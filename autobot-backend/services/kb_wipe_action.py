@@ -36,6 +36,7 @@ from autobot_shared.logging_manager import get_logger
 from models.approval import Approval, ApprovalComment, ApprovalStatus, ApprovalType
 from services.approval_execution import register_post_approval_action, verified_decider
 from services.approval_four_eyes import is_self_approval
+from services.audit.taxonomy import AuditAction
 from services.audit_logger import AuditResult, audit_log
 from services.kb_wipe_chroma import ChromaFactory, clear_chroma, kb_collection_names, plan_chroma
 from services.kb_wipe_redis import KB_WIPE_DATABASES, ClientFactory, default_client, execute_redis, plan_redis
@@ -128,7 +129,7 @@ async def _audit(
     approval: "Approval", result: AuditResult, record: dict, self_approval: bool, error: str | None = None
 ) -> bool:
     return await audit_log(
-        "knowledge.wipe",
+        AuditAction.KNOWLEDGE_WIPE.value,
         result=result,
         user_id=approval.decided_by_user,
         resource="knowledge_base",

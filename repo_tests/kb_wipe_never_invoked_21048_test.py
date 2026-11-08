@@ -2,20 +2,39 @@
 # SPDX-License-Identifier: Apache-2.0
 """The KB setup script is manual-only: nothing in the tree invokes it (#21048, #17038)."""
 
+from pathlib import Path
+
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
-#: Non-vacuity: the sweep must have read a real tree (13k+ tracked files when set), not an empty listing.
-MIN_TRACKED_FILES = 5000
 _SCRIPT = "fresh_kb_setup"
 _OWN_DIR = "autobot-infrastructure/shared/scripts/setup/knowledge/"
 #: Where an automatic caller would live. Tests, docs and the guards that name the script as data are not callers.
 _NOT_CALLERS = ("repo_tests/", "docs/", ".test_durations", "CHANGELOG.md", "changelog/")
 
 
+def _discover(root: Path) -> list[str]:
+    """Every tracked file; an empty tree yields [] so the floor raises the typed refusal, not a bare error."""
+    try:
+        return tracked_paths(Path(root), ".")
+    except EmptyEnumeration:
+        return []
+
+
 def _tracked_files() -> list[str]:
-    return tracked_paths(repo_root(), ".")
+    return _discover(repo_root())
+
+
+#: Non-vacuity: the sweep must have read a real tree, not an empty listing. The floor is computed from the base commit.
+REACH = declare(
+    "kb-wipe-never-invoked",
+    discover=_discover,
+    floor=13794,  # measured on this tree; a new guard pins until it lands on the base (#19676)
+    growth=400,
+    what="tracked files",
+)
 
 
 def _referencing(files: list[str], root) -> list[str]:
@@ -34,7 +53,7 @@ def _referencing(files: list[str], root) -> list[str]:
 
 def test_the_script_exists_so_the_scan_is_not_vacuous():
     files = _tracked_files()
-    assert len(files) >= MIN_TRACKED_FILES
+    REACH.completed(files, repo_root())
     assert f"{_OWN_DIR}{_SCRIPT}.py" in files
 
 
