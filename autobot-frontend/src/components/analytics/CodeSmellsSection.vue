@@ -8,8 +8,8 @@
       <span v-if="smells.length > 0" class="total-count">
         ({{ smells.length.toLocaleString() }} {{ $t('analytics.codeSmells.found') }})
       </span>
-      <label class="category-filter">
-        <span class="category-label">{{ $t('analytics.codeSmells.category.label') }}</span>
+      <label>
+        {{ $t('analytics.codeSmells.category.label') }}
         <select
           :value="category"
           :aria-label="$t('analytics.codeSmells.category.label')"
@@ -418,15 +418,6 @@ const getItemSeverityClass = (severity: string): string => {
 .accordion-leave-to {
   opacity: 0;
   max-height: 0;
-}
-
-.category-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  margin-left: var(--spacing-4);
-  font-size: var(--text-sm);
-  font-weight: normal;
 }
 
 .section-export-buttons {
