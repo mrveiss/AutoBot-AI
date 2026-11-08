@@ -4690,6 +4690,7 @@
       "started": "Workflow started",
       "startFailed": "Could not start the workflow",
       "selectFailed": "Could not open the workflow",
+      "startUnconfirmed": "The workflow was started but its status could not be confirmed. Refresh to check.",
       "paused": "Workflow paused",
       "resumed": "Workflow resumed",
       "cancelled": "Workflow cancelled",

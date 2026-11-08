@@ -36,6 +36,12 @@ describe('WorkflowRunner select and start (#21043)', () => {
     expect(w.emitted('select-workflow')).toEqual([['wf-1']])
   })
 
+  it('renders each list item as a focusable button', () => {
+    const item = mountRunner(null).find('.workflow-item')
+    expect(item.element.tagName).toBe('BUTTON')
+    expect(item.attributes('type')).toBe('button')
+  })
+
   it('shows Start for a not-started workflow and emits start-workflow', async () => {
     const w = mountRunner(SAVED)
     await w.findAll('button').find((b) => b.text() === 'Start')!.trigger('click')

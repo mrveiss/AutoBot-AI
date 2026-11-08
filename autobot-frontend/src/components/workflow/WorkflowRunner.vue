@@ -20,8 +20,9 @@
         <p>{{ $t('workflow.runner.noActiveWorkflows') }}</p>
       </div>
       <div v-else class="workflow-list">
-        <div v-for="wf in workflows" :key="wf.workflow_id" class="workflow-item"
+        <button v-for="wf in workflows" :key="wf.workflow_id" type="button" class="workflow-item"
              :class="{ active: currentWorkflow?.workflow_id === wf.workflow_id, paused: wf.is_paused }"
+             :aria-current="currentWorkflow?.workflow_id === wf.workflow_id ? 'true' : undefined"
              @click="$emit('select-workflow', wf.workflow_id)">
           <div class="wf-status" :class="getStatusClass(wf)">
             <Icon :name="getStatusIcon(wf)" />
@@ -33,7 +34,7 @@
           <div class="wf-progress-bar">
             <div class="progress-fill" :style="{ width: getProgress(wf) + '%' }"></div>
           </div>
-        </div>
+        </button>
       </div>
     </div>
 
@@ -238,11 +239,12 @@ function formatResult(result: Record<string, unknown>): string {
 .empty-list .icon { width: 32px; height: 32px; margin-bottom: var(--spacing-3); }
 
 .workflow-list { flex: 1; overflow-y: auto; padding: var(--spacing-2); }
-.workflow-item { padding: var(--spacing-3); background: var(--bg-tertiary); border-radius: var(--radius-lg); margin-bottom: var(--spacing-2); cursor: pointer; transition: all 0.15s; }
+.workflow-item { padding: var(--spacing-3); border: 1px solid transparent; background: var(--bg-tertiary); border-radius: var(--radius-lg); margin-bottom: var(--spacing-2); cursor: pointer; transition: all 0.15s; }
 .workflow-item:hover { background: var(--bg-hover); }
 .workflow-item.active { background: var(--color-primary-bg); border: 1px solid var(--color-primary); }
 .workflow-item.paused { opacity: 0.7; }
-.workflow-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-2-5); }
+.workflow-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-2-5); width: 100%; color: inherit; font: inherit; text-align: left; }
+.workflow-item:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .wf-status { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); }
 .wf-status.running { background: var(--color-success-bg); color: var(--color-success); }
 .wf-status.paused { background: var(--color-warning-bg); color: var(--color-warning); }
