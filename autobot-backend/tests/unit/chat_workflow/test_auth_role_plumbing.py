@@ -183,7 +183,7 @@ class TestTheEffectOnAdminOnlyTools:
         async def _fresh():
             return None
 
-        async def _call(tool_name, bridge, endpoint, arguments, role):
+        async def _call(tool_name, bridge, endpoint, arguments, role, user_id=None, session_id=None):
             return {"success": True, "result": "ran", "bridge": bridge, "role_seen": role}
 
         d._ensure_cache_fresh = _fresh
