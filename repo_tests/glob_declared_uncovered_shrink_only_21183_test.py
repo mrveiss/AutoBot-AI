@@ -16,20 +16,31 @@ rather than passing as "nothing grew"). Removals pass; additions fail.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from repo_tests._glob_declared_uncovered import GLOB_DECLARED_UNCOVERED
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table
+from repo_tests._ratchet_base import base_table, literal_in
 from repo_tests._reach import declare
 
 _RECORD = "repo_tests/_glob_declared_uncovered.py"
 _NAME = "GLOB_DECLARED_UNCOVERED"
 
+
+def _glob_keys(root: Path) -> list[str]:
+    """The record's glob keys as read from *root*'s copy of the file; none if *root* has no record."""
+    record = root / _RECORD
+    if not record.is_file():
+        return []
+    return sorted(literal_in(record.read_text(encoding="utf-8"), _NAME))  # type: ignore[call-overload]
+
+
 REACH = declare(
     "glob-declared-uncovered-entries",
-    discover=lambda _root: sorted(GLOB_DECLARED_UNCOVERED),
-    floor=10,  # 29 keys at the time of writing; the record only shrinks, so this is a lower bound
+    discover=_glob_keys,
+    floor=10,  # 29 keys when written; the record shrinks as debt is paid, so skips=19 lets it fall to the floor
+    skips=19,
     what="glob keys in the uncovered-debt record",
 )
 
