@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 from api.chat_activity_store import _process_activity_batch, _store_single_activity, activity_principal
+from api.chat_sessions_update import apply_session_update
 from api.schemas_chat import (
     ActivityAddData,
     ActivityBatchCreate,
@@ -943,22 +944,7 @@ async def update_session(
     # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
 
-    # Update session
-    updated_session = await chat_history_manager.update_session(
-        session_id=session_id,
-        title=session_data.title,
-        metadata=session_data.metadata,
-    )
-
-    if updated_session is None:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ResourceNotFoundError(f"Session {session_id} not found")
+    updated_session = await apply_session_update(chat_history_manager, session_id, session_data)
 
     log_chat_event(
         "session_updated",
