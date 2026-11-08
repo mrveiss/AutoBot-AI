@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { formatFleetTime } from '@/composables/useTimezone'
 import { BaseAlert } from '@autobot/ui'
 /**
  * VoiceTool - Voice Interface
@@ -370,7 +371,7 @@ onUnmounted(() => {
             >
               <p class="text-xs text-gray-500 mb-1">
                 {{ msg.role === 'user' ? $t('tools.admin.voiceTool.you') : $t('tools.admin.voiceTool.aI') }} -
-                {{ msg.timestamp.toLocaleTimeString() }}
+                {{ formatFleetTime(msg.timestamp) }}
               </p>
               <p class="text-gray-800">{{ msg.text }}</p>
             </div>

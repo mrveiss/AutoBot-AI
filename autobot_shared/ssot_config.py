@@ -54,6 +54,7 @@ from autobot_shared import postgres_identity as _pg
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import install_base_dir, project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
+from autobot_shared.ssot_chat_graph_settings import ChatGraphSettings
 from autobot_shared.ssot_codebase_index import CodebaseIndexSettings
 from autobot_shared.ssot_company_os_flags import CompanyOsFeatureFlags
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
@@ -209,7 +210,7 @@ class PortConfig(RedactedSettings):
     chrome_cdp: int = Field(default=9222, alias="AUTOBOT_CHROME_CDP_PORT")  # Issue #3829: Chrome DevTools Protocol
 
 
-class LLMConfig(RedactedSettings):
+class LLMConfig(RedactedSettings, ChatGraphSettings):
     """
     LLM model configuration with multi-provider support.
 
@@ -223,11 +224,7 @@ class LLMConfig(RedactedSettings):
     environment variables, defaulting to the main AUTOBOT_LLM_PROVIDER.
     """
 
-    model_config = SettingsConfigDict(
-        env_file=str(PROJECT_ROOT / ".env"),
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
+    # model_config is inherited from ChatGraphSettings (same .env / utf-8 / extra="ignore"): one ConfigDict.
 
     # Primary models — each role maps to its optimal 6-tier (#2553)
     default_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL")
@@ -293,8 +290,7 @@ class LLMConfig(RedactedSettings):
         ),
     )
     # Inline AgentResponseJudge on chat replies (#10599, §3.3).
-    # OFF by default — each judge call adds one LLM round-trip.
-    # Enable with AUTOBOT_CHAT_INLINE_JUDGE=true.
+    # OFF by default (one LLM round-trip per judge call); enable with AUTOBOT_CHAT_INLINE_JUDGE=true.
     chat_inline_judge_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_INLINE_JUDGE")
     # Minimum judge overall_score to accept a response without one regeneration
     # attempt.  Only used when chat_inline_judge_enabled=True.
