@@ -18,7 +18,7 @@ import { routes } from '@/router'
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import en from '@/i18n/locales/en.json'
 import {
-  ADMIN_SECTION_PERMISSION,
+  ADMIN_SECTION_REQUIRED,
   adminChildren,
   adminRoutes,
   resolveAdminPermissionRedirect,
@@ -56,35 +56,38 @@ const OLD_COMPONENT_FILES: Record<string, string> = {
 }
 
 function adminTo(): RouteLocationNormalized {
-  const matched = [{ meta: { permission: ADMIN_SECTION_PERMISSION } }, { meta: { admin: true } }]
+  const matched = [{ meta: { admin: true, adminSection: true } }, { meta: { admin: true } }]
   return { matched: matched as unknown as RouteRecordNormalized[] } as RouteLocationNormalized
 }
 
 const state = (over: Partial<Parameters<typeof resolveAdminPermissionRedirect>[1]>) => ({
   isAuthenticated: true,
   isAdmin: false,
-  hasServiceManagement: false,
   ...over,
 })
 
 describe('resolveAdminPermissionRedirect (#19833)', () => {
-  it('allows a user holding service.management', () => {
-    expect(resolveAdminPermissionRedirect(adminTo(), state({ hasServiceManagement: true }))).toBeNull()
+  it('refuses a service.management holder who is not an admin (#20631)', () => {
+    const operator = { ...state({}), hasServiceManagement: true }
+    expect(resolveAdminPermissionRedirect(adminTo(), operator)).toEqual({
+      name: 'permission-denied',
+      query: { required: ADMIN_SECTION_REQUIRED },
+    })
   })
 
   it('allows an administrative role', () => {
     expect(resolveAdminPermissionRedirect(adminTo(), state({ isAdmin: true }))).toBeNull()
   })
 
-  it('sends a signed-in user without the permission to permission-denied', () => {
+  it('sends a signed-in non-admin to permission-denied', () => {
     expect(resolveAdminPermissionRedirect(adminTo(), state({}))).toEqual({
       name: 'permission-denied',
-      query: { required: ADMIN_SECTION_PERMISSION },
+      query: { required: ADMIN_SECTION_REQUIRED },
     })
   })
 
   it('fails closed while auth is unresolved, even if the flags read true', () => {
-    const unresolved = state({ isAuthenticated: false, isAdmin: true, hasServiceManagement: true })
+    const unresolved = state({ isAuthenticated: false, isAdmin: true })
     expect(resolveAdminPermissionRedirect(adminTo(), unresolved)).toEqual({ name: 'login' })
   })
 
@@ -95,10 +98,12 @@ describe('resolveAdminPermissionRedirect (#19833)', () => {
 })
 
 describe('/admin parent route (#19833)', () => {
-  it('declares the permission on one parent with AdminLayout', () => {
+  it('declares the admin requirement on one parent with AdminLayout (#20631)', () => {
     expect(adminRoutes).toHaveLength(1)
     expect(adminRoutes[0].path).toBe('/admin')
-    expect(adminRoutes[0].meta?.permission).toBe('service.management')
+    expect(adminRoutes[0].meta?.admin).toBe(true)
+    expect(adminRoutes[0].meta?.adminSection).toBe(true)
+    expect(adminRoutes[0].meta?.permission).toBeUndefined()
     expect(adminRoutes[0].children).toBe(adminChildren)
   })
 

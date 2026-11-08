@@ -3,12 +3,12 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 /**
- * The main app's permission-gated /admin section (#19833).
+ * The main app's admin-gated /admin section (#19833).
  *
  * `/admin` is a parent record rendering AdminLayout; the 9 admin routes of this
  * app are its children with their paths unchanged, so every old URL still
  * resolves to the same component. The parent carries the one section
- * permission the router guard checks, which also covers a session restored
+ * marker the router guard checks, which also covers a session restored
  * from the backend. The children may move to domain paths later (#17814). The
  * SLM console keeps its own frontend; none of its screens are listed here.
  * Split out of router/index.ts, which is at its size ceiling, as the place
@@ -19,17 +19,19 @@ import i18n from '@/i18n'
 import type { RouteLocationNormalized, RouteLocationRaw, RouteRecordRaw } from 'vue-router'
 
 /**
- * The permission that opens the /admin section. The admin and operator roles hold
- * it, but every child route keeps `meta.admin` (an administrative role), so an
- * operator enters the parent and every page under it still sends them to /home.
+ * What opens the /admin section: an administrative role, the same `meta.admin`
+ * check every child route carries and the `isAdmin` store flag the router guard
+ * reads (#20631). `service.management` is held by the operator role and no
+ * longer opens the section. The section marker is a distinct meta key so only
+ * the parent record is checked here and other admin routes keep the guard's
+ * own /home redirect.
  */
-export const ADMIN_SECTION_PERMISSION = 'service.management'
+export const ADMIN_SECTION_REQUIRED = 'admin'
 
 /** Auth facts the admin gate reads, as exposed by `useUserStore()`. */
 export interface AdminAccessState {
   isAuthenticated: boolean
   isAdmin: boolean
-  hasServiceManagement: boolean
 }
 
 /**
@@ -138,31 +140,27 @@ export const adminRoutes: RouteRecordRaw[] = [
       },
       hideInNav: true,
       requiresAuth: true,
-      permission: ADMIN_SECTION_PERMISSION,
+      admin: true,
+      adminSection: true,
     },
     children: adminChildren,
   },
 ]
 
-/** True if the user may enter the section: the permission table or an admin role. */
-function mayEnterAdmin(state: AdminAccessState): boolean {
-  return state.hasServiceManagement || state.isAdmin
-}
-
 /**
  * Redirect target for a navigation into a route carrying the /admin section
- * permission, or `null` when allowed or not an /admin route. Fails closed:
+ * admin role, or `null` when allowed or not an /admin route. Fails closed:
  * while auth is unresolved (no session) it never lets the navigation through,
- * and a signed-in user without the permission gets the app's permission-denied
+ * and a signed-in user who is not an admin gets the app's permission-denied
  * page. UI routing only; the backend's own gates remain the authority.
  */
 export function resolveAdminPermissionRedirect(
   to: RouteLocationNormalized,
   state: AdminAccessState,
 ): RouteLocationRaw | null {
-  const gated = to.matched.some((r) => r.meta.permission === ADMIN_SECTION_PERMISSION)
+  const gated = to.matched.some((r) => r.meta.adminSection === true)
   if (!gated) return null
   if (!state.isAuthenticated) return { name: 'login' }
-  if (mayEnterAdmin(state)) return null
-  return { name: 'permission-denied', query: { required: ADMIN_SECTION_PERMISSION } }
+  if (state.isAdmin) return null
+  return { name: 'permission-denied', query: { required: ADMIN_SECTION_REQUIRED } }
 }
