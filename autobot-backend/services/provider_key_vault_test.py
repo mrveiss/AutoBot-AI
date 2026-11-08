@@ -23,6 +23,7 @@ from __future__ import annotations
 import pytest
 
 from services.provider_key_vault import VAULT_RESOLVED_CREDENTIAL_NAMES, mirror_provider_key_best_effort
+from testkit.fake_async_session import FakeAsyncSession
 
 _SECRET = "sk-not-a-real-key-0123456789"  # pragma: allowlist secret
 
@@ -59,19 +60,6 @@ async def test_an_unrecognised_name_never_reaches_the_mirror_at_all(caplog) -> N
 
     assert wrote is False
     assert "NOT_A_REGISTRY_NAME" not in caplog.text
-
-
-class _Session:
-    """A session that only has to be entered and exited: the steps under test are patched."""
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc) -> None:
-        return None
-
-    async def commit(self) -> None:
-        return None
 
 
 class _SessionOpenFails:
@@ -112,11 +100,15 @@ async def test_an_unreachable_vault_log_names_the_stage_that_failed_and_the_exce
     opened = await _unreachable_log(monkeypatch, caplog, _SessionOpenFails)
     assert "stage: open session" in opened and "ConnectionRefusedError" in opened
     caplog.clear()
-    listed = await _unreachable_log(monkeypatch, caplog, _Session, _find_system_secret_id=_list_fails)
+    listed = await _unreachable_log(monkeypatch, caplog, FakeAsyncSession, _find_system_secret_id=_list_fails)
     assert "stage: list" in listed and "TimeoutError" in listed
     caplog.clear()
     registered = await _unreachable_log(
-        monkeypatch, caplog, _Session, _find_system_secret_id=_found, _register_credential_dependency=_register_fails
+        monkeypatch,
+        caplog,
+        FakeAsyncSession,
+        _find_system_secret_id=_found,
+        _register_credential_dependency=_register_fails,
     )
     assert "stage: register dependency" in registered and "PermissionError" in registered
 
