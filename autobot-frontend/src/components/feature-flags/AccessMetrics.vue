@@ -205,7 +205,7 @@
 </template>
 
 <script setup lang="ts">
-import i18n from '@/i18n'
+import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
 import type { ViolationStatistics } from '@/utils/FeatureFlagsApiClient';
@@ -302,7 +302,7 @@ const getPercentage = (value: number, max: number) => {
 };
 
 const formatDayLabel = createDateFormatter({ kind: 'date', intl: { weekday: 'short' } });
-const formatTime = createDateFormatter({ locale: () => String(i18n.global.locale.value), unit: 'seconds', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } });
+const formatTime = createDateFormatter({ locale: () => locale.value, unit: 'seconds', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } });
 </script>
 
 <style scoped>
