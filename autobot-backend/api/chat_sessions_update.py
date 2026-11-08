@@ -5,7 +5,7 @@
 """Write side of PUT /chat/sessions/{id} (#20928)."""
 
 from api.schemas_chat import SessionUpdate
-from chat_history.owner_keys import SERVER_CONTROLLED_METADATA_KEYS
+from chat_history.owner_keys import strip_server_controlled
 from exceptions import get_exceptions_lazy
 
 
@@ -20,7 +20,7 @@ async def apply_session_update(manager, session_id: str, session_data: SessionUp
 
     ``title`` is stored as the session ``name``; ``metadata`` is merged so the owner and
     other server-written keys survive; client metadata cannot change the server-controlled
-    ownership keys (``SERVER_CONTROLLED_METADATA_KEYS``), which are dropped before the merge.
+    ownership keys (``strip_server_controlled``, shared with POST /chat/sessions), dropped before the merge.
     A missing session is a 404, a refused write a 5xx.
 
     The manager has no single locked write that sets the name and merges metadata, so these are
@@ -31,9 +31,7 @@ async def apply_session_update(manager, session_id: str, session_data: SessionUp
     _, _, ResourceNotFoundError, _, _ = get_exceptions_lazy()
     if await manager.get_session(session_id) is None:
         raise ResourceNotFoundError(f"Session {session_id} not found")
-    client_metadata = {
-        k: v for k, v in (session_data.metadata or {}).items() if k not in SERVER_CONTROLLED_METADATA_KEYS
-    }
+    client_metadata = strip_server_controlled(session_data.metadata)
     if client_metadata and not await manager.update_session_metadata(session_id, client_metadata):
         raise _update_failed(session_id)
     if session_data.title is not None and not await manager.update_session(session_id, {"name": session_data.title}):

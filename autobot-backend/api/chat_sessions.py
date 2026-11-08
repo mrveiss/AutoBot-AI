@@ -48,6 +48,7 @@ from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from chat_history.owner_keys import owner_from_metadata, strip_server_controlled
 
 # Import session lifecycle hooks (Issue #4260)
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
@@ -794,7 +795,7 @@ async def _reject_session_id_collision(chat_history_manager, session_id: str, us
             raise _session_id_taken_error()
         return
 
-    owner = ((existing.get("metadata") or {}) if isinstance(existing, dict) else {}).get("owner")
+    owner = owner_from_metadata((existing.get("metadata") or {}) if isinstance(existing, dict) else {})
     caller = (user_data or {}).get("username")
     if owner and caller and owner == caller:
         return  # the caller's own session — a retry, not a takeover
@@ -852,7 +853,9 @@ async def create_session(session_data: SessionCreate, request: Request):
         session_id = generate_chat_session_id()
     session_title = session_data.title or DEFAULT_SESSION_TITLE
 
-    metadata = session_data.metadata or {}
+    # #20928: client metadata can't set server-controlled ownership keys; the one strip the PUT
+    # route also uses runs before the server adds its own.
+    metadata = strip_server_controlled(session_data.metadata)
     # #14020: one builder for every path that stamps ownership (#684 org/team
     # hierarchy included), so create and backfill cannot drift apart.
     metadata.update(build_owner_metadata(user_data, session_data.team_id))

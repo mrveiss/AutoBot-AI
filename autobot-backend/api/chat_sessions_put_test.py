@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""PUT /chat/sessions/{id} writes through the manager's real API (#20928).
+"""PUT /chat/sessions/{id} writes through the manager's real API; POST and PUT share one strip (#20928).
 
 The route used to call ``update_session(session_id=, title=, metadata=)`` on a manager whose
 method takes ``(session_id, updates)`` and returns a bool, so it raised ``TypeError`` on every
@@ -19,8 +19,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import api.chat_sessions as chat_sessions
+import api.chat_sessions_update as chat_sessions_update
 from api.schemas_chat import SessionUpdate
+from autobot_memory_graph.owner_scope import OwnerScope
 from chat_history import ChatHistoryManager
+from chat_history.graph_owner import session_owner_scope
 from exceptions import InternalError, ResourceNotFoundError
 from security.session_ownership import SessionOwnershipValidator, build_owner_metadata
 from services.feature_flags import EnforcementMode
@@ -98,8 +101,19 @@ async def test_put_metadata_failure_leaves_name_unchanged(history, monkeypatch):
     assert stored["metadata"] == {"owner": "alice"}
 
 
+def _noop(name: str):
+    """A stand-in for a create-route side effect (audit, hooks, live event): sync or async to match."""
+    if name == "audit_record":
+        return lambda *_a, **_k: None
+
+    async def _done(*_a, **_k):
+        return None
+
+    return _done
+
+
 @contextlib.contextmanager
-def _real_route(history, username: str):
+def _real_route(history, username: str, *, anonymous_create: bool = False):
     """The real router with the REAL ``validate_session_ownership`` dependency, authenticated as *username*.
 
     Only the leaves are stubbed (flags, Redis, metrics, the auth middleware, the identity lookup); the
@@ -130,6 +144,10 @@ def _real_route(history, username: str):
         stack.enter_context(
             patch.object(SessionOwnershipValidator, "_get_authenticated_user", AsyncMock(return_value=user))
         )
+        creator = None if anonymous_create else user
+        stack.enter_context(patch.object(chat_sessions, "resolve_human_user", AsyncMock(return_value=creator)))
+        for name in ("audit_record", "_emit_session_create", "publish_session_created"):
+            stack.enter_context(patch.object(chat_sessions, name, MagicMock(side_effect=_noop(name))))
         app = FastAPI()
         app.include_router(chat_sessions.router)
         yield TestClient(app, raise_server_exceptions=False)
@@ -166,8 +184,7 @@ async def test_put_from_the_owner_succeeds_through_the_real_dependency(history):
     assert stored["metadata"]["color"] == "red"
 
 
-@pytest.mark.asyncio
-async def test_put_metadata_cannot_change_server_controlled_keys(history):
+async def _assert_put_ignores_planted_owner_keys(history):
     await _seed_owned(history, "alice")
     original = (await history.get_session(SID))["metadata"]
 
@@ -183,3 +200,60 @@ async def test_put_metadata_cannot_change_server_controlled_keys(history):
     assert stored["username"] == original["username"] == "alice"
     assert stored.get("org_id") == original.get("org_id")
     assert stored["color"] == "red"  # other keys still merge
+
+
+@pytest.mark.asyncio
+async def test_put_metadata_cannot_change_server_controlled_keys(history):
+    await _assert_put_ignores_planted_owner_keys(history)
+
+
+PLANTED = {"owner": "mallory", "username": "mallory", "user_id": "mallory-id", "org_id": "x", "team_id": "x"}
+
+
+async def _create_with_planted_keys(history, *, anonymous: bool = False) -> dict:
+    """POST /chat/sessions through the real router with client-sent ownership keys; return stored metadata."""
+    with _real_route(history, "alice", anonymous_create=anonymous) as client:
+        response = client.post("/chat/sessions", json={"id": SID, "metadata": {**PLANTED, "color": "red"}})
+    assert response.status_code == 201, response.text
+    return (await history.get_session(SID))["metadata"]
+
+
+async def _assert_create_keeps_server_owner_keys(history):
+    stored = await _create_with_planted_keys(history)
+    assert stored["owner"] == stored["username"] == "alice"
+    assert stored["user_id"] == "alice-id"
+    assert "org_id" not in stored and "team_id" not in stored  # the principal has none; the client's are dropped
+    assert stored["color"] == "red"  # a benign key is kept
+
+
+@pytest.mark.asyncio
+async def test_create_metadata_cannot_set_server_controlled_keys(history):
+    await _assert_create_keeps_server_owner_keys(history)
+
+
+@pytest.mark.asyncio
+async def test_anonymous_create_stores_no_client_ownership_keys(history):
+    stored = await _create_with_planted_keys(history, anonymous=True)
+    assert not set(stored) & set(PLANTED)
+    assert stored["color"] == "red"
+    assert session_owner_scope(stored) == OwnerScope.system()
+
+
+@pytest.mark.asyncio
+async def test_created_session_graph_owner_is_the_server_principal(history):
+    stored = await _create_with_planted_keys(history)
+    assert session_owner_scope(stored) == OwnerScope.for_user("alice-id")
+
+
+def _disable_strip(monkeypatch):
+    for module in (chat_sessions, chat_sessions_update):
+        monkeypatch.setattr(module, "strip_server_controlled", lambda metadata: dict(metadata or {}))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("check", [_assert_create_keeps_server_owner_keys, _assert_put_ignores_planted_owner_keys])
+async def test_control_the_checks_fail_without_the_strip(history, monkeypatch, check):
+    """Control: with the strip made an identity, the create and PUT owner-key checks fail (#20928)."""
+    _disable_strip(monkeypatch)
+    with pytest.raises(AssertionError):
+        await check(history)
