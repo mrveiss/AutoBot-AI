@@ -20,6 +20,7 @@ import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from autobot_shared.ai_lines import ATTACHMENT_TURN_KEY, VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_USER_KEY
+from chat_history.messages import MessagesMixin
 from chat_workflow import attachment_context, limits
 from chat_workflow.manager import ChatWorkflowManager
 from conversation_file_manager import ConversationFileManager
@@ -41,8 +42,24 @@ class FakeLLM:
         return "ok"
 
 
+class _InMemoryChatHistory(MessagesMixin):
+    """The real ``MessagesMixin`` (production message building and batching) over a dict; reads use ``load_session``."""
+
+    def __init__(self) -> None:
+        self.sessions: dict = {}
+
+    async def load_session(self, session_id: str) -> list:
+        return list(self.sessions.get(session_id, []))
+
+    async def save_session(self, session_id: str, messages=None, append: bool = False, **_kw) -> bool:
+        self.sessions[session_id] = (self.sessions.get(session_id, []) if append else []) + list(messages or [])
+        return True
+
+
 @pytest.fixture
 def world(tmp_path, monkeypatch):
+    history = _InMemoryChatHistory()
+    monkeypatch.setattr("chat_history.ChatHistoryManager", lambda: history)
     manager = ConversationFileManager(storage_dir=tmp_path / "storage", db_path=tmp_path / "files.db")
     manager._initialize_schema()
     monkeypatch.setattr(manager, "_get_redis_sessions", AsyncMock(side_effect=RedisConnectionError("down")))
@@ -55,7 +72,7 @@ def world(tmp_path, monkeypatch):
     chat = ChatWorkflowManager.__new__(ChatWorkflowManager)
     chat._register_user_message_in_history = MagicMock()
     chat._prepare_llm_request_params = AsyncMock(side_effect=lambda *a, **k: {"prompt": _BASE, "model": "m"})
-    return SimpleNamespace(chat=chat, files=manager, tmp=tmp_path, llm=FakeLLM())
+    return SimpleNamespace(chat=chat, files=manager, tmp=tmp_path, llm=FakeLLM(), history=history)
 
 
 def _seed(w, session, name, body: bytes, mime="text/plain", user="alice") -> str:
@@ -296,3 +313,51 @@ def test_an_unreadable_window_budget_falls_back_to_the_configured_bounds(world, 
     file_id = _seed(world, _ALICE, "report.txt", f"Revenue: {_FACT}".encode())
     _, prompt = _turn(world, [file_id])
     assert _FACT in prompt
+
+
+def test_the_graph_node_stores_the_notice_with_the_turn_so_a_reload_reads_it_back(world):
+    """#21006: a refreshed page reads the notice from the chat history, not from the one-shot stream."""
+    from chat_workflow import graph
+
+    chat = world.chat
+    chat.get_or_create_session = AsyncMock(
+        return_value=SimpleNamespace(session_id=_ALICE, metadata={}, conversation_history=[])
+    )
+    chat._create_llm_iteration_context = lambda params, *a, **k: SimpleNamespace(
+        ollama_endpoint="e",
+        selected_model="m",
+        system_prompt="",
+        initial_prompt="p",
+        used_knowledge=False,
+        rag_citations=[],
+    )
+    state = {
+        "session_id": _ALICE,
+        "user_message": "q",
+        "terminal_session_id": "t",
+        "context": {"attachments": ["no-such-id"], VERIFIED_USER_KEY: "alice", VERIFIED_ATTACHMENT_ACCESS_KEY: True},
+    }
+    seen: list = []
+    asyncio.run(graph.prepare_llm(state, {"configurable": {"manager": chat, "stream_callback": seen.append}}))
+    stored = asyncio.run(world.history.load_session(_ALICE))
+    assert [(m["sender"], m["messageType"], m["metadata"]["code"]) for m in stored] == [
+        ("system", "attachment_notice", "unavailable")
+    ]
+    assert stored[0]["text"] == seen[0]["content"] and stored[0]["metadata"] == seen[0]["metadata"]
+
+
+def test_a_turn_with_no_notice_stores_nothing_extra(world):
+    asyncio.run(attachment_context.deliver_notices(_ALICE, {}, None))
+    assert asyncio.run(world.history.load_session(_ALICE)) == []
+
+
+def test_a_failing_store_does_not_stop_the_live_notice(world, monkeypatch):
+    params, _ = _turn(world, ["no-such-id"])
+
+    def _boom():
+        raise RuntimeError("store down")
+
+    monkeypatch.setattr("chat_history.ChatHistoryManager", _boom)
+    seen: list = []
+    asyncio.run(attachment_context.deliver_notices(_ALICE, params, seen.append))
+    assert [m["metadata"]["code"] for m in seen] == ["unavailable"]

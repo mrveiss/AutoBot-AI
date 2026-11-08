@@ -6,6 +6,7 @@ import { toSessionDate, type ChatListEntry } from './sessionDates'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { clearStoredAuth } from '@/utils/authToken'
+import { storedMessageText } from '@/utils/attachmentNotice'
 import type { ApiResponse } from '@/types/models'
 import type { ChatMessage } from '@/types/api'
 
@@ -388,11 +389,10 @@ export class ChatRepository {
         const transformed = {
           id: msg.id || msg.metadata?.message_id || msg.rawData?.message_id || `${msg.sender}-${msg.timestamp}-${index}`,
           sender: this.normalizeSender(msg.sender),
-          content: msg.text || msg.content || '',
+          content: storedMessageText(msg),
           timestamp: new Date(msg.timestamp || new Date().toISOString()),
           type: normalizedType,
-          // CRITICAL FIX: Backend saves approval metadata in rawData, not metadata
-          // Check both rawData (old format) and metadata (new format) for backward compatibility
+          // Approval metadata is saved in rawData (old format) or metadata (new); accept both
           metadata: msg.metadata || msg.rawData || {},
           // Issue #4448: Map top-level sources for RAG citation display.
           // Normalise to RagSource shape; treat missing array as empty.
