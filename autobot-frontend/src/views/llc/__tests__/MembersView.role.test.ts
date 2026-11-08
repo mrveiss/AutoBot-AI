@@ -176,6 +176,38 @@ describe('MembersView role change (#19960)', () => {
   })
 })
 
+describe('MembersView failed reload (#21096)', () => {
+  beforeEach(() => {
+    get.mockReset()
+    patch.mockReset()
+    document.body.innerHTML = ''
+  })
+
+  it('keeps the rows after a role change whose reload fails, withholds controls, and says they are stale', async () => {
+    patch.mockResolvedValue({})
+    const wrapper = await mountView()
+    get.mockRejectedValue(new Error('HTTP 503'))
+    await choose(wrapper, 'admin')
+    expect(wrapper.text()).toContain('Bob')
+    expect(wrapper.text()).not.toContain(en.llcMembers.empty)
+    expect(wrapper.find('[data-testid="members-stale"]').text()).toBe(en.llcMembers.staleRows)
+    expect(wrapper.text()).toContain(en.llcMembers.loadError)
+    expect(wrapper.findAll('select.members-role-select').every((s) => s.attributes('disabled') !== undefined)).toBe(true)
+    const removes = wrapper.findAll('tbody button').filter((b) => b.text() === en.llcMembers.remove)
+    expect(removes.length).toBe(2)
+    expect(removes.every((b) => b.attributes('disabled') !== undefined)).toBe(true)
+  })
+
+  it('shows no stale note and no rows after a failed first load', async () => {
+    get.mockRejectedValue(new Error('HTTP 503'))
+    const wrapper = mount(MembersView, { global: { plugins: [i18n] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.llcMembers.loadError)
+    expect(wrapper.find('[data-testid="members-stale"]').exists()).toBe(false)
+    expect(wrapper.find('tbody').exists()).toBe(false)
+  })
+})
+
 describe('MembersView add form (#20073)', () => {
   beforeEach(() => {
     get.mockReset()
@@ -249,6 +281,25 @@ describe('MembersView add form (#20073)', () => {
     expect(roleOptions()).toEqual(NO_OWNER)
     expect(document.body.textContent).not.toContain(en.llcMembers.accessUnconfirmed)
     expect(document.body.textContent).not.toContain(en.llcMembers.addNotAllowed)
+  })
+
+  it('the modal hint retry re-runs the load and Add becomes enabled (#21096)', async () => {
+    get.mockRejectedValueOnce(new Error('HTTP 503'))
+    const wrapper = mount(MembersView, { global: { plugins: [i18n] }, attachTo: document.body })
+    await flushPromises()
+    await wrapper.find('header button').trigger('click')
+    await flushPromises()
+    expect(addButton().disabled).toBe(true)
+    get.mockClear()
+    get.mockResolvedValue(membersFor('admin', NO_OWNER))
+    const retry = document.body.querySelector<HTMLElement>('[data-testid="members-add-retry"]')!
+    retry.click()
+    await flushPromises()
+    expect(get).toHaveBeenCalledTimes(1)
+    expect(document.body.querySelector('[data-testid="members-add-retry"]')).toBeNull()
+    expect(roleOptions()).toEqual(NO_OWNER)
+    // Add needs a chosen user as well; the standing no longer blocks it.
+    expect(document.body.textContent).not.toContain(en.llcMembers.accessUnconfirmed)
   })
 
   it('maps a 403 on add to the refusal message', async () => {

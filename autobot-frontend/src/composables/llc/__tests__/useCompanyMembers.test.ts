@@ -10,7 +10,7 @@ import { defineComponent, h, ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
-import { useCompanyMembers, rolesToOffer, type MembersApi } from '../useCompanyMembers'
+import { useCompanyMembers, rolesToOffer, isMembersEnvelope, type MembersApi } from '../useCompanyMembers'
 
 vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
@@ -112,6 +112,34 @@ describe('useCompanyMembers viewerCanManage (#20542, #21096)', () => {
     expect(api.members.value).toEqual([])
     expect(api.viewerCanManage.value).toBe(false)
     expect(api.standingKnown.value).toBe(false)
+    expect(api.errorMessage.value).toBe(en.llcMembers.loadError)
+  })
+})
+
+describe('isMembersEnvelope (#21096)', () => {
+  it.each([[reply([]), true], [[row('a')], false], [null, false], [undefined, false], [{ members: 'x' }, false]])('%j -> %s', (v, ok) => {
+    expect(isMembersEnvelope(v)).toBe(ok)
+  })
+})
+
+describe('useCompanyMembers failed reload (#21096)', () => {
+  it('keeps the last rows on a failed reload but withholds the standing', async () => {
+    const get = vi.fn().mockResolvedValueOnce(reply([row('a')], true, ['admin'])).mockRejectedValueOnce(new Error('HTTP 503'))
+    const api = setup(get as unknown as MembersApi['get'])
+    await api.load()
+    expect(api.standingKnown.value).toBe(true)
+    await api.load()
+    expect(api.members.value.map((m) => m.user_id)).toEqual(['a'])
+    expect(api.standingKnown.value).toBe(false)
+    expect(api.viewerCanManage.value).toBe(false)
+    expect(api.grantableRoles.value).toEqual([])
+    expect(api.errorMessage.value).toBe(en.llcMembers.loadError)
+  })
+
+  it('shows no rows after a failed FIRST load', async () => {
+    const api = setup(vi.fn().mockRejectedValue(new Error('HTTP 503')) as unknown as MembersApi['get'])
+    await api.load()
+    expect(api.members.value).toEqual([])
     expect(api.errorMessage.value).toBe(en.llcMembers.loadError)
   })
 })

@@ -7,7 +7,7 @@
 // #10032), NOT the logical slug.
 import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
-import type { MembersResponse } from '@/composables/llc/useCompanyMembers'
+import { isMembersEnvelope, type MembersResponse } from '@/composables/llc/useCompanyMembers'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useCompanyPeople')
@@ -70,13 +70,15 @@ export function useCompanyPeople(companyId: string) {
         api.get<{ nodes: OrgNode[] }>(`/api/llc/companies/${companyId}/org-chart`),
         api.get<MembersResponse>(`/api/llc/companies/${companyId}/members`),
       ])
+      // #21096: a reply without the envelope (a legacy array) is a failed load, not an empty company.
+      if (!isMembersEnvelope(members)) throw new Error('members response is not the envelope')
       const flat: AgentOption[] = []
       flattenAgents(org?.nodes ?? [], flat)
       agents.value = flat
       // #14939: `display_name` is never null -- `list_members` resolves the whole ladder server-side.
       // #21096: the verdict is the response's own, so a company with no rows still carries it.
-      const rows = members?.members ?? []
-      viewerCanManage.value = members?.viewer_can_manage === true
+      const rows = members.members
+      viewerCanManage.value = members.viewer_can_manage === true
       // `is_active !== false` rather than a truthy test: a server that predates
       // this field omits it, and treating "absent" as inactive would empty
       // every picker during a rolling update.

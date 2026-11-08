@@ -118,6 +118,14 @@ describe('TeamsView (#18245)', () => {
     expect(byId('team-members')?.textContent).toContain(en.llcTeams.unknownMember)
   })
 
+  it('reads a legacy array members reply as a failed read, with the notice (#21096)', async () => {
+    reply(TEAMS, MEMBERS)
+    await show()
+    await click(buttonNamed(en.llcTeams.viewMembers))
+    expect(byId('teams-names-error')?.textContent).toContain(en.llcTeams.namesError)
+    expect(byId('team-members')?.textContent).toContain(en.llcTeams.unknownMember)
+  })
+
   it('ignores a teams response for a company no longer shown', async () => {
     let release!: (v: unknown) => void
     const late = new Promise((r) => { release = r })

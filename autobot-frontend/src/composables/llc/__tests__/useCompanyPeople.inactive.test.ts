@@ -53,3 +53,20 @@ describe('useCompanyPeople and inactive members (#13956)', () => {
     expect(inactiveHumans.value).toHaveLength(0)
   })
 })
+
+describe('useCompanyPeople non-envelope members reply (#21096)', () => {
+  beforeEach(() => get.mockReset())
+
+  it('reads a legacy array reply as a failed load, not an empty company', async () => {
+    get.mockImplementation((url?: string) =>
+      String(url).includes('/members')
+        ? Promise.resolve([{ user_id: 'u1', display_name: 'Ada', role: 'lead' }])
+        : Promise.resolve({ nodes: [] }),
+    )
+    const { humans, viewerCanManage, loadFailed, load } = useCompanyPeople('c1')
+    await load()
+    expect(loadFailed.value).toBe(true)
+    expect(humans.value).toEqual([])
+    expect(viewerCanManage.value).toBe(false)
+  })
+})

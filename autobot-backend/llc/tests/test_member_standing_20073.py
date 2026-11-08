@@ -165,3 +165,58 @@ async def test_an_empty_company_refuses_a_plain_viewer(session_factory):  # noqa
     assert rows["members"] == []
     assert rows["viewer_can_manage"] is False
     assert rows["viewer_grantable_roles"] == []
+
+
+async def _get_over_http(session_factory, company_id, viewer_id, *, platform_admin=False):  # noqa: ANN001
+    """GET the mounted route through the ASGI app, so response_model validation runs (#21096)."""
+    import httpx
+    from fastapi import FastAPI
+
+    from api.user_management.dependencies import get_current_user, require_org_context
+    from llc.api.companies import router
+    from user_management.database import get_async_session
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/llc")
+    async with session_factory() as session:
+
+        async def _session():
+            yield session
+
+        app.dependency_overrides[get_async_session] = _session
+        app.dependency_overrides[get_current_user] = lambda: {"id": str(viewer_id)}
+        app.dependency_overrides[require_org_context] = lambda: TenantContext(
+            org_id=company_id, user_id=viewer_id, is_platform_admin=platform_admin
+        )
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            return await client.get(f"/api/llc/companies/{company_id}/members")
+
+
+@pytest.mark.asyncio
+async def test_http_populated_company_returns_the_envelope_with_role_strings(session_factory):  # noqa: ANN001
+    company, owner, plain = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    await _seed(session_factory, company, {owner: "owner", plain: "member"})
+
+    resp = await _get_over_http(session_factory, company, owner)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"members", "viewer_role", "viewer_can_manage", "viewer_grantable_roles"}
+    assert body["viewer_role"] == "owner"
+    assert body["viewer_can_manage"] is True
+    assert body["viewer_grantable_roles"] == _ALL
+    assert {m["user_id"]: m["role"] for m in body["members"]} == {str(owner): "owner", str(plain): "member"}
+    assert all(isinstance(m["display_name"], str) and m["display_name"] for m in body["members"])
+
+
+@pytest.mark.asyncio
+async def test_http_empty_company_returns_an_envelope_not_an_array(session_factory):  # noqa: ANN001
+    resp = await _get_over_http(session_factory, uuid.uuid4(), uuid.uuid4(), platform_admin=True)
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "members": [],
+        "viewer_role": None,
+        "viewer_can_manage": True,
+        "viewer_grantable_roles": _ALL,
+    }

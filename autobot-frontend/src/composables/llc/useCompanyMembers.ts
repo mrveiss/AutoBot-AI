@@ -31,6 +31,11 @@ export interface MembersApi {
   delete<T>(url: string): Promise<T>
 }
 
+/** Whether a members reply is the envelope (#21096): a legacy bare array, or anything else, is not. */
+export function isMembersEnvelope(res: unknown): res is MembersResponse {
+  return Array.isArray((res as { members?: unknown } | null | undefined)?.members)
+}
+
 /** Whether the viewer may change a member who holds *current*: the server's grantable list decides. */
 export function canChangeRole(grantable: readonly string[], current: string): boolean {
   return grantable.length > 0 && (current !== 'owner' || grantable.includes('owner'))
@@ -83,7 +88,7 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
       const res = await api.get<MembersResponse>(base(id))
       if (!current()) return
       // A reply without the envelope (a backend still on the old array shape) is a failed load.
-      if (!Array.isArray(res?.members)) throw new Error('members response is not the envelope')
+      if (!isMembersEnvelope(res)) throw new Error('members response is not the envelope')
       members.value = res.members
       grantableRoles.value = res.viewer_grantable_roles
       viewerCanManage.value = res.viewer_can_manage
@@ -92,14 +97,15 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
       logger.error('Failed to load members', err)
       if (!current()) return
       errorMessage.value = t('llcMembers.loadError')
-      resetStanding()
+      // A failed RELOAD keeps the last rows (stale, controls withheld); a failed first load has none to keep.
+      resetStanding(members.value.length > 0)
     } finally {
       if (current()) isLoading.value = false
     }
   }
 
-  function resetStanding(): void {
-    members.value = []
+  function resetStanding(keepRows = false): void {
+    if (!keepRows) members.value = []
     grantableRoles.value = []
     viewerCanManage.value = false
     standingKnown.value = false

@@ -40,6 +40,8 @@
         </template>
       </BaseAlert>
 
+      <p v-if="members.length > 0 && !standingKnown && !isLoading" class="members-hint" data-testid="members-stale">{{ t('llcMembers.staleRows') }}</p>
+
       <p v-if="isLoading" class="members-state">{{ t('llcMembers.loading') }}</p>
 
       <BaseCard v-else-if="members.length === 0" class="members-empty">
@@ -82,7 +84,7 @@
             variant="error"
             size="sm"
             :loading="pendingUserId === row.user_id"
-            :disabled="pendingUserId !== null"
+            :disabled="pendingUserId !== null || !standingKnown"
             @click="confirmRemove(row as unknown as Member)"
           >
             {{ t('llcMembers.remove') }}
