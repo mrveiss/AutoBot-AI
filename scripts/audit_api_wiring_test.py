@@ -34,6 +34,7 @@ def _write_openapi(path: Path, paths: list[str]) -> Path:
 
 # --------------------------------------------------------- SLM union ----
 
+
 def test_slm_only_route_is_wired_after_union(tmp_path):
     """A frontend call matching ONLY the SLM backend's route table is not
     unwired once --slm-openapi is unioned in (the #12381 bug)."""
@@ -57,6 +58,7 @@ def test_slm_union_preserves_single_backend_behavior(tmp_path):
 
 
 # --------------------------------------------------------- websocket scan ----
+
 
 def test_static_websocket_paths_finds_prefixed_websocket_route(tmp_path_factory):
     """A source-level scan finds @router.websocket() routes and combines them
@@ -145,6 +147,7 @@ def _runtime_websocket_paths_returns_empty(fake_app) -> bool:
 
 # --------------------------------------------------------- baseline ----
 
+
 def test_load_baseline_skips_blanks_and_comments(tmp_path):
     baseline_file = tmp_path / "baseline.txt"
     baseline_file.write_text(
@@ -181,6 +184,7 @@ def test_partition_baseline_empty_baseline_is_noop():
 
 # --------------------------------------------------------- main() gating ----
 
+
 def test_baselined_call_does_not_fail_but_new_unwired_call_does(tmp_path, monkeypatch, capsys):
     """End-to-end through main(): a call matching an SLM-only route is wired,
     a baselined dead call is reported but non-gating, and a genuinely-new
@@ -204,10 +208,14 @@ def test_baselined_call_does_not_fail_but_new_unwired_call_does(tmp_path, monkey
         "argv",
         [
             "audit_api_wiring.py",
-            "--openapi", str(backend_json),
-            "--slm-openapi", str(slm_json),
-            "--baseline", str(baseline_file),
-            "--only-prefix", "/api",  # skip real-repo unmounted-router scan noise
+            "--openapi",
+            str(backend_json),
+            "--slm-openapi",
+            str(slm_json),
+            "--baseline",
+            str(baseline_file),
+            "--only-prefix",
+            "/api",  # skip real-repo unmounted-router scan noise
             "--fail-on-unwired",
         ],
     )
@@ -241,10 +249,14 @@ def test_no_new_unwired_calls_passes_gate(tmp_path, monkeypatch, capsys):
         "argv",
         [
             "audit_api_wiring.py",
-            "--openapi", str(backend_json),
-            "--slm-openapi", str(slm_json),
-            "--baseline", str(baseline_file),
-            "--only-prefix", "/api",
+            "--openapi",
+            str(backend_json),
+            "--slm-openapi",
+            str(slm_json),
+            "--baseline",
+            str(baseline_file),
+            "--only-prefix",
+            "/api",
             "--fail-on-unwired",
         ],
     )
@@ -254,12 +266,96 @@ def test_no_new_unwired_calls_passes_gate(tmp_path, monkeypatch, capsys):
 
 # --------------------------------------------------------- CLI wiring ----
 
+
 def test_dump_slm_openapi_flag_dispatches(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(audit, "dump_slm_openapi", lambda out: calls.append(out) or 0)
-    monkeypatch.setattr(
-        sys, "argv", ["audit_api_wiring.py", "--dump-slm-openapi", str(tmp_path / "out.json")]
-    )
+    monkeypatch.setattr(sys, "argv", ["audit_api_wiring.py", "--dump-slm-openapi", str(tmp_path / "out.json")])
     rc = audit.main()
     assert rc == 0
     assert calls == [str(tmp_path / "out.json")]
+
+
+# ------------------------------------------- trailing template placeholder ----
+
+
+def test_trailing_query_placeholder_is_not_part_of_the_path_20910():
+    """`${getApiBase()}/evolution/summary${qs ? ...}` reaches /api/evolution/summary (useEvolution.ts form)."""
+    line = "const url = `${getApiBase()}/evolution/summary${qs ? `?${qs}` : ''}`"
+    found = ["/api" + s for s in audit.GETAPIBASE_CALL_RE.findall(line)]
+    assert [audit.norm_path(m) for m in found] == ["/api/evolution/summary"]
+    assert audit.norm_path("/api/x/y${query}") == "/api/x/y"
+    assert audit.norm_path("/api/x/${id}") == "/api/x/{p}"
+    assert audit.norm_path("/api/x/${id}/y") == "/api/x/{p}/y"
+
+
+# ---------------------------------------------- request-URL forms (#20910) ----
+
+
+def _calls_in(tmp_path, source: str) -> set[str]:
+    """What ``frontend_calls`` extracts from one frontend source file (through the real walk)."""
+    src = tmp_path / "autobot-frontend" / "src"
+    src.mkdir(parents=True)
+    (src / "use.ts").write_text(source, encoding="utf-8")
+    saved = audit.FRONTEND_SRC, audit.REPO_ROOT
+    audit.FRONTEND_SRC, audit.REPO_ROOT = src, tmp_path
+    try:
+        return set(audit.frontend_calls())
+    finally:
+        audit.FRONTEND_SRC, audit.REPO_ROOT = saved
+
+
+def test_trailing_query_placeholder_call_is_extracted_without_it_20910(tmp_path):
+    line = "const url = `${getApiBase()}/evolution/summary${qs ? `?${qs}` : ''}`\n"
+    assert "/api/evolution/summary" in _calls_in(tmp_path, line)
+
+
+def test_get_backend_url_api_call_is_extracted_20910(tmp_path):
+    line = "const r = await fetchWithAuth(`${getBackendUrl()}/api/onboarding/status`, {})\n"
+    assert "/api/onboarding/status" in _calls_in(tmp_path, line)
+
+
+def test_get_backend_url_root_call_is_extracted_20910(tmp_path):
+    assert "/ws/terminal" in _calls_in(tmp_path, "const u = `${getBackendUrl()}/ws/terminal`\n")
+
+
+def test_other_host_placeholder_before_api_is_extracted_20910(tmp_path):
+    src = "const a = `${backendUrl}/api/things/${id}`\nconst b = `${NetworkConstants.getBackendUrl()}/api/other`\n"
+    assert {"/api/things/{p}", "/api/other"} <= _calls_in(tmp_path, src)
+
+
+def test_file_local_base_constant_calls_are_extended_20910(tmp_path):
+    src = (
+        "const API_BASE = `${getApiBase()}/knowledge-graph`\n"
+        "const a = `${API_BASE}/entities/${id}`\n"
+        "const b = API_BASE + '/events'\n"
+    )
+    assert {"/api/knowledge-graph/entities/{p}", "/api/knowledge-graph/events"} <= _calls_in(tmp_path, src)
+
+
+def test_parameterised_base_constant_calls_are_extended_20910(tmp_path):
+    """RolesView form: ``const base = `/api/llc/roles/${companyId.value}/${roleId}` `` then ``${base}/holders``."""
+    src = (
+        "const base = `/api/llc/roles/${companyId.value}/${roleId}`\n"
+        "const a = await api.get(`${base}/holders?include_past=${past}`)\n"
+        "const b = await api.get(`${base}/permissions`)\n"
+    )
+    assert {"/api/llc/roles/{p}/{p}/holders", "/api/llc/roles/{p}/{p}/permissions"} <= _calls_in(tmp_path, src)
+
+
+def test_get_api_base_is_not_a_host_placeholder_for_api_paths_20910(tmp_path):
+    """`${getApiBase()}/api/x` is `/api/api/x` at runtime; it must not also read as a call to `/api/x`."""
+    found = _calls_in(tmp_path, "const u = `${getApiBase()}/api/x`\n")
+    assert "/api/api/x" in found and "/api/x" not in found
+
+
+def test_chained_base_constants_resolve_in_declaration_order_20910(tmp_path):
+    """``const CHILD = `${BASE}/sub` `` then ``${CHILD}/leaf``: the leaf is a call, not an unwired route."""
+    src = (
+        "const BASE = `${getApiBase()}/knowledge-graph`\n"
+        "const CHILD = `${BASE}/entities`\n"
+        "const a = await api.get(`${CHILD}/${id}/leaf`)\n"
+    )
+    assert "/api/knowledge-graph/entities/{p}/leaf" in _calls_in(tmp_path, src)
+    # a value led by a name that is not a base is no base: nothing is invented
+    assert not any("leaf" in c for c in _calls_in(tmp_path / "x", "const C = `${unknown}/entities`\nf(`${C}/leaf`)\n"))

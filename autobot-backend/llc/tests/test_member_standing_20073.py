@@ -119,3 +119,28 @@ async def test_the_role_is_the_callers_not_another_members(session_factory):  # 
 
     assert {r["viewer_role"] for r in rows} == {"member"}
     assert {r["viewer_grantable_roles"] == [] for r in rows} == {True}
+
+
+@pytest.mark.asyncio
+async def test_a_platform_admin_with_no_membership_can_manage(session_factory):  # noqa: ANN001
+    """#20542: the CEO routes let a platform admin through, so the flag must say so."""
+    company, member = uuid.uuid4(), uuid.uuid4()
+    await _seed(session_factory, company, {member: "owner"})
+
+    rows = await _list_as(session_factory, company, uuid.uuid4(), platform_admin=True)
+
+    assert rows[0]["viewer_role"] is None
+    assert {r["viewer_can_manage"] for r in rows} == {True}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "role,expected", [("owner", True), ("admin", True), ("member", False), ("lead", False), ("guest", False)]
+)
+async def test_viewer_can_manage_follows_the_company_admin_gate(session_factory, role, expected):  # noqa: ANN001
+    company, viewer, other = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    await _seed(session_factory, company, {viewer: role, other: "member"})
+
+    rows = await _list_as(session_factory, company, viewer)
+
+    assert {r["viewer_can_manage"] for r in rows} == {expected}
