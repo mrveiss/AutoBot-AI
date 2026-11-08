@@ -79772,6 +79772,11 @@ export interface components {
             paused_at?: string | null;
             /** Paused By */
             paused_by?: string | null;
+            /**
+             * Paused By Name
+             * @description Display name of the user in paused_by; null for system actors or unknown users.
+             */
+            paused_by_name?: string | null;
             /** Error Detail */
             error_detail?: string | null;
             /** Error At */
