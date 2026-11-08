@@ -18,10 +18,9 @@ from fastapi import HTTPException
 from starlette.requests import ClientDisconnect
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.client_disconnect import is_client_disconnect, log_client_disconnect
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import RetryConfig, exponential_backoff_delay
-
-from autobot_shared.client_disconnect import is_client_disconnect, log_client_disconnect
 
 from .boundary_manager import get_error_boundary_manager
 from .hooks import get_cancel_scope_provider
