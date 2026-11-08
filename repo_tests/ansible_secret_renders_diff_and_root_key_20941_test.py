@@ -38,11 +38,21 @@ def _ansible_files(root: Path = ROOT) -> list[Path]:
     return [root / f for f in found if "/ansible/" in f and "node_modules" not in f]
 
 
-#: Measured 2026-11-08: 361 tracked ansible yml/yaml files; 250 leaves room for pruning before the sweep narrows.
+def _all_tracked_yaml(root: Path = ROOT) -> int:
+    try:
+        return len(tracked_paths(root, "*.yml", "*.yaml"))
+    except EmptyEnumeration:
+        return 0
+
+
+#: Measured 2026-11-08: the sweep reaches 361 of the 566 tracked yml/yaml files (63.8%). A share of all
+#: tracked YAML moves with the tree (an absolute count would need a ``growth`` allowance that the tree
+#: outgrows, #21034), so 0.5 sits below the measured share and fails only when the sweep narrows.
 REACH = declare(
     "ansible-secret-renders-20941",
     discover=_ansible_files,
-    floor=361,  # mid-window: population 361, window (361, 361)
+    reference=_all_tracked_yaml,
+    min_fraction=0.5,
     what="tracked ansible yml/yaml files swept for env/secrets writes and root-key renders",
     roots=("autobot-slm-backend/ansible",),
 )
@@ -160,19 +170,24 @@ _ENV = jinja2.Environment(undefined=jinja2.ChainableUndefined)  # nosec B701 -- 
 _ENV.filters.update(bool=lambda v: str(v).lower() in ("1", "true", "yes"), dirname=lambda v: str(v).rsplit("/", 1)[0])
 
 
-def _read_like_the_reader(slm_file: str) -> str:
+def _unquote_filter(tasks) -> tuple[str, str]:
+    """The pattern and replacement of the reader's own ``regex_replace``, read from its task."""
+    expose = next(t for t in tasks if "_slm_root_key_read" in str(t.get("ansible.builtin.set_fact", "")))
+    expr = expose["ansible.builtin.set_fact"]["_slm_root_key_read"]
+    found = re.search(r"regex_replace\('(.*?)',\s*'(.*?)'\)", expr)
+    assert found, "the reader no longer unquotes with regex_replace: re-point this test"
+    return found.group(1), found.group(2)
+
+
+def _read_like_the_reader(slm_file: str, tasks=None) -> str:
     """The reader's own grep pattern and unquote filter, applied to a file body (what `command` + set_fact do)."""
-    tasks = yaml.safe_load(_SHARED.read_text(encoding="utf-8"))
+    tasks = tasks or yaml.safe_load(_SHARED.read_text(encoding="utf-8"))
     argv = next(t for t in tasks if "ansible.builtin.command" in t)["ansible.builtin.command"]["argv"]
     pcre = next(a for a in argv if "AUTOBOT_SECRETS_ROOT_KEY" in a)
     pattern = re.compile(pcre.replace(r"\K", "(?P<key>").replace(r"\s", r"[ \t]") + ")")
     hits = [m.group("key") for ln in slm_file.splitlines() if (m := pattern.match(ln))]
-    expose = next(t for t in tasks if "set_fact" in str(t) and "_slm_root_key_read" in str(t))
-    unquote = expose["ansible.builtin.set_fact"]["_slm_root_key_read"]
-    quotes = re.search(r"regex_replace\('(.+?)', ''\)|regex_replace\(\"(.+?)\", ''\)", unquote)
-    assert quotes or "regex_replace" in unquote, "the reader no longer unquotes: re-point this test"
-    value = (hits[0] if hits else "").strip()
-    return re.sub(r"^[\"']|[\"']$", "", value)
+    old, new = _unquote_filter(tasks)
+    return re.sub(old, new, (hits[0] if hits else "").strip())
 
 
 def _rendered_key_lines(rel: str, key: str) -> list[str]:
@@ -188,10 +203,43 @@ def test_a_populated_slm_file_reaches_both_service_envs_and_a_tag_filtered_run_r
     assert key == "root-key-sample"
     for rel in ("roles/backend/templates/backend.env.j2", "roles/ai-stack/templates/ai-stack.env.j2"):
         assert _rendered_key_lines(rel, key) == [f"{_KEY}=root-key-sample"], rel
-    # `--tags config`: every include of the reader carries `config` in the tags it applies to the reader's tasks.
-    for rel in ("roles/ai-stack/tasks/env_files.yml", "roles/backend/tasks/read_secrets_root_key.yml"):
-        inc = next(t for t in _load(_ANSIBLE / rel) if _SHARED.name in str(t.get("ansible.builtin.include_tasks")))
-        assert "config" in inc["ansible.builtin.include_tasks"]["apply"]["tags"], rel
+    _assert_every_reader_include_carries_its_tags()
+
+
+#: Each include of the reader and the tag a tag-filtered run selects it by (env_only is the `env` path).
+_READER_INCLUDES = {
+    "roles/ai-stack/tasks/env_files.yml": "config",
+    "roles/backend/tasks/read_secrets_root_key.yml": "config",
+    "roles/backend/tasks/main.yml": "config",
+    "roles/backend/tasks/env_only.yml": "env",
+    "roles/backend_services/tasks/main.yml": "config",
+}
+
+
+def _assert_every_reader_include_carries_its_tags() -> None:
+    for rel, tag in _READER_INCLUDES.items():
+        found = 0
+        for t in _load(_ANSIBLE / rel):
+            inc = t.get("ansible.builtin.include_tasks")
+            if "read_slm_secrets_root_key" not in str(inc) and "read_secrets_root_key" not in str(inc):
+                continue
+            found += 1
+            assert tag in inc["apply"]["tags"], f"{rel}: apply tags lack {tag}"
+            assert tag in t["tags"], f"{rel}: the include itself lacks {tag}"
+        assert found, f"{rel}: no include of the reader found"
+
+
+def test_control_changing_the_readers_unquote_filter_changes_the_result() -> None:
+    tasks = yaml.safe_load(_SHARED.read_text(encoding="utf-8"))
+    body = "AUTOBOT_SECRETS_ROOT_KEY='root-key-sample'\n"  # pragma: allowlist secret
+    assert _read_like_the_reader(body, tasks) == "root-key-sample"
+    for t in tasks:
+        fact = t.get("ansible.builtin.set_fact", {})
+        if "_slm_root_key_read" in fact:
+            fact["_slm_root_key_read"] = re.sub(
+                r"regex_replace\('.*?', ''\)", "regex_replace('zz', '')", fact["_slm_root_key_read"]
+            )
+    assert _read_like_the_reader(body, tasks) != "root-key-sample"
 
 
 def test_controls_an_empty_or_commented_slm_file_yields_no_key() -> None:
