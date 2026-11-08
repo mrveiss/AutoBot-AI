@@ -557,3 +557,17 @@ register_env_var(
         range=(1, 10000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_WIPE_SCAN_BATCH",
+        type=int,
+        default=500,
+        description=(
+            "Keys scanned and unlinked per call while an approved knowledge wipe removes knowledge "
+            "key prefixes (services/kb_wipe_action.py, #21048)."
+        ),
+        component="knowledge",
+        range=(1, 10000),
+    )
+)

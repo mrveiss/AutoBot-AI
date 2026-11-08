@@ -210,6 +210,19 @@ def fresh_kb_setup():
         sys.path[:] = before
 
 
+def _resolves(name: str) -> bool:
+    """Whether import target *name* resolves.
+
+    ``find_spec`` raises ValueError for a module a test stubbed into ``sys.modules`` with ``__spec__ = None``.
+    That one case counts as resolved; every other unresolvable import still fails.
+    """
+    try:
+        return importlib.util.find_spec(name) is not None
+    except ValueError:
+        module = sys.modules.get(name)
+        return module is not None and getattr(module, "__spec__", 0) is None
+
+
 @pytest.mark.parametrize(
     ("script", "loader"),
     [
@@ -239,10 +252,7 @@ def test_every_absolute_import_target_in_the_script_resolves(request, script, lo
 
     # #18122 slice 5: the scripts reach the KB through the canonical accessor (knowledge_factory).
     assert targets & {"knowledge", "knowledge_factory"}, "the knowledge-base import must still be exercised"
-    # An already-imported module resolves; find_spec raises ValueError on one whose __spec__ a test stubbed to None.
-    unresolvable = sorted(
-        name for name in targets if name not in sys.modules and importlib.util.find_spec(name) is None
-    )
+    unresolvable = sorted(name for name in targets if not _resolves(name))
     assert unresolvable == []
 
 
@@ -318,6 +328,8 @@ def test_fresh_kb_setup_smoke_test_uses_the_real_knowledge_base_surface(fresh_kb
     searches = []
 
     class FakeKnowledgeBase:
+        redis_index_name = "llama_index"  # #21121: the smoke test inspects the KB's own index
+
         def __init__(self):
             self._docs = create_autospec(DocumentsMixin, instance=True)
             self._docs.add_document_from_file.return_value = {"status": "success"}
@@ -342,3 +354,12 @@ def test_fresh_kb_setup_smoke_test_uses_the_real_knowledge_base_surface(fresh_kb
     assert asyncio.run(fresh_kb_setup._test_knowledge_base(kb, FakeRedis())) is True
     assert kb._docs.add_document_from_file.await_args.kwargs["category"] == "documentation"
     assert searches == [("AutoBot features", 2)]
+
+
+def test_resolves_accepts_only_the_stubbed_spec_none_case(monkeypatch):
+    """Contrast for ``_resolves``: a ``__spec__ = None`` stub passes; a missing module still fails."""
+    import types
+
+    monkeypatch.setitem(sys.modules, "stub_with_no_spec_21048", types.SimpleNamespace(__spec__=None))
+    assert _resolves("stub_with_no_spec_21048")
+    assert not _resolves("definitely_not_a_module_21048")

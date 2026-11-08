@@ -5,11 +5,14 @@
 """The ChromaDB half of the approved knowledge wipe (#21048, #17038).
 
 The KB's embeddings live in ChromaDB (``knowledge/base.py`` ``_init_vector_store``), not in Redis, so a
-wipe that only flushed the ``knowledge`` Redis database would leave every vector behind. Only the KB's own
-collections are cleared, by explicit name: the configured collection (``memory.chromadb.collection_name``)
-and the collection of the active embedding space. The persist directory is never touched, other
-collections (per-company KBs, memory) are never listed, and a collection is emptied rather than dropped so
-a live KB's open handle stays valid.
+wipe that only cleared Redis would leave every vector behind. Only the KB's own collections are cleared,
+by explicit name: the configured collection (``memory.chromadb.collection_name``) and the collection of
+the active embedding space. The persist directory is never touched, other collections (per-company KBs,
+memory) are never listed, and a collection is emptied rather than dropped so a live KB's open handle
+stays valid.
+
+The names are resolved by the caller BEFORE anything is deleted and passed in: the active space is read
+from Redis, so resolving it afterwards would read a state the wipe had already changed.
 """
 
 from __future__ import annotations
@@ -48,11 +51,11 @@ async def default_chroma_client():
     return await get_async_default_client(db_path=str(path))
 
 
-async def plan_chroma(client_factory: ChromaFactory | None = None) -> list[dict]:
-    """Read only: each KB collection that exists, with its vector count."""
+async def plan_chroma(names: list[str], client_factory: ChromaFactory | None = None) -> list[dict]:
+    """Read only: each named collection that exists, with its vector count."""
     client = await (client_factory or default_chroma_client)()
     plan = []
-    for name in kb_collection_names():
+    for name in names:
         collection = await client.get_collection_or_none(name)
         if collection is not None:
             plan.append({"name": name, "vectors": int(await collection.count())})
@@ -68,15 +71,18 @@ async def _empty(collection) -> None:
         await collection.delete(ids=ids)
 
 
-async def clear_chroma(client_factory: ChromaFactory | None = None) -> list[dict]:
-    """Empty each existing KB collection; return what it held (name and vector count before)."""
+async def clear_chroma(names: list[str], record: list[dict], client_factory: ChromaFactory | None = None) -> None:
+    """Empty each named collection that exists, recording into *record* as it goes.
+
+    An entry is appended BEFORE its collection is emptied, with ``complete=False``, and flipped when
+    the emptying finishes, so a failure mid-way still shows what was started.
+    """
     client = await (client_factory or default_chroma_client)()
-    cleared = []
-    for name in kb_collection_names():
+    for name in names:
         collection = await client.get_collection_or_none(name)
         if collection is None:
             continue
-        before = int(await collection.count())
+        entry = {"name": name, "vectors": int(await collection.count()), "complete": False}
+        record.append(entry)
         await _empty(collection)
-        cleared.append({"name": name, "vectors": before})
-    return cleared
+        entry["complete"] = True

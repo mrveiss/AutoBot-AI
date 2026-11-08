@@ -82,6 +82,22 @@ To install AutoBot, follow the setup guide in the README.
     return test_file
 
 
+def _log_vector_dimension(r, idx_name: str) -> None:
+    """Log the vector dimension of index *idx_name* from ``FT.INFO``.
+
+    ``get_redis_client`` returns a decode_responses=True client, so FT.INFO elements arrive as str, not
+    the bytes this used to index with (#13290) -- decode defensively for both wire shapes.
+    """
+    info = decode_redis_list(r.execute_command("FT.INFO", idx_name))
+    attrs = info[info.index("attributes") + 1]
+    for attr in attrs:
+        if "vector" in attr:
+            for i, item in enumerate(attr):
+                if item == "dim":
+                    logger.info(f"   Vector dimension: {attr[i+1]}")
+                    break
+
+
 async def _test_knowledge_base(kb, r) -> bool:
     """Test knowledge base with sample document.
 
@@ -113,20 +129,12 @@ async def _test_knowledge_base(kb, r) -> bool:
         indexes = r.execute_command("FT._LIST")
         logger.info(f"   Indexes: {indexes}")
 
-        if indexes:
-            # get_redis_client returns a decode_responses=True client, so FT.INFO
-            # elements arrive as str, not the bytes this used to index with
-            # (#13290) — decode defensively for both wire shapes.
-            idx_name = decode_redis_value(indexes[0])
-            info = decode_redis_list(r.execute_command("FT.INFO", idx_name))
-            attrs_idx = info.index("attributes")
-            attrs = info[attrs_idx + 1]
-            for attr in attrs:
-                if "vector" in attr:
-                    for i, item in enumerate(attr):
-                        if item == "dim":
-                            logger.info(f"   Vector dimension: {attr[i+1]}")
-                            break
+        # #21121: the index the KB reports is the one inspected; another index in the list is not a pass.
+        names = [decode_redis_value(name) for name in indexes or []]
+        if kb.redis_index_name not in names:
+            logger.error(f"   KB index {kb.redis_index_name!r} is missing from the knowledge database: {names}")
+            return False
+        _log_vector_dimension(r, kb.redis_index_name)
 
         return True
     else:
@@ -192,7 +200,10 @@ def _parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--initialize", action="store_true", help="after an approved wipe: create the KB and run the smoke test"
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.initialize and args.dry_run:
+        parser.error("--dry-run previews the wipe; --initialize ingests a document. They cannot be combined.")
+    return args
 
 
 if __name__ == "__main__":

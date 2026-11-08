@@ -57,6 +57,8 @@ class FakeKnowledgeBase:
     and reject anything they would reject.
     """
 
+    redis_index_name = "llama_index"
+
     async def add_document_from_file(self, file_path: str, category: str = "general", metadata=None):
         return {"status": "success"}
 
@@ -160,3 +162,34 @@ async def test_initialize_reads_the_knowledge_database_never_main(monkeypatch):
     monkeypatch.setitem(sys.modules, "knowledge_factory", types.SimpleNamespace(get_knowledge_base_async=fake_kb))
     assert await fresh_kb_setup.fresh_setup(initialize=True) is True
     assert asked == ["knowledge"]
+
+
+@pytest.mark.asyncio
+async def test_smoke_test_inspects_the_kb_index_not_the_first_one_listed(caplog):
+    """#21121: FT.INFO runs on ``kb.redis_index_name``; a different first index is not a pass."""
+
+    class TwoIndexes(FakeRedis):
+        def execute_command(self, *args):
+            self.asked = getattr(self, "asked", []) + [args]
+            if args[0] == "FT._LIST":
+                return ["other_index", "llama_index"]
+            return super().execute_command(*args)
+
+    redis = TwoIndexes()
+    with caplog.at_level("INFO", logger=fresh_kb_setup.logger.name):
+        assert await fresh_kb_setup._test_knowledge_base(FakeKnowledgeBase(), redis) is True
+    assert ("FT.INFO", "llama_index") in redis.asked and ("FT.INFO", "other_index") not in redis.asked
+
+
+@pytest.mark.asyncio
+async def test_smoke_test_fails_when_the_kb_index_is_missing():
+    class OtherOnly(FakeRedis):
+        def execute_command(self, *args):
+            return ["other_index"] if args[0] == "FT._LIST" else super().execute_command(*args)
+
+    assert await fresh_kb_setup._test_knowledge_base(FakeKnowledgeBase(), OtherOnly()) is False
+
+
+def test_dry_run_with_initialize_is_an_argument_error():
+    with pytest.raises(SystemExit):
+        fresh_kb_setup._parse_args(["--dry-run", "--initialize"])
