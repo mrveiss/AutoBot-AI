@@ -18,6 +18,13 @@ vi.mock('@/utils/debugUtils', () => ({
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 const row = (name: string) => ({ user_id: name, display_name: name, role: 'member' })
+// The response: rows, and the viewer's standing once beside them (#21096).
+const reply = (rows: unknown[], can = false, grantable: string[] = []) => ({
+  members: rows,
+  viewer_role: null,
+  viewer_can_manage: can,
+  viewer_grantable_roles: grantable,
+})
 
 function deferred<T>() {
   let resolve!: (v: T) => void
@@ -42,22 +49,22 @@ function setup(get: MembersApi['get']) {
 
 describe('useCompanyMembers load ordering', () => {
   it('lets only the newest of two overlapping loads land', async () => {
-    const first = deferred<unknown[]>()
-    const second = deferred<unknown[]>()
+    const first = deferred<unknown>()
+    const second = deferred<unknown>()
     const get = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
     const api = setup(get as unknown as MembersApi['get'])
     const a = api.load()
     const b = api.load()
-    second.resolve([row('new')])
+    second.resolve(reply([row('new')]))
     await b
-    first.resolve([row('old')])
+    first.resolve(reply([row('old')]))
     await a
     expect(api.members.value.map((m) => m.user_id)).toEqual(['new'])
     expect(api.isLoading.value).toBe(false)
   })
 
   it('does not show the loading state when rows are already there', async () => {
-    const get = vi.fn().mockResolvedValueOnce([row('x')]).mockReturnValueOnce(new Promise(() => undefined))
+    const get = vi.fn().mockResolvedValueOnce(reply([row('x')])).mockReturnValueOnce(new Promise(() => undefined))
     const api = setup(get as unknown as MembersApi['get'])
     await api.load()
     void api.load()
@@ -74,17 +81,28 @@ describe('rolesToOffer', () => {
   })
 })
 
-describe('useCompanyMembers viewerCanManage (#20542)', () => {
-  const withFlag = (flag: boolean | undefined) => [{ ...row('a'), viewer_role: null, viewer_can_manage: flag }]
-
-  it.each([[true, true], [false, false], [undefined, false]])('reads the server flag %s as %s', async (flag, expected) => {
-    const api = setup(vi.fn().mockResolvedValue(withFlag(flag)) as unknown as MembersApi['get'])
+describe('useCompanyMembers viewerCanManage (#20542, #21096)', () => {
+  it.each([[true, true], [false, false]])('reads the server flag %s as %s', async (flag, expected) => {
+    const api = setup(vi.fn().mockResolvedValue(reply([row('a')], flag)) as unknown as MembersApi['get'])
     await api.load()
     expect(api.viewerCanManage.value).toBe(expected)
   })
 
-  it('is false before any rows are known', () => {
-    const api = setup(vi.fn() as unknown as MembersApi['get'])
+  it('is true for a platform admin on a company with no member rows', async () => {
+    const api = setup(vi.fn().mockResolvedValue(reply([], true, ['owner', 'admin'])) as unknown as MembersApi['get'])
+    await api.load()
+    expect(api.members.value).toEqual([])
+    expect(api.viewerCanManage.value).toBe(true)
+    expect(api.standingKnown.value).toBe(true)
+    expect(api.grantableRoles.value).toEqual(['owner', 'admin'])
+  })
+
+  it('is false, and the standing unknown, before any load and after a failed one', async () => {
+    const api = setup(vi.fn().mockRejectedValue(new Error('HTTP 503')) as unknown as MembersApi['get'])
     expect(api.viewerCanManage.value).toBe(false)
+    expect(api.standingKnown.value).toBe(false)
+    await api.load()
+    expect(api.viewerCanManage.value).toBe(false)
+    expect(api.standingKnown.value).toBe(false)
   })
 })

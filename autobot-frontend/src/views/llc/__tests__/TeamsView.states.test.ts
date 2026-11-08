@@ -31,9 +31,10 @@ const MEMBERS = [
   { user_id: 'u3', display_name: 'Alex Smith', role: 'guest', is_active: true },
   { user_id: 'u4', display_name: 'Left Person', role: 'member', is_active: false },
 ]
+const MEMBERS_REPLY = { members: MEMBERS, viewer_can_manage: true, viewer_role: 'owner', viewer_grantable_roles: [] }
 const TEAMS = { teams: [{ id: 't1', name: 'Platform', member_user_ids: ['u1', 'u2'] }, { id: 't2', name: 'Empty team', member_user_ids: [] }] }
 
-function reply(teams: unknown, members: unknown = MEMBERS) {
+function reply(teams: unknown, members: unknown = MEMBERS_REPLY) {
   get.mockImplementation((url: string) => {
     const out = url.endsWith('/teams') ? teams : members
     return out instanceof Error ? Promise.reject(out) : Promise.resolve(out)

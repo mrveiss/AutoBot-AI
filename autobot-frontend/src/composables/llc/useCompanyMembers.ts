@@ -11,24 +11,19 @@
  * longer shown is discarded. The server stays the authority on who may change what; the viewer's role
  * and grantable roles it sends are only reflected, to hide what it would refuse.
  */
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { components } from '@/types/generated/api'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useCompanyMembers')
 
-export interface Member {
-  user_id: string
-  /** Never null: `list_members` resolves the whole ladder server-side (#14939). */
-  display_name: string
-  role: string
-  /** The caller's own role in this company; the same on every row. Null without a membership. */
-  viewer_role?: string | null
-  /** The roles the server would let the caller grant or revoke (#20073). */
-  viewer_grantable_roles?: string[]
-  /** Whether the company owner/admin writes would let the caller through, as the server decides it (#20542). */
-  viewer_can_manage?: boolean
-}
+/** The members response: the rows, and the caller's own standing beside them (#21096). */
+export type MembersResponse = components['schemas']['CompanyMembersResponse']
+type MemberRow = components['schemas']['CompanyMemberRow']
+
+/** A member row. `display_name` is never null: `list_members` resolves the whole ladder server-side (#14939). */
+export type Member = Pick<MemberRow, 'user_id' | 'display_name' | 'role'> & Partial<MemberRow>
 
 export interface MembersApi {
   get<T>(url: string): Promise<T>
@@ -51,8 +46,8 @@ function statusOf(err: unknown): number | undefined {
 }
 
 /**
- * The roles the add form offers. With no rows the list carries no standing (it rides on the rows), so an
- * empty company is not read as a refusal: every role is offered and the server decides.
+ * The roles the add form offers. Before the standing is known (not loaded yet, or the load failed) it is
+ * not read as a refusal: every role is offered and the server decides.
  */
 export function rolesToOffer<T extends string>(all: readonly T[], grantable: readonly string[], known: boolean): T[] {
   return known ? all.filter((r) => grantable.includes(r)) : [...all]
@@ -62,6 +57,9 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
   const { t } = useI18n()
   const members = ref<Member[]>([])
   const grantableRoles = ref<string[]>([])
+  // The server's verdict on the owner/admin writes (#20542); it comes with the response, rows or none (#21096).
+  const viewerCanManage = ref(false)
+  const standingKnown = ref(false)
   const isLoading = ref(false)
   const errorMessage = ref('')
   const pendingUserId = ref<string | null>(null)
@@ -82,19 +80,27 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
     isLoading.value = members.value.length === 0
     errorMessage.value = ''
     try {
-      const rows = await api.get<Member[]>(base(id))
+      const res = await api.get<MembersResponse>(base(id))
       if (!current()) return
-      members.value = rows
-      grantableRoles.value = rows[0]?.viewer_grantable_roles ?? []
+      members.value = res.members
+      grantableRoles.value = res.viewer_grantable_roles
+      viewerCanManage.value = res.viewer_can_manage
+      standingKnown.value = true
     } catch (err) {
       logger.error('Failed to load members', err)
       if (!current()) return
       errorMessage.value = t('llcMembers.loadError')
-      members.value = []
-      grantableRoles.value = []
+      resetStanding()
     } finally {
       if (current()) isLoading.value = false
     }
+  }
+
+  function resetStanding(): void {
+    members.value = []
+    grantableRoles.value = []
+    viewerCanManage.value = false
+    standingKnown.value = false
   }
 
   function roleChangeMessage(err: unknown): string {
@@ -146,21 +152,11 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
   // Another company: drop what the old one loaded and fetch the new one's.
   watch(companyId, () => {
     generation += 1
-    members.value = []
-    grantableRoles.value = []
+    resetStanding()
     errorMessage.value = ''
     pendingUserId.value = null
     isLoading.value = false
     void load()
-  })
-
-  // Without rows there is no standing to read; see rolesToOffer.
-  const standingKnown = computed(() => members.value.length > 0)
-
-  // The server's own verdict rides on every row; without rows there is no standing, so it is false.
-  const viewerCanManage = computed<boolean>(() => {
-    const rows = members.value
-    return Array.isArray(rows) && rows[0]?.viewer_can_manage === true
   })
 
   return { members, grantableRoles, viewerCanManage, standingKnown, isLoading, errorMessage, pendingUserId, load, changeRole, removeMember }

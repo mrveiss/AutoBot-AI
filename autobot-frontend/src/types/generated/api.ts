@@ -66895,6 +66895,44 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * CompanyMemberRow
+         * @description One person in the members list.
+         */
+        CompanyMemberRow: {
+            /** Id */
+            id: string;
+            /** Company Id */
+            company_id: string;
+            /** User Id */
+            user_id: string;
+            /** Role */
+            role: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Display Name */
+            display_name: string;
+            /** Is Active */
+            is_active: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CompanyMembersResponse
+         * @description The members and the caller's own standing, which does not depend on there being any.
+         */
+        CompanyMembersResponse: {
+            /** Members */
+            members: components["schemas"]["CompanyMemberRow"][];
+            /** Viewer Role */
+            viewer_role?: string | null;
+            /** Viewer Can Manage */
+            viewer_can_manage: boolean;
+            /** Viewer Grantable Roles */
+            viewer_grantable_roles: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * CompanyRead
          * @description Response schema for a single company.
          */
@@ -176676,9 +176714,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["CompanyMembersResponse"];
                 };
             };
             /** @description Validation Error */

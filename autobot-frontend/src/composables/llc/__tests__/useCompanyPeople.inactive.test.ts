@@ -17,7 +17,7 @@ function respond(members: unknown[]): void {
   // String(url): the mock is also called once with no argument between tests,
   // after mockReset clears the implementation.
   get.mockImplementation((url?: string) => {
-    if (String(url).includes('/members')) return Promise.resolve(members)
+    if (String(url).includes('/members')) return Promise.resolve({ members, viewer_can_manage: false, viewer_role: 'member', viewer_grantable_roles: [] })
     return Promise.resolve({ nodes: [] })
   })
 }
