@@ -14,6 +14,11 @@ Scope is fixed in code, never read from the approval: the KB search indexes and 
 ``knowledge`` Redis database (``services.kb_wipe_redis``) and the KB's own ChromaDB collections, where its
 embeddings live (``services.kb_wipe_chroma``). Settings, including the embedding-model override, survive.
 
+Known partial wipe: the pipeline loader also writes PropertyGraph nodes (``knowledge/pipeline/loaders/
+redis_graph_loader.py``) that the memory graph shares. The wipe removes the loader's own ``entity:`` and
+``timeline:global`` keys but NOT those shared nodes, so the KB graph is left half-wiped until ownership of
+those nodes is split or KB-origin nodes are tagged (tracked in #21128).
+
 The audit record is built step by step, so a failure partway still records exactly what was deleted. A
 self-approval follows the one four-eyes rule (``services.approval_four_eyes``): the only admin may approve
 their own request, flagged; with a second admin it is refused.
@@ -75,6 +80,10 @@ async def propose_kb_wipe(
     """
     from services.approval_gate_service import ApprovalGateService
 
+    if channel == CHANNEL_API and requester_id(requested_by) is None:
+        # Refused before any row exists: a proposal the review hook would always refuse could never be decided
+        # and would block every later proposal behind it.
+        raise ValueError(f"{_WHAT} can be proposed on the API channel only by a user id")
     await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:name))"), {"name": ACTION})
     query = select(Approval).where(
         Approval.status == ApprovalStatus.PENDING.value, Approval.context["action"].astext == ACTION

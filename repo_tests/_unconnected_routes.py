@@ -61,7 +61,11 @@ _CALLER_SUFFIXES = (".py", ".sh", ".yml", ".yaml", ".j2", ".ts", ".js", ".vue", 
 
 #: Prefixes whose callers live outside this repository or outside a browser, beyond the
 #: agent- and machine-facing ones ``scripts/dead_surface.py`` already declares. Value: who calls.
-EXTERNAL_CALLER_PREFIXES: dict[str, str] = {}
+EXTERNAL_CALLER_PREFIXES: dict[str, str] = {
+    # #21048: the knowledge-wipe preview and proposal are called by an administrator over HTTP; there is no
+    # UI for it yet. The operator script raises the same proposal directly through the same service.
+    "/api/admin/knowledge-wipe": "an administrator, over HTTP (no UI yet)",
+}
 
 
 def load_script(root: Path, name: str) -> ModuleType:

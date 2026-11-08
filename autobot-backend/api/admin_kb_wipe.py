@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.approval_four_eyes import requester_id
 from services.kb_wipe_action import ACTION, plan_kb_wipe, propose_kb_wipe, register_kb_wipe_action
 
 router = APIRouter(prefix="/admin", dependencies=[Depends(check_admin_permission)])
@@ -40,5 +41,7 @@ async def propose_knowledge_wipe(
     requester = current_user.get("id") or current_user.get("user_id")
     if not requester:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "The proposal cannot be attributed to a verified user")
+    if requester_id(str(requester)) is None:  # refused before any plan is read or proposal row exists
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "The proposal needs a requester that is a user id")
     approval = await propose_kb_wipe(session, str(requester), await plan_kb_wipe())
     return {"approval_id": str(approval.id), "status": approval.status, "action": ACTION}

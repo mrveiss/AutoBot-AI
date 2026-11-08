@@ -397,7 +397,7 @@ async def test_propose_takes_the_advisory_lock_first_and_refreshes_a_reused_prop
     found.scalars.return_value.first.return_value = pending
     session.execute = AsyncMock(side_effect=lambda stmt, *a: calls.append(str(stmt)[:30]) or found)
     session.commit = AsyncMock()
-    got = await action.propose_kb_wipe(session, "u", {"total_keys": 9})
+    got = await action.propose_kb_wipe(session, str(uuid.uuid4()), {"total_keys": 9})
     assert got is pending and "pg_advisory_xact_lock" in calls[0]
     assert pending.context["plan"] == {"total_keys": 9}
     session.commit.assert_awaited()
@@ -427,3 +427,25 @@ def test_index_names_come_from_ft_list_without_a_second_prefix_scan(fleet):
     fleet["knowledge"].scan_iter = lambda match, count=None: scans.append(match) or original(match, count)
     redis_mod.execute_redis([], _factory(fleet))
     assert len(scans) == len(redis_mod.KB_KEY_PREFIXES)  # one scan per prefix, none for planning
+
+
+@pytest.mark.asyncio
+async def test_a_non_user_api_requester_is_refused_before_any_row_or_lock():
+    session = MagicMock(execute=AsyncMock(), commit=AsyncMock())
+    with pytest.raises(ValueError):
+        await action.propose_kb_wipe(session, "alice", {"total_keys": 1})
+    session.execute.assert_not_awaited()
+    session.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_route_answers_403_for_a_non_user_requester_and_creates_nothing():
+    from fastapi import HTTPException
+
+    from api import admin_kb_wipe
+
+    session = MagicMock(execute=AsyncMock(), commit=AsyncMock())
+    with pytest.raises(HTTPException) as caught:
+        await admin_kb_wipe.propose_knowledge_wipe(current_user={"id": "alice"}, session=session)
+    assert caught.value.status_code == 403
+    session.execute.assert_not_awaited()
