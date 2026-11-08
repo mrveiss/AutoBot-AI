@@ -123,6 +123,7 @@ class AuditAction(str, Enum):
     SSO_UNLINK = "sso.unlink"
     USER_ACTIVATE = "user.activate"
     USER_DEACTIVATE = "user.deactivate"
+    USER_PLATFORM_ADMIN_CHANGE = "user.platform_admin_change"  # #20670: the platform-admin flag was granted or revoked
     TEAM_CREATE = "team.create"
     TEAM_UPDATE = "team.update"
     TEAM_DELETE = "team.delete"
