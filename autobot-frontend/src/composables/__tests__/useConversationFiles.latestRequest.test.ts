@@ -157,5 +157,65 @@ describe('useConversationFiles latest-request ownership (#21159)', () => {
         vi.useRealTimers()
       }
     })
+
+    it('two uploads in one session: the older finishing last still surfaces its error', async () => {
+      const session = ref('s1')
+      const older = deferred<{ success: boolean }>()
+      const newer = deferred<{ success: boolean }>()
+      post.mockImplementationOnce(() => older.promise).mockImplementationOnce(() => newer.promise)
+      const f = useConversationFiles(session as ReturnType<typeof ref<string>> & { value: string })
+      const doneOld = f.uploadFiles([new File(['x'], 'old.txt')])
+      const doneNew = f.uploadFiles([new File(['y'], 'new.txt')])
+      await nextTick()
+      newer.resolve({ success: true })
+      await doneNew
+      older.reject(new Error('boom'))
+      expect(await doneOld).toBe(false)
+      expect(f.error.value).not.toBeNull()
+    })
+
+    it('two uploads in one session: the older finishing last still reloads the list', async () => {
+      const session = ref('s1')
+      const older = deferred<{ success: boolean }>()
+      const newer = deferred<{ success: boolean }>()
+      post.mockImplementationOnce(() => older.promise).mockImplementationOnce(() => newer.promise)
+      get.mockResolvedValue(listing('late'))
+      const f = useConversationFiles(session as ReturnType<typeof ref<string>> & { value: string })
+      const doneOld = f.uploadFiles([new File(['x'], 'old.txt')])
+      const doneNew = f.uploadFiles([new File(['y'], 'new.txt')])
+      await nextTick()
+      newer.resolve({ success: true })
+      await doneNew
+      get.mockClear()
+      older.resolve({ success: true })
+      expect(await doneOld).toBe(true)
+      expect(get).toHaveBeenCalled()
+    })
+  })
+
+  describe('loading is scoped to the conversation that started the mutation', () => {
+    it('an old-session upload neither keeps loading true nor decrements the new session count', async () => {
+      const session = ref('s1')
+      const oldReply = deferred<{ success: boolean }>()
+      const newReply = deferred<{ success: boolean }>()
+      post.mockImplementationOnce(() => oldReply.promise).mockImplementationOnce(() => newReply.promise)
+      get.mockResolvedValue(listing('n'))
+      const f = useConversationFiles(session as ReturnType<typeof ref<string>> & { value: string })
+      const oldDone = f.uploadFiles([new File(['x'], 'a.txt')])
+      await nextTick()
+      expect(f.loading.value).toBe(true)
+      session.value = 's2'
+      f.resetForSession()
+      expect(f.loading.value).toBe(false)
+      const newDone = f.uploadFiles([new File(['y'], 'b.txt')])
+      await nextTick()
+      expect(f.loading.value).toBe(true)
+      oldReply.resolve({ success: true })
+      await oldDone
+      expect(f.loading.value).toBe(true)
+      newReply.resolve({ success: true })
+      await newDone
+      expect(f.loading.value).toBe(false)
+    })
   })
 })

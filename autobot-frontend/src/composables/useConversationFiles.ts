@@ -20,17 +20,13 @@ import { describeApiRefusal } from '@/utils/conversationFileUpload'
 import i18n from '@/i18n'
 import { getApiBase } from '@/config/ssot-config'
 import { mapFileList, type BackendFileList } from '@/utils/conversationFileList'
-import { useLoadingState } from '@/composables/useLoadingState'
 import { useLatestRequest } from './useLatestRequest'
 import {
   useConversationFilePreview,
-  previewBlobType,
   isPreviewable,
-  PREVIEW_BLOB_REVOKE_MS,
   type PreviewPane
 } from './useConversationFilePreview'
 
-export { previewBlobType, PREVIEW_BLOB_REVOKE_MS }
 export type { PreviewPane }
 
 // Create scoped logger for useConversationFiles
@@ -100,7 +96,22 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
     uploads_count: 0,
     generated_count: 0
   })
-  const { isLoading: opLoading, wrap } = useLoadingState()
+  /**
+   * Mutations (upload, delete, ...) in flight for the CURRENT conversation (#21159). A mutation started in a previous
+   * conversation neither counts toward `loading` after the switch nor decrements the new conversation's count.
+   */
+  const opCount = ref(0)
+  let opEpoch = 0
+  const opLoading = computed(() => opCount.value > 0)
+  const wrap = async <T>(fn: () => Promise<T>): Promise<T> => {
+    const epoch = opEpoch
+    opCount.value++
+    try {
+      return await fn()
+    } finally {
+      if (epoch === opEpoch) opCount.value--
+    }
+  }
   /** True while the latest list request is in flight; a superseded request never clears it (#21159). */
   const listLoading = ref(false)
   const loading = computed(() => opLoading.value || listLoading.value)
@@ -181,7 +192,9 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
 
   /** Run one upload; progress, errors and the reload belong to the session that started it (#21159). */
   const sendUpload = async (fileList: FileList | File[], session: string, token: number): Promise<boolean> => {
-    const owns = (): boolean => uploadRequest.isCurrent(token) && currentSessionId() === session
+    const inSession = (): boolean => currentSessionId() === session
+    // The token only gates the shared progress display; the reload and the error belong to the session.
+    const owns = (): boolean => uploadRequest.isCurrent(token) && inSession()
     try {
       const formData = new FormData()
       Array.from(fileList).forEach((file) => formData.append('files', file))
@@ -194,14 +207,14 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
         }
       })
       if (data?.success) {
-        if (owns()) await loadFiles()
+        if (inSession()) await loadFiles()
         if (owns()) uploadProgress.value = 100
         return true
       }
-      if (owns()) error.value = i18n.global.t('chat.input.uploadError.unknown')
+      if (inSession()) error.value = i18n.global.t('chat.input.uploadError.unknown')
       return false
     } catch (err: unknown) {
-      if (owns()) error.value = failureText(err, i18n.global.t('chat.input.uploadError.unknown'))
+      if (inSession()) error.value = failureText(err, i18n.global.t('chat.input.uploadError.unknown'))
       logger.error('Upload error:', err)
       return false
     } finally {
@@ -289,6 +302,8 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
   const resetForSession = (): void => {
     listRequest.invalidate()
     uploadRequest.invalidate()
+    opEpoch++
+    opCount.value = 0
     listLoading.value = false
     uploadProgress.value = 0
     files.value = []
