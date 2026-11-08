@@ -203,3 +203,55 @@ def test_handle_error_reraises_a_disconnect_unchanged():
     with pytest.raises(WebSocketDisconnect) as info:
         asyncio.run(get_error_boundary_manager().handle_error(exc, ctx))
     assert info.value is exc
+
+
+class _Socket:
+    def __init__(self, client_state, application_state=None):
+        self.client_state = client_state
+        self.application_state = application_state or client_state
+
+
+def test_receive_after_disconnect_is_classified_by_socket_state_not_text():
+    from starlette.websockets import WebSocketState
+
+    err = RuntimeError("anything at all")
+    assert is_client_disconnect(err, websocket=_Socket(WebSocketState.DISCONNECTED))
+    assert is_client_disconnect(err, websocket=_Socket(WebSocketState.CONNECTED, WebSocketState.DISCONNECTED))
+
+
+def test_the_same_runtime_error_on_a_live_socket_stays_an_error():
+    from starlette.websockets import WebSocketState
+
+    err = RuntimeError('Cannot call "receive" once a disconnect message has been received.')
+    assert not is_client_disconnect(err, websocket=_Socket(WebSocketState.CONNECTED))
+    assert not is_client_disconnect(err)
+
+
+def _middleware_app(exc: Exception) -> FastAPI:
+    """The real app wiring plus an outermost-user middleware that raises ``exc``."""
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    from autobot_shared.client_disconnect import install_client_disconnect_guard
+
+    app = _app(RuntimeError("never reached"))
+    install_client_disconnect_guard(app)
+
+    async def raising(request, call_next):
+        raise exc
+
+    app.add_middleware(BaseHTTPMiddleware, dispatch=raising)
+    return app
+
+
+def test_a_disconnect_from_an_outer_middleware_is_consumed_quietly(caplog):
+    with caplog.at_level(logging.DEBUG):
+        escaped = _drive_asgi(_middleware_app(ClientDisconnect()), "/boom")
+    assert escaped == []
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR and r.name in ("app_factory", "uvicorn.error")]
+
+
+def test_a_real_error_from_an_outer_middleware_still_escapes_and_logs(caplog):
+    with caplog.at_level(logging.DEBUG):
+        escaped = _drive_asgi(_middleware_app(ValueError("real")), "/boom")
+    assert [type(e) for e in escaped] == [ValueError]
+    assert any(r.levelno >= logging.ERROR and r.name == "app_factory" and r.exc_info for r in caplog.records)

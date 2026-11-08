@@ -493,7 +493,7 @@ async def live_events_endpoint(websocket: WebSocket):
                 log_client_disconnect(logger, disconnect, "live_events_endpoint")
                 break
             except Exception as exc:
-                if is_client_disconnect(exc, on_send=True):
+                if is_client_disconnect(exc, on_send=True, websocket=websocket):
                     log_client_disconnect(logger, exc, "live_events_endpoint")
                 else:
                     logger.error("Live events WebSocket receive error: %s", exc)

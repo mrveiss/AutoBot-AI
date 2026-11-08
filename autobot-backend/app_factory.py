@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 # Import initialization modules
 from autobot_shared.client_disconnect import (
     CLIENT_CLOSED_REQUEST,
+    install_client_disconnect_guard,
     is_client_disconnect,
     log_client_disconnect,
     register_client_disconnect_handlers,
@@ -219,6 +220,7 @@ class AppFactory:
 
         # Issue #1733: Global exception handler — prevent stack traces in responses
         _register_exception_handlers(app)
+        install_client_disconnect_guard(app)  # outermost: outer-middleware disconnects too (#20939)
 
         configure_middleware(app, allow_origins=allow_origins)
         register_root_endpoints(app)
