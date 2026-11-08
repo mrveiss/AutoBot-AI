@@ -25,6 +25,7 @@ from typing import Any, Dict, FrozenSet, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
+from code_intelligence.python_files import discover_files
 
 logger = get_logger(__name__)
 
@@ -428,13 +429,6 @@ class RedisOptimizer:
             "**/test_*.py",
             "**/*_test.py",
             "**/tests/**",
-            "**/archive/**",
-            "**/archives/**",
-            "**/.git/**",
-            "**/node_modules/**",
-            "**/__pycache__/**",
-            "**/venv/**",
-            "**/.venv/**",
         ]
 
     def _is_path_excluded(self, rel_path: str, exclude_patterns: List[str]) -> bool:
@@ -465,7 +459,7 @@ class RedisOptimizer:
         self.total_files_scanned = 0  # Issue #686: Reset counter
         target_dir = Path(directory) if directory else self.project_root
         exclude_patterns = exclude_patterns or self._get_default_exclude_patterns()
-        python_files = list(target_dir.rglob("*.py"))
+        python_files = discover_files(target_dir, ("*.py",))
 
         for file_path in python_files:
             if self.total_files_scanned >= max_files:
