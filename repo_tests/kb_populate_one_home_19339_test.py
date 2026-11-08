@@ -29,6 +29,7 @@ from tools.lint import _parse_cache as parse_cache
 
 _ROOT = repo_root()
 _HOME = "autobot_shared/kb_doc_set.py"
+_SCRIPT = "autobot-infrastructure/shared/scripts/populate_knowledge_base.py"
 _ENGINE = "autobot-backend/knowledge_sync_incremental.py"
 _CLI = "autobot-infrastructure/shared/scripts/sync_kb_docs.py"
 _ROOTS = ("autobot-infrastructure",)
@@ -128,3 +129,21 @@ def test_an_agents_dir_of_md_files_is_a_different_concept() -> None:
 def test_the_home_and_an_import_are_not_flagged() -> None:
     assert not pattern_lists('DOC_PATTERNS = ["docs/**/*.md"]\n', _HOME)
     assert not pattern_lists("from populate_knowledge_base import DOC_PATTERNS\n", "x.py")
+
+
+def test_a_checkout_under_a_hidden_directory_still_collects_its_docs(tmp_path: Path) -> None:
+    """The hidden-segment exclusion applies inside the checkout, not to the directories above it."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("populate_kb_hidden", _ROOT / _SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    checkout = tmp_path / ".worktrees" / "t1"
+    (checkout / "docs").mkdir(parents=True)
+    (checkout / "docs" / "guide.md").write_text("# guide\n", encoding="utf-8")
+    (checkout / "docs" / ".hidden.md").write_text("# hidden\n", encoding="utf-8")
+
+    names = sorted(Path(fp).name for fp in module.collect_documentation_files(checkout))
+
+    assert names == ["guide.md"]

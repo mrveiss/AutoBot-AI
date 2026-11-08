@@ -3672,7 +3672,7 @@ export interface paths {
         };
         /**
          * Get organization
-         * @description Get a specific organization by ID.
+         * @description Get a specific organization by ID (own organization or platform admin).
          */
         get: operations["get_organization_api_user_management_organizations__org_id__get"];
         put?: never;
@@ -12230,6 +12230,26 @@ export interface paths {
         post?: never;
         /** Delete Recording */
         delete: operations["delete_recording_api_transcriber_recordings__recording_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transcriber/recordings/{recording_id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Recording Progress
+         * @description SSE stream of processing progress for a recording (consumed by useSseProgress).
+         */
+        get: operations["stream_recording_progress_api_transcriber_recordings__recording_id__progress_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -33429,7 +33449,7 @@ export interface paths {
         post?: never;
         /**
          * Service Delete System Secret
-         * @description Delete a system-vault secret via service identity.
+         * @description Delete a system-vault secret via service identity; 409 while it has dependents (#20640).
          */
         delete: operations["service_delete_system_secret_api_v2_secrets_system__secret_id__delete"];
         options?: never;
@@ -33473,7 +33493,10 @@ export interface paths {
         /** Rotate Secret */
         put: operations["rotate_secret_api_v2_secrets__secret_id__put"];
         post?: never;
-        /** Delete Secret */
+        /**
+         * Delete Secret
+         * @description Delete a secret; 409 with the dependents listed unless ``confirm_dependents`` (#20640).
+         */
         delete: operations["delete_secret_api_v2_secrets__secret_id__delete"];
         options?: never;
         head?: never;
@@ -124678,6 +124701,37 @@ export interface operations {
             };
         };
     };
+    stream_recording_progress_api_transcriber_recordings__recording_id__progress_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recording_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     audio_chunks_api_transcriber_recordings__recording_id__audio_chunks_get: {
         parameters: {
             query?: never;
@@ -152771,7 +152825,9 @@ export interface operations {
     };
     delete_secret_api_v2_secrets__secret_id__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                confirm_dependents?: boolean;
+            };
             header?: never;
             path: {
                 secret_id: string;
