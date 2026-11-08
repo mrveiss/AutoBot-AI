@@ -10,7 +10,6 @@ Provides real-time updates for deployments and system events.
 
 import asyncio
 import logging
-import os
 import time
 from typing import Dict, Set
 
@@ -19,9 +18,9 @@ from fastapi import APIRouter, HTTPException, WebSocket, status
 from autobot_shared.auth.interactive_principal import is_purpose_bound, is_service_token
 from autobot_shared.auth.revocation_unavailable import REVOCATION_UNAVAILABLE_DETAIL
 from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
-from autobot_shared.fleet_constants import DEFAULT_HEARTBEAT_INTERVAL
 from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.websocket_subprotocol import accept_websocket, negotiated_subprotocol, resolve_ws_token
+from config import settings
 from services.auth import auth_service, is_admin_session
 
 logger = logging.getLogger(__name__)
@@ -29,9 +28,6 @@ router = APIRouter(prefix="/ws", tags=["websocket"])
 
 # RFC 6455 close code 1013: the server cannot serve right now, retry later (#18892).
 _WS_TRY_AGAIN_LATER = 1013
-
-# Idle seconds before the server pings a quiet stream client; env-overridable.
-_WS_KEEPALIVE_SECONDS = float(os.environ.get("SLM_WS_KEEPALIVE_SECONDS", DEFAULT_HEARTBEAT_INTERVAL))
 
 
 def _extract_ws_token(websocket: WebSocket) -> str | None:
@@ -370,10 +366,10 @@ ws_manager = ConnectionManager()
 
 
 async def _keepalive_loop(websocket: WebSocket) -> None:
-    """Answer client pings and ping an idle client every _WS_KEEPALIVE_SECONDS until a send fails."""
+    """Answer client pings and ping an idle client every settings.ws_keepalive_seconds until a send fails."""
     while True:
         try:
-            data = await asyncio.wait_for(websocket.receive_text(), timeout=_WS_KEEPALIVE_SECONDS)
+            data = await asyncio.wait_for(websocket.receive_text(), timeout=settings.ws_keepalive_seconds)
             if data == "ping":
                 await websocket.send_text("pong")
         except asyncio.TimeoutError:

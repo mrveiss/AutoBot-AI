@@ -16,7 +16,7 @@ from api import websocket as ws_mod
 
 @pytest.mark.asyncio
 async def test_keepalive_uses_configured_interval_and_pings_when_idle(monkeypatch):
-    monkeypatch.setattr(ws_mod, "_WS_KEEPALIVE_SECONDS", 0.01)
+    monkeypatch.setattr(ws_mod.settings, "ws_keepalive_seconds", 0.01)
 
     async def _idle() -> str:
         await asyncio.sleep(5)
