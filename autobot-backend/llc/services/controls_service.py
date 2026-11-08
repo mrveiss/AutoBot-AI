@@ -42,6 +42,14 @@ class SprintNotFoundError(Exception):
     pass
 
 
+class AgentNotPausableError(Exception):
+    """Pausing an agent in a terminal status (terminated): the transition is refused before any write (#21056)."""
+
+    def __init__(self, agent_id: str, status: str) -> None:
+        super().__init__(f"Agent {agent_id} is {status}; it cannot be paused")
+        self.status = status
+
+
 class AgentNotSchedulableError(Exception):
     """Enabling a heartbeat on an agent whose status means it must never run (#15907)."""
 
@@ -100,31 +108,13 @@ class ControlsService:
         subscription-quota exhaustion (GH#10218).
 
         An agent that is already paused keeps its first pause (reason, ``paused_at``,
-        ``pre_pause_status``): the repeat is recorded as a no-op (#21056).
+        ``pre_pause_status``): the repeat is recorded as a no-op, under its own
+        ``CONTROL_AGENT_PAUSE_REPEATED`` event (#21056). A terminated agent raises
+        :class:`AgentNotPausableError` before anything is written.
         """
-        row = await self._get_agent_row(session, company_id, agent_id)
-        if row is None:
-            raise AgentNotFoundError(agent_id)
-        before_status = row["status"]
-        if before_status == LLCAgentStatus.PAUSED.value:
-            return await self._repeat_pause(session, company_id, agent_id, row, actor_user_id, reason, actor_type)
-
-        await session.execute(
-            text(
-                "UPDATE agent_org_nodes"
-                " SET status = :status, pause_reason = :reason, paused_at = :now,"
-                " pre_pause_status = :before_status"
-                " WHERE company_id = :company_id AND agent_id = :agent_id"
-            ),
-            {
-                "status": LLCAgentStatus.PAUSED.value,
-                "reason": reason,
-                "now": datetime.now(tz=timezone.utc),
-                "before_status": before_status,
-                "company_id": company_id,
-                "agent_id": agent_id,
-            },
-        )
+        before_status = await self._pause_row(session, company_id, agent_id, reason)
+        if before_status is None:
+            return await self._repeat_or_refuse(session, company_id, agent_id, actor_user_id, reason, actor_type)
 
         await self._activity_log.record(
             session=session,
@@ -141,6 +131,63 @@ class ControlsService:
         await self._set_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id), "1")
 
         return {"agent_id": agent_id, "status": LLCAgentStatus.PAUSED.value, "pause_reason": reason}
+
+    async def auto_pause_agent(self, session: AsyncSession, company_id: str, agent_id: str, reason: str) -> bool:
+        """System pause on a run outcome (quota); False when the agent is terminated, so the outcome is still saved."""
+        try:
+            await self.pause_agent(
+                session, company_id, agent_id, actor_user_id=None, reason=reason, actor_type="system"
+            )
+        except AgentNotPausableError as refused:
+            logger.warning("Agent %s not auto-paused (%s): %s", agent_id, reason, refused)
+            return False
+        return True
+
+    async def _pause_row(
+        self, session: AsyncSession, company_id: str, agent_id: str, reason: Optional[str]
+    ) -> Optional[str]:
+        """Pause the row in ONE conditional UPDATE; return the status it had, or None if it did not match.
+
+        ``pre_pause_status = status`` reads the row's own value inside the statement, and the
+        ``NOT IN`` guard is re-evaluated after any competing writer commits, so a concurrent terminate or
+        a concurrent first pause cannot be overwritten (#21056, #21190).
+        """
+        result = await session.execute(
+            text(
+                "UPDATE agent_org_nodes"
+                " SET status = :paused, pause_reason = :reason, paused_at = :now, pre_pause_status = status"
+                " WHERE company_id = :company_id AND agent_id = :agent_id"
+                " AND status NOT IN (:paused, :terminated)"
+                " RETURNING pre_pause_status"
+            ),
+            {
+                "paused": LLCAgentStatus.PAUSED.value,
+                "terminated": LLCAgentStatus.TERMINATED.value,
+                "reason": reason,
+                "now": datetime.now(tz=timezone.utc),
+                "company_id": company_id,
+                "agent_id": agent_id,
+            },
+        )
+        row = result.fetchone()
+        return row[0] if row else None
+
+    async def _repeat_or_refuse(
+        self,
+        session: AsyncSession,
+        company_id: str,
+        agent_id: str,
+        actor_user_id: Optional[str],
+        reason: Optional[str],
+        actor_type: str,
+    ) -> dict:
+        """The conditional pause matched no row: re-read it and log a repeat, or refuse. Writes nothing on refusal."""
+        row = await self._get_agent_row(session, company_id, agent_id)
+        if row is None:
+            raise AgentNotFoundError(agent_id)
+        if row["status"] != LLCAgentStatus.PAUSED.value:
+            raise AgentNotPausableError(agent_id, row["status"])
+        return await self._repeat_pause(session, company_id, agent_id, row, actor_user_id, reason, actor_type)
 
     async def _repeat_pause(
         self,
@@ -159,7 +206,7 @@ class ControlsService:
             company_id=company_id,
             actor_type=actor_type,
             actor_id=actor_user_id,
-            event_type=ActivityEventType.CONTROL_AGENT_PAUSED,
+            event_type=ActivityEventType.CONTROL_AGENT_PAUSE_REPEATED,
             entity_type="agent",
             entity_id=agent_id,
             before=state,
@@ -325,9 +372,12 @@ class ControlsService:
         agent_ids = await self._agents_in_sprint(session, company_id, sprint_id)
 
         for agent_id in agent_ids:
-            await self.pause_agent(
-                session, company_id, str(agent_id), actor_user_id, reason=f"sprint_pause:{sprint_id}"
-            )
+            try:
+                await self.pause_agent(
+                    session, company_id, str(agent_id), actor_user_id, reason=f"sprint_pause:{sprint_id}"
+                )
+            except AgentNotPausableError:
+                logger.info("Sprint %s pause skipped terminated agent %s", sprint_id, agent_id)
 
         await self._activity_log.record(
             session=session,

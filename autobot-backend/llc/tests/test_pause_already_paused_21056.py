@@ -18,7 +18,7 @@ from llc.exceptions import AdapterAuthFailed, SubscriptionQuotaExhausted
 from llc.models import ActivityEventType
 from llc.scheduler.auth_failure import pause_after_auth_failure
 from llc.scheduler.heartbeat_scheduler import LLCHeartbeatScheduler
-from llc.services.controls_service import ControlsService
+from llc.services.controls_service import AgentNotPausableError, ControlsService
 from testkit.fake_async_session import FakeAsyncSession, FakeResult
 
 _CS = "llc.services.controls_service"
@@ -26,31 +26,42 @@ _HBS = "llc.scheduler.heartbeat_scheduler"
 
 
 class _AgentSession(FakeAsyncSession):
-    """Answers the agent row SELECT and applies the pause/resume UPDATEs to it."""
+    """Answers the agent row SELECT and applies the pause/resume UPDATEs to it.
+
+    The pause UPDATE is conditional (``status NOT IN (:paused, :terminated)``) and returns the row's
+    previous status through ``RETURNING``, as Postgres does; no row matches -> ``fetchone()`` is None.
+    """
 
     def __init__(self, status="available"):
         super().__init__()
         self.agent = {"status": status, "pre_pause_status": None, "pause_reason": None}
         self.updates = []
+        self.selects = 0
 
     async def execute(self, statement, params=None, **kw):
         await super().execute(statement, params)
         sql = str(statement)
         if sql.startswith("SELECT status, pre_pause_status, pause_reason"):
+            self.selects += 1
             a = self.agent
-            return SimpleNamespace(fetchone=lambda: (a["status"], a["pre_pause_status"], a["pause_reason"]))
+            row = None if a["status"] is None else (a["status"], a["pre_pause_status"], a["pause_reason"])
+            return SimpleNamespace(fetchone=lambda: row)
         if sql.startswith("UPDATE agent_org_nodes"):
             self.updates.append(params)
-            self._apply(sql, params)
+            return SimpleNamespace(fetchone=lambda: self._apply(sql, params))
         return FakeResult([])
 
     def _apply(self, sql, p):
-        paused = "pause_reason = :reason" in sql
-        self.agent.update(
-            status=p["status"],
-            pause_reason=p["reason"] if paused else None,
-            pre_pause_status=p["before_status"] if paused else None,
-        )
+        if "pause_reason = :reason" not in sql:
+            self.agent.update(status=p["status"], pause_reason=None, pre_pause_status=None)
+            return None
+        assert "pre_pause_status = status" in sql, "the previous status must come from the row, not a prior read"
+        assert "status NOT IN (:paused, :terminated)" in sql, "the pause must be conditional in the statement"
+        if self.agent["status"] in (None, p["paused"], p["terminated"]):
+            return None
+        before = self.agent["status"]
+        self.agent.update(status=p["paused"], pause_reason=p["reason"], pre_pause_status=before)
+        return (before,)
 
 
 def _log():
@@ -75,11 +86,11 @@ async def _operator_pause(session, log):
 async def test_second_pause_keeps_first_reason_and_pre_pause_status(redis):
     session, log = _AgentSession("available"), _log()
     svc = await _operator_pause(session, log)
-    assert len(session.updates) == 1
+    assert session.agent["status"] == "paused"
 
     result = await svc.pause_agent(session, "co", "ag", None, reason="quota", actor_type="system")
 
-    assert len(session.updates) == 1, "the repeat must issue no UPDATE"
+    assert session.agent["status"] == "paused"
     assert session.agent["pause_reason"] == "operator hold"
     assert session.agent["pre_pause_status"] == "available"
     assert result["already_paused"] is True and result["pause_reason"] == "operator hold"
@@ -95,7 +106,8 @@ async def test_repeat_is_logged_as_a_noop(redis):
     assert log.record.await_count == 2
     kw = log.record.await_args.kwargs
     paused = {"status": "paused", "pause_reason": "operator hold"}
-    assert kw["event_type"] == ActivityEventType.CONTROL_AGENT_PAUSED
+    assert kw["event_type"] == ActivityEventType.CONTROL_AGENT_PAUSE_REPEATED
+    assert log.record.await_args_list[0].kwargs["event_type"] == ActivityEventType.CONTROL_AGENT_PAUSED
     assert kw["before"] == paused and kw["after"] == paused
     assert kw["actor_type"] == "system"
     assert kw["metadata"] == {
@@ -153,4 +165,64 @@ async def test_pause_sprint_keeps_an_operator_pause(redis):
 
     assert session.agent["pause_reason"] == "operator hold"
     assert session.agent["pre_pause_status"] == "available"
-    assert len(session.updates) == 1
+    assert session.agent["status"] == "paused"
+
+
+async def test_terminated_agent_is_refused_and_nothing_is_written(redis):
+    session, log = _AgentSession("terminated"), _log()
+    session.agent.update(pause_reason="fired for cause", pre_pause_status=None)
+    svc = ControlsService(activity_log=log)
+
+    with pytest.raises(AgentNotPausableError) as refused:
+        await svc.pause_agent(session, "co", "ag", "user-1", reason="hold")
+
+    assert refused.value.status == "terminated"
+    assert session.agent == {"status": "terminated", "pre_pause_status": None, "pause_reason": "fired for cause"}
+    log.record.assert_not_awaited()
+    redis.set.assert_not_awaited()
+
+
+async def test_missing_agent_is_not_found_and_sets_no_flag(redis):
+    from llc.services.controls_service import AgentNotFoundError
+
+    session = _AgentSession(None)
+
+    log = _log()
+    with pytest.raises(AgentNotFoundError):
+        await ControlsService(activity_log=log).pause_agent(session, "co", "ag", "user-1")
+    log.record.assert_not_awaited()
+    redis.set.assert_not_awaited()
+
+
+async def test_first_pause_is_one_conditional_update_with_no_prior_read(redis):
+    session = _AgentSession("in_sprint")
+
+    await ControlsService(activity_log=_log()).pause_agent(session, "co", "ag", "user-1", reason="hold")
+
+    assert len(session.updates) == 1 and session.selects == 0
+    assert session.agent["pre_pause_status"] == "in_sprint"
+
+
+async def test_pause_sprint_skips_a_terminated_agent(redis):
+    session = _AgentSession("terminated")
+    svc = ControlsService(activity_log=_log())
+
+    with (
+        patch.object(svc, "_get_sprint", AsyncMock(return_value={"id": "sp"})),
+        patch.object(svc, "_agents_in_sprint", AsyncMock(return_value=["ag"])),
+    ):
+        await svc.pause_sprint(session, "co", "sp", "user-2")
+
+    assert session.agent["status"] == "terminated"
+    redis.set.assert_not_awaited()
+
+
+async def test_auto_pause_of_a_terminated_agent_returns_false_and_writes_nothing(redis):
+    session, log = _AgentSession("terminated"), _log()
+    svc = ControlsService(activity_log=log)
+
+    assert await svc.auto_pause_agent(session, "co", "ag", "subscription quota exhausted") is False
+    assert session.agent["status"] == "terminated"
+    log.record.assert_not_awaited()
+    redis.set.assert_not_awaited()
+    assert await svc.auto_pause_agent(_AgentSession("available"), "co", "ag", "quota") is True
