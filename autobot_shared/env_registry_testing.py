@@ -153,7 +153,25 @@ register_env_var(
 
 # --- machine-wide queue for heavy local work (#20518, repo_tests/machine_slot.py) ---
 for _name, _type, _default, _description in (
-    ("AUTOBOT_MACHINE_SLOTS", int, 4, "How many heavy local runs (hooks, floor checks, big pytest runs) go at once."),
+    ("AUTOBOT_MACHINE_SLOTS", int, 2, "How many heavy local runs (hooks, floor checks, big pytest runs) go at once."),
+    (
+        "AUTOBOT_MACHINE_SLOT_MAX_LOAD",
+        float,
+        14.0,
+        "The pre-push queue takes no slot while the 1-minute load average is at or above this (#21098).",
+    ),
+    (
+        "AUTOBOT_MACHINE_SLOT_LOADAVG",
+        str,
+        "/proc/loadavg",
+        "File the pre-push queue reads the 1-minute load average from; tests point it at a fake (#21098).",
+    ),
+    (
+        "AUTOBOT_MACHINE_SLOT_REPORT",
+        float,
+        60.0,
+        "Seconds between 'still queued' lines while waiting for a machine slot.",
+    ),
     ("AUTOBOT_MACHINE_SLOT_POLL", float, 5.0, "Seconds between attempts while queued for a machine slot."),
     (
         "AUTOBOT_MACHINE_SLOT_DIR",

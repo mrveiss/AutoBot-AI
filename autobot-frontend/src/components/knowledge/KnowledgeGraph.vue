@@ -493,7 +493,7 @@ interface NewEntity {
 // State
 // ============================================================================
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const {
   entities,
@@ -698,7 +698,7 @@ function formatTypeName(type: string): string {
  * @param timestamp - Unix timestamp in seconds
  * @returns Formatted date string (e.g., 'Jan 7, 2026')
  */
-const formatDate = createDateFormatter({ kind: 'date', locale: 'en-US', unit: 'seconds', intl: { year: 'numeric', month: 'short', day: 'numeric' } })
+const formatDate = createDateFormatter({ kind: 'date', locale: () => locale.value, unit: 'seconds', intl: { year: 'numeric', month: 'short', day: 'numeric' } })
 
 // ============================================================================
 // Cytoscape Initialization

@@ -118,7 +118,6 @@
 2|other|autobot-backend/api/anthropic_compat.py|"system"
 1|other|autobot-backend/api/batch_jobs.py|30
 10|other|autobot-backend/api/chat.py|"assistant"
-1|other|autobot-backend/api/chat.py|"user"
 1|other|autobot-backend/api/chat_compare.py|"user"
 2|other|autobot-backend/api/chat_embed.py|"user"
 1|other|autobot-backend/api/chat_sessions.py|100

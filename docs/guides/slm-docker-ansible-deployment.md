@@ -1622,6 +1622,10 @@ The `serial: 1` directive ensures Ansible completes all tasks on one host before
 
 ## 9. Operational Gotchas
 
+### Change a linked person in the main app, not the SLM
+
+Once the main app is installed it is the record for a linked person's password and active state. Disabling or re-enabling that person, or changing their password, in the SLM alone is undone by the next compare, within 5 minutes (`AUTOBOT_PERSON_COPY_COMPARE_INTERVAL_S`). If the SLM's user settings page reports that the SLM could not be updated for someone, a change made in the main app has not reached the SLM yet, and a deactivated person may still be able to use it.
+
 These are hard-won lessons from operating the AutoBot fleet. Violating these will cause deployment failures.
 
 ### Both Inventories Are Required

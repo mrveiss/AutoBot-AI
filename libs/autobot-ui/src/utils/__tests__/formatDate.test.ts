@@ -27,6 +27,14 @@ describe('createDateFormatter (#19905)', () => {
     expect(both(ISO)).toBe('10/30/2025, 2:30:15 PM')
   })
 
+  it('reads the locale on every call', () => {
+    let locale = 'en-US'
+    const fmt = createDateFormatter({ kind: 'date', locale: () => locale, intl: { ...UTC, month: 'long' } })
+    expect(fmt(ISO)).toBe('October')
+    locale = 'de'
+    expect(fmt(ISO)).toBe('Oktober')
+  })
+
   it('reads a number as milliseconds, or as seconds when told', () => {
     const ms = createDateFormatter({ locale: 'en-US', intl: UTC })
     const secs = createDateFormatter({ locale: 'en-US', intl: UTC, unit: 'seconds' })
