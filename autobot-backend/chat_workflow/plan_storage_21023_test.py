@@ -115,3 +115,29 @@ def test_known_provider_is_kept_normalised():
     from autobot_shared.ssot_config import LLMConfig
 
     assert LLMConfig(AUTOBOT_LLM_PROVIDER=" OpenAI ").provider == "openai"
+
+
+async def test_planner_call_records_its_spend_against_the_session(monkeypatch):
+    from chat_workflow import planner_client
+    from llm_shared.models import LLMResponse
+
+    response = LLMResponse(
+        content="plan", usage={"prompt_tokens": 3, "completion_tokens": 4}, provider="openai", model="m"
+    )
+    recorded = []
+
+    class _Provider:
+        async def chat_completion(self, request):
+            return response
+
+    class _Registry:
+        async def get_provider_for_request(self, provider_name, request):
+            return _Provider()
+
+    async def _record(resp, session_id=None, **kwargs):
+        recorded.append((resp, session_id, kwargs))
+
+    monkeypatch.setattr(planner_client, "get_provider_registry", lambda: _Registry())
+    monkeypatch.setattr(planner_client, "record_response_usage", _record)
+    assert await planner_client.PlannerLLMClient("m", "sess-1").generate("p", 0.1) == "plan"
+    assert recorded == [(response, "sess-1", {"endpoint": planner_client.PLANNER_ENDPOINT})]

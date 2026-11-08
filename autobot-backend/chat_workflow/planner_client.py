@@ -16,10 +16,13 @@ from constants.threshold_constants import CategoryDefaults
 from llm_shared import get_provider_registry
 from llm_shared.models import LLMRequest
 from llm_shared.types import LLMType
+from services.llm_usage_recording import record_response_usage
 
 from .llm_provider import configured_provider
 
 logger = get_logger(__name__)
+
+PLANNER_ENDPOINT = "chat_planner"
 
 
 class PlannerLLMClient:
@@ -44,6 +47,8 @@ class PlannerLLMClient:
         if provider is None:
             raise RuntimeError("no provider available for planning")
         response = await provider.chat_completion(request)
+        # Planning spend belongs to the turn's session and must reach budgets (#16924).
+        await record_response_usage(response, self.session_id, endpoint=PLANNER_ENDPOINT)
         if response.error or not response.content:
             raise RuntimeError(f"planner model returned no plan: {response.error or 'empty'}")
         return response.content
