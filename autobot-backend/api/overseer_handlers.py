@@ -15,7 +15,7 @@ Provides WebSocket endpoints for:
 import asyncio
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
 
 from agents.overseer import OverseerAgent, OverseerUpdate, StepExecutorAgent, StepRunResult
 from agents.overseer.types import (
@@ -28,6 +28,7 @@ from api.schemas_agent import OverseerQueryData
 from api.schemas_system import OverseerStatusResponse
 from api.ws_security import open_authenticated_ws, owns_chat_session
 from auth_middleware import get_current_user
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
@@ -466,7 +467,7 @@ async def overseer_websocket(websocket: WebSocket, session_id: str):
             data = await websocket.receive_json()
             await handler.handle_message(data)
 
-    except WebSocketDisconnect:
+    except PEER_CLOSED_ERRORS:
         await handler.disconnect()
     except Exception as e:
         logger.error("[OverseerWS] Error: %s", e)
