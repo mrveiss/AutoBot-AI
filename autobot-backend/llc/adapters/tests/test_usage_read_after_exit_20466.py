@@ -15,7 +15,6 @@ import json
 import sys
 from unittest.mock import AsyncMock, patch
 
-import psutil
 import pytest
 
 from llc.adapters.claude_code_adapter import ClaudeCodeAdapter, _state_path
@@ -29,26 +28,23 @@ _RESULT = {
     "is_error": False,
     "usage": {"input_tokens": 123, "output_tokens": 45},
 }
+# The child blocks on stdin (not a timer) until the test releases it, so how many polls
+# see it alive is decided by the test, never by wall-clock time.
+_ALIVE_POLLS = 3
 _CHILD = (
-    "import json,sys,time\n"
+    "import json,sys\n"
     "print(json.dumps({'type':'system'}),flush=True)\n"
-    "time.sleep(1.5)\n"
+    "sys.stdin.readline()\n"
     "print(json.dumps(json.loads(sys.argv[1])),flush=True)\n"
 )
-
-
-def _alive(pid: int) -> bool:
-    """True while the child is a running process (a zombie awaiting reaping has already exited)."""
-    try:
-        return psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
-    except psutil.NoSuchProcess:
-        return False
 
 
 async def _spawn_run(tmp_path, adapter):
     out = tmp_path / "out.jsonl"
     with open(out, "w", encoding="utf-8") as fh:
-        proc = await spawn_detached(sys.executable, "-c", _CHILD, json.dumps(_RESULT), stdout=fh)
+        proc = await spawn_detached(
+            sys.executable, "-c", _CHILD, json.dumps(_RESULT), stdin=asyncio.subprocess.PIPE, stdout=fh
+        )
     run_id = f"{proc.pid}/sess"
     state = adapter._build_state(proc, "sess", "agent-1", str(out), None, 60, 60, 60)
     with open(_state_path(str(tmp_path), run_id), "w", encoding="utf-8") as fh:
@@ -61,23 +57,26 @@ async def test_status_is_running_while_alive_and_usage_arrives_only_after_exit(t
     adapter = ClaudeCodeAdapter()
     cfg = {"agent_id": "agent-1", "adapter_config": {"output_dir": str(tmp_path)}}
     proc, run_id = await _spawn_run(tmp_path, adapter)
-    polls: list[tuple[bool, object]] = []
+    polls: list = []
 
     async def status(c, r):
-        before = _alive(proc.pid)
         res = await adapter.status(c, r)
-        polls.append((before and _alive(proc.pid), res))  # live only if alive on BOTH sides of the call
+        polls.append(res)
+        if len(polls) == _ALIVE_POLLS:  # release the child only after the Nth alive poll
+            proc.stdin.write(b"go\n")
+            await proc.stdin.drain()
+            proc.stdin.close()
+            await proc.wait()  # exited and reaped before the next poll
         return res
 
     wrapped = AsyncMock()
     wrapped.status = status
-    with patch.object(hbs, "_ADAPTER_POLL_INTERVAL", 0.1):
+    with patch.object(hbs, "_ADAPTER_POLL_INTERVAL", 0.01):
         result = await asyncio.wait_for(hbs._await_adapter_completion(wrapped, cfg, run_id), timeout=30)
-    await proc.wait()
 
-    live = [res for alive, res in polls if alive]
-    assert len(live) >= 3 and all(res.status is LLCRunStatus.RUNNING for res in live)
-    assert all(res.tokens_in is None and res.tokens_out is None for res in live)
+    assert [r.status for r in polls] == [LLCRunStatus.RUNNING] * _ALIVE_POLLS + [LLCRunStatus.COMPLETED]
+    assert all(r.tokens_in is None and r.tokens_out is None for r in polls[:_ALIVE_POLLS])
+    assert result is polls[-1]
     assert (result.status, result.tokens_in, result.tokens_out) == (LLCRunStatus.COMPLETED, 123, 45)
 
     ingest = AsyncMock()
