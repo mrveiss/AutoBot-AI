@@ -398,6 +398,9 @@ def enforce_system_requirements() -> None:
         RuntimeError: the interpreter is below the floor, or the disk is full.
             Warnings (low-but-sufficient disk) are logged and do not block boot.
     """
+    from autobot_shared.placeholder_guard import enforce_no_placeholders
+
+    enforce_no_placeholders()  # #20886: one clear error for an unfilled `YOUR_*` value, not one failure per client
     result = validate_system_requirements()
     for warning in result.warnings:
         logger.warning("Startup requirement warning: %s", warning)
