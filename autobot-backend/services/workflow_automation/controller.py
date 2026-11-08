@@ -98,6 +98,22 @@ class WorkflowController:
         await self.executor.cancel_workflow(workflow, workflows)
         return True
 
+    async def _decide_step(
+        self, workflow: ActiveWorkflow, step_id: str, workflows: Dict[str, ActiveWorkflow], decision: str, apply
+    ) -> bool:
+        """Apply a step decision, then withdraw its pending approval record (#21101).
+
+        The executor refuses a decision for an unknown, non-current or not-awaiting step by
+        raising StepNotAwaitingApproval (route: 409), so a refusal leaves the record listed and
+        the approver can still act. The record is withdrawn only once *apply* has returned. If
+        *apply* raises after accepting, the exception propagates before the withdraw and the
+        record stays pending rather than being lost.
+        """
+        await apply(workflow, step_id, workflows)
+        await self.executor.step_approvals.withdraw(workflow.workflow_id, step_id)
+        self.prometheus_metrics.record_workflow_approval(workflow_type="automated_workflow", decision=decision)
+        return True
+
     async def _approve_step(
         self,
         workflow: ActiveWorkflow,
@@ -105,12 +121,7 @@ class WorkflowController:
         workflows: Dict[str, ActiveWorkflow],
     ) -> bool:
         """Approve and execute a workflow step"""
-        # Record Prometheus workflow approval metric, only once the executor accepted the step (#20918)
-        workflow_type = "automated_workflow"
-        await self.executor.step_approvals.withdraw(workflow.workflow_id, step_id)
-        await self.executor.approve_and_execute_step(workflow, step_id, workflows)
-        self.prometheus_metrics.record_workflow_approval(workflow_type=workflow_type, decision="approved")
-        return True
+        return await self._decide_step(workflow, step_id, workflows, "approved", self.executor.approve_and_execute_step)
 
     async def _skip_step(
         self,
@@ -119,9 +130,4 @@ class WorkflowController:
         workflows: Dict[str, ActiveWorkflow],
     ) -> bool:
         """Skip a workflow step"""
-        # Record Prometheus workflow approval metric (rejected/skipped)
-        workflow_type = "automated_workflow"
-        await self.executor.step_approvals.withdraw(workflow.workflow_id, step_id)
-        await self.executor.skip_step(workflow, step_id, workflows)
-        self.prometheus_metrics.record_workflow_approval(workflow_type=workflow_type, decision="skipped")
-        return True
+        return await self._decide_step(workflow, step_id, workflows, "skipped", self.executor.skip_step)
