@@ -13,12 +13,14 @@ import logging
 import time
 from typing import Dict, Set
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, HTTPException, WebSocket, status
 
 from autobot_shared.auth.interactive_principal import is_purpose_bound, is_service_token
 from autobot_shared.auth.revocation_unavailable import REVOCATION_UNAVAILABLE_DETAIL
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.websocket_subprotocol import accept_websocket, negotiated_subprotocol, resolve_ws_token
+from config import settings
 from services.auth import auth_service, is_admin_session
 
 logger = logging.getLogger(__name__)
@@ -363,45 +365,42 @@ class ConnectionManager:
 ws_manager = ConnectionManager()
 
 
+async def _keepalive_loop(websocket: WebSocket) -> None:
+    """Answer client pings and ping an idle client every settings.ws_keepalive_seconds until a send fails."""
+    while True:
+        try:
+            data = await asyncio.wait_for(websocket.receive_text(), timeout=settings.ws_keepalive_seconds)
+            if data == "ping":
+                await websocket.send_text("pong")
+        except asyncio.TimeoutError:
+            try:
+                await websocket.send_json({"type": "ping"})
+            except Exception:
+                break
+
+
+async def _serve_stream(websocket: WebSocket, channel: str, hello: dict, handler: str, subject: str) -> None:
+    """Connect to *channel*, greet, keep alive, and tear down: the tail every stream endpoint shares (#20939)."""
+    await ws_manager.connect(websocket, channel)
+    try:
+        await websocket.send_json(hello)
+        await _keepalive_loop(websocket)
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, handler)
+    except Exception as e:
+        logger.error("WebSocket error for %s: %s", subject, e)
+    finally:
+        await ws_manager.disconnect(websocket, channel)
+
+
 @router.websocket("/deployments/{deployment_id}")
 async def deployment_websocket(websocket: WebSocket, deployment_id: str):
     """WebSocket endpoint for watching deployment progress."""
     if not await _authenticate_websocket_token(websocket):
         return
-
-    channel = f"deployment:{deployment_id}"
-    await ws_manager.connect(websocket, channel)
-
-    try:
-        # Send initial connection confirmation
-        await websocket.send_json(
-            {
-                "type": "connected",
-                "deployment_id": deployment_id,
-                "message": "Connected to deployment stream",
-            }
-        )
-
-        # Keep connection alive and handle any client messages
-        while True:
-            try:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-                # Handle ping/pong for keepalive
-                if data == "ping":
-                    await websocket.send_text("pong")
-            except asyncio.TimeoutError:
-                # Send keepalive ping
-                try:
-                    await websocket.send_json({"type": "ping"})
-                except Exception:
-                    break
-
-    except WebSocketDisconnect:
-        logger.debug("Client disconnected from deployment: %s", deployment_id)
-    except Exception as e:
-        logger.error("WebSocket error for deployment %s: %s", deployment_id, e)
-    finally:
-        await ws_manager.disconnect(websocket, channel)
+    hello = {"type": "connected", "deployment_id": deployment_id, "message": "Connected to deployment stream"}
+    channel, subject = f"deployment:{deployment_id}", f"deployment {deployment_id}"
+    await _serve_stream(websocket, channel, hello, "deployment_websocket", subject)
 
 
 @router.websocket("/events")
@@ -409,30 +408,8 @@ async def events_websocket(websocket: WebSocket):
     """WebSocket endpoint for global system events."""
     if not await _authenticate_websocket_token(websocket):
         return
-
-    channel = "events:global"
-    await ws_manager.connect(websocket, channel)
-
-    try:
-        await websocket.send_json({"type": "connected", "message": "Connected to event stream"})
-
-        while True:
-            try:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-                if data == "ping":
-                    await websocket.send_text("pong")
-            except asyncio.TimeoutError:
-                try:
-                    await websocket.send_json({"type": "ping"})
-                except Exception:
-                    break
-
-    except WebSocketDisconnect:
-        logger.debug("Client disconnected from events")
-    except Exception as e:
-        logger.error("WebSocket error for events: %s", e)
-    finally:
-        await ws_manager.disconnect(websocket, channel)
+    hello = {"type": "connected", "message": "Connected to event stream"}
+    await _serve_stream(websocket, "events:global", hello, "events_websocket", "events")
 
 
 @router.websocket("/nodes/{node_id}")
@@ -451,36 +428,9 @@ async def node_events_websocket(websocket: WebSocket, node_id: str):
     """
     if not await _authenticate_websocket_token(websocket):
         return
-
-    channel = f"node:{node_id}"
-    await ws_manager.connect(websocket, channel)
-
-    try:
-        await websocket.send_json(
-            {
-                "type": "connected",
-                "node_id": node_id,
-                "message": f"Connected to lifecycle events for node {node_id}",
-            }
-        )
-
-        while True:
-            try:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-                if data == "ping":
-                    await websocket.send_text("pong")
-            except asyncio.TimeoutError:
-                try:
-                    await websocket.send_json({"type": "ping"})
-                except Exception:
-                    break
-
-    except WebSocketDisconnect:
-        logger.debug("Client disconnected from node %s events", node_id)
-    except Exception as e:
-        logger.error("WebSocket error for node %s: %s", node_id, e)
-    finally:
-        await ws_manager.disconnect(websocket, channel)
+    message = f"Connected to lifecycle events for node {node_id}"
+    hello = {"type": "connected", "node_id": node_id, "message": message}
+    await _serve_stream(websocket, f"node:{node_id}", hello, "node_events_websocket", f"node {node_id}")
 
 
 @router.websocket("/provision")
@@ -488,27 +438,5 @@ async def provision_websocket(websocket: WebSocket):
     """WebSocket endpoint for watching provisioning progress (#2754)."""
     if not await _authenticate_websocket_token(websocket):
         return
-
-    channel = "provision"
-    await ws_manager.connect(websocket, channel)
-
-    try:
-        await websocket.send_json({"type": "connected", "message": "Connected to provision stream"})
-
-        while True:
-            try:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-                if data == "ping":
-                    await websocket.send_text("pong")
-            except asyncio.TimeoutError:
-                try:
-                    await websocket.send_json({"type": "ping"})
-                except Exception:
-                    break
-
-    except WebSocketDisconnect:
-        logger.debug("Client disconnected from provision stream")
-    except Exception as e:
-        logger.error("WebSocket error for provision: %s", e)
-    finally:
-        await ws_manager.disconnect(websocket, channel)
+    hello = {"type": "connected", "message": "Connected to provision stream"}
+    await _serve_stream(websocket, "provision", hello, "provision_websocket", "provision")
