@@ -40,10 +40,6 @@ MAX_FILES_PER_COMMIT: int = env_int("AUTOBOT_COCHANGE_MAX_FILES_PER_COMMIT", def
 # Bound on the history walk; never a literal at the call site.
 _GIT_TIMEOUT_SECONDS: int = env_int("AUTOBOT_COCHANGE_GIT_TIMEOUT_SECONDS", default=120)
 
-# Paths that co-change because a tool wrote them, not because they depend on each
-# other. Lockfiles are the clearest case: every dependency bump touches all of them.
-# Canonical skip dirs plus extras: vendored third-party code is not first-party co-change.
-
 
 class PatternOccurrence:
     """Single occurrence of a pattern at a point in time"""

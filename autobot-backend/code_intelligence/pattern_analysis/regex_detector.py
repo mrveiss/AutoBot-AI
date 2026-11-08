@@ -201,9 +201,6 @@ class RegexPatternDetector:
     # Minimum chain length to report
     MIN_CHAIN_LENGTH = 2
 
-    # Exclude patterns (test files, etc.)
-    # Canonical skip dirs plus extras: archived copies and the type checker's cache.
-
     def __init__(
         self,
         min_chain_length: int = 2,

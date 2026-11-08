@@ -255,8 +255,6 @@ class ComplexityAnalyzer:
     NESTING_THRESHOLD = 4  # Deep nesting is problematic
     LINE_THRESHOLD = 50  # Long functions need review
 
-    # Canonical skip dirs plus extras: archived copies and the type checker's cache.
-
     def __init__(
         self,
         cc_threshold: int = 10,

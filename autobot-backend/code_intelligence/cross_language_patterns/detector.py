@@ -49,9 +49,6 @@ from .models import (
 
 logger = get_logger(__name__)
 
-# Default directories to skip
-# Canonical skip dirs plus extras: archives and backups duplicate live code; mypy's cache is not source.
-
 # ChromaDB collection name
 PATTERNS_COLLECTION = "cross_language_patterns"
 

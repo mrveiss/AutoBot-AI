@@ -87,8 +87,6 @@ class CodePatternAnalyzer:
         7. Produce comprehensive report
     """
 
-    # Canonical skip dirs plus extras: archived copies and the type checker's cache.
-
     def _init_feature_flags(
         self,
         enable_clone_detection: bool,

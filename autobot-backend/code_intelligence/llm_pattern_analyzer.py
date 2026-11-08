@@ -317,7 +317,7 @@ class LLMPatternAnalyzer:
 
             for file_path in discover_files(directory, ("*.py",)):
                 # Issue #616: Use any() for O(1) early termination
-                if not any(file_path.relative_to(directory).match(pattern) for pattern in exclude_patterns):
+                if not any(file_path.match(pattern) for pattern in exclude_patterns):
                     files.append(file_path)
 
         return files

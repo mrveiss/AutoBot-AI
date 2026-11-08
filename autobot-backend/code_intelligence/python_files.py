@@ -10,8 +10,10 @@ predicate (``is_excluded``) is shared too, so the cached (async) and
 uncached (sync) discovery paths cannot disagree (#20493).
 """
 
+import fnmatch
+import os
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, Iterator, List, Set
 
 from utils.file_categorization import SKIP_DIRS
 
@@ -42,6 +44,29 @@ def is_excluded(path: Path, root: Path, excluded: Iterable[str]) -> bool:
     return not set(excluded).isdisjoint(parts)
 
 
+def _escapes(path: Path, real_root: Path, excluded: Iterable[str]) -> bool:
+    """True if symlinked leaf *path* resolves outside the root or into an excluded dir."""
+    try:
+        return is_excluded(path.resolve(), real_root, excluded)
+    except (OSError, RuntimeError):
+        return True  # a loop or unreadable link cannot be placed under the root
+
+
+def _walk_matches(root: Path, patterns: List[str], excluded: Set[str]) -> Iterator[Path]:
+    """Yield files under *root* matching a pattern, pruning excluded dirs while walking."""
+    real_root = root.resolve()
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = [d for d in dirnames if d not in excluded]
+        for name in filenames:
+            if not any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns):
+                continue
+            path = Path(dirpath) / name
+            if path.is_symlink() and _escapes(path, real_root, excluded):
+                continue
+            if path.is_file():
+                yield path
+
+
 def discover_files(
     directory: str | Path,
     patterns: Iterable[str] = ("*.py",),
@@ -49,14 +74,14 @@ def discover_files(
 ) -> List[Path]:
     """The one file-discovery walk for the code-intelligence analyzers (#21004).
 
-    Returns the sorted, de-duplicated files under *directory* matching any glob
-    in *patterns*, minus those with an excluded component **below** the root
-    (``exclude_dirs`` defaults to ``ANALYSIS_EXCLUDE_DIRS``).
+    A single pruned ``os.walk`` returns the sorted files under *directory* whose
+    name matches any glob in *patterns*. Excluded directory names (default
+    ``ANALYSIS_EXCLUDE_DIRS``) are matched **below** the root only, and are never
+    descended into. A symlinked leaf that resolves outside the root, or into an
+    excluded directory, is dropped (#13602 tier 2/3).
     """
-    root = Path(directory)
-    excluded = ANALYSIS_EXCLUDE_DIRS if exclude_dirs is None else set(exclude_dirs)
-    found = {path for pattern in patterns for path in root.rglob(pattern) if path.is_file()}
-    return sorted(path for path in found if not is_excluded(path, root, excluded))
+    excluded = set(ANALYSIS_EXCLUDE_DIRS if exclude_dirs is None else exclude_dirs)
+    return sorted(_walk_matches(Path(directory), list(patterns), excluded))
 
 
 def collect_python_files(directory: str, exclude_dirs: Iterable[str]) -> List[str]:
@@ -65,11 +90,11 @@ def collect_python_files(directory: str, exclude_dirs: Iterable[str]) -> List[st
 
 
 def cache_covers_exclusions(exclude_dirs: Iterable[str]) -> bool:
-    """True if the shared file cache's fixed ``SKIP_DIRS`` filter is implied by *exclude_dirs*.
+    """True if the shared file cache's fixed ``ANALYSIS_EXCLUDE_DIRS`` filter is implied by *exclude_dirs*.
 
-    The cache pre-filters with ``SKIP_DIRS``. Only then can ``is_excluded`` over
+    The cache pre-filters with ``ANALYSIS_EXCLUDE_DIRS``. Only then can ``is_excluded`` over
     the cached list equal the uncached walk; for a custom ``exclude_dirs`` that
-    omits a ``SKIP_DIRS`` name the cache already dropped files the caller wants,
+    omits one of those names the cache already dropped files the caller wants,
     so discovery must walk instead. ``exclude_dirs`` stays authoritative (#20493).
     """
-    return SKIP_DIRS <= set(exclude_dirs)
+    return ANALYSIS_EXCLUDE_DIRS <= set(exclude_dirs)

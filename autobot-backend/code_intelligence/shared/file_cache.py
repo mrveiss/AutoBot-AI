@@ -48,7 +48,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from code_intelligence.python_files import discover_files
 from constants.path_constants import PATH
-from utils.file_categorization import HTML_EXTENSIONS, SKIP_DIRS
+from utils.file_categorization import HTML_EXTENSIONS
 
 logger = get_logger(__name__)
 
@@ -181,7 +181,7 @@ class FileListCache:
         start_time = time.time()
 
         def _do_scan() -> List[Path]:
-            return discover_files(root_path, [f"*{ext}" for ext in extensions], SKIP_DIRS)
+            return discover_files(root_path, [f"*{ext}" for ext in extensions])
 
         files = await asyncio.to_thread(_do_scan)
 
