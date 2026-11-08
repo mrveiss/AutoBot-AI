@@ -85,12 +85,11 @@ def _is_colour(token: str, line: str = "", start: int = -1) -> bool:
     return bool(_VALUE_POSITION.search(before))
 
 
-def _colour_scanned_files(root: Path) -> list[str]:
-    """Every file the colour scanner opens. Its reach population."""
-    frontend = root / _FRONTEND
+def _colour_candidates(frontend: Path) -> list[Path]:
+    """Every file under *frontend* the colour scanner opens. One filter for both apps."""
     if not frontend.is_dir():
         return []
-    out: list[str] = []
+    out: list[Path] = []
     for path in sorted(frontend.rglob("*")):
         if path.suffix not in _SUFFIXES or "node_modules" in path.parts:
             continue
@@ -101,7 +100,18 @@ def _colour_scanned_files(root: Path) -> list[str]:
             continue
         if "__tests__" in path.parts or path.name.endswith((".spec.ts", ".test.ts", ".stories.ts")):
             continue
-        out.append(rel)
+        out.append(path)
+    return out
+
+
+def _colour_scanned_files(root: Path) -> list[str]:
+    """Every file the colour scanner opens, in both apps. Its reach population.
+
+    The control plane's keys carry ``SLM_KEY_PREFIX`` (#17567), as the `!important` sweep's do.
+    """
+    out: list[str] = []
+    for tree, prefix in ((_FRONTEND, ""), (_SLM_FRONTEND, SLM_KEY_PREFIX)):
+        out += [prefix + p.relative_to(root / tree).as_posix() for p in _colour_candidates(root / tree)]
     return out
 
 
@@ -124,7 +134,7 @@ REACH_COLOUR_FILES = declare(
     discover=_colour_scanned_files,
     growth=60,
     skips=0,
-    what="frontend source files scanned for colour literals",
+    what="frontend source files scanned for colour literals, in both frontends (the SLM joined in #17567)",
 )
 REACH_IMPORTANT_FILES = declare(
     "important-declaration-sweep",
@@ -143,16 +153,7 @@ def _scan(root: Path) -> dict[str, int]:
     changes what CI runs on a frontend edit. See the baseline's docstring.
     """
     counts: dict[str, int] = {}
-    for path in sorted(root.rglob("*")):
-        if path.suffix not in _SUFFIXES or "node_modules" in path.parts:
-            continue
-        relative = path.relative_to(root).as_posix()
-        if any(fragment in relative for fragment in _SKIP_FRAGMENTS):
-            continue
-        if path.name in EXEMPT_BASENAMES:
-            continue
-        if "__tests__" in path.parts or path.name.endswith((".spec.ts", ".test.ts", ".stories.ts")):
-            continue
+    for path in _colour_candidates(root):
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -182,6 +183,11 @@ def _scan(root: Path) -> dict[str, int]:
                 literal = match.group(0).lower()
                 counts[literal] = counts.get(literal, 0) + 1
     return counts
+
+
+def _scan_slm(repo: Path) -> dict[str, int]:
+    """The same colour scan over the control plane (#17567): own tree, own baseline, same detector."""
+    return _scan(repo / _SLM_FRONTEND)
 
 
 _STYLE_CONTENT = re.compile(r"<style\b[^>]*>(.*?)</style>", re.DOTALL | re.IGNORECASE)
