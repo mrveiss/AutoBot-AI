@@ -46,6 +46,7 @@ def indexer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> DocIndexerServic
     monkeypatch.setattr(doc_indexer, "HASH_CACHE_FILE", tmp_path / "hashes.json")
     monkeypatch.setattr(doc_indexer, "_select_files", lambda *_a, **_k: [(str(root / "docs" / "a.md"), 1)])
     svc = _make_service(root_dir=root)
+    svc._llm_service = None  # __init__ sets it; _make_service builds via __new__ and skips it
     svc._embed_model = _Embedder()
     svc._collection = InMemoryClient().get_or_create_collection("autobot_docs")
     svc._store = STORE
@@ -63,6 +64,7 @@ async def test_a_populated_collection_is_not_re_embedded(indexer: DocIndexerServ
     await indexer.index_all()
     embedded = indexer._embed_model.calls
     with caplog.at_level(logging.INFO):
+        caplog.clear()  # caplog spans the whole test: drop the first run's (legitimate) "Full reindex" record
         result = await indexer.index_all()
     assert indexer._embed_model.calls == embedded
     assert result.skipped == 1 and result.success == 0
