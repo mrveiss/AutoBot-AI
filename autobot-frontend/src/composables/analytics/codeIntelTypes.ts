@@ -41,6 +41,23 @@ export interface SecurityScoreResult {
   owasp_breakdown: Record<string, number>
 }
 
+/** Raw payload of `security/score/cached`; `no_data` carries no score. */
+export interface CachedSecurityScoreRaw {
+  status: string
+  from_cache?: boolean
+  completed_at?: string
+  security_score?: number
+  grade?: string
+  risk_level?: string
+  status_message?: string
+  total_findings?: number
+  critical_issues?: number
+  high_issues?: number
+  files_analyzed?: number
+  severity_breakdown?: Record<string, number>
+  owasp_breakdown?: Record<string, number>
+}
+
 export interface PerformanceScoreResult {
   performance_score: number
   grade: string

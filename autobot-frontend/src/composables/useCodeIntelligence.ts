@@ -11,6 +11,7 @@
 import type { components } from '@/types/generated/api'
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
 import ApiClient from '@/utils/ApiClient'
+import { useCachedSecurityScore } from '@/composables/analytics/useCachedSecurityScore'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 
@@ -283,6 +284,9 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     }
   }
 
+  // The read is owned by useCachedSecurityScore (#18907); this wraps it for callers here.
+  const cachedScore = useCachedSecurityScore({ withSourceId })
+
   async function getSecurityScoreCached(): Promise<SecurityScoreCached | null> {
     // The route requires source_id (#20491); without a scoper the call could only answer 422.
     if (!withSourceId) {
@@ -291,17 +295,13 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     }
     startLoading()
     try {
-      const data = await ApiClient.get<SecurityScoreCached>(
-        withSourceId(`${getApiBase()}/code-intelligence/security/score/cached`),
-      )
-      securityScoreCached.value = data
-      logger.debug('Cached security score:', data)
-      return data
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch cached security score'
-      logger.error('Failed to fetch cached security score:', err)
-      errors.value = [...errors.value, message]
-      return null
+      await cachedScore.load()
+      if (cachedScore.error.value) {
+        errors.value = [...errors.value, cachedScore.error.value]
+        return null
+      }
+      securityScoreCached.value = cachedScore.raw.value as SecurityScoreCached | null
+      return securityScoreCached.value
     } finally {
       stopLoading()
     }
