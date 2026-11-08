@@ -299,7 +299,7 @@
       </header>
 
       <!-- Steps waiting for approval: every tab; the runner tab shows them inline (#17677) -->
-      <StepApprovalCard v-for="s in activeSection === 'runner' ? [] : stepsAwaitingApproval" :key="s.step_id" :step="s"
+      <StepApprovalList :steps="activeSection === 'runner' ? [] : stepsAwaitingApproval"
         :workflow-id="currentWorkflow?.workflow_id ?? ''" :approve="handleApproveStep" :skip="handleSkipStep" />
 
       <!-- Loading State -->
@@ -506,6 +506,7 @@
               :title="$t('workflow.views.planAwaitingApproval')"
               :approve-label="$t('workflow.views.approveAndRun')"
               :reject-label="$t('workflow.views.reject')"
+              :deciding="deciding"
               @approve="handleApprovePlan"
               @reject="handleRejectPlan"
             >
@@ -705,7 +706,8 @@ import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import Icon, { type IconName } from '@/components/ui/Icon.vue';
 import ApprovalEnvelope from '@/components/approvals/ApprovalEnvelope.vue';
-import StepApprovalCard from '@/components/workflow/StepApprovalCard.vue';
+import StepApprovalList from '@/components/workflow/StepApprovalList.vue';
+import { usePlanDecision } from '@/composables/usePlanDecision';
 import { useStepAnswerToast } from '@/composables/useStepAnswerToast';
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue';
 import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGallery.vue';
@@ -1027,27 +1029,16 @@ async function createFromNaturalLanguage(): Promise<void> {
   }
 }
 
-async function handleApprovePlan(): Promise<void> {
-  if (!pendingApproval.value) return;
-
-  const success = await approvePlan(pendingApproval.value.workflow_id);
-  if (success) {
-    showToast(t('workflow.builder.planApproved'), 'success');
+const { deciding, handleApprovePlan, handleRejectPlan } = usePlanDecision({
+  pendingApproval,
+  approvePlan,
+  rejectPlan,
+  notify: (key, kind) => showToast(t(key), kind),
+  onApproved: () => {
     naturalLanguageInput.value = '';
     navigateTo('runner');
-  } else {
-    showToast(t('workflow.builder.planApproveFailed'), 'error');
-  }
-}
-
-async function handleRejectPlan(): Promise<void> {
-  if (!pendingApproval.value) return;
-
-  const success = await rejectPlan(pendingApproval.value.workflow_id, 'User rejected');
-  if (success) {
-    showToast(t('workflow.builder.planRejected'), 'info');
-  }
-}
+  },
+});
 
 function handleNodeAdded(node: WorkflowNode): void {
   addNode(node);
