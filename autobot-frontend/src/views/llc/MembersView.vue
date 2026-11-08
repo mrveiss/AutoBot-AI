@@ -279,6 +279,7 @@ async function submitAdd(): Promise<void> {
 }
 
 async function confirmRemove(member: Member): Promise<void> {
+  if (!standingKnown.value) return
   if (!window.confirm(t('llcMembers.confirmRemove', { name: member.display_name }))) return
   await removeMember(member)
 }

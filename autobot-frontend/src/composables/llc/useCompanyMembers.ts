@@ -120,6 +120,8 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
 
   /** PATCH the role; the row changes only once the server accepts it. False when it did not. */
   async function changeRole(member: Member, newRole: string): Promise<boolean> {
+    // Stale rows (the standing is unconfirmed): refuse, whatever the template showed (#21096).
+    if (!standingKnown.value) return false
     const id = companyId()
     const mine = generation
     pendingUserId.value = member.user_id
@@ -141,7 +143,9 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
     }
   }
 
+  /** DELETE the member; refused (no request) while the standing is unconfirmed. */
   async function removeMember(member: Member): Promise<void> {
+    if (!standingKnown.value) return
     const id = companyId()
     const mine = generation
     pendingUserId.value = member.user_id

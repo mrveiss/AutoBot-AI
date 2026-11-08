@@ -184,3 +184,38 @@ describe('useCompanyMembers standing across a company switch', () => {
     expect(api.members.value.map((m) => m.user_id)).toEqual(['b'])
   })
 })
+
+describe('useCompanyMembers stale standing (#21096)', () => {
+  it('refuses changeRole and removeMember after a failed reload, and allows them after a good one', async () => {
+    const get = vi.fn().mockResolvedValueOnce(reply([row('a')], true, ['member', 'admin']))
+    const api0 = { get, patch: vi.fn().mockResolvedValue({}), delete: vi.fn().mockResolvedValue({}) }
+    let api!: ReturnType<typeof useCompanyMembers>
+    mount(
+      defineComponent({
+        setup() {
+          api = useCompanyMembers(api0 as unknown as MembersApi, () => 'co1')
+          return () => h('div')
+        },
+      }),
+      { global: { plugins: [i18n] } },
+    )
+    await api.load()
+    expect(api.standingKnown.value).toBe(true)
+    // The reload fails: the rows stay, the standing is gone.
+    get.mockRejectedValueOnce(new Error('boom'))
+    await api.load()
+    expect(api.members.value).toHaveLength(1)
+    expect(api.standingKnown.value).toBe(false)
+    expect(await api.changeRole(api.members.value[0], 'admin')).toBe(false)
+    await api.removeMember(api.members.value[0])
+    expect(api0.patch).not.toHaveBeenCalled()
+    expect(api0.delete).not.toHaveBeenCalled()
+    // A good reload restores the standing and the actions go through.
+    get.mockResolvedValue(reply([row('a')], true, ['member', 'admin']))
+    await api.load()
+    expect(await api.changeRole(api.members.value[0], 'admin')).toBe(true)
+    await api.removeMember(api.members.value[0])
+    expect(api0.patch).toHaveBeenCalledTimes(1)
+    expect(api0.delete).toHaveBeenCalledTimes(1)
+  })
+})
