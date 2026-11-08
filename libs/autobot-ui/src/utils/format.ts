@@ -412,8 +412,8 @@ export function createRecencyFormatter(options: RecencyFormatterOptions = {}): (
 export interface DateFormatterOptions {
   /** Which part to show (default `'dateTime'`). */
   kind?: 'date' | 'time' | 'dateTime'
-  /** BCP 47 locale; default is the browser's. */
-  locale?: string
+  /** BCP 47 locale, or a function read on every call (for the app locale); default is the browser's. */
+  locale?: string | (() => string)
   /** `Intl` fields, or a function returning them (for a timezone that can change). */
   intl?: Intl.DateTimeFormatOptions | (() => Intl.DateTimeFormatOptions)
   /** Unit of a numeric input (default `'ms'`). */
@@ -426,9 +426,10 @@ export interface DateFormatterOptions {
 
 function toLocaleText(date: Date, options: DateFormatterOptions): string {
   const intl = typeof options.intl === 'function' ? options.intl() : options.intl
-  if (options.kind === 'date') return date.toLocaleDateString(options.locale, intl)
-  if (options.kind === 'time') return date.toLocaleTimeString(options.locale, intl)
-  return date.toLocaleString(options.locale, intl)
+  const locale = typeof options.locale === 'function' ? options.locale() : options.locale
+  if (options.kind === 'date') return date.toLocaleDateString(locale, intl)
+  if (options.kind === 'time') return date.toLocaleTimeString(locale, intl)
+  return date.toLocaleString(locale, intl)
 }
 
 /**
