@@ -4,6 +4,8 @@
 # Author: mrveiss
 """LLC domain exceptions (GH#8215)."""
 
+from typing import Optional
+
 
 class BudgetExhausted(Exception):
     """Raised when an agent's budget_spent exceeds budget_limit."""
@@ -65,12 +67,22 @@ class AdapterRunFailed(Exception):
     silently marked COMPLETED.
     """
 
-    def __init__(self, adapter_type: str, run_id: str, status: object) -> None:
+    def __init__(self, adapter_type: str, run_id: str, status: object, reason: Optional[str] = None) -> None:
         self.adapter_type = adapter_type
         self.run_id = run_id
         self.status = status
+        self.reason = reason
         status_val = getattr(status, "value", status)
-        super().__init__(f"{adapter_type or 'adapter'} run {run_id} ended in state {status_val!r}")
+        message = f"{adapter_type or 'adapter'} run {run_id} ended in state {status_val!r}"
+        super().__init__(f"{message}: {reason}" if reason else message)
+
+
+class AdapterAuthFailed(AdapterRunFailed):
+    """A claude_code run failed because the agent's Claude login is no longer valid (#20202).
+
+    Still an ``AdapterRunFailed``, so the run takes the ordinary FAILED path; the subclass only
+    tells the scheduler to pause the agent afterwards, since every further wake fails the same way.
+    """
 
 
 class HeartbeatDispatchSkipped(Exception):

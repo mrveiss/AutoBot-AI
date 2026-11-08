@@ -220,7 +220,7 @@ class LivenessMonitor(PollLoopScheduler):
             )
         except HierarchyViolation as exc:
             await _note_unfiled_recovery(
-                session, svc, work_item, company_id, f"{title}. {description}", exc, run, agent_id
+                session, svc, work_item, company_id, f"{title}. {description}", exc, run, agent_id, self._activity_log
             )
 
     async def _resolve_manager(self, session: AsyncSession, company_id: str, agent_id: str) -> Optional[str]:
@@ -276,17 +276,54 @@ async def _recovery_project(session: AsyncSession, work_item: Optional[LLCWorkIt
 
 
 async def _note_unfiled_recovery(
-    session, svc, work_item, company_id: str, text_: str, exc: Exception, run: LLCHeartbeatRun, agent_id: str
+    session,
+    svc,
+    work_item,
+    company_id: str,
+    text_: str,
+    exc: Exception,
+    run: LLCHeartbeatRun,
+    agent_id: str,
+    log: LLCActivityLogService,
 ) -> None:
     """The recovery Bug was refused (a stuck item from before the every-item-has-a-project rule may have no
     project, #18978): record it on the stuck item itself so the recovery is not lost. A run with no work item has
-    nowhere to comment, so the company is told through the notification router instead (#20687);
-    nothing is created for it."""
+    nowhere to comment, so the company is told instead (#20687, #20930): an activity-feed entry, which is what
+    company users see, and the notification router's live event; nothing is created for it."""
     logger.error("Recovery item not created (%s); noting it on the stuck work item", exc)
     if work_item is not None:
         await svc.add_comment(session, str(work_item.id), company_id, f"{text_} ({exc})")
         return
+    await _log_unfiled_recovery(log, session, company_id, agent_id, run, exc)
     await _notify_admins_unfiled_recovery(company_id, agent_id, run, exc)
+
+
+async def _log_unfiled_recovery(
+    log: LLCActivityLogService, session, company_id: str, agent_id: str, run: LLCHeartbeatRun, exc: Exception
+) -> None:
+    """The company activity feed's entry for an unfiled recovery: best-effort, in its own savepoint, so a failed
+    write rolls back only itself and never fails the recovery it annotates. The row is a write in the caller's
+    transaction (it cannot be deferred past the commit); the live publish to the company's dashboard follows the
+    commit, as every activity record's does."""
+    try:
+        async with session.begin_nested():
+            await audit(
+                log,
+                session,
+                company_id=company_id,
+                actor_type=ActorType.SYSTEM,
+                actor_id=None,
+                event_type=ActivityEventType.HEARTBEAT_FAILED,
+                entity_type="heartbeat_run",
+                entity_id=str(run.id),
+                metadata={
+                    "agent_id": str(agent_id),
+                    "reason": "recovery_unfiled",
+                    "message": f"Agent {agent_id} timed out on run {run.id}; no recovery item could be filed ({exc})",
+                },
+            )
+    except Exception:
+        logger.warning("Unfiled-recovery activity entry for run %s not written", run.id, exc_info=True)
 
 
 async def _notify_admins_unfiled_recovery(company_id: str, agent_id: str, run: LLCHeartbeatRun, exc: Exception) -> None:

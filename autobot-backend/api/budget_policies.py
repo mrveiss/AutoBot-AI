@@ -17,9 +17,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_principal_id
 from models.heartbeat import AgentRuntimeState
 from services.budget_policy import (
     BudgetPolicy,
@@ -237,9 +238,11 @@ async def delete_budget_policy(
 async def resume_paused_agent(
     agent_id: str,
     _admin: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ) -> ResumeAgentResponse:
-    """Resume a budget-paused agent (admin only)."""
-    success = await resume_agent(agent_id, approved_by="admin")
+    """Resume a budget-paused agent (admin only); the verified caller is the recorded approver."""
+    approver = resolve_principal_id(current_user) or str(current_user.get("username") or "unknown")
+    success = await resume_agent(agent_id, approved_by=approver)
     if not success:
         return ResumeAgentResponse(
             success=False,
