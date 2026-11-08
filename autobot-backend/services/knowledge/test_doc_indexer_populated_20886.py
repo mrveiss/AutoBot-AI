@@ -266,3 +266,31 @@ def test_the_embedding_client_is_built_with_the_caller_header(monkeypatch) -> No
     monkeypatch.setattr("knowledge.backends.get_default_client", lambda **_k: object())
     assert asyncio.run(svc.initialize()) is False
     assert seen["client_kwargs"]["headers"][guard.CALLER_HEADER].startswith("doc_indexer pid=")
+
+
+async def _state(indexer: DocIndexerService) -> tuple:
+    return (doc_indexer._load_hash_cache(), guard.load_recorded_store(doc_indexer.HASH_CACHE_FILE))
+
+
+async def test_force_does_not_bypass_the_store_guard_over_a_moved_store(indexer: DocIndexerService) -> None:
+    await indexer.index_all()
+    file = indexer._root_dir / "docs" / "a.md"
+    other = InMemoryClient().get_or_create_collection("autobot_docs")
+    other.upsert(ids=["x"], embeddings=[[0.1] * 8], documents=["unrelated"], metadatas=[{"k": "v"}])
+    indexer._collection, indexer._store = other, OTHER
+    before, embedded = await _state(indexer), indexer._embed_model.calls
+    result = await indexer.index_file(file, force=True)
+    assert result.failed == 1 and result.success == 0 and STORE in result.errors[0]
+    assert await _state(indexer) == before and other.count() == 1 and indexer._embed_model.calls == embedded
+
+
+async def test_force_does_not_bypass_the_store_guard_over_an_empty_store(indexer: DocIndexerService) -> None:
+    await indexer.index_all()
+    _make_legacy(indexer)
+    file = indexer._root_dir / "docs" / "a.md"
+    indexer._collection = InMemoryClient().get_or_create_collection("autobot_docs")
+    before, embedded = await _state(indexer), indexer._embed_model.calls
+    result = await indexer.index_file(file, force=True)
+    assert result.failed == 1 and result.errors
+    assert await _state(indexer) == before and indexer._collection.count() == 0
+    assert indexer._embed_model.calls == embedded

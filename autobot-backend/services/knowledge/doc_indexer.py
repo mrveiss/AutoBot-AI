@@ -762,52 +762,40 @@ class DocIndexerService:
         return indexed, len(chunks)
 
     async def index_file(self, file_path: Path, tier: int = 3, force: bool = False) -> IndexResult:
-        """Index a single markdown file at the given priority tier; force skips the hash check."""
+        """Index one markdown file at a priority tier; force skips the hash check, never the store guard (#20886)."""
         if not self._initialized:
             await self.initialize()
 
-        result = IndexResult(total_files=1)
         file_str = str(file_path)
-
         if not file_path.exists():
-            result.failed = 1
-            result.errors.append(f"File not found: {file_str}")
-            return result
-
+            return IndexResult(total_files=1, failed=1, errors=[f"File not found: {file_str}"])
         try:
-            # Before the hash cache or the store record is touched (#20886); leaves _needs_reindex for index_all.
-            force = force or bool(self._full_reindex_reason())
+            # Unconditional, so force cannot bypass it; before the cache or store record is touched (#20886).
+            reason = self._full_reindex_reason()
+            force = force or bool(reason)
         except (store_guard.CollectionCountUnknown, store_guard.StoreLocationChanged) as e:
             logger.error("Doc indexer refusing to index %s: %s", file_str, e)
             return IndexResult(total_files=1, failed=1, errors=[str(e)])
-
         if self._check_hash_and_update_cache(file_str, force):
-            result.skipped = 1
-            return result
+            return IndexResult(total_files=1, skipped=1)
+        return await self._embed_one_file(file_path, tier)
 
+    async def _embed_one_file(self, file_path: Path, tier: int) -> IndexResult:
+        """Read, chunk and embed one file; a failure is returned as a failed result."""
+        file_str = str(file_path)
         try:
             # #7467: was sync `file_path.read_text` blocking the event loop.
             content = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
             if not content.strip():
-                result.skipped = 1
-                return result
-
+                return IndexResult(total_files=1, skipped=1)
             rel_path = os.path.relpath(file_str, self._root_dir)
             indexed, total_chunks = await self._index_file_chunks(file_str, content, rel_path, tier)
-
             if total_chunks == 0:
-                result.skipped = 1
-                return result
-
-            result.success = 1 if indexed > 0 else 0
-            result.failed = 0 if indexed > 0 else 1
-            return result
-
+                return IndexResult(total_files=1, skipped=1)
+            return IndexResult(total_files=1, success=int(indexed > 0), failed=int(indexed == 0))
         except Exception as e:
             logger.error("Error indexing %s: %s", file_str, e)
-            result.failed = 1
-            result.errors.append(f"{file_str}: {e}")
-            return result
+            return IndexResult(total_files=1, failed=1, errors=[f"{file_str}: {e}"])
 
     async def _index_single_file_content(self, file_path: str, tier: int, result: IndexResult) -> None:
         """Read, chunk, and index a single file. Helper for index_all (#1385)."""
@@ -919,21 +907,13 @@ class DocIndexerService:
         if not files:
             logger.warning("No documentation files discovered in %s", self._root_dir)
             return total_result
-        store_guard.log_run_start(self.embedding_model_name, get_ollama_url())
-        self._embed_progress = store_guard.EmbedProgress()
-        try:
-            force = self._resolve_force(force)
-        except (store_guard.CollectionCountUnknown, store_guard.StoreLocationChanged) as e:
-            logger.error("Doc indexer refusing to re-embed: %s", e)
-            return IndexResult(total_files=len(files), errors=[str(e)])
-
-        new_hashes: Dict[str, str] = {}
-        if not force:
-            files, new_hashes, early = self._apply_incremental_filter(files, total_result, start_time)
-            if early:
-                return total_result
-        else:  # force: hash every file so the cache is rewritten
-            files, new_hashes = _filter_changed_files(files, {}, self._root_dir)
+        force, refused = self._begin_run(force, len(files))
+        if refused:
+            return refused
+        planned = self._plan_run(force, files, total_result, start_time)
+        if planned is None:
+            return total_result
+        files, new_hashes = planned
 
         logger.info("Indexing %d documentation files...", len(files))
         indexed_paths = await self._index_listed_files(files, total_result, start_time)
@@ -943,6 +923,23 @@ class DocIndexerService:
         total_result.elapsed_seconds = round(time.time() - start_time, 2)
         store_guard.log_run_summary(total_result, self._collection)
         return total_result
+
+    def _begin_run(self, force: bool, file_count: int) -> tuple[bool, IndexResult | None]:
+        """Log the run start and decide force; a refusal comes back as a failed result (#20886)."""
+        store_guard.log_run_start(self.embedding_model_name, get_ollama_url())
+        self._embed_progress = store_guard.EmbedProgress()
+        try:
+            return self._resolve_force(force), None
+        except (store_guard.CollectionCountUnknown, store_guard.StoreLocationChanged) as e:
+            logger.error("Doc indexer refusing to re-embed: %s", e)
+            return force, IndexResult(total_files=file_count, errors=[str(e)])
+
+    def _plan_run(self, force, files, total_result, start_time):
+        """(files to embed, new hashes), or None when nothing changed. Force hashes every file."""
+        if force:
+            return _filter_changed_files(files, {}, self._root_dir)
+        files, new_hashes, early = self._apply_incremental_filter(files, total_result, start_time)
+        return None if early else (files, new_hashes)
 
     def _resolve_force(self, force: bool) -> bool:
         """Whether this run re-embeds everything; raises on an unknown count or a moved store (#20886)."""
