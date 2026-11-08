@@ -16,6 +16,7 @@ import {
   describeUploadError,
   ensureUploadSession,
   postConversationUpload,
+  uploadEtaSeconds,
   usesCanonicalRoute,
 } from '@/utils/conversationFileUpload'
 
@@ -47,6 +48,11 @@ class FakeXhr {
   }
   send(body: unknown) {
     this.body = body
+  }
+  aborted = false
+  abort() {
+    this.aborted = true
+    this.listeners.abort?.()
   }
 }
 
@@ -261,5 +267,49 @@ describe('usesCanonicalRoute (#20195)', () => {
 
   it('control: the decision depends on the ids, not on the overseer flag alone', () => {
     expect(usesCanonicalRoute(true, [])).not.toBe(usesCanonicalRoute(true, ['file-1']))
+  })
+})
+
+describe('user cancel of an upload (#20133)', () => {
+  beforeEach(() => vi.stubGlobal('XMLHttpRequest', FakeXhr))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('aborting the signal aborts the request and rejects as cancelled', async () => {
+    const controller = new AbortController()
+    const pending = postConversationUpload('s1', file(), () => {}, controller.signal)
+    expect(FakeXhr.last.aborted).toBe(false)
+    controller.abort()
+    expect(FakeXhr.last.aborted).toBe(true)
+    await expect(pending).rejects.toMatchObject({ code: 'cancelled' })
+  })
+
+  it('a signal that is already aborted cancels the request at once', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(postConversationUpload('s1', file(), () => {}, controller.signal)).rejects.toMatchObject({
+      code: 'cancelled',
+    })
+  })
+
+  it('control: without a signal nothing aborts', () => {
+    void postConversationUpload('s1', file(), () => {}).catch(() => {})
+    expect(FakeXhr.last.aborted).toBe(false)
+  })
+})
+
+describe('uploadEtaSeconds (#20133)', () => {
+  it('extrapolates the average rate so far', () => {
+    // 25 of 100 bytes in 10 s -> 75 bytes left at 2.5 B/s = 30 s
+    expect(uploadEtaSeconds(25, 100, 10_000)).toBeCloseTo(30)
+  })
+
+  it('has no estimate before time or bytes have passed', () => {
+    expect(uploadEtaSeconds(0, 100, 5_000)).toBeUndefined()
+    expect(uploadEtaSeconds(10, 100, 0)).toBeUndefined()
+  })
+
+  it('has no estimate when a second or less remains', () => {
+    expect(uploadEtaSeconds(100, 100, 5_000)).toBeUndefined()
+    expect(uploadEtaSeconds(99, 100, 99_000)).toBeUndefined()
   })
 })

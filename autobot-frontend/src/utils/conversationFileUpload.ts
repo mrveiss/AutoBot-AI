@@ -134,11 +134,29 @@ export function describeApiRefusal(err: unknown, t: Translate): string | null {
   return refusal ? describeUploadError(refusal, t) : null
 }
 
-/** POST `file` to the conversation's upload route; rejects on a non-200, a bad body, a network error or an abort. */
+const MS_PER_SECOND = 1000
+const MIN_SHOWN_ETA_SECONDS = 1
+
+/** Seconds left at the average rate so far; undefined before any time or bytes have passed, or when under a second remains. */
+export function uploadEtaSeconds(loaded: number, total: number, elapsedMs: number): number | undefined {
+  if (elapsedMs <= 0 || loaded <= 0) return undefined
+  const remaining = (total - loaded) / (loaded / elapsedMs) / MS_PER_SECOND
+  return remaining > MIN_SHOWN_ETA_SECONDS ? remaining : undefined
+}
+
+/** Wires `signal` to the request: an abort (or one already raised) cancels the XHR, which rejects as `cancelled`. */
+function abortWith(xhr: XMLHttpRequest, signal?: AbortSignal): void {
+  if (!signal) return
+  if (signal.aborted) return xhr.abort()
+  signal.addEventListener('abort', () => xhr.abort(), { once: true })
+}
+
+/** POST `file` to the conversation's upload route; rejects on a non-200, a bad body, a network error or an abort of `signal`. */
 export function postConversationUpload(
   sessionId: string,
   file: File,
-  onProgress: (loaded: number, total: number) => void
+  onProgress: (loaded: number, total: number) => void,
+  signal?: AbortSignal
 ): Promise<ConversationUploadResponse> {
   const formData = new FormData()
   formData.append('file', file)
@@ -161,6 +179,7 @@ export function postConversationUpload(
     const token = readStoredAuthToken()
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     xhr.send(formData)
+    abortWith(xhr, signal)
   })
 }
 
