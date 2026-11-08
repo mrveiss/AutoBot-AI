@@ -9,6 +9,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from api.codebase_analytics.endpoints import stats as stats_mod
 from api.codebase_analytics.problem_query import ProblemCategory, problem_where, select_category
@@ -81,3 +83,25 @@ class TestWhereDedupRuns:
                 (await stats_mod.get_codebase_problems(source_id="s", file_category=ProblemCategory.CODE)).body
             )
         assert [(p["type"], p["severity"]) for p in body["problems"]] == [("long_function", "high")]
+
+
+class TestReportPathDedup:
+    def test_the_report_fetch_returns_one_defect_once(self):
+        from api.codebase_analytics.endpoints import report as report_mod
+
+        rows = [_row("long_function"), _row("code_smell_long_method", "high")]
+        with (
+            patch.object(report_mod, "get_code_collection", return_value=_Collection(rows)),
+            patch.object(report_mod, "get_all_paginated", lambda *a, **k: {"metadatas": rows}),
+            patch.object(report_mod, "filter_problems_by_file_existence", lambda p, _r: p),
+        ):
+            out = report_mod._fetch_problems_from_chromadb("s", Path("."))
+        assert [(p["type"], p["severity"]) for p in out] == [("long_function", "high")]
+
+
+class TestProblemsRouteHttp:
+    def test_a_bad_file_category_is_422(self):
+        app = FastAPI()
+        app.include_router(stats_mod.router)
+        resp = TestClient(app).get("/problems", params={"file_category": "bogus"})
+        assert resp.status_code == 422

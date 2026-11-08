@@ -23,7 +23,7 @@ describe('summarizeSmells (#20493)', () => {
 describe('the export agrees with the cards (#20493)', () => {
   it('exports the same list with the same total and severity counts', () => {
     const list = [smell('high', 'a'), smell('medium', 'a'), smell('high', 'b')]
-    const exported = buildSmellsExport(list)
+    const exported = buildSmellsExport(list, 'code')
     const cards = summarizeSmells(list)
     expect(exported.smells).toEqual(list)
     expect(exported.summary.total_smells).toBe(cards.total)
