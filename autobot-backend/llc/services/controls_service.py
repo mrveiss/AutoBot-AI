@@ -98,11 +98,16 @@ class ControlsService:
         ``actor_type="system"`` (with ``actor_user_id=None``) records the pause
         as a system-initiated board event — used by the auto-pause on
         subscription-quota exhaustion (GH#10218).
+
+        An agent that is already paused keeps its first pause (reason, ``paused_at``,
+        ``pre_pause_status``): the repeat is recorded as a no-op (#21056).
         """
         row = await self._get_agent_row(session, company_id, agent_id)
         if row is None:
             raise AgentNotFoundError(agent_id)
         before_status = row["status"]
+        if before_status == LLCAgentStatus.PAUSED.value:
+            return await self._repeat_pause(session, company_id, agent_id, row, actor_user_id, reason, actor_type)
 
         await session.execute(
             text(
@@ -136,6 +141,33 @@ class ControlsService:
         await self._set_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id), "1")
 
         return {"agent_id": agent_id, "status": LLCAgentStatus.PAUSED.value, "pause_reason": reason}
+
+    async def _repeat_pause(
+        self,
+        session: AsyncSession,
+        company_id: str,
+        agent_id: str,
+        row: dict,
+        actor_user_id: Optional[str],
+        reason: Optional[str],
+        actor_type: str,
+    ) -> dict:
+        """A pause request for an already-paused agent: keep the first pause, log the repeat (#21056)."""
+        state = {"status": LLCAgentStatus.PAUSED.value, "pause_reason": row["pause_reason"]}
+        await self._activity_log.record(
+            session=session,
+            company_id=company_id,
+            actor_type=actor_type,
+            actor_id=actor_user_id,
+            event_type=ActivityEventType.CONTROL_AGENT_PAUSED,
+            entity_type="agent",
+            entity_id=agent_id,
+            before=state,
+            after=state,
+            metadata={"repeated_pause": "noop", "requested_reason": reason, "requested_actor_type": actor_type},
+        )
+        await self._set_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id), "1")
+        return {"agent_id": agent_id, **state, "already_paused": True}
 
     async def resume_agent(
         self,
@@ -400,13 +432,13 @@ class ControlsService:
     async def _get_agent_row(self, session: AsyncSession, company_id: str, agent_id: str) -> Optional[dict]:
         result = await session.execute(
             text(
-                "SELECT status, pre_pause_status FROM agent_org_nodes"
+                "SELECT status, pre_pause_status, pause_reason FROM agent_org_nodes"
                 " WHERE company_id = :company_id AND agent_id = :agent_id LIMIT 1"
             ),
             {"company_id": company_id, "agent_id": agent_id},
         )
         row = result.fetchone()
-        return {"status": row[0], "pre_pause_status": row[1]} if row else None
+        return {"status": row[0], "pre_pause_status": row[1], "pause_reason": row[2]} if row else None
 
     async def _get_heartbeat_row(self, session: AsyncSession, company_id: str, agent_id: str) -> Optional[dict]:
         result = await session.execute(
