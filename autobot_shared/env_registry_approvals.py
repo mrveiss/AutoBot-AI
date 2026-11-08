@@ -29,11 +29,28 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_APPROVAL_DECISION_TTL_SECONDS",
         type=int,
-        default=600,
+        default=7200,
         description=(
-            "Crash safety net for the per-approval decision claim (#20674): seconds before a claim held by a "
-            "worker that died is freed. A run that fails releases its claim at once; a successful run keeps it, "
-            "so a second decision routed to another worker cannot run the command again."
+            "How long the per-approval decision claim is held (#20674): longer than the longest command a "
+            "decision can start (AUTOBOT_SECURE_COMMAND_TIMEOUT_S, max 3600) plus the retries that persist the "
+            "cleared record, so a second worker cannot win the claim while the command runs. Also the crash "
+            "safety net: a claim held by a worker that died is freed after this many seconds. A run that fails "
+            "releases its claim at once; a successful run keeps it."
+        ),
+        component="approvals",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_APPROVAL_DECIDED_MARKER_TTL_SECONDS",
+        type=int,
+        default=2592000,
+        description=(
+            "How long the durable decided marker of an approval lives (#21174), keyed by its original command id "
+            "and written atomically with the decision claim. Must outlast the session record (7 days) and the "
+            "chat-history window, so a rebuild from chat history never makes a decided approval decidable "
+            "again. A failed run clears it with its claim; a successful run keeps it."
         ),
         component="approvals",
     )

@@ -26,7 +26,6 @@ import uuid
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_utils import delete_if_value
 from services.command_approval_manager import AgentRole
 
 from .models import AgentSessionState, AgentTerminalSession
@@ -36,9 +35,38 @@ logger = get_logger(__name__)
 
 READ_TIMEOUT_SECONDS: float = 2.0
 
-#: Crash safety net only: a worker that dies holding a decision claim frees it after this long. A run that
-#: fails releases its claim at once (``release_decision``); a successful one keeps it.
-DECISION_TTL_SECONDS: int = env_int("AUTOBOT_APPROVAL_DECISION_TTL_SECONDS", default=600)
+#: How long a decision claim is held. It must outlast the longest command a decision can start
+#: (``AUTOBOT_SECURE_COMMAND_TIMEOUT_S``, at most 3600 s) plus the retries that persist the cleared record
+#: (~160 s), or a second worker could win the claim while the command still runs (#20674). It is also the
+#: crash safety net: a worker that dies holding a claim frees it after this long. A run that fails releases
+#: its claim at once (``release_decision``); a successful one keeps it. No heartbeat exists to refresh it.
+DECISION_TTL_SECONDS: int = env_int("AUTOBOT_APPROVAL_DECISION_TTL_SECONDS", default=2 * 60 * 60)
+
+#: The durable "decided" marker outlives the session record (at most 7 d, ``APPROVAL_PENDING_SESSION_TTL``)
+#: and the chat-history window the rebuild reads, so a decided approval is never decidable again (#21174).
+DECIDED_MARKER_TTL_SECONDS: int = env_int("AUTOBOT_APPROVAL_DECIDED_MARKER_TTL_SECONDS", default=30 * 24 * 60 * 60)
+
+#: Take the claim and write the decided marker as one step: both, or neither.
+CLAIM_AND_MARK_LUA = """
+if redis.call('SET', KEYS[1], ARGV[1], 'NX', 'EX', tonumber(ARGV[2])) then
+  redis.call('SET', KEYS[2], ARGV[1], 'EX', tonumber(ARGV[3]))
+  return 1
+end
+return 0
+"""
+
+#: Give a failed run's approval back: drop the claim and the marker, each only while it still holds the token.
+RELEASE_CLAIM_AND_MARK_LUA = """
+local released = 0
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  redis.call('DEL', KEYS[1])
+  released = 1
+end
+if redis.call('GET', KEYS[2]) == ARGV[1] then
+  redis.call('DEL', KEYS[2])
+end
+return released
+"""
 
 #: Write the record only while the stored one is still at the caller's version. Atomic in Redis.
 PERSIST_IF_VERSION_LUA = """
@@ -77,6 +105,11 @@ def pending_decision_id(pending: dict | None) -> str | None:
         return pending["command_id"]
     seed = f"{pending.get('timestamp')}|{pending.get('command')}"
     return "restored-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
+
+
+def decided_key(decision_id: str | None) -> str:
+    """The durable marker of one approval, by its original command id (else the request digest)."""
+    return f"agent_terminal:decided:{decision_id or 'unidentified'}"
 
 
 def decision_key(session_id: str, decision_id: str | None) -> str:
@@ -147,7 +180,15 @@ async def claim_decision(redis, session_id: str, decision_id: str | None) -> str
         raise ApprovalStateUnavailableError("no usable Redis client")
     token = uuid.uuid4().hex
     try:
-        won = await redis.set(decision_key(session_id, decision_id), token, nx=True, ex=DECISION_TTL_SECONDS)
+        won = await redis.eval(
+            CLAIM_AND_MARK_LUA,
+            2,
+            decision_key(session_id, decision_id),
+            decided_key(decision_id),
+            token,
+            DECISION_TTL_SECONDS,
+            DECIDED_MARKER_TTL_SECONDS,
+        )
     except Exception as exc:  # noqa: BLE001 - an unconfirmed claim is a refused decision
         raise ApprovalStateUnavailableError(f"could not claim approval {decision_id}: {exc}") from exc
     if won:
@@ -159,7 +200,22 @@ async def claim_decision(redis, session_id: str, decision_id: str | None) -> str
 async def release_decision(redis, session_id: str, decision_id: str | None, token: str) -> bool:
     """Give the decision back after a run that failed, so the approval can be answered again.
 
-    Releases only the claim that carries *token*. A successful or still-running command never calls this,
-    so its claim stays and refuses a second run.
+    Releases the claim and the decided marker, each only while it carries *token*, so the approval is
+    decidable again and a rebuild may restore it. A successful or still-running command never calls this:
+    its claim and marker stay and refuse a second run, here and after a rebuild.
     """
-    return await delete_if_value(redis, decision_key(session_id, decision_id), token)
+    return bool(
+        await redis.eval(
+            RELEASE_CLAIM_AND_MARK_LUA, 2, decision_key(session_id, decision_id), decided_key(decision_id), token
+        )
+    )
+
+
+async def decided_marker_exists(redis, decision_id: str | None) -> bool:
+    """Whether the approval was ever claimed. Fails closed: an unreadable marker raises, never reads as absent."""
+    if not usable_redis(redis):
+        raise ApprovalStateUnavailableError("no usable Redis client")
+    try:
+        return bool(await asyncio.wait_for(redis.exists(decided_key(decision_id)), timeout=READ_TIMEOUT_SECONDS))
+    except Exception as exc:  # noqa: BLE001 - an unconfirmed marker is a refused rebuild
+        raise ApprovalStateUnavailableError(f"could not read decided marker {decision_id}: {exc}") from exc

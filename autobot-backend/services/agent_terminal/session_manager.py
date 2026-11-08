@@ -18,8 +18,9 @@ from constants.ttl_constants import TTL_1_HOUR
 from services.command_approval_manager import AgentRole
 from type_defs.common import Metadata
 
+from .approval_restore import restore_pending_approval
 from .conversation_owner import ConversationNotOwnedError, conversation_owner, verified_conversation_owner
-from .models import AgentSessionState, AgentTerminalSession
+from .models import AgentTerminalSession
 from .pending_claim import drop_pending_slot, hold_pending_slot
 from .redis_usability import usable_redis
 from .session_state import (
@@ -40,88 +41,6 @@ logger = get_logger(__name__)
 # established that an approval does not expire on a timer. This bounds the
 # stored session, not the approval's validity.
 APPROVAL_PENDING_SESSION_TTL: int = env_int("AUTOBOT_APPROVAL_PENDING_SESSION_TTL_SECONDS", default=7 * 24 * 60 * 60)
-
-# O(1) lookup optimization constants (Issue #326)
-APPROVAL_RESPONSE_KEYWORDS = {"approved", "denied", "executed", "rejected"}
-
-
-def _find_latest_approval_request(messages: List[Dict]) -> Dict | None:
-    """
-    Find the most recent command_approval_request message (Issue #665: extracted helper).
-
-    Args:
-        messages: List of chat messages to search
-
-    Returns:
-        Most recent approval request message or None
-    """
-    for msg in reversed(messages):  # Search newest first
-        if msg.get("message_type") == "command_approval_request":
-            return msg
-    return None
-
-
-def _is_approval_already_responded(messages: List[Dict], request_timestamp: float) -> bool:
-    """
-    Check if approval request was already responded to (Issue #665: extracted helper).
-
-    Searches for approval/denial response messages after the request timestamp.
-
-    Args:
-        messages: List of chat messages to search
-        request_timestamp: Timestamp of the approval request
-
-    Returns:
-        True if approval was already handled, False if still pending
-    """
-    for msg in reversed(messages):
-        msg_time = msg.get("timestamp", 0)
-        if msg_time > request_timestamp:
-            content = msg.get("text", "").lower()
-            if any(keyword in content for keyword in APPROVAL_RESPONSE_KEYWORDS):
-                return True
-    return False
-
-
-def _apply_restored_approval_state(
-    session: "AgentTerminalSession",
-    approval_request: Dict,
-    conversation_id: str,
-    request_timestamp: float,
-) -> None:
-    """
-    Apply restored approval state to session from approval request metadata.
-
-    Issue #665: Extracted from _restore_pending_approval to reduce function length.
-
-    Args:
-        session: Agent terminal session to update
-        approval_request: Approval request message with metadata
-        conversation_id: Chat conversation ID
-        request_timestamp: Timestamp of the approval request
-    """
-    metadata = approval_request.get("metadata", {})
-    command = metadata.get("command")
-
-    if command:
-        session.pending_approval = {
-            "command": command,
-            "risk": metadata.get("risk_level", "MEDIUM"),
-            "reasons": metadata.get("reasons", []),
-            "description": metadata.get("description", ""),
-            "terminal_session_id": metadata.get("terminal_session_id"),
-            "conversation_id": conversation_id,
-            "timestamp": request_timestamp,
-        }
-        session.state = AgentSessionState.AWAITING_APPROVAL
-
-        logger.info(
-            f"✅ [APPROVAL RESTORED] Restored pending approval "
-            f"for session {session.session_id}: "
-            f"command='{command}', risk={metadata.get('risk_level')}"
-        )
-    else:
-        logger.warning(f"Found approval request but no command in metadata " f"for conversation {conversation_id}")
 
 
 class SessionManager:
@@ -547,50 +466,5 @@ class SessionManager:
         return raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
 
     async def _restore_pending_approval(self, session: AgentTerminalSession, conversation_id: str) -> None:
-        """
-        Restore pending approval from chat history (survives backend restarts).
-
-        Issue #665: Refactored to use extracted helper functions for
-        finding approval requests and checking response status.
-
-        Scans recent chat messages for unapproved command_approval_request messages
-        and restores the pending_approval state so users can approve after restart.
-
-        Args:
-            session: Agent terminal session to restore state for
-            conversation_id: Chat conversation ID to check
-        """
-        if not self.chat_history_manager:
-            return
-
-        try:
-            # Get recent messages from chat history (last 50 messages)
-            messages = await self.chat_history_manager.get_session_messages(session_id=conversation_id, limit=50)
-
-            if not messages:
-                logger.debug(f"No messages found for conversation {conversation_id}, " f"skipping approval restoration")
-                return
-
-            # Search for most recent command_approval_request (Issue #665: uses helper)
-            approval_request = _find_latest_approval_request(messages)
-
-            if not approval_request:
-                logger.debug(f"No pending approval requests found in conversation {conversation_id}")
-                return
-
-            # Check if this approval was already responded to (Issue #665: uses helper)
-            request_timestamp = approval_request.get("timestamp", 0)
-            if _is_approval_already_responded(messages, request_timestamp):
-                logger.info(
-                    f"Approval request already responded to in " f"conversation {conversation_id}, skipping restoration"
-                )
-                return
-
-            # Approval is still pending! Restore state (Issue #665: uses helper)
-            _apply_restored_approval_state(session, approval_request, conversation_id, request_timestamp)
-
-        except Exception as e:
-            logger.error("Failed to restore pending approval from chat history: %s", e)
-            import traceback
-
-            logger.error("Traceback: %s", traceback.format_exc())
+        """Restore the session's own undecided approval from chat history (#13478, #21174); see approval_restore."""
+        await restore_pending_approval(self, session, conversation_id)
