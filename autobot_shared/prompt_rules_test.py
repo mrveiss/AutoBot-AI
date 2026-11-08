@@ -70,3 +70,14 @@ def test_a_long_invisible_run_is_matched_in_linear_time():
     t_large = _elapsed(large)
     assert t_large < 2.0
     assert t_large / t_small < 12  # 4x the input: linear is ~4x, quadratic ~16x
+
+
+def test_the_possessive_quantifier_is_backed_by_the_interpreter_floor():
+    """The regex needs 3.11+ possessive quantifiers; the floor (#20903) is what keeps that safe."""
+    import sys
+
+    from autobot_shared.prompt_rules import _FRAME_MARKER_RE
+    from autobot_shared.python_floor import minimum_python_version
+
+    assert sys.version_info[:2] >= minimum_python_version()
+    assert "*+" in _FRAME_MARKER_RE.pattern
