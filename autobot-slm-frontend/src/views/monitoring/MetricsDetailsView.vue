@@ -9,6 +9,7 @@
  */
 
 import { formatFleetTime } from '@/composables/useTimezone'
+import { saveTextFile } from '@autobot/ui'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { PollingPausedAlert, createLogger } from '@autobot/ui'
@@ -48,13 +49,7 @@ async function loadMetrics() {
 async function downloadPrometheusMetrics() {
   await fetchPrometheusExport()
   if (prometheusExport.value) {
-    const blob = new Blob([prometheusExport.value], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `prometheus-metrics-${Date.now()}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
+    saveTextFile(prometheusExport.value, `prometheus-metrics-${Date.now()}.txt`, 'text/plain')
   }
 }
 

@@ -197,6 +197,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { saveBlob } from '@autobot/ui'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { BaseTable, type BaseTableColumn, BaseButton } from '@autobot/ui'
@@ -291,13 +292,7 @@ async function triggerDownload(res: Response, defaultFilename: string): Promise<
   const disposition = res.headers.get('content-disposition') ?? ''
   const match = disposition.match(/filename="?([^";\n]+)"?/)
   const filename = match?.[1] ?? defaultFilename
-  const blob = await res.blob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 100)
+  saveBlob(await res.blob(), filename)
 }
 
 function extractSecretPlaceholders(json: unknown): string[] {

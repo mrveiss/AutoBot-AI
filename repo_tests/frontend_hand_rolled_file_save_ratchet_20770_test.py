@@ -31,10 +31,10 @@ from repo_tests._reach import declare
 
 _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src")
 _EXCLUDED = re.compile(r"(\.test\.|\.spec\.|\.stories\.|/__tests__/)")
-_ASSIGNMENT = re.compile(r"\.download\s*=(?!=)")
+_ASSIGNMENT = re.compile(r"\.download\s*=(?!=)|setAttribute\(\s*['\"]download['\"]")
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 
-PIN = 11
+PIN = 6
 
 
 def _sources(root: Path) -> list[Path]:
@@ -83,6 +83,10 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
             _w(tmp_path, "a/C.vue", "anchor.download='f.json'; other.download = g\n"),
         ]
         assert count(paths) == 4
+
+    def test_it_counts_a_set_attribute_download(self, tmp_path: Path) -> None:
+        planted = _w(tmp_path, "a/P.vue", "link.setAttribute('download', filename)\n")
+        assert count([planted]) == 1
 
     def test_a_kit_call_a_comparison_a_comment_and_a_template_attribute_are_not_saves(self, tmp_path: Path) -> None:
         paths = [

@@ -24,10 +24,10 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 760,
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 721,
-    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 902,  # #18849: 903 -> 902
+    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 896,
     "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 767,
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
-    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1786,
+    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1781,
     "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1216,
     "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1260,
     "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 756,
@@ -93,7 +93,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1605,
     "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 924,
     "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 708,
-    "autobot-frontend/src/components/vision/MediaGallery.vue": 717,
+    "autobot-frontend/src/components/vision/MediaGallery.vue": 711,
     "autobot-frontend/src/components/vision/ScreenCaptureViewer.vue": 835,
     "autobot-frontend/src/components/vision/VideoProcessor.vue": 891,
     "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 936,
@@ -150,7 +150,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/WorkflowBuilderView.vue": 2166,  # #17677: 2169 -> 2166; #13421: 2201 -> 2169; #13422
     "autobot-frontend/src/views/llc/BacklogView.vue": 611,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
-    "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 761,
+    "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 756,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1012,  # #20123: 1015 -> 1012 (mixed bucket lists each currency)
     "autobot-frontend/src/views/llc/GanttTimelineView.vue": 815,
     "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 800,
