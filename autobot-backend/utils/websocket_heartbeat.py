@@ -16,6 +16,7 @@ from typing import Any, Callable, Dict, FrozenSet, Set
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
@@ -420,8 +421,8 @@ async def create_websocket_handler(websocket: WebSocket, connection_id: str):
                 if not await websocket_manager.handle_message(connection_id, message):
                     break  # Handler indicated connection should close
 
-            except WebSocketDisconnect:
-                logger.info("🔌 WebSocket disconnected normally: %s", connection_id)
+            except PEER_CLOSED_ERRORS as disconnect:
+                log_client_disconnect(logger, disconnect, "create_websocket_handler")
                 break
 
             except Exception as e:

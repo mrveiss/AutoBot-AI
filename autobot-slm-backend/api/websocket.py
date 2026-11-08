@@ -13,10 +13,11 @@ import logging
 import time
 from typing import Dict, Set
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, HTTPException, WebSocket, status
 
 from autobot_shared.auth.interactive_principal import is_purpose_bound, is_service_token
 from autobot_shared.auth.revocation_unavailable import REVOCATION_UNAVAILABLE_DETAIL
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.websocket_subprotocol import accept_websocket, negotiated_subprotocol, resolve_ws_token
 from services.auth import auth_service, is_admin_session
@@ -396,8 +397,8 @@ async def deployment_websocket(websocket: WebSocket, deployment_id: str):
                 except Exception:
                     break
 
-    except WebSocketDisconnect:
-        logger.debug("Client disconnected from deployment: %s", deployment_id)
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "deployment_websocket")
     except Exception as e:
         logger.error("WebSocket error for deployment %s: %s", deployment_id, e)
     finally:
@@ -427,8 +428,8 @@ async def events_websocket(websocket: WebSocket):
                 except Exception:
                     break
 
-    except WebSocketDisconnect:
-        logger.debug("Client disconnected from events")
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "events_websocket")
     except Exception as e:
         logger.error("WebSocket error for events: %s", e)
     finally:
@@ -475,8 +476,8 @@ async def node_events_websocket(websocket: WebSocket, node_id: str):
                 except Exception:
                     break
 
-    except WebSocketDisconnect:
-        logger.debug("Client disconnected from node %s events", node_id)
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "node_events_websocket")
     except Exception as e:
         logger.error("WebSocket error for node %s: %s", node_id, e)
     finally:
@@ -506,8 +507,8 @@ async def provision_websocket(websocket: WebSocket):
                 except Exception:
                     break
 
-    except WebSocketDisconnect:
-        logger.debug("Client disconnected from provision stream")
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "provision_websocket")
     except Exception as e:
         logger.error("WebSocket error for provision: %s", e)
     finally:

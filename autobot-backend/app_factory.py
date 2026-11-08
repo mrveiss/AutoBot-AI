@@ -24,7 +24,12 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 # Import initialization modules
-from autobot_shared.client_disconnect import CLIENT_CLOSED_REQUEST, is_client_disconnect, log_client_disconnect
+from autobot_shared.client_disconnect import (
+    CLIENT_CLOSED_REQUEST,
+    is_client_disconnect,
+    log_client_disconnect,
+    register_client_disconnect_handlers,
+)
 from autobot_shared.fastapi_validation_handlers import register_validation_error_handlers
 
 # Issue #697: OpenTelemetry distributed tracing
@@ -72,6 +77,7 @@ def _register_exception_handlers(app: FastAPI) -> None:
     # concrete case is a secret disclosed through a failed request model
     # validator (#16428 security review).
     register_validation_error_handlers(app)
+    register_client_disconnect_handlers(app)  # consumed in ExceptionMiddleware, not re-raised to the server (#20939)
 
     # Upload rejections carry a stable detail_code the frontend maps to i18n (#17577).
     app.add_exception_handler(UploadRejection, upload_rejection_handler)

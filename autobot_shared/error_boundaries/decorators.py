@@ -18,7 +18,7 @@ from fastapi import HTTPException
 from starlette.requests import ClientDisconnect
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.client_disconnect import is_client_disconnect, log_client_disconnect
+from autobot_shared.client_disconnect import is_client_disconnect, log_client_disconnect, propagate_client_disconnect
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import RetryConfig, exponential_backoff_delay
 
@@ -59,6 +59,7 @@ async def _handle_async_attempt(
         result = await func(*args, **kwargs)
         return (True, result)
     except Exception as e:
+        propagate_client_disconnect(logger, e, f"{context.component}.{context.function}")
         if attempt == max_retries:
             return (True, await manager.handle_error(e, context))
         if recovery_strategy == RecoveryStrategy.RETRY:
@@ -97,6 +98,7 @@ def _handle_sync_attempt(
         result = func(*args, **kwargs)
         return (True, result)
     except Exception as e:
+        propagate_client_disconnect(logger, e, f"{context.component}.{context.function}")
         if attempt == max_retries:
             # #7469: defensive sync/async-context handler. Bare asyncio.run()
             # crashes when this sync wrapper is dispatched from a running

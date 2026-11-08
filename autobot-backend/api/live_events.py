@@ -36,11 +36,12 @@ the silent data loss this protocol addition exists to prevent.
 import asyncio
 import json
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketState
 
 from api.ws_security import enforce_ws_origin
 from autobot_shared.auth.permissions import is_admin_role
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, is_client_disconnect, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from events.bus import get_event_bus
@@ -488,13 +489,12 @@ async def live_events_endpoint(websocket: WebSocket):
         while websocket.client_state == WebSocketState.CONNECTED:
             try:
                 raw = await websocket.receive_text()
-            except WebSocketDisconnect:
-                logger.info("Live events WebSocket disconnected cleanly")
+            except PEER_CLOSED_ERRORS as disconnect:
+                log_client_disconnect(logger, disconnect, "live_events_endpoint")
                 break
             except Exception as exc:
-                msg = str(exc).lower()
-                if "connection" in msg or "closed" in msg or "disconnect" in msg:
-                    logger.info("Live events WebSocket connection lost: %s", exc)
+                if is_client_disconnect(exc, on_send=True):
+                    log_client_disconnect(logger, exc, "live_events_endpoint")
                 else:
                     logger.error("Live events WebSocket receive error: %s", exc)
                 break

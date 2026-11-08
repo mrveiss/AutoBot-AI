@@ -41,7 +41,7 @@ import asyncio
 import json
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
 
 from api.schemas_task_workspace import (
     CheckpointRestoreRequest,
@@ -54,6 +54,7 @@ from api.schemas_task_workspace import (
 from api.ws_security import authenticate_ws_admin
 from api.ws_security import validate_ws_origin as _validate_ws_origin
 from auth_middleware import check_admin_permission
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.websocket_subprotocol import accept_websocket
 from services.docker_task_workspace import (
@@ -276,8 +277,8 @@ async def workspace_shell(
                 pass
             elif msg.get("type") == "ping":
                 await _ws_send(websocket, "pong", "")
-    except (WebSocketDisconnect, RuntimeError):
-        pass
+    except (*PEER_CLOSED_ERRORS, RuntimeError) as closed:
+        log_client_disconnect(logger, closed, "task_workspace_exec_stream")
     finally:
         read_task.cancel()
         try:

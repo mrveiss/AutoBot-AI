@@ -112,3 +112,94 @@ def test_boundary_still_converts_a_real_error_and_logs_it(caplog):
     with caplog.at_level(logging.DEBUG), pytest.raises(HTTPException):
         asyncio.run(endpoint())
     assert _error_records(caplog)
+
+
+def _drive_asgi(app: FastAPI, path: str) -> list:
+    """Run one request through the whole ASGI stack; return what escaped to the server."""
+    import asyncio
+
+    sent: list = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "path": path,
+        "raw_path": path.encode(),
+        "query_string": b"",
+        "headers": [],
+        "client": ("127.0.0.1", 1),
+        "server": ("testserver", 80),
+        "scheme": "http",
+    }
+    escaped: list = []
+
+    async def run():
+        try:
+            await app(scope, receive, send)
+        except BaseException as exc:  # what the ASGI server (uvicorn) would log as an error
+            escaped.append(exc)
+
+    asyncio.run(run())
+    return escaped
+
+
+def test_a_disconnect_does_not_escape_the_asgi_stack_to_the_server(caplog):
+    """uvicorn logs anything that escapes the app at ERROR ("Exception in ASGI application")."""
+    with caplog.at_level(logging.DEBUG):
+        escaped = _drive_asgi(_app(ClientDisconnect()), "/boom")
+    assert escaped == []
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR and r.name in ("app_factory", "uvicorn.error")]
+
+
+def test_a_real_error_still_escapes_the_asgi_stack_control():
+    assert [type(e) for e in _drive_asgi(_app(ValueError("real")), "/boom")] == [ValueError]
+
+
+def test_sync_boundary_handles_a_disconnect_like_the_async_one(caplog):
+    @with_error_handling(operation="sync_ws", error_code_prefix="T")
+    def endpoint():
+        raise WebSocketDisconnect(1006)
+
+    with caplog.at_level(logging.DEBUG):
+        assert endpoint() is None
+    assert not _error_records(caplog)
+
+
+def test_error_boundary_neither_retries_nor_reports_a_disconnect(caplog):
+    import asyncio
+
+    from autobot_shared.error_boundaries.decorators import error_boundary
+    from autobot_shared.error_boundaries.types import RecoveryStrategy
+
+    calls = []
+
+    @error_boundary(component="c", function="f", recovery_strategy=RecoveryStrategy.RETRY, max_retries=3)
+    async def endpoint():
+        calls.append(1)
+        raise ClientDisconnect()
+
+    with caplog.at_level(logging.DEBUG), pytest.raises(ClientDisconnect):
+        asyncio.run(endpoint())
+    assert calls == [1]
+    assert not _error_records(caplog)
+
+
+def test_handle_error_reraises_a_disconnect_unchanged():
+    import asyncio
+
+    from autobot_shared.error_boundaries.boundary_manager import get_error_boundary_manager
+    from autobot_shared.error_boundaries.types import ErrorContext
+
+    exc = WebSocketDisconnect(1001)
+    ctx = ErrorContext(component="c", function="f", args=(), kwargs={})
+    with pytest.raises(WebSocketDisconnect) as info:
+        asyncio.run(get_error_boundary_manager().handle_error(exc, ctx))
+    assert info.value is exc
