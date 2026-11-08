@@ -24,3 +24,10 @@ export async function downloadAdminFile(path: string, filename: string): Promise
   }
   saveBlob(await response.blob(), filename)
 }
+
+/** i18n key shown when the main backend refuses the SLM token (#10193); null for any other error. */
+export const DOWNLOAD_UNAUTHORIZED_KEY = 'tools.admin.fileBrowserTool.downloadUnauthorized'
+
+export function downloadErrorKey(error: unknown): string | null {
+  return error instanceof HttpError && error.status === 401 ? DOWNLOAD_UNAUTHORIZED_KEY : null
+}

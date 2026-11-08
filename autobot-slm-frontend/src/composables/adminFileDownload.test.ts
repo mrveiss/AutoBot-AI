@@ -8,7 +8,7 @@
  * The payload is invalid UTF-8, so any text decode on the way changes it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { downloadAdminFile } from '@/composables/adminFileDownload'
+import { DOWNLOAD_UNAUTHORIZED_KEY, downloadAdminFile, downloadErrorKey } from '@/composables/adminFileDownload'
 
 const PAYLOAD = new Uint8Array([0xff, 0xd8, 0x00, 0x80, 0x89, 0x50, 0x4e, 0x47])
 
@@ -68,5 +68,13 @@ describe('downloadAdminFile (#21029)', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('nope', { status: 404, statusText: 'Not Found' })))
     await expect(downloadAdminFile('/home/autobot/x', 'x')).rejects.toThrow('404')
     expect(saved).toBeNull()
+  })
+
+  it('a 401 saves nothing and maps to the i18n key; other errors do not', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('no', { status: 401, statusText: 'Unauthorized' })))
+    const failure = await downloadAdminFile('/home/autobot/x', 'x').catch((e: unknown) => e)
+    expect(saved).toBeNull()
+    expect(downloadErrorKey(failure)).toBe(DOWNLOAD_UNAUTHORIZED_KEY)
+    expect(downloadErrorKey(new Error('boom'))).toBeNull()
   })
 })

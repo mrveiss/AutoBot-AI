@@ -13,10 +13,12 @@ import { BaseAlert, formatFileSize } from '@autobot/ui'
 
 import { ref, computed, onMounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
-import { downloadAdminFile } from '@/composables/adminFileDownload'
+import { useI18n } from 'vue-i18n'
+import { downloadAdminFile, downloadErrorKey } from '@/composables/adminFileDownload'
 import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
+const { t } = useI18n()
 
 // State
 const loading = ref(false)
@@ -142,7 +144,8 @@ async function downloadFile(entry: FileEntry): Promise<void> {
       : `${currentPath.value}/${entry.name}`
     await downloadAdminFile(filePath, entry.name)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to download file'
+    const key = downloadErrorKey(e)
+    error.value = key ? t(key) : e instanceof Error ? e.message : 'Failed to download file'
   }
 }
 
