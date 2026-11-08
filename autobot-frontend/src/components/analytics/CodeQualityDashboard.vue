@@ -433,10 +433,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
-import { saveTextFile } from '@autobot/ui';
 import { createDateFormatter, formatLocalTime } from '@/utils/formatHelpers'
 import TruncationNotice from './TruncationNotice.vue';
-import { useShowMore, BaseButton } from '@autobot/ui'
+import { useShowMore, BaseButton, saveTextFile } from '@autobot/ui'
 import type { DirectiveBinding } from 'vue';
 import { BaseBadge, BaseModal, BaseTable, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
 import { useRoute } from 'vue-router';

@@ -9,10 +9,9 @@
  */
 
 import { formatFleetTime } from '@/composables/useTimezone'
-import { saveTextFile } from '@autobot/ui'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PollingPausedAlert, createLogger } from '@autobot/ui'
+import { PollingPausedAlert, createLogger, saveTextFile } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useFleetMetrics } from '@/composables/useFleetMetrics'
 import FleetMetricsCard from '@/components/monitoring/FleetMetricsCard.vue'

@@ -87,10 +87,9 @@ Issue #10554: Per-user memory transparency + edit/forget-everywhere + export
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { saveTextFile } from '@autobot/ui'
 import { formatISOString } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
-import { isHttpError, BaseButton } from '@autobot/ui'
+import { isHttpError, BaseButton, saveTextFile } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'

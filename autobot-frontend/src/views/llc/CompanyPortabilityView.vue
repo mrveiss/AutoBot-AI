@@ -197,10 +197,9 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { saveBlob } from '@autobot/ui'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { BaseTable, type BaseTableColumn, BaseButton } from '@autobot/ui'
+import { BaseTable, type BaseTableColumn, BaseButton, saveBlob } from '@autobot/ui'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { useNotificationBus } from '@/composables/useNotificationBus'
