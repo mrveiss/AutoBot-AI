@@ -21,13 +21,14 @@ with no prior context until an approved #17038 backfill moves its legacy turns i
 
 import asyncio
 import json
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_constants import REDIS_KEY
 from autobot_shared.store_authority import system_of_record
+from chat_history.rolling_summary import schedule_refresh
 
 from .models import WorkflowSession
 
@@ -74,15 +75,9 @@ class ConversationHandlerMixin:
         None (an unreadable session) is kept apart from ``[]`` (a session with no
         completed turns) so the first is logged as the error it is.
         """
-        from chat_history import ChatHistoryManager
-        from chat_history.turn_projection import LLM_CONTEXT_TURN_LIMIT, project_turn_pairs
+        from chat_history.turn_projection import load_turn_pairs
 
-        try:
-            messages = await ChatHistoryManager().load_session(session_id)
-        except (PermissionError, ValueError, OSError) as exc:
-            logger.error("Cannot read chat session %s for LLM context: %s", session_id, exc)
-            return None
-        return project_turn_pairs(messages, LLM_CONTEXT_TURN_LIMIT)
+        return await load_turn_pairs(session_id)
 
     async def _load_conversation_history(self, session_id: str) -> List[Dict[str, str]]:
         """LLM context: the Redis cache, else projected from chat_sessions, else nothing (#18293)."""
@@ -175,7 +170,7 @@ class ConversationHandlerMixin:
     ) -> None:
         """Update session conversation history with deduplication.
 
-        Issue #620.
+        Issue #620. A turn the trim evicts is still in chat_sessions, which the rolling summary (#20852) reads.
 
         Args:
             session: Workflow session object
@@ -201,6 +196,7 @@ class ConversationHandlerMixin:
         session: WorkflowSession,
         message: str,
         llm_response: str,
+        model: Optional[str] = None,
     ):
         """Record a completed exchange in the session's LLM context and its cache.
 
@@ -215,8 +211,11 @@ class ConversationHandlerMixin:
             session: Workflow session object
             message: User message
             llm_response: LLM response
+            model: The model the turn used; the rolling-summary refresh folds with it (#20852)
         """
         self._update_conversation_history(session, message, llm_response, session_id)
+        # #20852: fold the older turns off the reply path, from the durable history.
+        schedule_refresh(session, model)
 
         await self._save_conversation_history(session_id, session.conversation_history)
 
