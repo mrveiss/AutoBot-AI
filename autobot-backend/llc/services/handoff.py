@@ -5,7 +5,6 @@
 """LLC HandoffService — bi-directional work item handoff (GH#8231, GH#8232)."""
 
 import asyncio
-import json
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -25,6 +24,7 @@ from ..models.enums import ActivityEventType, AssigneeType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
 from .actor import audit
 from .base import LLCServiceBase
+from .commit_publish import publish_after_commit
 from .wake_events import wake_for_item_changes
 
 try:
@@ -123,7 +123,7 @@ class HandoffService(LLCServiceBase):
         # key must still be there and nobody told. Redis and the notification cannot be rolled back.
         await self._record_h2a_activity(session, company_id, user_id, work_item_id, target_agent_id)
         await self._release_redis_key(work_item_id, user_id)
-        await self._publish_h2a_notification(company_id, target_agent_id, work_item_id)
+        await self._publish_h2a_notification(session, company_id, target_agent_id, work_item_id)
         task = asyncio.create_task(
             self._generate_and_update_h2a_brief_async(
                 work_item_id=work_item_id,
@@ -175,7 +175,7 @@ class HandoffService(LLCServiceBase):
         redis = await get_async_redis_client()
         if redis is not None:
             await redis.delete(f"{_CHECKOUT_REDIS_PREFIX}{work_item_id}")
-        await self._publish_a2h_notification(company_id, work_item_id, reviewer_user_id, brief)
+        await self._publish_a2h_notification(session, company_id, work_item_id, reviewer_user_id, brief)
 
         task = asyncio.create_task(
             self._generate_and_update_brief_async(
@@ -337,47 +337,28 @@ class HandoffService(LLCServiceBase):
         if existing in (f"user:{user_id}", user_id):
             await redis.delete(key)
 
-    async def _publish_h2a_notification(self, company_id: str, target_agent_id: str, work_item_id: str) -> None:
-        payload = json.dumps(
-            {
-                "event": "work_item.handoff_ready",
-                "work_item_id": work_item_id,
-                "target_agent_id": target_agent_id,
-                "has_human_handoff_context": True,
-            }
-        )
-        channel = f"{_NOTIFICATION_CHANNEL_PREFIX}{company_id}"
-        try:
-            redis = await get_async_redis_client()
-            if redis is None:
-                return
-            await redis.publish(channel, payload)
-        except Exception:
-            logger.exception("Failed to publish h2a handoff notification for work_item %s — non-fatal", work_item_id)
+    async def _publish_h2a_notification(
+        self, session: AsyncSession, company_id: str, target_agent_id: str, work_item_id: str
+    ) -> None:
+        message = {
+            "event_type": "work_item.handoff_ready",
+            "work_item_id": work_item_id,
+            "target_agent_id": target_agent_id,
+            "has_human_handoff_context": True,
+        }
+        await publish_after_commit(session, f"{_NOTIFICATION_CHANNEL_PREFIX}{company_id}", message)
 
     async def _publish_a2h_notification(
-        self, company_id: str, work_item_id: str, reviewer_user_id: str, brief: Dict[str, Any]
+        self, session: AsyncSession, company_id: str, work_item_id: str, reviewer_user_id: str, brief: Dict[str, Any]
     ) -> None:
-        redis = await get_async_redis_client()
-        if redis is None:
-            logger.warning("HandoffService: Redis unavailable, dropping a2h notification")
-            return
-        try:
-            channel = f"{_NOTIFICATION_CHANNEL_PREFIX}{company_id}"
-            await redis.publish(
-                channel,
-                json.dumps(
-                    {
-                        "event_type": "work_item.handoff",
-                        "work_item_id": work_item_id,
-                        "reviewer_user_id": reviewer_user_id,
-                        "brief_title": brief.get("title"),
-                        "brief_identifier": brief.get("identifier"),
-                    }
-                ),
-            )
-        except Exception:
-            logger.debug("HandoffService._publish_a2h_notification failed (swallowed)")
+        message = {
+            "event_type": "work_item.handoff",
+            "work_item_id": work_item_id,
+            "reviewer_user_id": reviewer_user_id,
+            "brief_title": brief.get("title"),
+            "brief_identifier": brief.get("identifier"),
+        }
+        await publish_after_commit(session, f"{_NOTIFICATION_CHANNEL_PREFIX}{company_id}", message)
 
     async def _record_a2h_activity(
         self,
