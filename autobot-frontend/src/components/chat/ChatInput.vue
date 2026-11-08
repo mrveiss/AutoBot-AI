@@ -21,6 +21,16 @@
           :show-details="true"
         />
         <BaseButton
+          v-if="isCancellable(upload)"
+          variant="secondary"
+          size="xs"
+          @click="cancelUpload(upload.id)"
+          class="cancel-upload-btn"
+          :aria-label="$t('chat.input.cancelUpload', { name: upload.filename })"
+        >
+          <Icon name="times" />
+        </BaseButton>
+        <BaseButton
           v-if="upload.error"
           variant="error"
           size="xs"
@@ -462,7 +472,8 @@ import McpPromptPicker from './McpPromptPicker.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconNameByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
-import { postConversationUpload, describeUploadError, ensureUploadSession, usesCanonicalRoute } from '@/utils/conversationFileUpload'
+import { postConversationUpload, type ConversationUploadResponse, describeUploadError, ensureUploadSession, usesCanonicalRoute, uploadEtaSeconds } from '@/utils/conversationFileUpload'
+import { useUploadCancel, isUploadCancelled } from '@/composables/useUploadCancel'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useSlashCommands } from '@/composables/useSlashCommands'
@@ -544,6 +555,11 @@ const emojiPicker = ref<HTMLElement>()
 
 // State
 const attachedFiles = ref<File[]>([])
+const dropCancelledUpload = (upload: UploadItem) => {
+  uploadProgress.value = uploadProgress.value.filter(u => u.id !== upload.id)
+  showToast(t('chat.input.uploadCancelled', { name: upload.filename }), 'info')
+}
+const { begin: beginUpload, settle: settleUpload, isCancellable, cancel: cancelUpload } = useUploadCancel<UploadItem>(dropCancelledUpload)
 const uploadedIds = new WeakMap<File, string>()  // File -> server file id (#20195)
 const serverFileIds = (files: File[]) => files.flatMap(f => uploadedIds.get(f) ?? [])
 const isInputFocused = ref(false)
@@ -556,17 +572,7 @@ const showPresetsModal = ref(false)
 
 // Issue #249: Knowledge-Enhanced Chat (RAG) toggle
 const useKnowledge = ref(true) // Default enabled
-const uploadProgress = ref<Array<{
-  id: string
-  filename: string
-  progress: number
-  status: string
-  current: number
-  total: number
-  eta?: number
-  error?: string
-  file?: File  // Store original File object for retry functionality
-}>>([])
+const uploadProgress = ref<UploadItem[]>([])
 const messageQueueLength = ref(0)
 const isTypingStartTime = ref<number | null>(null)
 const typingDebounceTimer = ref<number | null>(null)
@@ -818,19 +824,7 @@ const handleFileSelect = async (event: Event) => {
   // Create upload tracking objects for all files first
   const uploads = validFiles.map(file => {
     const uploadId = generateId()
-    const upload: {
-      id: string;
-      filename: string;
-      progress: number;
-      status: string;
-      current: number;
-      total: number;
-      file: File;
-      fileId?: string;
-      uploadId?: string;
-      error?: string;
-      eta?: number;
-    } = {
+    const upload: UploadItem = {
       id: uploadId,
       filename: file.name,
       progress: 0,
@@ -855,7 +849,7 @@ const handleFileSelect = async (event: Event) => {
   results.forEach((result, index) => {
     if (result.status === 'fulfilled') {
       attachedFiles.value.push(result.value)
-    } else {
+    } else if (!isUploadCancelled(result.reason)) {
       const upload = uploads[index].upload
       upload.error = describeUploadError(result.reason, t)
       upload.status = 'Failed'
@@ -1060,40 +1054,36 @@ const generateId = (): string => {
 }
 
 // Real file upload implementation (transport and bearer: utils/conversationFileUpload.ts, #20133)
+const reportProgress = (upload: UploadItem, startTime: number) => (loaded: number, total: number): void => {
+  upload.current = loaded
+  upload.total = total
+  upload.progress = (loaded / total) * 100
+  upload.eta = uploadEtaSeconds(loaded, total, Date.now() - startTime)
+  upload.status = `Uploading... ${Math.round(upload.progress)}%`
+}
+
+const markUploadComplete = (upload: UploadItem, file: File, response: ConversationUploadResponse): void => {
+  settleUpload(upload)
+  Object.assign(upload, { status: 'Complete', progress: 100 })
+  upload.fileId = response.file_info?.file_id
+  if (upload.fileId) uploadedIds.set(file, upload.fileId)
+  upload.uploadId = response.upload_id
+  setTimeout(() => {
+    const index = uploadProgress.value.findIndex(u => u.id === upload.id)
+    if (index !== -1) uploadProgress.value.splice(index, 1)
+  }, 2000)
+}
+
 const uploadFile = async (upload: UploadItem, file: File): Promise<void> => {
-  const startTime = Date.now()
   upload.status = 'Uploading...'
-
+  const signal = beginUpload(upload)
   try {
-    const response = await postConversationUpload(await ensureUploadSession(store, controller), file, (loaded, total) => {
-      upload.current = loaded
-      upload.total = total
-      upload.progress = (loaded / total) * 100
-
-      // Calculate ETA
-      const elapsed = Date.now() - startTime
-      if (elapsed > 0) {
-        const rate = loaded / elapsed // bytes per millisecond
-        const remaining = (total - loaded) / rate / 1000 // seconds
-        upload.eta = remaining > 1 ? remaining : undefined
-      }
-
-      upload.status = `Uploading... ${Math.round(upload.progress)}%`
-    })
-    upload.status = 'Complete'
-    upload.progress = 100
-    upload.fileId = response.file_info?.file_id
-    if (upload.fileId) uploadedIds.set(file, upload.fileId)
-    upload.uploadId = response.upload_id
-    // Remove from progress after delay
-    setTimeout(() => {
-      const index = uploadProgress.value.findIndex(u => u.id === upload.id)
-      if (index !== -1) uploadProgress.value.splice(index, 1)
-    }, 2000)
+    const sessionId = await ensureUploadSession(store, controller)
+    markUploadComplete(upload, file, await postConversationUpload(sessionId, file, reportProgress(upload, Date.now()), signal))
   } catch (error) {
-    upload.error = describeUploadError(error, t)
-    upload.status = 'Failed'
-    upload.progress = 0
+    if (!settleUpload(upload, error)) {
+      Object.assign(upload, { error: describeUploadError(error, t), status: 'Failed', progress: 0 })
+    }
     throw error
   }
 }
@@ -1119,6 +1109,7 @@ const retryUpload = async (uploadId: string) => {
       attachedFiles.value.push(upload.file)
     }
   } catch (error) {
+    if (isUploadCancelled(error)) return
     upload.error = describeUploadError(error, t)
     upload.status = 'Failed'
   }
