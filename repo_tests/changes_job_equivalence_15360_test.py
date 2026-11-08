@@ -89,10 +89,12 @@ ISSUE_17822_ENTRIES = tuple(
 # migration tests import, `llc/services/membership_policy.py` (#19985's two-session membership-lock test), and
 # `llc/services/budget.py` + `llc/exceptions.py` (#20168's cost event foreign key test), and
 # `llc/services/company_os/**` + `llc/services/goal.py` (#20115's two-session plan convert lock test), and
-# `services/ai_line_change_proposal.py` + `autobot_shared/ai_lines.py` (imported by `plan_convert_lines.py`, which that test runs, #20086).
+# `services/ai_line_change_proposal.py` + `autobot_shared/ai_lines.py` (imported by `plan_convert_lines.py`, which that test runs, #20086),
+# and `autobot_shared/db_session.py` + `autobot_shared/user_management/models/audit.py` (the secrets API test's canonical
+# audit store on its database, #20557).
 assert (
-    len(ISSUE_17822_ENTRIES) == 28
-), "the pinned migration-gate set is 28 entries; an emptied fixture would pin nothing"
+    len(ISSUE_17822_ENTRIES) == 30
+), "the pinned migration-gate set is 30 entries; an emptied fixture would pin nothing"
 ISSUE_17822_WORKFLOW = "migration-gate"
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared
