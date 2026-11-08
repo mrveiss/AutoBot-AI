@@ -88,15 +88,15 @@
             <div class="progress-track">
               <div
                 class="progress-fill"
-                :style="{ width: getProgressPercent(wf) + '%' }"
+                :style="{ width: getWorkflowStepDisplay(wf).percent + '%' }"
                 :class="getProgressClass(wf)"
               ></div>
             </div>
             <div class="progress-meta">
               <span class="step-counter">
-                {{ $t('workflow.liveDashboard.stepOf', getWorkflowStepDisplay(wf)) }}
+                {{ $t('workflow.liveDashboard.stepOf', stepOf(wf)) }}
               </span>
-              <span class="progress-pct">{{ Math.round(getProgressPercent(wf)) }}%</span>
+              <span class="progress-pct">{{ getWorkflowStepDisplay(wf).percent }}%</span>
             </div>
           </div>
 
@@ -274,16 +274,13 @@ function getStatusLabel(wf: ActiveWorkflow): string {
   return t('workflow.liveDashboard.pending');
 }
 
-function getProgressPercent(wf: ActiveWorkflow): number {
-  if (wf.total_steps === 0) return 0;
-  const done = wf.steps.filter(
-    s => s.status === 'completed' || s.status === 'skipped',
-  ).length;
-  return (done / wf.total_steps) * 100;
+function stepOf(wf: ActiveWorkflow): { current: number; total: number } {
+  const { current, total } = getWorkflowStepDisplay(wf);
+  return { current, total };
 }
 
 function getProgressClass(wf: ActiveWorkflow): string {
-  if (wf.steps.some(s => s.status === 'failed')) return 'progress-failed';
+  if (wf.is_cancelled || wf.steps.some(s => s.status === 'failed')) return 'progress-failed';
   if (wf.is_paused) return 'progress-paused';
   if (wf.completed_at) return 'progress-completed';
   return 'progress-active';

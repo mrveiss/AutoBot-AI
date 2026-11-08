@@ -36,4 +36,43 @@ describe('getWorkflowStepDisplay (#21106)', () => {
     expect(getWorkflowStepDisplay({ current_step: 0, total_steps: 2 }, { indexBase: 0 }).current).toBe(1)
     expect(getWorkflowStepDisplay({ current_step: 1, total_steps: 2, status: 'completed' }, { indexBase: 0 }).current).toBe(2)
   })
+
+  describe.each([
+    ['1-based', 1 as const, 2, { current: 2, total: 5, percent: 20 }],
+    ['0-based', 0 as const, 1, { current: 2, total: 5, percent: 20 }],
+  ])('a run that did not complete (%s index)', (_name, indexBase, step, reached) => {
+    const run = { current_step: step, total_steps: 5, started_at: STARTED }
+
+    it('cancelled (executor stamps completed_at too) shows the step reached, not 5 / 5', () => {
+      expect(getWorkflowStepDisplay({ ...run, is_cancelled: true, completed_at: STARTED }, { indexBase })).toEqual(reached)
+      expect(getWorkflowStepDisplay({ ...run, status: 'cancelled', completed_at: STARTED }, { indexBase })).toEqual(reached)
+    })
+
+    it('failed (status or a failed step) shows the step reached, below 100%', () => {
+      expect(getWorkflowStepDisplay({ ...run, status: 'failed' }, { indexBase })).toEqual(reached)
+      expect(getWorkflowStepDisplay({ ...run, steps: [{ status: 'completed' }, { status: 'failed' }] }, { indexBase })).toEqual(reached)
+      expect(getWorkflowStepDisplay({ ...run, steps: [{ status: 'failed' }], completed_at: STARTED }, { indexBase }).percent).toBeLessThan(100)
+    })
+
+    it('paused shows the step reached, below 100%', () => {
+      expect(getWorkflowStepDisplay({ ...run, is_paused: true }, { indexBase })).toEqual(reached)
+      expect(getWorkflowStepDisplay({ ...run, status: 'paused' }, { indexBase })).toEqual(reached)
+    })
+
+    it('a successful completion still reads total / total, 100%', () => {
+      expect(getWorkflowStepDisplay({ ...run, completed_at: STARTED, steps: [{ status: 'completed' }] }, { indexBase })).toEqual({ current: 5, total: 5, percent: 100 })
+    })
+
+    it('treats NaN, undefined and 0 totals as an empty workflow', () => {
+      for (const total_steps of [Number.NaN, undefined as unknown as number, 0]) {
+        expect(getWorkflowStepDisplay({ current_step: step, total_steps, started_at: STARTED }, { indexBase })).toEqual({ current: 0, total: 0, percent: 0 })
+      }
+    })
+
+    it('treats a NaN or undefined step as the first step', () => {
+      for (const current_step of [Number.NaN, undefined as unknown as number]) {
+        expect(getWorkflowStepDisplay({ current_step, total_steps: 5, started_at: STARTED }, { indexBase }).current).toBe(1)
+      }
+    })
+  })
 })

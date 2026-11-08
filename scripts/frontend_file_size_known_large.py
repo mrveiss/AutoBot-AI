@@ -101,7 +101,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/visualizations/WorkflowVisualization.vue": 1017,  # #16744: 1020 -> 1019
     "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 618,
     "autobot-frontend/src/components/workflow/WorkflowCanvas.vue": 2849,  # #20682: -38 (CanvasDetachButton)
-    "autobot-frontend/src/components/workflow/WorkflowLiveDashboard.vue": 780,
+    "autobot-frontend/src/components/workflow/WorkflowLiveDashboard.vue": 777,
     "autobot-frontend/src/composables/__tests__/useClipboard.test.ts": 696,
     "autobot-frontend/src/composables/__tests__/useConnectionTester.test.ts": 944,
     "autobot-frontend/src/composables/__tests__/useErrorHandler.test.ts": 1901,
