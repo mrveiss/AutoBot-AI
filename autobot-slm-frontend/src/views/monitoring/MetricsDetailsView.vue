@@ -11,7 +11,7 @@
 import { formatFleetTime } from '@/composables/useTimezone'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PollingPausedAlert, createLogger } from '@autobot/ui'
+import { PollingPausedAlert, createLogger, saveTextFile } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useFleetMetrics } from '@/composables/useFleetMetrics'
 import FleetMetricsCard from '@/components/monitoring/FleetMetricsCard.vue'
@@ -48,13 +48,7 @@ async function loadMetrics() {
 async function downloadPrometheusMetrics() {
   await fetchPrometheusExport()
   if (prometheusExport.value) {
-    const blob = new Blob([prometheusExport.value], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `prometheus-metrics-${Date.now()}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
+    saveTextFile(prometheusExport.value, `prometheus-metrics-${Date.now()}.txt`, 'text/plain')
   }
 }
 

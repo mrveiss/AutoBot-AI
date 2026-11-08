@@ -46,8 +46,9 @@ from typing import Dict, FrozenSet, List
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
+from code_intelligence.python_files import discover_files
 from constants.path_constants import PATH
-from utils.file_categorization import HTML_EXTENSIONS, is_skipped_path
+from utils.file_categorization import HTML_EXTENSIONS
 
 logger = get_logger(__name__)
 
@@ -167,10 +168,6 @@ class FileListCache:
         """Check if cache entry is still valid."""
         return (time.time() - entry.timestamp) < self._ttl
 
-    def _should_skip_path(self, path: Path, root_path: Path) -> bool:
-        """Check if path should be skipped, relative to the scan root (#13602)."""
-        return is_skipped_path(path, root_path)
-
     async def _scan_files(
         self,
         extensions: FrozenSet[str],
@@ -184,13 +181,7 @@ class FileListCache:
         start_time = time.time()
 
         def _do_scan() -> List[Path]:
-            files = []
-            for ext in extensions:
-                pattern = f"*{ext}"
-                for file_path in root_path.rglob(pattern):
-                    if file_path.is_file() and not self._should_skip_path(file_path, root_path):
-                        files.append(file_path)
-            return sorted(files)
+            return discover_files(root_path, [f"*{ext}" for ext in extensions])
 
         files = await asyncio.to_thread(_do_scan)
 
