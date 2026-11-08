@@ -26,5 +26,7 @@
  "autobot_shared/auth/device_capabilities.py",
  "autobot_shared/secrets_vault.py",
  "autobot_shared/legacy_secret_keys.py",
- "autobot_shared/db_errors.py"
+ "autobot_shared/db_errors.py",
+ "autobot_shared/db_session.py",
+ "autobot_shared/user_management/models/audit.py"
 ]
