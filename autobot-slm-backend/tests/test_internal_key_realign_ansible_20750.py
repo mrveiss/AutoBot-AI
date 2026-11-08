@@ -92,6 +92,8 @@ def _run(tmp_path: Path, backend: _Backend, canonical: str = _SLM, restart: bool
         "autobot_restart_services": restart,
     }
     ansible = shutil.which("ansible-playbook")  # absolute: the child env below has a narrowed PATH
+    if ansible is None:
+        pytest.skip("ansible-playbook is not installed")
     cmd = [str(ansible), "-i", "localhost,", "-c", "local", str(tmp_path / "p.yml"), "-e", json.dumps(extra)]
     cmd += list(flags)
     env = {
