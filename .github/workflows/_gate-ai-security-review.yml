@@ -33,6 +33,10 @@ name: AI Security Review (reusable body)
 
 on:
   workflow_call:
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        description: "Subscription token for the review step"
+        required: false
 
 permissions:
   contents: read

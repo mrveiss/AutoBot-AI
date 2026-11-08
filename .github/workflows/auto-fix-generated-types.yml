@@ -24,6 +24,10 @@ name: Auto-fix Generated Types
 # the path set is the verify gate's own, so this file carries neither.
 on:
   workflow_call:
+    secrets:
+      AUTOBOT_PUSH_TOKEN:
+        description: "Push token used by the checkout so a regenerated-types report can trigger checks"
+        required: false
 
 # #15362: `read`, not `write`. `autofix-types` used to commit the regenerated types
 # back to the PR branch, which invalidated every check already in flight and

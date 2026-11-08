@@ -104,3 +104,77 @@ def test_a_missing_input_is_an_error_not_a_pass(missing):
         ["bash", str(SCRIPT)], env={"PATH": "/usr/bin:/bin", **env}, capture_output=True, text=True, check=False
     )
     assert proc.returncode != 0
+
+
+# --- ci.yml wiring of the gates (review of #19621) ---------------------------------------------
+import re  # noqa: E402
+
+import yaml  # noqa: E402
+
+_WORKFLOWS = repo_root() / ".github" / "workflows"
+
+
+def _ci_job(name):
+    jobs = yaml.safe_load((_WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))["jobs"]
+    return jobs[name]
+
+
+def _step_with(job, action):
+    return next(s for s in job["steps"] if str(s.get("uses", "")).endswith(action))["with"]
+
+
+def test_python_suite_gate_sees_a_cancelled_provision():
+    """If only provision-packages is cancelled the shards read skipped: the gate must end cancelled, not red."""
+    job = _ci_job("python-suite")
+    assert "provision-packages" in job["needs"]
+    results = _step_with(job, "cancel-run-on-cancelled-upstream")["results"]
+    assert "needs.provision-packages.result" in results
+    # control: the shard result is still there, so the assertion above is not satisfied by a rewrite
+    assert "needs.python-shard.result" in results
+
+
+def test_types_gate_applies_and_fails_on_either_types_job():
+    """The SLM freshness job is a real part of the verdict: it applies it, and its failure fails the gate."""
+    verdict = _step_with(_ci_job("verify-generated-types"), "gate-verdict")
+    assert "run_types" in verdict["applies"] and "run_slm_types" in verdict["applies"]
+    assert "outputs.ok" in verdict["work-ok"] and "outputs.slm_ok" in verdict["work-ok"]
+    body = yaml.safe_load((_WORKFLOWS / "_gate-generated-types.yml").read_text(encoding="utf-8"))
+    assert "slm_ok" in body[True]["workflow_call"]["outputs"]
+    slm = body["jobs"]["verify-generated-types-slm"]
+    assert slm["outputs"]["ok"] == "${{ steps.done.outputs.ok }}"
+    assert slm["steps"][-1]["id"] == "done"  # last step, so it is reached only when every step passed
+
+
+def _inherits(text):
+    return [m.start() for m in re.finditer(r"^\s*secrets:\s*inherit\b", text, re.M)]
+
+
+def test_no_workflow_passes_every_secret_with_inherit():
+    """Each reusable body names the secrets it reads; the caller passes those names and nothing else."""
+    workflows = [p for p in sorted(_WORKFLOWS.iterdir()) if p.suffix == ".yml"]
+    # A listing that found nothing would report the same clean result as a compliant tree.
+    assert len(workflows) >= 40, f"only {len(workflows)} workflows listed: the sweep did not look"
+    offenders = [p.name for p in workflows if _inherits(p.read_text(encoding="utf-8"))]
+    assert not offenders, f"`secrets: inherit` in {offenders}: pass the named secrets instead"
+
+
+def test_the_inherit_detector_catches_a_planted_one():
+    assert _inherits("jobs:\n  x:\n    uses: ./a.yml\n    secrets: inherit  # note\n")
+    assert not _inherits("jobs:\n  x:\n    secrets:\n      A: ${{ secrets.A }}\n")
+
+
+@pytest.mark.parametrize(
+    ("body", "secret"),
+    [("_gate-code-quality.yml", "CONVENTIONS_DENYLIST"), ("_gate-ai-security-review.yml", "CLAUDE_CODE_OAUTH_TOKEN")],
+)
+def test_a_reusable_body_declares_exactly_the_secrets_it_reads(body, secret):
+    text = (_WORKFLOWS / body).read_text(encoding="utf-8")
+    declared = set(yaml.safe_load(text)[True]["workflow_call"].get("secrets", {}))
+    read = set(re.findall(r"secrets\.([A-Z0-9_]+)", text)) - {"GITHUB_TOKEN"}
+    assert declared == read == {secret}
+    caller = {
+        j: v
+        for j, v in yaml.safe_load((_WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))["jobs"].items()
+        if v.get("uses", "").endswith(body)
+    }
+    assert [set(v["secrets"]) for v in caller.values()] == [{secret}]

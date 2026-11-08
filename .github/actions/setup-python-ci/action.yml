@@ -8,8 +8,8 @@
 # pattern, so the interpreter version, pip cache and dependency install live in
 # one place rather than a copy per workflow.
 #
-# #13517: this previously claimed to be "shared across ci.yml, code-quality.yml,
-# and other workflows" while having ZERO callers — neither of those files used
+# #13517: this previously claimed to be "shared across ci.yml and the gate
+# workflows" while having ZERO callers — none of those files used
 # it, and nothing else did either. A description that names callers it does not
 # have is worse than none: it reads as load-bearing shared infrastructure, so
 # nobody checks, and the three expression-injection sites it carried (#13516)

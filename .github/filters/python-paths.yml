@@ -5,10 +5,8 @@
 # Read once, by the `changes` job of .github/workflows/ci.yml, and published as
 # `run_python_suite`. The `python-suite` gate job in that file reports the
 # context green ("not affected") when this set does not match and requires all
-# twelve shards when it does (#14353, #18208). Before #18208 a second workflow
-# (python-required-context.yml) read this file to publish the complement; that
-# shim is gone, and with it the need for the two `if:` conditions to stay exact
-# complements -- there is one job and one output.
+# twelve shards when it does (#14353, #18208). There is one job and one output,
+# so no second condition has to stay the exact complement of this one.
 python:
   - '**/*.py'
   - '**/requirements*.txt'
@@ -86,7 +84,7 @@ python:
   - 'autobot-browser-worker/playwright-server.js'
   - 'autobot-browser-worker/session-store.js'
   # #17329: frontend_path_filter_mirror_test.py PARSES this file and compares it
-  # to frontend-test.yml's push paths, so its verdict depends on the content --
+  # to the frontend gate's push paths, so its verdict depends on the content --
   # a real dependency, covered here rather than recorded as a bypass.
   - '.github/filters/frontend-paths.yml'
   # #19527: filters_moved_intact_18208_test.py reads this filter for its frozen content.
@@ -94,12 +92,12 @@ python:
   # #17885: scripts/frontend_file_size_known_large.py names 184
   # frontend files BY CONCRETE LITERAL and the ratchet reads each one to
   # compare it with its ceiling. Without these two trees a change confined to a
-  # measured .ts/.vue takes the required-context shim's green while the guard
+  # measured .ts/.vue takes the python-suite gate's "not affected" green while the guard
   # that measures it never runs -- the bypass python_filter_covers_its_guards
   # exists to catch, and it caught this one.
   #
   # The hook (`frontend-file-size` in .pre-commit-config.yaml) is the
-  # first-line gate and runs on every PR via enforce-precommit.yml, so a file
+  # first-line gate and runs on every PR via the `run-precommit` gate in ci.yml, so a file
   # growing past its ceiling is caught either way. What these entries protect
   # is the rest of the guard: anchor agreement, the reach floor and the ceiling
   # TOTAL (#17970), which a hook run against the diff cannot check.
@@ -107,8 +105,8 @@ python:
   - 'autobot-slm-frontend/src/**'
   # Read by repo_tests/npm_audit_covers_its_workspaces_test.py, which asserts the
   # audit's workspace set against the tracked tree (#16131). Without this, a change
-  # confined to security.yml takes the required-context shim's green while the guard
-  # that reads it never runs.
+  # confined to _gate-security.yml takes the python-suite gate's "not affected" green
+  # while the guard that reads it never runs.
   # #16302 / #16283: repo_tests/codeql_query_filters_match_queries_16302_test.py fails
   # on a `query-filters` key CodeQL does not match on, and
   # repo_tests/codeql_config_files_are_referenced_16283_test.py fails on a file under
@@ -205,7 +203,7 @@ python:
 
   # #16249: the CI wrappers under pipeline-scripts/ and the one library they
   # source. Each has a python-suite test that runs the script, so a change
-  # confined to a wrapper computed `python != 'true'`, the required-context shim
+  # confined to a wrapper computed `python != 'true'`, the python-suite gate
   # reported `python-suite` green, and the tests that exercise the change never
   # ran. No pattern in this file matched them -- `**/*.py` does not match a
   # `.sh`, and there was no `pipeline-scripts` entry at all.
@@ -267,7 +265,7 @@ python:
   # workflow by concrete literal -- it asserts the landing job exists, runs on
   # the cron, never holds a write token, and that its shell parses. Without an
   # entry here a change confined to the workflow computes `python != 'true'`,
-  # the required-context shim publishes green, and the guard never runs.
+  # the python-suite gate reports "not affected", and the guard never runs.
   - '.github/workflows/test-durations.yml'
 
   # #15650: repo_tests/slm_frontend_shell_publish_test.py reads this script to
@@ -336,7 +334,7 @@ python:
   # detect-secrets baseline carries an audited verdict and that its version
   # matches the hook and the CI install. Without an entry here, a change confined
   # to the baseline -- an unaudited finding parked in it -- skips that guard. The
-  # ungated `secret-detection` job in security.yml checks the verdicts too.
+  # ungated `secret-detection` job in _gate-security.yml checks the verdicts too.
   - '.secrets.baseline'
   # #16237: `workflow_rc_capture_test.py` runs one step of each of these on a
   # planted failing path, proving it captures its exit code instead of aborting
