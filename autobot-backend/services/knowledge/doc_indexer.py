@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.kb_doc_set import in_doc_set
 from autobot_shared.logging_manager import get_logger
 from services.knowledge.index_cache_paths import doc_index_hashes
@@ -918,7 +919,7 @@ class DocIndexerService:
         logger.info("Indexing %d documentation files...", len(files))
         indexed_paths = await self._index_listed_files(files, total_result, start_time)
         if indexed_paths:  # Issue #4564: KBSynthesizer after ingest (best-effort)
-            asyncio.ensure_future(self._run_kb_synthesis(indexed_paths))
+            fire_and_forget(self._run_kb_synthesis(indexed_paths), name="doc-indexer-kb-synthesis")
         self._record_run(new_hashes)
         total_result.elapsed_seconds = round(time.time() - start_time, 2)
         store_guard.log_run_summary(total_result, self._collection)
@@ -953,22 +954,17 @@ class DocIndexerService:
         self, files: List[Tuple[str, int]], total_result: IndexResult, start_time: float
     ) -> List[str]:
         """Index each file in turn with per-file progress; return the paths that stored chunks."""
-        indexed_paths: List[str] = []
-        for position, (file_path, tier) in enumerate(files, 1):
-            before, chunks_before = total_result.success, self._embed_progress.count
-            await self._index_single_file_content(file_path, tier, total_result)
-            rel = os.path.relpath(file_path, self._root_dir)
-            store_guard.log_file_progress(
-                position, len(files), rel, self._embed_progress.count - chunks_before, start_time
-            )
-            if total_result.success > before:
-                indexed_paths.append(file_path)
-        return indexed_paths
+        return await store_guard.index_listed_files(
+            self._index_single_file_content, files, total_result, start_time, self._embed_progress, self._root_dir
+        )
 
     def _record_run(self, new_hashes: Dict[str, str]) -> None:
-        """Persist the hash cache and the store this run embedded into."""
+        """Persist the hash cache (a failed document gets no hash) and the store this run embedded into."""
         if new_hashes:
-            _save_hash_cache({**_load_hash_cache(), **new_hashes})
+            failed = [_normalize_path(p, self._root_dir)[1] for p in self._embed_progress.failed]
+            recorded = store_guard.load_recorded_store(HASH_CACHE_FILE)
+            same_store = recorded in (None, self._store)
+            _save_hash_cache(store_guard.surviving_hashes(_load_hash_cache(), new_hashes, failed, same_store))
             store_guard.save_recorded_store(self._store, HASH_CACHE_FILE)
 
     async def open_store_for_adoption(self) -> tuple[str, Any]:

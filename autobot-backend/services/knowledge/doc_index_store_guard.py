@@ -13,6 +13,7 @@ cannot be read is likewise refused, never read as zero. Nothing here deletes or 
 
 import asyncio
 import json
+import math
 import os
 import time
 from pathlib import Path
@@ -26,11 +27,15 @@ logger = get_logger(__name__)
 
 # Seconds between batch progress lines from the embed loop.
 PROGRESS_INTERVAL_MIN_S, PROGRESS_INTERVAL_MAX_S = 1.0, 3600.0
+DEFAULT_PROGRESS_INTERVAL_S = 30.0  # used when the configured interval is not a number
 
 
 def clamp_progress_interval(seconds: float) -> float:
     """The registry declares 1-3600 s but does not enforce it; 0 would log once per chunk."""
-    return min(max(float(seconds), PROGRESS_INTERVAL_MIN_S), PROGRESS_INTERVAL_MAX_S)
+    value = float(seconds)
+    if math.isnan(value):  # NaN survives min/max and makes every progress comparison false
+        value = DEFAULT_PROGRESS_INTERVAL_S
+    return min(max(value, PROGRESS_INTERVAL_MIN_S), PROGRESS_INTERVAL_MAX_S)
 
 
 EMBED_PROGRESS_INTERVAL_S = clamp_progress_interval(env("AUTOBOT_DOC_INDEX_PROGRESS_INTERVAL_S"))
@@ -67,7 +72,11 @@ def write_recorded_store(store: str, hash_override: Path | None = None) -> None:
     """Record the store; an unwritable record raises OSError (the adoption command must not report success)."""
     path = doc_index_store(hash_override)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"store": store}), encoding="utf-8")
+    staging = path.with_name(
+        path.name + ".tmp"
+    )  # write beside the record, then replace: a failed write keeps the old one
+    staging.write_text(json.dumps({"store": store}), encoding="utf-8")
+    os.replace(staging, path)
 
 
 def save_recorded_store(store: str, hash_override: Path | None = None) -> None:
@@ -87,7 +96,9 @@ def _refusal(cache_entries: int, recorded: str | None, current: str) -> str:
     )
     return (
         f"collection is empty but the hash cache ({cache_entries} files) {seen}. Refusing to re-embed "
-        "into what may be the wrong store. Point the indexer at the original store, or pass --force to "
+        "into what may be the wrong store. Point the indexer at the original store, or pass --force "
+        "(a full run: drop --file and any scope "
+        "filter) to "
         "re-embed everything here on purpose, or pass --adopt-store to record this store as the cache's "
         "store without embedding anything."
     )
@@ -110,7 +121,8 @@ def _moved_refusal(cache_entries: int, recorded: str, current: str) -> str:
     return (
         f"the hash cache ({cache_entries} files) was built against '{recorded}' and this run opened '{current}'. "
         "Incremental mode would skip every cached document this store lacks. Point the indexer at the original "
-        "store, or pass --force to re-embed everything here on purpose, or pass --adopt-store to record this "
+        "store, or pass --force on a full run (no --file or scope filter) to "
+        "re-embed everything here on purpose, or pass --adopt-store to record this "
         "store as the cache's store without embedding anything."
     )
 
@@ -148,15 +160,24 @@ async def open_store_for_adoption(root_dir: Path, collection_name: str) -> tuple
     return chromadb_endpoint(path), collection
 
 
+def _best_effort_count(collection: Any) -> int | str:
+    """The vector count for the summary line; a store that went away after indexing reports 'unknown'."""
+    try:
+        return int(collection.count()) if collection else 0
+    except Exception as e:
+        logger.warning("Could not read the final vector count: %s", e)
+        return "unknown"
+
+
 def log_run_summary(result: Any, collection: Any) -> None:
     """One closing line: outcome counts, elapsed time and the collection's size."""
     logger.info(
-        "Documentation indexing complete: %d success, %d failed, %d skipped in %.1fs (collection now has %d vectors)",
+        "Documentation indexing complete: %d success, %d failed, %d skipped in %.1fs (collection now has %s vectors)",
         result.success,
         result.failed,
         result.skipped,
         result.elapsed_seconds,
-        collection.count() if collection else 0,
+        _best_effort_count(collection),
     )
 
 
@@ -185,6 +206,7 @@ class EmbedProgress:
     def __init__(self, interval_s: float = EMBED_PROGRESS_INTERVAL_S) -> None:
         self._interval = interval_s
         self._count = 0
+        self.failed: list[str] = []  # paths whose indexing failed this run: they get no hash
         self._last = self._start = time.monotonic()
 
     @property
@@ -204,3 +226,30 @@ class EmbedProgress:
 def log_file_progress(index: int, total: int, rel_path: str, chunks: int, started: float) -> None:
     """One line per indexed file: position, path, chunks embedded, seconds elapsed."""
     logger.info("Doc indexer %d/%d %s chunks=%d elapsed=%.1fs", index, total, rel_path, chunks, time.time() - started)
+
+
+def surviving_hashes(cached: dict, new: dict, failed_rel: list, same_store: bool) -> dict:
+    """The hash cache to save: the previous store's hashes are dropped when this run embedded into a
+    different one, and a failed document has none, so the next incremental run retries it."""
+    merged = {**(cached if same_store else {}), **new}
+    for rel in failed_rel:
+        merged.pop(rel, None)
+    return merged
+
+
+async def index_listed_files(
+    index_one: Any, files: list, result: Any, started: float, progress: Any, root: Path
+) -> list:
+    """Index each (path, tier) in turn with per-file progress; return the paths that stored chunks."""
+    indexed: list[str] = []
+    for position, (file_path, tier) in enumerate(files, 1):
+        before, failed_before, chunks_before = result.success, result.failed, progress.count
+        await index_one(file_path, tier, result)
+        log_file_progress(
+            position, len(files), os.path.relpath(file_path, root), progress.count - chunks_before, started
+        )
+        if result.success > before:
+            indexed.append(file_path)
+        if result.failed > failed_before:
+            progress.failed.append(file_path)
+    return indexed

@@ -26,6 +26,8 @@ export interface Member {
   viewer_role?: string | null
   /** The roles the server would let the caller grant or revoke (#20073). */
   viewer_grantable_roles?: string[]
+  /** Whether the company owner/admin writes would let the caller through, as the server decides it (#20542). */
+  viewer_can_manage?: boolean
 }
 
 export interface MembersApi {
@@ -155,5 +157,11 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
   // Without rows there is no standing to read; see rolesToOffer.
   const standingKnown = computed(() => members.value.length > 0)
 
-  return { members, grantableRoles, standingKnown, isLoading, errorMessage, pendingUserId, load, changeRole, removeMember }
+  // The server's own verdict rides on every row; without rows there is no standing, so it is false.
+  const viewerCanManage = computed<boolean>(() => {
+    const rows = members.value
+    return Array.isArray(rows) && rows[0]?.viewer_can_manage === true
+  })
+
+  return { members, grantableRoles, viewerCanManage, standingKnown, isLoading, errorMessage, pendingUserId, load, changeRole, removeMember }
 }
