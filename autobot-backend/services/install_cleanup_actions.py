@@ -92,6 +92,17 @@ def _is_checkout(root: Path) -> bool:
     return root.name == BACKEND_DIR_NAME and os.path.lexists(root.parent / ".git")
 
 
+def _still_present(paths: list[Path]) -> list[tuple[float, Path]]:
+    """(mtime, path) for each path; one that vanished since the glob is already gone, so it is not planned."""
+    present = []
+    for path in paths:
+        try:
+            present.append((path.stat().st_mtime, path))
+        except FileNotFoundError:
+            continue
+    return present
+
+
 def plan_env_copies(root: Path | None = None) -> CleanupPlan:
     """Which ``.env.*~`` copies to remove: all but the newest. Reads names and mtimes only."""
     root = root or install_root()
@@ -107,7 +118,8 @@ def plan_env_copies(root: Path | None = None) -> CleanupPlan:
     for path in found:
         if path.is_symlink() or not path.is_file() or not _inside(path, backend):
             return CleanupPlan(refused=f"{path.name} is a symlink, not a regular file, or outside the install root")
-    ranked = sorted(found, key=lambda p: (p.stat().st_mtime, p.name))
+    ranked = sorted(_still_present(found), key=lambda p: (p[0], p[1].name))
+    ranked = [p for _mtime, p in ranked]
     if len(ranked) < 2:
         return CleanupPlan(kept=ranked[0] if ranked else None, backend_id=(stat.st_dev, stat.st_ino))
     return CleanupPlan(targets=tuple(ranked[:-1]), kept=ranked[-1], backend_id=(stat.st_dev, stat.st_ino))
@@ -123,20 +135,34 @@ def _open_pinned_backend(backend: Path, expected: tuple[int, int] | None) -> int
     return fd
 
 
-def _remove_env_copies(plan: CleanupPlan, root: Path) -> int:
-    """Unlink each target relative to the pinned directory fd, so a swapped path cannot redirect the removal."""
+def _unlink_pinned(name: str, fd: int) -> bool:
+    """Unlink *name* under *fd*; False when it is already gone (it vanished between plan and act)."""
+    try:
+        info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+        if not stat_module.S_ISREG(info.st_mode):
+            raise ValueError(f"{name} changed to a symlink or left the install root; nothing further removed")
+        os.unlink(name, dir_fd=fd)
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def _remove_env_copies(plan: CleanupPlan, root: Path) -> tuple[int, list[str]]:
+    """Unlink each target relative to the pinned directory fd, so a swapped path cannot redirect the removal.
+
+    Returns (removed count, names that were already gone).
+    """
     fd = _open_pinned_backend(_backend_dir(root), plan.backend_id)
-    removed = 0
+    removed, gone = 0, []
     try:
         for path in plan.targets:
-            info = os.stat(path.name, dir_fd=fd, follow_symlinks=False)
-            if not stat_module.S_ISREG(info.st_mode):
-                raise ValueError(f"{path.name} changed to a symlink or left the install root; nothing further removed")
-            os.unlink(path.name, dir_fd=fd)
-            removed += 1
+            if _unlink_pinned(path.name, fd):
+                removed += 1
+            else:
+                gone.append(path.name)
     finally:
         os.close(fd)
-    return removed
+    return removed, gone
 
 
 async def _audit(
@@ -179,7 +205,7 @@ async def _record_intent(approval: "Approval", session: "AsyncSession", names: l
     raise ValueError("the audit entry could not be written, so nothing was removed")
 
 
-async def _remove_audited(approval: "Approval", plan: CleanupPlan, root: Path, own: bool) -> int:
+async def _remove_audited(approval: "Approval", plan: CleanupPlan, root: Path, own: bool) -> tuple[int, list[str]]:
     try:
         return await asyncio.to_thread(_remove_env_copies, plan, root)
     except (OSError, ValueError) as exc:
@@ -202,10 +228,23 @@ async def execute_env_copies_cleanup(approval: "Approval", session: "AsyncSessio
         return
     names = [str(p.relative_to(root)) for p in plan.targets]
     await _record_intent(approval, session, names, own)
-    removed = await _remove_audited(approval, plan, root, own)
-    await _audit(approval, _AUDIT, "success", phase="completion", removed=removed, paths=names, self_approval=own)
+    removed, gone = await _remove_audited(approval, plan, root, own)
+    written = await _audit(
+        approval,
+        _AUDIT,
+        "success",
+        phase="completion",
+        removed=removed,
+        already_gone=gone,
+        paths=names,
+        self_approval=own,
+    )
     suffix = " (self-approved by the only admin)." if own else "."
-    await _record(approval, session, f"Removed {removed} .env.*~ copies: {', '.join(names)}{suffix}")
+    already = f" {len(gone)} were already gone: {', '.join(gone)}." if gone else ""
+    await _record(approval, session, f"Removed {removed} .env.*~ copies: {', '.join(names)}{suffix}{already}")
+    if not written:
+        await _record(approval, session, "The removal happened but its completion audit entry could not be written.")
+        raise ValueError("the completion audit entry could not be written, though the copies were removed")
 
 
 def register_install_cleanup_actions() -> None:

@@ -9817,6 +9817,20 @@
     }
   },
   "admin": {
+    "routes": {
+      "users": "User Management",
+      "sandbox": "Sandbox Inspector",
+      "advancedControl": "Advanced Control",
+      "budgetPolicies": "Budget Policies",
+      "systemHealth": "System Health",
+      "providerFallback": "Provider Fallback",
+      "pricing": "Model Pricing",
+      "mcpServers": "MCP Servers",
+      "conversations": "Conversation Review",
+      "permissionScopes": "Permission Scopes",
+      "cleanupProposals": "Cleanup proposals",
+      "section": "Administration"
+    },
     "systemHealth": {
       "title": "System Health",
       "subtitle": "Live backend reachability for content sources",

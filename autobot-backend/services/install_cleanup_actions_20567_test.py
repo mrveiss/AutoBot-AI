@@ -202,7 +202,7 @@ def test_a_different_directory_at_the_same_path_removes_nothing(tmp_path: Path) 
 
 def test_contrast_the_unchanged_directory_is_removed_from(tmp_path: Path) -> None:
     backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
-    assert acts._remove_env_copies(acts.plan_env_copies(tmp_path), tmp_path) == 1
+    assert acts._remove_env_copies(acts.plan_env_copies(tmp_path), tmp_path) == (1, [])
     assert ".env.1~" not in _names(backend)
 
 
@@ -213,3 +213,56 @@ async def test_an_approval_raised_for_another_node_removes_nothing(tmp_path: Pat
     with pytest.raises(ValueError, match="another installation"):
         await _run(acts.execute_env_copies_cleanup, other, tmp_path)
     assert ".env.1~" in _names(backend)
+
+
+def test_a_copy_that_vanishes_during_planning_is_skipped_not_a_crash(tmp_path: Path) -> None:
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200, ".env.3~": 300})
+    real_stat = Path.stat
+    seen = {"hit": False}
+
+    def flaky(self: Path, *args, **kwargs):
+        if self.name == ".env.1~" and not seen["hit"] and not args and not kwargs:
+            seen["hit"] = True
+            if self.exists():
+                self.unlink()  # gone between the glob and the ranking
+        return real_stat(self, *args, **kwargs)
+
+    with patch.object(Path, "stat", flaky):
+        plan = acts.plan_env_copies(tmp_path)
+    assert seen["hit"] and plan.refused is None
+    assert [p.name for p in plan.targets] == [".env.2~"] and plan.kept == backend / ".env.3~"
+
+
+async def test_a_target_gone_between_plan_and_act_is_audited_as_already_gone(tmp_path: Path) -> None:
+    backend = await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200, ".env.3~": 300})
+    audit, session = AsyncMock(), _session()
+    real_remove = acts._remove_env_copies
+
+    def vanish_then_remove(plan, root):
+        (backend / ".env.1~").unlink()  # another process removed it after the plan was computed
+        return real_remove(plan, root)
+
+    with (
+        patch.object(acts, "install_root", return_value=tmp_path),
+        patch.object(acts, "audit_log", audit),
+        patch.object(acts, "_remove_env_copies", vanish_then_remove),
+    ):
+        await acts.execute_env_copies_cleanup(_approval(acts.ENV_COPIES_ACTION), session)
+    details = audit.await_args.kwargs["details"]
+    assert audit.await_args.kwargs["result"] == "success"
+    assert details["removed"] == 1 and details["already_gone"] == [".env.1~"]
+    assert "already gone" in session.added[-1].body
+    assert await asyncio.to_thread(_names, backend) == [".env", ".env.3~"]
+
+
+async def test_a_failed_completion_audit_is_reported_not_swallowed(tmp_path: Path) -> None:
+    backend = await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200})
+    audit, session = AsyncMock(side_effect=[True, False]), _session()  # intent written, completion not
+    with (
+        patch.object(acts, "install_root", return_value=tmp_path),
+        patch.object(acts, "audit_log", audit),
+        pytest.raises(ValueError, match="completion audit entry could not be written"),
+    ):
+        await acts.execute_env_copies_cleanup(_approval(acts.ENV_COPIES_ACTION), session)
+    assert await asyncio.to_thread(_names, backend) == [".env", ".env.2~"]  # the removal did happen
+    assert "completion audit entry could not be written" in session.added[-1].body
