@@ -11,6 +11,7 @@ against a real signed token through the real ``get_current_user``; only the epoc
 memory) and the database session are stood in for.
 """
 
+import time
 import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -28,6 +29,7 @@ from autobot_shared.user_management import password_epoch
 from autobot_shared.user_management.base_service import TenantContext
 from autobot_shared.user_management.models.audit import AuditResourceType, IdentityAuditAction
 from autobot_shared.user_management.user_service import UserService
+from tests.security._credential_harness import real_middleware
 from tests.security._revocation_harness import assert_refused as _assert_refused
 from tests.security._revocation_harness import token_request as _token_request
 
@@ -108,6 +110,48 @@ async def test_granting_admin_voids_the_old_token_so_the_next_login_carries_admi
     issued_role = UserService.account_role(user)  # the one derivation login uses for the token's role
     assert issued_role == "admin"
     assert (await get_current_user(_token_request(age_seconds=-5, role=issued_role)))["username"] == "alice"
+
+
+def _rs256_middleware(real_auth_middleware):
+    """The real middleware with a throwaway RS256 pair, so the real ``create_jwt_token`` signs."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = serialization.Encoding.PEM
+    middleware = real_middleware(real_auth_middleware, enable_auth=True)
+    middleware.jwt_private_key = key.private_bytes(
+        pem, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    ).decode()
+    middleware.jwt_public_key = (
+        key.public_key().public_bytes(pem, serialization.PublicFormat.SubjectPublicKeyInfo).decode()
+    )
+    middleware.jwt_kid, middleware.jwt_expiry_hours = "test-kid", 24
+    middleware.is_account_locked = lambda _username: False
+    return middleware
+
+
+@pytest.mark.asyncio
+async def test_the_real_login_after_a_promotion_issues_an_admin_token_that_survives_the_epoch(
+    real_auth_middleware, epochs, monkeypatch
+):
+    """Drives ``_authenticate_and_build_user_data`` (the login helper), not ``account_role`` alone."""
+    from api import auth as auth_api
+
+    user = _user(False)
+    stale = {"username": "alice", "role": "user", "iat": int(time.time()) - 60}  # minted before the promotion
+    await _change(_service(user), True)
+    monkeypatch.setattr(auth_api, "db_session_context", MagicMock())
+    monkeypatch.setattr(auth_api.UserService, "authenticate", AsyncMock(return_value=user))
+    user.last_login_at, user.org_id, user.email = None, None, "alice@example.invalid"
+
+    user_data = await auth_api._authenticate_and_build_user_data("alice", "pw", "203.0.113.1")
+    middleware = _rs256_middleware(real_auth_middleware)
+    claims = middleware.verify_jwt_token(middleware.create_jwt_token(user_data))
+
+    assert claims["role"] == "admin" and claims["username"] == "alice"
+    assert await password_epoch.is_token_revoked_by_password_change(claims) is False
+    assert await password_epoch.is_token_revoked_by_password_change(stale) is True
 
 
 @pytest.mark.asyncio
