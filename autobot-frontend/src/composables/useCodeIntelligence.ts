@@ -12,6 +12,7 @@ import type { components } from '@/types/generated/api'
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { useCachedSecurityScore } from '@/composables/analytics/useCachedSecurityScore'
+import type { CachedSecurityScoreRaw } from '@/composables/analytics/codeIntelTypes'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 
@@ -137,21 +138,8 @@ export interface ComparisonResult {
   quality_change: number
 }
 
-export interface SecurityScoreCached {
-  status: 'success' | 'no_data'
-  from_cache?: boolean
-  completed_at?: string
-  security_score?: number
-  grade?: string
-  risk_level?: string
-  status_message?: string
-  total_findings?: number
-  critical_issues?: number
-  high_issues?: number
-  files_analyzed?: number
-  severity_breakdown?: Record<string, number>
-  owasp_breakdown?: Record<string, number>
-}
+/** The cached-score payload; one definition, owned with the reader (#18907). */
+export type SecurityScoreCached = CachedSecurityScoreRaw
 
 export interface UseCodeIntelligenceOptions {
   autoFetch?: boolean
@@ -295,12 +283,16 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     }
     startLoading()
     try {
+      const before = cachedScore.raw.value
       await cachedScore.load()
+      // A newer call aborted this one: its answer is the newer call's, not ours.
+      if (cachedScore.loading.value) return null
       if (cachedScore.error.value) {
         errors.value = [...errors.value, cachedScore.error.value]
         return null
       }
-      securityScoreCached.value = cachedScore.raw.value as SecurityScoreCached | null
+      if (cachedScore.raw.value === before) return null // no answer recorded for this call
+      securityScoreCached.value = cachedScore.raw.value
       return securityScoreCached.value
     } finally {
       stopLoading()

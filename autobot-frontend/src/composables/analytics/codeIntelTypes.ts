@@ -43,7 +43,7 @@ export interface SecurityScoreResult {
 
 /** Raw payload of `security/score/cached`; `no_data` carries no score. */
 export interface CachedSecurityScoreRaw {
-  status: string
+  status: 'success' | 'no_data'
   from_cache?: boolean
   completed_at?: string
   security_score?: number

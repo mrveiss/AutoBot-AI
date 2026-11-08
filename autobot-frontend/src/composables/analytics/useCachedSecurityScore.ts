@@ -28,7 +28,7 @@ export interface UseCachedSecurityScoreOptions {
 export function pickCachedSecurityScore(r: CachedSecurityScoreRaw): SecurityScoreResult | null {
   if (r.status !== 'success' || r.security_score === undefined) return null
   return {
-    security_score: r.security_score ?? 0,
+    security_score: r.security_score,
     grade: r.grade ?? 'N/A',
     risk_level: r.risk_level ?? 'unknown',
     status_message: r.status_message ?? '',

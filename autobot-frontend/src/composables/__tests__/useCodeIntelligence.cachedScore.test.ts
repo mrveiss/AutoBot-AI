@@ -65,4 +65,36 @@ describe('useCodeIntelligence cached security score (#18907)', () => {
     expect(await ci.getSecurityScoreCached()).toBeNull()
     expect(ci.errors.value.length).toBe(1)
   })
+
+  it('a no_data payload is returned and stored, and loading returns to false', async () => {
+    mockedFetch.mockResolvedValueOnce(jsonResponse({ status: 'no_data' }))
+    const ci = useCodeIntelligence({ withSourceId })
+    const result = await ci.getSecurityScoreCached()
+
+    expect(result?.status).toBe('no_data')
+    expect(ci.securityScoreCached.value?.status).toBe('no_data')
+    expect(ci.isLoading.value).toBe(false)
+    expect(ci.errors.value).toEqual([])
+  })
+
+  it('an overlapping call aborts the first, which returns null instead of stale data', async () => {
+    mockedFetch.mockImplementationOnce(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          )
+        }),
+    )
+    mockedFetch.mockResolvedValueOnce(jsonResponse({ status: 'success', security_score: 70 }))
+    const ci = useCodeIntelligence({ withSourceId })
+    const first = ci.getSecurityScoreCached()
+    await vi.waitFor(() => expect(mockedFetch).toHaveBeenCalledTimes(1))
+    const second = ci.getSecurityScoreCached()
+
+    expect(await first).toBeNull()
+    expect((await second)?.security_score).toBe(70)
+    expect(ci.errors.value).toEqual([])
+    expect(ci.isLoading.value).toBe(false)
+  })
 })
