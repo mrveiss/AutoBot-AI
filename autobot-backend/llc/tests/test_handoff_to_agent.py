@@ -99,6 +99,7 @@ class TestHumanToAgent:
 
         with (
             patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
             patch("llc.kb.work_item_kb.WorkItemKB", return_value=kb_mock),
         ):
             result = await service.human_to_agent(
@@ -185,6 +186,7 @@ class TestHumanToAgent:
 
         with (
             patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
             patch("llc.kb.work_item_kb.WorkItemKB", return_value=kb_mock),
         ):
             result = await service.human_to_agent(
@@ -224,6 +226,7 @@ class TestHumanToAgent:
 
         with (
             patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
             patch("llc.kb.work_item_kb.WorkItemKB", return_value=kb_mock),
         ):
             result = await service.human_to_agent(
@@ -246,6 +249,7 @@ class TestHumanToAgent:
 
         with (
             patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
             patch("llc.kb.work_item_kb.WorkItemKB", return_value=kb_mock),
         ):
             result = await service.human_to_agent(
@@ -272,6 +276,7 @@ class TestHumanToAgent:
 
         with (
             patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
             patch("llc.kb.work_item_kb.WorkItemKB", return_value=kb_mock),
         ):
             await service.human_to_agent(
@@ -294,6 +299,38 @@ class TestHumanToAgent:
         assert payload["target_agent_id"] == target_agent
         assert payload["has_human_handoff_context"] is True
 
+    async def test_handoff_publication_survives_the_router(self, service, mock_session, mock_redis):
+        """The captured publication, fed to the router, reaches the live fan-out with both ids (#21080)."""
+        from llc.notifications.router import LLCNotificationRouter
+        from llc.tests.test_notification_router import _FakePublisher
+
+        item, user_id = _make_item()
+        company_id, target_agent = str(uuid.uuid4()), str(uuid.uuid4())
+        mock_session._db_result.scalar_one_or_none.return_value = item
+        redis_patch = AsyncMock(return_value=mock_redis)
+        with (
+            patch("llc.services.handoff.get_async_redis_client", new=redis_patch),
+            patch("llc.services.commit_publish.get_async_redis_client", new=redis_patch),
+            patch("llc.kb.work_item_kb.WorkItemKB", return_value=_patch_kb()),
+        ):
+            await service.human_to_agent(
+                mock_session,
+                work_item_id=str(item.id),
+                target_agent_id=target_agent,
+                user_id=user_id,
+                company_id=company_id,
+                human_notes="Notes",
+            )
+        channel, raw = mock_redis.publish.call_args[0]
+        pub = _FakePublisher()
+        await LLCNotificationRouter(publisher=pub)._dispatch({"type": "message", "channel": channel, "data": raw})
+
+        assert len(pub.calls) == 1
+        assert pub.calls[0]["company_id"] == company_id
+        assert pub.calls[0]["event_type"] == "work_item.handoff_ready"
+        assert pub.calls[0]["payload"]["work_item_id"] == str(item.id)
+        assert pub.calls[0]["payload"]["target_agent_id"] == target_agent
+
     async def test_redis_checkout_key_released(self, service, mock_session, mock_redis):
         item, user_id = _make_item()
         mock_session._db_result.scalar_one_or_none.return_value = item
@@ -302,6 +339,7 @@ class TestHumanToAgent:
 
         with (
             patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
             patch("llc.kb.work_item_kb.WorkItemKB", return_value=kb_mock),
         ):
             await service.human_to_agent(
@@ -327,6 +365,7 @@ class TestHumanToAgent:
 
         with (
             patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=mock_redis)),
             patch("llc.kb.work_item_kb.WorkItemKB", return_value=kb_mock),
         ):
             await service.human_to_agent(
@@ -351,6 +390,7 @@ class TestHumanToAgent:
 
         with (
             patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=None)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=None)),
             patch("llc.kb.work_item_kb.WorkItemKB", return_value=kb_mock),
         ):
             result = await service.human_to_agent(
@@ -393,6 +433,7 @@ class TestGenerateAndUpdateH2ABriefAsync:
             patch("llc.services.handoff.HandoffBriefGenerator") as MockGen,
             patch("llc.services.handoff.get_async_session_factory", return_value=mock_session_factory),
             patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=None)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=None)),
         ):
             gen_instance = AsyncMock()
             gen_instance.generate_human_to_agent_brief = AsyncMock(return_value=brief)
