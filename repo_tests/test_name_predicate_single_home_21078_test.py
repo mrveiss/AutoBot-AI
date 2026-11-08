@@ -40,32 +40,45 @@ _JS_INFIXES = frozenset({".test.", ".spec."})
 #: The source trees swept. ``.claude/``, ``docs/``, ``debug/``, the worker stubs and the ``.github``/``site``/``data``
 #: leftovers hold a few dozen tracked .py files and are NOT read (RATCHET_BASELINES rule 1: the boundary is declared here).
 _ROOTS = (
-    "autobot-backend/",
-    "autobot-slm-backend/",
-    "autobot_shared/",
-    "autobot-infrastructure/",
-    "autobot-npu-worker/",
-    "repo_tests/",
-    "tools/",
-    "scripts/",
-    "pipeline-scripts/",
-    "plugins/",
-    "libs/",
+    "autobot-backend",
+    "autobot-infrastructure",
+    "autobot-npu-worker",
+    "autobot-slm-backend",
+    "autobot_shared",
+    "libs",
+    "pipeline-scripts",
+    "plugins",
+    "repo_tests",
+    "scripts",
+    "tools",
 )
 
 
 def _discover(root: Path) -> list[str]:
     try:
-        return tracked_paths(root, *(f"{prefix}*.py" for prefix in _ROOTS))
+        return tracked_paths(root, *(f"{prefix}/*.py" for prefix in _ROOTS))
     except EmptyEnumeration:
         return []
 
 
-#: About 8,200 of the tracked tree's ~13,700 files; 0.5 fires once a fifth of the sweep goes unread.
+def _swept_count(root: Path) -> int:
+    """Tracked ``.py`` files under ``_ROOTS``, counted INDEPENDENTLY of the sweep's pathspecs (#17142).
+
+    Enumerates with no patterns and filters in Python, so a broken glob in ``_discover`` cannot lower both numbers.
+    """
+    try:
+        listed = tracked_paths(root)
+    except EmptyEnumeration:
+        return 0
+    return sum(1 for rel in listed if rel.endswith(".py") and rel.startswith(tuple(f"{p}/" for p in _ROOTS)))
+
+
+#: 0.98 of the independently counted population fires once one file in fifty goes unread.
 REACH = declare(
     "test-name-predicate-single-home-21078",
     discover=_discover,
-    min_fraction=0.5,
+    min_fraction=0.98,
+    reference=_swept_count,
     what="tracked .py files",
     roots=_ROOTS,
 )
