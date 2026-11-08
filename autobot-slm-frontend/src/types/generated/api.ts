@@ -2715,6 +2715,10 @@ export interface paths {
         /**
          * Update Person Copy
          * @description Write only what differs, so the periodic pass changes nothing when the two agree.
+         *
+         *     The person's issued SLM sessions are revoked on a deactivation or a password change (#21154): the
+         *     SLM's request gate reads the epoch store, never ``is_active`` or the hash. The deactivation epoch is
+         *     recorded on every push of an inactive person, and both epochs are written before the change is committed.
          */
         post: operations["update_person_copy_api_internal_person_copy_post"];
         delete?: never;
