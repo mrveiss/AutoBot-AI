@@ -45,9 +45,6 @@ _HARDCODED = re.compile(
 
 #: path -> why a hard-coded interpreter may stay. Reasons are checked for presence.
 _ALLOWED = {
-    "autobot-infrastructure/shared/scripts/install-slm.sh": (
-        "open PRs #20587 and #20777 edit this file; it joins #20932 after they land"
-    ),
     "autobot-slm-backend/ansible/playbooks/deploy-native-services.yml": (
         "open PRs #20587 and #20777 edit this file; it joins #20932 after they land"
     ),
@@ -163,3 +160,31 @@ def test_the_shared_sources_still_derive_from_python_version():
     assert ".python-version" in resolve and "python_interpreter_binary" in resolve
     helper = (_ROOT / "scripts/lib/python_floor.sh").read_text(encoding="utf-8")
     assert ".python-version" in helper
+
+
+_INSTALL_SLM = "autobot-infrastructure/shared/scripts/install-slm.sh"
+
+
+def _install_slm_builds_via_floor(text: str) -> bool:
+    """True when the script sources the shared lookup and builds only through it."""
+    code = "\n".join(line for _, line in code_lines(text, name=Path(_INSTALL_SLM)))
+    return (
+        "scripts/lib/python_floor.sh" in code
+        and "python_floor_build_venv" in code
+        and not _HARDCODED.search(code)
+        and not re.search(r"\bpython3?\S*\s+-m\s+venv\b", code)
+    )
+
+
+def test_install_slm_builds_its_venv_only_through_the_floor_lookup():
+    """#20932: install-slm.sh uses python_floor.sh, not a bare `python3 -m venv`."""
+    text = (_ROOT / _INSTALL_SLM).read_text(encoding="utf-8")
+    assert _install_slm_builds_via_floor(text)
+
+
+def test_the_install_slm_check_fires_on_the_bare_form():
+    """Control: the same check must reject the old line and a literal version."""
+    bare = 'source "$PROJECT_ROOT/scripts/lib/python_floor.sh"\npython_floor_build_venv x\nsudo -u autobot python3 -m venv "$D/venv"\n'
+    literal = 'source "$R/scripts/lib/python_floor.sh"\npython_floor_build_venv x\nsudo -u autobot python3.14 -m venv "$D/venv"\n'
+    assert not _install_slm_builds_via_floor(bare)
+    assert not _install_slm_builds_via_floor(literal)
