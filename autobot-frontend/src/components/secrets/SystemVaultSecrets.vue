@@ -94,11 +94,21 @@ async function run(secretId: string, action: () => Promise<unknown>) {
 
 const rotate = (secret: SystemVaultEntry) => run(secret.id, () => secretsApiClient.updateSecret(secret.id, { value: newValue.value }))
 
+/** Ask before deleting. `busy` also covers the open confirm, so a re-entrant click is a no-op. */
+async function askToDelete(secret: SystemVaultEntry): Promise<boolean> {
+  busy.value = true
+  try {
+    return await confirm({
+      title: t('security.secretsManager.systemVault.deleteTitle'),
+      message: t('security.secretsManager.systemVault.deleteMessage', { name: secret.name })
+    })
+  } finally {
+    busy.value = false
+  }
+}
+
 async function remove(secret: SystemVaultEntry) {
-  const ok = await confirm({
-    title: t('security.secretsManager.systemVault.deleteTitle'),
-    message: t('security.secretsManager.systemVault.deleteMessage', { name: secret.name })
-  })
-  if (ok) await run(secret.id, () => deleteConfirmingDependents(secret))
+  if (busy.value) return
+  if (await askToDelete(secret)) await run(secret.id, () => deleteConfirmingDependents(secret))
 }
 </script>
