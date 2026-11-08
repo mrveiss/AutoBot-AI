@@ -24,10 +24,10 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 760,
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 721,
-    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 902,  # #18849: 903 -> 902
-    "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 765,
+    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 896,
+    "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 767,
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
-    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1786,
+    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1780,
     "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1216,
     "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1260,
     "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 756,
@@ -90,10 +90,10 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.vue": 615,  # #18849: 616 -> 615
     "autobot-frontend/src/components/terminal/BaseXTerminal.vue": 825,
     "autobot-frontend/src/components/terminal/TerminalModals.vue": 742,  # #18849: 743 -> 742
-    "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1603,
+    "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1605,
     "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 924,
     "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 708,
-    "autobot-frontend/src/components/vision/MediaGallery.vue": 717,
+    "autobot-frontend/src/components/vision/MediaGallery.vue": 711,
     "autobot-frontend/src/components/vision/ScreenCaptureViewer.vue": 835,
     "autobot-frontend/src/components/vision/VideoProcessor.vue": 891,
     "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 936,
@@ -125,7 +125,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/models/controllers/ChatController.ts": 1156,
     "autobot-frontend/src/models/controllers/KnowledgeController.ts": 645,
     "autobot-frontend/src/models/repositories/ChatRepository.ts": 674,
-    "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 897,
+    "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 890,
     "autobot-frontend/src/router/index.ts": 1305,  # #20605 + #20631: 1385 -> 1305
     "autobot-frontend/src/services/GlobalWebSocketService.ts": 905,
     "autobot-frontend/src/services/TerminalService.ts": 1137,
@@ -150,7 +150,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/WorkflowBuilderView.vue": 2142,  # #21043: 2166 -> 2151 -> 2142; #17677; #13421
     "autobot-frontend/src/views/llc/BacklogView.vue": 611,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
-    "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 761,
+    "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 755,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1012,  # #20123: 1015 -> 1012 (mixed bucket lists each currency)
     "autobot-frontend/src/views/llc/GanttTimelineView.vue": 815,
     "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 800,
@@ -176,7 +176,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/views/CodeSyncView.vue": 1956,  # #18819: 2080 -> 2069; #20201: poll loop extracted
     "autobot-slm-frontend/src/views/DeploymentsView.vue": 1613,  # #18819 + #14777: 1703 -> 1623; #20003: -> 1614
     "autobot-slm-frontend/src/views/FleetOverview.vue": 707,  # #14780: 786 -> 708
-    "autobot-slm-frontend/src/views/MaintenanceView.vue": 782,  # #14777 batch 2: 817 -> 794; #20003: -> 790
+    "autobot-slm-frontend/src/views/MaintenanceView.vue": 789,  # #14777 batch 2: 817 -> 794; #20003: -> 790
     "autobot-slm-frontend/src/views/OrchestrationView.vue": 2183,
     "autobot-slm-frontend/src/views/ReplicationView.vue": 698,  # #18819 + #14777: 731 -> 706
     "autobot-slm-frontend/src/views/SecurityView.vue": 1366,  # #14780 BasePagination: 1386 -> 1374

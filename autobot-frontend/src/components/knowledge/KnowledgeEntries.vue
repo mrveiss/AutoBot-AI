@@ -186,7 +186,7 @@
               />
             </td>
             <td class="title-cell" @click="viewEntry(entry)">
-              <span class="entry-title">{{ entry.title || $t('knowledge.entries.untitled') }}</span>
+              <span class="entry-title">{{ formatManPageTitle(entry.title, entry.metadata?.factType, $t) || $t('knowledge.entries.untitled') }}</span>
               <span
                 v-if="getVerificationStatus(entry)"
                 class="provenance-dot"
@@ -295,7 +295,7 @@
         <div class="entry-metadata">
           <div class="meta-item">
             <label>{{ $t('knowledge.entries.titleLabel') }}</label>
-            <span>{{ currentEntry.title || $t('knowledge.entries.untitled') }}</span>
+            <span>{{ formatManPageTitle(currentEntry.title, currentEntry.metadata?.factType, $t) || $t('knowledge.entries.untitled') }}</span>
           </div>
           <div class="meta-item">
             <label>{{ $t('knowledge.entries.categoryViewLabel') }}</label>
@@ -444,7 +444,7 @@ import ConnectorManager from './connectors/ConnectorManager.vue'
 import BulkActionsToolbar from '@/components/knowledge/BulkActionsToolbar.vue'
 import BulkEditModal from '@/components/knowledge/modals/BulkEditModal.vue'
 import type { BulkEditMode, BulkEditEntry } from '@/components/knowledge/modals/BulkEditModal.vue'
-import { formatDate, formatDateTime, isoDateStamp } from '@/utils/formatHelpers'
+import { formatDate, formatDateTime, formatManPageTitle, isoDateStamp } from '@/utils/formatHelpers'
 // #9724: the FA-class variant rendered empty SVGs through <Icon :name>
 import { getDocumentTypeIconName as getDocumentTypeIcon } from '@/utils/iconMappings'
 import { useDebounce } from '@/composables/useDebounce'
@@ -596,7 +596,7 @@ const selectedBulkEditEntries = computed<BulkEditEntry[]>(() => {
     .filter(doc => selection.isSelected(doc))
     .map(doc => ({
       id: doc.id,
-      title: doc.title || t('knowledge.entries.untitled'),
+      title: formatManPageTitle(doc.title, doc.metadata?.factType, t) || t('knowledge.entries.untitled'),
       category: doc.category,
       tags: doc.tags
     }))
