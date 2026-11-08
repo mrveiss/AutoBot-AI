@@ -12,48 +12,44 @@ client, so a later request-time call would fail this file rather than a user.
 """
 
 import ast
-import importlib
 import secrets
 import sys
 import uuid
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from autobot_shared.user_management.base_service import TenantContext
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
-from _real_orm_import import real_modules_swapped  # noqa: E402
+from _real_orm_import import import_modules_with_real_orm, real_modules_swapped  # noqa: E402
 
 _SLM = Path(__file__).resolve().parents[2]
+
+# This directory's conftest stands in for sqlalchemy and the SLM's ``user_management`` package; the real ones are the
+# system under test. The shared helper imports them once, for real, and the references are held for the whole module
+# (SQLAlchemy's class registry is weak, so a dropped ``Organization`` would stop ``Role`` resolving it).
+_LOADED = import_modules_with_real_orm(
+    import_names=(
+        "user_management",
+        "user_management.models",
+        "user_management.models.api_key",
+        "user_management.models.user",
+        "autobot_shared.user_management.user_service",
+        "services.main_backend_client",
+    )
+)
+User = _LOADED[3].User
+UserService = _LOADED[-2].UserService
+main_backend_client = _LOADED[-1]
+
 with real_modules_swapped():
-    from sqlalchemy.dialects.postgresql import JSONB
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
     from sqlalchemy.ext.compiler import compiles
 
-    # The conftest stands in for the SLM's ``user_management`` package; the real one is the system under test, so the
-    # stand-ins are lifted for the import only. The real modules stay in ``sys.modules`` (SQLAlchemy's class registry
-    # holds weak references, so dropping them lets ``Organization`` be collected and ``Role`` stop resolving it).
-    _OWN = ("user_management", "autobot_shared.user_management")
-    _before = set(sys.modules)
-    with pytest.MonkeyPatch.context() as _mp:
-        for _k in [k for k in sys.modules if k.startswith(_OWN)]:
-            _mp.delitem(sys.modules, _k)
-        for _mod in ("user", "organization", "role", "team", "api_key", "mfa", "sso", "audit"):
-            importlib.import_module(f"user_management.models.{_mod}")
-        User = sys.modules["user_management.models.user"].User
-        UserService = importlib.import_module("autobot_shared.user_management.user_service").UserService
-        _created = [k for k in sys.modules if k.startswith(_OWN) and ".models" not in k and k not in _before]
-    # ``_mp`` has put every stand-in back; the services imported above did not exist before, so a restore would keep
-    # them (bound to a second ``password_epoch``) for the next module. They are dropped through a MonkeyPatch whose
-    # record is deliberately never undone, which leaves ``sys.modules`` as it was found; only the models stay.
-    _drop = pytest.MonkeyPatch()
-    for _k in _created:
-        _drop.delitem(sys.modules, _k, raising=False)
 
-
-@compiles(JSONB, "sqlite")
+# the JSONB class the models were declared with (a second import of the dialect would be a different class)
+@compiles(type(User.metadata.tables["organizations"].c.settings.type), "sqlite")
 def _jsonb_as_json(element, compiler, **kw):  # noqa: ANN001
     return "JSON"
 
@@ -94,25 +90,34 @@ async def _seed_admin(db):
     return svc
 
 
+@pytest.fixture()
+def main_app_down(monkeypatch):
+    """The SLM's one client for the main app, made to fail; ``awaited`` records every call that reaches it."""
+    awaited = []
+
+    async def _down(*args, **kwargs):
+        awaited.append((args, kwargs))
+        raise ConnectionError("main app unreachable")
+
+    monkeypatch.setattr(main_backend_client, "call_main_backend", _down)
+    return awaited
+
+
 @pytest.mark.asyncio
-async def test_login_works_from_the_local_copy_with_the_main_app_unreachable(session):
+async def test_login_works_from_the_local_copy_with_the_main_app_unreachable(session, main_app_down):
     svc = await _seed_admin(session)
-    down = AsyncMock(side_effect=ConnectionError("main app unreachable"))
-    with patch("services.main_backend_client.call_main_backend", down):
-        user = await svc.authenticate("admin", _PASSWORD)
-        by_email = await svc.authenticate("admin@example.test", _PASSWORD)
+    user = await svc.authenticate("admin", _PASSWORD)
+    by_email = await svc.authenticate("admin@example.test", _PASSWORD)
     assert user is not None and user.username == "admin" and user.is_platform_admin
     assert by_email is not None and by_email.id == user.id
-    down.assert_not_awaited()
+    assert main_app_down == []
 
 
 @pytest.mark.asyncio
-async def test_a_wrong_password_is_refused_not_an_error_with_the_main_app_unreachable(session):
+async def test_a_wrong_password_is_refused_not_an_error_with_the_main_app_unreachable(session, main_app_down):
     svc = await _seed_admin(session)
-    down = AsyncMock(side_effect=ConnectionError("main app unreachable"))
-    with patch("services.main_backend_client.call_main_backend", down):
-        assert await svc.authenticate("admin", _PASSWORD + "x") is None
-    down.assert_not_awaited()
+    assert await svc.authenticate("admin", _PASSWORD + "x") is None
+    assert main_app_down == []
 
 
 _LOGIN_PATH = (
