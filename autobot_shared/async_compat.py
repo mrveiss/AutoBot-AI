@@ -161,8 +161,10 @@ def run_or_schedule(coro: Coroutine[Any, Any, T]) -> T:
     See module docstring for the full contract. Inside a Celery worker the
     coroutine always runs on the worker's persistent loop. Otherwise, with no
     loop running in this thread it uses ``asyncio.run``; with a loop running it
-    is submitted to the API process's main loop (never a fresh loop in a
-    thread, which would touch loop-bound singletons from the wrong loop).
+    is submitted to the worker loop or the API process's main loop; a fresh loop in a
+    thread is used only in the fallback cases below, because it would touch loop-bound
+    singletons from the wrong loop. Worker-loop lookup checks only that the loop is
+    not closed, not ``is_running()``.
 
     Fresh-loop fallback (#21082, #20919): under a running loop the coroutine runs in a
     thread with its OWN new loop when (a) the target loop (worker loop, or registered

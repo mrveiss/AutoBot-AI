@@ -262,3 +262,60 @@ def test_decorator_alias_from_import_is_resolved_as_a_task():
 def test_unrelated_decorator_alias_is_not_a_task():
     src = "from functools import cache as task\n\n@task\ndef f():\n    pass\n"
     assert not rule.is_task_module(parse_cache.parse(src))
+
+
+def test_decorator_alias_imported_inside_a_helper_function_is_a_task():
+    src = "def helper():\n    from celery import shared_task as task\n\n    @task\n    def inner():\n        pass\n"
+    assert rule.is_task_module(parse_cache.parse(src))
+
+
+def test_decorator_alias_in_one_function_does_not_mark_a_sibling_as_a_task():
+    src = (
+        "def a():\n    from celery import shared_task as task\n\n    @task\n    def inner():\n        pass\n\n"
+        "def b():\n    @task\n    def other():\n        pass\n"
+    )
+    names = [fn.name for fn in rule.task_functions(parse_cache.parse(src))]
+    assert names == ["inner"]
+
+
+def test_class_level_decorator_alias_is_a_task():
+    src = "class K:\n    from celery import shared_task as task\n\n    @task\n    def f():\n        pass\n"
+    assert rule.is_task_module(parse_cache.parse(src))
+
+
+def test_class_level_import_is_seen_in_the_class_body_but_not_in_methods():
+    src = "class K:\n    import asyncio as aio\n    X = aio.run(c)\n\n    def m(self):\n        aio.run(d)\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(3, "asyncio.run")]
+
+
+def test_lambda_parameter_shadows_an_import_alias():
+    src = "import asyncio as aio\nf = lambda aio: aio.run(1)\ng = lambda: aio.run(2)\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(3, "asyncio.run")]
+
+
+def test_nested_function_inherits_enclosing_imports():
+    src = (
+        "def outer():\n    import asyncio as aio\n    from celery import shared_task as task\n\n"
+        "    @task\n    def inner():\n        aio.run(x)\n"
+    )
+    tree = parse_cache.parse(src)
+    assert rule.is_task_module(tree)
+    assert [name for _, name in rule.private_loop_calls(tree)] == ["asyncio.run"]
+
+
+def test_decorator_match_is_on_whole_components_not_a_suffix():
+    src = "import webapp as router\n\n@router.task\ndef f():\n    pass\n"
+    assert not rule.is_task_module(parse_cache.parse(src))
+
+
+def test_deeply_nested_expression_does_not_overflow_the_stack():
+    src = "x = " + "(" * 90 + "1" + ")" * 90 + "\nasyncio_value = " + "-" * 400 + "1\n"
+    assert _calls(src) == set()
+
+
+def test_global_declared_name_is_not_rebound_by_a_function_local_import():
+    src = "import asyncio as aio\n\ndef f():\n    global aio\n    aio.run(x)\n    import json as aio\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(5, "asyncio.run")]

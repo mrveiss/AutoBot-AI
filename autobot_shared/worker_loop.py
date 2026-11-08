@@ -121,7 +121,10 @@ def _abandon_slow_loop(loop: asyncio.AbstractEventLoop, thread: threading.Thread
     _ABANDONED_THREADS[:] = [t for t in _ABANDONED_THREADS if t.is_alive()]
     _ABANDONED_THREADS.append(thread)
     loop.call_soon_threadsafe(loop.stop)
-    logger.warning("worker loop thread missed the %ss startup timeout; stop requested", WORKER_LOOP_START_TIMEOUT)
+    logger.warning(
+        "worker loop thread missed the %ss startup timeout; stop requested",
+        WORKER_LOOP_START_TIMEOUT,
+    )
 
 
 def _spawn_loop() -> asyncio.AbstractEventLoop:
@@ -226,28 +229,49 @@ _DISPOSERS: tuple[tuple[str, str, str], ...] = (
 )
 
 
+def _consume_result(task: "asyncio.Future[None]") -> None:
+    """Retrieve an abandoned disposer's outcome so asyncio never logs it as unretrieved."""
+    if not task.cancelled():
+        task.exception()
+
+
 async def _run_disposer(name: str, step: Callable[[], Awaitable[None]], share: float) -> None:
-    """Run one disposer within its own ``share`` seconds; a stall or failure is logged, not fatal."""
-    try:
-        await asyncio.wait_for(step(), share)
-    except asyncio.TimeoutError:
+    """Run one disposer within ``share`` seconds; a stall or failure is logged, not fatal.
+
+    The disposer runs as its own task and is awaited through ``asyncio.wait``, which never
+    cancels it. On expiry it is cancelled and abandoned, so one that swallows
+    ``CancelledError`` cannot hold shutdown past ``share``.
+    """
+    task = asyncio.ensure_future(step())
+    done, _ = await asyncio.wait({task}, timeout=max(share, 0.0))
+    if not done:
+        task.cancel()
+        task.add_done_callback(_consume_result)
         logger.warning("worker loop shutdown: %s disposal exceeded its %.1fs share", name, share)
+        return
+    try:
+        task.result()
     except Exception:  # noqa: BLE001 - shutdown must continue past one failed disposal
         logger.warning("worker loop shutdown: %s disposal failed", name, exc_info=True)
 
 
 async def _dispose_shared_resources(budget: float | None = None) -> None:
-    """Dispose the engine, transcriber DB and Redis pools, each with an equal share of ``budget``."""
+    """Dispose the engine, transcriber DB and Redis pools within ``budget`` seconds in total.
+
+    Each disposer gets ``remaining / disposers_left``, so an unused or skipped share
+    carries forward to the later ones (Redis, last, can use everything left).
+    """
     import importlib
 
-    share = (WORKER_LOOP_SHUTDOWN_TIMEOUT if budget is None else budget) / len(_DISPOSERS)
-    for name, module, attr in _DISPOSERS:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + (WORKER_LOOP_SHUTDOWN_TIMEOUT if budget is None else budget)
+    for left, (name, module, attr) in zip(range(len(_DISPOSERS), 0, -1), _DISPOSERS):
         try:
             step: Callable[[], Awaitable[None]] = getattr(importlib.import_module(module), attr)
         except ImportError:
             logger.debug("worker loop shutdown: %s not importable here", module)
             continue
-        await _run_disposer(name, step, share)
+        await _run_disposer(name, step, (deadline - loop.time()) / left)
 
 
 def stop_worker_loop() -> None:

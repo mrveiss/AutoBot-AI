@@ -99,15 +99,22 @@ def _bind(node: ast.AST, table: dict[str, str]) -> None:
 
 
 def _own_imports(body: list[ast.stmt]) -> dict[str, str]:
-    """Import bindings made directly in one scope's body (nested scopes excluded)."""
+    """Import bindings made directly in one scope's body (nested scopes excluded).
+
+    A name declared ``global``/``nonlocal`` is bound in an outer scope, not here, so it is
+    left to resolve through the enclosing table.
+    """
     table: dict[str, str] = {}
+    outer: set[str] = set()
     stack: list[ast.AST] = list(reversed(body))
     while stack:
         node = stack.pop()
         _bind(node, table)
+        if isinstance(node, (ast.Global, ast.Nonlocal)):
+            outer.update(node.names)
         if not isinstance(node, _NEW_SCOPES):
             stack.extend(reversed(list(ast.iter_child_nodes(node))))
-    return table
+    return {k: v for k, v in table.items() if k not in outer}
 
 
 def alias_table(tree: ast.AST) -> dict[str, str]:
@@ -115,23 +122,48 @@ def alias_table(tree: ast.AST) -> dict[str, str]:
     return _own_imports(getattr(tree, "body", []))
 
 
+def _lambda_names(node: ast.Lambda) -> set[str]:
+    a = node.args
+    names = [x.arg for x in (*a.posonlyargs, *a.args, *a.kwonlyargs)]
+    names += [x.arg for x in (a.vararg, a.kwarg) if x is not None]
+    return set(names)
+
+
+def _children(node: ast.AST, seen: dict[str, str], inherited: dict[str, str]) -> list[tuple[ast.AST, dict, dict]]:
+    """Children of ``node`` paired with (visible table, table nested functions inherit).
+
+    ``seen`` is the table visible at ``node``; ``inherited`` is what a function defined here
+    would close over (a class body's imports are visible to the class body only).
+    """
+    if isinstance(node, _FUNCS):
+        outer = [*node.decorator_list, node.args, node.returns]
+        inner = {**inherited, **_own_imports(node.body)}
+        return [(p, seen, inherited) for p in outer if p is not None] + [(s, inner, inner) for s in node.body]
+    if isinstance(node, ast.ClassDef):
+        head = [*node.decorator_list, *node.bases, *node.keywords]
+        cls = {**inherited, **_own_imports(node.body)}
+        return [(h, seen, inherited) for h in head] + [(s, cls, inherited) for s in node.body]
+    if isinstance(node, ast.Lambda):
+        shadow = _lambda_names(node)
+        keep = {k: v for k, v in seen.items() if k not in shadow}
+        kept = {k: v for k, v in inherited.items() if k not in shadow}
+        return [(node.args, seen, inherited), (node.body, keep, kept)]
+    return [(c, seen, inherited) for c in ast.iter_child_nodes(node)]
+
+
 def scoped_nodes(node: ast.AST, table: dict[str, str]) -> Iterator[tuple[ast.AST, dict[str, str]]]:
     """Yield every node under ``node`` with the import table visible in its lexical scope (#21082).
 
     A function body sees the enclosing tables plus its own imports; a sibling function's
-    imports never leak. Decorators and defaults are evaluated in the enclosing scope.
+    imports never leak. A class body sees its own imports, which its methods do not
+    inherit. Decorators and defaults are evaluated in the enclosing scope. Iterative, so a
+    deeply nested expression cannot raise ``RecursionError`` in the lint run.
     """
-    yield node, table
-    if isinstance(node, _FUNCS):
-        outer = [*node.decorator_list, node.args, node.returns]
-        for part in (p for p in outer if p is not None):
-            yield from scoped_nodes(part, table)
-        inner = {**table, **_own_imports(node.body)}
-        for stmt in node.body:
-            yield from scoped_nodes(stmt, inner)
-        return
-    for child in ast.iter_child_nodes(node):
-        yield from scoped_nodes(child, table)
+    stack: list[tuple[ast.AST, dict[str, str], dict[str, str]]] = [(node, table, table)]
+    while stack:
+        cur, seen, inherited = stack.pop()
+        yield cur, seen
+        stack.extend(reversed(_children(cur, seen, inherited)))
 
 
 def resolve(node: ast.AST, table: dict[str, str]) -> str | None:
@@ -144,6 +176,11 @@ def resolve(node: ast.AST, table: dict[str, str]) -> str | None:
     return f"{full}.{rest}" if rest else full
 
 
+def _is_task_decorator(name: str) -> bool:
+    """Match whole dotted components, so ``webapp.task`` is not mistaken for ``app.task``."""
+    return any(name == d or name.endswith("." + d) for d in _TASK_DECORATORS)
+
+
 def task_functions(tree: ast.AST) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
     """Every function decorated as a Celery task, decorator aliases resolved per scope."""
     found: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
@@ -152,7 +189,7 @@ def task_functions(tree: ast.AST) -> list[ast.FunctionDef | ast.AsyncFunctionDef
             continue
         for dec in node.decorator_list:
             name = resolve(dec.func if isinstance(dec, ast.Call) else dec, table) or ""
-            if name.endswith(_TASK_DECORATORS):
+            if _is_task_decorator(name):
                 found.append(node)
                 break
     return found
