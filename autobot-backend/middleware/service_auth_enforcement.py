@@ -78,8 +78,19 @@ EXEMPT_PATHS: List[str] = [
     # 401s that call in production; it belongs with its siblings, not with the
     # worker-to-master reporting endpoints below.
     "/api/npu/status",
-    # User-facing file operations
-    "/api/files",
+    # User-facing sandbox file operations; each route performs its own
+    # permission check. The admin file routes (/api/files, /api/files/read)
+    # are deliberately not listed.
+    "/api/files/list",
+    "/api/files/upload",
+    "/api/files/download",
+    "/api/files/view",
+    "/api/files/rename",
+    "/api/files/preview",
+    "/api/files/delete",
+    "/api/files/create_directory",
+    "/api/files/tree",
+    "/api/files/stats",
     # LLM configuration and models
     "/api/llm",
     # Prompts management

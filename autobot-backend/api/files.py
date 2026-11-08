@@ -37,7 +37,7 @@ from api.schemas_system import (
     FileStatsResponse,
     FileViewResponse,
 )
-from auth_middleware import get_auth_middleware
+from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.logging_manager import get_logger
@@ -1193,11 +1193,11 @@ async def admin_list_directory(
     # committed frontend types, disclosing the service account's home directory
     # to every API consumer. Runtime behaviour is unchanged.
     path: str = Query(default_factory=lambda: _ADMIN_DEFAULT_BROWSE_DIR),
+    _: bool = Depends(check_admin_permission),
 ) -> dict:
     """List directory contents at an absolute path.
 
-    No auth required — accessible via /autobot-api/ nginx proxy (Issue #984).
-    Restricted to pre-approved base directories.
+    Admin permission required. Restricted to pre-approved base directories.
     """
     target = _validate_admin_path(path)
     if not target.exists():
@@ -1221,10 +1221,10 @@ async def admin_list_directory(
     operation="admin_read_file",
     error_code_prefix="FILES",
 )
-async def admin_read_file(path: str) -> dict:
+async def admin_read_file(path: str, _: bool = Depends(check_admin_permission)) -> dict:
     """Return text content of a file at an absolute path.
 
-    Limited to 1 MB. No auth required — accessible via /autobot-api/ (Issue #984).
+    Limited to 1 MB. Admin permission required.
     """
     target = _validate_admin_path(path)
     if not target.exists():
