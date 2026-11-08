@@ -51,8 +51,9 @@ from llm_shared.provider_error_category import (
     failure_from_exception,
     failure_from_status,
 )
-from llm_shared.types import LLMType, ProviderType
+from llm_shared.types import LLMType
 
+from .llm_provider import configured_provider
 from .models import LLMIterationContext
 
 logger = get_logger(__name__)
@@ -95,7 +96,7 @@ def _build_request(call: IterationCall) -> LLMRequest:
     return LLMRequest(
         messages=[*system, {"role": CategoryDefaults.ROLE_USER, "content": call.prompt}],
         llm_type=LLMType.CHAT,
-        provider=ProviderType.OLLAMA,
+        provider=configured_provider(),
         model_name=ctx.selected_model,
         temperature=options["temperature"],
         top_p=options["top_p"],
@@ -127,7 +128,7 @@ async def _hand_picked(call: IterationCall) -> bool:
 
 async def _primary_is_held(call: IterationCall) -> bool:
     """True while the primary sits in its skip window / quota hold and the user did not pick it by hand."""
-    if not await get_degradation_store().is_degraded(ProviderType.OLLAMA.value, call.ctx.selected_model):
+    if not await get_degradation_store().is_degraded(configured_provider().value, call.ctx.selected_model):
         return False
     return not await _hand_picked(call)
 
