@@ -93,7 +93,7 @@ from services.knowledge.doc_indexer import (  # noqa: E402 — after sys.modules
     _should_exclude,
     get_doc_indexer_service,
 )
-from tests.fixtures import read_text_async, write_text_async
+from tests.fixtures import read_text_async, write_text_async  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -295,6 +295,7 @@ class TestIndexAll:
         stale_cache = {"docs/features/feature_a.md": "stale", "docs/features/feature_b.md": "stale"}
         cache_file = tmp_path / ".doc_index_hashes.json"
         await write_text_async(cache_file, json.dumps(stale_cache))
+        await write_text_async(tmp_path / ".doc_index_store.json", '{"store": ""}')  # same store (#20886)
 
         with (
             patch(f"{_MODULE}.HASH_CACHE_FILE", cache_file),
@@ -309,9 +310,7 @@ class TestIndexAll:
             await svc.index_all(force=False)
 
         # Both files must be indexed — cache was ignored because collection was empty
-        assert mock_index.call_count == 2, (
-            f"Expected 2 files indexed (full index forced by empty collection), " f"got {mock_index.call_count}"
-        )
+        assert mock_index.call_count == 2, "full index forced by empty collection"
 
     @pytest.mark.asyncio
     async def test_force_true_reindexes_all_files(self, tmp_path) -> None:
@@ -623,6 +622,7 @@ class TestIndexAllEmpty4350Fix:
         cache = {"docs/features/api.md": current_hash}
         cache_file = tmp_path / ".doc_index_hashes.json"
         await write_text_async(cache_file, json.dumps(cache))
+        await write_text_async(tmp_path / ".doc_index_store.json", '{"store": ""}')  # same store (#20886)
 
         indexed_files = []
 
