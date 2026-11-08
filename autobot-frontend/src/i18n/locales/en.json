@@ -1092,6 +1092,7 @@
       "scans": {
         "stats": "Codebase Stats",
         "problems": "Problems Report",
+        "smells": "Code Smells",
         "declarations": "Declarations",
         "duplicates": "Duplicates",
         "hardcodes": "Hardcoded Values",
@@ -2342,7 +2343,14 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "emptyMessage": "No code smells detected"
+      "emptyMessage": "No code smells detected",
+      "loading": "Loading code smells",
+      "category": {
+        "label": "Files",
+        "code": "Production code",
+        "test": "Test files",
+        "all": "All files"
+      }
     },
     "declarations": {
       "title": "Declarations",
