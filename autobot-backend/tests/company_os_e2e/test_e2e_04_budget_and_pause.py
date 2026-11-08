@@ -64,9 +64,17 @@ def test_step_6_exhausted_budget_is_not_dispatched(scenario):  # noqa: ANN001
     scenario.require(2, 4)
     a, b = scenario.agent("a"), scenario.agent("b")
     with step(6):
-        quiesce(scenario, a["agent_id"])  # a run still in flight is not this step's dispatch
-        scenario.ids["t_budget"] = datetime.now(timezone.utc).isoformat()
-        _exhaust(scenario.api, a["agent_id"])  # precondition: asserted, not xfailed
+        # quiesce() is a point-in-time check: it returns the moment no run is in flight, and a heartbeat or
+        # assignment wake can start the next run right after, which then spends tokens between _exhaust's
+        # read and its ingest (#21166, #20830). Pausing makes the agent ineligible for dispatch FIRST, so
+        # waiting for the run table to settle stays true while the limit is set and exhausted.
+        direct = _pause(scenario, a["agent_id"])
+        try:
+            quiesce(scenario, a["agent_id"])  # no new run can start; wait out the one already running
+            scenario.ids["t_budget"] = datetime.now(timezone.utc).isoformat()
+            _exhaust(scenario.api, a["agent_id"])  # precondition: asserted, not xfailed
+        finally:
+            _resume(scenario, a["agent_id"], direct)  # eligible again: only the exhausted budget may now stop it
 
         def arrange() -> None:
             make_ready_task(scenario, "Exhausted agent's next task", a["node_id"])
