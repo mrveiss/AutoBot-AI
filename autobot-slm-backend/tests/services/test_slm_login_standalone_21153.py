@@ -126,6 +126,23 @@ _LOGIN_PATH = (
     "services/auth.py",
     "services/token_denylist.py",
     "user_management/services/__init__.py",
+    # the shared user service ``authenticate`` runs: the class, its two mixins, the base and what they import
+    *(
+        f"../autobot_shared/user_management/{m}.py"
+        for m in (
+            "user_service",
+            "user_service_access",
+            "user_service_base",
+            "user_service_lifecycle",
+            "user_service_conflict",
+            "user_service_errors",
+            "login_eligibility",
+            "audit_rows",
+            "grant_scope",
+            "role_permission_query",
+        )
+    ),
+    "../autobot_shared/auth/jwt_core.py",
 )
 _FORBIDDEN = ("main_backend_client", "httpx", "aiohttp", "requests", "urllib3")
 
