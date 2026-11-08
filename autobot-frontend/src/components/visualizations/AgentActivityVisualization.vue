@@ -248,14 +248,14 @@ const activeAgentCount = computed(() => {
 
 // #17514: a status nobody reported is not "idle"; the header says so instead of "0 active".
 const statusReported = computed(() => agents.value.some(a => a.status != null))
-const { successText, getAgentIcon, formatAgentType, formatUptime, formatTimeAgo, truncate } = agentActivityFormat(t, () => locale.value)
+const { successText, getAgentIcon, formatAgentType, formatUptime, formatTimeAgo, formatHourLabel, truncate } = agentActivityFormat(t, () => locale.value)
 
 const timeLabels = computed(() => {
   const now = new Date()
   const labels: string[] = []
   for (let i = 5; i >= 0; i--) {
     const hour = new Date(now.getTime() - i * 60 * 60 * 1000)
-    labels.push(hour.getHours().toString().padStart(2, '0') + ':00')
+    labels.push(formatHourLabel(new Date(hour.setMinutes(0, 0, 0))))
   }
   return labels
 })
