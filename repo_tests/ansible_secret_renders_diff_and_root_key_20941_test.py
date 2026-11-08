@@ -246,3 +246,73 @@ def test_controls_an_empty_or_commented_slm_file_yields_no_key() -> None:
     assert _read_like_the_reader("") == ""
     assert _read_like_the_reader("# AUTOBOT_SECRETS_ROOT_KEY=nope\nMY_AUTOBOT_SECRETS_ROOT_KEY=x\n") == ""
     assert _read_like_the_reader('AUTOBOT_SECRETS_ROOT_KEY="quoted"\n') == "quoted"  # pragma: allowlist secret
+
+
+# --- #21089: the ai-stack env gets the Postgres block from the backend's own reader ------------------
+
+_PG_READER = "read_postgres_app_credentials.yml"
+_PG_VARS = {
+    "backend_postgres_host": "db.example.invalid",
+    "backend_postgres_port": "5433",
+    "backend_postgres_db": "users_db",
+    "backend_postgres_user": "app_user",
+    "backend_postgres_password": "pg-sample",  # pragma: allowlist secret
+}
+_PG_EXPECTED = [
+    "AUTOBOT_POSTGRES_HOST=db.example.invalid",
+    "AUTOBOT_POSTGRES_PORT=5433",
+    "AUTOBOT_POSTGRES_DB=users_db",
+    "AUTOBOT_POSTGRES_USER=app_user",
+    "AUTOBOT_POSTGRES_PASSWORD=pg-sample",  # pragma: allowlist secret
+]
+
+
+def _postgres_lines(text: str, **variables) -> list[str]:
+    rendered = _ENV.from_string(text).render(**variables)
+    return [ln for ln in rendered.splitlines() if ln.startswith("AUTOBOT_POSTGRES_")]
+
+
+def _pg_reader_includes(rel: str) -> list[dict]:
+    return [
+        t
+        for t in _load(_ANSIBLE / rel)
+        if _PG_READER in str(t.get("ansible.builtin.include_tasks")) and "include_tasks" in str(list(t))
+    ]
+
+
+def test_both_envs_read_the_postgres_password_with_the_one_shared_reader() -> None:
+    for rel, tag in (("roles/backend/tasks/main.yml", "backend"), ("roles/ai-stack/tasks/env_files.yml", "ai")):
+        incs = _pg_reader_includes(rel)
+        assert len(incs) == 1, f"{rel}: expected one include of {_PG_READER}, found {len(incs)}"
+        assert {tag, "config"} <= set(incs[0]["ansible.builtin.include_tasks"]["apply"]["tags"]), rel
+        assert {tag, "config"} <= set(incs[0]["tags"]), rel
+        assert "autobot-db-credentials.env 2>" not in (_ANSIBLE / rel).read_text(
+            encoding="utf-8"
+        ), f"{rel} re-reads it itself"
+    assert "autobot-db-credentials.env" in (_ANSIBLE / "_shared" / "tasks" / _PG_READER).read_text(encoding="utf-8")
+
+
+def test_the_ai_stack_env_renders_the_same_postgres_block_as_the_backend_env() -> None:
+    ai = (_ANSIBLE / "roles/ai-stack/templates/ai-stack.env.j2").read_text(encoding="utf-8")
+    backend = (_ANSIBLE / "roles/backend/templates/backend.env.j2").read_text(encoding="utf-8")
+    assert _postgres_lines(ai, **_PG_VARS) == _PG_EXPECTED
+    assert _postgres_lines(backend, **_PG_VARS) == _PG_EXPECTED
+    # an empty password is not rendered (the drop-guard below is what stops that from replacing a real one)
+    assert not [ln for ln in _postgres_lines(ai, **{**_PG_VARS, "backend_postgres_password": ""}) if "PASSWORD" in ln]
+
+
+def test_a_render_that_would_drop_an_existing_postgres_password_is_refused() -> None:
+    fails = [
+        t
+        for t in _load(_ANSIBLE / "roles/ai-stack/tasks/env_files.yml")
+        if "ansible.builtin.fail" in t and "_ai_env_postgres_password_present" in str(t.get("when"))
+    ]
+    assert len(fails) == 1
+    assert "backend_postgres_password" in str(fails[0]["when"])
+
+
+def test_control_an_env_template_without_the_postgres_block_renders_none_of_it() -> None:
+    ai = (_ANSIBLE / "roles/ai-stack/templates/ai-stack.env.j2").read_text(encoding="utf-8")
+    without = "\n".join(ln for ln in ai.splitlines() if "AUTOBOT_POSTGRES_" not in ln)
+    assert _postgres_lines(without, **_PG_VARS) == []
+    assert _postgres_lines(ai, **_PG_VARS) != []

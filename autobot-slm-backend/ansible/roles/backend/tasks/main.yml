@@ -1382,15 +1382,11 @@
   # db_password fact is present is safe: the role wrote both in the same include,
   # so they are identical in a full run; on a tag-skip / separate-provisioning
   # run the file is the only truth.
-  - name: "Backend | Read role-managed AUTOBOT_DB_PASSWORD (single authority, #10636, #12520)"
-    ansible.builtin.shell:
-      cmd: >-
-        grep -oP '^AUTOBOT_DB_PASSWORD=\K.*'
-        /etc/autobot/autobot-db-credentials.env 2>/dev/null || true
-    register: _backend_db_password_file
-    changed_when: false
-    failed_when: false
-    no_log: true
+  - name: "Backend | Read role-managed AUTOBOT_DB_PASSWORD (single authority, #10636, #12520, #21089)"
+    ansible.builtin.include_tasks:
+      file: ../../../_shared/tasks/read_postgres_app_credentials.yml
+      apply:
+        tags: ['backend', 'config']
     tags: ['backend', 'config']
 
   - name: "Backend | Set full-user-management .env facts (#10636, #12520)"
@@ -1404,7 +1400,7 @@
       # override survives). This order makes the .env render structurally from the
       # single role-managed authority; the assert below is the regression guard.
       backend_postgres_password: >-
-        {{ (_backend_db_password_file.stdout | default('') | trim)
+        {{ (_postgres_app_password_read | default(''))
            | default(db_password | default(''), true)
            | default(backend_postgres_password | default(''), true) }}
     no_log: true

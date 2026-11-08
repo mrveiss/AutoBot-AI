@@ -59,3 +59,71 @@ async def test_an_unrecognised_name_never_reaches_the_mirror_at_all(caplog) -> N
 
     assert wrote is False
     assert "NOT_A_REGISTRY_NAME" not in caplog.text
+
+
+class _Session:
+    """A session that only has to be entered and exited: the steps under test are patched."""
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc) -> None:
+        return None
+
+    async def commit(self) -> None:
+        return None
+
+
+class _SessionOpenFails:
+    async def __aenter__(self):
+        raise ConnectionRefusedError("down")
+
+    async def __aexit__(self, *exc) -> None:
+        return None
+
+
+def _factory(session_cls):
+    return lambda: session_cls
+
+
+async def _unreachable_log(monkeypatch, caplog, session_cls, **patched) -> str:
+    from services import provider_key_vault as vault
+
+    for attr, fn in patched.items():
+        monkeypatch.setattr(vault, attr, fn)
+    with caplog.at_level("ERROR"):
+        assert await vault.hydrate_at_startup(_factory(session_cls)) == []
+    return caplog.text
+
+
+@pytest.mark.asyncio
+async def test_an_unreachable_vault_log_names_the_stage_that_failed_and_the_exception_class(
+    monkeypatch, caplog
+) -> None:
+    async def _list_fails(_session, _name):
+        raise TimeoutError("slow")
+
+    async def _found(_session, _name):
+        return "id-1"
+
+    async def _register_fails(_session, **_kw):
+        raise PermissionError("denied")
+
+    opened = await _unreachable_log(monkeypatch, caplog, _SessionOpenFails)
+    assert "stage: open session" in opened and "ConnectionRefusedError" in opened
+    caplog.clear()
+    listed = await _unreachable_log(monkeypatch, caplog, _Session, _find_system_secret_id=_list_fails)
+    assert "stage: list" in listed and "TimeoutError" in listed
+    caplog.clear()
+    registered = await _unreachable_log(
+        monkeypatch, caplog, _Session, _find_system_secret_id=_found, _register_credential_dependency=_register_fails
+    )
+    assert "stage: register dependency" in registered and "PermissionError" in registered
+
+
+@pytest.mark.asyncio
+async def test_the_failed_hydration_still_refuses_every_vault_resolved_name(monkeypatch, caplog) -> None:
+    from services import provider_key_vault as vault
+
+    await _unreachable_log(monkeypatch, caplog, _SessionOpenFails)
+    assert vault._vault_state == vault.VAULT_UNREACHABLE

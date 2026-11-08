@@ -85,6 +85,52 @@
       | rejectattr('rc', 'equalto', 1) | list | length > 0
   tags: ['ai', 'config']
 
+# #21089: the process opens the user database too (the System vault, provider keys), so it
+# needs the same AUTOBOT_POSTGRES_* the backend renders. The password is read by the one
+# reader the backend uses, never copied; `apply` carries the tags into it.
+- name: "AI Stack | Read the role-managed Postgres app password (#21089)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/read_postgres_app_credentials.yml
+    apply:
+      tags: ['ai', 'config']
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Adopt the role-managed Postgres app password when none is set (#21089)"
+  ansible.builtin.set_fact:
+    backend_postgres_password: "{{ _postgres_app_password_read }}"
+  when:
+    - (_postgres_app_password_read | default('') | trim) | length > 0
+    - (backend_postgres_password | default('') | trim) | length == 0
+  no_log: true
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Check whether the env files already carry a Postgres password (#21089)"
+  # Same fail-closed probe as the root-key one: absent file 1, match 0, unreadable 2.
+  ansible.builtin.command:
+    argv: [sh, -c, '[ -e "$1" ] || exit 1; grep -q "^AUTOBOT_POSTGRES_PASSWORD=." "$1"', sh, "{{ item }}"]
+  loop:
+    - /etc/autobot/autobot-ai-stack.env
+    - "{{ ai_install_dir }}/.env"
+  register: _ai_env_postgres_password_present
+  changed_when: false
+  failed_when: false
+  become: true
+  when: (backend_postgres_password | default('') | trim) | length == 0
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Stop before dropping the Postgres password an env file has (#21089)"
+  ansible.builtin.fail:
+    msg: >-
+      An AI Stack env file on this node has a Postgres password, or could not be read to
+      tell, but this run has none to render: the role-managed credentials file yielded none
+      and no password is set. Rendering now would remove it and the AI Stack could no longer
+      open the user database. Nothing was changed. Restore the credentials file, then run the update again.
+  when:
+    - (backend_postgres_password | default('') | trim) | length == 0
+    - _ai_env_postgres_password_present.results | default([]) | selectattr('rc', 'defined')
+      | rejectattr('rc', 'equalto', 1) | list | length > 0
+  tags: ['ai', 'config']
+
 # #20724: the updater renders these files on every update now, not only at install.
 # The credential read above is best-effort: a missing or unreadable slm-secrets.env
 # reads empty. With no vault password either, the template would then write the
