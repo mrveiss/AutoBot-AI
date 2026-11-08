@@ -45,7 +45,7 @@ from api.schemas_system import (
     SecretTypesData,
     SecretUpdateRequest,
 )
-from api.secrets_audit import audit_secret_op
+from api.secrets_audit import audit_secret_op, remember_actor
 from api.secrets_failure_log import describe_failure
 from api.secrets_ownership import stamp_owner
 from api.secrets_system_vault import create_system_vault_secret as _create_system_vault_secret
@@ -936,7 +936,7 @@ async def update_secret(
 ):
     """Update a secret's metadata (Issue #744: requires admin authentication)"""
     await check_rate_limit(http_request)
-    owner_id = str((get_auth_middleware().get_user_from_request(http_request) or {}).get("user_id", "unknown"))
+    owner_id = remember_actor(http_request, get_auth_middleware().get_user_from_request(http_request))
     rotating = bool(request.value or request.credentials)
     try:
         if rotating:  # #20557: no credential is replaced without its record
@@ -1001,7 +1001,7 @@ async def delete_secret(
     await check_rate_limit(http_request)
     try:
         _user = get_auth_middleware().get_user_from_request(http_request)
-        owner_id = str((_user or {}).get("user_id", "unknown"))
+        owner_id = remember_actor(http_request, _user)
         # #20557: the record comes first; a failed write stops the delete
         await audit_secret_op("DELETE", secret_id, http_request, "attempted", required=True, phase="before_write")
         success = await asyncio.to_thread(secrets_manager.delete_secret, secret_id, chat_id=chat_id)

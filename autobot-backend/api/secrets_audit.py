@@ -46,6 +46,18 @@ def _actor(request: Request) -> str | None:
     return str((user or {}).get("user_id", "")) or None
 
 
+def remember_actor(request: Request, user: dict | None) -> str:
+    """The user id of the session *user* ("unknown" when none), kept for every record of this request.
+
+    A second session lookup that comes back empty would file the required DELETE/UPDATE record as
+    ``system`` while the operation proceeds; ``"unknown"`` (no session resolved) is not remembered.
+    """
+    user_id = str((user or {}).get("user_id", "unknown"))
+    if user_id != "unknown":
+        request.state.audit_actor = user_id
+    return user_id
+
+
 async def audit_secret_op(
     operation: str,
     secret_id: str | None,
@@ -71,10 +83,11 @@ async def audit_secret_op(
         recorded = await audit_log(
             SECRET_OPERATIONS[operation],
             result,
-            user_id=actor or _actor(request),
+            user_id=actor or getattr(request.state, "audit_actor", None) or _actor(request),
             ip_address=get_client_ip(request) or "unknown",
             resource=secret_log_ref(secret_id) if secret_id else None,
             details=details,
+            durable=required,  # a required record is awaited until committed, not just scheduled
         )
     except Exception as exc:  # noqa: BLE001 -- a best-effort record must not fail a secret operation
         logger.error("[Secrets Audit] audit store write failed for %s: %s", operation, type(exc).__name__)

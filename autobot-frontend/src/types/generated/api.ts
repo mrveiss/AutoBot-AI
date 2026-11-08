@@ -12235,6 +12235,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/transcriber/recordings/{recording_id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Recording Progress
+         * @description SSE stream of processing progress for a recording (consumed by useSseProgress).
+         */
+        get: operations["stream_recording_progress_api_transcriber_recordings__recording_id__progress_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transcriber/recordings/{recording_id}/audio/chunks": {
         parameters: {
             query?: never;
@@ -33429,7 +33449,7 @@ export interface paths {
         post?: never;
         /**
          * Service Delete System Secret
-         * @description Delete a system-vault secret via service identity.
+         * @description Delete a system-vault secret via service identity; 409 while it has dependents (#20640).
          */
         delete: operations["service_delete_system_secret_api_v2_secrets_system__secret_id__delete"];
         options?: never;
@@ -33473,7 +33493,10 @@ export interface paths {
         /** Rotate Secret */
         put: operations["rotate_secret_api_v2_secrets__secret_id__put"];
         post?: never;
-        /** Delete Secret */
+        /**
+         * Delete Secret
+         * @description Delete a secret; 409 with the dependents listed unless ``confirm_dependents`` (#20640).
+         */
         delete: operations["delete_secret_api_v2_secrets__secret_id__delete"];
         options?: never;
         head?: never;
@@ -124666,6 +124689,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_recording_progress_api_transcriber_recordings__recording_id__progress_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recording_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {
