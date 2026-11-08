@@ -453,3 +453,38 @@ async def test_detaching_an_item_that_has_a_project_is_allowed_and_a_noop_detach
     assert pbi.parent_id is None and str(pbi.project_id) == PROJECT
     legacy = await _legacy(session, T.EPIC)  # no parent, no project: nothing changes, so nothing is checked
     assert (await WorkItemService().update(session, str(legacy.id), title="x", parent_id=None)).title == "x"
+
+
+async def test_unfiled_recovery_with_no_work_item_lands_in_the_company_activity_feed(session):
+    """Company users read the activity feed (it is pushed live to the dashboard); the router notice alone
+    has no reader in the UI (#20930)."""
+    from llc.models.activity import LLCActivityLog
+
+    _, company, run = await _unfiled_run_recovery(session)
+    rows = (
+        (await session.execute(select(LLCActivityLog).where(LLCActivityLog.company_id == uuid.UUID(company))))
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+    entry = rows[0]
+    assert entry.action == "heartbeat.failed" and str(entry.entity_id) == str(run.id)
+    assert entry.log_metadata["reason"] == "recovery_unfiled" and "agent-007" in entry.log_metadata["message"]
+
+
+async def test_a_failed_unfiled_recovery_activity_write_does_not_fail_the_recovery(session):
+    """The feed entry is best-effort: its failure is logged and the router notice still goes out."""
+    redis = AsyncMock()
+    run = SimpleNamespace(id=uuid.uuid4())
+    with (
+        patch.object(LivenessMonitor, "_resolve_manager", new=AsyncMock(return_value=None)),
+        patch("llc.scheduler.liveness_monitor.get_async_redis_client", new=AsyncMock(return_value=redis)),
+        patch("llc.scheduler.liveness_monitor.audit", new=AsyncMock(side_effect=RuntimeError("feed down"))),
+        patch("llc.scheduler.liveness_monitor.logger") as log,
+    ):
+        await LivenessMonitor(poll_interval=9999)._create_recovery_item(
+            session, run, None, str(uuid.uuid4()), "agent-007"
+        )
+    redis.publish.assert_awaited_once()
+    assert any("not written" in c.args[0] for c in log.warning.call_args_list)
+    assert log.warning.call_args.kwargs.get("exc_info") is True
