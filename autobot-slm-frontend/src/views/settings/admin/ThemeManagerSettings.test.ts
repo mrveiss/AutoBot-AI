@@ -16,6 +16,7 @@ import { createI18n } from 'vue-i18n'
 import { HttpError } from '@autobot/ui'
 import ThemeManagerSettings from './ThemeManagerSettings.vue'
 import en from '@/locales/en.json'
+import appI18n from '@/i18n'
 
 const client = { get: vi.fn(), post: vi.fn(), delete: vi.fn() }
 vi.mock('@/composables/useAutobotApi', () => ({ createAutobotBackendClient: () => client }))
@@ -215,5 +216,60 @@ describe('ThemeManagerSettings uninstall', () => {
     await flushPromises()
     expect(byId(w, 'slm-themes-notice').text()).toContain("Theme 'amber' not found")
     expect(client.get).toHaveBeenCalledTimes(1)
+  })
+
+  it('names the malformed answer with a translated message (#20816)', async () => {
+    client.get.mockResolvedValue({ detail: 'x' })
+    // useThemesApi throws the message from the app i18n singleton: give that key a distinct text so a
+    // hard-coded English sentence cannot pass, and put the singleton back afterwards.
+    const g = appI18n.global
+    const locale = g.locale as string
+    const before = g.getLocaleMessage(locale) as Record<string, unknown>
+    g.mergeLocaleMessage(locale, { settings: { admin: { themeManager: { malformedList: 'CONTROL-malformed-list-text' } } } })
+    try {
+      const w = await mountView()
+      const text = byId(w, 'slm-themes-error').text()
+      expect(text).toContain('CONTROL-malformed-list-text')
+      expect(text).not.toContain('The theme list answer was not a list.')
+    } finally {
+      g.setLocaleMessage(locale, before)
+    }
+  })
+
+  it('ignores an older read that resolves after a newer one (#20816)', async () => {
+    const w = await mountView()
+    // The refresh is slow (older); an install then re-reads and answers at once (newer).
+    let resolveOld: (v: unknown) => void = () => {}
+    client.get.mockReturnValueOnce(new Promise((r) => { resolveOld = r }))
+    await byId(w, 'slm-themes-refresh').trigger('click')
+    client.post.mockResolvedValue(ember)
+    client.get.mockResolvedValueOnce([ember])
+    await pick(w, zip('ember.zip'))
+    expect(w.text()).toContain('Ember')
+    resolveOld([amber])
+    await flushPromises()
+    expect(w.text()).toContain('Ember')
+    expect(w.text()).not.toContain('Amber')
+  })
+
+  it.each([
+    ['a network error', () => new TypeError('Failed to fetch')],
+    ['HTTP 500', () => new HttpError(500)],
+    ['HTTP 503', () => new HttpError(503)],
+  ])('ignores an older read that rejects with %s after a newer one succeeded (#20816)', async (_name, makeError) => {
+    const w = await mountView()
+    let rejectOld: (e: unknown) => void = () => {}
+    client.get.mockReturnValueOnce(new Promise((_, rej) => { rejectOld = rej }))
+    await byId(w, 'slm-themes-refresh').trigger('click')
+    client.post.mockResolvedValue(ember)
+    client.get.mockResolvedValueOnce([ember])
+    await pick(w, zip('ember.zip'))
+    rejectOld(makeError())
+    await flushPromises()
+    expect(byId(w, 'slm-themes-unavailable').exists()).toBe(false)
+    expect(byId(w, 'slm-themes-error').exists()).toBe(false)
+    const table = byId(w, 'slm-themes-table')
+    expect(table.exists()).toBe(true)
+    expect(table.text()).toContain('Ember')
   })
 })

@@ -54,9 +54,13 @@ services:
     volumes:
       - redis_data:/data
     environment:
-      - REDIS_ARGS=--appendonly yes --save 60 1 --maxmemory 512mb --maxmemory-policy allkeys-lru
+      # #17500: an ACL file, so no password is on the command line. It holds only a hash.
+      - REDIS_ARGS=--appendonly yes --save 60 1 --maxmemory 512mb --maxmemory-policy allkeys-lru --aclfile /run/secrets/redis_acl
+    secrets:
+      - redis_acl
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      # #17500: healthy only if Redis is up AND refuses a client with no password; dependents wait on this.
+      test: ["CMD-SHELL", "redis-cli ping 2>&1 | grep -q NOAUTH"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -318,6 +322,7 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
+      - AUTOBOT_REDIS_PASSWORD=${AUTOBOT_REDIS_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets}
       - AUTOBOT_OLLAMA_HOST=${AUTOBOT_OLLAMA_HOST:-autobot-ollama}
       - AUTOBOT_OLLAMA_PORT=11434
       - AUTOBOT_OLLAMA_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
@@ -471,6 +476,7 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
+      - AUTOBOT_REDIS_PASSWORD=${AUTOBOT_REDIS_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets}
       # Broker/result URLs: celery_app builds them from AUTOBOT_REDIS_HOST/PORT above and
       # redis-databases.yaml (+ AUTOBOT_REDIS_DB_CELERY_*), #19232 -- no URL or DB literal here.
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
@@ -591,6 +597,7 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
+      - AUTOBOT_REDIS_PASSWORD=${AUTOBOT_REDIS_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets}
       # Broker/result URLs: celery_app builds them from AUTOBOT_REDIS_HOST/PORT above and
       # redis-databases.yaml (+ AUTOBOT_REDIS_DB_CELERY_*), #19232 -- no URL or DB literal here.
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
@@ -685,6 +692,7 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
+      - AUTOBOT_REDIS_PASSWORD=${AUTOBOT_REDIS_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets}
       - SLM_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-slm-postgres:5432/${SLM_DB_NAME:-${AUTOBOT_DB_NAME:-autobot_slm}}
       - SLM_USERS_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-slm-postgres:5432/slm_users
       # #19406: without this the SLM falls back to 127.0.0.1 and role slm_app for autobot_users.
@@ -1016,6 +1024,10 @@ services:
       - autobot-app
     profiles:
       - monitoring
+
+secrets:
+  redis_acl:
+    file: ./docker/.redis-users.acl  # #17500: docker/generate-secrets.sh writes it
 
 volumes:
   autobot_secrets:
