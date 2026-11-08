@@ -29,16 +29,16 @@ import asyncio
 import re
 import time
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet
+from typing import TYPE_CHECKING, Any, Callable, Dict
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
 from orchestration.success_criteria import SuccessCriteriaEvaluator
-from services.workflow_secret_service import get_workflow_secret_service
+from services.workflow_secret_service import SECRET_STORE_ERRORS, StepSecrets, get_workflow_secret_service
 from type_defs.common import Metadata
 
+from .command_step import run_command_step, secret_value_redactor
 from .models import (
     ActiveWorkflow,
     PlanApprovalMode,
@@ -53,6 +53,7 @@ from .safety_limits import (
     WorkflowLimits,
 )
 from .state_machine import AutomationWorkflowStateMachine, WorkflowPhase
+from .step_approval_gate import StepApprovalGate
 from .step_evaluator import WorkflowStepEvaluator
 from .vision_step_handler import VISION_STEP_TYPES, execute_vision_step
 
@@ -83,55 +84,40 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _resolve_command_secrets(command: str, owner_id: str | None) -> tuple[str, FrozenSet[str]]:
+def _resolve_command_secrets(command: str, owner_id: str | None) -> tuple[str, StepSecrets]:
     """
     Replace ${secrets.NAME} tokens in *command* with their plaintext values.
 
-    Returns the original string unchanged (with an empty resolved-names set)
-    if no tokens are present or if the WorkflowSecretService is unavailable.
+    Returns the original string unchanged (with no injected secrets) if no tokens
+    are present or if the WorkflowSecretService is unavailable.
 
     SECURITY: the resolved string must NEVER be logged. (Issue #2153)
 
     Returns:
-        Tuple of (resolved_command, resolved_names).  Pass resolved_names to
-        _redact_result_secrets so only injected secrets are scanned. (#2321)
+        Tuple of (resolved_command, step_secrets).  ``step_secrets`` holds the values
+        injected into this step, in memory; pass it to _redact_result_secrets and to
+        secret_value_redactor so exactly those values are masked. (#2321, #20868)
     """
     try:
-        return get_workflow_secret_service().resolve_secrets(command, owner_id) if owner_id else (command, frozenset())
-    except Exception as exc:  # pragma: no cover
-        logger.error("Secret resolution failed for workflow command: %s", exc)
-        return command, frozenset()
+        return (
+            get_workflow_secret_service().resolve_secrets(command, owner_id) if owner_id else (command, StepSecrets())
+        )
+    except SECRET_STORE_ERRORS as exc:
+        logger.error("Secret resolution failed for workflow command: %s", type(exc).__name__)
+        return command, StepSecrets()
 
 
-def _redact_result_secrets(
-    result: Metadata,
-    owner_id: str | None,
-    resolved_names: FrozenSet[str],
-) -> Metadata:
+def _redact_result_secrets(result: Metadata, secrets: StepSecrets) -> Metadata:
     """
-    Replace known secret values in execution result strings with ***.
+    Replace the values injected into this step in the result's stdout and stderr with ***.
 
-    Operates on the 'stdout' and 'stderr' fields only.
-
-    Args:
-        result: Step execution result dict.
-        owner_id: Workflow owner — only their secrets are loaded.
-        resolved_names: Names resolved by _resolve_command_secrets for this
-            step.  Passed directly to redact_secrets() to avoid an O(n) full
-            owner-secrets scan on every step completion. (Issue #2321)
-
-    Issue #2153, #2321.
+    Goes through the same redactor as the command step (``secret_value_redactor``), so the
+    executor has no redaction of its own and never re-reads a secret by name. (#2153, #20868)
     """
-    if not resolved_names:
-        # Nothing was injected; nothing to redact.
-        return result
-    try:
-        svc = get_workflow_secret_service()
-        for field in ("stdout", "stderr"):
-            if isinstance(result.get(field), str):
-                result[field] = svc.redact_secrets(result[field], owner_id, resolved_names=resolved_names)
-    except Exception as exc:  # pragma: no cover
-        logger.error("Secret redaction failed for workflow result: %s", exc)
+    mask = secret_value_redactor(secrets)
+    for field in ("stdout", "stderr"):
+        if isinstance(result.get(field), str):
+            result[field] = mask(result[field])
     return result
 
 
@@ -202,6 +188,9 @@ def _resolve_step_references(config: dict, step_results: dict) -> dict:
 
 class WorkflowExecutor:
     """Handles workflow step execution and processing"""
+
+    #: Files a waiting step in the approvals inbox (#20917); a test replaces it on the instance.
+    step_approvals = StepApprovalGate()
 
     def __init__(
         self,
@@ -281,7 +270,7 @@ class WorkflowExecutor:
         active_count = len([w for w in workflows.values() if w.started_at and not w.completed_at])
         self.prometheus_metrics.update_active_workflows(workflow_type=workflow_type, count=active_count)
 
-        # Send workflow start message to frontend
+        # Server-to-client only (clients start workflows over REST; #17677)
         await self.messenger.send_message(
             workflow.session_id,
             {
@@ -360,7 +349,6 @@ class WorkflowExecutor:
 
         current_step = workflow.steps[workflow.current_step_index]
 
-        # Check dependencies
         if not self._check_step_dependencies(workflow, current_step):
             logger.warning("Step %s dependencies not met", current_step.step_id)
             current_step.status = WorkflowStepStatus.SKIPPED
@@ -368,16 +356,13 @@ class WorkflowExecutor:
             await self.process_next_step(workflow, workflows)
             return
 
-        # Evaluate step with LLM judges if enabled (Issue #620: extracted)
         if not await self._evaluate_step_with_judges(workflow, current_step):
             return
 
-        # Update step status
         current_step.status = WorkflowStepStatus.WAITING_APPROVAL
         current_step.started_at = datetime.now(tz=timezone.utc)
-
-        # Send step confirmation request to frontend
         await self._send_step_confirmation_request(workflow, current_step)
+        await self.step_approvals.file(workflow, current_step)
 
     async def _send_step_confirmation_request(self, workflow: ActiveWorkflow, step: WorkflowStep) -> None:
         """Send step confirmation request to frontend"""
@@ -506,7 +491,7 @@ class WorkflowExecutor:
         """
         logger.error("Step execution failed: %s", error)
         current_step.status = WorkflowStepStatus.FAILED
-        current_step.execution_result = {"error": str(error)}
+        current_step.execution_result = {"error": str(error), **getattr(error, "result", {})}
 
         self._record_step_metric("failed", current_step.step_type)
 
@@ -551,7 +536,7 @@ class WorkflowExecutor:
             logger.error(f"Step ID mismatch: expected {current_step.step_id}, got {step_id}")
             return
 
-        current_step.status = WorkflowStepStatus.EXECUTING
+        current_step.begin_after_approval()  # a repeated approve is refused (409), never run twice
 
         # Issue #2159: Enforce token/output budget before executing next step
         if not self.cost_tracker.check_token_budget(workflow.workflow_id, self.limits):
@@ -581,10 +566,10 @@ class WorkflowExecutor:
         Handles both vision and command step types (Issues #2153, #2321, #2397, #2632).
         """
         # Issue #2153: Resolve ${secrets.NAME} tokens before execution.
-        # Issue #2321: Capture resolved_names so redaction only scans
-        # injected secrets — not all secrets for all users.
+        # Issue #20868: keep the injected values in memory for this step so redaction
+        # masks exactly those, whatever happens to the stored secret meanwhile.
         owner_id = workflow.owner_id  # #17014: never the session id -- see workflow_ownership
-        resolved_command, resolved_names = _resolve_command_secrets(current_step.command, owner_id)
+        resolved_command, step_secrets = _resolve_command_secrets(current_step.command, owner_id)
 
         # Issue #2632: Resolve ${steps.<id>.<path>} references for ALL step
         # types, not just vision.  Resolution is cheap and harmless for steps
@@ -603,14 +588,14 @@ class WorkflowExecutor:
         else:
             # Issue #2159: Wrap execution in per-step timeout enforcer
             result = await self._timeout_enforcer.run_with_timeout(
-                coro=self._execute_command(workflow.session_id, resolved_command),
+                coro=self._execute_command(workflow, resolved_command, secret_value_redactor(step_secrets)),
                 step_id=step_id,
                 timeout_seconds=current_step.timeout_seconds,
                 limits=self.limits,
             )
 
         # Issue #2153: Redact any secret values that may appear in output.
-        result = _redact_result_secrets(result, owner_id, resolved_names)
+        result = _redact_result_secrets(result, step_secrets)
         await self._finalize_step_result(workflow, current_step, step_id, result, workflows)
 
     async def _finalize_step_result(
@@ -669,25 +654,14 @@ class WorkflowExecutor:
             await asyncio.sleep(TimingConstants.STANDARD_DELAY)
             await self.process_next_step(workflow, workflows)
 
-    async def _execute_command(self, session_id: str, command: str) -> Metadata:
-        """Execute command via terminal session.
+    async def _execute_command(
+        self, workflow: ActiveWorkflow, command: str, value_redactor: Callable[[str], str]
+    ) -> Metadata:
+        """Run a command step through the security layer (#19807).
 
-        Note: *command* received here has already had ${secrets.NAME} tokens
-        resolved by the caller.  Do NOT log the command — it may contain live
-        credential values. (Issue #2153)
+        *command* has had ${secrets.NAME} resolved: never log or return it. (#2153)
         """
-        # Integrates with the terminal WebSocket system when wired up; simulated for now.
-        logger.info("Executing workflow step (session=%s)", session_id)
-
-        await asyncio.sleep(TimingConstants.STANDARD_DELAY)
-
-        return {
-            "command": REDACTED_PLACEHOLDER,
-            "exit_code": 0,
-            "stdout": "Simulated output",
-            "stderr": "",
-            "execution_time": 1.0,
-        }
+        return await run_command_step(command, user=workflow.owner_id, value_redactor=value_redactor)
 
     def _record_workflow_completion_metrics(
         self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
@@ -789,7 +763,7 @@ class WorkflowExecutor:
 
         # Issue #390: Clear any pending approval when workflow is cancelled
         self.clear_pending_approval(workflow.workflow_id)
-
+        await self.step_approvals.withdraw(workflow.workflow_id)
         self._record_cancellation_metrics(workflow, workflows)
 
         # Issue #2159: Clean up cost tracker entry to prevent memory leak

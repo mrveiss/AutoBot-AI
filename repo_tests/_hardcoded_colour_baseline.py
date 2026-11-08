@@ -134,3 +134,14 @@ IMPORTANT_DECLARATIONS: dict[str, int] = {
     "slm:components/monitoring/GrafanaDashboard.vue": 1,
     "slm:views/AgentsView.vue": 2,
 }
+
+#: ``path -> rules that fill with the primary token and write a literal white label`` (#20425).
+#:
+#: ``--color-primary`` is white in High Contrast Dark and pale in Dark, so a literal white label
+#: on it vanishes there; ``--text-on-primary`` follows the fill. Keyed like IMPORTANT_DECLARATIONS
+#: (the `slm:` prefix marks the control plane). Shrink-only: convert the label, then delete the
+#: entry. The one entry left is held by an open PR that already edits the file; it is converted
+#: when that PR lands.
+WHITE_ON_PRIMARY_LABELS: dict[str, int] = {
+    "views/llc/BacklogView.vue": 1,
+}

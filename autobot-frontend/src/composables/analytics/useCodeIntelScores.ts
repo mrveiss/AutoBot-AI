@@ -22,7 +22,8 @@
  * The file no longer imports `fetchWithAuth` or `appConfig`.
  */
 
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import i18n from '@/i18n'
 import { useTaskLoader } from '@/composables/useTaskLoader'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
@@ -63,7 +64,7 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
   const {
     data: securityScore,
     loading: loadingSecurityScore,
-    error: securityScoreError,
+    error: liveSecurityScoreError,
     load: _loadSecurityScoreTask,
   } = useTaskLoader<SecurityScoreResult>(
     `${getApiBase()}/code-intelligence/security/score`,
@@ -194,11 +195,16 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
   })
   const showRedisDetails = ref(false)
 
+  // Set once a live scan succeeds after a failed stored read; cleared by the next stored read.
+  const cachedReadSuperseded = ref(false)
+
   // --- Score loaders ---
 
   const loadSecurityScore = async () => {
     if (!rootPath.value) return
-    await _loadSecurityScoreTask(undefined, { path: rootPath.value })
+    const result = await _loadSecurityScoreTask(undefined, { path: rootPath.value })
+    // A successful live scan supersedes an earlier failed stored read.
+    if (result && !liveSecurityScoreError.value) cachedReadSuperseded.value = true
   }
 
   const loadPerformanceScore = async () => {
@@ -290,33 +296,54 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
   const cachedSecurityScoreEndpoint = useFetchEndpoint<
     CachedSecurityScoreRaw,
     SecurityScoreResult
-  >({
-    path: '/api/code-intelligence/security/score/cached',
-    label: 'Cached security score',
-    pickData: (r) =>
-      r.status === 'success' && r.security_score !== undefined
-        ? {
-            security_score: r.security_score ?? 0,
-            grade: r.grade ?? 'N/A',
-            risk_level: r.risk_level ?? 'unknown',
-            status_message: r.status_message ?? '',
-            total_findings: r.total_findings ?? 0,
-            critical_issues: r.critical_issues ?? 0,
-            high_issues: r.high_issues ?? 0,
-            files_analyzed: r.files_analyzed ?? 0,
-            severity_breakdown: r.severity_breakdown ?? {},
-            owasp_breakdown: r.owasp_breakdown ?? {},
-          }
-        : null,
-    // Mutate the useTaskLoader-backed `securityScore` ref only on a
-    // successful cached read. On no_data / error / !ok, leave it alone
-    // so a prior live-scan result remains visible.
-    onSuccess: (picked) => {
-      securityScore.value = picked
+  >(
+    {
+      path: '/api/code-intelligence/security/score/cached',
+      // #20491: the route requires source_id; without it the page-open read answered 422.
+      scopeToSource: true,
+      label: 'Cached security score',
+      pickData: (r) =>
+        r.status === 'success' && r.security_score !== undefined
+          ? {
+              security_score: r.security_score ?? 0,
+              grade: r.grade ?? 'N/A',
+              risk_level: r.risk_level ?? 'unknown',
+              status_message: r.status_message ?? '',
+              total_findings: r.total_findings ?? 0,
+              critical_issues: r.critical_issues ?? 0,
+              high_issues: r.high_issues ?? 0,
+              files_analyzed: r.files_analyzed ?? 0,
+              severity_breakdown: r.severity_breakdown ?? {},
+              owasp_breakdown: r.owasp_breakdown ?? {},
+            }
+          : null,
+      // Mutate the useTaskLoader-backed `securityScore` ref only on a
+      // successful cached read. On no_data / error / !ok, leave it alone
+      // so a prior live-scan result remains visible.
+      onSuccess: (picked) => {
+        securityScore.value = picked
+      },
     },
-  })
+    { withSourceId },
+  )
 
-  const loadCachedSecurityScore = () => cachedSecurityScoreEndpoint.load()
+  // A failed stored read (422, network) shows in the panel's error slot; a legitimate
+  // `no_data` leaves the endpoint error empty, so it stays the empty state.
+  const securityScoreError = computed(
+    () =>
+      liveSecurityScoreError.value ||
+      (cachedSecurityScoreEndpoint.error.value && !cachedReadSuperseded.value
+        ? i18n.global.t('analytics.codebase.errors.cachedSecurityScoreFailed', {
+            error: cachedSecurityScoreEndpoint.error.value,
+          })
+        : ''),
+  )
+
+  // A new stored read starts afresh: it clears its own error, so its outcome is what shows.
+  const loadCachedSecurityScore = async () => {
+    cachedReadSuperseded.value = false
+    await cachedSecurityScoreEndpoint.load()
+  }
 
   return {
     // Scores

@@ -10,12 +10,13 @@
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createDateFormatter, createRecencyFormatter } from '@autobot/ui'
 import { useSecretsAuditApi } from '@/composables/useSecretsAuditApi'
 import { createLogger } from '@/utils/debugUtils'
 import { auditTimestampToDate } from '@/types/audit'
 
 const logger = createLogger('SecretAuditLog')
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 // API composable
 const auditApi = useSecretsAuditApi()
@@ -166,20 +167,14 @@ const uniqueUsers = computed(() => {
   return Array.from(users).sort((a, b) => a.name.localeCompare(b.name))
 })
 
-/**
- * Format timestamp to relative or absolute format
- */
-const formatTime = (date: Date): string => {
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(minutes / 60)
-
-  if (minutes < 1) return t('secrets.auditLog.justNow')
-  if (minutes < 60) return t('secrets.auditLog.minutesAgo', { minutes })
-  if (hours < 24) return t('secrets.auditLog.hoursAgo', { hours })
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+/** Relative text under a day, a short date and time past it. */
+const formatTime = createRecencyFormatter({
+  justNow: () => t('secrets.auditLog.justNow'),
+  locale: () => locale.value,
+  style: 'narrow',
+  olderThanMs: 86_400_000,
+  older: createDateFormatter({ locale: () => locale.value, kind: 'date', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } }),
+})
 
 /**
  * Get styling for action type

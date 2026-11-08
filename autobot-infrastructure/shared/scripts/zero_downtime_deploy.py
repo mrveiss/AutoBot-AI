@@ -721,6 +721,11 @@ server {{
     listen 80;
     server_name autobot.local;
 
+    # #20046: service-to-service only; never served through this edge.
+    location ^~ /api/internal/ {{
+        return 404;
+    }}
+
     location /api/ {{
         proxy_pass http://autobot_backend_{env};
         proxy_set_header Host $host;

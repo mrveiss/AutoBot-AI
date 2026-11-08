@@ -39,6 +39,10 @@ on:
       - 'autobot-backend/llc/services/budget.py'
       - 'autobot-backend/llc/exceptions.py'
       - 'autobot-backend/llc/scheduler/run_status.py'
+      - 'autobot-backend/llc/services/company_os/**'
+      - 'autobot-backend/services/ai_line_change_proposal.py'
+      - 'autobot_shared/ai_lines.py'
+      - 'autobot-backend/llc/services/goal.py'
       - 'autobot-backend/canvas/models.py'
       - 'autobot-backend/models/**'
       - 'autobot-backend/initialization/lifespan.py'
@@ -59,6 +63,8 @@ on:
       - 'autobot_shared/secrets_vault.py'
       - 'autobot_shared/legacy_secret_keys.py'
       - 'autobot_shared/db_errors.py'
+      - 'autobot_shared/db_session.py'
+      - 'autobot_shared/user_management/models/audit.py'
       - '.github/workflows/_changes.yml'
   # NOTE (#11346): no pull_request.paths filter — this workflow ALWAYS runs on PRs
   # so its required-check context ("migration-matrix") always reports a conclusion.
@@ -129,6 +135,10 @@ jobs:
           - 'autobot-backend/llc/services/budget.py'
           - 'autobot-backend/llc/exceptions.py'
           - 'autobot-backend/llc/scheduler/run_status.py'
+          - 'autobot-backend/llc/services/company_os/**'
+          - 'autobot-backend/services/ai_line_change_proposal.py'
+          - 'autobot_shared/ai_lines.py'
+          - 'autobot-backend/llc/services/goal.py'
           - 'autobot-backend/canvas/models.py'
           - 'autobot-backend/models/**'
           - 'autobot-backend/initialization/lifespan.py'
@@ -149,6 +159,8 @@ jobs:
           - 'autobot_shared/secrets_vault.py'
           - 'autobot_shared/legacy_secret_keys.py'
           - 'autobot_shared/db_errors.py'
+          - 'autobot_shared/db_session.py'
+          - 'autobot_shared/user_management/models/audit.py'
 
   migration-tests:
     needs: changes
@@ -250,12 +262,14 @@ jobs:
           # croniter: services/trigger_service.py imports it at module level since #18469, and the
           # migration tests import that module through api.schemas_workflows; without it the
           # backend conftest stubs the module and TriggerType becomes a MagicMock. Version: constraints.
+          # fakeredis[lua]: the autouse fake_session_lease fixture (testkit/singleton_state.py) binds it for every
+          # backend test (#20862); no version is pinned anywhere in constraints/shared.txt, so none is declared here.
           python -m pip install -c requirements-ci/storage.txt -c constraints/shared.txt \
             "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite croniter \
             pydantic pydantic-settings "email-validator>=2.3.0" \
             bcrypt pyjwt redis httpx aiofiles python-dotenv pyyaml \
             cryptography fastapi structlog aiohttp prometheus_client cachetools \
-            pytest pytest-asyncio
+            pytest pytest-asyncio "fakeredis[lua]"
 
       - name: Run migration matrix
         env:

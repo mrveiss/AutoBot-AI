@@ -242,6 +242,32 @@
     "statefulServices": "Stateful Services",
     "status": "Status"
   },
+  "codeRollback": {
+    "cancel": "Cancel",
+    "checked": "two databases, the SLM database and the backend database, for a migration the chosen version does not have.",
+    "checkedLabel": "Checked:",
+    "close": "بند کریں",
+    "confirm": "Roll back",
+    "confirmTitle": "Roll back to this version?",
+    "description": "Deploy an earlier version of the main branch through the updater. Run Update Everything afterwards to return to the latest.",
+    "empty": "No earlier versions are available.",
+    "notChecked": "SQLite stores, Redis, ChromaDB, file formats, and tables the application creates on startup. If the chosen version reads any of these differently, the rollback does not detect it.",
+    "notCheckedLabel": "Not checked:",
+    "option": "{date}: {subject}",
+    "optionRunning": "{date}: {subject} (running now)",
+    "pickerLabel": "Version to roll back to",
+    "pickerPlaceholder": "Choose an earlier version",
+    "refusedTitle": "This rollback is not possible",
+    "requestFailed": "The request failed. Try again, or check the SLM logs.",
+    "review": "Review rollback",
+    "stepFetch": "Fetch the latest history from the code source.",
+    "stepFleet": "Update every fleet node that is on a different version.",
+    "stepLatest": "Show the nodes as outdated against the latest version. Run Update Everything to return to it.",
+    "stepMigrations": "Never undo a database migration. A rollback that a migration is in the way of is refused.",
+    "stepSlm": "Update this SLM server to that version and restart it.",
+    "title": "Roll back to an earlier version",
+    "willDo": "This will:"
+  },
   "codeSourceModal": {
     "assign": "تفویض",
     "assignCodeSource": "Assign Code Source",
@@ -1746,6 +1772,8 @@
       "loading": "Reading install metrics...",
       "unavailableTitle": "The main app is not available",
       "unavailableBody": "The main backend did not answer any install metrics request. No figures are shown, because any shown now would be out of date. Polling stops after repeated failures; use Refresh to read again.",
+      "unauthorisedTitle": "Not authorised to read the main app",
+      "unauthorisedBody": "The main app answered every install metrics request but refused this session. Sign in again or ask an administrator for access. No figures are shown.",
       "sectionFailedTitle": "{section} could not be read",
       "sectionFailedBody": "The install metrics request failed.",
       "emptyTitle": "Nothing reported yet",
@@ -1779,8 +1807,6 @@
       "stat": {
         "cpu": "CPU",
         "memory": "Memory",
-        "disk": "Disk",
-        "processes": "Processes",
         "overallHealth": "Overall health",
         "performanceScore": "Performance score",
         "gpuName": "Device",
@@ -2131,7 +2157,13 @@
       "time": "Time:",
       "time1": "Time",
       "value0TracePlural": "{value0} trace{plural}",
-      "paginationAria": "Trace list pages"
+      "paginationAria": "Trace list pages",
+      "range": {
+        "1h": "1h",
+        "6h": "6h",
+        "24h": "24h",
+        "7d": "7d"
+      }
     }
   },
   "performanceView": {
@@ -3106,6 +3138,7 @@
         "value": "ویلیو"
       },
       "userManagementSettings": {
+        "personPushFailed": "The SLM could not be updated for: {names}. If one of them was deactivated or changed their password, the SLM still has the old state. It retries by itself.",
         "23PermissionsAcross8": "23 permissions across 8 resources",
         "actions": "اقدامات",
         "active": "فعال",
@@ -3380,6 +3413,32 @@
       "failedToSaveSetting": "Failed to save setting",
       "failedToLoadSettings": "Failed to load settings"
     },
+    "chatApprovalSettings": {
+      "categories": {
+        "pushing commits": "Pushing commits",
+        "publishing": "Publishing",
+        "destructive operations": "Destructive operations",
+        "rotating credentials": "Rotating credentials",
+        "sending externally": "Sending externally",
+        "writing files": "Writing files",
+        "executing code": "Executing code",
+        "deploying infrastructure": "Deploying infrastructure",
+        "discarding local changes": "Discarding local changes",
+        "writing data": "Writing data",
+        "browser actions": "Browser actions",
+        "delegating work": "Delegating work"
+      },
+      "autoApproveHelp": "When on, tool calls in a chat turn that used an attached file run without asking for approval. Off by default.",
+      "autoApproveLabel": "Auto-approve tool calls in chats that used an attached file",
+      "autoApproveRisk": "Risk: text inside an attached file could steer tools without anyone being asked. Turn this on only if you trust every file your users can attach.",
+      "autoApproveTitle": "Auto-approve for attachment chats",
+      "failedToLoad": "Failed to load chat approval settings",
+      "failedToSave": "Failed to save chat approval settings",
+      "relaxedHelp": "Categories switched on here no longer ask for approval by default. Every other category keeps asking. Changes are recorded in the audit log.",
+      "relaxedTitle": "Relaxed approval categories",
+      "save": "محفوظ کریں",
+      "saved": "Saved."
+    },
     "disposalPolicySettings": {
       "controlsHowCompanyOSProjectsAre": "Controls how Company OS projects are disposed after archiving. Default: immediate, no approval.",
       "howManyDaysAnArchivedProject": "How many days an archived project waits before disposal. Set 0 for immediate.",
@@ -3615,6 +3674,7 @@
       "api": "API",
       "backend": "Backend",
       "disposalPolicy": "Disposal Policy",
+      "chatApproval": "Chat Approvals",
       "findingsPolicy": "Findings Policy",
       "users": "Users",
       "cache": "Cache",

@@ -154,7 +154,7 @@ function submit(): void {
 
 .attachment-count {
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .attachment-empty {
@@ -180,7 +180,7 @@ function submit(): void {
   background: var(--color-surface-hover);
   color: var(--text-primary);
   font-family: var(--font-family-mono, monospace);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .attachment-remove {

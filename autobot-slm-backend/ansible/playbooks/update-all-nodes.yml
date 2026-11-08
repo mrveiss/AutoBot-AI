@@ -60,6 +60,11 @@
     # `autobot.services` stops carrying unrendered templates (#15731).
     git_repo_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
     deploy_ref: "main"
+    # #20214: a rollback sets this and a full commit id as `deploy_ref` (services/rollback_target.py). The id
+    # was validated as an ancestor of the branch head before it got here, so the branch allow-list does not
+    # apply; and the commit is NOT announced to /code-source/notify below, which would record it as the
+    # latest commit and make every node read as current at an old commit.
+    deploy_is_rollback: false
     allowed_branches:
       - main
       - release
@@ -153,6 +158,7 @@
           Override: -e skip_branch_check=true
       when:
         - not skip_branch_check | bool
+        - not deploy_is_rollback | bool
         - deploy_ref not in allowed_branches
 
     - name: "[PRE-FLIGHT] Create deploy archive directory"
@@ -357,6 +363,7 @@
         validate_certs: false
         status_code: [200, 404]
       ignore_errors: true
+      when: not deploy_is_rollback | bool
 
 # =============================================================================
 # PLAY 1: Update SLM Server First
@@ -562,26 +569,16 @@
 
     # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
     - name: "[PLAY 1] SLM Agent | Create autobot_shared symlink for agent imports"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-slm-agent/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-slm-agent
       tags: [slm, slm-agent, shared]
 
     # Issue #9565: slm-backend needs autobot_shared in PYTHONPATH
     - name: "[PLAY 1] SLM Backend | Create autobot_shared symlink for backend imports"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-slm-backend/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-slm-backend
       tags: [slm, slm-backend, shared]
 
     # #12907/#12959: same role-owned reconciliation as PLAY 2, for the SLM
@@ -1061,14 +1058,9 @@
       tags: [backend, shared]
 
     - name: "[PLAY 2] Backend | Ensure autobot_shared symlink inside backend dir (#2651)"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-backend/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-backend
       when: "'backend' in group_names"
       tags: [backend, shared, symlink]
 
@@ -1183,11 +1175,27 @@
     # key is canonical; a backend whose key differs keeps it, visibly, because changing it needs
     # the owner's approval (#17038). Sets autobot_internal_api_key for the env_only render below.
     - name: "[PLAY 2] Backend | Resolve AUTOBOT_INTERNAL_API_KEY (#10636, #20750)"
-      ansible.builtin.include_tasks: ../_shared/tasks/resolve_internal_api_key.yml
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/resolve_internal_api_key.yml
+        apply:
+          tags: [backend, env]  # a dynamic include's tags don't reach its tasks without apply
       vars:
         internal_api_key_current_env_files:
           - "{{ autobot.base_dir }}/autobot-backend/.env"
           - "{{ autobot_backend_env_file }}"
+      when: "'backend' in group_names"
+      tags: [backend, env]
+
+    # #20750: a mismatch is proposed for approval; an approved realign is claimed here and applied by
+    # this run's render, restart and the verify step after "Wait for API to be ready".
+    - name: "[PLAY 2] Backend | Propose or claim re-aligning the internal key (#20750)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/realign_internal_api_key_claim.yml
+        apply:
+          tags: [backend, env]
+      vars:
+        internal_api_key_loaded_file: "{{ autobot.base_dir }}/autobot-backend/.env"
+        internal_api_key_backend_url: "http://127.0.0.1:{{ infrastructure.ports.backend }}"  # pragma: allowlist secret -- a URL
       when: "'backend' in group_names"
       tags: [backend, env]
 
@@ -1486,6 +1494,18 @@
       retries: 42
       delay: 10
       when: "'backend' in group_names"
+      tags: [backend, restart]
+
+    - name: "[PLAY 2] Backend | Check the re-aligned internal key works, and report it (#20750)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/realign_internal_api_key_verify.yml
+        apply:
+          tags: [backend, restart]
+      vars:
+        internal_api_key_backend_url: "http://127.0.0.1:{{ infrastructure.ports.backend }}"  # pragma: allowlist secret -- a URL
+      when:
+        - "'backend' in group_names"
+        - internal_api_key_realign_applying | default(false) | bool
       tags: [backend, restart]
 
     # ----- Frontend -----
@@ -2016,19 +2036,6 @@
       when: "'backend' not in group_names"
       tags: [shared]
 
-    # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
-    - name: "[PLAY 2] SLM Agent | Create autobot_shared symlink for agent imports"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-slm-agent/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
-      when: slm_node_id is defined
-      tags: [slm-agent, shared]
-
     # #11480: redeploy the slm-agent (code + agent-secrets.env + restart) on
     # remote nodes too. block/rescue keeps a single node's agent failure from
     # aborting the whole fleet update (Play 2 has any_errors_fatal: true) —
@@ -2057,16 +2064,21 @@
               agent may run stale code / miss agent-secrets.env (#11480).
               Continuing fleet update.
 
+    # Linked after the redeploy so a freshly enrolled node (no agent tree yet) gets the
+    # link once the role has installed it (#21035).
+    # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
+    - name: "[PLAY 2] SLM Agent | Create autobot_shared symlink for agent imports"
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-slm-agent
+      when: slm_node_id is defined
+      tags: [slm-agent, shared]
+
     # Issue #9565: slm-backend needs autobot_shared in PYTHONPATH
     - name: "[PLAY 2] SLM Backend | Create autobot_shared symlink for backend imports"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-slm-backend/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-slm-backend
       when: slm_node_id is defined
       tags: [slm-backend, shared]
 

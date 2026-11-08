@@ -4,7 +4,8 @@
  * @autobot/ui — byte, uptime, duration and date/time formatting for both apps (#14908, #19905).
  *
  * Each app had its own copy; the SLM one was an exact subset of the user app's, so the
- * shared part lives here once and each app's `utils/formatHelpers.ts` re-exports it.
+ * shared part lives here once. The SLM imports it from the kit; the user app's
+ * `utils/formatHelpers.ts` re-exports it.
  * A timezone is passed per call (`intl: { timeZone }`), so an app that stores one keeps that
  * state itself and the formatting still lives here.
  *
@@ -354,16 +355,6 @@ export function formatRelativeTime(timestamp: DateInput, options: FormatRelative
   return formatter.format(value === 0 && seconds <= 0 ? -0 : value, unit) // -0 reads as past: 0 seconds ago
 }
 
-/**
- * English `2 hours ago`, `'just now'` under a minute (or in the future), `'unknown'` when invalid.
- * It is {@link formatRelativeTime} fixed to English; a caller that shows it to a user passes a locale there.
- */
-export function formatTimeAgo(timestamp: Date | string | number): string {
-  const date = toValidDate(timestamp)
-  if (!date) return 'unknown'
-  return Date.now() - date.getTime() < 60000 ? 'just now' : formatRelativeTime(date, { locale: 'en' })
-}
-
 /** Options for {@link createRecencyFormatter}; a function is read on every call (a locale can change). */
 export interface RecencyFormatterOptions {
   /** BCP 47 locale for the relative text (default: the browser's). */
@@ -421,8 +412,8 @@ export function createRecencyFormatter(options: RecencyFormatterOptions = {}): (
 export interface DateFormatterOptions {
   /** Which part to show (default `'dateTime'`). */
   kind?: 'date' | 'time' | 'dateTime'
-  /** BCP 47 locale; default is the browser's. */
-  locale?: string
+  /** BCP 47 locale, or a function read on every call (for the app locale); default is the browser's. */
+  locale?: string | (() => string)
   /** `Intl` fields, or a function returning them (for a timezone that can change). */
   intl?: Intl.DateTimeFormatOptions | (() => Intl.DateTimeFormatOptions)
   /** Unit of a numeric input (default `'ms'`). */
@@ -435,9 +426,10 @@ export interface DateFormatterOptions {
 
 function toLocaleText(date: Date, options: DateFormatterOptions): string {
   const intl = typeof options.intl === 'function' ? options.intl() : options.intl
-  if (options.kind === 'date') return date.toLocaleDateString(options.locale, intl)
-  if (options.kind === 'time') return date.toLocaleTimeString(options.locale, intl)
-  return date.toLocaleString(options.locale, intl)
+  const locale = typeof options.locale === 'function' ? options.locale() : options.locale
+  if (options.kind === 'date') return date.toLocaleDateString(locale, intl)
+  if (options.kind === 'time') return date.toLocaleTimeString(locale, intl)
+  return date.toLocaleString(locale, intl)
 }
 
 /**

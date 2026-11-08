@@ -12,7 +12,7 @@ import inputSource from '../BaseInput.vue?raw'
 import BaseInput, { type InputSize, type InputType } from '../BaseInput.vue'
 
 const SIZES: InputSize[] = ['sm', 'md', 'lg']
-const TYPES: InputType[] = ['text', 'email', 'password', 'search', 'tel', 'url']
+const TYPES: InputType[] = ['text', 'email', 'password', 'search', 'tel', 'url', 'number']
 
 describe('BaseInput', () => {
   it('renders a real <input> with defaults: type=text, size=md, no label', () => {
@@ -35,6 +35,13 @@ describe('BaseInput', () => {
     const wrapper = mount(BaseInput)
     await wrapper.get('input').setValue('abc')
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['abc'])
+  })
+
+  it('emits the typed string, leading zeros kept, from a number input', async () => {
+    // fails if a number input coerces its value: consumers parse '001' themselves and BaseInput must not lose it
+    const wrapper = mount(BaseInput, { props: { type: 'number' } })
+    await wrapper.get('input').setValue('001')
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['001'])
   })
 
   it('ties <label for> to the input id when label is given', () => {

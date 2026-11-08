@@ -13,8 +13,7 @@
 
 import { ref } from 'vue'
 import { getTimeConfig } from '@/utils/slmSettingsApi'
-import { createLogger } from '@/utils/debugUtils'
-import { createDateFormatter } from '@/utils/formatHelpers'
+import { createLogger, createDateFormatter } from '@autobot/ui'
 
 const logger = createLogger('useTimezone')
 
@@ -59,6 +58,10 @@ export function getTimezoneOption(): { timeZone?: string } {
 }
 
 const formatInFleetTimezone = createDateFormatter({ intl: getTimezoneOption })
+
+/** Time of day / calendar date in the fleet timezone; an absent value reads as `''`. */
+export const formatFleetTime = createDateFormatter({ kind: 'time', intl: getTimezoneOption })
+export const formatFleetDate = createDateFormatter({ kind: 'date', intl: getTimezoneOption })
 
 /**
  * Format an ISO date string using the fleet-configured timezone.

@@ -279,6 +279,7 @@ class TestHandleDueAgent:
 # ---------------------------------------------------------------------------
 
 _HBS = "llc.scheduler.heartbeat_scheduler"
+_INGEST = "llc.services.budget.BudgetService.ingest_cost_event"
 
 
 @pytest.mark.asyncio
@@ -895,7 +896,7 @@ class TestIngestAdapterUsage:
 
         with (
             patch(f"{_HBS}.get_async_session_factory", return_value=factory),
-            patch(f"{_HBS}.BudgetService.ingest_cost_event", new=mock_ingest),
+            patch(_INGEST, new=mock_ingest),
         ):
             await _ingest_adapter_usage(agent, result)
 
@@ -907,7 +908,7 @@ class TestIngestAdapterUsage:
         agent = _make_agent(adapter_type="claude_code")
         result = AdapterRunStatus(status=LLCRunStatus.COMPLETED)  # tokens None
         mock_ingest = AsyncMock()
-        with patch(f"{_HBS}.BudgetService.ingest_cost_event", new=mock_ingest):
+        with patch(_INGEST, new=mock_ingest):
             await _ingest_adapter_usage(agent, result)
         mock_ingest.assert_not_awaited()
 
@@ -923,10 +924,7 @@ class TestIngestAdapterUsage:
 
         with (
             patch(f"{_HBS}.get_async_session_factory", return_value=factory),
-            patch(
-                f"{_HBS}.BudgetService.ingest_cost_event",
-                new=AsyncMock(side_effect=BudgetExhausted("agent", 100.0, 50.0)),
-            ),
+            patch(_INGEST, new=AsyncMock(side_effect=BudgetExhausted("agent", 100.0, 50.0))),
             pytest.raises(BudgetExhausted),
         ):
             await _ingest_adapter_usage(agent, result)
@@ -940,7 +938,7 @@ class TestIngestAdapterUsage:
         factory.return_value.__aexit__ = AsyncMock(return_value=False)
         with (
             patch(f"{_HBS}.get_async_session_factory", return_value=factory),
-            patch(f"{_HBS}.BudgetService.ingest_cost_event", new=AsyncMock(side_effect=RuntimeError("db down"))),
+            patch(_INGEST, new=AsyncMock(side_effect=RuntimeError("db down"))),
         ):
             await _ingest_adapter_usage(agent, result)  # must not raise
 

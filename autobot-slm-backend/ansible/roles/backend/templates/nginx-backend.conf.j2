@@ -49,6 +49,11 @@ server {
     proxy_send_timeout    300s;
     proxy_read_timeout    300s;
 
+    # #20046: service-to-service only; never served through this edge.
+    location ^~ /api/internal/ {
+        return 404;
+    }
+
     # API — plain HTTP upstream (uvicorn no longer terminates TLS)
     # Always connect to loopback — backend_host may be 0.0.0.0 on WSL2 (#MVA-1423/MVA-1454).
     location / {

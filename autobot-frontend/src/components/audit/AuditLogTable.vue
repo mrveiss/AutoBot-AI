@@ -223,12 +223,12 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal, BasePagination } from '@autobot/ui'
+import { BaseModal, BasePagination, createRecencyFormatter } from '@autobot/ui'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AuditEntry } from '@/types/audit'
 import { AUDIT_RESULT_CONFIG, auditTimestampToDate } from '@/types/audit'
-import { formatDateTime, formatTimeAgo } from '@/utils/formatHelpers'
+import { formatDateTime } from '@/utils/formatHelpers'
 
 interface Props {
   entries: AuditEntry[]
@@ -254,8 +254,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<Emits>()
-const { t } = useI18n()
-
+const { t, locale } = useI18n()
+const formatTimeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
 const selectedEntry = ref<AuditEntry | null>(null)
 const showExportMenu = ref(false)
 const sortField = ref<'timestamp' | 'operation'>('timestamp')
