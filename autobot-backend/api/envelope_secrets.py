@@ -29,6 +29,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api._service_principal_refusal import validated_service
+from api.envelope_secrets_delete import delete_as_service, delete_as_user
 from auth_middleware import resolve_human_user, verify_internal_api_key
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from llc.deps import get_session
@@ -358,17 +359,13 @@ async def service_rotate_system_secret(
 @router.delete("/system/{secret_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def service_delete_system_secret(
     secret_id: uuid.UUID,
+    request: Request,
     service_id: str = Depends(service_principal),
     session: AsyncSession = Depends(get_session),
     coordinator: SecretsCoordinator = Depends(get_coordinator),
 ) -> None:
-    """Delete a system-vault secret via service identity."""
-    logger.info("service CRUD: delete system secret", extra={"service_id": service_id})
-    try:
-        await coordinator.service_delete(session, secret_id=secret_id, vault=_SYSTEM_VAULT)
-        await session.commit()
-    except (SecretAccessError, SecretNotFoundError) as exc:
-        raise _mapped(exc)
+    """Delete a system-vault secret via service identity; 409 while it has dependents (#20640)."""
+    await delete_as_service(request, session, coordinator, secret_id, service_id, _SYSTEM_VAULT, _mapped)
 
 
 @router.post("/system/{secret_id}/rewrap", response_model=SecretMetadata)
@@ -529,16 +526,15 @@ async def rotate_secret(
 @router.delete("/{secret_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_secret(
     secret_id: uuid.UUID,
+    request: Request,
+    confirm_dependents: bool = False,
     who: tuple[uuid.UUID, set[str]] = Depends(principal),
     session: AsyncSession = Depends(get_session),
     coordinator: SecretsCoordinator = Depends(get_coordinator),
 ) -> None:
+    """Delete a secret; 409 with the dependents listed unless ``confirm_dependents`` (#20640)."""
     user_id, perms = who
-    try:
-        await coordinator.delete(session, user_id=user_id, permissions=perms, secret_id=secret_id)
-        await session.commit()
-    except (SecretAccessError, SecretNotFoundError) as exc:
-        raise _mapped(exc)
+    await delete_as_user(request, session, coordinator, secret_id, user_id, perms, confirm_dependents, _mapped)
 
 
 @router.post("/{secret_id}/share", status_code=status.HTTP_201_CREATED)
