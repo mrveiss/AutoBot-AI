@@ -110,12 +110,11 @@ def test_pinned_by_design_names_only_pinned_declarations() -> None:
         assert name in by_name and by_name[name].pinned_floor > 0, f"{name} is listed but not pinned"
 
 
-def test_the_base_tree_is_outside_the_repo_and_removed_with_its_record(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_base_tree_is_outside_the_repo_and_has_no_worktree_record(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_reach_base, "_TREE", {})
     tree = _reach_base.base_tree()
     assert _reach_base.REPO_ROOT not in tree.resolve().parents
-    assert tree.name.startswith(_reach_base.TREE_PREFIX), "each process gets its own temp directory"
-    _reach_base.remove_base_tree(tree)
+    assert tree.name.startswith(_reach_base.TREE_PREFIX), "one directory per base commit (#20875)"
     listed = subprocess.run(
         ["git", "-C", str(_reach_base.REPO_ROOT), "worktree", "list", "--porcelain"],
         capture_output=True,
@@ -123,4 +122,4 @@ def test_the_base_tree_is_outside_the_repo_and_removed_with_its_record(monkeypat
         check=True,
         env=scrubbed_git_env(),
     ).stdout
-    assert not tree.exists() and str(tree) not in listed
+    assert tree.exists() and tree.name not in listed
