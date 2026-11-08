@@ -18,7 +18,7 @@ from autobot_shared.logging_manager import get_logger
 from llc.config import DEFAULT_BUDGET_LIMIT
 from llc.deps import assert_company_access, load_authorized
 from llc.exceptions import BudgetExhausted, UnpricedModel
-from llc.models.budget import TOKEN_LIMIT_MAX, LLCAgentBudget
+from llc.models.budget import TOKEN_LIMIT_MAX, TOKEN_LIMIT_MIN, LLCAgentBudget
 from llc.services.accessors import get_budget_service
 from llc.services.approval import ApprovalService
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
@@ -81,7 +81,7 @@ class UpdateLimitRequest(BaseModel):
 
     budget_mode: Optional[str] = None  # "dollars" or "tokens"
     budget_limit: Optional[Decimal] = None  # For DOLLARS mode
-    token_limit: Optional[int] = Field(None, le=TOKEN_LIMIT_MAX)  # For TOKENS mode
+    token_limit: Optional[int] = Field(None, ge=TOKEN_LIMIT_MIN, le=TOKEN_LIMIT_MAX)  # For TOKENS mode
     alert_threshold: Optional[float] = None
 
 
