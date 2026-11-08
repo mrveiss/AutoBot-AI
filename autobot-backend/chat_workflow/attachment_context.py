@@ -46,7 +46,7 @@ from autobot_shared.ai_lines import ATTACHMENT_TURN_KEY, VERIFIED_ATTACHMENT_ACC
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers, sanitize_injected
 from chat_workflow import attachment_extract, attachment_floor, attachment_guards, limits
-from chat_workflow.session_role import stamp_resumer_identity
+from chat_workflow.session_role import overlay_verified_identity
 
 logger = get_logger(__name__)
 
@@ -323,7 +323,7 @@ async def resume_context(graph, session_id: str, allowed: bool, scope: dict | No
     ``restore_block`` reads nothing for them. Stripping is also what an absent verdict means.
     """
     snapshot = await graph.aget_state({"configurable": {"thread_id": session_id}})
-    context = stamp_resumer_identity((getattr(snapshot, "values", None) or {}).get("context"), scope)  # #20709
+    context = overlay_verified_identity((getattr(snapshot, "values", None) or {}).get("context"), scope)  # #20709
     if allowed:
         context[VERIFIED_ATTACHMENT_ACCESS_KEY] = True
     else:

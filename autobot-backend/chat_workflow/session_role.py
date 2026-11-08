@@ -70,17 +70,19 @@ def _identity_pairs(scope: "dict | None") -> tuple:
     )
 
 
-def stamp_resumer_identity(context: "dict | None", scope: "dict | None") -> dict:
-    """Overlay the AUTHENTICATED resumer's identity onto a checkpointed context (#20709).
+def overlay_verified_identity(context: "dict | None", scope: "dict | None") -> dict:
+    """Return *context* with the verified principal REPLACED by *scope*'s (#18430, #20709).
 
-    A resumed turn does not pass through ``apply_auth_role``, so its tool calls would be audited as ``system``
-    whenever the checkpoint lacks the key. The same keys ``apply_auth_role`` writes are written here from the
-    resume request's own verified scope. A missing value keeps the checkpoint's (server-built, not client-supplied).
+    The one overlay for a new turn (``apply_auth_role``) and a resumed one (``resume_context``). Fail closed: a
+    present value overwrites the old one, an absent value removes the key, so a previous or client-supplied
+    identity never survives into the tool seam and the audit row falls to ``system``, never to another user.
     """
     merged = {**(context or {})}
     for key, value in _identity_pairs(scope):
         if value:
             merged[key] = str(value)
+        else:
+            merged.pop(key, None)
     return merged
 
 
@@ -99,12 +101,7 @@ def apply_auth_role(context: "dict | None", role: Optional[str], scope: "dict | 
     ``verified_company_id`` / ``verified_user_id``, the scope the AI lines are decided for. The request's own
     ``company_id`` and ``user_id`` are client claims and never scope a decision.
     """
-    merged = {**(context or {})}
-    for key, value in _identity_pairs(scope):
-        if value:
-            merged[key] = str(value)
-        else:
-            merged.pop(key, None)
+    merged = overlay_verified_identity(context, scope)
     if (scope or {}).get("attachment_access") is True:  # #20195: the route's STRICT check, never the client's word
         merged[VERIFIED_ATTACHMENT_ACCESS_KEY] = True
     else:

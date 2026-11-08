@@ -128,3 +128,33 @@ async def test_resumed_turn_audits_the_real_user_when_checkpoint_lacks_the_key()
     from chat_workflow.tool_permission_gate import caller_identity
 
     assert caller_identity(ctx, "sess-1")["user_id"] == "alice"
+
+
+async def _resume_audit(checkpoint_ctx, scope):
+    """Resume a checkpoint through resume_context, then audit an external call from the resumed turn."""
+    from chat_workflow.attachment_context import resume_context
+    from chat_workflow.tool_permission_gate import caller_identity
+
+    class _Graph:
+        async def aget_state(self, _config):
+            return SimpleNamespace(values={"context": checkpoint_ctx})
+
+    with patch("chat_workflow.attachment_floor.stamp_attachment_floor", AsyncMock(side_effect=lambda c, _s: c)):
+        update = await resume_context(_Graph(), "sess-1", False, scope)
+    identity = caller_identity(SimpleNamespace(context=update["context"]), "sess-1")
+    return update["context"], await _dispatch_external(identity["user_id"], session_id="sess-1")
+
+
+@pytest.mark.asyncio
+async def test_resumer_b_replaces_the_user_who_paused_the_checkpoint():
+    ctx, audit = await _resume_audit({VERIFIED_USER_KEY: "alice"}, {"user_id": "bob"})
+    assert ctx[VERIFIED_USER_KEY] == "bob"
+    assert audit.await_args.kwargs["user_id"] == "bob"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scope", [None, {}, {"org_id": "o1"}])
+async def test_resumer_without_a_user_drops_the_key_and_audits_system(scope):
+    ctx, audit = await _resume_audit({VERIFIED_USER_KEY: "alice"}, scope)
+    assert VERIFIED_USER_KEY not in ctx
+    assert audit.await_args.kwargs["user_id"] == "system"
