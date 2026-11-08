@@ -435,7 +435,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
 import { createDateFormatter, formatLocalTime } from '@/utils/formatHelpers'
 import TruncationNotice from './TruncationNotice.vue';
-import { useShowMore, BaseButton } from '@autobot/ui'
+import { useShowMore, BaseButton, saveTextFile } from '@autobot/ui'
 import type { DirectiveBinding } from 'vue';
 import { BaseBadge, BaseModal, BaseTable, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
 import { useRoute } from 'vue-router';
@@ -835,13 +835,7 @@ async function exportReport(format: string): Promise<void> {
 }
 
 function downloadFile(content: string, filename: string, type: string): void {
-  const blob = new Blob([content], { type });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  window.URL.revokeObjectURL(url);
+  saveTextFile(content, filename, type);
 }
 
 function closeExportMenu(): void {

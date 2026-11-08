@@ -46,8 +46,10 @@ BASE_MERGE = re.compile(r"^Merge (?:branch |remote-tracking branch )?['\"]?(?:or
 #: The member list of a train title: "chore(merge-train): #1 #2". A "(#3)" later in it is no member.
 DECLARED_MEMBERS = re.compile(r"^chore\(merge-train\):\s*((?:#\d+\s*)+)")
 DELIBERATE_DROP = re.compile(r"^train-content-drop:\s*#(\d+)\s+(\S+)\s+\S", re.MULTILINE)
-#: Files a train recomputes on purpose, so the member's own value is not expected to survive.
-RECOMPUTED = re.compile(r"(_known_large\.py|_baseline\.py|_ratchet_test\.py|_ratchet_\d+_test\.py)$")
+#: Files a train recomputes on purpose, so the member's own value is not expected to survive. The size
+#: tables (``*_known_large.py``) are not among them (#19673): nothing in a train rewrites them, so a
+#: member's entries must survive.
+RECOMPUTED = re.compile(r"(_baseline\.py|_ratchet_test\.py|_ratchet_\d+_test\.py)$")
 #: A line this short matches by chance; a floor pin is recomputed by the train.
 MIN_LINE = 12
 FLOOR_LINE = "floor="
