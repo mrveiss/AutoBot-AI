@@ -32,12 +32,13 @@ import asyncio
 import base64
 from contextlib import aclosing
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketState
 
 from api.ws_security import enforce_ws_origin
 from auth_middleware import authenticate_websocket
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.websocket_subprotocol import accept_websocket
@@ -366,8 +367,8 @@ async def voice_stream_ws(websocket: WebSocket) -> None:
             tts_task = await _handle_ws_message(msg, websocket, ctx)
             ctx["tts_task"] = tts_task
 
-    except WebSocketDisconnect:
-        logger.info("Voice stream WebSocket disconnected")
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "voice_stream_ws")
     except Exception as e:
         logger.error("Voice stream WebSocket error: %s", e)
         await _send_json(websocket, {"type": "error", "message": "Operation failed"})
