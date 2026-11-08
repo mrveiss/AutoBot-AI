@@ -2414,7 +2414,7 @@ class AgentPauseRequest(BaseModel):
     """Request body for POST /heartbeat/{agent_id}/pause (GH#6476)."""
 
     reason: str | None = None
-    paused_by: str | None = None
+    paused_by: str | None = Field(default=None, description="Ignored; the actor is the verified caller.")
 
 
 class AgentResumeRequest(BaseModel):

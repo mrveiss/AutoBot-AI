@@ -57937,7 +57937,10 @@ export interface components {
         AgentPauseRequest: {
             /** Reason */
             reason?: string | null;
-            /** Paused By */
+            /**
+             * Paused By
+             * @description Ignored; the actor is the verified caller.
+             */
             paused_by?: string | null;
         } & {
             [key: string]: unknown;
