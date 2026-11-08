@@ -105,8 +105,8 @@ describe('TeamsView (#18245)', () => {
     await click(buttonNamed(en.llcTeams.viewMembers))
     const text = byId('team-members')?.textContent ?? ''
     expect(text.match(/Alex Smith/g)).toHaveLength(2)
-    expect(text).toContain('member')
-    expect(text).toContain('guest')
+    expect(text).toContain(en.llcMembers.role.member)
+    expect(text).toContain(en.llcMembers.role.guest)
   })
 
   it('shows members without invented names when the member list cannot be read', async () => {

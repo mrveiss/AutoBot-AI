@@ -23,7 +23,9 @@ Related to Issue #760 Phase 2.
 """
 
 import asyncio
+import json
 import os
+import ssl
 import time
 from dataclasses import dataclass
 from typing import Callable, Dict
@@ -371,15 +373,23 @@ class SLMClient(SLMDeploymentsMixin):
         # HTTP session
         self._http_session: aiohttp.ClientSession | None = None
 
+    def _resolve_auth_token(self) -> str | None:
+        """Static token if configured, else a freshly minted service JWT (GH#9852); None without a secret."""
+        if self.auth_token:
+            return self.auth_token
+        secret = _get_slm_signing_secret()
+        return _mint_service_jwt(secret) if secret else None
+
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create HTTP session."""
+        """Get or create the HTTP session; its bearer is re-resolved per call so a minted JWT never expires (#20943)."""
         if self._http_session is None or self._http_session.closed:
-            headers = {}
-            if self.auth_token:
-                headers["Authorization"] = f"Bearer {self.auth_token}"
             # Accept self-signed certs for internal HTTPS (#1048, #6654)
             connector = aiohttp.TCPConnector(ssl=_create_permissive_ssl_context(self.slm_url))
-            self._http_session = aiohttp.ClientSession(headers=headers, connector=connector)
+            self._http_session = aiohttp.ClientSession(connector=connector)
+        token = self._resolve_auth_token()
+        self._http_session.headers.pop("Authorization", None)
+        if token:
+            self._http_session.headers["Authorization"] = f"Bearer {token}"
         return self._http_session
 
     def _rest_url(self, path: str) -> str:
@@ -638,23 +648,13 @@ class SLMClient(SLMDeploymentsMixin):
             _is_direct_uvicorn_url(self.slm_url),
         )
 
-        # Resolve the auth token for this connection attempt.
-        # Operator-provided static token takes precedence; when absent, mint a
-        # short-lived service JWT from the shared HS256 secret so the SLM's
-        # auth_service.decode_token can verify it (GH#9852).
-        token = self.auth_token
+        token = self._resolve_auth_token()
         if not token:
-            secret = _get_slm_signing_secret()
-            if secret:
-                token = _mint_service_jwt(secret)
-                logger.debug("Minted service JWT for SLM WebSocket connection")
-            else:
-                logger.warning(
-                    "No SLM auth token and no signing secret available "
-                    "(AUTOBOT_JWT_SECRET / SECRET_KEY unset); "
-                    "skipping WebSocket connection to SLM"
-                )
-                return
+            logger.warning(
+                "No SLM auth token and no signing secret available (AUTOBOT_JWT_SECRET / SECRET_KEY unset); "
+                "skipping WebSocket connection to SLM"
+            )
+            return
 
         logger.info("Connecting to WebSocket at %s", ws_url)
 
@@ -680,21 +680,21 @@ class SLMClient(SLMDeploymentsMixin):
                         break
 
                     try:
-                        import json
-
                         data = json.loads(message)
                         await self._handle_ws_message(data)
                     except Exception as e:
                         logger.error("Error handling WebSocket message: %s", e)
 
-        except WebSocketException as e:
-            self._on_ws_failure(e)
         except Exception as e:
-            logger.error("Unexpected WebSocket error: %s", e)
-            self._ws_connected = False
+            # Handshake timeouts and refused connects are transient (#20938); a TLS fault is a config defect: ERROR.
+            if isinstance(e, (WebSocketException, OSError)) and not isinstance(e, ssl.SSLError):
+                self._on_ws_failure(e)
+            else:
+                logger.error("Unexpected WebSocket error: %s", e)
+                self._ws_connected = False
 
-    def _on_ws_failure(self, exc: WebSocketException) -> None:
-        """Account for a closed socket (4001 = bad/missing token) or rejected handshake; failures pin the delay."""
+    def _on_ws_failure(self, exc: WebSocketException | OSError) -> None:
+        """Account for a 4001 close, a rejected handshake or a connect-time OSError/timeout; failures pin the delay."""
         self._ws_connected = False
         if isinstance(exc, ConnectionClosed):
             if exc.rcvd is not None and exc.rcvd.code == 4001:
@@ -719,7 +719,7 @@ class SLMClient(SLMDeploymentsMixin):
         if self._ws_auth_fail_count >= _WS_AUTH_FAIL_THRESHOLD:
             if self._ws_auth_fail_count == _WS_AUTH_FAIL_THRESHOLD:
                 logger.warning(
-                    "SLM WebSocket handshake rejected %d consecutive times (%s). "
+                    "SLM WebSocket handshake failed %d consecutive times (%s). "
                     "Check SLM reachability and that AUTOBOT_JWT_SECRET on the backend "
                     "matches SLM_SECRET_KEY on the SLM host. "
                     "Backing off to maximum reconnect interval.",
@@ -728,7 +728,7 @@ class SLMClient(SLMDeploymentsMixin):
                 )
             self._reconnect_delay = self._max_reconnect_delay
         else:
-            logger.warning("WebSocket error (handshake rejected): %s", exc)
+            logger.warning("WebSocket error (handshake failed): %s", exc)
 
     async def _handle_ws_message(self, data: dict) -> None:
         """
