@@ -12,7 +12,7 @@ import asyncio
 import time
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
 
 from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from api.ws_security import enforce_ws_origin
@@ -29,6 +29,7 @@ from api.schemas_agent import (
     AgentSystemCapabilitiesResponse,
     GoalRequest,
 )
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from monitoring.prometheus_metrics import get_metrics_manager
 
@@ -313,8 +314,8 @@ async def websocket_stream(websocket: WebSocket):
             except Exception as e:
                 logger.error("Error processing WebSocket goal: %s", e)
                 await websocket.send_json({"type": "error", "content": "Error processing goal"})
-    except WebSocketDisconnect:
-        logger.info("WebSocket connection closed")
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "websocket_stream")
     except Exception as e:
         logger.error("WebSocket error: %s", e)
         try:
