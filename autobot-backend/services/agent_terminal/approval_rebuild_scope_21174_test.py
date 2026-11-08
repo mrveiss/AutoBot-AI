@@ -198,6 +198,8 @@ async def test_a_release_redis_refuses_is_retried_with_the_same_token(redis, mon
     from services.agent_terminal import decision_session
 
     monkeypatch.setattr(decision_session, "_RELEASE_RETRY_DELAYS_SECONDS", (0, 0))
+    scheduled = []
+    monkeypatch.setattr(decision_session, "fire_and_forget", lambda coro, **_kw: scheduled.append(coro))
     token = await claim_decision(redis, "sess-X", "cmd-x")
     real = redis.eval
     failures = iter([ConnectionError("blip")])
@@ -210,10 +212,8 @@ async def test_a_release_redis_refuses_is_retried_with_the_same_token(redis, mon
 
     redis.eval = _eval
     await decision_session.release_with_retry(redis, "sess-X", "cmd-x", token)  # must not raise
-    for _ in range(50):
-        if not await redis.exists(decided_key("cmd-x")):
-            break
-        await asyncio.sleep(0.01)
+    assert len(scheduled) == 1
+    await scheduled[0]
     assert not await redis.exists(decided_key("cmd-x"))
     assert await claim_decision(redis, "sess-X", "cmd-x")
 
