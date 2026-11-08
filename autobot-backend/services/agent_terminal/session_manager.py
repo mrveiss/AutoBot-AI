@@ -12,7 +12,6 @@ import asyncio
 import uuid
 from typing import Dict, List
 
-from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
 from services.command_approval_manager import AgentRole
@@ -20,27 +19,22 @@ from type_defs.common import Metadata
 
 from .approval_restore import restore_pending_approval
 from .conversation_owner import ConversationNotOwnedError, conversation_owner, verified_conversation_owner
+from .decision_session import release_with_retry
 from .models import AgentTerminalSession
 from .pending_claim import drop_pending_slot, hold_pending_slot
 from .redis_usability import usable_redis
 from .session_state import (
+    APPROVAL_PENDING_SESSION_TTL,
     apply_record,
     claim_decision,
     pending_decision_id,
     persist_if_current,
     read_record,
-    release_decision,
     session_from_record,
     session_key,
 )
 
 logger = get_logger(__name__)
-
-# #13478: how long a session holding a pending approval survives in Redis.
-# Deliberately long: the thing it is waiting for is a person, and #13481
-# established that an approval does not expire on a timer. This bounds the
-# stored session, not the approval's validity.
-APPROVAL_PENDING_SESSION_TTL: int = env_int("AUTOBOT_APPROVAL_PENDING_SESSION_TTL_SECONDS", default=7 * 24 * 60 * 60)
 
 
 class SessionManager:
@@ -316,6 +310,13 @@ class SessionManager:
             # no session worth resurrecting.
             return None
 
+        # A rebuilt session is made authoritative before anything can decide it: the record is written first, and
+        # a session whose record cannot be written is not handed out (#20674). Without Redis it is display-only,
+        # and every decision fails closed.
+        if usable_redis(self.redis_client) and not await self._persist_session(session):
+            logger.error("Could not record the rebuilt session %s; not restoring it", session_id)
+            return None
+
         async with self._sessions_lock:
             self.sessions[session_id] = session
 
@@ -426,6 +427,19 @@ class SessionManager:
             logger.error("Failed to persist session to Redis: %s", e)
             return False
 
+    async def persist_control(self, session: AgentTerminalSession, target) -> Metadata | None:
+        """Move *session* to the control state *target* and save it so other workers see it (#20674).
+
+        Returns the error to answer with if the save is refused; the copy then goes back to its old state unless
+        the refused save already refreshed it from Redis.
+        """
+        previous, session.state = session.state, target
+        if not usable_redis(self.redis_client) or await self._persist_session(session):
+            return None
+        if session.state == target:
+            session.state = previous
+        return {"status": "error", "error": "Control change not saved, retry"}
+
     async def _refuse_stale_persist(self, session: AgentTerminalSession) -> bool:
         """The record moved on since this copy was read (#20674): keep it, take it as the copy, report no save."""
         logger.warning("Session %s changed in Redis since this copy was read; not overwriting it", session.session_id)
@@ -440,11 +454,15 @@ class SessionManager:
         return session.decision_token is not None
 
     async def release_after_failed_run(self, session: AgentTerminalSession) -> None:
-        """Log the failed run and give its decision claim back, so the user can approve again at once (#20674)."""
+        """Log the failed run and give its decision claim back, so the user can approve again at once (#20674).
+
+        A release Redis refuses is retried in the background with the same token and decision id; the caller
+        still answers with the execution failure.
+        """
         logger.error("Approved command execution error", exc_info=True)
         token, session.decision_token = session.decision_token, None
         if token and usable_redis(self.redis_client):
-            await release_decision(
+            await release_with_retry(
                 self.redis_client, session.session_id, pending_decision_id(session.pending_approval), token
             )
 

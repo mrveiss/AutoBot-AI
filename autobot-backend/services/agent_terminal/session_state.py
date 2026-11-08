@@ -42,12 +42,28 @@ READ_TIMEOUT_SECONDS: float = 2.0
 #: its claim at once (``release_decision``); a successful one keeps it. No heartbeat exists to refresh it.
 DECISION_TTL_SECONDS: int = env_int("AUTOBOT_APPROVAL_DECISION_TTL_SECONDS", default=2 * 60 * 60)
 
-#: The durable "decided" marker outlives the session record (at most 7 d, ``APPROVAL_PENDING_SESSION_TTL``)
-#: and the chat-history window the rebuild reads, so a decided approval is never decidable again (#21174).
-DECIDED_MARKER_TTL_SECONDS: int = env_int("AUTOBOT_APPROVAL_DECIDED_MARKER_TTL_SECONDS", default=30 * 24 * 60 * 60)
+#: How long a session holding a pending approval survives in Redis (#13478). Deliberately long: the thing it is
+#: waiting for is a person, and #13481 established that an approval does not expire on a timer. This bounds the
+#: stored session, not the approval's validity.
+APPROVAL_PENDING_SESSION_TTL: int = env_int("AUTOBOT_APPROVAL_PENDING_SESSION_TTL_SECONDS", default=7 * 24 * 60 * 60)
 
-#: Take the claim and write the decided marker as one step: both, or neither.
+#: The shortest the decided marker may live: it must outlast the session record, so a rebuild can never meet an
+#: approval whose marker has gone, and the claim that guards a running command (#21174).
+DECIDED_MARKER_MIN_TTL_SECONDS: int = APPROVAL_PENDING_SESSION_TTL + DECISION_TTL_SECONDS
+
+#: The durable "decided" marker outlives the session record (``APPROVAL_PENDING_SESSION_TTL``), the claim and the
+#: chat-history window the rebuild reads, so a decided approval is never decidable again (#21174). A configured
+#: value below ``DECIDED_MARKER_MIN_TTL_SECONDS`` is raised to it, never honoured.
+DECIDED_MARKER_TTL_SECONDS: int = max(
+    env_int("AUTOBOT_APPROVAL_DECIDED_MARKER_TTL_SECONDS", default=30 * 24 * 60 * 60), DECIDED_MARKER_MIN_TTL_SECONDS
+)
+
+#: Take the claim and write the decided marker as one step: both, or neither. An approval whose marker exists was
+#: decided already, even if its claim has lapsed, so it is never granted again.
 CLAIM_AND_MARK_LUA = """
+if redis.call('EXISTS', KEYS[2]) == 1 then
+  return 0
+end
 if redis.call('SET', KEYS[1], ARGV[1], 'NX', 'EX', tonumber(ARGV[2])) then
   redis.call('SET', KEYS[2], ARGV[1], 'EX', tonumber(ARGV[3]))
   return 1

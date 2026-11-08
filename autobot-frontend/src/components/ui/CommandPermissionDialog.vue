@@ -224,7 +224,9 @@ const handleDeny = async () => {
     closeDialog()
   } catch (err) {
     logger.error('Command denial error:', err)
-    errorApprove.value = new Error(t('ui.commandPermission.denyFailed'))
+    // The request failed, not necessarily the denial: the server may have recorded it before the reply was lost.
+    const detail = err instanceof Error ? err.message : String(err)
+    errorApprove.value = new Error(t('ui.commandPermission.denyFailed', { error: detail }))
   }
 }
 

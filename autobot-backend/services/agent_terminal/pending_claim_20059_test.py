@@ -308,3 +308,21 @@ async def _until_session_is_cleared(redis) -> None:
         return json.loads(await redis.get(f"agent_terminal:session:{SID}"))["pending_approval"] is None
 
     await _eventually_async(_cleared)
+
+
+async def test_the_retry_clears_the_decided_approval_a_refresh_restored(redis, monkeypatch):
+    monkeypatch.setattr("services.agent_terminal.ai_line_gate._CLEAR_RETRY_DELAYS_SECONDS", (0, 0))
+    worker = _worker(redis)
+    _set_pending(worker.session, "cmd-1")
+    refusals = iter([False, False])
+
+    async def _persist(session):
+        if next(refusals, True) is False:
+            _set_pending(session, "cmd-1")  # the refused save refreshed the copy over the decided approval
+            return False
+        return True
+
+    worker.manager._persist_session = _persist
+    await settle_pending(worker.session, worker.manager)
+    await eventually(lambda: not _retry_tasks_running())
+    assert not worker.session.has_pending_approval()

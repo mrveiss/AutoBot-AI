@@ -9,7 +9,8 @@ Chat history is a best-effort record. A rebuild restores an approval only when:
 
 * the request belongs to the session being rebuilt (``metadata.terminal_session_id``): a conversation can
   hold requests from several sessions, and one session's decision must never run another's command;
-* no ``command_approval_response`` for that session follows it; and
+* no ``command_approval_response`` message of that session follows it (matched by message type, never by
+  the words of other messages); and
 * the durable decided marker (``session_state.decided_marker_exists``) is absent. The marker, not the chat
   message, is the authority: the message is written last and may be lost.
 
@@ -27,10 +28,15 @@ from .session_state import ApprovalStateUnavailableError, decided_marker_exists,
 
 logger = get_logger(__name__)
 
-# O(1) lookup optimization constants (Issue #326)
-APPROVAL_RESPONSE_KEYWORDS = {"approved", "denied", "executed", "rejected"}
-
 RESTORE_MESSAGE_LIMIT = 50
+
+REQUEST_TYPE = "command_approval_request"
+RESPONSE_TYPE = "command_approval_response"
+
+
+def _message_type(msg: Dict) -> str | None:
+    """The stored type: `add_message` writes ``messageType``; ``message_type`` is the legacy key."""
+    return msg.get("messageType") or msg.get("message_type")
 
 
 def _request_session(msg: Dict) -> str | None:
@@ -38,25 +44,22 @@ def _request_session(msg: Dict) -> str | None:
 
 
 def _find_latest_approval_request(messages: List[Dict], session_id: str) -> Dict | None:
-    """The newest ``command_approval_request`` raised by *session_id*; requests of other sessions never match."""
+    """The newest approval request raised by *session_id*; requests of other sessions never match."""
     for msg in reversed(messages):  # Search newest first
-        if msg.get("message_type") == "command_approval_request" and _request_session(msg) == session_id:
+        if _message_type(msg) == REQUEST_TYPE and _request_session(msg) == session_id:
             return msg
     return None
 
 
 def _is_approval_already_responded(messages: List[Dict], request_timestamp: float, session_id: str) -> bool:
-    """True if a response for *session_id* follows the request; another session's response does not count."""
-    for msg in reversed(messages):
-        if msg.get("timestamp", 0) <= request_timestamp:
-            continue
-        other = _request_session(msg)
-        if other is not None and other != session_id:
-            continue
-        content = msg.get("text", "").lower()
-        if any(keyword in content for keyword in APPROVAL_RESPONSE_KEYWORDS):
-            return True
-    return False
+    """True if an approval response of *session_id* follows the request; any other message, or another
+    session's response, does not count."""
+    return any(
+        _message_type(msg) == RESPONSE_TYPE
+        and _request_session(msg) == session_id
+        and msg.get("timestamp", 0) > request_timestamp
+        for msg in messages
+    )
 
 
 def _apply_restored_approval_state(

@@ -21,7 +21,7 @@ vi.mock('@/composables/useModal', () => ({ useModal: () => ({ isOpen: ref(true) 
 vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() })
 }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => `t:${k}` }) }))
+vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string, p?: object) => `t:${k}${p ? JSON.stringify(p) : ''}` }) }))
 vi.mock('@autobot/ui', () => ({
   useFocusTrap: () => ({ onKeydown: vi.fn() }),
   useFocusRestore: vi.fn(),
@@ -70,7 +70,7 @@ describe('CommandPermissionDialog handleDeny (#21174)', () => {
     const wrapper = mountDialog()
     await clickDeny(wrapper)
     expect(wrapper.emitted('denied')).toBeUndefined()
-    expect(errorApprove.value).not.toBeNull()
+    expect(errorApprove.value?.message).toBe('t:ui.commandPermission.denyFailed{"error":"network"}')
   })
 
   it('emits denied after a real denial', async () => {

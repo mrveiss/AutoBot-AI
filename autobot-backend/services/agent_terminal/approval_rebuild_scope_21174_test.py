@@ -36,7 +36,7 @@ def _request(session_id: str, command_id: str | None, command: str, stamp: float
     meta = {"command": command, "terminal_session_id": session_id, "risk_level": "HIGH"}
     if command_id:
         meta["command_id"] = command_id
-    return {"message_type": "command_approval_request", "timestamp": stamp, "text": "needs approval", "metadata": meta}
+    return {"messageType": "command_approval_request", "timestamp": stamp, "text": "needs approval", "metadata": meta}
 
 
 def _worker(redis, messages: list[dict]) -> SessionManager:
@@ -132,7 +132,7 @@ async def test_two_sessions_in_one_conversation_each_keep_their_own_approval(red
 
 async def test_another_sessions_response_does_not_hide_this_sessions_approval(redis):
     response = {
-        "message_type": "command_approval_response",
+        "messageType": "command_approval_response",
         "timestamp": 300.0,
         "text": "Command approved and executed: `rm y`",
         "metadata": {"terminal_session_id": "sess-Y"},
@@ -161,6 +161,82 @@ async def test_a_request_without_a_command_id_is_still_marked_by_its_digest(redi
 async def test_the_claim_and_the_marker_are_written_together_and_outlive_the_record(redis):
     assert await claim_decision(redis, "sess-X", "cmd-x")
     assert await claim_decision(redis, "sess-X", "cmd-x") is None
-    assert 0 < await redis.ttl(decided_key("cmd-x")) <= DECIDED_MARKER_TTL_SECONDS
-    assert DECIDED_MARKER_TTL_SECONDS > APPROVAL_PENDING_SESSION_TTL
+    stored = await redis.ttl(decided_key("cmd-x"))
+    assert APPROVAL_PENDING_SESSION_TTL < stored <= DECIDED_MARKER_TTL_SECONDS  # the marker TTL, not the claim's
     assert DECISION_TTL_SECONDS > 3600  # longer than the longest command the decision can start
+
+
+async def test_a_later_unrelated_message_does_not_hide_the_approval(redis):
+    chatter = {"messageType": "default", "timestamp": 300.0, "text": "Has this command executed yet?", "metadata": {}}
+    worker = _worker(redis, [_request("sess-X", "cmd-x", "rm x", 100.0), chatter])
+    await redis.set("agent_terminal:approval_conversation:sess-X", CONV)
+    assert await worker._rebuild_session_from_pending_approval("sess-X") is not None
+
+
+async def test_the_legacy_message_type_key_still_matches(redis):
+    request = _request("sess-X", "cmd-x", "rm x", 100.0)
+    request["message_type"] = request.pop("messageType")
+    worker = _worker(redis, [request])
+    await redis.set("agent_terminal:approval_conversation:sess-X", CONV)
+    assert await worker._rebuild_session_from_pending_approval("sess-X") is not None
+
+
+async def test_a_rebuilt_session_is_recorded_before_it_is_returned(redis):
+    worker = _worker(redis, [_request("sess-X", "cmd-x", "rm x", 100.0)])
+    await redis.set("agent_terminal:approval_conversation:sess-X", CONV)
+    assert await worker._rebuild_session_from_pending_approval("sess-X") is not None
+    assert await redis.exists(session_key("sess-X"))
+
+
+async def test_a_lapsed_claim_does_not_regrant_a_decided_approval(redis):
+    assert await claim_decision(redis, "sess-X", "cmd-x")
+    await redis.delete("agent_terminal:decision:sess-X:cmd-x")  # the claim lapses, the marker stays
+    assert await claim_decision(redis, "sess-X", "cmd-x") is None
+
+
+async def test_a_release_redis_refuses_is_retried_with_the_same_token(redis, monkeypatch):
+    from services.agent_terminal import decision_session
+
+    monkeypatch.setattr(decision_session, "_RELEASE_RETRY_DELAYS_SECONDS", (0, 0))
+    token = await claim_decision(redis, "sess-X", "cmd-x")
+    real = redis.eval
+    failures = iter([ConnectionError("blip")])
+
+    async def _eval(*args, **kwargs):
+        failure = next(failures, None)
+        if failure is not None:
+            raise failure
+        return await real(*args, **kwargs)
+
+    redis.eval = _eval
+    await decision_session.release_with_retry(redis, "sess-X", "cmd-x", token)  # must not raise
+    for _ in range(50):
+        if not await redis.exists(decided_key("cmd-x")):
+            break
+        await asyncio.sleep(0.01)
+    assert not await redis.exists(decided_key("cmd-x"))
+    assert await claim_decision(redis, "sess-X", "cmd-x")
+
+
+async def test_a_refused_reservation_save_is_retried_with_the_approval_put_back(redis):
+    from types import SimpleNamespace
+
+    from services.agent_terminal.ai_line_gate import persist_reservation
+
+    worker = _worker(redis, [])
+    session = AgentTerminalSession(session_id="sess-R", agent_id="a", agent_role=AgentRole.CHAT_AGENT, owner="owner")
+    session.set_pending_approval("rm r", None, "HIGH", [], "cmd-r", False, [])
+    calls = []
+
+    async def _persist(s):
+        calls.append(s.get_pending_command_id())
+        if len(calls) == 1:
+            s.pending_approval = None  # the stale-save refresh replaced the approval with the older record
+            return False
+        return True
+
+    worker._persist_session = _persist
+    risk = SimpleNamespace(value="HIGH")
+    assert await persist_reservation(session, worker, SimpleNamespace(command_id="cmd-r"), None, risk) is None
+    assert calls == ["cmd-r", "cmd-r"]  # put back before the second save
+    assert session.get_pending_command_id() == "cmd-r"

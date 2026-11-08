@@ -123,13 +123,16 @@ async def claim_pending(session: AgentTerminalSession, redis, command_id: str, c
     return session.get_permission_denied_response(PENDING_APPROVAL_REFUSAL, command, risk.value)
 
 
+_PERSIST_RESERVATION_ATTEMPTS = 3
+
+
 async def settle_pending(session: AgentTerminalSession, session_manager) -> None:
     """The decision has landed: clear the approval, persist that for other workers, free the slot (#20059)."""
     command_id = session.get_pending_command_id()
     session.clear_pending_and_resume()
     redis = session_manager.redis_client
     if usable_redis(redis) and not await _persist_cleared(session, session_manager, command_id):
-        fire_and_forget(_retry_clear(session, session_manager), name=f"retry-clear-{session.session_id}")
+        fire_and_forget(_retry_clear(session, session_manager, command_id), name=f"retry-clear-{session.session_id}")
     await release_pending_slot(redis, session.session_id, command_id)
 
 
@@ -147,11 +150,17 @@ async def _persist_cleared(session: AgentTerminalSession, session_manager, comma
     return await session_manager._persist_session(session)
 
 
-async def _retry_clear(session: AgentTerminalSession, session_manager) -> None:
-    """A stale persisted approval refuses every command, so the save that clears it is retried while it is true."""
+async def _retry_clear(session: AgentTerminalSession, session_manager, command_id: str | None) -> None:
+    """A stale persisted approval refuses every command, so the save that clears it is retried: the decided
+    approval is cleared again each time a refresh restores it, and a newer approval is left alone (#20674)."""
     for delay in _CLEAR_RETRY_DELAYS_SECONDS:
         await asyncio.sleep(delay)
-        if session.has_pending_approval() or await session_manager._persist_session(session):
+        pending_id = session.get_pending_command_id()
+        if pending_id is not None and pending_id != command_id:
+            return  # a newer approval owns the record
+        if pending_id is not None:
+            session.clear_pending_and_resume()  # a refresh restored the decided one
+        if await _persist_cleared(session, session_manager, command_id):
             return
     logger.error("Session %s still shows a decided approval in Redis; its commands stay refused", session.session_id)
 
@@ -167,14 +176,47 @@ async def write_reservation(session: AgentTerminalSession, command, queue, redis
     try:
         await asyncio.shield(write)
     except BaseException:
-        if (session.pending_approval or {}).get("command_id") == command.command_id:
-            session.pending_approval = None
-        fire_and_forget(_close_queued_command(queue, command, write), name=f"close-queued-{command.command_id}")
-        fire_and_forget(
-            release_pending_slot(redis, session.session_id, command.command_id),
-            name=f"release-claim-{command.command_id}",
-        )
+        abandon_reservation(session, command, queue, redis, write)
         raise
+
+
+def abandon_reservation(session: AgentTerminalSession, command, queue, redis, write: "asyncio.Future") -> None:
+    """Undo a reservation: drop its approval, close its queued row once *write* is over, free the claim."""
+    if (session.pending_approval or {}).get("command_id") == command.command_id:
+        session.pending_approval = None
+    fire_and_forget(_close_queued_command(queue, command, write), name=f"close-queued-{command.command_id}")
+    fire_and_forget(
+        release_pending_slot(redis, session.session_id, command.command_id),
+        name=f"release-claim-{command.command_id}",
+    )
+
+
+async def queue_reservation(session: AgentTerminalSession, session_manager, command, queue, risk) -> Metadata | None:
+    """Queue *command*, whose pending approval is set, and save it; the refusal to return if it was not (#20674)."""
+    await write_reservation(session, command, queue, session_manager.redis_client)
+    logger.info("✅ [QUEUE] Added command %s to queue", command.command_id)
+    return await persist_reservation(session, session_manager, command, queue, risk)
+
+
+async def persist_reservation(session: AgentTerminalSession, session_manager, command, queue, risk) -> Metadata | None:
+    """Save the new pending approval; the refusal to return once it is undone because no save landed (#20674).
+
+    A save refused as stale refreshed the copy from Redis, which replaced the approval with the older record.
+    This worker holds the slot's claim, so the approval is its own: put it back and save again.
+    """
+    redis = session_manager.redis_client
+    if not usable_redis(redis):
+        return None
+    pending = dict(session.pending_approval or {})
+    for _ in range(_PERSIST_RESERVATION_ATTEMPTS):
+        if session.get_pending_command_id() != command.command_id:
+            session.pending_approval = dict(pending)
+        if await session_manager._persist_session(session):
+            return None
+    done = asyncio.get_running_loop().create_future()
+    done.set_result(None)
+    abandon_reservation(session, command, queue, redis, done)
+    return session.get_permission_denied_response(CLAIM_UNAVAILABLE_REFUSAL, pending.get("command"), risk.value)
 
 
 async def _close_queued_command(queue, command, write: "asyncio.Future") -> None:
