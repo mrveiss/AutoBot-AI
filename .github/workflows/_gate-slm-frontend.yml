@@ -88,11 +88,6 @@ jobs:
         if: inputs.slm_frontend == 'true'
         run: npm run check:locales
 
-      - name: Locales match the lifting rule
-        if: inputs.slm_frontend == 'true'
-        working-directory: .
-        run: python3 scripts/lift_locale_translations.py --app autobot-slm-frontend/src/locales --check
-
       # The two repo_tests guards run HERE as well as in the python suite, and
       # the reason is #15900: they declare `*.vue` / `*.json` globs, which the
       # python path filter does not cover. That gap is recorded deliberately in
@@ -111,6 +106,11 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version-file: '.python-version'
+
+      - name: Locales match the lifting rule
+        if: inputs.slm_frontend == 'true'
+        working-directory: .
+        run: python3 scripts/lift_locale_translations.py --app autobot-slm-frontend/src/locales --check
 
       - name: Install pytest
         if: inputs.slm_frontend == 'true'

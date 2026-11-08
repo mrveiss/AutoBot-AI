@@ -20,9 +20,10 @@
         <p>{{ $t('workflow.runner.noActiveWorkflows') }}</p>
       </div>
       <div v-else class="workflow-list">
-        <div v-for="wf in workflows" :key="wf.workflow_id" class="workflow-item"
+        <button v-for="wf in workflows" :key="wf.workflow_id" type="button" class="workflow-item"
              :class="{ active: currentWorkflow?.workflow_id === wf.workflow_id, paused: wf.is_paused }"
-             @click="selectWorkflow(wf)">
+             :aria-current="currentWorkflow?.workflow_id === wf.workflow_id ? 'true' : undefined"
+             @click="$emit('select-workflow', wf.workflow_id)">
           <div class="wf-status" :class="getStatusClass(wf)">
             <Icon :name="getStatusIcon(wf)" />
           </div>
@@ -33,7 +34,7 @@
           <div class="wf-progress-bar">
             <div class="progress-fill" :style="{ width: getProgress(wf) + '%' }"></div>
           </div>
-        </div>
+        </button>
       </div>
     </div>
 
@@ -66,15 +67,20 @@
             <button class="btn-notif" @click="showNotifConfig = true" :aria-label="$t('workflow.notifications.title')">
               <Icon name="bell" />
             </button>
-            <BaseButton variant="success" size="sm" v-if="currentWorkflow.is_paused" @click="$emit('resume-workflow', currentWorkflow.workflow_id)">
-              <Icon name="play" /> {{ $t('workflow.runner.resume') }}
+            <BaseButton v-if="!currentWorkflow.started_at" variant="primary" size="sm" :disabled="loading" @click="$emit('start-workflow', currentWorkflow.workflow_id)">
+              <Icon name="play" /> {{ $t('workflow.runner.start') }}
             </BaseButton>
-            <BaseButton variant="warning" size="sm" v-else @click="$emit('pause-workflow', currentWorkflow.workflow_id)">
-              <Icon name="pause" /> {{ $t('workflow.runner.pause') }}
-            </BaseButton>
-            <BaseButton variant="error" size="sm" @click="$emit('cancel-workflow', currentWorkflow.workflow_id)">
-              <Icon name="stop" /> {{ $t('workflow.runner.cancel') }}
-            </BaseButton>
+            <template v-else>
+              <BaseButton variant="success" size="sm" v-if="currentWorkflow.is_paused" @click="$emit('resume-workflow', currentWorkflow.workflow_id)">
+                <Icon name="play" /> {{ $t('workflow.runner.resume') }}
+              </BaseButton>
+              <BaseButton variant="warning" size="sm" v-else @click="$emit('pause-workflow', currentWorkflow.workflow_id)">
+                <Icon name="pause" /> {{ $t('workflow.runner.pause') }}
+              </BaseButton>
+              <BaseButton variant="error" size="sm" @click="$emit('cancel-workflow', currentWorkflow.workflow_id)">
+                <Icon name="stop" /> {{ $t('workflow.runner.cancel') }}
+              </BaseButton>
+            </template>
           </div>
         </div>
 
@@ -119,15 +125,13 @@
                   <span v-if="step.started_at"><Icon name="play" /> {{ formatTime(step.started_at) }}</span>
                   <span v-if="step.completed_at"><Icon name="check" /> {{ formatTime(step.completed_at) }}</span>
                 </div>
-                <!-- Approval Actions -->
-                <div v-if="step.status === 'waiting_approval' && step.requires_confirmation" class="step-actions">
-                  <BaseButton variant="success" size="xs" @click="$emit('approve-step', currentWorkflow.workflow_id, step.step_id)">
-                    <Icon name="check" /> {{ $t('workflow.runner.approve') }}
-                  </BaseButton>
-                  <BaseButton variant="secondary" size="xs" @click="$emit('skip-step', currentWorkflow.workflow_id, step.step_id)">
-                    <Icon name="forward" /> {{ $t('workflow.runner.skip') }}
-                  </BaseButton>
-                </div>
+                <StepApprovalCard
+                  v-if="step.status === 'waiting_approval'"
+                  :step="step"
+                  :workflow-id="currentWorkflow.workflow_id"
+                  :approve="approveStep"
+                  :skip="skipStep"
+                />
                 <!-- Execution Result -->
                 <div v-if="step.execution_result" class="step-result" :class="{ error: step.status === 'failed' }">
                   <pre>{{ formatResult(step.execution_result) }}</pre>
@@ -163,15 +167,15 @@ import { BaseBadge, BaseModal, RiskBadge, BaseButton } from '@autobot/ui'
 import { ref, computed } from 'vue';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
 import WorkflowNotificationConfig from './WorkflowNotificationConfig.vue';
+import StepApprovalCard, { type StepAnswer } from './StepApprovalCard.vue';
 
-const props = defineProps<{ workflows: ActiveWorkflow[]; currentWorkflow: ActiveWorkflow | null; loading: boolean }>();
+const props = defineProps<{ workflows: ActiveWorkflow[]; currentWorkflow: ActiveWorkflow | null; loading: boolean; approveStep: StepAnswer; skipStep: StepAnswer }>();
 const emit = defineEmits<{
   (e: 'start-workflow', id: string): void;
   (e: 'pause-workflow', id: string): void;
   (e: 'resume-workflow', id: string): void;
   (e: 'cancel-workflow', id: string): void;
-  (e: 'approve-step', wfId: string, stepId: string): void;
-  (e: 'skip-step', wfId: string, stepId: string): void;
+  (e: 'select-workflow', id: string): void;
   (e: 'refresh'): void;
 }>();
 
@@ -184,10 +188,6 @@ function onNotifSaved(): void {
 
 const completedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s.status === 'completed').length ?? 0);
 const failedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s.status === 'failed').length ?? 0);
-
-function selectWorkflow(_wf: ActiveWorkflow) {
-  // Parent should handle selection via props
-}
 
 function getProgress(wf: ActiveWorkflow): number {
   if (!wf.total_steps) return 0;
@@ -239,11 +239,12 @@ function formatResult(result: Record<string, unknown>): string {
 .empty-list .icon { width: 32px; height: 32px; margin-bottom: var(--spacing-3); }
 
 .workflow-list { flex: 1; overflow-y: auto; padding: var(--spacing-2); }
-.workflow-item { padding: var(--spacing-3); background: var(--bg-tertiary); border-radius: var(--radius-lg); margin-bottom: var(--spacing-2); cursor: pointer; transition: all 0.15s; }
+.workflow-item { padding: var(--spacing-3); border: 1px solid transparent; background: var(--bg-tertiary); border-radius: var(--radius-lg); margin-bottom: var(--spacing-2); cursor: pointer; transition: all 0.15s; }
 .workflow-item:hover { background: var(--bg-hover); }
 .workflow-item.active { background: var(--color-primary-bg); border: 1px solid var(--color-primary); }
 .workflow-item.paused { opacity: 0.7; }
-.workflow-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-2-5); }
+.workflow-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-2-5); width: 100%; color: inherit; font: inherit; text-align: left; }
+.workflow-item:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .wf-status { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); }
 .wf-status.running { background: var(--color-success-bg); color: var(--color-success); }
 .wf-status.paused { background: var(--color-warning-bg); color: var(--color-warning); }
@@ -330,7 +331,6 @@ function formatResult(result: Record<string, unknown>): string {
 .step-meta { display: flex; gap: var(--spacing-3); font-size: var(--text-xs); color: var(--text-tertiary); }
 .step-meta span { display: flex; align-items: center; gap: var(--spacing-1); }
 
-.step-actions { display: flex; gap: var(--spacing-2); margin-top: var(--spacing-3); padding-top: var(--spacing-3); border-top: 1px solid var(--border-default); }
 .step-result { margin-top: var(--spacing-3); padding: var(--spacing-2-5); background: var(--bg-tertiary); border-radius: var(--radius-default); }
 .step-result.error { background: var(--color-error-bg); }
 .step-result pre { margin: var(--spacing-0); font-size: var(--text-xs); color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 150px; overflow-y: auto; }

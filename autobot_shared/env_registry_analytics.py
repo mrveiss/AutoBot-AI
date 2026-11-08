@@ -98,3 +98,25 @@ register_env_var(
         range=(1, 300),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODE_INDEX_RUN_TIMEOUT_SECONDS",
+        type=float,
+        default=180.0,
+        description="Seconds the code-index subprocess may run before the analytics run reports it timed out (#18056).",
+        component="analytics",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MODEL_PULL_TIMEOUT_SECONDS",
+        type=float,
+        default=1800.0,
+        description=(
+            "Seconds one `ollama pull` may run in the model optimizer before it is reported timed out (#18056)."
+        ),
+        component="analytics",
+    )
+)

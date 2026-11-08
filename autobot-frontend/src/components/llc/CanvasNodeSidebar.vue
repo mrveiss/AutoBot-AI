@@ -21,7 +21,8 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatTimeAgo, createDateFormatter } from '@/utils/formatHelpers'
+import { createRecencyFormatter } from '@autobot/ui'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import type { components } from '@/types/generated/api'
 import type { OrgNode } from '@/views/llc/OrgTreeNode.vue'
 import type { WorkItem } from '@/views/llc/workItemTypes'
@@ -51,6 +52,8 @@ const props = defineProps<{
   node: OrgNode
   companyId: string
   terminating: boolean
+  /** Whether the viewer may pause/resume/terminate: the server refuses all but a company owner/admin (#21001). */
+  canControl?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -62,7 +65,8 @@ const emit = defineEmits<{
 
 const logger = createLogger('CanvasNodeSidebar')
 const api = useApiClient()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const formatTimeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
 
 
 const RAIL_ICON_CLASS: Record<SidebarRailIcon, string> = {
@@ -500,6 +504,7 @@ const formatTime = createDateFormatter({ emptyText: () => t('llc.orgChart.never'
         @changed="(on: boolean) => emit('heartbeat', node, on)"
       />
       <button
+        v-if="canControl"
         class="w-full py-2 rounded-lg text-sm font-medium transition-colors"
         :class="node.status === 'paused'
           ? 'bg-green-600 text-white hover:bg-green-700'
@@ -510,6 +515,7 @@ const formatTime = createDateFormatter({ emptyText: () => t('llc.orgChart.never'
         {{ node.status === 'paused' ? t('llc.orgChart.resumeAgent') : t('llc.orgChart.pauseAgent') }}
       </button>
       <button
+        v-if="canControl"
         class="w-full py-2 rounded-lg text-sm font-medium transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
         :disabled="terminating"
         data-testid="org-drawer-terminate"
@@ -527,7 +533,6 @@ const formatTime = createDateFormatter({ emptyText: () => t('llc.orgChart.never'
       :work-item-id="handoffItem.id"
       :company-id="companyId"
       direction="to_human"
-      :agent-assignee-id="node.node_id"
       @close="handoffItem = null"
       @done="onHandoffDone"
     />

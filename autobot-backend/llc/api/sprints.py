@@ -1108,11 +1108,9 @@ async def get_project_knowledge(
     proj = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
     if proj is None or str(proj.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
-    from autobot_shared.singleton_factory import lazy_singleton
+    from ..services.accessors import get_work_product_service
 
-    from ..services.work_product_service import WorkProductService
-
-    svc = lazy_singleton(WorkProductService)()
+    svc = get_work_product_service()
     artifacts = await svc.list_indexed_by_project(
         session=None,  # type: ignore[arg-type]  — no DB needed, reads ChromaDB directly
         project_id=str(project_id),

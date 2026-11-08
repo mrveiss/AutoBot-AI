@@ -434,6 +434,7 @@
 </template>
 
 <script setup lang="ts">
+import { createDateFormatter } from '@/utils/formatHelpers'
 import { ref, computed, onMounted, watch } from 'vue';
 import TruncationNotice from './TruncationNotice.vue';
 import { BaseModal, BaseButton, saveTextFile } from '@autobot/ui'
@@ -784,10 +785,7 @@ function formatTrendChange(change: number): string {
   return `${prefix}${change.toFixed(1)}%`;
 }
 
-function formatTrendDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
+const formatTrendDate = createDateFormatter({ kind: 'date', intl: { month: 'numeric', day: 'numeric' } });
 
 function getTrendClass(trend: number): string {
   if (trend < 0) return 'positive';

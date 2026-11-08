@@ -242,6 +242,32 @@
     "statefulServices": "Stateful Services",
     "status": "Status"
   },
+  "codeRollback": {
+    "cancel": "Cancel",
+    "checked": "two databases, the SLM database and the backend database, for a migration the chosen version does not have.",
+    "checkedLabel": "Checked:",
+    "close": "Close",
+    "confirm": "Roll back",
+    "confirmTitle": "Roll back to this version?",
+    "description": "Deploy an earlier version of the main branch through the updater. Run Update Everything afterwards to return to the latest.",
+    "empty": "No earlier versions are available.",
+    "notChecked": "SQLite stores, Redis, ChromaDB, file formats, and tables the application creates on startup. If the chosen version reads any of these differently, the rollback does not detect it.",
+    "notCheckedLabel": "Not checked:",
+    "option": "{date}: {subject}",
+    "optionRunning": "{date}: {subject} (running now)",
+    "pickerLabel": "Version to roll back to",
+    "pickerPlaceholder": "Choose an earlier version",
+    "refusedTitle": "This rollback is not possible",
+    "requestFailed": "The request failed. Try again, or check the SLM logs.",
+    "review": "Review rollback",
+    "stepFetch": "Fetch the latest history from the code source.",
+    "stepFleet": "Update every fleet node that is on a different version.",
+    "stepLatest": "Show the nodes as outdated against the latest version. Run Update Everything to return to it.",
+    "stepMigrations": "Never undo a database migration. A rollback that a migration is in the way of is refused.",
+    "stepSlm": "Update this SLM server to that version and restart it.",
+    "title": "Roll back to an earlier version",
+    "willDo": "This will:"
+  },
   "codeSourceModal": {
     "assign": "Assign",
     "assignCodeSource": "Assign Code Source",
@@ -1746,6 +1772,8 @@
       "loading": "Reading install metrics...",
       "unavailableTitle": "The main app is not available",
       "unavailableBody": "The main backend did not answer any install metrics request. No figures are shown, because any shown now would be out of date. Polling stops after repeated failures; use Refresh to read again.",
+      "unauthorisedTitle": "Not authorised to read the main app",
+      "unauthorisedBody": "The main app answered every install metrics request but refused this session. Sign in again or ask an administrator for access. No figures are shown.",
       "sectionFailedTitle": "{section} could not be read",
       "sectionFailedBody": "The install metrics request failed.",
       "emptyTitle": "Nothing reported yet",
@@ -1779,8 +1807,6 @@
       "stat": {
         "cpu": "CPU",
         "memory": "Memory",
-        "disk": "Disk",
-        "processes": "Processes",
         "overallHealth": "Overall health",
         "performanceScore": "Performance score",
         "gpuName": "Device",
@@ -2131,7 +2157,13 @@
       "time": "Time:",
       "time1": "Time",
       "value0TracePlural": "{value0} trace{plural}",
-      "paginationAria": "Trace list pages"
+      "paginationAria": "Trace list pages",
+      "range": {
+        "1h": "1h",
+        "6h": "6h",
+        "24h": "24h",
+        "7d": "7d"
+      }
     }
   },
   "performanceView": {
@@ -3106,6 +3138,7 @@
         "value": "Value"
       },
       "userManagementSettings": {
+        "personPushFailed": "The SLM could not be updated for: {names}. If one of them was deactivated or changed their password, the SLM still has the old state. It retries by itself.",
         "23PermissionsAcross8": "23 permissions across 8 resources",
         "actions": "Actions",
         "active": "Active",
@@ -3254,6 +3287,7 @@
         "loading": "Reading the installed themes...",
         "errorTitle": "The installed themes could not be read",
         "errorBody": "The theme list request failed.",
+        "malformedList": "The theme list answer was not a list.",
         "unavailableTitle": "The theme manager is not available",
         "unavailableBody": "Theme packages live on the main app, which did not answer. Try again once it is running.",
         "emptyTitle": "No themes installed",

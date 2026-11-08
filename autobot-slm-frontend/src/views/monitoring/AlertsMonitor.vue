@@ -11,11 +11,10 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PollingPausedAlert, createLogger } from '@autobot/ui'
+import { PollingPausedAlert, createLogger, createDateFormatter, createRecencyFormatter } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useFleetMetrics } from '@/composables/useFleetMetrics'
 import { slmApiClient } from '@/utils/ApiClient'
-import { formatCompactRelativeTime } from '@/utils/dateUtils'
 
 const logger = createLogger('AlertsMonitor')
 
@@ -27,7 +26,7 @@ const {
   isLoading,
 } = useFleetMetrics({ autoFetch: false, pollInterval: 0 })
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const isClearing = ref(false)
 const clearError = ref<string | null>(null)
@@ -109,12 +108,14 @@ function getPriorityBadgeClass(priority: string): string {
   }
 }
 
-function formatTimestamp(ts: number): string {
-  // ts is already in milliseconds (from Date.now() / .getTime())
-  const date = new Date(ts)
-  if (Date.now() - date.getTime() < 86400000) return formatCompactRelativeTime(date)
-  return date.toLocaleDateString()
-}
+// ts is already in milliseconds (from Date.now() / .getTime())
+const formatTimestamp = createRecencyFormatter({
+  locale: () => locale.value,
+  style: 'narrow',
+  maxUnit: 'day',
+  olderThanMs: 86_400_000,
+  older: createDateFormatter({ locale: () => locale.value, kind: 'date' }),
+})
 
 function acknowledgeAlert(index: number) {
   acknowledgedAlerts.value.add(index)

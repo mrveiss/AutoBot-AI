@@ -1243,6 +1243,7 @@ async def _init_slm_client():
     # the decorator only fires on import, and a node whose SLM init raises is
     # precisely the node whose link state must be reported. Registering inside
     # the try would omit the component on exactly the broken nodes.
+    from services import first_admin_link_probe  # noqa: F401
     from services import slm_link_probe  # noqa: F401
 
     try:
@@ -1422,17 +1423,14 @@ async def _seed_agent_registry() -> None:
 
 
 async def _seed_default_admin() -> None:
-    """Seed the default platform-admin into autobot_users (#10199).
-
-    Idempotent — skips if any admin user already exists or if
-    AUTOBOT_ADMIN_PASSWORD is not configured.  Non-fatal: errors are
-    logged and swallowed so a seed failure never blocks startup.
-    """
+    """Seed the default platform-admin (#10199) after linking the SLM's first admin (#10200). Non-fatal."""
     logger.info("[ 97%%] Admin Seed: seeding default admin user...")
     try:
         from user_management.database import get_async_session_factory
+        from user_management.services import person_link_service
         from user_management.services.seed import seed_default_admin
 
+        await person_link_service.link_first_slm_admin_at_startup()
         async with get_async_session_factory()() as session:
             await seed_default_admin(session)
             # seed_default_admin (via UserService) only flushes; without an
@@ -2281,10 +2279,10 @@ def create_lifespan_manager():
         loop.set_default_executor(_executor)
         logger.info("🧵 Bounded thread pool configured (max %d workers)", MAX_WORKER_THREADS)
 
-        # Register the running event loop for sync-endpoint audit scheduling (#1568)
-        from middleware.audit_middleware import set_main_event_loop
+        # Register the running event loop for sync-endpoint audit scheduling (#1568), run_or_schedule (#20887)
+        from initialization.main_loop import register_main_loops
 
-        set_main_event_loop(asyncio.get_running_loop())
+        register_main_loops(asyncio.get_running_loop())
 
         # Phase 1: Critical initialization (BLOCKING)
         await initialize_critical_services(app)

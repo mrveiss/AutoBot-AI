@@ -218,6 +218,13 @@ jobs:
           cache: 'npm'
           cache-dependency-path: autobot-frontend/package-lock.json
 
+      # #20903: the npm audit gate is a repo script; run it on the .python-version
+      # interpreter like every other repo script, not the runner default python3.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
       - name: Install dependencies
         working-directory: autobot-frontend
         # #13410: no CI job runs Cypress (only `test:e2e` needs the binary), so

@@ -13,13 +13,18 @@ mapping (403/404/400).
 
 import base64
 import uuid
+from contextlib import contextmanager
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api import envelope_secrets
+from autobot_shared.db_session import async_session_scope
+from autobot_shared.user_management.models.audit import AuditLog
 from services.envelope_secrets_service import EnvelopeSecretsService
 from services.secrets_coordinator import SecretsCoordinator
 from tests.migrations.conftest import requires_postgres, run_alembic
@@ -69,9 +74,23 @@ async def client(fresh_db_url):
     app.dependency_overrides[envelope_secrets.principal] = _principal_override
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://t", follow_redirects=True) as c:
-        yield c
+    with _canonical_audit_on(maker):
+        async with AsyncClient(transport=transport, base_url="http://t", follow_redirects=True) as c:
+            c.sessions = maker  # type: ignore[attr-defined]
+            yield c
     await engine.dispose()
+
+
+@contextmanager
+def _canonical_audit_on(maker):
+    """The canonical audit store writes ``audit_logs`` in the database the routes use (#20557).
+
+    In a deployment ``db_session_context`` and ``get_session`` share one session factory, so the
+    required before-write record lands in the same Postgres as the secret; the router-only app
+    here overrides ``get_session`` only, so the audit store is pointed at the same database.
+    """
+    with patch("services.audit.store.db_session_context", lambda: async_session_scope(maker)):
+        yield
 
 
 def _as(user_id, perms=""):
@@ -126,6 +145,28 @@ async def test_delete_then_404(client):
     sid = (await _create(client)).json()["id"]
     assert (await client.delete(f"{_P}/{sid}", headers=_as(_ADMIN))).status_code == 204
     assert (await client.get(f"{_P}/{sid}", headers=_as(_ADMIN))).status_code == 404
+
+
+async def test_delete_commits_the_before_write_record(client):
+    """The required ``attempted`` record is a committed ``audit_logs`` row before the delete (#20557)."""
+    sid = (await _create(client)).json()["id"]
+    assert (await client.delete(f"{_P}/{sid}", headers=_as(_ADMIN))).status_code == 204
+    async with client.sessions() as s:
+        rows = await s.execute(select(AuditLog.action).where(AuditLog.outcome == "attempted"))
+        assert "secret.delete" in rows.scalars().all()
+
+
+async def test_delete_unrecorded_is_503_and_nothing_changed(client):
+    """When the record cannot be committed the delete is refused and the secret survives (#17038)."""
+    sid = (await _create(client)).json()["id"]
+    with patch("services.audit.audit.record_committed", AsyncMock(return_value=False)):
+        r = await client.delete(f"{_P}/{sid}", headers=_as(_ADMIN))
+    assert r.status_code == 503
+    assert (await client.get(f"{_P}/{sid}", headers=_as(_ADMIN))).status_code == 200
+
+
+async def test_delete_missing_404(client):
+    assert (await client.delete(f"{_P}/{uuid.uuid4()}", headers=_as(_ADMIN))).status_code == 404
 
 
 async def test_read_missing_404(client):
@@ -214,9 +255,10 @@ async def service_client(fresh_db_url):
     app.dependency_overrides[envelope_secrets.service_principal] = _service_principal_override
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://t", follow_redirects=True) as c:
-        c.set_active_root = lambda raw: active_root.__setitem__("key", raw)  # type: ignore[attr-defined]
-        yield c
+    with _canonical_audit_on(maker):
+        async with AsyncClient(transport=transport, base_url="http://t", follow_redirects=True) as c:
+            c.set_active_root = lambda raw: active_root.__setitem__("key", raw)  # type: ignore[attr-defined]
+            yield c
     await engine.dispose()
 
 
