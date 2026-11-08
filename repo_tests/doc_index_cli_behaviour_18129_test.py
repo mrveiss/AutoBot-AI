@@ -90,3 +90,32 @@ def test_scoping_flags_reach_the_service(monkeypatch, flags: list[str]) -> None:
         assert service.index_file.await_args.kwargs == {"tier": 3, "force": False}
     else:
         service.index_all.assert_awaited_once_with(force=False, tier=2, category="api")
+
+
+def test_adopt_store_is_rejected_with_dry_run_before_anything_opens(monkeypatch) -> None:
+    cli = _cli()
+    service = _service(monkeypatch)
+    service.open_store_for_adoption = AsyncMock()
+    assert _run(cli, ["--adopt-store", "--dry-run"]) == 1
+    service.open_store_for_adoption.assert_not_called()
+    service.initialize.assert_not_called()
+
+
+def test_adopt_store_never_initialises_the_service_and_reports_a_failed_write(monkeypatch, tmp_path) -> None:
+    from services.knowledge import doc_index_store_guard, doc_indexer
+
+    cli = _cli()
+    service = _service(monkeypatch)
+    collection = MagicMock()
+    collection.count.return_value = 3
+    service.open_store_for_adoption = AsyncMock(return_value=("store-a", collection))
+    monkeypatch.setattr(doc_indexer, "HASH_CACHE_FILE", tmp_path / "hashes.json")
+    assert _run(cli, ["--adopt-store"]) == 0
+    assert doc_index_store_guard.load_recorded_store(doc_indexer.HASH_CACHE_FILE) == "store-a"
+    service.initialize.assert_not_called()
+
+    def unwritable(*_a, **_k):
+        raise PermissionError("read-only")
+
+    monkeypatch.setattr(doc_index_store_guard, "write_recorded_store", unwritable)
+    assert _run(cli, ["--adopt-store"]) == 1
