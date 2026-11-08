@@ -62,6 +62,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # fails with "No module named 'autobot_shared'" and takes the whole dump with it.
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+from autobot_shared.api_routing import frontend_call_paths as _fcp  # noqa: E402
 from autobot_shared.api_routing import router_prefixes as _routing  # noqa: E402
 from autobot_shared.openapi_schema import normalize_pattern_anchors  # noqa: E402
 
@@ -95,25 +96,21 @@ ROUTE_DECORATOR_RE = re.compile(
 # api_endpoint_scanner.py with separate regexes, and the two had diverged —
 # the scanner got package resolution (#12945/#12956), this gate did not.
 include_router_prefixes = _routing.include_router_prefixes
-FE_API_RE = re.compile(r"[\'\"`](/api/[A-Za-z0-9_/${}():.\-]+)")
-# #12326: the dominant idiom composes the path from a helper —
-# ``apiClient.get(`${getApiBase()}/knowledge_base/health/status`)``. getApiBase()
-# resolves to '/api' (see ssot-config.ts:getApiBase), so the real call target is
-# ``/api`` + the captured suffix. Without this the audit only saw literal
-# ``'/api/...'`` strings (~42% of calls) and reported a clean bill while dozens of
-# ``${getApiBase()}/...`` calls hit non-existent routes.
-GETAPIBASE_CALL_RE = re.compile(r"\$\{getApiBase\(\)\}(/[A-Za-z0-9_/${}():.\-]+)")
-# #10037: ``${getBackendUrl()}/<path>`` calls. getBackendUrl() is host-level
-# (no /api), so any <path> that omits /api hits a path the backend doesn't
-# serve. We only flag the high-confidence case where /api<path> IS a real
-# route (a forgotten /api, the #10036 class) — never legit non-/api mounts.
-BACKEND_URL_CALL_RE = re.compile(r"\$\{getBackendUrl\(\)\}(/[A-Za-z0-9_/${}():.\-]+)")
+# Request-URL extraction lives in autobot_shared/api_routing/frontend_call_paths.py (#20910); re-exported here.
+FE_API_RE = _fcp.FE_API_RE
+GETAPIBASE_CALL_RE = _fcp.GETAPIBASE_CALL_RE
+BACKEND_URL_CALL_RE = _fcp.BACKEND_URL_CALL_RE
+URL_BASE_API_RE = _fcp.URL_BASE_API_RE
+call_paths = _fcp.call_paths
 PARAM_RE = re.compile(r"\{[^}]*\}")
 
 
 def norm_path(p: str) -> str:
     """Normalize a path: collapse params to {p}, strip trailing slash."""
     p = p.split("?")[0]
+    # A placeholder glued onto a literal at the END of the path (`/x${qs`, `/x${query}`) is a query or
+    # suffix appended to the path, not a path segment: drop it. `/x/${id}` (a segment) is kept.
+    p = re.sub(r"(?<=[A-Za-z0-9_])\$\{[^/]*$", "", p)
     p = re.sub(r"\$\{[^}]*\}?", "{p}", p)  # ${id}, ${encodeURIComponent(...
     p = re.sub(r"/:([A-Za-z_]\w*)", "/{p}", p)  # /:id
     p = PARAM_RE.sub("{p}", p)  # {device_id}
@@ -440,22 +437,13 @@ def frontend_calls() -> dict[str, set[str]]:
             if "node_modules" in sp or any(x in sp for x in FE_EXCLUDE_PATTERNS):
                 continue
             txt = f.read_text(encoding="utf-8", errors="ignore")
-            for line in txt.splitlines():
-                # Comment lines hold doc EXAMPLES (`* apiClient.get('/api/users')`),
-                # not real calls — skip them.
-                if line.lstrip()[:2] in ("* ", "//", "/*") or line.strip() == "*":
+            for m in call_paths(txt):
+                p = norm_path(m)
+                # Unbalanced braces = extraction artifact (brace-expansion
+                # notation inside comments, e.g. `/api/x/{a,b}/y`), not a call.
+                if p.count("{") != p.count("}"):
                     continue
-                # Literal '/api/...' strings and getApiBase()-composed paths
-                # (#12326). getApiBase() -> '/api', so prepend it to the suffix.
-                matched = list(FE_API_RE.findall(line))
-                matched += ["/api" + s for s in GETAPIBASE_CALL_RE.findall(line)]
-                for m in matched:
-                    p = norm_path(m)
-                    # Unbalanced braces = extraction artifact (brace-expansion
-                    # notation inside comments, e.g. `/api/x/{a,b}/y`), not a call.
-                    if p.count("{") != p.count("}"):
-                        continue
-                    calls[p].add(str(f.relative_to(REPO_ROOT)))
+                calls[p].add(str(f.relative_to(REPO_ROOT)))
     return calls
 
 

@@ -87,6 +87,7 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_terminal,
     env_registry_testing,
     env_registry_tls,
+    env_registry_transcriber,
     env_registry_worker_loop,
 )
 
@@ -839,19 +840,6 @@ register_env_var(
 )
 
 # --- storage paths and toolsets (#14223) -------------------------------------
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TRANSCRIBER_DB_PATH",
-        type=str,
-        default="data/transcriber.db",
-        description=(
-            "SQLite database backing the transcriber. Relative to the working "
-            "directory unless given as an absolute path."
-        ),
-        component="voice",
-    )
-)
 
 register_env_var(
     EnvVarSpec(
