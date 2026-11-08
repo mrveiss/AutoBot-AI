@@ -370,7 +370,7 @@ const {
   isPreviewable,
   isEditable,
   clearError
-} = useConversationFiles(props.sessionId)
+} = useConversationFiles(() => props.sessionId)
 
 // Local state
 const fileInput = ref<HTMLInputElement>()
