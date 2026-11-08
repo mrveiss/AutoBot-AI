@@ -59,6 +59,17 @@
     mode: "0644"
   become: true
 
+# #20942: autobot_shared/python_floor.py reads <install root>/.python-version at
+# startup (the Python floor SSOT, #13842). Nothing placed it on a node, so every
+# backend start logged ".python-version unreadable" and fell back to a hardcoded floor.
+- name: "Shared manifests | Stage .python-version onto the node (#20942)"
+  ansible.builtin.copy:
+    src: "{{ role_path | default(playbook_dir ~ '/x') }}/../../../../.python-version"
+    dest: "{{ autobot.base_dir }}/.python-version"
+    owner: "{{ autobot.user }}"
+    mode: "0644"
+  become: true
+
 - name: "Shared manifests | Record that this host is staged (#17331)"
   ansible.builtin.set_fact:
     autobot_shared_manifests_staged: true
