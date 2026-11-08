@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from security_layer import SecurityLayer
+from tests.fixtures.fake_process import finished_process
 from utils import command_utils
 from utils.agent_command_helpers import run_agent_command
 from utils.command_utils import execute_shell_command
@@ -96,3 +97,32 @@ async def test_a_background_job_outlives_a_shell_that_finished_in_time(tmp_path)
         assert _alive(pid), "a job deliberately backgrounded was killed when its shell returned"
     finally:
         os.kill(pid, 9)
+
+
+@pytest.mark.asyncio
+async def test_a_timed_out_command_kills_only_its_own_process_group(tmp_path):
+    """The child leads a group of its own, so the group kill never reaches the test process's group."""
+    pid_file = tmp_path / "pid"
+    own_group = os.getpgid(0)
+    signalled: list[int] = []
+    real_killpg = os.killpg
+
+    def recording_killpg(pgid, sig):
+        signalled.append(pgid)
+        real_killpg(pgid, sig)
+
+    with patch.object(command_utils, "DEFAULT_SHELL_TIMEOUT_S", 1), patch("os.killpg", recording_killpg):
+        result = await execute_shell_command(f"sh -c 'echo $$ > {pid_file}; sleep 60'")
+    child = await _pid_from(pid_file)
+    assert result["timed_out"] is True
+    assert signalled and own_group not in signalled and 0 not in signalled
+    assert child != own_group and not _alive(child)  # the shell was its group's leader: pid == pgid
+    assert os.getpgid(0) == own_group  # and we are still here
+
+
+@pytest.mark.asyncio
+async def test_an_eof_terminated_fake_process_completes_without_a_group_kill():
+    """A patched spawn must hand back streams that reach EOF; a bare AsyncMock streams forever (CI OOM)."""
+    with patch("asyncio.create_subprocess_shell", return_value=finished_process(b"out\n")):
+        result = await asyncio.wait_for(execute_shell_command("echo out"), timeout=5)
+    assert result["stdout"] == "out" and result["status"] == "success"
