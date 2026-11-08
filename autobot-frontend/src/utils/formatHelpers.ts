@@ -178,3 +178,58 @@ export default {
   formatCategoryName,
   truncateString
 }
+
+// ---------------------------------------------------------------------------
+// Knowledge-base fact titles (#21037). DISPLAY ONLY: the stored title and the
+// idempotency key never change; sorting and searching keep using the raw title.
+// A man-page fact is stored as `gettext(1)` / `man gettext(1)`; users read the
+// `(1)` as a duplicate counter, so it is shown as "gettext, section 1: user commands".
+// ---------------------------------------------------------------------------
+
+type TranslateFn = (key: string, params?: Record<string, unknown>) => string
+
+/** Fact `type` values the backend writes for man-page facts (`man_page_parser` / `knowledge_population`). */
+const MAN_PAGE_TYPES = new Set(['man_page', 'manual_page'])
+
+/** `name(N)` with an optional leading `man `; N may carry a letter suffix (3p). */
+const MAN_TITLE_PATTERN = /^(?:man\s+)?(\S+?)\((\d+[a-z]*)\)$/i
+
+/** Standard man sections that have an i18n name (`knowledge.manSection.<N>`). */
+const KNOWN_SECTIONS = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+
+/**
+ * Return the display title for a fact. `kind` is the fact's `type`
+ * (`metadata.type` / `document.type`); a title is only reinterpreted when the
+ * fact is identified as a man page, never from the `name(N)` shape alone.
+ */
+export function formatManPageTitle(
+  title: string | null | undefined,
+  kind: unknown,
+  t: TranslateFn,
+): string {
+  const raw = title ?? ''
+  if (typeof kind !== 'string' || !MAN_PAGE_TYPES.has(kind)) return raw
+  const match = MAN_TITLE_PATTERN.exec(raw.trim())
+  if (!match) return raw
+  const [, name, section] = match
+  if (!KNOWN_SECTIONS.has(section)) {
+    return t('knowledge.manSection.formatUnnamed', { name, section })
+  }
+  return t('knowledge.manSection.format', {
+    name,
+    section,
+    sectionName: t(`knowledge.manSection.${section}`),
+  })
+}
+
+/**
+ * The fact `type` of a knowledge-browser tree node. A node built from
+ * `GET /facts/by_category` carries the fact's metadata flat (`metadata.type`);
+ * a node lazy-loaded from `POST /search` carries the whole search hit, whose
+ * metadata is nested (`metadata.metadata.type`).
+ */
+export function knowledgeNodeFactType(metadata: { type?: unknown; metadata?: unknown } | undefined): unknown {
+  const hit = metadata?.metadata
+  if (hit && typeof hit === 'object') return (hit as { type?: unknown }).type
+  return metadata?.type
+}
