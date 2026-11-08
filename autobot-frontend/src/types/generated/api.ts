@@ -3466,12 +3466,12 @@ export interface paths {
         put?: never;
         /**
          * Assign role
-         * @description Assign a role to a user.
+         * @description Assign a role to a user. Changes permissions only, never platform admin status (PUT /{user_id}/admin).
          */
         post: operations["assign_role_api_user_management_users__user_id__roles__role_id__post"];
         /**
          * Revoke role
-         * @description Revoke a role from a user.
+         * @description Revoke a role from a user. Changes permissions only, never platform admin status (PUT /{user_id}/admin).
          */
         delete: operations["revoke_role_api_user_management_users__user_id__roles__role_id__delete"];
         options?: never;
@@ -3489,9 +3489,29 @@ export interface paths {
         get?: never;
         /**
          * Set user role by name
-         * @description Replace all system roles for a user with the named role (admin, user, readonly). Requires admin privilege. Issue #1801.
+         * @description Replace all system roles for a user with the named role (admin, user, readonly). Changes permissions only, never platform admin status (PUT /{user_id}/admin). Requires admin privilege. Issue #1801.
          */
         put: operations["set_user_role_api_user_management_users__user_id__role_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/user-management/users/{user_id}/admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set platform admin status
+         * @description Make a user a platform admin, or remove that. This is the only route that changes admin status; the role routes change permissions only. The user's earlier tokens stop working on their next request, so they sign in again. Admin only. Issue #20670.
+         */
+        put: operations["set_admin_status_api_user_management_users__user_id__admin_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -56857,6 +56877,35 @@ export interface components {
         AdminFileReadResponse: {
             /** Content */
             content: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AdminStatusRequest
+         * @description The admin status to set.
+         */
+        AdminStatusRequest: {
+            /** Is Platform Admin */
+            is_platform_admin: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AdminStatusResponse
+         * @description The admin status now in force, and whether this request changed it.
+         */
+        AdminStatusResponse: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Is Platform Admin */
+            is_platform_admin: boolean;
+            /** Changed */
+            changed: boolean;
+            /** Sessions Revoked */
+            sessions_revoked: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -113689,6 +113738,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoleUpdateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_admin_status_api_user_management_users__user_id__admin_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStatusResponse"];
                 };
             };
             /** @description Validation Error */

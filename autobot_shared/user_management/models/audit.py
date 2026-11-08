@@ -178,6 +178,7 @@ class IdentityAuditAction:
     USER_DELETED = "user_deleted"
     USER_ACTIVATED = "user_activated"
     USER_DEACTIVATED = "user_deactivated"
+    PLATFORM_ADMIN_CHANGED = "platform_admin_changed"  # #20670
 
     # Teams
     TEAM_CREATED = "team_created"
