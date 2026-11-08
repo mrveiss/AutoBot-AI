@@ -27,12 +27,12 @@ import os
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
 from autobot_shared.testfile_names import is_test_filename
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files
 
 logger = get_logger(__name__)
 
@@ -331,17 +331,7 @@ class TestPatternAnalyzer:
             test_file_patterns: Name patterns to identify test files; when omitted the
                 canonical ``is_test_filename`` rule applies
         """
-        self.exclude_dirs = exclude_dirs or [
-            "__pycache__",
-            ".git",
-            ".venv",
-            "venv",
-            "node_modules",
-            "dist",
-            "build",
-            ".pytest_cache",
-            ".mypy_cache",
-        ]
+        self.exclude_dirs = exclude_dirs or sorted(ANALYSIS_EXCLUDE_DIRS)
         self.exclude_patterns = exclude_patterns or [
             r".*\.pyc$",
             r".*\.pyo$",
@@ -364,11 +354,10 @@ class TestPatternAnalyzer:
         return any(p.match(filename) for p in self._test_patterns)
 
     def _should_exclude(self, path: str) -> bool:
-        """Check if a path should be excluded from analysis."""
-        path_parts = Path(path).parts
-        for exclude_dir in self.exclude_dirs:
-            if exclude_dir in path_parts:
-                return True
+        """Check a path against the file-name exclusion patterns.
+
+        Directory exclusion is done once, root-relative, by ``discover_files`` (#21004).
+        """
         for pattern in self._exclude_patterns:
             if pattern.match(path):
                 return True
@@ -870,21 +859,15 @@ class TestPatternAnalyzer:
         test_files: List[str] = []
         source_files: List[str] = []
 
-        for root, dirs, files in os.walk(directory):
-            dirs[:] = [d for d in dirs if d not in self.exclude_dirs]
+        for path in discover_files(directory, ("*.py",), self.exclude_dirs):
+            file_path = str(path)
+            if self._should_exclude(file_path):
+                continue
 
-            for file in files:
-                if not file.endswith(".py"):
-                    continue
-
-                file_path = os.path.join(root, file)
-                if self._should_exclude(file_path):
-                    continue
-
-                if self.is_test_file(file_path):
-                    test_files.append(file_path)
-                else:
-                    source_files.append(file_path)
+            if self.is_test_file(file_path):
+                test_files.append(file_path)
+            else:
+                source_files.append(file_path)
 
         return test_files, source_files
 
