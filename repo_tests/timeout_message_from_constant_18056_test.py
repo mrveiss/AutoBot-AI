@@ -47,9 +47,6 @@ _LITERAL = re.compile(r"(?i)\btime(d\s*)?\s*out\s*(after|\()\s*\d|\bafter\s+\d+\
 _PENDING = {
     # Open PRs touch these two files; the sites are appended to #18056's PR once they land.
     "autobot-slm-backend/api/code_sync.py": 2,
-    # Says "5 minutes" but nothing in this file sets a timeout, so the stated
-    # duration is not enforced here at all. That needs tracing to its caller, not a constant swap.
-    "autobot-backend/secure_command_executor.py": 1,
 }
 
 #: Literals checked against their code and found not to report a wait: the matching line of each, and why.
