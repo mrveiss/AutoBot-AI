@@ -191,14 +191,14 @@ table exists in both files; none is invented. Token meanings: [REFINED_TOKEN_MAP
 ```python
 from pathlib import Path
 from repo_tests._raw_palette_detect import scan_tree
-c = scan_tree(Path("autobot-slm-frontend/src"))   # run with ~/.venv-python-suite/bin/python -I
+c = scan_tree(Path("autobot-slm-frontend/src"))   # run with the python-suite venv's interpreter: python -I
 sum(c.values())  # 5300 occurrences, 195 distinct classes, 103 of 113 .vue files, 105 family-step pairs
 ```
 
 Control: `RAW_PALETTE_CLASS.search("bg-gray-800")` matches, and `raw_palette_class_ratchet_14580_test.py`
 plants a class in a temporary SLM tree and sees it under the `slm:` key. The ratchet in
 `_raw_palette_baseline.py` was measured when it landed (6214 occurrences); the sweep has drained it since, so
-re-measure rather than reuse this figure.
+re-measure rather than reuse this figure. The figures are a snapshot at `250ddc4554`, not a contract; re-measure them with the same command.
 
 How to read it: pick the row for the step, then the utility for the role (`bg`, `text`, `border`, `ring`, `divide`,
 `placeholder`). An opacity suffix stays (`bg-red-500/10` becomes `bg-autobot-error/10`). The count is how often
@@ -253,8 +253,8 @@ Judgement calls, stated once:
 | `emerald-600` | 3 | bg (3) -> `bg-autobot-success-hover` |  |
 | `emerald-700` | 1 | bg (1) -> `bg-autobot-success-hover` |  |
 | `gray-50` | 239 | bg (235) -> `bg-autobot-bg-secondary`; border (4) -> `border-autobot-border-subtle` |  |
-| `gray-100` | 275 | bg (197) -> `bg-autobot-bg-tertiary`; border (54) -> `border-autobot-border-subtle`; text (12) -> `text-autobot-text-inverse`; divide (12) -> `divide-autobot-border-subtle` |  |
-| `gray-200` | 444 | border (305) -> `border-autobot-border-subtle`; bg (92) -> `bg-autobot-bg-hover`; divide (42) -> `divide-autobot-border-subtle`; text (5) -> `text-autobot-text-inverse` |  |
+| `gray-100` | 275 | bg (197) -> `bg-autobot-bg-tertiary`; border (54) -> `border-autobot-border-subtle`; text (on dark fills) (12) -> `text-autobot-text-inverse`; divide (12) -> `divide-autobot-border-subtle` |  |
+| `gray-200` | 444 | border (305) -> `border-autobot-border-subtle`; bg (92) -> `bg-autobot-bg-hover`; divide (42) -> `divide-autobot-border-subtle`; text (on dark fills) (5) -> `text-autobot-text-inverse` |  |
 | `gray-300` | 377 | border (322) -> `border-autobot-border`; text (46) -> `text-autobot-text-tertiary`; bg (9) -> `bg-autobot-bg-active` |  |
 | `gray-400` | 249 | text (208) -> `text-autobot-text-tertiary`; bg (41): **no token yet** | a solid mid-grey fill has no surface token (the bg-* tokens are page and panel surfaces) |
 | `gray-500` | 877 | text (866) -> `text-autobot-text-muted`; bg (6): **no token yet**; border (4) -> `border-autobot-border-strong`; placeholder (1) -> `placeholder-autobot-text-tertiary` | a solid mid-grey fill has no surface token (the bg-* tokens are page and panel surfaces) |
