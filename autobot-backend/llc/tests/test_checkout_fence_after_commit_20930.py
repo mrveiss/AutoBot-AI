@@ -13,6 +13,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from llc.models.enums import WorkItemStatus
+from llc.services import after_commit
 from llc.services import work_item_own_task as own_task
 from llc.services.work_item_service import CheckoutConflict, WorkItemService
 from testkit.fake_async_session import FakeAsyncSession
@@ -47,7 +48,7 @@ def _item(*, user=None, agent=None, run=None) -> MagicMock:
 
 
 async def _settle() -> None:
-    await asyncio.gather(*own_task._release_tasks)
+    await asyncio.gather(*after_commit.after_commit_tasks)
 
 
 def _stamp(session: _TxSession, item: MagicMock) -> None:
