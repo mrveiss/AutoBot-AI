@@ -35,7 +35,7 @@ async def test_npu_embedding_fails_over_after_mock(monkeypatch):
 
     monkeypatch.setattr(module, "_ssot_config", SimpleNamespace(npu_worker_host="worker", npu_worker_port=80))
     monkeypatch.setattr(npu_worker_routing, "npu_worker_urls", AsyncMock(return_value=["http://one", "http://two"]))
-    post = AsyncMock(side_effect=[{"mock": True}, {"embedding": [2.0]}])
+    post = AsyncMock(side_effect=[{"mock": True}, {"embedding": [2.0], "mock": False}])
     monkeypatch.setattr(npu_worker_routing, "_post_inference", post)
     accelerator = module.AIHardwareAccelerator()
     accelerator._get_optimal_npu_model = MagicMock(return_value="model")

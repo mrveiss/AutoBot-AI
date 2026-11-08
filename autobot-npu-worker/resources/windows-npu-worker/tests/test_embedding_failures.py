@@ -13,6 +13,7 @@ from api_schemas import NPUTaskRequest
 from worker_inference import WorkerInferenceMixin
 from worker_routes import WorkerRoutesMixin
 from worker_state import LRUCache, ThreadSafeStats
+from worker_startup import WorkerStartupMixin
 
 
 class FailingModelManager:
@@ -134,3 +135,36 @@ def test_mixed_batch_marks_cached_mock_and_new_real_embedding():
     real = client.post("/embedding/generate", json=["real"], params={"model_name": "model"}).json()
     assert real["mock"] is False
     assert real["embeddings"] == [[1.0, 0.0]]
+
+
+def test_failed_preload_is_unhealthy_until_a_model_loads(monkeypatch):
+    import worker_startup
+
+    class Worker(WorkerStartupMixin, WorkerRoutesMixin):
+        def __init__(self):
+            self.app = FastAPI()
+            self._preload_failed = False
+            self.loaded_models = {}
+            self.task_stats = ThreadSafeStats()
+            self.worker_id = "test"
+            self.npu_available = False
+            self.npu_optimization = {}
+            self.pairing_status = {}
+            self._register_health_routes()
+
+        async def get_npu_metrics(self):
+            return {}
+
+        async def load_and_optimize_model(self, name, optimization_level):
+            raise RuntimeError("load failed")
+
+    monkeypatch.setattr(worker_startup, "config", {"models": {"embedding": {"preload": True, "name": "model"}}})
+    worker = Worker()
+    client = TestClient(worker.app)
+    assert client.get("/health").status_code == 200
+    asyncio.run(worker.load_default_models())
+    response = client.get("/health")
+    assert response.status_code == 503
+    assert response.json()["status"] == "unhealthy"
+    worker.loaded_models["model"] = {}
+    assert client.get("/health").json()["status"] == "healthy"

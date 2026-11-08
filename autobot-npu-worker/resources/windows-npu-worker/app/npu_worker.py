@@ -111,6 +111,7 @@ class WindowsNPUWorker(
         self.npu_available = False
         self.openvino_core = None
         self.loaded_models = {}
+        self._preload_failed = False
         self._models_lock = asyncio.Lock()  # Thread-safe model loading (TOCTOU fix)
 
         # Real OpenVINO model manager (Issue #640 - replaces mock inference)

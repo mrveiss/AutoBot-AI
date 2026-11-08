@@ -261,7 +261,9 @@ class WorkerStartupMixin:
 
                 except Exception as e:
                     logger.error(f"Failed to initialize model manager: {e}")
-                    logger.info("Real inference unavailable; requests will fail unless mock inference is explicitly enabled")
+                    logger.info(
+                        "Real inference unavailable; requests will fail unless mock inference is explicitly enabled"
+                    )
                     self._use_real_inference = False
 
         except ImportError as e:
@@ -277,6 +279,7 @@ class WorkerStartupMixin:
     async def load_default_models(self):
         """Load default models"""
         models_config = config.get("models", {})
+        self._preload_failed = False
 
         for model_type in ["embedding", "chat"]:
             model_config = models_config.get(model_type, {})
@@ -287,6 +290,7 @@ class WorkerStartupMixin:
                         model_config.get("optimization_level", "balanced"),
                     )
                 except Exception as e:
+                    self._preload_failed = True
                     logger.warning(f"Failed to preload {model_type} model: {e}")
 
     async def load_and_optimize_model(self, model_name: str, optimization_level: str = "balanced"):

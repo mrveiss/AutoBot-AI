@@ -23,6 +23,7 @@ from typing import Any, Dict, List
 
 from api_schemas import NPUTaskRequest, NPUTaskResponse
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 from worker_settings import DEFAULT_PORT, DEFAULT_SEMANTIC_SEARCH_TOP_K, config
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,8 @@ logger = logging.getLogger(__name__)
 
 class WorkerRoutesMixin:
     """Route registration and handlers for :class:`WindowsNPUWorker`."""
+
+    _preload_failed: bool
 
     def setup_routes(self):
         """Register all API routes. Issue #2346: decomposed from monolithic method."""
@@ -59,9 +62,10 @@ class WorkerRoutesMixin:
             """Health check with NPU metrics"""
             npu_metrics = await self.get_npu_metrics()
             stats = await self.task_stats.get_all()
+            ready = not self._preload_failed or bool(self.loaded_models)
 
-            return {
-                "status": "healthy",
+            result = {
+                "status": "healthy" if ready else "unhealthy",
                 "worker_id": self.worker_id,
                 "platform": "windows",
                 "port": config.get("service", {}).get("port", DEFAULT_PORT),
@@ -73,6 +77,9 @@ class WorkerRoutesMixin:
                 "timestamp": datetime.now().isoformat(),
                 "paired": self.pairing_status.get("paired", False),
             }
+            if not ready:
+                return JSONResponse(status_code=503, content=result)
+            return result
 
         @self.app.get("/stats")
         async def get_detailed_stats():

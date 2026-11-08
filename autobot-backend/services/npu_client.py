@@ -283,8 +283,8 @@ class NPUClient:
             ) as response:
                 if response.status == 200:
                     data = await response.json()
-                    if data.get("mock") is True:
-                        logger.warning("NPU worker returned mock embeddings; rejecting response")
+                    if data.get("mock") is not False:
+                        logger.warning("NPU worker did not confirm real embeddings; rejecting response")
                         return None
                     return EmbeddingResult(
                         embeddings=data.get("embeddings", []),
