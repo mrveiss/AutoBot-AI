@@ -68,6 +68,15 @@ def _add_mode_flags(parser: argparse.ArgumentParser) -> None:
         help="Re-index and re-embed every file, ignoring the hash cache.",
     )
     mode.add_argument(
+        "--adopt-store",
+        dest="adopt_store",
+        action="store_true",
+        help=(
+            "One-time, operator-run: record the store this run opened as the hash cache's store, "
+            "embedding and deleting nothing (#20886). Use after a refusal you have checked."
+        ),
+    )
+    mode.add_argument(
         "--rebuild",
         action="store_true",
         help=(
@@ -158,18 +167,38 @@ async def _read_collection(logger, service, args: argparse.Namespace) -> int:
     return 0
 
 
+async def _adopt_store(logger, service, args: argparse.Namespace) -> int:
+    """--adopt-store: record the opened store without initialising (and so possibly recreating) it (#20886)."""
+    from services.knowledge import doc_index_store_guard, doc_indexer
+
+    if args.dry_run:
+        logger.error("--adopt-store writes the store record and cannot be combined with --dry-run")
+        return 1
+    try:
+        store, collection = await service.open_store_for_adoption()
+        doc_index_store_guard.adopt_store(store, collection, doc_indexer.HASH_CACHE_FILE)
+    except Exception as e:
+        logger.error("Could not adopt the doc index store; the previous record is unchanged: %s", e)
+        return 1
+    return 0
+
+
 async def run_index(force: bool, rebuild: bool, args: argparse.Namespace | None = None) -> int:
     """Run the indexer and return a process exit code."""
     _install_import_paths()
     from autobot_shared.logging_manager import get_logger
+    from autobot_shared.placeholder_guard import enforce_no_placeholders
     from services.knowledge.doc_indexer import get_doc_indexer_service
 
+    enforce_no_placeholders()  # #20886: one clear error, not a failure per client
     logger = get_logger(__name__)
     service = get_doc_indexer_service()
     args = args or parse_args([])
     args.force, args.rebuild = force, rebuild
     if args.search or args.stats:
         return await _read_collection(logger, service, args)
+    if args.adopt_store:
+        return await _adopt_store(logger, service, args)
     if args.dry_run:
         return _dry_run(logger, service, args)
     result = await _index(service, args)
