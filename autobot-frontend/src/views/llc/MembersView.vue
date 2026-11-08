@@ -7,7 +7,7 @@
 
   Company-scoped child of LlcCompanyLayout (/llc/companies/:companyId/members).
   Lists current human members (display name + role), supports adding a member
-  (user picker populated from /api/user-management/users, role select) and
+  (user picker populated from /api/user-management/users/search, role select) and
   removing a member. Roles are the backend MembershipRole enum
   (owner/admin/member/guest/lead — see autobot-backend/llc/models/enums.py).
 
@@ -109,7 +109,7 @@
           >
             <option value="">{{ t('llcMembers.userPlaceholder') }}</option>
             <option v-for="u in selectableUsers" :key="u.id" :value="u.id">
-              {{ displayNameOf(u) }} ({{ u.email }})
+              {{ u.email ? `${displayNameOf(u)} (${u.email})` : displayNameOf(u) }}
             </option>
           </select>
           <p v-if="usersLoading" class="members-hint">{{ t('llcMembers.usersLoading') }}</p>

@@ -173,9 +173,9 @@ def _trail(monkeypatch) -> AsyncMock:
 
 
 def _outcome(ops: AsyncMock) -> tuple:
-    """The result and details of the last record: (result, details)."""
+    """The result and details of the last record: (result, details); the actor is asserted on its own."""
     call = ops.await_args
-    return (call.args[3] if len(call.args) > 3 else "success", call.kwargs)
+    return (call.args[3] if len(call.args) > 3 else "success", {k: v for k, v in call.kwargs.items() if k != "actor"})
 
 
 def test_a_completed_delete_records_its_outcome_after_the_intent(client_and_vault, monkeypatch) -> None:  # noqa: F811
@@ -220,3 +220,29 @@ def test_best_effort_operations_still_survive_a_down_audit_store(real_audit, mon
     )
 
     assert client.put("/api/secrets/legacy-1", json={"description": "d"}).status_code == 200
+
+
+def test_the_required_record_is_awaited_durably_and_best_effort_ones_are_not(real_audit, monkeypatch) -> None:
+    """Train review: `required` must wait for the committed row, not merely schedule the write."""
+    client, _ = real_audit
+    record = AsyncMock(return_value=True)
+    monkeypatch.setattr(secrets_audit, "audit_log", record)
+
+    assert client.delete(f"/api/secrets/{_SECRET_ID}").status_code == 200
+
+    durable = [call.kwargs["durable"] for call in record.await_args_list]
+    assert durable[0] is True  # the "attempted" record written before the delete
+    assert durable[1:] == [False] * (len(durable) - 1)  # the outcome record stays best-effort
+
+
+def test_every_record_of_a_delete_names_the_resolved_actor(real_audit, monkeypatch) -> None:
+    """The actor is looked up once; a second lookup that fails must not file the delete as `system`."""
+    client, _ = real_audit
+    record = AsyncMock(return_value=True)
+    monkeypatch.setattr(secrets_audit, "audit_log", record)
+    monkeypatch.setattr(secrets_audit, "_actor", lambda _r: None)  # the second lookup comes back empty
+
+    assert client.delete(f"/api/secrets/{_SECRET_ID}").status_code == 200
+
+    users = {call.kwargs["user_id"] for call in record.await_args_list}
+    assert users and None not in users
