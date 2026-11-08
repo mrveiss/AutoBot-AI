@@ -27,6 +27,7 @@ from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
 from security_layer_roles import DEPRECATED_PRIVILEGED_ROLES, _normalise_role, canonical_role_permissions
 from services.audit.audit import emit_security, query_filtered
 from services.audit.taxonomy import AuditCategory, AuditFilter
+from utils.command_utils import execute_shell_command
 
 logger = get_logger(__name__)
 
@@ -412,6 +413,7 @@ class SecurityLayer:
             # SECURITY: Admin has elevated permissions but NOT unrestricted access
             # Dangerous commands ALWAYS require approval, even for admin
             "admin": [
+                "files.*",
                 "allow_goal_submission",
                 "allow_kb_read",
                 "allow_kb_write",
@@ -421,6 +423,7 @@ class SecurityLayer:
                 "allow_voice_listen",
             ],
             "operator": [
+                "files.*",
                 "allow_goal_submission",
                 "allow_kb_read",
                 "allow_kb_write",
@@ -428,6 +431,7 @@ class SecurityLayer:
                 "allow_shell_moderate",
             ],
             "developer": [
+                "files.*",
                 "allow_goal_submission",
                 "allow_kb_read",
                 "allow_kb_write",
@@ -457,9 +461,7 @@ class SecurityLayer:
             # Unauthenticated requests must be rejected, not assigned permissions.
         }
 
-        # #15738: file grants come from the canonical role map, not a restated list.
-        canonical = [p for p in canonical_role_permissions(user_role) if p.startswith("files.")]
-        return [*canonical, *default_role_permissions.get(user_role, [])]
+        return default_role_permissions.get(user_role, [])
 
     # =========================================================================
     # Command Execution
@@ -526,17 +528,9 @@ class SecurityLayer:
         """Execute command without security controls (fallback mode). Issue #620."""
         if policy is not None:  # no risk check here: an unattended caller is refused, not run unchecked (#19807)
             return self.command_executor.build_refused_result("Command refused: command security is disabled")
-        process = await asyncio.create_subprocess_shell(
-            command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await process.communicate()
-        return {
-            "stdout": stdout.decode().strip(),
-            "stderr": stderr.decode().strip(),
-            "return_code": process.returncode,
-            "status": "success" if process.returncode == 0 else "error",
-            "security": {"enabled": False},
-        }
+        # #20740: the same runner and deadline as the security-checked branch, so turning
+        # command security off never removes the time limit.
+        return {**await execute_shell_command(command), "security": {"enabled": False}}
 
     def _log_command_complete(self, command: str, user: str, result: Dict[str, Any]) -> None:
         """Log command execution completion to audit log. Issue #620."""

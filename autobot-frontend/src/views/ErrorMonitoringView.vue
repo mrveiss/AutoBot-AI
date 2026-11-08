@@ -261,7 +261,7 @@ import { useI18n } from 'vue-i18n'
 import { BaseTable, type BaseTableColumn } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { useErrorMonitoring } from '@/composables/useErrorMonitoring'
-import { createDateFormatter } from '@/utils/formatHelpers'
+import { createDateFormatter, formatLocalTime } from '@/utils/formatHelpers'
 
 const {
   statistics,
@@ -307,7 +307,7 @@ const resolvingIds = ref<Set<string>>(new Set())
 
 const lastUpdateFormatted = computed(() => {
   if (!lastUpdate.value) return ''
-  return lastUpdate.value.toLocaleTimeString()
+  return formatLocalTime(lastUpdate.value)
 })
 
 const availableCategories = computed(() => {

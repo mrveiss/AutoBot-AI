@@ -27,6 +27,14 @@ _PERSON = service.SlmPerson(uuid.uuid4(), "root", "root@example.test", "Root", "
 _TABLES = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__]
 
 
+@pytest.fixture(autouse=True)
+def _no_copy_sync_listeners():
+    """The startup also starts the SLM copy sync, whose commit listener would push in the background
+    over this file's single in-memory connection; these tests are about the link only."""
+    with patch("user_management.services.person_copy_sync.start_person_copy_sync"):
+        yield
+
+
 @pytest_asyncio.fixture
 async def factory() -> AsyncIterator:
     async for session_factory in real_savepoint_session_factory(_TABLES):
