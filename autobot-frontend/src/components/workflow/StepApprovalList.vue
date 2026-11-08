@@ -9,7 +9,7 @@
   loading / error / content switch, so the bound applies in every state.
 -->
 <template>
-  <div v-if="steps.length" class="step-approval-list" data-testid="step-approval-list">
+  <div v-if="steps.length" class="max-h-96 overflow-y-auto" data-testid="step-approval-list">
     <StepApprovalCard
       v-for="s in steps"
       :key="s.step_id"
@@ -33,25 +33,3 @@ defineProps<{
   skip: Props['skip']
 }>()
 </script>
-
-<style scoped>
-.step-approval-list {
-  max-height: calc(var(--view-min-height) / 2);
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
-}
-
-.step-approval-list::-webkit-scrollbar {
-  width: var(--scrollbar-width);
-}
-
-.step-approval-list::-webkit-scrollbar-track {
-  background: var(--scrollbar-track);
-}
-
-.step-approval-list::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: var(--scrollbar-thumb-radius);
-}
-</style>
