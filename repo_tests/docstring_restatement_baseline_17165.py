@@ -32,9 +32,6 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     "autobot-backend/agents/web_researcher.py": frozenset({"get_circuit_breaker_status"}),
     "autobot-backend/api/analytics_continuous_learning.py": frozenset({"PatternStatistics"}),
     "autobot-backend/api/analytics_precommit.py": frozenset({"get_file_content"}),
-    "autobot-backend/api/budget_policies.py": frozenset(
-        {"delete_budget_policy", "get_agent_pause_status", "update_budget_policy"}
-    ),
     "autobot-backend/api/elevation.py": frozenset({"revoke_elevation_session"}),
     "autobot-backend/api/knowledge_metadata.py": frozenset({"delete_metadata_template"}),
     "autobot-backend/api/long_running_operations.py": frozenset({"initialize_operations_service"}),
