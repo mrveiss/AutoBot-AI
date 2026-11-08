@@ -27,7 +27,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 902,  # #18849: 903 -> 902
     "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 767,
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
-    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1789,
+    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1786,
     "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1216,
     "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1260,
     "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 756,
@@ -38,7 +38,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/PerformanceAnalysisDashboard.vue": 1075,
     "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": 1094,
     "autobot-frontend/src/components/analytics/SourceManager.vue": 830,
-    "autobot-frontend/src/components/analytics/TechnicalDebtDashboard.vue": 1706,
+    "autobot-frontend/src/components/analytics/TechnicalDebtDashboard.vue": 1704,
     "autobot-frontend/src/components/analytics/panels/CodebaseBugPredictionPanel.vue": 779,
     "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": 640,
     "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 1325,
@@ -179,7 +179,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/views/MaintenanceView.vue": 789,  # #14777 batch 2: 817 -> 794; #20003: -> 790
     "autobot-slm-frontend/src/views/OrchestrationView.vue": 2183,
     "autobot-slm-frontend/src/views/ReplicationView.vue": 698,  # #18819 + #14777: 731 -> 706
-    "autobot-slm-frontend/src/views/SecurityView.vue": 1367,  # #14780 BasePagination: 1386 -> 1374
+    "autobot-slm-frontend/src/views/SecurityView.vue": 1366,  # #14780 BasePagination: 1386 -> 1374
     "autobot-slm-frontend/src/views/SetupWizardView.vue": 1789,
     "autobot-slm-frontend/src/views/SkillsView.vue": 631,  # #18819 + #14777: 645 -> 633; #19482: -> 631
     "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 621,  # #18819: 638 -> 635; #19482: -> 632; #18863: -> 626
