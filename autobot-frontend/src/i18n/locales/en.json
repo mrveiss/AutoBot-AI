@@ -4678,6 +4678,7 @@
       "planApproved": "Plan approved, workflow starting...",
       "planApproveFailed": "Failed to approve plan",
       "planRejected": "Plan rejected",
+      "planRejectFailed": "Failed to reject plan",
       "unsupportedNodes": "These node types are not supported yet and will be excluded: {types}",
       "addStepFirst": "Add at least one step before saving",
       "saved": "Workflow \"{name}\" saved",

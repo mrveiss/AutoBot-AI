@@ -6,7 +6,7 @@
  * Approve / reject handlers for the plan-approval envelope (#20853).
  *
  * `deciding` is true from the first click until the request settles; a decision made while
- * one is in flight is not sent.
+ * one is in flight is not sent. A thrown request counts as a failed decision (error toast).
  */
 import { ref, type Ref } from 'vue'
 
@@ -31,6 +31,8 @@ export function usePlanDecision(deps: PlanDecisionDeps) {
     deciding.value = true
     try {
       return await send(plan.workflow_id)
+    } catch {
+      return false
     } finally {
       deciding.value = false
     }
@@ -46,7 +48,9 @@ export function usePlanDecision(deps: PlanDecisionDeps) {
 
   async function handleRejectPlan(): Promise<void> {
     const success = await decide((id) => deps.rejectPlan(id, 'User rejected'))
-    if (success) deps.notify('workflow.builder.planRejected', 'info')
+    if (success === null) return
+    if (!success) return deps.notify('workflow.builder.planRejectFailed', 'error')
+    deps.notify('workflow.builder.planRejected', 'info')
   }
 
   return { deciding, handleApprovePlan, handleRejectPlan }
