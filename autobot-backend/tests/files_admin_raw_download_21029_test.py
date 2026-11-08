@@ -131,7 +131,9 @@ def test_filename_with_quote_and_non_ascii_is_encoded(admin, root):
     (root / 'é"q.bin').write_bytes(PAYLOAD)
     response = _get(admin, root / 'é"q.bin')
     assert response.status_code == 200
-    assert response.headers["content-disposition"] == "attachment; filename*=utf-8''%C3%A9%22q.bin"
+    assert (
+        response.headers["content-disposition"] == "attachment; filename=\"__q.bin\"; filename*=utf-8''%C3%A9%22q.bin"
+    )
 
 
 def test_file_vanishing_before_validation_is_404(admin, root, monkeypatch):
@@ -161,20 +163,116 @@ def test_file_vanishing_after_the_check_before_streaming_is_404(admin, root, mon
     assert _get(admin, target).status_code == 404
 
 
-def test_preparation_runs_off_the_event_loop(admin, root, monkeypatch):
+def _record_threads(app, monkeypatch, inline):
+    """Return (loop_idents, worker_idents) seen while serving one request; ``inline`` defeats to_thread."""
     import threading
 
+    loop_idents, worker_idents = [], []
+
+    @app.middleware("http")
+    async def note_loop(request, call_next):
+        loop_idents.append(threading.get_ident())
+        return await call_next(request)
+
+    for name in ("_prepare_download", "_read_chunk"):
+        real = getattr(files_admin_raw, name)
+
+        def wrapped(*args, _real=real):
+            worker_idents.append(threading.get_ident())
+            return _real(*args)
+
+        monkeypatch.setattr(files_admin_raw, name, wrapped)
+    if inline:
+
+        async def direct(func, *args):
+            return func(*args)
+
+        monkeypatch.setattr(files_admin_raw.asyncio, "to_thread", direct)
+    return loop_idents, worker_idents
+
+
+@pytest.mark.parametrize("inline,expect_off_loop", [(False, True), (True, False)])
+def test_preparation_and_reads_run_off_the_event_loop(app, as_user, root, monkeypatch, inline, expect_off_loop):
     (root / "t.bin").write_bytes(PAYLOAD)
-    seen = []
-    real_prepare = files_admin_raw._prepare_download
+    loop_idents, worker_idents = _record_threads(app, monkeypatch, inline)
+    with as_user({"username": "root", "role": "admin"}):
+        assert _get(TestClient(app, raise_server_exceptions=False), root / "t.bin").status_code == 200
+    assert len(worker_idents) >= 2 and loop_idents
+    assert all(w != loop_idents[0] for w in worker_idents) is expect_off_loop
 
-    def record(path):
-        seen.append(threading.current_thread() is threading.main_thread())
-        return real_prepare(path)
 
-    monkeypatch.setattr(files_admin_raw, "_prepare_download", record)
-    assert _get(admin, root / "t.bin").status_code == 200
-    assert seen == [False]
+def test_growing_file_sends_only_the_declared_length(admin, root, monkeypatch):
+    target = root / "grow.bin"
+    target.write_bytes(PAYLOAD)
+    real_read = files_admin_raw._read_chunk
+
+    def grow_then_read(handle, limit):
+        with target.open("ab") as extra:
+            extra.write(b"EXTRA")
+        return real_read(handle, limit)
+
+    monkeypatch.setattr(files_admin_raw, "_read_chunk", grow_then_read)
+    response = _get(admin, target)
+    assert response.content == PAYLOAD
+    assert response.headers["content-length"] == str(len(PAYLOAD))
+
+
+def test_truncated_file_is_an_error_not_a_short_success(admin, root, monkeypatch):
+    target = root / "shrink.bin"
+    target.write_bytes(PAYLOAD)
+    real_read = files_admin_raw._read_chunk
+
+    def shrink_then_read(handle, limit):
+        target.write_bytes(b"")
+        return real_read(handle, limit)
+
+    monkeypatch.setattr(files_admin_raw, "_read_chunk", shrink_then_read)
+    with pytest.raises(Exception):
+        TestClient(admin.app, raise_server_exceptions=True).get("/files/raw", params={"path": str(target)})
+
+
+def _run_response(response, receive_messages):
+    import asyncio
+
+    sent = []
+
+    async def receive():
+        return receive_messages.pop(0) if receive_messages else {"type": "http.disconnect"}
+
+    async def send(message):
+        sent.append(message)
+
+    asyncio.run(response({"type": "http", "asgi": {"spec_version": "2.4"}}, receive, send))
+    return sent
+
+
+def test_handle_is_closed_after_normal_completion(root):
+    (root / "c.bin").write_bytes(PAYLOAD)
+    handle = (root / "c.bin").open("rb")
+    response = files_admin_raw._HandleResponse(handle, len(PAYLOAD))
+    _run_response(response, [])
+    assert handle.closed
+
+
+def test_handle_is_closed_after_disconnect_before_first_chunk(root):
+    (root / "d.bin").write_bytes(PAYLOAD)
+    handle = (root / "d.bin").open("rb")
+    response = files_admin_raw._HandleResponse(handle, len(PAYLOAD))
+
+    async def refuse(message):
+        raise OSError("client went away")
+
+    import asyncio
+
+    async def run():
+        async def receive():
+            return {"type": "http.disconnect"}
+
+        await response({"type": "http", "asgi": {"spec_version": "2.3"}}, receive, refuse)
+
+    with pytest.raises(OSError):
+        asyncio.run(run())
+    assert handle.closed
 
 
 def test_content_length_matches_and_large_file_is_exact(admin, root):
