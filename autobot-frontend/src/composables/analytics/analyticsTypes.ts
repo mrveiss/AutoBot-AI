@@ -194,3 +194,10 @@ export const CODE_SMELL_TYPES = new Set([
   'performance_sequential_awaits',
   'performance_unbatched_api_calls',
 ])
+
+/** Backend analyzers emit `code_smell_<pattern>` types beyond the whitelist above. */
+export const CODE_SMELL_TYPE_PREFIX = 'code_smell_'
+
+/** The ONE predicate for "is this finding a code smell" (#20493). */
+export const isCodeSmellType = (type?: string | null): boolean =>
+  !!type && (CODE_SMELL_TYPES.has(type) || type.startsWith(CODE_SMELL_TYPE_PREFIX))

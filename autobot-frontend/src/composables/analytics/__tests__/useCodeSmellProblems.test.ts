@@ -45,11 +45,38 @@ describe('useCodeSmellProblems category wiring (#20493)', () => {
     expect(s.smellsForPanel.value).toHaveLength(0)
   })
 
-  it('the export is the panel list under the selected category', async () => {
+  it('the export is the panel list under the category the rows were loaded for', async () => {
     const s = useCodeSmellProblems((u) => u)
-    captured.onSuccess?.([{ type: 'long_function', severity: 'high', message: 'm', file_path: 'a.py' }])
     await s.selectSmellCategory('test')
+    captured.onSuccess?.([{ type: 'long_function', severity: 'high', message: 'm', file_path: 'a.py' }])
     expect(s.smellsExport.value.file_category).toBe('test')
     expect(s.smellsExport.value.summary.total_smells).toBe(s.smellsForPanel.value.length)
+  })
+
+  it('an export taken mid-load keeps the old rows labelled with their own category', async () => {
+    const s = useCodeSmellProblems((u) => u)
+    await s.loadSmellProblems()
+    captured.onSuccess?.([{ type: 'long_function', severity: 'high', message: 'm', file_path: 'a.py' }])
+    await s.selectSmellCategory('test') // load resolves without onSuccess: still in flight
+    expect(s.smellCategory.value).toBe('test')
+    expect(s.smellsExport.value.file_category).toBe('code')
+  })
+
+  it('counts code_smell_<pattern> findings in the cards and the export', () => {
+    const s = useCodeSmellProblems((u) => u)
+    captured.onSuccess?.([
+      { type: 'code_smell_god_class', severity: 'high', message: 'm', file_path: 'a.py' },
+      { type: 'unrelated_type', severity: 'high', message: 'm', file_path: 'b.py' },
+    ])
+    expect(s.smellsForPanel.value).toHaveLength(1)
+    expect(s.smellsExport.value.summary.total_smells).toBe(1)
+    expect(s.smellsExport.value.smells[0].smell_type).toBe('code_smell_god_class')
+  })
+
+  it('resetSmells empties the rows', () => {
+    const s = useCodeSmellProblems((u) => u)
+    captured.onSuccess?.([{ type: 'long_function', severity: 'high', message: 'm', file_path: 'a.py' }])
+    s.resetSmells()
+    expect(s.smellsForPanel.value).toHaveLength(0)
   })
 })

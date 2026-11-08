@@ -15,7 +15,7 @@
 
 import { computed, ref } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-import { CODE_SMELL_TYPES, type Problem } from './analyticsTypes'
+import { isCodeSmellType, type Problem } from './analyticsTypes'
 import { buildSmellsExport } from './codeSmellSummary'
 
 export const SMELL_CATEGORY_ALL = 'all'
@@ -26,6 +26,11 @@ export type SmellCategory = (typeof SMELL_CATEGORIES)[number]
 export function useCodeSmellProblems(withSourceId: (url: string) => string) {
   const smellCategory = ref<SmellCategory>(SMELL_CATEGORY_DEFAULT)
   const smellProblems = ref<Problem[]>([])
+  // The category the rows in `smellProblems` were loaded for; `smellCategory` is
+  // the selection and runs ahead of it while a load is in flight.
+  const loadedCategory = ref<SmellCategory>(SMELL_CATEGORY_DEFAULT)
+
+  let requestedCategory: SmellCategory = smellCategory.value
 
   const endpoint = useFetchEndpoint<{ status?: string; problems?: Problem[] }, Problem[]>(
     {
@@ -33,17 +38,25 @@ export function useCodeSmellProblems(withSourceId: (url: string) => string) {
       scopeToSource: true,
       label: 'Code smells endpoint',
       pickData: (raw) => (raw.status === 'no_data' ? [] : raw.problems ?? []),
-      onSuccess: (d) => { smellProblems.value = d },
+      onSuccess: (d) => { smellProblems.value = d; loadedCategory.value = requestedCategory },
       // A failed load must not leave the previous category's findings on screen.
-      onError: () => { smellProblems.value = [] },
+      onError: () => { smellProblems.value = []; loadedCategory.value = requestedCategory },
     },
     { withSourceId },
   )
 
-  const loadSmellProblems = () =>
-    endpoint.load(
-      smellCategory.value === SMELL_CATEGORY_ALL ? undefined : { file_category: smellCategory.value },
+  const loadSmellProblems = () => {
+    requestedCategory = smellCategory.value
+    return endpoint.load(
+      requestedCategory === SMELL_CATEGORY_ALL ? undefined : { file_category: requestedCategory },
     )
+  }
+
+  /** Drop the loaded rows (cache clear); they are the default category's again. */
+  const resetSmells = () => {
+    smellProblems.value = []
+    loadedCategory.value = smellCategory.value
+  }
 
   const selectSmellCategory = async (category: SmellCategory) => {
     smellCategory.value = category
@@ -52,7 +65,7 @@ export function useCodeSmellProblems(withSourceId: (url: string) => string) {
 
   const smellsForPanel = computed(() =>
     smellProblems.value
-      .filter((p) => p.type && CODE_SMELL_TYPES.has(p.type))
+      .filter((p) => isCodeSmellType(p.type))
       .map((p) => ({
         severity: p.severity,
         description: p.description || p.message,
@@ -64,7 +77,7 @@ export function useCodeSmellProblems(withSourceId: (url: string) => string) {
   )
 
   /** The export's data: the cards' list and the cards' counts, nothing else. */
-  const smellsExport = computed(() => buildSmellsExport(smellsForPanel.value, smellCategory.value))
+  const smellsExport = computed(() => buildSmellsExport(smellsForPanel.value, loadedCategory.value))
 
   return {
     smellCategory,
@@ -74,5 +87,6 @@ export function useCodeSmellProblems(withSourceId: (url: string) => string) {
     smellsLoading: endpoint.loading,
     loadSmellProblems,
     selectSmellCategory,
+    resetSmells,
   }
 }

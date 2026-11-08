@@ -114,7 +114,7 @@
       </div>
     </div>
     <EmptyState
-      v-else
+      v-else-if="!loading"
       icon="sparkles"
       :message="$t('analytics.codeSmells.emptyMessage')"
       variant="info"
