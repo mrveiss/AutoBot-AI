@@ -184,7 +184,7 @@ def test_a_recomputed_file_is_skipped(train):
 
 
 def test_a_size_table_is_no_longer_recomputed_so_it_is_measured(train):
-    """#19673: a train only lowers the ceilings' ints, so a member's table entries must survive it."""
+    """#19673: trains no longer edit the size ceilings; they are down-only bounds gated against the merge base."""
     head = member("one", {"size_known_large.py": LONG.format(1)})
     board(1, head, "-s", "ours")
     report = gate.check_range("main..train")
