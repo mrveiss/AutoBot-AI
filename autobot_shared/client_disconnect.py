@@ -35,6 +35,10 @@ _CHANNEL_TAG = "__autobot_client_channel__"
 # a model server) is a real failure, so it only counts when the caller says so.
 _RESET_ON_SEND = (ConnectionResetError, BrokenPipeError)
 _CHAIN_DEPTH = 8
+# ASGI messages after which the guard must not send its own answer (a second close or start).
+_RESPONSE_STARTED = frozenset(
+    {"http.response.start", "websocket.accept", "websocket.close", "websocket.http.response.start"}
+)
 
 
 def _socket_is_gone(websocket) -> bool:
@@ -50,14 +54,14 @@ def _tag_channel_error(exc: BaseException) -> None:
 
 
 def _is_channel_error(exc: BaseException) -> bool:
-    """True when ``exc`` or something on its cause/context chain was tagged by the guard."""
+    """True when ``exc`` or something on its ``__cause__`` chain was tagged by the guard."""
     link: BaseException | None = exc
     for _ in range(_CHAIN_DEPTH):
         if link is None:
             return False
         if getattr(link, _CHANNEL_TAG, False):
             return True
-        link = link.__cause__ or link.__context__
+        link = link.__cause__  # `raise ... from`; __context__ is "raised while handling", not "caused by"
     return False
 
 
@@ -94,10 +98,10 @@ def is_client_disconnect(
 
 
 def _caused_by_disconnect(exc: BaseException) -> bool:
-    """True when a boundary disconnect sits on ``exc``'s ``__cause__`` / ``__context__`` chain."""
+    """True when a boundary disconnect sits on ``exc``'s ``__cause__`` chain (``raise ... from``)."""
     link: BaseException | None = exc
     for _ in range(_CHAIN_DEPTH):
-        link = link.__cause__ or link.__context__ if link else None
+        link = link.__cause__ if link else None
         if link is None:
             return False
         if is_client_disconnect(link, at_boundary=True):
@@ -183,7 +187,7 @@ class ClientDisconnectGuard:
 
         async def tracked_send(message) -> None:
             nonlocal started
-            started = started or message["type"] in ("http.response.start", "websocket.accept")
+            started = started or message["type"] in _RESPONSE_STARTED
             try:
                 await send(message)
             except _CHANNEL_ERRORS as exc:

@@ -66,6 +66,14 @@ def _app(exc: Exception) -> FastAPI:
     return app
 
 
+@pytest.fixture(autouse=True)
+def _no_log_flood_suppression(monkeypatch):
+    """The flood guard drops a call site's 6th ERROR per window; these tests count ERROR records."""
+    from autobot_shared.logging_manager import LogFloodSuppressionFilter
+
+    monkeypatch.setattr(LogFloodSuppressionFilter, "filter", lambda self, record: True)
+
+
 def _error_records(caplog):
     # Importing app_factory logs unrelated start-up errors; only the code under test counts.
     own = ("app_factory", "autobot_shared.error_boundaries.decorators")
@@ -483,3 +491,66 @@ def test_an_internal_end_of_stream_in_a_websocket_body_escapes(caplog):
 
     escaped, sent = _drive_full(ClientDisconnectGuard(inner), "/ws", scope_type="websocket")
     assert [type(e) for e in escaped] == [anyio.EndOfStream] and sent == []
+
+
+def test_a_runtime_error_raised_inside_a_disconnect_handler_is_not_a_disconnect():
+    try:
+        try:
+            raise ClientDisconnect()
+        except ClientDisconnect:
+            raise RuntimeError("bug in the handler")  # __context__ only, no `from`
+    except RuntimeError as bug:
+        from autobot_shared.client_disconnect import is_boundary_disconnect
+
+        assert not is_boundary_disconnect(bug)
+        chained = RuntimeError("wrapped")
+        chained.__cause__ = ClientDisconnect()
+        assert is_boundary_disconnect(chained)
+
+
+def test_an_oserror_raised_in_the_handler_of_a_tagged_error_escapes_and_logs(caplog):
+    from fastapi import Request
+
+    app = _body_app()
+
+    @app.get("/handler-bug")
+    async def handler_bug(request: Request):
+        try:
+            await request.body()
+        except OSError:
+            open("/nonexistent/autobot-20939", encoding="utf-8")  # FileNotFoundError, context = tagged reset
+
+    async def receive_reset():
+        raise ConnectionResetError()
+
+    with caplog.at_level(logging.DEBUG):
+        escaped, sent = _drive_full(app, "/handler-bug", server_receive=receive_reset)
+    assert [type(e) for e in escaped] == [FileNotFoundError]
+    assert sent[0]["status"] == 500
+    assert any(r.exc_info for r in _error_records(caplog))
+
+
+def test_a_runtime_error_in_a_disconnect_handler_escapes_the_stack(caplog):
+    app = _body_app()
+
+    @app.get("/ctx-bug")
+    async def ctx_bug():
+        try:
+            raise ClientDisconnect()
+        except ClientDisconnect:
+            raise RuntimeError("bug in the handler")
+
+    with caplog.at_level(logging.DEBUG):
+        escaped, _ = _drive_full(app, "/ctx-bug")
+    assert [type(e) for e in escaped] == [RuntimeError]
+
+
+def test_the_guard_does_not_send_a_second_close():
+    from autobot_shared.client_disconnect import ClientDisconnectGuard
+
+    async def inner(scope, receive, send):
+        await send({"type": "websocket.close", "code": 4001})  # rejected before accept
+        raise WebSocketDisconnect(1006)
+
+    escaped, sent = _drive_full(ClientDisconnectGuard(inner), "/ws", scope_type="websocket")
+    assert escaped == [] and [m["type"] for m in sent] == ["websocket.close"]

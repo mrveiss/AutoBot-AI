@@ -438,6 +438,11 @@ def with_error_handling(
     """
     Simplified decorator for API endpoints with automatic HTTP error conversion.
 
+    A client disconnect is not converted. An endpoint that is handed a WebSocket ends
+    quietly (returns ``None``) for a ``WebSocketDisconnect`` and, by design, for the
+    ``RuntimeError`` Starlette raises on a socket whose state is already DISCONNECTED;
+    the same ``RuntimeError`` on a live socket is a real error. An HTTP endpoint re-raises.
+
     Usage:
         @with_error_handling(
             category=ErrorCategory.VALIDATION,
