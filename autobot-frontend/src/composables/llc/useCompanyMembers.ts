@@ -46,11 +46,11 @@ function statusOf(err: unknown): number | undefined {
 }
 
 /**
- * The roles the add form offers. Before the standing is known (not loaded yet, or the load failed) it is
- * not read as a refusal: every role is offered and the server decides.
+ * The roles the add form offers. Before the standing is known (not loaded yet, or the load failed) nothing
+ * is granted: the form must not invite a write the server may refuse.
  */
 export function rolesToOffer<T extends string>(all: readonly T[], grantable: readonly string[], known: boolean): T[] {
-  return known ? all.filter((r) => grantable.includes(r)) : [...all]
+  return known ? all.filter((r) => grantable.includes(r)) : []
 }
 
 export function useCompanyMembers(api: MembersApi, companyId: () => string) {
@@ -82,6 +82,8 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
     try {
       const res = await api.get<MembersResponse>(base(id))
       if (!current()) return
+      // A reply without the envelope (a backend still on the old array shape) is a failed load.
+      if (!Array.isArray(res?.members)) throw new Error('members response is not the envelope')
       members.value = res.members
       grantableRoles.value = res.viewer_grantable_roles
       viewerCanManage.value = res.viewer_can_manage

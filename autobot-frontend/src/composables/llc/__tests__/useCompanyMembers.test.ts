@@ -6,8 +6,8 @@
 // #19960: overlapping reloads in one company land newest-first, and a reload keeps the rows.
 
 import { describe, it, expect, vi } from 'vitest'
-import { defineComponent, h } from 'vue'
-import { mount } from '@vue/test-utils'
+import { defineComponent, h, ref } from 'vue'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 import { useCompanyMembers, rolesToOffer, type MembersApi } from '../useCompanyMembers'
@@ -74,10 +74,10 @@ describe('useCompanyMembers load ordering', () => {
 })
 
 describe('rolesToOffer', () => {
-  it('offers the grantable roles, and every role when no standing is known', () => {
+  it('offers the grantable roles, and nothing when no standing is known', () => {
     expect(rolesToOffer(['owner', 'admin'], ['admin'], true)).toEqual(['admin'])
     expect(rolesToOffer(['owner', 'admin'], [], true)).toEqual([])
-    expect(rolesToOffer(['owner', 'admin'], [], false)).toEqual(['owner', 'admin'])
+    expect(rolesToOffer(['owner', 'admin'], [], false)).toEqual([])
   })
 })
 
@@ -104,5 +104,55 @@ describe('useCompanyMembers viewerCanManage (#20542, #21096)', () => {
     await api.load()
     expect(api.viewerCanManage.value).toBe(false)
     expect(api.standingKnown.value).toBe(false)
+  })
+
+  it('reads an old array-shaped reply as a failed load: no throw, standing unknown, error shown', async () => {
+    const api = setup(vi.fn().mockResolvedValue([row('a')]) as unknown as MembersApi['get'])
+    await expect(api.load()).resolves.toBeUndefined()
+    expect(api.members.value).toEqual([])
+    expect(api.viewerCanManage.value).toBe(false)
+    expect(api.standingKnown.value).toBe(false)
+    expect(api.errorMessage.value).toBe(en.llcMembers.loadError)
+  })
+})
+
+describe('useCompanyMembers standing across a company switch', () => {
+  it('resets, ignores the old company\'s late reply, then loads the new standing', async () => {
+    const late = deferred<unknown>()
+    const next = deferred<unknown>()
+    const get = vi.fn().mockResolvedValueOnce(reply([row('a')], true, ['owner']))
+    const id = ref('coA')
+    let api!: ReturnType<typeof useCompanyMembers>
+    const api0 = { get, patch: vi.fn(), delete: vi.fn() } as unknown as MembersApi
+    mount(
+      defineComponent({
+        setup() {
+          api = useCompanyMembers(api0, () => id.value)
+          return () => h('div')
+        },
+      }),
+      { global: { plugins: [i18n] } },
+    )
+    await api.load()
+    expect(api.viewerCanManage.value).toBe(true)
+    expect(api.standingKnown.value).toBe(true)
+    // A reload of A is still in flight when the route moves to B.
+    get.mockReturnValueOnce(late.promise)
+    const stale = api.load()
+    get.mockReturnValueOnce(next.promise)
+    id.value = 'coB'
+    await flushPromises()
+    expect(api.viewerCanManage.value).toBe(false)
+    expect(api.standingKnown.value).toBe(false)
+    late.resolve(reply([row('old')], true, ['owner']))
+    await stale
+    expect(api.viewerCanManage.value).toBe(false)
+    expect(api.standingKnown.value).toBe(false)
+    expect(api.members.value).toEqual([])
+    next.resolve(reply([row('b')], false, []))
+    await flushPromises()
+    expect(api.viewerCanManage.value).toBe(false)
+    expect(api.standingKnown.value).toBe(true)
+    expect(api.members.value.map((m) => m.user_id)).toEqual(['b'])
   })
 })

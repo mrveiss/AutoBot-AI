@@ -221,14 +221,15 @@ describe('MembersView add form (#20073)', () => {
     expect(document.body.textContent).not.toContain(en.llcMembers.addNotAllowed)
   })
 
-  it('does not read an unreadable standing as a refusal: it offers every role and leaves the server to decide', async () => {
+  it('offers no role and blocks Add when the standing could not be read', async () => {
     get.mockRejectedValue(new Error('HTTP 503'))
     const wrapper = mount(MembersView, { global: { plugins: [i18n] }, attachTo: document.body })
     await flushPromises()
     await wrapper.find('header button').trigger('click')
     await flushPromises()
-    expect(roleOptions()).toEqual(['owner', 'admin', 'member', 'guest', 'lead'])
-    expect(document.body.textContent).not.toContain(en.llcMembers.addNotAllowed)
+    expect(roleOptions()).toEqual([])
+    expect(addButton().disabled).toBe(true)
+    expect(document.body.textContent).toContain(en.llcMembers.addNotAllowed)
   })
 
   it('maps a 403 on add to the refusal message', async () => {
