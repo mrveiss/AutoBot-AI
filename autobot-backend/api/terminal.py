@@ -117,7 +117,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
 
 from api.schemas_terminal import (
     AdminExecuteRequest,
@@ -197,6 +197,7 @@ from api.terminal_ssh import (  # noqa: E402
 
 # Tool management router, extracted from this file (#185).
 from api.terminal_tools import router as tools_router
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 
 # On `admin_router` (#15084): they run system commands and carry no gate of their own.
 admin_router.include_router(tools_router, prefix="/terminal")
@@ -793,15 +794,10 @@ async def _run_terminal_message_loop(
         while True:
             data = await websocket.receive_text()
             message = json.loads(data)
-            logger.info(
-                "[WS RECV] Session %s, Type: %s, Data: %s",
-                session_id,
-                message.get("type"),
-                str(message)[:100],
-            )
+            logger.info("[WS RECV] Session %s, Type: %s, Data: %s", session_id, message.get("type"), str(message)[:100])
             await terminal.handle_message(message)
-    except WebSocketDisconnect:
-        logger.info("WebSocket disconnected for session %s", session_id)
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "_run_terminal_message_loop")
     except Exception as e:
         logger.error("Error in WebSocket handling: %s", e)
         await websocket.send_text(
