@@ -257,6 +257,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/person-links/push-failures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Person Push Failures
+         * @description Read only. A person here may still have SLM access after being deactivated.
+         */
+        get: operations["person_push_failures_api_admin_person_links_push_failures_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/orphans": {
         parameters: {
             query?: never;
@@ -18268,8 +18288,7 @@ export interface paths {
          * List directory for SLM admin file browser
          * @description List directory contents at an absolute path.
          *
-         *     No auth required — accessible via /autobot-api/ nginx proxy (Issue #984).
-         *     Restricted to pre-approved base directories.
+         *     Admin permission required. Restricted to pre-approved base directories.
          */
         get: operations["admin_list_directory_api_files_get"];
         put?: never;
@@ -18291,7 +18310,7 @@ export interface paths {
          * Read file content for SLM admin file browser
          * @description Return text content of a file at an absolute path.
          *
-         *     Limited to 1 MB. No auth required — accessible via /autobot-api/ (Issue #984).
+         *     Limited to 1 MB. Admin permission required.
          */
         get: operations["admin_read_file_api_files_read_get"];
         put?: never;
@@ -42769,13 +42788,13 @@ export interface paths {
         };
         /**
          * List Budget Policies
-         * @description List budget policies, optionally filtered by scope.
+         * @description List budget policies, optionally filtered by scope (admin permission required).
          */
         get: operations["list_budget_policies_api_budget_policies_get"];
         put?: never;
         /**
          * Create Budget Policy
-         * @description Create a new budget policy.
+         * @description Create a new budget policy (admin permission required).
          */
         post: operations["create_budget_policy_api_budget_policies_post"];
         delete?: never;
@@ -42793,21 +42812,21 @@ export interface paths {
         };
         /**
          * Get Budget Policy
-         * @description Get a single budget policy by ID.
+         * @description Get a single budget policy by ID (admin permission required).
          */
         get: operations["get_budget_policy_api_budget_policies__policy_id__get"];
         put?: never;
         post?: never;
         /**
          * Delete Budget Policy
-         * @description Delete a budget policy.
+         * @description Delete a budget policy (admin permission required).
          */
         delete: operations["delete_budget_policy_api_budget_policies__policy_id__delete"];
         options?: never;
         head?: never;
         /**
          * Update Budget Policy
-         * @description Update a budget policy.
+         * @description Update a budget policy (admin permission required).
          */
         patch: operations["update_budget_policy_api_budget_policies__policy_id__patch"];
         trace?: never;
@@ -42841,7 +42860,7 @@ export interface paths {
         };
         /**
          * Get Agent Pause Status
-         * @description Get the pause status of an agent.
+         * @description Get the pause status of an agent (admin permission required).
          */
         get: operations["get_agent_pause_status_api_budget_policies__agent_id__status_get"];
         put?: never;
@@ -91443,6 +91462,30 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * PersonPushFailure
+         * @description A linked person whose copy in the SLM could not be updated.
+         */
+        PersonPushFailure: {
+            /** Username */
+            username: string;
+            /**
+             * Failed Since
+             * Format: date-time
+             */
+            failed_since: string;
+            /** Error */
+            error: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** PersonPushFailuresResponse */
+        PersonPushFailuresResponse: {
+            /** Failures */
+            failures: components["schemas"]["PersonPushFailure"][];
+        } & {
+            [key: string]: unknown;
+        };
         /** PersonalityProfileCreate */
         PersonalityProfileCreate: {
             /** Name */
@@ -108990,6 +109033,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    person_push_failures_api_admin_person_links_push_failures_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonPushFailuresResponse"];
                 };
             };
         };
