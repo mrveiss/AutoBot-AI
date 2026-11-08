@@ -283,11 +283,15 @@ STORE_AUTHORITY: dict[str, Concept] = {
             # #18293: writes only the chat:conversation:* LLM-context cache, a
             # projection of these messages -- never a durable copy of a turn.
             "autobot-backend/chat_workflow/conversation.py",
+            # #20852: writes only chat:rolling_summary:*, a summary projection of these turns.
+            "autobot-backend/chat_history/rolling_summary.py",
         ),
         rebuilt_by="ChatHistoryCacheMixin repopulates a session's cache entry from its session "
         "file on the next load; the file is written atomically and is the session. The "
         "chat:conversation:* LLM-context cache is re-projected from load_session() on a miss "
-        "(chat_history/turn_projection.project_turn_pairs).",
+        "(chat_history/turn_projection.project_turn_pairs). chat:rolling_summary:* is rebuilt "
+        "from the same messages by the next rolling-summary refresh "
+        "(chat_history/rolling_summary.refresh_summary), which folds the durable turns from the oldest.",
         note="The one system of record for conversation turns (#18293). The per-turn transcript "
         "files that once duplicated them are legacy_conversation_transcripts: read-only.",
     ),

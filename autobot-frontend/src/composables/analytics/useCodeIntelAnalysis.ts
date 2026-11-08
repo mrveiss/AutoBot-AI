@@ -46,7 +46,7 @@ const logger = createLogger('useCodeIntelAnalysis')
 export function useCodeIntelAnalysis(
   deps: UseCodeIntelAnalysisDeps,
 ) {
-  const { rootPath, t, notify } = deps
+  const { rootPath, t, notify, withSourceId } = deps
 
   // --- useCodeIntelligence composable (stays in facade) ---
 
@@ -62,7 +62,7 @@ export function useCodeIntelAnalysis(
     getQualityScore: codeIntelGetQualityScore,
     getAnalysisHistory: codeIntelGetAnalysisHistory,
     scanFile: codeIntelScanFile,
-  } = useCodeIntelligence()
+  } = useCodeIntelligence({ withSourceId })
   // #5365: codeIntel{Security,Performance,Redis}Findings are declared
   // as computed adapters further down, after `scores` is constructed.
   const codeIntelFindingsLoading = ref(false)
