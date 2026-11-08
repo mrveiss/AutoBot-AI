@@ -157,7 +157,7 @@ TEST_FILE_FLOOR = 1500
 
 
 def _is_test_file(rel_posix: str) -> bool:
-    return is_test_filename(rel_posix, include_js=False)
+    return is_test_filename(rel_posix, include_js=False, include_conftest=False)
 
 
 #: One slot per argv element: its literal string if the element is a plain

@@ -45,7 +45,7 @@ def _docstring_constant_ids(tree: ast.AST) -> set[int]:
 
 def _is_test_file(file_path: Path) -> bool:
     """Test fixtures legitimately use mock localhost URLs (not SSOT-resolvable)."""
-    return is_test_filename(file_path.name, include_js=False) or "tests" in file_path.parts
+    return is_test_filename(file_path.name, include_js=False, include_conftest=False) or "tests" in file_path.parts
 
 
 def check(file_path: Path, tree: ast.AST, ctx: Context) -> list[Diagnostic]:

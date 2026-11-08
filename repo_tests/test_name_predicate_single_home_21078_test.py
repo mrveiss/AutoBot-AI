@@ -15,6 +15,11 @@ naming them is not a rule):
 * ``x == "conftest.py"`` / ``"conftest"`` (``==``, ``!=``, ``in``, ``not in``, either side);
 * ``".test." in x`` / ``".spec." in x``.
 
+Known limit (pinned by a control below): a ``startswith("test_")``-only rule, a regex such as
+``test_.*\\.py`` and ``endswith("test.py")`` are NOT flagged. ``startswith("test_")`` also tests test
+FUNCTION names all over the tree, so flagging it by shape would count thousands of unrelated sites; the
+census of the remaining drift is therefore an undercount, and the remainder is tracked in #21161.
+
 Directory rules (``"tests" in parts``) are not flagged: they stay with the caller and combine with the
 predicate. Sites not yet moved are in a shrink-only baseline, each group with its reason.
 """
@@ -141,6 +146,17 @@ def test_no_file_hand_writes_a_test_name_rule_beyond_the_baseline() -> None:
     assert new == {}, f"call autobot_shared.testfile_names.is_test_filename instead of a hand-written rule: {new}"
 
 
+#: Ceilings for the baseline's own size (#21078 review): a hand edit that adds an entry or raises a count
+#: fails here even though the sweep would otherwise be satisfied. Lower them when the baseline shrinks.
+MAX_ENTRIES = 135
+MAX_SITES = 169
+
+
+def test_the_baseline_itself_cannot_grow() -> None:
+    assert len(BASELINE) <= MAX_ENTRIES, "a baseline entry was added; migrate the file instead"
+    assert sum(BASELINE.values()) <= MAX_SITES, "a baseline count was raised; migrate the site instead"
+
+
 def test_the_baseline_only_shrinks() -> None:
     found = measure(_read_all())
     stale = {rel: (n, found.get(rel, 0)) for rel, n in BASELINE.items() if found.get(rel, 0) < n}
@@ -185,6 +201,14 @@ def test_the_canonical_call_a_mention_and_a_directory_rule_are_not_flagged() -> 
     assert handwritten_sites(_CANONICAL_CALL) == 0
     assert handwritten_sites(_MENTION) == 0
     assert handwritten_sites(_DIRECTORY_RULE) == 0
+
+
+def test_a_startswith_only_rule_is_the_documented_blind_spot() -> None:
+    """Pinned limit (see the header): this shape is not detected. If the detector learns it, flip this."""
+    prefix_only = 'def is_test(p):\n    return p.name.startswith("test_")\n'
+    regex_only = 'import re\nRULE = re.compile(r"test_.*\\.py$")\n'
+    assert handwritten_sites(prefix_only) == 0
+    assert handwritten_sites(regex_only) == 0
 
 
 def test_the_canonical_path_is_exempt_whatever_it_holds() -> None:

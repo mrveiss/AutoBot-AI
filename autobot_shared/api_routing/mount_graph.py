@@ -575,7 +575,7 @@ def build_graph(
     graph = MountGraph()
     registry_files: List[Tuple[Path, Dict[str, str]]] = []
     for path in python_files(backend, skip):
-        if skip_tests and is_test_filename(path.name, include_js=False):
+        if skip_tests and is_test_filename(path.name, include_js=False, include_conftest=False):
             continue  # a colocated test's throwaway FastAPI() mount is no route into the app
         try:
             source = path.read_text(encoding="utf-8")

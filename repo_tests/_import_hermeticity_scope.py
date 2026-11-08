@@ -117,7 +117,7 @@ def entries(root: Path) -> list[Entry]:
         if not package_dir.is_dir():
             continue
         for path in sorted(package_dir.rglob("*.py")):
-            if "__pycache__" in path.parts or is_test_filename(path.name, include_js=False):
+            if "__pycache__" in path.parts or is_test_filename(path.name, include_js=False, include_conftest=False):
                 continue
             found.append(Entry(tree, module_name(package, path, package_dir), path.relative_to(root).as_posix()))
     return found

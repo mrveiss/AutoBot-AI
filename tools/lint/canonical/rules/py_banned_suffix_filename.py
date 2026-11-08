@@ -34,7 +34,7 @@ def _banned_suffix(stem: str) -> str | None:
     for suffix in _ALWAYS_BANNED:
         if stem.endswith(suffix):
             return suffix
-    is_test = is_test_filename(f"{stem}.py", include_js=False)
+    is_test = is_test_filename(f"{stem}.py", include_js=False, include_conftest=False)
     if not is_test:
         for suffix in _TEST_ONLY_BANNED:
             if stem.endswith(suffix):

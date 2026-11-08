@@ -24,7 +24,7 @@ ALLOWED = {"user_management/database.py", "api/autobot_users.py", "api/autobot_t
 
 
 def _is_test(relative: str) -> bool:
-    return relative.startswith("tests/") or is_test_filename(relative, include_js=False)
+    return relative.startswith("tests/") or is_test_filename(relative, include_js=False, include_conftest=False)
 
 
 def users_db_readers(sources: dict[str, str]) -> set[str]:
@@ -46,9 +46,6 @@ REACH = declare(
     discover=_source_paths,
     what="non-test SLM python source",
     roots=(SLM.name,),
-    # The canonical test-file rule (#21078) also classes the root conftest.py as a test, so the base's 330 is
-    # 329 here. Drop the pin once this lands: the floor is then computed from the new base.
-    floor=329,
 )
 
 

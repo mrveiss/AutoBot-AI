@@ -208,7 +208,7 @@ def _tracked_python_files() -> tuple[str, ...]:
 
 
 def _is_test(rel: str) -> bool:
-    return is_test_filename(rel, include_js=False) or "/tests/" in rel
+    return is_test_filename(rel, include_js=False, include_conftest=False) or "/tests/" in rel
 
 
 @functools.lru_cache(maxsize=1)

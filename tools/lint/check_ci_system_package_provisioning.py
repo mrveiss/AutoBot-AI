@@ -262,7 +262,7 @@ def _walked_test_files(root: pathlib.Path) -> list[str]:
             if not name.endswith(".py"):
                 continue
             rel = (pathlib.Path(dirpath) / name).relative_to(root).as_posix()
-            if is_test_filename(name, include_js=False) or "/tests/" in f"/{rel}":
+            if is_test_filename(name, include_js=False, include_conftest=False) or "/tests/" in f"/{rel}":
                 found.append(rel)
     return sorted(found)
 

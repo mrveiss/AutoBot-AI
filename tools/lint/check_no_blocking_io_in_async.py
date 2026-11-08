@@ -190,7 +190,7 @@ def _is_test_path(rel_posix: str) -> bool:
     ``*_test.py`` would let ``tests/test_x.py`` through, and this guard has
     already been bitten once by a detector narrower than the class it named.
     """
-    return is_test_filename(rel_posix, include_js=False) or "/tests/" in f"/{rel_posix}"
+    return is_test_filename(rel_posix, include_js=False, include_conftest=False) or "/tests/" in f"/{rel_posix}"
 
 
 def in_scope(violations: List[_Violation], rel_posix: str) -> tuple[List[_Violation], int]:

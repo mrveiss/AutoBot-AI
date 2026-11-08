@@ -360,7 +360,7 @@ class TestPatternAnalyzer:
         """Check if a file is a test file based on naming patterns."""
         filename = os.path.basename(file_path)
         if not self._test_patterns:
-            return is_test_filename(filename, include_js=False)
+            return is_test_filename(filename, include_js=False, include_conftest=False)
         return any(p.match(filename) for p in self._test_patterns)
 
     def _should_exclude(self, path: str) -> bool:

@@ -153,7 +153,7 @@ def _is_test_file(path: Path) -> bool:
 
     Matches the canonical test-file names plus anything under a ``tests`` directory.
     """
-    return is_test_filename(path.name, include_js=False) or "tests" in path.parts
+    return is_test_filename(path.name, include_js=False, include_conftest=False) or "tests" in path.parts
 
 
 def find_backend_dir(project_root: Path) -> Path:

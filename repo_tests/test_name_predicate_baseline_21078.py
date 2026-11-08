@@ -12,8 +12,17 @@ The guard fails when a file is missing from here or holds more than listed, and 
 * DELIBERATELY_NOT_CANONICAL -- a different rule on purpose (reason beside the entry);
 * NOT_YET_MIGRATED -- a hand-written copy beyond the sites #21078 enumerated, left so the PR stays under the
   100-file ceiling. Each is to move to `is_test_filename` (keeping its directory rule); the follow-up is
-  referenced from #21078.
+  tracked in #21161.
+
+The totals are pinned by `repo_tests/test_name_predicate_single_home_21078_test.py`
+(`MAX_ENTRIES`, `MAX_SITES`): adding an entry or raising a count fails there as well as in the guard.
 """
+
+# Deliberately not canonical, and invisible to the detector so it has no entry below:
+# `pipeline-scripts/audit_unwired_trackers.py` (`TEST_PATH_FRAGMENTS`, `is_test_path`) matches `_test.` and `.test.`
+# anywhere in a path, any extension, and leaves out `/test_` on purpose because pytest `tmp_path` directories embed
+# `test_<name>/`; the canonical base-name rule would change what it audits. The reason is recorded here rather than
+# in the file because that file fails its flake8 hook today (#21164), so editing it would trip the hook.
 
 BASELINE: dict[str, int] = {
     # --- NOT_A_FILE_NAME_PREDICATE ---
@@ -27,8 +36,8 @@ BASELINE: dict[str, int] = {
     "repo_tests/sys_modules_leak_guard.py": 2,
     # classifies module NAMES during collection by `_test`/`_examples` suffix, not file names
     "autobot-backend/conftest.py": 1,
-    # Deliberately not canonical: the rule must still scan a `conftest.py` under tasks/, which the canonical rule
-    # would exempt (its own test, test_py_celery_private_event_loop, requires that file to be scanned).
+    # Deliberately not canonical: the rule scans `conftest.py` today, and migrating to the canonical rule would
+    # silently exempt it (#21078). Nothing in its own test requires that; this entry is what keeps it deliberate.
     "tools/lint/canonical/rules/py_celery_private_event_loop.py": 1,
     # --- NOT_YET_MIGRATED ---
     # Pre-commit hook runs under the system interpreter, which autobot_shared's import-time floor refuses (#20903);

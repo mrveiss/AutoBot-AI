@@ -48,7 +48,7 @@ _EXCLUDE_DIR_PARTS = frozenset({"ansible", "tests", "__pycache__", "node_modules
 
 
 def _is_test_file(path: Path) -> bool:
-    return is_test_filename(path.name, include_js=False) or path.stem.endswith("_tests")
+    return is_test_filename(path.name, include_js=False, include_conftest=False) or path.stem.endswith("_tests")
 
 
 def _files_to_scan(root: Path) -> list[Path]:

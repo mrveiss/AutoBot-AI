@@ -117,7 +117,11 @@ def default_sites(text: str) -> list[tuple[str, str]]:
 
 
 def _is_test_file(rel: str) -> bool:
-    return rel.startswith("repo_tests/") or "/tests/" in rel or is_test_filename(rel, include_js=False)
+    return (
+        rel.startswith("repo_tests/")
+        or "/tests/" in rel
+        or is_test_filename(rel, include_js=False, include_conftest=False)
+    )
 
 
 def bare_literals(text: str) -> list[str]:

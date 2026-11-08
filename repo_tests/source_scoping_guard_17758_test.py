@@ -111,7 +111,7 @@ _UNSCOPED_ROOT_RESOLVERS = ("get_project_root", "resolve_project_root")
 
 
 def _is_test(path: pathlib.Path) -> bool:
-    return is_test_filename(path.name, include_js=False)
+    return is_test_filename(path.name, include_js=False, include_conftest=False)
 
 
 def _is_unscoped_fallback(node: ast.AST) -> bool:

@@ -220,7 +220,7 @@ class TestingCoverageAnalyzer:
     def _is_test_file(self, file_path: Path) -> bool:
         """Check if file is a test file"""
         path_str = str(file_path)
-        return is_test_filename(Path(path_str).name, include_js=False) or (
+        return is_test_filename(Path(path_str).name, include_js=False, include_conftest=False) or (
             "tests/" in path_str and path_str.endswith(".py")
         )
 

@@ -30,7 +30,7 @@ def _uses(source: str) -> bool:
 
 
 def _is_test(path: str) -> bool:
-    return is_test_filename(path, include_js=False) or "/tests/" in path
+    return is_test_filename(path, include_js=False, include_conftest=False) or "/tests/" in path
 
 
 def _callers(paths) -> list[str]:

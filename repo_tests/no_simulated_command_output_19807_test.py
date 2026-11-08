@@ -33,7 +33,7 @@ LITERAL = "Simulated output"
 
 def _is_test_path(path: str) -> bool:
     parts = Path(path).parts
-    return is_test_filename(path, include_js=False) or "tests" in parts or "repo_tests" in parts
+    return is_test_filename(path, include_js=False, include_conftest=False) or "tests" in parts or "repo_tests" in parts
 
 
 def contains_literal(source: str) -> bool:

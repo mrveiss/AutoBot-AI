@@ -94,7 +94,7 @@ _RESOLUTION_CACHE: dict[str, tuple[bool, str | None]] = {}
 
 def _is_test_file(rel_path: str) -> bool:
     """Return True if path matches the test naming convention."""
-    return is_test_filename(rel_path, include_js=False)
+    return is_test_filename(rel_path, include_js=False, include_conftest=False)
 
 
 def _is_patch_call(node: ast.Call) -> bool:

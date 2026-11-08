@@ -58,7 +58,7 @@ def catalogue_files(backend_dir: Path) -> tuple[Path, ...]:
     return tuple(
         path
         for path in sorted(api_dir.rglob("*.py"))
-        if not is_test_filename(path.name, include_js=False)
+        if not is_test_filename(path.name, include_js=False, include_conftest=False)
         and _declares_router_config(path.read_text(encoding="utf-8"))
     )
 

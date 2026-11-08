@@ -26,7 +26,7 @@ _PATTERNS = ("test_", "_test.py")
 
 
 def _is_test(rel: str) -> bool:
-    return is_test_filename(rel, include_js=False)
+    return is_test_filename(rel, include_js=False, include_conftest=False)
 
 
 def _importers(module: str) -> list[str]:

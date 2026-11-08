@@ -54,7 +54,7 @@ _WAIVER = re.compile(r"#\s*canonical:\s*ignore\s+py-banned-route-path\b")
 
 def _is_test_file(file_path: Path) -> bool:
     """Tests may define fixture routes with legacy paths for migration coverage."""
-    return is_test_filename(file_path.name, include_js=False) or "tests" in file_path.parts
+    return is_test_filename(file_path.name, include_js=False, include_conftest=False) or "tests" in file_path.parts
 
 
 def _is_router_registry_file(file_path: Path) -> bool:

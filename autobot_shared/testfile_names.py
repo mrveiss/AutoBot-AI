@@ -7,7 +7,8 @@
 The repo co-locates tests (``foo_test.py`` beside ``foo.py``), so a directory name
 alone never marks them. Name conventions recognised:
 
-* Python: ``test_*.py``, ``*_test.py``, ``tests.py``, ``conftest.py``
+* Python: ``test_*.py``, ``*_test.py`` (so ``test_.py`` and ``_test.py`` too), ``tests.py``,
+  ``conftest.py`` (unless ``include_conftest=False``)
 * JS/TS/Vue (``include_js=True``, the default): ``*.test.<ext>``, ``*.spec.<ext>``
 
 The rule is by NAME, so a production module called ``test_*.py`` is classed as a
@@ -25,11 +26,20 @@ Callers that stay separate (an open PR touches them; tracked as a follow-up in
 
 import re
 
-_PY_TEST_RE = re.compile(r"^(test_.+|.+_test|tests|conftest)\.py$")
+# ``.*`` not ``.+``: ``test_.py`` and ``_test.py`` are tests, as the older ``startswith("test_")`` /
+# ``endswith("_test")`` rules had it (the meta-agent target refusal depends on that).
+_PY_TEST_RE = re.compile(r"^(test_.*|.*_test|tests|conftest)\.py$")
+_PY_TEST_NO_CONFTEST_RE = re.compile(r"^(test_.*|.*_test|tests)\.py$")
 _JS_TEST_RE = re.compile(r"^.+\.(test|spec)\.(js|jsx|ts|tsx|mjs|cjs|vue)$")
 
 
-def is_test_filename(filename: str, *, include_js: bool = True) -> bool:
-    """True when the base name (any case) follows a test-file convention."""
+def is_test_filename(filename: str, *, include_js: bool = True, include_conftest: bool = True) -> bool:
+    """True when the base name (any case) follows a test-file convention.
+
+    ``include_conftest=False`` leaves ``conftest.py`` out: a tool that scans it as real code
+    (hooks, fixtures and env handling are production-shaped) passes this so the move to the
+    canonical rule does not drop it from the tool's population (#21078).
+    """
     name = filename.rsplit("/", 1)[-1].lower()
-    return _PY_TEST_RE.match(name) is not None or (include_js and _JS_TEST_RE.match(name) is not None)
+    py_re = _PY_TEST_RE if include_conftest else _PY_TEST_NO_CONFTEST_RE
+    return py_re.match(name) is not None or (include_js and _JS_TEST_RE.match(name) is not None)

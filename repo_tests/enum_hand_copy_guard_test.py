@@ -136,7 +136,7 @@ def _tracked_python(root: Path = REPO_ROOT) -> List[str]:
 
 
 def is_test_path(rel: str) -> bool:
-    return is_test_filename(rel, include_js=False) or "/tests/" in f"/{rel}"
+    return is_test_filename(rel, include_js=False, include_conftest=False) or "/tests/" in f"/{rel}"
 
 
 def enum_members(source: str) -> Dict[str, FrozenSet[str]]:

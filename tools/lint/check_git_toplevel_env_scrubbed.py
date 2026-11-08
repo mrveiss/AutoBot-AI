@@ -294,7 +294,7 @@ def is_production_path(rel: str) -> bool:
     code has no reason to inherit a git environment it never set. Production is
     also where all four recurrences landed with nothing watching.
     """
-    if is_test_filename(rel, include_js=False):
+    if is_test_filename(rel, include_js=False, include_conftest=False):
         return rel == "scripts/test_first_remediation.py"  # real tool, no fixture (#16179)
     return "/tests/" not in f"/{rel}"
 

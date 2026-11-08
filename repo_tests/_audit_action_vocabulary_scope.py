@@ -23,7 +23,7 @@ def source_python(rel: str) -> bool:
     """True for non-test Python under one of ``ROOTS``; *rel* is repo-relative."""
     parts = rel.split("/")
     name = parts[-1]
-    is_test = is_test_filename(name, include_js=False) or "tests" in parts[:-1]
+    is_test = is_test_filename(name, include_js=False, include_conftest=False) or "tests" in parts[:-1]
     return rel.endswith(".py") and parts[0] in ROOTS and not is_test
 
 

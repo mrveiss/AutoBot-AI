@@ -196,7 +196,7 @@ def main() -> int:
             _err(f"[route-deadlines] covered package missing: {package}")
             return 1
         for source in sorted(root.rglob("*.py")):
-            if is_test_filename(source.name, include_js=False):
+            if is_test_filename(source.name, include_js=False, include_conftest=False):
                 continue
             try:
                 ceiling = _module_timeout_ceiling(ast.parse(source.read_text(encoding="utf-8")))

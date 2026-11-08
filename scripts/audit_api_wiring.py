@@ -64,7 +64,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 from autobot_shared.api_routing import router_prefixes as _routing  # noqa: E402
 from autobot_shared.openapi_schema import normalize_pattern_anchors  # noqa: E402
-from autobot_shared.testfile_names import is_test_filename  # noqa: E402
+from autobot_shared.testfile_names import is_test_filename as _is_test_name  # noqa: E402
 
 BACKEND = REPO_ROOT / "autobot-backend"
 # #12381: the SLM control-plane backend (autobot-slm-backend, :8000) mounts its own '/api'-prefixed route table,
@@ -272,7 +272,7 @@ def _scan_route_decorators(
     prefixes: set[str] = set()
     for py in root.rglob("*.py"):
         sp = str(py)
-        if "__pycache__" in sp or "/tests/" in sp or is_test_filename(py.name, include_js=False):
+        if "__pycache__" in sp or "/tests/" in sp or _is_test_name(py.name, include_js=False, include_conftest=False):
             continue
         txt = py.read_text(encoding="utf-8", errors="ignore")
         mp = apirouter_prefix(txt)
@@ -389,7 +389,7 @@ def find_unmounted_routers(backend: set[str] | None = None) -> list[str]:
         module_txt = {
             py.stem: py.read_text(encoding="utf-8", errors="ignore")
             for py in api_dir.glob("*.py")
-            if py.stem != "__init__" and not is_test_filename(py.name, include_js=False)
+            if py.stem != "__init__" and not _is_test_name(py.name, include_js=False, include_conftest=False)
         }
         init_txt = (
             (api_dir / "__init__.py").read_text(encoding="utf-8", errors="ignore")

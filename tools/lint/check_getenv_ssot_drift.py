@@ -315,7 +315,7 @@ def _in_scope(path: Path, repo_root: Path) -> bool:
         return False
     if "tests" in parts:
         return False
-    if path.name in SSOT_FIELD_SOURCES or is_test_filename(path.name, include_js=False):
+    if path.name in SSOT_FIELD_SOURCES or is_test_filename(path.name, include_js=False, include_conftest=False):
         return False
     return True
 

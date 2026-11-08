@@ -52,7 +52,7 @@ _WAIVER = re.compile(r"#\s*canonical:\s*ignore\s+py-duplicate-concept\b")
 
 def _is_test_file(file_path: Path) -> bool:
     """Migration / back-compat tests legitimately reference the old era-marker names."""
-    return is_test_filename(file_path.name, include_js=False) or "tests" in file_path.parts
+    return is_test_filename(file_path.name, include_js=False, include_conftest=False) or "tests" in file_path.parts
 
 
 def _banned_token(name: str) -> str | None:

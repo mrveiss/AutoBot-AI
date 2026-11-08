@@ -44,7 +44,7 @@ def _is_test_module(path) -> bool:
     filter in such a module escapes -- a guard that silently checks less,
     which is the failure both sweeps exist to catch.
     """
-    return is_test_filename(path.name, include_js=False) or "/tests/" in str(path)
+    return is_test_filename(path.name, include_js=False, include_conftest=False) or "/tests/" in str(path)
 
 
 #: The writer is no longer one file: #18055 split problem storage out of

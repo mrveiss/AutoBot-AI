@@ -254,7 +254,7 @@ def scan(repo_root: Path, files: list[Path], registry: dict[str, Any]) -> ScanRe
         rel_path = path.relative_to(repo_root).as_posix()
         if (
             rel_path.split("/")[0] not in SCAN_ROOTS
-            or is_test_filename(rel_path, include_js=False)
+            or is_test_filename(rel_path, include_js=False, include_conftest=False)
             or "/tests/" in rel_path
         ):
             continue

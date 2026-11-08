@@ -338,7 +338,9 @@ class ConfigDuplicationDetector(_BaseClass):
         ``latest.py``) was skipped wholesale, with no error and no count.
         """
         parts = set(relative.parts[:-1])
-        return bool(parts & {"test", "tests", "archive"}) or is_test_filename(relative.name, include_js=False)
+        return bool(parts & {"test", "tests", "archive"}) or is_test_filename(
+            relative.name, include_js=False, include_conftest=False
+        )
 
     def scan_directory(self, directory: str = None) -> None:
         """

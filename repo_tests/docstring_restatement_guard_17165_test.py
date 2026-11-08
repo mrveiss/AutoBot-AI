@@ -34,7 +34,7 @@ REPO_ROOT = repo_root()
 
 
 def _is_test_path(path: str) -> bool:
-    return is_test_filename(path, include_js=False) or "/tests/" in path
+    return is_test_filename(path, include_js=False, include_conftest=False) or "/tests/" in path
 
 
 def _public_symbols(root: Path) -> list[tuple[str, str, str | None]]:

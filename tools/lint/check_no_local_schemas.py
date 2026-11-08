@@ -123,7 +123,7 @@ def _is_target_file(path: Path, repo_root: Path) -> bool:
     name = path.name
     if name.startswith("schemas_"):
         return False
-    if is_test_filename(name, include_js=False):
+    if is_test_filename(name, include_js=False, include_conftest=False):
         return False
     if name in ALLOWLISTED_FILENAMES:
         return False

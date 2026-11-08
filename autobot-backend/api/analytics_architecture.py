@@ -461,7 +461,7 @@ class ArchitectureAnalyzer:
 
     def _should_skip_python_file(self, py_file: Path) -> bool:
         """Check if a Python file should be skipped from analysis. (Issue #315 - extracted)"""
-        return "__pycache__" in str(py_file) or is_test_filename(py_file.name, include_js=False)
+        return "__pycache__" in str(py_file) or is_test_filename(py_file.name, include_js=False, include_conftest=False)
 
     def _collect_files_from_directory(self, dir_path: Path) -> List[str]:
         """Collect Python files from a directory. (Issue #315 - extracted)"""

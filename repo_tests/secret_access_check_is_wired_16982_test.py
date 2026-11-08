@@ -76,7 +76,7 @@ _ROOTS = ("autobot-backend", "autobot_shared", "autobot-slm-backend")
 
 
 def _is_test_path(rel: str) -> bool:
-    return is_test_filename(rel, include_js=False) or "/tests/" in f"/{rel}"
+    return is_test_filename(rel, include_js=False, include_conftest=False) or "/tests/" in f"/{rel}"
 
 
 def _production_modules() -> list[Path]:

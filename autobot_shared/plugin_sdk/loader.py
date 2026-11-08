@@ -126,8 +126,8 @@ def is_non_production_module(name: str) -> bool:
 
     Importing the package's own tests drags pytest into the production process
     (~100ms), and where pytest is absent the import fails, is swallowed, and — because
-    failed imports are not cached — retries for every plugin on every startup. A
-    `conftest.py` would do the same; the canonical test-file name rule (#21078) decides, stated here to be testable.
+    failed imports are not cached — retries for every plugin on every startup. The canonical test-file
+    name rule decides (#21078); see `non_production_module_21078_test.py` for what it adds.
     """
     return is_test_filename(f"{name}.py", include_js=False)
 
