@@ -109,7 +109,7 @@ class TestNameRuleIsByNameOnly:
         assert get_file_category(Path("pkg/test_runner.py")) == FILE_CATEGORY_TEST
 
     def test_the_js_alternatives_are_dotted_not_underscored(self):
-        from autobot_shared.test_file_names import is_test_filename
+        from autobot_shared.testfile_names import is_test_filename
 
         assert is_test_filename("widget.test.ts") and not is_test_filename("widget_test.ts")
         assert not is_test_filename("widget.test.ts", include_js=False)

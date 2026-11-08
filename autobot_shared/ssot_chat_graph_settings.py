@@ -21,7 +21,7 @@ from autobot_shared.status_enums import LLMProvider
 
 logger = get_logger(__name__)
 
-DEFAULT_LLM_PROVIDER = "ollama"
+DEFAULT_LLM_PROVIDER = LLMProvider.OLLAMA.value
 _PROVIDER_WARNED = False
 
 

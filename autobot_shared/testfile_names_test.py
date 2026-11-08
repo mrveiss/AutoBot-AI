@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from autobot_shared.api_routing.route_order import is_test_path
-from autobot_shared.test_file_names import is_test_filename
+from autobot_shared.testfile_names import is_test_filename
 
 
 @pytest.mark.parametrize("name", ["a_test.py", "test_a.py", "tests.py", "conftest.py", "A_Test.PY", "x/y/a_test.py"])

@@ -13,14 +13,14 @@ one the code-smell panel recognises) and takes the highest severity of the group
 
 from typing import Dict, List
 
+from autobot_shared.status_enums import Severity
+
 #: Each tuple is one defect described by several types; the first is canonical.
 SAME_DEFECT_FAMILIES = (("long_function", "code_smell_long_method"),)
 
-_SEVERITY_RANK = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
-
 
 def _rank(problem: Dict) -> int:
-    return _SEVERITY_RANK.get(str(problem.get("severity", "")).lower(), 0)
+    return Severity.rank_of(str(problem.get("severity", "")), default=0)
 
 
 def _family_of(problem_type: str) -> tuple | None:
