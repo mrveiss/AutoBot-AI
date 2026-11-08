@@ -33,6 +33,7 @@ from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.user_management.login_eligibility import login_refusal
 from user_management.models import User
 from user_management.models.person_link import PersonLink
 from user_management.services.person_link_service import require_internal_key
@@ -66,7 +67,7 @@ async def _post_copy(slm_user_id: uuid.UUID, user: User) -> None:
     payload = {
         "slm_user_id": str(slm_user_id),
         "password_hash": user.password_hash,
-        "is_active": bool(user.is_active and user.deleted_at is None),
+        "is_active": login_refusal(user) is None,
     }
     headers = {"X-Internal-API-Key": key}
     async with session.post(

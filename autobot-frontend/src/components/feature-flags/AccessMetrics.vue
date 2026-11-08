@@ -300,7 +300,7 @@ const handleDaysChange = () => {
 const getPercentage = (value: number, max: number) => {
   return Math.min((value / max) * 100, 100);
 };
-
+const { locale } = useI18n()
 const formatDayLabel = createDateFormatter({ kind: 'date', intl: { weekday: 'short' } });
 const formatTime = createDateFormatter({ locale: () => locale.value, unit: 'seconds', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } });
 </script>
