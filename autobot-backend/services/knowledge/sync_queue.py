@@ -24,6 +24,7 @@ to the score at enqueue time.
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -74,6 +75,11 @@ class SyncStatus(str, Enum):
     PROCESSING = "processing"
     DONE = "done"
     FAILED = "failed"
+    GONE = "gone"  # the file no longer exists: dropped, never retried (#20968)
+
+
+class DocumentGone(Exception):
+    """The entry's file no longer exists, so there is nothing to index and nothing to retry."""
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +307,7 @@ class DocumentSyncQueue:
         pipe.zrem(_PENDING_KEY, entry_id)
         await pipe.execute()
 
-    async def mark_done(self, entry_id: str) -> None:
+    async def mark_done(self, entry_id: str, status: SyncStatus = SyncStatus.DONE) -> None:
         """Mark an entry complete and place it on the TTL-pruned done zset.
 
         Clears the ``pending_paths`` secondary key so a subsequent re-edit
@@ -319,7 +325,7 @@ class DocumentSyncQueue:
         pipe = redis.pipeline()
         pipe.hset(
             self._entry_key(entry_id),
-            mapping={"status": SyncStatus.DONE.value, "updated_at": now_iso},
+            mapping={"status": status.value, "updated_at": now_iso},
         )
         pipe.zrem(_PENDING_KEY, entry_id)
         pipe.zadd(_DONE_KEY, {entry_id: now_ts})
@@ -387,22 +393,36 @@ class DocumentSyncQueue:
             SyncStatus.PENDING: _PENDING_KEY,
             SyncStatus.FAILED: _FAILED_KEY,
             SyncStatus.DONE: _DONE_KEY,
+            SyncStatus.GONE: _DONE_KEY,
         }.get(status)
         if key is None:
             return []
+        if status in (SyncStatus.DONE, SyncStatus.GONE):
+            return await self._list_terminal(redis, status, limit, offset)
         stop = offset + limit - 1
         if status == SyncStatus.PENDING:
             ids = await redis.zrange(key, offset, stop)
         else:
             ids = await redis.zrevrange(key, offset, stop)
-        entries: List[SyncQueueEntry] = []
-        for entry_id in ids:
-            if isinstance(entry_id, bytes):
-                entry_id = entry_id.decode()
-            raw = await redis.hgetall(self._entry_key(entry_id))
-            if raw:
-                entries.append(SyncQueueEntry.from_redis_mapping(raw))
-        return entries
+        return await self._load_entries(redis, ids)
+
+    async def _load_entries(self, redis: Any, ids: List[Any]) -> List[SyncQueueEntry]:
+        """Load the entries behind *ids*, skipping any whose hash has expired."""
+        decoded = [i.decode() if isinstance(i, bytes) else i for i in ids]
+        raws = [await redis.hgetall(self._entry_key(i)) for i in decoded]
+        return [SyncQueueEntry.from_redis_mapping(raw) for raw in raws if raw]
+
+    async def _list_terminal(self, redis: Any, status: SyncStatus, limit: int, offset: int) -> List[SyncQueueEntry]:
+        """DONE and GONE share one zset: filter by status BEFORE applying offset and limit (#20968)."""
+        matched: List[SyncQueueEntry] = []
+        cursor, batch = 0, max(limit, 100)
+        while len(matched) < offset + limit:
+            ids = await redis.zrevrange(_DONE_KEY, cursor, cursor + batch - 1)
+            if not ids:
+                break
+            cursor += len(ids)
+            matched += [e for e in await self._load_entries(redis, ids) if e.status == status]
+        return matched[offset : offset + limit]
 
     async def prune_done(self, older_than_seconds: int = DONE_TTL_SECONDS) -> int:
         """Delete done entries older than the cutoff and return the count."""
@@ -454,6 +474,11 @@ class DocumentSyncQueue:
             return None
         try:
             await processor(entry)
+        except DocumentGone as gone:
+            logger.warning("sync entry %s dropped, file gone: %s (%s)", entry.id, entry.document_path, gone)
+            await self.mark_done(entry.id, SyncStatus.GONE)
+            entry.status = SyncStatus.GONE
+            return entry
         except Exception as exc:  # noqa: BLE001 — worker must survive any failure
             return await self.mark_failed(entry.id, str(exc))
         await self.mark_done(entry.id)
@@ -482,6 +507,14 @@ def get_document_sync_queue() -> DocumentSyncQueue:
 # ---------------------------------------------------------------------------
 
 
+async def _raise_if_gone(path: Any) -> None:
+    """Raise DocumentGone only for a confirmed missing path; any other stat error propagates and is retried."""
+    try:
+        await asyncio.to_thread(path.stat)
+    except (FileNotFoundError, NotADirectoryError) as e:
+        raise DocumentGone(f"File no longer exists: {path}") from e
+
+
 async def _reindex_processor(entry: SyncQueueEntry) -> None:
     """Processor that re-indexes the document referenced by ``entry``.
 
@@ -492,6 +525,7 @@ async def _reindex_processor(entry: SyncQueueEntry) -> None:
 
     from services.knowledge.doc_indexer import get_doc_indexer_service
 
+    await _raise_if_gone(Path(entry.document_path))
     indexer = get_doc_indexer_service()
     if not await indexer.initialize():
         raise RuntimeError("DocIndexerService initialization failed")
@@ -550,6 +584,7 @@ __all__ = [
     "DONE_TTL_SECONDS",
     "DocumentSyncQueue",
     "MAX_ATTEMPTS",
+    "DocumentGone",
     "SyncQueueEntry",
     "SyncQueueWorker",
     "SyncReason",

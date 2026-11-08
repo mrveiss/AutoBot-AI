@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
-from auth_middleware import check_admin_permission, get_current_user
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from models.heartbeat import AgentRuntimeState
@@ -119,9 +119,9 @@ def _policy_to_response(policy: BudgetPolicy) -> BudgetPolicyResponse:
 )
 async def create_budget_policy(
     body: BudgetPolicyRequest,
-    _user=Depends(get_current_user),
+    _admin: bool = Depends(check_admin_permission),
 ) -> BudgetPolicyResponse:
-    """Create a new budget policy."""
+    """Create a new budget policy (admin permission required)."""
     policy = BudgetPolicy(
         scope=body.scope,
         scope_id=body.scope_id,
@@ -146,9 +146,9 @@ async def create_budget_policy(
 async def list_budget_policies(
     scope: Optional[str] = Query(None, description="Filter by scope (optional)"),
     scope_id: Optional[str] = Query(None, description="Filter by scope_id (optional)"),
-    _user=Depends(get_current_user),
+    _admin: bool = Depends(check_admin_permission),
 ) -> BudgetPoliciesListResponse:
-    """List budget policies, optionally filtered by scope."""
+    """List budget policies, optionally filtered by scope (admin permission required)."""
     if scope and scope_id:
         policies = await list_policies_for_scope(scope, scope_id)
     else:
@@ -166,9 +166,9 @@ async def list_budget_policies(
 )
 async def get_budget_policy(
     policy_id: str,
-    _user=Depends(get_current_user),
+    _admin: bool = Depends(check_admin_permission),
 ) -> BudgetPolicyResponse:
-    """Get a single budget policy by ID."""
+    """Get a single budget policy by ID (admin permission required)."""
     policy = await get_policy(policy_id)
     if policy is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found")
@@ -184,9 +184,9 @@ async def get_budget_policy(
 async def update_budget_policy(
     policy_id: str,
     body: BudgetPolicyRequest,
-    _user=Depends(get_current_user),
+    _admin: bool = Depends(check_admin_permission),
 ) -> BudgetPolicyResponse:
-    """Update a budget policy."""
+    """Update a budget policy (admin permission required)."""
     existing = await get_policy(policy_id)
     if existing is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found")
@@ -216,9 +216,9 @@ async def update_budget_policy(
 )
 async def delete_budget_policy(
     policy_id: str,
-    _user=Depends(get_current_user),
+    _admin: bool = Depends(check_admin_permission),
 ) -> None:
-    """Delete a budget policy."""
+    """Delete a budget policy (admin permission required)."""
     success = await delete_policy(policy_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found")
@@ -260,9 +260,9 @@ async def resume_paused_agent(
 async def get_agent_pause_status(
     agent_id: str,
     session: AsyncSession = Depends(get_db_session),
-    _user=Depends(get_current_user),
+    _admin: bool = Depends(check_admin_permission),
 ) -> PauseStatusResponse:
-    """Get the pause status of an agent."""
+    """Get the pause status of an agent (admin permission required)."""
     try:
         result = await session.execute(select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id))
         state = result.scalar_one_or_none()
