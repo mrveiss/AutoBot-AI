@@ -19,7 +19,7 @@ This document shows how to migrate from duplicate timeout/debounce implementatio
 
 ## Debounce Patterns
 
-### Example 1: Custom Debounce Implementation (WebResearchSettings.vue)
+### Example 1: Custom Debounce Implementation
 
 **BEFORE (lines 429-454):**
 ```vue

@@ -16,7 +16,7 @@ import pytest
 
 from autobot_shared.user_management import user_service_lifecycle
 from autobot_shared.user_management.base_service import TenantContext
-from autobot_shared.user_management.models.audit import AuditAction
+from autobot_shared.user_management.models.audit import IdentityAuditAction
 from autobot_shared.user_management.user_service import UserService
 from autobot_shared.user_management.user_service_errors import DuplicateUserError, UserServiceError
 
@@ -67,9 +67,9 @@ async def test_change_password_audits_the_union_of_both_forks_keys(cls, expected
     svc = _service(cls)
     with patch.object(user_service_lifecycle, "set_password_epoch", AsyncMock(return_value=1234)) as epoch:
         assert await svc.change_password(uuid.uuid4(), None, "new-secret", require_current=False)
-    epoch.assert_awaited_once_with("alice")
+    epoch.assert_awaited_once_with("alice", in_redis=False)
     action, _rtype, _rid, details = svc._audit_log.await_args.args
-    assert action == AuditAction.PASSWORD_CHANGED
+    assert action == IdentityAuditAction.PASSWORD_CHANGED
     assert details == {
         "method": "user_initiated",
         "sessions_revoked_from": 1234,

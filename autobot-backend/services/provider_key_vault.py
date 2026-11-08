@@ -153,6 +153,15 @@ IMAGE_PROVIDER_KEY_NAMES: frozenset[str] = _IMAGE_ONLY_KEY_NAMES | (LLM_PROVIDER
 #: Video-generation credentials (#18094): the plugin's providers and the backend video API.
 VIDEO_PROVIDER_KEY_NAMES: frozenset[str] = frozenset({"RUNWAY_API_KEY", "SORA_API_KEY", "KLING_API_KEY"})
 
+#: LLM sign-in OAuth client secrets (#19241). Optional: a provider registered as a
+#: public PKCE client has none. Vault only -- there is no env fallback for these.
+LLM_OAUTH_CLIENT_SECRET_NAMES: frozenset[str] = frozenset(
+    {
+        "AUTOBOT_LLM_OAUTH_OPENAI_CLIENT_SECRET",
+        "AUTOBOT_LLM_OAUTH_ANTHROPIC_CLIENT_SECRET",
+        "AUTOBOT_LLM_OAUTH_HUGGINGFACE_CLIENT_SECRET",
+    }
+)
 #: The full set of names eligible for capture-time mirroring and startup
 #: hydration -- provider-agnostic per #15267's suggestion, since this module
 #: is no longer LLM-only once search joins it.
@@ -162,6 +171,7 @@ VAULT_RESOLVED_CREDENTIAL_NAMES: frozenset[str] = (
     | SERVICE_CREDENTIAL_KEY_NAMES
     | IMAGE_PROVIDER_KEY_NAMES
     | VIDEO_PROVIDER_KEY_NAMES
+    | LLM_OAUTH_CLIENT_SECRET_NAMES
 )
 
 #: Which module resolves each name -- the ``secret_dependencies`` edge
@@ -171,6 +181,7 @@ _CREDENTIAL_CONSUMERS: dict[str, str] = {
     **{name: "agent_loop.search.registry" for name in SEARCH_PROVIDER_KEY_NAMES},
     **{name: "api.image_generation" for name in _IMAGE_ONLY_KEY_NAMES},
     **{name: "api.video_generation" for name in VIDEO_PROVIDER_KEY_NAMES},
+    **{name: "llm_shared.llm_oauth_registry" for name in LLM_OAUTH_CLIENT_SECRET_NAMES},
     **{name: "voice_processing.providers.lv.tilde_provider" for name in ("TILDE_API_KEY",)},
     "SLACK_BOT_TOKEN": "integrations.capability_registry",  # nosec B105  # module path, not a credential
     "DISCORD_BOT_TOKEN": "integrations.capability_registry",  # nosec B105  # module path, not a credential

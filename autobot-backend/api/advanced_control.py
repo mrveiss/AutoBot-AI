@@ -34,7 +34,7 @@ from api.schemas_workflows import (
     AdvancedControlTakeoverSessionStatusResponse,
     AdvancedControlTakeoverSystemStatusResponse,
 )
-from api.ws_security import enforce_ws_admin, enforce_ws_origin
+from api.ws_security import enforce_ws_admin, enforce_ws_desktop_auth, enforce_ws_origin
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -568,7 +568,7 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for desktop streaming control"""
     if not await enforce_ws_origin(websocket):
         return
-    if not await enforce_ws_admin(websocket):
+    if await enforce_ws_desktop_auth(websocket) is None:
         return
     await accept_websocket(websocket)
 

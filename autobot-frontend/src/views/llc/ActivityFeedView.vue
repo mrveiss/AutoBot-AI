@@ -21,9 +21,9 @@
           <input type="checkbox" :checked="autoRefresh" @change="toggleAutoRefresh" />
           {{ $t('llc.activity.autoRefresh') }}
         </label>
-        <button class="btn-sm" :disabled="isLoading" @click="reload">
+        <BaseButton variant="secondary" size="sm" :disabled="isLoading" @click="reload">
           {{ isLoading ? $t('llc.activity.refreshing') : $t('llc.activity.refresh') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -55,10 +55,10 @@
           @keyup.enter="applyFilters"
         />
       </label>
-      <button class="btn-sm" @click="applyFilters">{{ $t('llc.activity.applyFilters') }}</button>
-      <button v-if="hasActiveFilters" class="btn-sm btn-ghost" @click="clearFilters">
+      <BaseButton variant="secondary" size="sm" @click="applyFilters">{{ $t('llc.activity.applyFilters') }}</BaseButton>
+      <BaseButton variant="ghost" size="sm" v-if="hasActiveFilters" @click="clearFilters">
         {{ $t('llc.activity.clearFilters') }}
-      </button>
+      </BaseButton>
     </div>
 
     <div v-if="isLoading && entries.length === 0" class="state-msg">{{ $t('llc.activity.loading') }}</div>
@@ -73,29 +73,30 @@
           <span class="event-entity">{{ entry.entity_type }}<span class="event-entity-id" :title="entry.entity_id">#{{ shortId(entry.entity_id) }}</span></span>
           <span v-if="actorName(entry)" class="event-actor-name">· {{ actorName(entry) }}</span>
         </div>
-        <time class="event-time" :title="formatDateTime(entry.occurred_at)">{{ formatTimeAgo(entry.occurred_at) }}</time>
+        <time class="event-time" :title="formatDateTime(entry.occurred_at)">{{ timeAgo(entry.occurred_at) }}</time>
       </li>
     </ul>
 
     <div v-if="entries.length > 0" class="feed-pagination">
       <span class="page-info">{{ $t('llc.activity.pageInfo', { page, total }) }}</span>
       <div class="page-buttons">
-        <button class="btn-sm" :disabled="page <= 1 || isLoading" @click="goToPage(page - 1)">
+        <BaseButton variant="secondary" size="sm" :disabled="page <= 1 || isLoading" @click="goToPage(page - 1)">
           {{ $t('llc.activity.prev') }}
-        </button>
-        <button class="btn-sm" :disabled="!hasNext || isLoading" @click="goToPage(page + 1)">
+        </BaseButton>
+        <BaseButton variant="secondary" size="sm" :disabled="!hasNext || isLoading" @click="goToPage(page + 1)">
           {{ $t('llc.activity.next') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { BaseButton, formatRelativeTime } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDateTime, formatTimeAgo } from '@/utils/formatHelpers'
+import { formatDateTime } from '@/utils/formatHelpers'
 import type { components } from '@/types/generated/api'
 import { useI18n } from 'vue-i18n'
 
@@ -103,7 +104,8 @@ const props = defineProps<{ companyId?: string }>()
 
 const logger = createLogger('ActivityFeedView')
 const api = useApiClient()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const timeAgo = (at: string) => formatRelativeTime(at, { locale: locale.value })
 
 // No backend push stream exists; poll at a fixed cadence when auto-refresh is on.
 const POLL_INTERVAL_MS = 15000
@@ -219,7 +221,7 @@ onUnmounted(() => {
 }
 
 .view-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -252,7 +254,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -260,7 +262,7 @@ onUnmounted(() => {
 .filter input,
 .filter select {
   padding: 0.375rem 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 400;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
@@ -289,7 +291,7 @@ onUnmounted(() => {
   gap: 0.75rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--border-subtle);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .actor-badge {
@@ -341,18 +343,18 @@ onUnmounted(() => {
 
 .event-entity-id {
   font-family: var(--font-mono, monospace);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .event-actor-name {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .event-time {
   flex: none;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -373,25 +375,5 @@ onUnmounted(() => {
 .page-buttons {
   display: flex;
   gap: 0.5rem;
-}
-
-.btn-sm {
-  padding: 0.3125rem 0.75rem;
-  font-size: 0.8125rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-input);
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
-.btn-sm:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-ghost {
-  border-color: transparent;
-  color: var(--color-accent-text, var(--actfeed-accent-text));
 }
 </style>

@@ -737,7 +737,7 @@ record, which is the entire premise of D2. Hidden cost: one field; the risk is t
 ### D4. CI is attached to commits, never to runs
 
 65 workflows in `.github/workflows/` (23 `pull_request`, 19 `push`, 12 `schedule`), including
-real blocking objective gates — `llc-contract.yml:62-77` (API-wiring audit `--fail-on-unwired`
+real blocking objective gates — `company-os-contract.yml:66-105` (API-wiring audit `--fail-on-unwired`
 plus LLC e2e), `pr-template-check.yml` with `scripts/check_pr_template_sections.py` (required PR
 sections), `ratchet-base-guard.yml`, `duplication-guard.yml`, `canonical-audit.yml:31-58`.
 
@@ -1005,7 +1005,7 @@ That is why #17217 keeps finding the same shape from unrelated corners: it catal
 instances, and the mechanism producing them is upstream, in how acceptance criteria are written.
 Two witnesses, one finding. **The fix is a criterion of the form "a named production call site
 exists"** on any issue whose deliverable is a module rather than a behaviour — the
-`--fail-on-unwired` idea (`llc-contract.yml:62-77`) applied to ACs instead of routes. Worth
+`--fail-on-unwired` idea (`company-os-contract.yml:66-76`) applied to ACs instead of routes. Worth
 proposing on #17217 as its root cause rather than filing as a sixteenth instance.
 
 ### E6. Consolidated filing shape
@@ -1028,3 +1028,14 @@ not 13 issues:
 
 B6 (vector-store forensics) is deliberately **not** filed: it is only worth doing after item 2
 lands, since a read-side screen makes stored poison inert without having to find it.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #16533 — Post-generation grounding check for RAG answers
+- #16646 — feat(coordination): claim events never fire — hold_scopes calls try_acquire directly instead of the publishing wrapper
+- #16649 — feat(coordination): one queryable view of who is doing what, in which state — extend /coordination/claims with task state
+- #16776 — security(agents): no taint propagation — approval gates never learn that untrusted content entered the context
+- #16780 — security(rag): RAGService.advanced_search() merges doc_indexer_service results with no content-firewall inspection
+- #16963 — bug(llc): LLCWorkspaceLease has no writer, no reader, and no reaper — wire in or retire

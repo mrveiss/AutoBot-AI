@@ -28,6 +28,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _EVALUATOR = "autobot_shared/auth/permission_evaluator.py"
@@ -94,7 +95,6 @@ REACH = declare(
     "one-permission-gate-scan",
     discover=_source_population,
     # Same population as fact-read-authorization-scan (#18184): 2997 at its measurement, growth 300.
-    floor=2988,
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,
@@ -114,7 +114,7 @@ def _scan() -> tuple[dict[str, tuple[str, ...]], tuple[str, ...], int]:
         read += 1
         if not any(needle in source for needle in _NEEDLES):
             continue
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
         for name in _definitions(tree) & defined.keys():
             defined[name].append(rel)
         string_calls.extend(f"{rel}:{line}" for line in _string_factory_calls(tree))
@@ -134,13 +134,13 @@ def _scan() -> tuple[dict[str, tuple[str, ...]], tuple[str, ...], int]:
     ],
 )
 def test_the_string_call_detector_has_contrast(source: str, expected: list[int]) -> None:
-    assert _string_factory_calls(ast.parse(source)) == expected
+    assert _string_factory_calls(parse_cache.parse(source)) == expected
 
 
 def test_the_definition_detector_sees_methods_and_async_defs() -> None:
-    tree = ast.parse("class G:\n    def require_permission(self, p): ...\nasync def evaluate_any(c, p): ...\n")
+    tree = parse_cache.parse("class G:\n    def require_permission(self, p): ...\nasync def evaluate_any(c, p): ...\n")
     assert _definitions(tree) == {"require_permission", "evaluate_any"}
-    assert _definitions(ast.parse("require_permission = gate.require_permission\n")) == set()
+    assert _definitions(parse_cache.parse("require_permission = gate.require_permission\n")) == set()
 
 
 def test_the_scan_is_not_vacuous() -> None:

@@ -181,7 +181,8 @@ describe('the 401 session teardown the private instances lacked (#13079)', () =>
     await useOrchestrationManagement().fetchServiceDefinitions()
 
     expect(sessionStorage.getItem(TOKEN_KEY)).toBeNull()
-    expect(window.location.href).toBe('/login')
+    // #18892: the base-aware login URL carries the current route back as ?redirect=
+    expect(window.location.href).toBe('/login?redirect=%2Forchestration')
   })
 
   it('does NOT clear the session on a 401 to a token-less call', async () => {
@@ -299,5 +300,15 @@ describe('endpoints stay relative to the API base (regression guard)', () => {
     expect((lastInit().headers as Record<string, string>)['Content-Type']).toBe(
       'application/json'
     )
+  })
+})
+
+describe('a failed read is distinct from an empty one (#19887)', () => {
+  it('fetchServiceDefinitions resolves null on failure and [] for a genuinely empty list', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]))
+    expect(await useOrchestrationManagement().fetchServiceDefinitions()).toEqual([])
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'down' }, 500))
+    expect(await useOrchestrationManagement().fetchServiceDefinitions()).toBeNull()
   })
 })

@@ -36,6 +36,12 @@ from enum import Enum
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.threshold_constants import CategoryDefaults, StringParsingConstants
+from services.feature_flags_cache import (
+    ENDPOINT_KEY_PREFIX,
+    FEATURE_FLAG_CACHE_TTL_SECONDS,
+    FeatureFlagCacheMixin,
+)
+from services.feature_flags_stats import FeatureFlagStatsMixin
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -143,7 +149,7 @@ def resolve_provisioned_enforcement_mode(raw: str | None = None) -> EnforcementM
         raise ValueError(f"Unrecognised enforcement mode {value!r}; expected one of: {valid}") from exc
 
 
-class FeatureFlags(AsyncRedisClientMixin):
+class FeatureFlags(FeatureFlagCacheMixin, FeatureFlagStatsMixin, AsyncRedisClientMixin):
     """
     Redis-backed feature flags for access control rollout
 
@@ -156,16 +162,26 @@ class FeatureFlags(AsyncRedisClientMixin):
     def __init__(self) -> None:
         """Initialize feature flags service"""
         self._cache = {}
-        self._cache_ttl = 5  # seconds
+        self._cache_ttl = FEATURE_FLAG_CACHE_TTL_SECONDS  # seconds, see feature_flags_cache
         self._last_refresh = {}
         self._enforcement_default_logged = False
 
     async def get_enforcement_mode(self) -> EnforcementMode:
-        """Current access control enforcement mode.
+        """Current access control enforcement mode, cached for ``_cache_ttl`` seconds.
 
         An absent key resolves to :data:`PROVISIONED_ENFORCEMENT_MODE_DEFAULT`,
-        the same posture the provisioning seeder writes (#14866).
+        the same posture the provisioning seeder writes (#14866). A failed read
+        raises and is not cached.
         """
+        hit, cached = self._cache_lookup(ENFORCEMENT_MODE_KEY)
+        if hit:
+            return cached
+        mode = await self._fetch_enforcement_mode()
+        self._cache_store(ENFORCEMENT_MODE_KEY, mode)
+        return mode
+
+    async def _fetch_enforcement_mode(self) -> EnforcementMode:
+        """The uncached read behind :meth:`get_enforcement_mode`."""
         try:
             redis = await self._get_redis()
             mode_str = await redis.get(ENFORCEMENT_MODE_KEY)
@@ -230,6 +246,7 @@ class FeatureFlags(AsyncRedisClientMixin):
             return existing is None, existing or target
 
         if await redis.set(ENFORCEMENT_MODE_KEY, target.value, nx=True):
+            self._cache_invalidate(ENFORCEMENT_MODE_KEY)
             logger.info("Provisioned access control enforcement mode: %s", target.value)
             return True, target
 
@@ -315,10 +332,15 @@ class FeatureFlags(AsyncRedisClientMixin):
             # Nothing reached EXEC, so nothing was written: False is the truth.
             logger.error("Failed to set enforcement mode: %s", e)
             return False
+        finally:
+            # Whatever happened, the next read in this process asks Redis.
+            self._cache_invalidate(ENFORCEMENT_MODE_KEY)
 
     async def get_endpoint_enforcement(self, endpoint: str) -> EnforcementMode | None:
         """
-        Get enforcement mode for specific endpoint (allows per-endpoint control)
+        Get enforcement mode for specific endpoint (allows per-endpoint control),
+        cached for ``_cache_ttl`` seconds. "No override" is cached; a failed read
+        is not.
 
         Args:
             endpoint: API endpoint path
@@ -326,21 +348,21 @@ class FeatureFlags(AsyncRedisClientMixin):
         Returns:
             EnforcementMode if set for endpoint, None to use global mode
         """
+        key = f"{ENDPOINT_KEY_PREFIX}{endpoint}"
+        hit, cached = self._cache_lookup(key)
+        if hit:
+            return cached
         try:
             redis = await self._get_redis()
-            key = f"feature_flag:access_control:endpoint:{endpoint}"
             mode_str = await redis.get(key)
-
-            if mode_str:
-                if isinstance(mode_str, bytes):
-                    mode_str = mode_str.decode()
-                return EnforcementMode(mode_str)
-
-            return None  # Use global mode
-
+            if isinstance(mode_str, bytes):
+                mode_str = mode_str.decode()
+            mode = EnforcementMode(mode_str) if mode_str else None  # None: use global mode
         except Exception as e:
             logger.error("Failed to get endpoint enforcement for %s: %s", endpoint, e)
             return None
+        self._cache_store(key, mode)
+        return mode
 
     async def set_endpoint_enforcement(self, endpoint: str, mode: EnforcementMode | None) -> bool:
         """
@@ -353,9 +375,9 @@ class FeatureFlags(AsyncRedisClientMixin):
         Returns:
             True if successful
         """
+        key = f"{ENDPOINT_KEY_PREFIX}{endpoint}"
         try:
             redis = await self._get_redis()
-            key = f"feature_flag:access_control:endpoint:{endpoint}"
 
             if mode is None:
                 # Remove endpoint override
@@ -371,6 +393,8 @@ class FeatureFlags(AsyncRedisClientMixin):
         except Exception as e:
             logger.error("Failed to set endpoint enforcement: %s", e)
             return False
+        finally:
+            self._cache_invalidate(key)
 
     async def get_feature(self, feature_name: str, default: bool = False) -> bool:
         """
@@ -478,32 +502,6 @@ class FeatureFlags(AsyncRedisClientMixin):
             logger.error("Failed to clear feature flag %s: %s", feature_name, e)
             return False
 
-    def _parse_history_entries(self, history_raw: list) -> list:
-        """Parse raw history entries from Redis. (Issue #315 - extracted)"""
-        history = []
-        for entry in history_raw:
-            if isinstance(entry, bytes):
-                entry = entry.decode()
-            try:
-                history.append(json.loads(entry))
-            except Exception as e:
-                logger.debug("Skipping malformed history entry: %s", e)
-        return history
-
-    def _build_endpoint_overrides(self, endpoint_keys: list, mode_values: list) -> dict:
-        """Build endpoint overrides dict from keys and values. (Issue #315 - extracted)"""
-        endpoint_overrides = {}
-        for key, mode_val in zip(endpoint_keys, mode_values):
-            if not mode_val:
-                continue
-            if isinstance(key, bytes):
-                key = key.decode()
-            endpoint = key.replace("feature_flag:access_control:endpoint:", "")
-            if isinstance(mode_val, bytes):
-                mode_val = mode_val.decode()
-            endpoint_overrides[endpoint] = mode_val
-        return endpoint_overrides
-
     async def get_rollout_statistics(self) -> Metadata:
         """
         Get rollout statistics and metrics
@@ -521,24 +519,7 @@ class FeatureFlags(AsyncRedisClientMixin):
             history_raw = await redis.lrange(ENFORCEMENT_HISTORY_KEY, 0, 9)
             history = self._parse_history_entries(history_raw)
 
-            # Get endpoint overrides
-            endpoint_keys = []
-            cursor = 0
-            while True:
-                cursor, keys = await redis.scan(cursor, match="feature_flag:access_control:endpoint:*", count=100)
-                endpoint_keys.extend(keys)
-                if cursor == 0:
-                    break
-
-            # Batch fetch endpoint overrides using pipeline (fix N+1 query)
-            endpoint_overrides = {}
-            if endpoint_keys:
-                pipe = redis.pipeline()
-                for key in endpoint_keys:
-                    pipe.get(key)
-                mode_values = await pipe.execute()
-                # Use helper to build overrides (Issue #315)
-                endpoint_overrides = self._build_endpoint_overrides(endpoint_keys, mode_values)
+            endpoint_overrides = await self._collect_endpoint_overrides(redis)
 
             return {
                 "current_mode": mode.value,
@@ -580,6 +561,8 @@ class FeatureFlags(AsyncRedisClientMixin):
         except Exception as e:
             logger.error("Failed to clear feature flags: %s", e)
             return False
+        finally:
+            self._cache_invalidate()
 
 
 # Global feature flags instance
@@ -590,6 +573,11 @@ _flags_lock = asyncio.Lock()
 async def get_feature_flags() -> FeatureFlags:
     """Get or create global feature flags instance"""
     global _feature_flags
+
+    # Lock-free once the singleton exists (#18998); the lock only guards creation.
+    flags = _feature_flags
+    if flags is not None:
+        return flags
 
     async with _flags_lock:
         if _feature_flags is None:

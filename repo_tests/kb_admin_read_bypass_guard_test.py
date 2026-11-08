@@ -33,6 +33,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -56,8 +57,10 @@ EXPLICIT_READ_APIS = frozenset(
         "autobot-backend/api/knowledge_search_aggregator.py",
     }
 )
-#: The helper that forwards its own ``is_admin`` parameter to ``check_access``.
-PASS_THROUGH = frozenset({"autobot-backend/knowledge/search_filters.py"})
+#: The helper that forwards its own ``is_admin`` parameter to ``check_access``, and the superadmin's root view
+#: (#19860, owner decision 2026-10-28: "superadmin is like a root user"), which is the one audited place that
+#: passes ``is_admin=True`` on a principal's behalf and is reached only through ``filter_for_principal``.
+PASS_THROUGH = frozenset({"autobot-backend/knowledge/search_filters.py", "autobot-backend/knowledge/root_read.py"})
 #: The canonical per-fact read entries (#18184). They derive ``is_admin`` from ``current_user``
 #: (or take it explicitly) and forward it to ``check_access``, so calling one is an admin-aware read.
 #: Accepted only while the helper's own body in :data:`HELPER_HOME` passes ``is_admin`` (asserted).
@@ -89,12 +92,11 @@ def _production_files(root: Path) -> list[str]:
     return [rel for rel in tracked if _is_production(rel)]
 
 
-#: Bound at the 2567 files measured when the floor was added; since re-pinned mid-window
-#: from REACH.window() as the tree grew (the value below carries its own measurement).
+#: Bound at the 2567 files measured when the floor was added; the floor is now computed from
+#: the base commit (#19676).
 REACH = declare(
     "kb-admin-read-bypass",
     discover=_production_files,
-    floor=2742,  # re-pinned mid-window: population 2752, window [2552, 2752]
     growth=200,
     skips=0,
     # The scope moves from prose to data (#17844): `declare` renders the same sentence from
@@ -107,7 +109,7 @@ REACH = declare(
 def admin_bypass_calls(source: str) -> list[int]:
     """Line numbers of gated-helper calls in *source* that pass ``is_admin=``."""
     lines = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, ast.Call):
             continue
         func = node.func
@@ -126,14 +128,14 @@ def canonical_helper_calls(source: str) -> list[int]:
     """Line numbers of calls to the canonical admin-aware fact-read helpers in *source*."""
     return [
         n.lineno
-        for n in ast.walk(ast.parse(source))
+        for n in ast.walk(parse_cache.parse(source))
         if isinstance(n, ast.Call) and _call_name(n) in CANONICAL_READ_HELPERS
     ]
 
 
 def helper_forwards_admin(source: str, helper: str = "can_read_fact") -> bool:
     """Whether *helper*'s body in *source* passes ``is_admin=`` to ``check_access``."""
-    for fn in ast.walk(ast.parse(source)):
+    for fn in ast.walk(parse_cache.parse(source)):
         if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and fn.name == helper:
             return any(
                 isinstance(n, ast.Call)

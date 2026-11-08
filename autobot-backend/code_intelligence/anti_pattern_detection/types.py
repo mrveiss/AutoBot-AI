@@ -24,6 +24,7 @@ from autobot_shared.status_enums import Severity
 # keeps working for every detector in this package.
 from code_analysis.src.anti_pattern_detector import AntiPatternType  # noqa: F401
 from code_analysis.src.anti_pattern_detector import MAGIC_NUMBER_MIN_OCCURRENCES
+from utils.file_categorization import SKIP_DIRS
 
 #: An exact subset of the canonical ladder, so an alias rather than a class (#18098).
 #: Safe to alias because every severity distribution built from this is built from the
@@ -90,18 +91,8 @@ class Thresholds:
 # Default ignore patterns
 # ============================================================================
 
-DEFAULT_IGNORE_PATTERNS = [
-    "__pycache__",
-    ".git",
-    ".venv",
-    "venv",
-    "node_modules",
-    "*.pyc",
-    "*.pyo",
-    "*.egg-info",
-    ".tox",
-    ".pytest_cache",
-]
+# Directory names (matched as exact path parts) from the canonical set, plus bytecode/egg globs.
+DEFAULT_IGNORE_PATTERNS = [*sorted(SKIP_DIRS), "*.pyc", "*.pyo", "*.egg-info"]
 
 # Common boilerplate single-letter variables to ignore
 ALLOWED_SINGLE_LETTER_VARS = frozenset(

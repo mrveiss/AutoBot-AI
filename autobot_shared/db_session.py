@@ -12,7 +12,7 @@ db_session_context() in user_management.database, which passes that service's ow
 session maker (each service binds its own engine).
 """
 
-from collections.abc import AsyncGenerator, Callable, Generator
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import asynccontextmanager, contextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -36,6 +36,25 @@ class PostCommitCallbackError(Exception):
     def __init__(self, errors: list[Exception]) -> None:
         super().__init__(f"{len(errors)} post-commit callback(s) failed after the transaction committed: {errors!r}")
         self.errors = errors
+
+
+class NoCommitScopeError(RuntimeError):
+    """A post-commit hook was requested on a session that has no post-commit callback list."""
+
+
+def run_after_commit(session: AsyncSession, hook: Callable[[], Awaitable[object]]) -> None:
+    """Queue *hook* to run once the session's transaction commits (once, however many writes ask).
+
+    Only ``async_session_scope`` seeds the list. Without it there is no commit point to run
+    after, and running the hook at once would fire it BEFORE the commit, so a reader could
+    re-cache the old state under the new epoch: that raises ``NoCommitScopeError`` instead.
+    A hook queued inside a rolled-back savepoint stays queued: over-invalidation, never under.
+    """
+    queued = session.info.get(POST_COMMIT_CALLBACKS)
+    if queued is None:
+        raise NoCommitScopeError("no post-commit callback list: open the session with async_session_scope")
+    if hook not in queued:
+        queued.append(hook)
 
 
 def _rollback_sync(session: Session) -> None:
@@ -69,6 +88,19 @@ async def _run_post_commit_callbacks(session: AsyncSession) -> None:
             errors.append(exc)
     if errors:
         raise PostCommitCallbackError(errors) from errors[0]
+
+
+async def commit_and_run_post_commit(session: AsyncSession) -> None:
+    """Commit now and run the queued post-commit callbacks, for a caller that must see their outcome (#20443).
+
+    ``async_session_scope`` runs the callbacks when its block exits, which for a FastAPI dependency
+    is after the route has answered, so a failing one cannot change the response. A route that must
+    report it commits here instead: the scope's own commit then has nothing to write and its callback
+    list is already drained, so nothing runs twice. Raises what ``session.commit`` raises (the scope
+    rolls back), or ``PostCommitCallbackError`` after the commit stands, with every callback run.
+    """
+    await session.commit()
+    await _run_post_commit_callbacks(session)
 
 
 @contextmanager

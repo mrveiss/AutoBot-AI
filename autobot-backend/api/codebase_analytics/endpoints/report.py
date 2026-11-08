@@ -18,21 +18,17 @@ from typing import Any, Dict, List, Set, Tuple
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 
+from api.codebase_analytics.problem_severity import PROBLEM_SEVERITY_ORDER
 from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
 # Issue #244: Cross-Language Pattern Detection
-from code_intelligence.cross_language_patterns import (
-    CrossLanguageAnalysis,
-    CrossLanguagePatternDetector,
-)
+from code_intelligence.cross_language_patterns import CrossLanguageAnalysis, CrossLanguagePatternDetector
 
 # Issue #208: Code Pattern Detection & Optimization
-from code_intelligence.pattern_analysis import (
-    CodePatternAnalyzer,
-    PatternAnalysisReport,
-)
+from code_intelligence.pattern_analysis import CodePatternAnalyzer, PatternAnalysisReport
 from constants.path_constants import PATH
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
 from utils.cancel_tokens import new_cancel_token, run_cancellable
@@ -52,7 +48,9 @@ from utils.io_executor import get_analytics_executor
 
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..duplicate_detector import (  # noqa: F401
+    HIGH_SIMILARITY_THRESHOLD,
     LOW_SIMILARITY_THRESHOLD,
+    MEDIUM_SIMILARITY_THRESHOLD,
     DuplicateAnalysis,
     DuplicateCodeDetector,
 )
@@ -69,9 +67,6 @@ from .shared import (
 logger = get_logger(__name__)
 
 router = APIRouter()
-
-# Severity order for sorting (most critical first)
-SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3, "hint": 4}
 
 # All file categories for tracking
 ALL_CATEGORIES = [
@@ -227,7 +222,7 @@ def _generate_category_section(
 
     grouped = _group_problems(problems)
 
-    for severity in ["high", "medium", "low", "info", "hint"]:
+    for severity in PROBLEM_SEVERITY_ORDER:
         if severity in grouped:
             lines.extend(_format_severity_subsection(severity, grouped[severity]))
 
@@ -300,7 +295,7 @@ def _build_summary_section(severity_counts: Dict[str, int], type_counts: Dict[st
         "|----------|-------|",
     ]
 
-    for sev in ["high", "medium", "low", "info", "hint"]:
+    for sev in PROBLEM_SEVERITY_ORDER:
         count = severity_counts.get(sev, 0)
         if count > 0:
             emoji = _get_severity_emoji(sev)
@@ -360,7 +355,7 @@ def _generate_risk_distribution(prediction: PredictionResult) -> List[str]:
         "| Risk Level | Files |",
         "|------------|-------|",
     ]
-    for level in ["critical", "high", "medium", "low", "minimal"]:
+    for level in (s.value for s in Severity.risk_ladder()):
         count = prediction.risk_distribution.get(level, 0)
         emoji = _get_risk_emoji(level)
         lines.append(f"| {emoji} {level.capitalize()} | {count} |")
@@ -671,7 +666,7 @@ def _generate_duplicate_overview(analysis: DuplicateAnalysis) -> List[str]:
 
 def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
     """Generate high similarity duplicates section."""
-    high_similarity_dups = [d for d in analysis.duplicates if d.similarity >= 0.90]
+    high_similarity_dups = [d for d in analysis.duplicates if d.similarity >= HIGH_SIMILARITY_THRESHOLD]
     if not high_similarity_dups:
         return []
 
@@ -702,7 +697,9 @@ def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[st
 
 def _generate_medium_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
     """Generate medium similarity duplicates section."""
-    medium_similarity_dups = [d for d in analysis.duplicates if 0.70 <= d.similarity < 0.90]
+    medium_similarity_dups = [
+        d for d in analysis.duplicates if MEDIUM_SIMILARITY_THRESHOLD <= d.similarity < HIGH_SIMILARITY_THRESHOLD
+    ]
     if not medium_similarity_dups:
         return []
 
@@ -1012,11 +1009,10 @@ def _generate_severity_distribution(report: PatternAnalysisReport) -> List[str]:
         "low": "🟢",
         "info": "🔵",
     }
-    for severity in ["critical", "high", "medium", "low", "info"]:
+    for severity in (s.value for s in reversed(Severity.finding_ladder())):
         count = report.severity_distribution.get(severity, 0)
         if count > 0:
-            emoji = severity_emojis.get(severity, "⚪")
-            lines.append(f"| {emoji} {severity.capitalize()} | {count} |")
+            lines.append(f"| {severity_emojis.get(severity, '⚪')} {severity.capitalize()} | {count} |")
     lines.append("")
     return lines
 

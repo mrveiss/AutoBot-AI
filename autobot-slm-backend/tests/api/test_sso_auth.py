@@ -458,7 +458,7 @@ def _make_sso_service_stub(*, succeed: bool, provider_id: uuid.UUID | None = Non
     fake_user = MagicMock()
     fake_user.id = uuid.uuid4()
     fake_user.username = "testuser"
-    fake_user.is_platform_admin = False
+    fake_user.is_platform_admin = True
 
     sso_service_instance = MagicMock()
     sso_service_instance.complete_oauth_login = (
@@ -529,7 +529,7 @@ def test_oauth_callback_success_writes_audit_log():
     call_kwargs = audit_mock.call_args.kwargs
     assert call_kwargs.get("success") is True
     assert call_kwargs.get("category") == "sso"
-    assert call_kwargs.get("action") == "login"
+    assert call_kwargs.get("action") == "auth.login"
     assert call_kwargs.get("username") == fake_user.username
     # provider_id must come from the tuple, not _oauth_states
     assert call_kwargs.get("resource_id") == str(fake_provider_id)

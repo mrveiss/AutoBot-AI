@@ -1,6 +1,9 @@
 # Deploying Docker Containers via SLM Ansible Playbooks
 
 
+
+> **Scope:** the `ansible-playbook` commands in this guide are for writing and testing a playbook. A deployed fleet is updated only through the SLM's builtin updater (Maintenance → Updates → Code Sync), never by hand.
+
 ## Quick Answer
 
 **How do you deploy a Docker container using the SLM and an Ansible playbook?**
@@ -1209,8 +1212,8 @@ All endpoints are prefixed with `/api` and require JWT Bearer authentication unl
 |--------|----------|-------------|
 | `GET` | `/api/roles` | List all role definitions (from `roles` table). |
 | `GET` | `/api/roles/definitions` | Lightweight role definitions for agents (**no auth required**). |
-| `GET` | `/api/roles/fleet-health` | Fleet health: `{"health": "healthy|degraded|critical", "required_down", "optional_down"}`. |
-| `GET` | `/api/roles/owners` | Role-to-node ownership mapping (`{"owners": {"role": "node_id"}}`). |
+| `GET` | `/api/roles/fleet-health` | Fleet health: `{"health": "healthy|degraded|critical", "required_down", "optional_down", "roles_with_nodes_down"}`. |
+| `GET` | `/api/roles/owners` | Role-to-nodes mapping and the roles allowed on several nodes (`{"owners": {"role": ["node_id"]}, "multi_node_roles": ["role"]}`). |
 | `GET` | `/api/roles/{role_name}` | Get specific role details including `ansible_playbook` field. |
 | `POST` | `/api/roles` | Create a new role definition. |
 | `PUT` | `/api/roles/{role_name}` | Update a role definition. |
@@ -1724,9 +1727,9 @@ If SSH fails, check:
 All changes must follow the local-edit-then-sync pattern. See CLAUDE.md for details:
 
 ```bash
-# CORRECT - edit locally, sync via Ansible
+# CORRECT - edit locally, commit, then update the host through the builtin updater
 vim autobot-slm-backend/ansible/deploy-container.yml
-ansible-playbook ansible/playbooks/deploy-infrastructure.yml
+# SLM: Maintenance -> Updates -> Code Sync (runs playbooks/deploy_role.yml for the node's roles)
 
 # WRONG - direct editing on VM
 ssh autobot@<slm-manager-ip> "vim /opt/autobot/.../deploy-container.yml"

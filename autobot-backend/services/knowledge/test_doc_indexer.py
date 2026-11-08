@@ -1017,21 +1017,17 @@ class TestIndexChunkOversized4665:
         # Only one embed attempt (the initial oversized call) — halves are empty, skipped
         assert call_count[0] == 1
 
-    def test_index_chunk_logs_warning_on_oversized(self, caplog):
-        """Oversized chunk must emit a WARNING with doc path and char count (#4665)."""
+    def test_index_chunk_logs_warning_on_oversized(self, caplog, monkeypatch):
+        """Oversized chunk must emit a WARNING with doc path and char count (#4665).
+
+        The flood filter is off here: it counts this message across tests, so an earlier
+        test's repeats would suppress the one this test asserts on (#20207).
+        """
         import logging
 
+        monkeypatch.setattr(_doc_indexer_mod.logger, "filters", [])
         svc = _make_service()
-
-        call_count = [0]
-
-        def _fake_embed(text):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                raise ValueError("input too large")
-            return [0.3] * 128
-
-        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        svc._embed_model.get_text_embedding.side_effect = [ValueError("input too large"), [0.3] * 128, [0.3] * 128]
 
         with caplog.at_level(logging.WARNING, logger="services.knowledge.doc_indexer"):
             chunk = self._make_chunk("D" * 400)

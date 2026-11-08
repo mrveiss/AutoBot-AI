@@ -58,6 +58,7 @@
         v-if="isRootRoute"
         class="default-content"
       >
+        <KnowledgeGraph />
         <div class="welcome-card">
           <h2>
             <Icon name="project-diagram" />
@@ -91,6 +92,7 @@
 // Author: mrveiss
 
 import Icon from '@/components/ui/Icon.vue'
+import KnowledgeGraph from '@/components/knowledge/KnowledgeGraph.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -176,7 +178,7 @@ function navigateTo(path: string): void {
   gap: var(--spacing-sm);
 }
 
-.sidebar-header h3 i {
+.sidebar-header h3 .icon {
   color: var(--color-primary);
 }
 
@@ -196,7 +198,7 @@ function navigateTo(path: string): void {
   font-size: var(--text-sm);
 }
 
-.stat-row i {
+.stat-row .icon {
   color: var(--color-primary);
   width: 16px;
   text-align: center;
@@ -243,7 +245,7 @@ function navigateTo(path: string): void {
   border-left: 3px solid var(--color-primary);
 }
 
-.nav-item i {
+.nav-item .icon {
   width: 18px;
   text-align: center;
   font-size: var(--text-sm);
@@ -283,9 +285,17 @@ function navigateTo(path: string): void {
 .default-content {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: var(--spacing-lg);
   padding: var(--spacing-lg);
+}
+
+/* #19727: the graph is what this page is for, so it gets the width and a height to draw in. */
+.default-content > .knowledge-graph {
+  width: 100%;
+  flex: none;
+  height: 70vh;
 }
 
 .welcome-card {
@@ -304,7 +314,7 @@ function navigateTo(path: string): void {
   margin: 0 0 var(--spacing-sm) 0;
 }
 
-.welcome-card h2 i {
+.welcome-card h2 .icon {
   color: var(--color-primary);
 }
 

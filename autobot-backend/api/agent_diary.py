@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, Query
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from knowledge.search_filters import caller_reader
 from memory.agent_diary import AgentDiaryService, list_with_diaries
 from utils.response_helpers import create_success_response
 
@@ -51,7 +52,7 @@ async def get_agent_diary_entries(
 ):
     """Return the most recent diary entries for a single agent."""
     diary = AgentDiaryService()
-    entries = await diary.read(agent_name, last_n=last_n)
+    entries = await diary.read(agent_name, last_n=last_n, user_id=caller_reader(current_user))  # #16665
     return create_success_response(
         {
             "agent_name": agent_name,
@@ -75,7 +76,7 @@ async def search_agent_diary(
 ):
     """Semantic search within one agent's diary."""
     diary = AgentDiaryService()
-    results = await diary.search(agent_name, query=q, n=n)
+    results = await diary.search(agent_name, query=q, n=n, user_id=caller_reader(current_user))  # #16665
     return create_success_response(
         {
             "agent_name": agent_name,
@@ -97,7 +98,7 @@ async def get_agent_diary_summary(
     current_user: dict = Depends(get_current_user),
 ):
     """Return recent diary entries for all known agents (parallel fetch)."""
-    summary = await list_with_diaries(_KNOWN_AGENTS, last_n=last_n)
+    summary = await list_with_diaries(_KNOWN_AGENTS, last_n=last_n, user_id=caller_reader(current_user))  # #16665
     return create_success_response(
         {
             "agents": summary,

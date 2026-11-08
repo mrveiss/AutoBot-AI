@@ -57,6 +57,8 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import report_audit  # noqa: E402
+from _scan_helpers import project_root as repo_root  # noqa: E402
 
 # Plain stdlib logging (matching every other tools/lint/check_*.py in this
 # repo): this runs inside `code-quality`, which installs linters only, never
@@ -84,11 +86,6 @@ _FILTER_COMMENT_RE = re.compile(r"^\s*#")
 #: composed filter, or one inside a workflow's ``filters: |`` literal -- is a
 #: different set and must not be picked up as this one.
 _FILTER_KEY_RE = re.compile(r"^backend:\s*$")
-
-
-def repo_root() -> pathlib.Path:
-    """Repo root derived from this file, never from the caller's cwd."""
-    return pathlib.Path(__file__).resolve().parents[2]
 
 
 def _load_module(root: pathlib.Path, rel_path: str):
@@ -230,16 +227,6 @@ def audit_reach(root: pathlib.Path | None = None) -> tuple[int, list[str]]:
     return total, problems
 
 
-def run_audit() -> int:
-    reached, problems = audit_reach()
-    if problems:
-        logger.error("%s", "\n\n".join(problems))
-        logger.error("\ncode-quality guard-reach audit FAILED over %d guarded path(s) (#14550/#14551).", reached)
-        return 1
-    logger.info("code-quality guard-reach audit clean over %d guarded path(s) (#14550/#14551).", reached)
-    return 0
-
-
 def main(argv: list[str]) -> int:
     configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -251,7 +238,14 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if not args.audit:
         parser.error("nothing to do — pass --audit")
-    return run_audit()
+    reached, problems = audit_reach()
+    return report_audit(
+        logger,
+        problems,
+        "\ncode-quality guard-reach audit FAILED over %d guarded path(s) (#14550/#14551).",
+        "code-quality guard-reach audit clean over %d guarded path(s) (#14550/#14551).",
+        reached,
+    )
 
 
 if __name__ == "__main__":

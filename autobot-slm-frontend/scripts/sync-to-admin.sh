@@ -39,7 +39,7 @@ fi
 
 # Sync source files (exclude node_modules and dist)
 echo "Syncing source files..."
-rsync -avz --delete \
+rsync -avz --chmod=o-w --delete \
     --exclude 'node_modules/' \
     --exclude 'dist/' \
     --exclude '.git/' \

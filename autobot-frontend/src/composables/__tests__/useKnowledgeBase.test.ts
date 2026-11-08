@@ -30,6 +30,7 @@ vi.mock('@/utils/ApiClient', () => ({
 
 vi.mock('@/utils/formatHelpers', () => ({
   formatDate: (date: unknown) => new Date(date as string).toLocaleDateString(),
+  createDateFormatter: () => (date: unknown) => new Date(date as string).toLocaleTimeString(),
   formatFileSize: (bytes: number) => `${(bytes / 1024).toFixed(2)} KB`,
   formatCategoryName: (name: string) => name.replace(/_/g, ' ').toUpperCase(),
 }))

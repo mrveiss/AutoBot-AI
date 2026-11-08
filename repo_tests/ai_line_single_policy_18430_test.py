@@ -40,6 +40,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = ("autobot-backend", "autobot_shared")
@@ -54,6 +55,7 @@ _STORE = "autobot-backend/llc/services/ai_lines.py"
 _DISPATCH = "autobot-backend/chat_workflow/tool_handler.py"
 _BRIDGE = "autobot-backend/services/realtime_mcp_bridge.py"
 _VOICE_ROUTES = ("autobot-backend/api/voice.py", "autobot-backend/api/realtime_session.py")
+_TOOL_EXECUTING_ROUTES = ("autobot-backend/api/realtime_session.py",)
 
 #: Every approval-decision function in production, and what it is. Adding one means saying which of these
 #: it is; none of them may be a policy of its own.
@@ -113,7 +115,7 @@ def decision_functions(source: str) -> list[str]:
     """Names of approval-decision ``def``s in *source*."""
     return [
         node.name
-        for node in ast.walk(ast.parse(source))
+        for node in ast.walk(parse_cache.parse(source))
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _DECISION_NAME.search(node.name)
     ]
 
@@ -121,7 +123,7 @@ def decision_functions(source: str) -> list[str]:
 def calls_of(source: str, name: str) -> list[int]:
     """Lines calling ``name(...)`` or ``<obj>.name(...)``."""
     found = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Call):
             func = node.func
             if (isinstance(func, ast.Name) and func.id == name) or (
@@ -137,7 +139,7 @@ def _population() -> tuple[tuple[str, str], ...]:
     texts = []
     for rel in REACH.examined(root):
         try:
-            ast.parse(text := (root / rel).read_text(encoding="utf-8"))
+            parse_cache.parse(text := (root / rel).read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, SyntaxError):
             continue
         texts.append((rel, text))
@@ -207,10 +209,12 @@ def test_the_realtime_bridge_is_reached_only_by_routes_that_pass_the_authenticat
     assert users == set(
         _VOICE_ROUTES
     ), f"#18430: a new caller of the realtime bridge: {sorted(users - set(_VOICE_ROUTES))}"
-    for rel in _VOICE_ROUTES:
+    # #18721 removed voice.py's duplicate realtime call route; the tool-executing call lives only
+    # in realtime_session.py, while voice.py only lists tools. Both still reach the bridge above.
+    for rel in _TOOL_EXECUTING_ROUTES:
         sites = [
             node
-            for node in ast.walk(ast.parse(_sources()[rel]))
+            for node in ast.walk(parse_cache.parse(_sources()[rel]))
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "call_tool"
         ]
         assert sites, f"{rel} no longer calls the bridge"

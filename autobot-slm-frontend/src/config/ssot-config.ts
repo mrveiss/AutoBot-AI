@@ -10,6 +10,8 @@
  * All values support VITE_* environment variable overrides (#3049).
  */
 
+import { getEnvPositiveInt } from '@autobot/ui'
+
 export interface SLMConfig {
   httpProtocol: 'http' | 'https'
   apiBaseUrl: string
@@ -27,6 +29,7 @@ export interface SLMConfig {
   port: {
     backend: number
     frontend: number
+    frontendServed: number
     slmApi: number
     grafana: number
     prometheus: number
@@ -54,19 +57,6 @@ function getEnv(key: string, defaultValue: string): string {
     return defaultValue
   }
   return String(value)
-}
-
-/**
- * Get numeric environment variable with fallback.
- * Matches the pattern used in autobot-frontend ssot-config.ts.
- */
-function getEnvNumber(key: string, defaultValue: number): number {
-  const value = import.meta.env[key]
-  if (value === undefined || value === null || value === '') {
-    return defaultValue
-  }
-  const parsed = parseInt(String(value), 10)
-  return isNaN(parsed) ? defaultValue : parsed
 }
 
 // Detect protocol from browser context
@@ -105,18 +95,24 @@ const config: SLMConfig = {
   wsBaseUrl: import.meta.env.VITE_WS_URL || getWsBaseUrl(),
   vm,
   port: {
-    backend: getEnvNumber('VITE_BACKEND_PORT', 8001),
-    frontend: getEnvNumber('VITE_FRONTEND_PORT', 5173),
-    slmApi: getEnvNumber('VITE_SLM_PORT', 8000),
-    grafana: getEnvNumber('VITE_GRAFANA_PORT', 3000),
-    prometheus: getEnvNumber('VITE_PROMETHEUS_PORT', 9090),
-    redis: getEnvNumber('VITE_REDIS_PORT', 6379),
-    vnc: getEnvNumber('VITE_DESKTOP_VNC_PORT', 6080), // DORMANT: VNC replaced by screenshot panel (#1130); see #5136
-    ollama: getEnvNumber('VITE_OLLAMA_PORT', 11434),
-    elasticsearch: getEnvNumber('VITE_ELASTICSEARCH_PORT', 9200),
-    tlsFrontend: getEnvNumber('VITE_TLS_FRONTEND_PORT', 443),
-    tlsBackend: getEnvNumber('VITE_TLS_BACKEND_PORT', 8443),
-    tlsRedis: getEnvNumber('VITE_TLS_REDIS_PORT', 6380),
+    backend: getEnvPositiveInt(import.meta.env, 'VITE_BACKEND_PORT', 8001),
+    frontend: getEnvPositiveInt(import.meta.env, 'VITE_FRONTEND_PORT', 5173),
+    // #20058: nginx's port on a nginx host, else the dev port
+    frontendServed: getEnvPositiveInt(
+      import.meta.env,
+      'VITE_FRONTEND_SERVED_PORT',
+      getEnvPositiveInt(import.meta.env, 'VITE_FRONTEND_PORT', 5173),
+    ),
+    slmApi: getEnvPositiveInt(import.meta.env, 'VITE_SLM_PORT', 8000),
+    grafana: getEnvPositiveInt(import.meta.env, 'VITE_GRAFANA_PORT', 3000),
+    prometheus: getEnvPositiveInt(import.meta.env, 'VITE_PROMETHEUS_PORT', 9090),
+    redis: getEnvPositiveInt(import.meta.env, 'VITE_REDIS_PORT', 6379),
+    vnc: getEnvPositiveInt(import.meta.env, 'VITE_DESKTOP_VNC_PORT', 6080), // DORMANT: VNC replaced by screenshot panel (#1130); see #5136
+    ollama: getEnvPositiveInt(import.meta.env, 'VITE_OLLAMA_PORT', 11434),
+    elasticsearch: getEnvPositiveInt(import.meta.env, 'VITE_ELASTICSEARCH_PORT', 9200),
+    tlsFrontend: getEnvPositiveInt(import.meta.env, 'VITE_TLS_FRONTEND_PORT', 443),
+    tlsBackend: getEnvPositiveInt(import.meta.env, 'VITE_TLS_BACKEND_PORT', 8443),
+    tlsRedis: getEnvPositiveInt(import.meta.env, 'VITE_TLS_REDIS_PORT', 6380),
   },
 }
 

@@ -25,6 +25,22 @@ autobot_ssh_key_path: "/etc/autobot/ssh/autobot_key"
 ai_stack_port: 8080
 
 # ==========================================
+# SLM BACKEND PORT (#20600)
+# ==========================================
+# The ONE ansible literal for the SLM backend (uvicorn) port. roles/slm_manager, roles/common
+# (firewall_service_ports), roles/redis and the enroll playbooks all read `slm_backend_port`; none
+# restates it. Kept equal to install.sh SLM_BACKEND_PORT by
+# repo_tests/install_defaults_follow_their_source_19239_test.py. It lives in group_vars/all so every
+# play that includes a role resolves it, with or without `common` having run.
+slm_backend_port: 8000
+
+# ==========================================
+# CHROMADB HEARTBEAT PATH (#19413)
+# ==========================================
+# chromadb_heartbeat_path lives in vars/chromadb_endpoints.yml, loaded by the plays that probe
+# ChromaDB (#19413).
+
+# ==========================================
 # AUTOBOT APPLICATION CONFIGURATION
 # ==========================================
 
@@ -66,6 +82,9 @@ autobot:
   version: "2.0.0"
   environment: "production"
   domain: "autobot.internal"
+  # THE install root (#15632): the folder AutoBot deploys to. Every path under it derives
+  # from `autobot.base_dir`; install.sh's AUTOBOT_BASE must equal it (#18880). Plain string:
+  # controller plays read this mapping, so it may hold no template (#15731).
   base_dir: "/opt/autobot"
   user: "autobot"
   group: "autobot"
@@ -156,11 +175,11 @@ system:
 
   # System directories
   directories:
-    - "/opt/autobot"
+    - "{{ autobot.base_dir }}"
     - "/var/log/autobot"
     - "/var/lib/autobot"
     - "/etc/autobot"
-    - "/opt/autobot/backups"
+    - "{{ autobot.base_dir }}/backups"
 
 # ==========================================
 # SECURITY CONFIGURATION
@@ -214,6 +233,17 @@ logging:
 # MONITORING CONFIGURATION
 # ==========================================
 
+# The backend's systemd EnvironmentFile (#16375 scrape token lives here). One declaration,
+# shared by the backend role and the updater's monitoring play (#18994); override per host
+# if the backend env file lives elsewhere.
+autobot_backend_env_file: "/etc/autobot/autobot-backend.env"
+
+# Addresses the monitoring services bind to / are reached at (#18556). Declared here,
+# not in roles/monitoring/defaults, because the slm_agent role renders the monitoring
+# role's node_exporter.service.j2 as well and role defaults are not shared across roles.
+monitoring_listen_address: "0.0.0.0"
+monitoring_local_host: "localhost"
+
 monitoring:
   enabled: true
 
@@ -257,7 +287,7 @@ backup:
 
   # Backup storage
   storage:
-    local_path: "/opt/autobot/backups"
+    local_path: "{{ autobot.base_dir }}/backups"
     compress: true
     encryption: true
 
@@ -289,13 +319,18 @@ debug:
   log_level: "debug"
   verbose_output: false
 
+# Node.js major for every fleet install path: pinned to the repo-root .nvmrc by
+# repo_tests/node_major_one_home_19328_test.py (#19328). Roles and playbooks read this, never a literal.
+node_major: "22"
+# The NodeSource base URL has one home, read by every play (env-backed like the shell SSOT, #19662).
+nodesource_base_url: "{{ lookup('env', 'AUTOBOT_NODESOURCE_BASE_URL') | default('https://deb.nodesource.com', true) }}"
+
+# #19805: where a GPU host gets torch. The version pair stays in constraints/shared.txt; every build of
+# that pair must exist on this index. Override for a GPU or driver this CUDA does not suit.
+backend_torch_cuda_index_url: "{{ lookup('env', 'AUTOBOT_TORCH_CUDA_INDEX_URL') | default('https://download.pytorch.org/whl/cu130', true) }}"
+
 # Package repositories
 repositories:
-  # Add NodeSource for Node.js
-  nodejs:
-    key_url: "https://deb.nodesource.com/gpgkey/nodesource.gpg.key"
-    repo: "deb https://deb.nodesource.com/node_20.x {{ ansible_facts['distribution_release'] }} main"
-
   # Add Redis repository
   redis:
     key_url: "https://packages.redis.io/gpg"
@@ -535,3 +570,13 @@ slm_manager_node_id: >-
 # read Ansible inventory, so the two halves carry the number separately and
 # must be changed together.
 slm_frontend_release_keep: 3
+
+# #19317/#19366: the node's flat TLS directory (server-cert.pem, server-key.pem,
+# ca-cert.pem). Python's home is DEFAULT_TLS_REMOTE_CERT_DIR in
+# autobot_shared/env_registry_tls.py; this is the ONE Ansible spelling of it.
+# Plays that do not see group_vars (enable-tls.yml via api/tls.py's static
+# inventory.yml, inline `-i "<ip>,"` runs) fall back per file to
+# `autobot_tls_remote_cert_dir | default('/etc/autobot/certs')`, spelled once
+# per file. repo_tests/tls_cert_dir_one_home_19317_test.py pins every fallback
+# to the Python home and fails on any bare literal outside them.
+autobot_tls_remote_cert_dir: "/etc/autobot/certs"

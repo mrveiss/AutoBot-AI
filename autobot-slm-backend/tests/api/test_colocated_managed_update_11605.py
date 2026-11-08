@@ -397,7 +397,7 @@ def test_dedupe_collapses_shared_ansible_deploys_to_one_run_each() -> None:
         "scheduler": _role("scheduler", playbook="playbooks/deploy_role.yml"),
         "ai-stack": _role("ai-stack", playbook="setup-ai-stack.yml"),
         "chromadb": _role("chromadb", playbook="setup-ai-stack.yml"),
-        "slm-agent": _role("slm-agent", playbook="deploy-slm-agent.yml"),
+        "slm-agent": _role("slm-agent", playbook="playbooks/deploy-slm-agent.yml"),
         "frontend": _role("frontend", playbook="playbooks/deploy_role.yml"),
     }
 
@@ -445,7 +445,7 @@ def test_coverage_key_never_merges_roles_on_different_playbooks() -> None:
     the dedupe never merges roles it hasn't verified share real coverage.
     """
     frontend_role = _role("frontend", playbook="playbooks/deploy_role.yml")
-    slm_agent_role = _role("slm-agent", playbook="deploy-slm-agent.yml")
+    slm_agent_role = _role("slm-agent", playbook="playbooks/deploy-slm-agent.yml")
 
     assert _CS._colocated_coverage_key(frontend_role) != _CS._colocated_coverage_key(slm_agent_role)
 

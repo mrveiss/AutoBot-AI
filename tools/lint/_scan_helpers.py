@@ -46,10 +46,11 @@ import re
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
-from typing import Iterable, List, Sequence, Tuple
+from typing import Collection, Iterable, List, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from autobot_shared.paths import project_root  # noqa: E402,F401  # re-export for lint hooks (#18954)
 from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082): these helpers run inside bare
@@ -81,12 +82,13 @@ EXCLUDED_DIR_NAMES: frozenset[str] = frozenset(
     }
 )
 
-#: Floor for a full-repo ``*.py`` sweep. 5,319 files were tracked when this
-#: landed, so this sits ~25% below the real count: low enough that ordinary
-#: churn (or a subtree moving out) never trips it, high enough that a sweep
-#: which lost its reach — wrong root, wrong CWD, a filter inverted — cannot
-#: land under it and still look clean.
-PY_FLOOR = 4000
+#: Floor for a full-repo ``*.py`` sweep, kept ~25% below the real count: low
+#: enough that ordinary churn (or a subtree moving out) never trips it, high
+#: enough that a sweep which lost its reach — wrong root, wrong CWD, a filter
+#: inverted — cannot land under it and still look clean. 5,319 files were
+#: tracked when this landed (floor 4000); re-measured at 8,003 on 2026-11-03,
+#: when the vacuity test's "at least half the tree" bound tripped (#20650).
+PY_FLOOR = 6000
 
 
 def _looks_like_a_pattern(entry: str) -> bool:
@@ -242,18 +244,19 @@ def _ls_files(repo_root: Path, git_args: Sequence[str], described: str) -> List[
     return lines
 
 
-def enforce_reach(reached: int, floor: int, *, hook: str, full_repo: bool) -> int:
+def enforce_reach(reached: int, floor: int, *, hook: str, full_repo: bool, unit: str = "file(s)") -> int:
     """``1`` when a full-repo sweep landed under *floor*, else ``0``.
 
     **Full-repo mode only.** pre-commit passes the changed files as argv, and
     a PR touching nothing in a hook's scope legitimately gives it zero files;
     a floor applied there would fail every such PR in the repository. That is
     why *full_repo* is a keyword the caller must state rather than something
-    inferred here.
+    inferred here. *unit* names what *reached* counts, so a sweep that counts
+    reads or plays does not report them as files.
     """
     if not full_repo or reached >= floor:
         return 0
-    logger.error("[%s] full-repo sweep reached only %d file(s); floor is %d.", hook, reached, floor)
+    logger.error("[%s] full-repo sweep reached only %d %s; floor is %d.", hook, reached, unit, floor)
     logger.error("FIX THE SWEEP, not the tree — a clean result below this floor asserts nothing.")
     return 1
 
@@ -414,6 +417,25 @@ def resolve_base(explicit: str | None = None) -> str | None:
     return None
 
 
+#: Directory names the Ansible-file walks never descend into: VCS, caches, vendored
+#: or per-checkout trees. Named once so the two ansible lint walks cannot disagree.
+ANSIBLE_SKIP_DIRS = frozenset({".git", "__pycache__", "node_modules", ".worktrees", "venv", ".venv"})
+
+
+def iter_ansible_files(root: Path, suffixes: Collection[str]) -> Iterable[Path]:
+    """Yield files under *root* whose suffix is in *suffixes*, skipping vendored/cached dirs.
+
+    Only the parts BELOW *root* are matched: a checkout that itself lives under
+    ``.worktrees`` would otherwise skip every file and report a clean scan (#18972).
+    """
+    for path in root.rglob("*"):
+        if not path.is_file() or path.suffix not in suffixes:
+            continue
+        if any(part in ANSIBLE_SKIP_DIRS for part in path.relative_to(root).parts):
+            continue
+        yield path
+
+
 def configure_logging(target: logging.Logger) -> None:
     """Attach a stderr handler to *target* so findings reach the developer.
 
@@ -432,6 +454,23 @@ def configure_logging(target: logging.Logger) -> None:
         handler.setFormatter(logging.Formatter("%(message)s"))
         target.addHandler(handler)
     target.setLevel(logging.INFO)
+
+
+def report_audit(log: logging.Logger, problems: List[str], failed: str, clean: str, *counts: int) -> int:
+    """Report a full-repo ``--audit`` sweep: ``1`` with every problem logged, else ``0``.
+
+    Seven checkers each ended their ``run_audit`` with this same block: the
+    problems joined by a blank line at ERROR, then a one-line FAILED summary,
+    or a one-line clean summary at INFO. *failed* and *clean* are the
+    %-format summaries (each begins with the newline the FAILED form has
+    always carried), filled from *counts*; the checker owns its wording.
+    """
+    if problems:
+        log.error("%s", "\n\n".join(problems))
+        log.error(failed, *counts)
+        return 1
+    log.info(clean, *counts)
+    return 0
 
 
 def logical_lines(text: str) -> List[Tuple[int, str]]:

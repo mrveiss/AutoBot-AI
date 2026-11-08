@@ -31,6 +31,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = ("autobot-backend", "autobot-infrastructure", "autobot-npu-worker", "autobot-slm-backend", "repo_tests")
@@ -77,7 +78,7 @@ def _called_name(node: ast.Call) -> str:
 def hand_rolled_primitives(source: str) -> list[str]:
     """The primitives `source` writes by hand, as ``"<kind>:<line>"`` entries."""
     found: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         for tgt in _targets(node):
             if _is_sys_modules(tgt):
                 found.append(f"sys.modules:{node.lineno}")
@@ -120,8 +121,6 @@ def _conftests(root: Path) -> list[str]:
 REACH = declare(
     "conftest-stubset-primitives",
     discover=_conftests,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=19,
     what="conftest.py files",
     roots=_ROOTS,
     growth=10,

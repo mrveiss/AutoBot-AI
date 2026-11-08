@@ -67,7 +67,7 @@ class SharedFakeRedis:
     async def pexpire(self, key: str, ms: int) -> int:
         return 1 if key in self._store else 0
 
-    async def scan_iter(self, match: str = "*") -> Iterator[str]:
+    async def scan_iter(self, match: str = "*", count: int | None = None) -> Iterator[str]:
         prefix = match.rstrip("*")
         for key in list(self._store.keys()):
             if key.startswith(prefix):

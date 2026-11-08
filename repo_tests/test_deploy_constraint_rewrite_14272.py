@@ -80,7 +80,7 @@ def test_the_rewrite_root_overrides_the_source_root(tmp_path):
     assert "numpy" in out
 
 
-@pytest.mark.parametrize("depth", [1, 2, 3, 4, 6])
+@pytest.mark.parametrize("depth", [0, 1, 2, 3, 4, 6])  # 0: a repo-root manifest (#19330)
 def test_a_constraint_include_is_rewritten_at_any_depth(tmp_path, depth):
     """The original pattern was a literal `../`, which fitted the backend and
     silently missed the ai-stack's four levels. A rewrite that only handles the

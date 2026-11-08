@@ -16,8 +16,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from auth_middleware import check_admin_permission
 from autobot_shared.logging_manager import get_logger
-from transcriber.deps import authenticate, require_transcriber_admin
+from transcriber.deps import authenticate
 from voice_processing.providers.selection import (
     get_active_asr_provider_id,
     list_available_providers,
@@ -58,9 +59,11 @@ async def list_providers() -> Dict[str, Any]:
     }
 
 
-@router.patch("/providers", dependencies=[Depends(require_transcriber_admin)])
+@router.patch("/providers", dependencies=[Depends(check_admin_permission)])  # #16333: the one admin gate
 async def set_provider(body: SetProviderRequest) -> Dict[str, Any]:
     """Set the active cloud ASR provider.
+
+    Admin-only (owner ruling 2026-09-11): it decides which cloud provider receives every user's audio.
 
     Persistence limitation: this is in-process only and is lost on restart.
     For persistence across restarts, set TRANSCRIBER_ASR_PROVIDER in the

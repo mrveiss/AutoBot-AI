@@ -116,7 +116,9 @@
       "rollingBack": "Rolling back...",
       "select": "Select...",
       "source": "Source:",
-      "yesRollback": "Yes, rollback"
+      "yesRollback": "Yes, rollback",
+      "loadFailed": "Failed to load revisions",
+      "rollbackFailed": "Rollback failed"
     },
     "orgChartTab": {
       "agentHierarchy": "Agent Hierarchy",
@@ -135,12 +137,16 @@
       "selectReport": "Select report...",
       "submit": "שלח",
       "task": "משימה",
-      "total": "Total"
+      "total": "Total",
+      "loadFailed": "Failed to load org tree",
+      "delegationFailed": "Delegation failed"
     },
     "orgTreeNode": {
       "value0Reports": "{value0} reports"
     },
     "processMonitorTab": {
+      "durationSeconds": "s",
+      "durationMinutes": "m",
       "actions": "פעולות",
       "agentID": "Agent ID",
       "all": "All",
@@ -149,7 +155,7 @@
       "command": "פקודה",
       "completed": "Completed",
       "dismiss": "Dismiss",
-      "duration": "Duration",
+      "duration": "משך",
       "eGOrchestrator": "e.g. orchestrator",
       "exit": "Exit",
       "failed": "נכשל",
@@ -174,7 +180,10 @@
       "timedOut": "Timed Out",
       "timeoutS": "Timeout (s)",
       "usrBinPython3": "/usr/bin/python3",
-      "viewFullLog": "View Full Log"
+      "viewFullLog": "View Full Log",
+      "loadFailed": "Failed to load processes",
+      "signalFailed": "Signal failed",
+      "spawnFailed": "Spawn failed"
     }
   },
   "agentsView": {
@@ -233,6 +242,32 @@
     "statefulServices": "Stateful Services",
     "status": "סטטוס"
   },
+  "codeRollback": {
+    "cancel": "Cancel",
+    "checked": "two databases, the SLM database and the backend database, for a migration the chosen version does not have.",
+    "checkedLabel": "Checked:",
+    "close": "סגור",
+    "confirm": "Roll back",
+    "confirmTitle": "Roll back to this version?",
+    "description": "Deploy an earlier version of the main branch through the updater. Run Update Everything afterwards to return to the latest.",
+    "empty": "No earlier versions are available.",
+    "notChecked": "SQLite stores, Redis, ChromaDB, file formats, and tables the application creates on startup. If the chosen version reads any of these differently, the rollback does not detect it.",
+    "notCheckedLabel": "Not checked:",
+    "option": "{date}: {subject}",
+    "optionRunning": "{date}: {subject} (running now)",
+    "pickerLabel": "Version to roll back to",
+    "pickerPlaceholder": "Choose an earlier version",
+    "refusedTitle": "This rollback is not possible",
+    "requestFailed": "The request failed. Try again, or check the SLM logs.",
+    "review": "Review rollback",
+    "stepFetch": "Fetch the latest history from the code source.",
+    "stepFleet": "Update every fleet node that is on a different version.",
+    "stepLatest": "Show the nodes as outdated against the latest version. Run Update Everything to return to it.",
+    "stepMigrations": "Never undo a database migration. A rollback that a migration is in the way of is refused.",
+    "stepSlm": "Update this SLM server to that version and restart it.",
+    "title": "Roll back to an earlier version",
+    "willDo": "This will:"
+  },
   "codeSourceModal": {
     "assign": "שבץ",
     "assignCodeSource": "Assign Code Source",
@@ -246,7 +281,21 @@
     "selectANode": "Select a node...",
     "update": "Update"
   },
+  "updateProgressPanel": {
+    "elapsed": "Running for {minutes} min",
+    "exited": "The update process has stopped without finishing. Check the update report before running it again.",
+    "lastLine": "Last log line: {time}",
+    "note": "The update continues in the background. A long pause does not mean it failed.",
+    "play": "Play: {name}",
+    "quiet": "The log has not moved for a while, but the update process is still running. Some steps are silent for a long time.",
+    "task": "Task: {name}",
+    "title": "Update progress",
+    "unavailable": "Could not read the update's progress just now. Trying again.",
+    "unknown": "Could not tell whether the update process is still running.",
+    "waiting": "Waiting for the update to write its log."
+  },
   "codeSyncView": {
+    "nodesOfflineAfterUpdate": "The update of {time} finished, but {offline} of the {total} nodes online before it are still offline. They may need attention.",
     "actions": "פעולות",
     "addSchedule": "Add Schedule",
     "advancedDiagnostics": "Advanced / Diagnostics",
@@ -270,8 +319,8 @@
     "component": "רכיב:",
     "configure": "Configure",
     "configureAutomaticCodeSync": "Configure automatic code sync schedules",
-    "countDriftedFilePluralDetected": "{count} drifted file{plural} detected",
-    "countUntrackedFilePlural": "{count} untracked file{plural} on this host",
+    "countDriftedFilePluralDetected": "{count} drifted file detected | {count} drifted files detected",
+    "countUntrackedFilePlural": "{count} untracked file on this host | {count} untracked files on this host",
     "createAScheduleTo": "Create a schedule to automatically sync code at specific times.",
     "createFirstSchedule": "Create First Schedule",
     "currentVersion": "Current Version",
@@ -317,6 +366,12 @@
     "pipelineColocatedPartial": "SLM is current, but a co-located component failed to update — see the SLM self-update stage below for details.",
     "pipelinePartial": "Update finished — {count} node(s) skipped because they are not operational.",
     "pipelineReconnectingAttempt": "Control plane restarting — reconnecting… (attempt {attempt})",
+    "pipelineSessionExpiredTitle": "Session expired",
+    "pipelineSessionExpired": "The server rejected the status check because you are no longer logged in. Log in again to see whether the update finished.",
+    "pipelineLogInAgain": "Log in again",
+    "pipelineGaveUpTitle": "Stopped checking the update",
+    "pipelineGaveUp": "No answer from the control plane after {attempt} status checks, so polling stopped. The update may have finished; re-check its status.",
+    "pipelineRecheckStatus": "Re-check status",
     "pipelineStageCurrent": "already current",
     "pipelineStageFailed": "failed",
     "pipelineStagePartial": "partial",
@@ -369,9 +424,23 @@
     "updatePipelineDesc": "Fetches from GitHub, pulls code_source, updates this server, then updates fleet nodes with all dependency installs.",
     "updatePipelineTitle": "Full Update Pipeline",
     "updateThisServer": "Update This Server",
-    "updatesAvailable": "Updates Available"
+    "updatesAvailable": "Updates Available",
+    "syncedNodes": "Successfully synced {count} node | Successfully synced {count} nodes",
+    "queuedSyncNodes": "Successfully queued sync for {count} node | Successfully queued sync for {count} nodes",
+    "pulledLatestChanges": "Successfully pulled latest changes ({commit})",
+    "unknownCommit": "unknown",
+    "componentResynced": "Resynced {component} from code_source",
+    "fleetSyncFailed": "Fleet sync failed",
+    "selfUpdateFailed": "Self-update failed",
+    "failedToPullFromSource": "Failed to pull from source",
+    "driftResolveJobFailed": "Drift resolve job failed",
+    "viewCommitOnGithub": "View commit on GitHub",
+    "fullCommitHashUnavailable": "Full commit hash unavailable",
+    "removeCodeSourceAssignment": "Remove code source assignment?",
+    "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
+    "zeroSize": "0 B",
     "codeSyncBadge": {},
     "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
@@ -419,6 +488,15 @@
     },
     "app": {
       "mainContentAria": "Main content"
+    },
+    "polling": {
+      "paused": "Updates paused: the backend did not answer several times in a row, so the figures shown may be out of date.",
+      "readFailed": "A dashboard read did not load.",
+      "retry": "Retry"
+    },
+    "errors": {
+      "withStatus": "{message} (HTTP {status})",
+      "withCause": "{message}: {cause}"
     }
   },
   "deploymentLogViewer": {
@@ -547,7 +625,44 @@
     "total": "Total",
     "upgrade": "Upgrade",
     "viewDetails": "View details",
-    "yes": "Yes"
+    "yes": "Yes",
+    "rollbackCompleted2": "Rollback completed",
+    "rollbackCompletedMessage": "Rollback completed",
+    "failedToRetryDeployment": "Failed to retry deployment",
+    "areYouSureYouWantToCancel": "Are you sure you want to cancel this deployment?",
+    "failedToCancelDeployment": "Failed to cancel deployment",
+    "areYouSureYouWantToRollback": "Are you sure you want to rollback this deployment? This will revert the node to its previous state.",
+    "failedToRollbackDeployment": "Failed to rollback deployment",
+    "pleaseSelectABlueSourceNode": "Please select a blue (source) node",
+    "pleaseSelectAGreenTargetNode": "Please select a green (target) node",
+    "accessDeniedBlueGreenDeploymentsRequireAdmin": "Access denied: Blue-green deployments require admin privileges",
+    "failedToCreateBlueGreenDeployment": "Failed to create blue-green deployment: {detail}",
+    "areYouSureYouWantToSwitch": "Are you sure you want to switch traffic to the green node?",
+    "failedToSwitchTraffic": "Failed to switch traffic",
+    "failedToRollback": "Failed to rollback",
+    "failedToCancel": "Failed to cancel",
+    "areYouSureYouWantToRetry": "Are you sure you want to retry this deployment?",
+    "pleaseSelectATargetNode": "Please select a target node",
+    "failedToCreateDeployment": "Failed to create deployment: {detail}",
+    "confirmRollbackToBlue": "Are you sure you want to rollback to the blue node?",
+    "pleaseSelectRoleToDeploy": "Please select at least one role to deploy",
+    "pleaseSelectRoleToMigrate": "Please select at least one role to migrate",
+    "categoryCoreLabel": "Core Infrastructure",
+    "categoryCoreDescription": "Required base components for all nodes",
+    "categoryDataLabel": "Data Layer",
+    "categoryDataDescription": "Database and caching services",
+    "categoryApplicationLabel": "Application Layer",
+    "categoryApplicationDescription": "Backend API and frontend web servers",
+    "categoryAiLabel": "AI/ML Services",
+    "categoryAiDescription": "LLM inference and AI processing",
+    "categoryAutomationLabel": "אוטומציה",
+    "categoryAutomationDescription": "Browser automation and scripting",
+    "categoryObservabilityLabel": "Observability",
+    "categoryObservabilityDescription": "Monitoring and logging stack",
+    "categoryRemoteAccessLabel": "Remote Access",
+    "categoryRemoteAccessDescription": "VNC and remote desktop services",
+    "categoryInfrastructureLabel": "Infrastructure",
+    "categoryInfrastructureDescription": "Shared libraries and agents deployed to all nodes"
   },
   "externalAgentsView": {
     "actions": "פעולות",
@@ -611,7 +726,9 @@
       "selectANode": "-- Select a node --",
       "selectANodeTo": "Select a node to enable NPU acceleration capabilities",
       "selectNode": "Select Node",
-      "status": "סטטוס"
+      "status": "סטטוס",
+      "failedToAssignNpuRole": "Failed to assign NPU role",
+      "pleaseSelectANode": "Please select a node"
     },
     "decommissionModal": {
       "backupDataBeforeRemoval": "Backup data before removal",
@@ -689,7 +806,15 @@
       "utilization": "Utilization",
       "value0Tasks": "{value0} tasks",
       "weight": "Weight:",
-      "workerLoadOverview": "Worker Load Overview"
+      "workerLoadOverview": "Worker Load Overview",
+      "strategyUpdated": "Load balancing strategy updated successfully.",
+      "metricsRefreshed": "Fleet metrics refreshed. Load distribution updated.",
+      "failedToLoadData": "Failed to load data",
+      "failedToSaveStrategy": "Failed to save strategy",
+      "rebalanceFailed": "Rebalance failed",
+      "highUtilizationSpread": "High utilization spread ({spread}%). Consider switching to \"least-loaded\" strategy.",
+      "moderateUtilizationSpread": "Moderate utilization spread ({spread}%). Current strategy may be adequate.",
+      "loadWellDistributed": "Load is well distributed. No action needed."
     },
     "nPUDetailsPanel": {
       "alertOnly": "Alert Only",
@@ -714,6 +839,7 @@
       "memory": "Memory",
       "modelsCount": "Models ({count})",
       "noModelsDetected": "No models detected",
+      "notAvailable": "N/A",
       "pending": "Pending",
       "priority110": "Priority (1-10)",
       "queueDepthValue0Requests": "Queue Depth: {value0} requests",
@@ -729,7 +855,12 @@
       "unknown": "לא ידוע",
       "value0ErrorsRecorded": "{value0} errors recorded",
       "weight1100": "Weight (1-100)",
-      "workerConfiguration": "Worker Configuration"
+      "workerConfiguration": "Worker Configuration",
+      "configurationSaved": "Configuration saved",
+      "failedToSaveConfiguration": "Failed to save configuration",
+      "failedToRemoveNpuRole": "Failed to remove NPU role",
+      "failedToRefreshNpuStatus": "Failed to refresh NPU status",
+      "removeNpuWorkerRoleFrom": "Remove NPU Worker role from {hostname}?"
     },
     "nPUNodeCard": {
       "detecting": "Detecting...",
@@ -760,10 +891,12 @@
     "nPUWorkerMonitor": {
       "avgUtilization": "Avg utilization:",
       "currentTask": "Current Task",
+      "metricsUnavailable": "NPU fleet metrics are unavailable",
       "noNPUWorkers": "No NPU Workers",
       "noNodesWithThe": "No nodes with the npu-worker role are registered in the fleet.",
       "online": "online",
       "queueDepth": "Queue Depth",
+      "refreshFailed": "Refresh failed",
       "refreshNow": "Refresh now",
       "utilization": "Utilization"
     },
@@ -797,12 +930,10 @@
       "enrollNode": "Enroll Node",
       "enrolling": "Enrolling...",
       "healthMetricsAria": "Health metrics",
-      "hoursAgo": "{hours}h ago",
       "justNow": "Just now",
       "lastSeen": "Last seen: {time}",
       "manageRoles": "Manage Roles",
       "memory": "MEM",
-      "minutesAgo": "{minutes}m ago",
       "never": "Never",
       "noHealthDataAvailable": "No health data available",
       "noRolesAssigned": "No roles assigned",
@@ -812,7 +943,6 @@
       "reEnrollNode": "Re-enroll Node",
       "recoverConnection": "Recover Connection",
       "restartNodeAria": "Restart {hostname}",
-      "secondsAgo": "{seconds}s ago",
       "serviceHealthSummaryAria": "Service health summary",
       "services": "Services",
       "services1": "Services:",
@@ -831,7 +961,7 @@
       "clear": "Clear",
       "clickCheckForUpdatesToScan": "Click \"Check for Updates\" to scan",
       "codeUpdateAvailable": "Code update available",
-      "duration": "Duration",
+      "duration": "משך",
       "eventPlural": "event{plural}",
       "eventsWillAppearHereAsThey": "Events will appear here as they occur.",
       "installUpdates": "Install Updates",
@@ -852,7 +982,9 @@
       "type2": "סוג",
       "value0Critical": "{value0} critical",
       "value0Security": "({value0} security)",
-      "value0UpdatePluralAvailable": "{value0} update{plural} available"
+      "value0UpdatePluralAvailable": "{value0} update{plural} available",
+      "eventsUnavailable": "Lifecycle events could not be loaded.",
+      "retry": "Retry"
     },
     "nodeServicesPanel": {
       "actionFailed": "Failed to {action} {service}",
@@ -932,8 +1064,6 @@
     "nPUWorkersAria": "NPU workers",
     "noNodesRegistered": "No nodes registered",
     "nodeDetails": "Node Details",
-    "nodeDetailsPanelAria": "Node details panel",
-    "nodeServicesPanelAria": "Node services panel",
     "nodes": "Nodes",
     "nodesOverviewAria": "Nodes overview",
     "realTimeHealthStatus": "Real-time health status of all managed nodes",
@@ -988,7 +1118,8 @@
     "stepValue0Of3": "Step {value0} of 3",
     "targetHosts": "Target Hosts",
     "thisPlaybookWillMake": "This playbook will make changes to your infrastructure. Please review the configuration carefully before proceeding.",
-    "whatHappensNext": "What happens next?"
+    "whatHappensNext": "What happens next?",
+    "failedToExecutePlaybook": "Failed to execute playbook"
   },
   "loginView": {
     "authenticationCode": "Authentication code",
@@ -1014,6 +1145,7 @@
     "signInWithProviderAria": "התחברות באמצעות {provider}",
     "signingIn": "Signing in...",
     "singleSignOnProvidersAria": "Single sign-on providers",
+    "adminOnly": "This console is for administrators.",
     "ssoLoginFailed": "SSO login failed. Please try again.",
     "twoFactorAuthentication": "Two-Factor Authentication",
     "twoFactorAuthenticationAria": "Two-factor authentication",
@@ -1067,6 +1199,11 @@
     "editMaintenanceWindow": "Edit Maintenance Window",
     "editWindow": "Edit window",
     "endTime": "End Time",
+    "failedToActivateWindow": "הפעלת חלון התחזוקה נכשלה",
+    "failedToCompleteWindow": "השלמת חלון התחזוקה נכשלה",
+    "failedToDeleteWindow": "מחיקת חלון התחזוקה נכשלה",
+    "failedToDrainNode": "ריקון הצומת נכשל. נא לנסות שוב.",
+    "failedToResumeNode": "חידוש הצומת נכשל. נא לנסות שוב.",
     "fleetWideMaintenance": "Fleet-Wide Maintenance",
     "leaveEmptyForFleet": "Leave empty for fleet-wide maintenance",
     "loadingMaintenanceWindows": "Loading maintenance windows...",
@@ -1182,7 +1319,8 @@
       "trend": "Trend",
       "type": "סוג",
       "unresolved": "Unresolved",
-      "resolvedByAt": "By {by} at {at}"
+      "resolvedByAt": "By {by} at {at}",
+      "paginationAria": "Error list pages"
     },
     "fleetMetricsCard": {
       "acrossValue0Nodes": "Across {value0} nodes",
@@ -1268,7 +1406,8 @@
       "showingCountOfCount2Entries": "Showing {count} of {count2} entries",
       "source": "Source:",
       "source1": "Source",
-      "time": "Time"
+      "time": "Time",
+      "loadError": "טעינת היומנים נכשלה: {error}"
     },
     "metricsDetailsView": {
       "activeWorkers": "Active Workers",
@@ -1427,6 +1566,303 @@
       "pendingFor": "{n} ממתינות עבור {name}",
       "sentBy": "מאת {names}",
       "waitsForIdle": "{who} ממתין עד ש-{target} יתפנה"
+    },
+    "validationDashboard": {
+      "title": "Validation dashboard",
+      "subtitle": "System validation status from the main backend: phases, metrics, alerts and recommendations.",
+      "refresh": "Refresh",
+      "generate": "Rebuild HTML dashboard",
+      "generateStarted": "The HTML dashboard is rebuilding in the background. This screen does not show it; the backend serves it on its own dashboard page.",
+      "generateFailed": "The dashboard rebuild did not start.",
+      "loading": "Reading the validation report...",
+      "unavailableTitle": "Validation reporting is not available",
+      "unavailableBody": "The backend answered that its validation report generator is not available. Check that the generator is installed on the backend, then refresh.",
+      "errorTitle": "The validation report could not be read",
+      "errorBody": "The validation report request failed.",
+      "emptyTitle": "No validation phases reported",
+      "emptyBody": "The backend answered, but its report lists no phases yet.",
+      "percent": "{value}%",
+      "yes": "Yes",
+      "no": "No",
+      "outOf": "{done} of {total}",
+      "seconds": "{n} s",
+      "days": "{n} days",
+      "health": {
+        "excellent": "Excellent",
+        "good": "Good",
+        "fair": "Fair",
+        "needs_attention": "Needs attention"
+      },
+      "overview": {
+        "title": "סקירה",
+        "measures": "The headline figure measures:",
+        "readAt": "Read {time}"
+      },
+      "stat": {
+        "maturity": "Overall maturity",
+        "health": "System health",
+        "phases": "Phases complete",
+        "capabilities": "Active capabilities",
+        "averageCompletion": "Average completion",
+        "minCompletion": "Lowest completion",
+        "maxCompletion": "Highest completion",
+        "above50": "Phases at 50% or more",
+        "above90": "Phases at 90% or more",
+        "stage": "Development stage",
+        "validationScore": "Validation score",
+        "errorRate": "Error rate",
+        "recentChanges": "Recent changes",
+        "velocity": "Progression velocity",
+        "canProgress": "Can progress",
+        "blocked": "Blocked phases",
+        "refreshInterval": "Dashboard refresh interval",
+        "retention": "Data retention"
+      },
+      "phases": {
+        "title": "Phases",
+        "empty": "No phases reported",
+        "notScored": "Not scored",
+        "col": {
+          "phase": "Phase",
+          "status": "סטטוס",
+          "completion": "Completion",
+          "requirements": "Requirements met",
+          "missing": "Missing",
+          "verifiedBy": "Verified by"
+        }
+      },
+      "alerts": {
+        "title": "Alerts ({n})",
+        "empty": "No alerts: the report raised none.",
+        "level": {
+          "critical": "Critical",
+          "warning": "אזהרה",
+          "info": "מידע"
+        }
+      },
+      "recommendations": {
+        "title": "Recommendations ({n})",
+        "empty": "No recommendations: the report made none.",
+        "action": "Next step: {action}",
+        "urgency": {
+          "high": "גבוה",
+          "medium": "בינוני",
+          "low": "Low",
+          "info": "מידע"
+        }
+      },
+      "trends": {
+        "title": "Trends",
+        "note": "No stored trend history is available yet, so the backend sends no trend series.",
+        "empty": "The backend sent no trend series",
+        "col": {
+          "series": "Series",
+          "points": "Points",
+          "first": "First",
+          "latest": "Latest"
+        },
+        "series": {
+          "maturity_trend": "Maturity",
+          "phase_completion_trend": "Completed phases",
+          "capability_growth": "Capabilities"
+        }
+      }
+    },
+    "rum": {
+      "title": "Real user monitoring",
+      "subtitle": "What browsers have reported to the main backend: errors, performance and interaction events, and their sessions.",
+      "refresh": "Refresh",
+      "dismiss": "Dismiss",
+      "loading": "Reading real user monitoring...",
+      "errorTitle": "Real user monitoring could not be read",
+      "errorBody": "The real user monitoring status request failed.",
+      "detailFailedTitle": "The collected data could not be read",
+      "detailFailedBody": "The real user monitoring export request failed.",
+      "emptyOnTitle": "Collecting, nothing received yet",
+      "emptyOnBody": "Collection is on and the backend holds no events or sessions yet.",
+      "emptyOffTitle": "Collection is off and nothing is held",
+      "emptyOffBody": "The backend holds no events or sessions. Turn collection on to receive them.",
+      "yes": "Yes",
+      "no": "No",
+      "collection": {
+        "title": "אוסף",
+        "switch": "Collect browser events",
+        "on": "On",
+        "off": "Off",
+        "memoryNote": "Events are held in the backend's memory, so a backend restart empties them. Turning collection off keeps what is already held until it is cleared.",
+        "enabledOk": "Collection is on.",
+        "disabledOk": "Collection is off.",
+        "enableFailed": "Collection could not be turned on.",
+        "disableFailed": "Collection could not be turned off."
+      },
+      "stat": {
+        "total_events": "Events held",
+        "total_sessions": "Sessions held",
+        "active_sessions": "Active sessions (last 30 minutes)",
+        "events_today": "Events today"
+      },
+      "settings": {
+        "title": "Collection settings",
+        "label": {
+          "enabled": "מופעל",
+          "error_tracking": "Error tracking",
+          "performance_monitoring": "Performance monitoring",
+          "interaction_tracking": "Interaction tracking",
+          "session_recording": "Session recording",
+          "sample_rate": "Sample rate (%)",
+          "max_events_per_session": "Max events per session",
+          "debug_mode": "Debug mode",
+          "log_to_backend": "Log to backend",
+          "log_level": "Log level"
+        }
+      },
+      "clear": {
+        "title": "Clear collected data",
+        "body": "Removes every event and session the backend holds. This cannot be undone.",
+        "button": "Clear collected data",
+        "confirmTitle": "Clear collected data?",
+        "confirmBody": "This permanently removes {events} events and {sessions} sessions. It cannot be undone.",
+        "confirm": "Clear",
+        "cancel": "Cancel",
+        "done": "Cleared {events} events and {sessions} sessions.",
+        "failed": "The collected data could not be cleared."
+      },
+      "types": {
+        "title": "Events by type",
+        "empty": "No events",
+        "col": {
+          "type": "סוג",
+          "count": "Events"
+        }
+      },
+      "sessions": {
+        "title": "Sessions",
+        "empty": "No sessions",
+        "col": {
+          "id": "Session",
+          "url": "First page",
+          "agent": "דפדפן",
+          "events": "Events",
+          "started": "התחילה",
+          "last": "Last activity"
+        }
+      },
+      "events": {
+        "title": "Latest events",
+        "empty": "No events",
+        "shown": "Showing the latest {shown} of {total} events held.",
+        "col": {
+          "at": "Received",
+          "type": "סוג",
+          "url": "דף",
+          "session": "Session"
+        }
+      },
+      "page": {
+        "previous": "Previous",
+        "next": "הבא",
+        "label": "Latest events pages",
+        "summary": "Page {page} of {count}"
+      }
+    },
+    "installMetrics": {
+      "title": "Install metrics",
+      "subtitle": "This install's own monitoring figures from the main backend: host, services, alerts, recommendations, GPU and NPU. Updated every 15 seconds.",
+      "refresh": "Refresh",
+      "loading": "Reading install metrics...",
+      "unavailableTitle": "The main app is not available",
+      "unavailableBody": "The main backend did not answer any install metrics request. No figures are shown, because any shown now would be out of date. Polling stops after repeated failures; use Refresh to read again.",
+      "unauthorisedTitle": "Not authorised to read the main app",
+      "unauthorisedBody": "The main app answered every install metrics request but refused this session. Sign in again or ask an administrator for access. No figures are shown.",
+      "sectionFailedTitle": "{section} could not be read",
+      "sectionFailedBody": "The install metrics request failed.",
+      "emptyTitle": "Nothing reported yet",
+      "emptyBody": "The main backend answered and reports no host figures, services, alerts, recommendations or devices.",
+      "notReported": "Not reported",
+      "percent": "{value}%",
+      "celsius": "{n} °C",
+      "watts": "{n} W",
+      "ms": "{n} ms",
+      "hours": "{n} h",
+      "readAt": "Read {time}",
+      "sections": {
+        "dashboard": "Host metrics",
+        "services": "Service health",
+        "alerts": "Alerts",
+        "recommendations": "Recommendations",
+        "gpu": "GPU",
+        "npu": "NPU"
+      },
+      "system": {
+        "title": "Host"
+      },
+      "gpu": {
+        "title": "GPU",
+        "absent": "The main backend reports no GPU on this install."
+      },
+      "npu": {
+        "title": "NPU",
+        "absent": "The main backend reports no NPU on this install."
+      },
+      "stat": {
+        "cpu": "CPU",
+        "memory": "Memory",
+        "overallHealth": "Overall health",
+        "performanceScore": "Performance score",
+        "gpuName": "Device",
+        "gpuUtilization": "Utilization",
+        "gpuMemory": "Memory utilization",
+        "gpuTemperature": "Temperature",
+        "gpuPower": "Power",
+        "npuUtilization": "Utilization",
+        "npuAcceleration": "Acceleration ratio",
+        "npuInferences": "Inferences"
+      },
+      "services": {
+        "title": "Services",
+        "summary": "{healthy} of {total} services healthy, overall {status}",
+        "empty": "The backend reports no services.",
+        "col": {
+          "name": "Service",
+          "status": "סטטוס",
+          "endpoint": "Endpoint",
+          "response": "Response",
+          "score": "Health score",
+          "uptime": "זמן פעילות"
+        }
+      },
+      "alerts": {
+        "title": "Alerts",
+        "empty": "The backend reports no active alerts."
+      },
+      "recommendations": {
+        "title": "Recommendations",
+        "empty": "The backend has no optimization recommendations.",
+        "action": "Action: {action}"
+      },
+      "status": {
+        "healthy": "Healthy",
+        "degraded": "מדורדר",
+        "critical": "Critical",
+        "offline": "Offline"
+      },
+      "health": {
+        "healthy": "healthy",
+        "degraded": "degraded",
+        "critical": "critical",
+        "unknown": "unknown"
+      },
+      "severity": {
+        "critical": "Critical",
+        "high": "גבוה",
+        "warning": "אזהרה",
+        "info": "מידע"
+      },
+      "priority": {
+        "high": "גבוה",
+        "medium": "בינוני",
+        "low": "Low"
+      }
     }
   },
   "monitoringView": {
@@ -1444,7 +1880,10 @@
       "errors": "שגיאות",
       "backendHealth": "Backend Health",
       "performance": "ביצועים",
-      "agentLedger": "יומן הסוכנים"
+      "agentLedger": "יומן הסוכנים",
+      "validation": "Validation",
+      "rum": "Real user monitoring",
+      "install": "Install metrics"
     }
   },
   "orchestration": {
@@ -1610,12 +2049,13 @@
     "value0AnsibleMigrationOf": "{value0} Ansible migration of",
     "value0Nodes": "({value0} nodes)",
     "value0OnlineValue1Offline": "{value0} online, {value1} offline",
-    "value0Required": "{value0} (required)"
+    "value0Required": "{value0} (required)",
+    "serviceCount": "{count} service | {count} services"
   },
   "performance": {
     "alertRulesView": {
       "actions": "פעולות",
-      "alertRules": "Alert Rules",
+      "alertRules": "כללי התראה",
       "areYouSureYou": "האם אתה בטוח שברצונך למחוק",
       "cancel": "Cancel",
       "condition": "Condition",
@@ -1646,7 +2086,7 @@
     },
     "performanceOverview": {
       "avgLatency": "Avg Latency",
-      "duration": "Duration",
+      "duration": "משך",
       "errorRate": "Error Rate",
       "name": "שם",
       "noTraceDataAvailable": "No trace data available",
@@ -1697,7 +2137,7 @@
     },
     "tracingView": {
       "apply": "Apply",
-      "duration": "Duration",
+      "duration": "משך",
       "failedToLoadSpan": "Failed to load span details",
       "first": "First",
       "last": "Last",
@@ -1716,7 +2156,8 @@
       "status1": "סטטוס",
       "time": "Time:",
       "time1": "Time",
-      "value0TracePlural": "{value0} trace{plural}"
+      "value0TracePlural": "{value0} trace{plural}",
+      "paginationAria": "Trace list pages"
     }
   },
   "performanceView": {
@@ -1726,7 +2167,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "כללי התראה",
+      "overview": "סקירה",
+      "slos": "SLOs",
+      "traces": "עקבות"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
@@ -1826,7 +2273,9 @@
     "verifySync": "Verify Sync",
     "verifySyncStatus": "Verify sync status",
     "verifyingSyncStatus": "Verifying sync status...",
-    "viewDetails": "View details"
+    "viewDetails": "View details",
+    "areYouSureYouWantToPromote": "Are you sure you want to promote this replica to primary? This will make the target node a standalone master.",
+    "areYouSureYouWantToStop": "Are you sure you want to stop this replication? The replica will remain connected but replication link will be marked as stopped."
   },
   "roleManagementModal": {
     "actions": "פעולות",
@@ -1862,7 +2311,6 @@
     "syncRoleAria": "Sync {roleName}",
     "thisRoleMayContain": "This role may contain data. You can back it up before removal.",
     "thisWillStopAnd": "This will stop and remove the service from the node.",
-    "times": "×",
     "version": "Version"
   },
   "rolesView": {
@@ -2102,7 +2550,42 @@
     "uploadTLSCertificate": "Upload TLS Certificate",
     "user": "משתמש",
     "value0Violations": "{value0} violations",
-    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?"
+    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?",
+    "paginationAria": "Security list pages",
+    "failedToLoadSecurityOverview": "Failed to load security overview",
+    "failedToLoadAuditLogs": "Failed to load audit logs",
+    "failedToLoadSecurityEvents": "Failed to load security events",
+    "failedToLoadSecurityPolicies": "Failed to load security policies",
+    "failedToLoadTlsCertificates": "Failed to load TLS certificates",
+    "failedToEnableTls": "Failed to enable TLS",
+    "areYouSureYouWantToDelete": "Are you sure you want to delete this certificate?",
+    "failedToDeleteCertificate": "Failed to delete certificate",
+    "renewThisCertificateThisWillGenerateA": "Renew this certificate? This will generate a new certificate with the same CN and extended validity.",
+    "failedToRenewCertificate": "Failed to renew certificate",
+    "rotateThisCertificateThisWillGenerateA": "Rotate this certificate? This will generate a completely new certificate with new keys (more secure than renewal).",
+    "failedToRotateCertificate": "Failed to rotate certificate",
+    "renewAllCertificatesExpiringWithin30Days": "Renew all certificates expiring within 30 days? This will deploy new certificates to the nodes.",
+    "bulkRenewalCompleteRenewedFailed": "Bulk renewal complete: {renewed} renewed, {failed} failed",
+    "failedToBulkRenewCertificates": "Failed to bulk renew certificates",
+    "pleaseSelectANode": "Please select a node",
+    "pleaseProvideAllCertificateFiles": "Please provide all certificate files",
+    "failedToUploadCertificate": "Failed to upload certificate",
+    "pleaseSelectAtLeastOneServiceTo": "Please select at least one service to enable TLS",
+    "certificateRenewed": "Certificate renewed successfully. New expiry: {expiry}",
+    "certificateRotated": "Certificate rotated successfully. New expiry: {expiry}",
+    "unknownExpiry": "לא ידוע",
+    "confirmEnableTls": "Enable TLS on {services}?\n\nThis will:\n1. Deploy TLS certificates to the nodes\n2. Configure services for HTTPS\n3. Restart affected services\n\nContinue?",
+    "enableTlsForService": "Enable TLS for {name}",
+    "renewCertificateFor": "Renew certificate for {hostname}",
+    "rotateCertificateFor": "Rotate certificate for {hostname}",
+    "deleteCertificateFor": "Delete certificate for {hostname}",
+    "acknowledgeEvent": "Acknowledge event: {title}",
+    "resolveEvent": "Resolve event: {title}",
+    "severityLabel": "{severity} severity",
+    "disableCertificateFor": "Disable certificate for {hostname}",
+    "enableCertificateFor": "Enable certificate for {hostname}",
+    "disablePolicy": "Disable policy: {name}",
+    "enablePolicy": "Enable policy: {name}"
   },
   "settings": {
     "aPISettings": {
@@ -2162,7 +2645,17 @@
         "turnCachingOnOr": "Turn caching on or off globally",
         "value0Keys": "{value0} keys",
         "warmUpCaches": "Warm Up Caches",
-        "yourBrowserIsStill": "Your browser is still caching API responses and static assets automatically."
+        "yourBrowserIsStill": "Your browser is still caching API responses and static assets automatically.",
+        "configurationSaved": "Cache configuration saved successfully",
+        "cacheCleared": "{type} cache cleared successfully",
+        "redisDatabaseCleared": "Redis {database} database cleared successfully",
+        "warmupCompleted": "Cache warmup completed successfully",
+        "failedToSaveCacheConfiguration": "Failed to save cache configuration",
+        "failedToClearCache": "Failed to clear cache",
+        "failedToWarmUpCaches": "Failed to warm up caches",
+        "confirmClearRedisDatabase": "Are you sure you want to clear the {database} Redis database?",
+        "confirmClearCache": "Are you sure you want to clear the {type} cache?",
+        "failedToClearRedisDatabase": "Failed to clear Redis database"
       },
       "configDefaultsSettings": {
         "actions": "פעולות",
@@ -2194,7 +2687,12 @@
         "update": "Update",
         "updated": "עודכן",
         "value": "Value *",
-        "value1": "ערך"
+        "value1": "ערך",
+        "configSaved": "Config \"{key}\" saved",
+        "deleteGlobalConfig": "Delete global config \"{key}\"?",
+        "requestFailed": "Request failed: {detail}",
+        "unknownError": "שגיאה בלתי ידועה",
+        "editKey": "Edit: {key}"
       },
       "lLMFallbacksView": {},
       "lLMSettings": {
@@ -2259,7 +2757,19 @@
         "setActive": "Set Active",
         "temperature": "Temperature:",
         "test": "Test",
-        "unsavedChanges": "Unsaved changes"
+        "unsavedChanges": "Unsaved changes",
+        "configurationSaved": "Configuration saved",
+        "configApplied": "Config applied to {count} nodes",
+        "failedToLoadLlmConfig": "Failed to load LLM config",
+        "failedToSaveLlmConfig": "Failed to save LLM config",
+        "saveConfigurationBeforeApplyingToFleet": "Save configuration before applying to fleet",
+        "applyFailed": "Apply failed",
+        "failedToApplyConfigToFleet": "Failed to apply config to fleet",
+        "connectionTestFailed": "Connection test failed",
+        "removeProvider": "Remove provider \"{name}\"?",
+        "providersTab": "Providers",
+        "serverSettingsTab": "Server Settings",
+        "modelsTab": "דגמים"
       },
       "logForwardingSettings": {
         "aPIKeyOptional": "API Key (optional)",
@@ -2313,7 +2823,26 @@
         "username": "שם משתמש",
         "varLogAutobotForwardedLog": "/var/log/autobot-forwarded.log",
         "warning": "אזהרה",
-        "statusUnknown": "לא ידוע"
+        "statusUnknown": "לא ידוע",
+        "leaveBlankToKeep": "Leave blank to keep the current value",
+        "loadFailed": "Failed to load destinations",
+        "toggleFailed": "Failed to toggle service",
+        "autoStartEnabled": "Auto-start enabled",
+        "autoStartDisabled": "Auto-start disabled",
+        "autoStartFailed": "Failed to update auto-start",
+        "destinationCreated": "Destination created successfully",
+        "destinationUpdated": "Destination updated successfully",
+        "saveFailed": "Failed to save destination",
+        "testSucceeded": "Connection test successful",
+        "testFailed": "Connection test failed",
+        "testAllSummary": "{healthy}/{total} destinations healthy",
+        "testAllFailed": "Failed to test destinations",
+        "destinationDeleted": "Destination deleted successfully",
+        "deleteFailed": "Failed to delete destination",
+        "removeStoredValue": "Remove the stored value",
+        "urlPlaceholderSyslog": "syslog.example.com:514",
+        "urlPlaceholderWebhook": "https://logs.example.com/ingest",
+        "urlPlaceholderElasticsearch": "http://elasticsearch.example.com:{port}"
       },
       "nPUWorkersSettings": {
         "actions": "פעולות",
@@ -2345,6 +2874,9 @@
         "online": "Online",
         "pairNewWorker": "Pair New Worker",
         "pairWorker": "Pair Worker",
+        "assignedNotPaired": "{hostname} has the NPU worker role in the SLM but isn't paired, so it gets no work yet.",
+        "assignedPairFailed": "Could not pair the NPU worker on {hostname}. Check that it is running, then try again.",
+        "assignedReadFailed": "Could not read which nodes have the NPU worker role, so a node waiting to be paired may be missing here.",
         "pairYourFirstWorker": "Pair Your First Worker",
         "platform": "Platform *",
         "port": "Port *",
@@ -2369,7 +2901,16 @@
         "worker": "Worker",
         "workerName": "Worker Name *",
         "connectionTestFailed": "Connection test failed",
-        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration",
+        "loadBalancingSaved": "Load balancing configuration saved",
+        "workerUpdated": "Worker updated successfully",
+        "workerPaired": "Worker paired successfully",
+        "connectionSuccessful": "Connection to {hostname} successful",
+        "workerRemoved": "Worker removed successfully",
+        "failedToLoadWorkers": "Failed to load workers",
+        "failedToSaveWorker": "Failed to save worker",
+        "failedToRemoveWorker": "Failed to remove worker",
+        "failedToSaveConfiguration": "Failed to save configuration"
       },
       "personalitySettings": {
         "active": "Active",
@@ -2410,7 +2951,13 @@
         "thisActionCannotBe": "This action cannot be undone. The profile will be permanently removed.",
         "tone": "Tone",
         "voice": "Voice",
-        "whenThisPersonalityIs": "When this personality is active, voice output will use the selected voice."
+        "whenThisPersonalityIs": "When this personality is active, voice output will use the selected voice.",
+        "profileSaved": "Profile saved.",
+        "profileActivated": "Profile activated.",
+        "profileReset": "Profile reset to default values.",
+        "profileDeleted": "Profile deleted.",
+        "profileCreated": "Profile \"{name}\" created.",
+        "profileDuplicated": "Duplicated as \"{name}\"."
       },
       "promptsSettings": {
         "allCategories": "All Categories",
@@ -2433,9 +2980,28 @@
         "selectAPrompt": "Select a Prompt",
         "selectAPromptFrom": "Select a prompt from the list to edit",
         "status": "Status:",
-        "unsavedChanges": "Unsaved Changes"
+        "unsavedChanges": "Unsaved Changes",
+        "promptSaved": "Prompt saved successfully",
+        "promptReverted": "Prompt reverted to default",
+        "failedToLoadPrompts": "Failed to load prompts",
+        "failedToSavePrompt": "Failed to save prompt",
+        "failedToRevertPrompt": "Failed to revert prompt",
+        "youHaveUnsavedChangesDiscardThem": "You have unsaved changes. Discard them?",
+        "areYouSureYouWantToRevert": "Are you sure you want to revert this prompt to its default content?"
       },
       "sSOSettings": {
+        "confirmDeleteProvider": "Delete SSO provider \"{name}\"? This cannot be undone.",
+        "providerCreated": "Provider created successfully",
+        "providerDeleted": "Provider deleted successfully",
+        "providerDisabled": "Provider disabled",
+        "providerEnabled": "Provider enabled",
+        "providerNameRequired": "Provider name is required",
+        "providerUpdated": "Provider updated successfully",
+        "connectionTestFailed": "Connection test failed",
+        "failedToDeleteProvider": "Failed to delete provider",
+        "failedToLoadProviders": "Failed to load SSO providers",
+        "failedToSaveProvider": "Failed to save provider",
+        "failedToToggleProvider": "Failed to toggle provider",
         "aCSURLAssertionConsumerService": "ACS URL (Assertion Consumer Service)",
         "addProvider": "Add Provider",
         "addYourFirstProvider": "Add your first provider",
@@ -2540,6 +3106,9 @@
         "description": "תיאור",
         "dismissError": "Dismiss error",
         "encryptedTokensAndCredentials": "Encrypted tokens and credentials for AutoBot infrastructure. Values are never displayed.",
+        "expectedHashingPepper": "Pepper used to hash API keys. Required to create new API keys; you provide the value. Rotating it later invalidates existing API keys.",
+        "expectedMissing": "Not set. New API keys cannot be created until it is.",
+        "expectedSetValue": "Set value",
         "failedToCreateSecret": "Failed to create secret",
         "failedToDeleteSecret": "Failed to delete secret",
         "failedToLoadSecrets": "Failed to load secrets",
@@ -2671,7 +3240,134 @@
         "userPreferences": "User Preferences",
         "username": "שם משתמש",
         "usersWhoAccessAutoBot": "Users who access AutoBot chat, workflows, and tools",
-        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard"
+        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard",
+        "resetPasswordFor": "Reset Password for {username}",
+        "userCreated": "User created successfully",
+        "slmUserDeleted": "SLM user deleted successfully",
+        "autobotUserDeleted": "AutoBot user deleted successfully",
+        "teamCreated": "Team created successfully",
+        "teamDeleted": "Team deleted successfully",
+        "rbacInitializedSuccessfully": "RBAC initialized successfully",
+        "ssoProviderCreated": "SSO provider created successfully",
+        "ssoProviderDeleted": "SSO provider deleted successfully",
+        "ssoConnectionSuccessful": "SSO provider connection successful",
+        "ssoConnectionFailed": "SSO provider connection test failed",
+        "failedToLoadSlmUsers": "Failed to load SLM users",
+        "failedToLoadAutobotUsers": "Failed to load AutoBot users",
+        "failedToLoadTeams": "Failed to load teams",
+        "failedToLoadSsoProviders": "Failed to load SSO providers",
+        "passwordsDoNotMatch": "Passwords do not match",
+        "failedToCreateUser": "Failed to create user",
+        "failedToDeleteUser": "Failed to delete user",
+        "failedToCreateTeam": "Failed to create team",
+        "failedToDeleteTeam": "Failed to delete team",
+        "failedToCheckRbacStatus": "Failed to check RBAC status",
+        "failedToCreateSsoProvider": "Failed to create SSO provider",
+        "failedToDeleteSsoProvider": "Failed to delete SSO provider",
+        "failedToTestSsoProvider": "Failed to test SSO provider",
+        "confirmDeleteUser": "Are you sure you want to delete this user?",
+        "confirmDeleteTeam": "Are you sure you want to delete this team?",
+        "confirmDeleteSsoProvider": "Are you sure you want to delete this SSO provider?",
+        "confirmDeleteSlmAdmin": "Are you sure you want to delete this SLM admin?",
+        "checkingRbacStatus": "Checking RBAC status...",
+        "failedToInitializeRbac": "Failed to initialize RBAC"
+      },
+      "themeManager": {
+        "title": "Themes",
+        "subtitle": "Theme packages installed on the main app. Installing or removing one applies to every user.",
+        "refresh": "Refresh",
+        "dismiss": "Dismiss",
+        "loading": "Reading the installed themes...",
+        "errorTitle": "The installed themes could not be read",
+        "errorBody": "The theme list request failed.",
+        "unavailableTitle": "The theme manager is not available",
+        "unavailableBody": "Theme packages live on the main app, which did not answer. Try again once it is running.",
+        "emptyTitle": "No themes installed",
+        "emptyBody": "Upload a theme package (.zip) to make it available to every user.",
+        "installTitle": "Install a theme",
+        "installHint": "A .zip package holding theme.json and theme.css.",
+        "chooseFile": "Choose package",
+        "installing": "Installing...",
+        "installedOk": "Installed {name} {version}.",
+        "installFailed": "The theme could not be installed.",
+        "notZip": "Choose a .zip theme package.",
+        "tooLarge": "The package is larger than the SLM proxy accepts, so it was refused before the main app saw it.",
+        "adminOnly": "Only an administrator can change themes.",
+        "col": {
+          "name": "שם",
+          "version": "Version",
+          "author": "Author",
+          "supports": "Supports",
+          "id": "Id"
+        },
+        "tableLabel": "Installed themes",
+        "actions": "פעולות",
+        "uninstall": "Uninstall",
+        "confirmTitle": "Uninstall {name}?",
+        "confirmBody": "The theme is removed from the main app for every user.",
+        "confirmCancel": "Cancel",
+        "removedOk": "Uninstalled {name}.",
+        "removeFailed": "The theme could not be uninstalled."
+      },
+      "webResearchSettings": {
+        "title": "Web Research",
+        "subtitle": "Platform-wide web research settings. Changes apply to every user.",
+        "dismiss": "Dismiss",
+        "refresh": "Refresh",
+        "enableSwitch": "Enable web research",
+        "statusEnabled": "מופעל",
+        "statusMethod": "Preferred method",
+        "statusCache": "Cache size",
+        "statusRateLimiter": "Rate limiter",
+        "statusResearcher": "Researcher",
+        "yes": "Yes",
+        "no": "No",
+        "unknown": "לא ידוע",
+        "rateLimiterValue": "{current} / {max}",
+        "unavailableTitle": "Web researcher unavailable",
+        "unavailableHint": "The web researcher failed to start on the backend, so web research cannot run and these controls are paused. Settings can still be saved.",
+        "degradedHint": "The web researcher is degraded.",
+        "clearCache": "Clear cache",
+        "resetBreakers": "Reset circuit breakers ({count})",
+        "formTitle": "הגדרות",
+        "save": "שמור שינויים",
+        "saving": "Saving...",
+        "discard": "Discard changes",
+        "range": "Between {min} and {max}",
+        "atLeast": "At least {min}",
+        "notEnforced": "Saved — not enforced yet",
+        "saved": "Settings saved",
+        "savedNotApplied": "Saved; takes effect after a restart.",
+        "enabledMessage": "Web research enabled",
+        "disabledMessage": "Web research disabled",
+        "cacheCleared": "Research cache cleared",
+        "breakersReset": "Circuit breakers reset",
+        "loadFailed": "Failed to load web research settings",
+        "statusFailed": "Failed to load web research status",
+        "saveFailed": "Failed to save web research settings",
+        "toggleFailed": "Failed to change web research",
+        "clearCacheFailed": "Failed to clear the research cache",
+        "resetBreakersFailed": "Failed to reset circuit breakers",
+        "field_preferred_method": "Search method",
+        "field_max_results": "Max results",
+        "field_timeout_seconds": "Timeout (seconds)",
+        "field_auto_research_threshold": "Auto-research threshold",
+        "field_rate_limit_requests": "Rate limit: requests",
+        "field_rate_limit_window": "Rate limit: window (seconds)",
+        "field_daily_limit": "Daily limit",
+        "field_quality_threshold": "Quality threshold",
+        "field_require_user_confirmation": "Require confirmation before searching",
+        "field_store_results_in_kb": "Store results in the knowledge base",
+        "field_filter_adult_content": "Filter adult content",
+        "field_anonymize_requests": "Anonymize requests",
+        "method_basic": "Basic",
+        "method_advanced": "Advanced",
+        "method_api_based": "API-based",
+        "researcher_unknown": "לא ידוע",
+        "researcher_ok": "זמין",
+        "researcher_unavailable": "לא זמין",
+        "researcher_degraded": "מדורדר",
+        "researcher_error": "Status unreadable"
       }
     },
     "backendSettings": {
@@ -2706,7 +3402,35 @@
       "test": "Test",
       "theseSettingsAreRead": "These settings are read-only and configured in the backend.",
       "timeBeforeANode": "Time before a node is marked offline (seconds)",
-      "warning": "אזהרה"
+      "warning": "אזהרה",
+      "failedToSaveSetting": "Failed to save setting",
+      "failedToLoadSettings": "Failed to load settings"
+    },
+    "chatApprovalSettings": {
+      "categories": {
+        "pushing commits": "Pushing commits",
+        "publishing": "Publishing",
+        "destructive operations": "Destructive operations",
+        "rotating credentials": "Rotating credentials",
+        "sending externally": "Sending externally",
+        "writing files": "Writing files",
+        "executing code": "Executing code",
+        "deploying infrastructure": "Deploying infrastructure",
+        "discarding local changes": "Discarding local changes",
+        "writing data": "Writing data",
+        "browser actions": "Browser actions",
+        "delegating work": "Delegating work"
+      },
+      "autoApproveHelp": "When on, tool calls in a chat turn that used an attached file run without asking for approval. Off by default.",
+      "autoApproveLabel": "Auto-approve tool calls in chats that used an attached file",
+      "autoApproveRisk": "Risk: text inside an attached file could steer tools without anyone being asked. Turn this on only if you trust every file your users can attach.",
+      "autoApproveTitle": "Auto-approve for attachment chats",
+      "failedToLoad": "Failed to load chat approval settings",
+      "failedToSave": "Failed to save chat approval settings",
+      "relaxedHelp": "Categories switched on here no longer ask for approval by default. Every other category keeps asking. Changes are recorded in the audit log.",
+      "relaxedTitle": "Relaxed approval categories",
+      "save": "Save",
+      "saved": "Saved."
     },
     "disposalPolicySettings": {
       "controlsHowCompanyOSProjectsAre": "Controls how Company OS projects are disposed after archiving. Default: immediate, no approval.",
@@ -2717,7 +3441,9 @@
       "retentionPeriodDays": "Retention period (days)",
       "savePolicy": "Save Policy",
       "saving": "שומר…",
-      "whenEnabledDisposalCreatesAnApproval": "When enabled, disposal creates an approval request before the project is deleted."
+      "whenEnabledDisposalCreatesAnApproval": "When enabled, disposal creates an approval request before the project is deleted.",
+      "failedToLoadDisposalPolicy": "Failed to load disposal policy",
+      "failedToSaveDisposalPolicy": "Failed to save disposal policy"
     },
     "findingsPolicySettings": {
       "automaticallyTriggerFindings": "Automatically trigger findings analysis whenever the code index is refreshed.",
@@ -2778,8 +3504,15 @@
       "systemName": "System Name",
       "timezoneForDisplayingDatesAndTimes": "Timezone for displaying dates and times ({count} zones available)",
       "useDarkThemeFor": "Use dark theme for the interface",
-      "value0Value1NodePlural": "{value0} — {value1} node{plural}",
-      "viewWizard": "View Wizard"
+      "value0Value1NodePlural": "{value0} — {value1} node | {value0} — {value1} nodes",
+      "viewWizard": "View Wizard",
+      "settingsSaved": "Settings saved successfully",
+      "setupWizardReset": "Setup wizard has been reset",
+      "failedToLoadSettings": "Failed to load settings",
+      "failedToSaveSettings": "Failed to save settings",
+      "timeSyncFailed": "Time sync failed",
+      "failedToResetWizard": "Failed to reset wizard",
+      "failedToSaveSettingsList": "Failed to save setting(s): {keys}"
     },
     "monitoringSettings": {
       "10Seconds": "10 seconds",
@@ -2819,7 +3552,9 @@
       "grafanaConnected": "Grafana connection successful",
       "grafanaFailed": "Grafana connection failed",
       "grafanaUnreachable": "Cannot reach the Grafana server",
-      "deployViaAnsible": "Monitoring role deployment will be triggered via Ansible"
+      "deployViaAnsible": "Monitoring role deployment will be triggered via Ansible",
+      "failedToLoadSettings": "Failed to load settings",
+      "failedToSaveSetting": "Failed to save setting"
     },
     "notificationsSettings": {
       "adminExampleCom": "admin{'@'}example.com",
@@ -2842,7 +3577,11 @@
       "saveChanges": "Save Changes",
       "saving": "Saving...",
       "securityAlerts": "Security Alerts",
-      "sendNotificationsViaEmail": "Send notifications via email"
+      "sendNotificationsViaEmail": "Send notifications via email",
+      "settingsSaved": "Notification settings saved successfully",
+      "failedToLoadSettings": "Failed to load settings",
+      "failedToSaveSettings": "Failed to save settings",
+      "failedToSaveSettingsList": "Failed to save setting(s): {keys}"
     },
     "securitySettings": {
       "1Year": "1 year",
@@ -2894,13 +3633,54 @@
       "value0Uses": "{value0} uses",
       "verifyAndEnable": "Verify and Enable",
       "whatThisKeyIsFor": "What this key is for",
-      "yourAccountIsProtectedWithValue0": "Your account is protected with {value0} authentication"
+      "yourAccountIsProtectedWithValue0": "Your account is protected with {value0} authentication",
+      "mFAEnabledSuccessfully": "MFA enabled successfully",
+      "mFADisabledSuccessfully": "MFA disabled successfully",
+      "aPIKeyRevoked": "API key revoked successfully",
+      "copiedToClipboard": "Copied to clipboard",
+      "failedToLoadMfaStatus": "Failed to load MFA status",
+      "failedToStartMfaSetup": "Failed to start MFA setup",
+      "pleaseEnterAValid6DigitCode": "Please enter a valid 6-digit code",
+      "verificationFailed": "Verification failed",
+      "failedToVerifyMfaCode": "Failed to verify MFA code",
+      "passwordIsRequired": "Password is required",
+      "failedToDisableMfa": "Failed to disable MFA",
+      "failedToRegenerateBackupCodes": "Failed to regenerate backup codes",
+      "failedToLoadApiKeys": "Failed to load API keys",
+      "failedToLoadScopes": "Failed to load scopes",
+      "nameAndAtLeastOneScopeAre": "Name and at least one scope are required",
+      "failedToCreateApiKey": "Failed to create API key",
+      "failedToRevokeApiKey": "Failed to revoke API key",
+      "confirmRevokeApiKey": "Are you sure you want to revoke this API key? This action cannot be undone."
     },
     "cache": {
       "databaseLabel": "{name} (DB {db})"
     },
     "llm": {
       "latencyMs": "({ms}ms)"
+    },
+    "nav": {
+      "general": "General",
+      "monitoring": "ניטור",
+      "notifications": "התראות",
+      "security": "אבטחה",
+      "api": "API",
+      "backend": "Backend",
+      "disposalPolicy": "Disposal Policy",
+      "chatApproval": "Chat Approvals",
+      "findingsPolicy": "Findings Policy",
+      "users": "Users",
+      "cache": "Cache",
+      "prompts": "Prompts",
+      "personality": "Personality",
+      "secrets": "Secrets",
+      "logForwarding": "Log Forwarding",
+      "llm": "LLM",
+      "llmFallbacks": "LLM Fallbacks",
+      "budgetAudit": "Budget Audit",
+      "sso": "SSO / OIDC",
+      "webResearch": "Web Research",
+      "themes": "Themes"
     }
   },
   "settingsView": {
@@ -2983,11 +3763,13 @@
     "yourAutoBotFleetIs": "Your AutoBot fleet is configured and ready to use.",
     "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes.",
     "provisioningFailed": "Provisioning failed",
-    "retryProvisioning": "Retry provisioning"
+    "retryProvisioning": "Retry provisioning",
+    "failedToSaveKeys": "שמירת מפתחות ה-API נכשלה. פרטים נוספים זמינים בקונסולה.",
+    "failedToAddNode": "הוספת הצומת נכשלה"
   },
   "skills": {
     "approvalsTab": {
-      "approve": "אשר",
+      "approve": "Approve",
       "monitored": "Monitored",
       "noPendingApprovals": "No pending approvals",
       "reject": "Reject",
@@ -3021,8 +3803,24 @@
       "noRepositoriesRegisteredAdd": "No repositories registered. Add a skill repo to install community skills.",
       "skills": "Skills",
       "sync": "Sync",
+      "tableLabel": "Skill repositories",
       "type": "סוג",
       "uRL": "URL"
+    },
+    "unknownSkill": "unknown",
+    "newDraftNotification": "AutoBot generated a new skill: \"{skillId}\" — pending approval",
+    "errors": {
+      "generic": "Skills request failed",
+      "fetchReposFailed": "Failed to fetch repos",
+      "addRepoFailed": "Failed to add repo",
+      "syncRepoFailed": "Failed to sync repo",
+      "fetchApprovalsFailed": "Failed to fetch approvals",
+      "processApprovalFailed": "Failed to process approval",
+      "fetchDraftsFailed": "Failed to fetch drafts",
+      "testDraftFailed": "Test draft failed",
+      "promoteDraftFailed": "Failed to promote draft",
+      "fetchGovernanceFailed": "Failed to fetch governance config",
+      "updateGovernanceModeFailed": "Failed to update governance mode"
     }
   },
   "skillsView": {
@@ -3096,7 +3894,13 @@
     "upgradeAll": "Upgrade All",
     "upgradeSelectedValue0": "Upgrade Selected ({value0})",
     "value0Value1Nodes": "{value0} / {value1} nodes",
-    "version": "Version"
+    "version": "Version",
+    "discoveryCompleted": "Discovery completed",
+    "upgradeJobsStarted": "Upgrade jobs started",
+    "confirmCancelJob": "Cancel this update job?",
+    "jobCancelled": "Job cancelled",
+    "confirmUpgradeAllOnNode": "Upgrade ALL packages on {nodeId}?",
+    "upgradeAllStartedOnNode": "Upgrade all started for {nodeId}"
   },
   "tools": {
     "admin": {
@@ -3146,7 +3950,7 @@
         "colReason": "סיבה",
         "colPriority": "עדיפות",
         "operatorPlaceholder": "Operator name",
-        "approve": "אשר",
+        "approve": "Approve",
         "activeTitle": "הפעלות השתלטות פעילות",
         "noActive": "No active takeover sessions",
         "colOperator": "מפעיל",
@@ -3196,7 +4000,7 @@
         "creating": "Creating...",
         "dataExport": "Data Export",
         "delete": "Delete",
-        "duration": "Duration",
+        "duration": "משך",
         "enterJobName": "Enter job name",
         "failed": "נכשל",
         "failedItems": "Failed Items",
@@ -3213,7 +4017,13 @@
         "running": "פועל",
         "started": "התחילה",
         "totalJobs": "Total Jobs",
-        "value0Value1ItemsValue2": "{value0} / {value1} items ({value2}%)"
+        "value0Value1ItemsValue2": "{value0} / {value1} items ({value2}%)",
+        "failedToLoadJobs": "Failed to load jobs",
+        "failedToCreateJob": "Failed to create job",
+        "failedToCancelJob": "Failed to cancel job",
+        "failedToRetryJob": "Failed to retry job",
+        "failedToDeleteJob": "Failed to delete job",
+        "confirmDeleteJob": "Are you sure you want to delete this job?"
       },
       "browserTool": {
         "back": "חזרה",
@@ -3236,7 +4046,12 @@
           "disconnected": "disconnected",
           "unknown": "unknown"
         },
-        "takeScreenshot": "Take Screenshot"
+        "takeScreenshot": "Take Screenshot",
+        "startFailed": "Failed to start browser",
+        "navigateFailed": "Navigation failed",
+        "backFailed": "Failed to go back",
+        "forwardFailed": "Failed to go forward",
+        "refreshFailed": "Failed to refresh"
       },
       "fileBrowserTool": {
         "actions": "פעולות",
@@ -3515,7 +4330,8 @@
     "title": "Budget Policy Audit",
     "totalPolicies": "Total Policies",
     "unnamed": "(unnamed)",
-    "warning": "Warning At"
+    "warning": "Warning At",
+    "failedToFetchBudgetPolicies": "Failed to fetch budget policies"
   },
   "dataHygiene": {
     "audit": {
@@ -3575,10 +4391,16 @@
       "subtitle": "Storage no live record references. Deletion is only ever PROPOSED here — approving it in the approval queue is what actually removes anything.",
       "title": "Unreferenced Storage",
       "totalCandidates": "Candidates",
-      "totalSize": "Total Size"
+      "totalSize": "Total Size",
+      "unknownError": "unknown error"
     },
     "subtitle": "Preview unreferenced storage, repair unreachable resources, and review the audit trail — every deletion is proposed through the approval queue, never applied directly.",
     "tabName": "Data Hygiene",
     "title": "Data Hygiene"
+  },
+  "ui": {
+    "modal": {
+      "closeDialog": "סגירת תיבת הדו-שיח"
+    }
   }
 }

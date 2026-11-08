@@ -9,7 +9,7 @@ umbrella: 12617
 
 ## Overview
 
-LLC review gates currently verify work with the **same** provider that produced it. This design adds an optional **second-opinion verifier tier** that requires an *independent* LLM provider to sign off before a gate resolves, so a single model's systematic blind spots cannot pass through unchallenged.
+Company OS review gates currently verify work with the **same** provider that produced it. This design adds an optional **second-opinion verifier tier** that requires an *independent* LLM provider to sign off before a gate resolves, so a single model's systematic blind spots cannot pass through unchallenged.
 
 **Scope:** review-gate policy + findings verifier only. No new provider transport — it reuses the existing multi-provider `LLMService` and provider-agnostic tier resolution.
 

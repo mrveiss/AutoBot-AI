@@ -60,7 +60,10 @@ async def test_multi_source_search_lets_an_admin_read_another_users_private_fact
     }
     kb = _make_kb([others_private])
 
-    with patch("api.knowledge_search_aggregator.get_or_create_knowledge_base", new=AsyncMock(return_value=kb)):
+    with (
+        patch("api.knowledge_search_aggregator.get_or_create_knowledge_base", new=AsyncMock(return_value=kb)),
+        patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)),
+    ):  # the admin read is audited and committed before it returns (#19860)
         result = await search(
             MagicMock(),
             SearchRequest(query="test", include_sources=["facts"]),

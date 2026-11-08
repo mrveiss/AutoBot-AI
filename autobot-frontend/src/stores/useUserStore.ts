@@ -1,6 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { ref, computed } from 'vue'
+import { ROLE_PERMISSIONS } from '@/types/_generated/workflow'
 import type { Role } from '@/types/_generated/workflow'
 import { defineStore } from 'pinia'
 import { createLogger } from '@/utils/debugUtils'
@@ -109,15 +110,14 @@ export const useUserStore = defineStore('user', () => {
   // role (admin AND superadmin), not just a literal 'admin' comparison.
   const isAdmin = computed(() => isAdminRole(currentUser.value?.role))
 
-  // Roles that hold Permission.SERVICE_MANAGEMENT (service.management) — must
-  // mirror ROLE_PERMISSIONS in autobot_shared/auth/permissions.py (#10198).
-  // superadmin deliberately excluded: its ROLE_PERMISSIONS entry is empty by
-  // design (it is an administrative predicate, not a permission grant) —
-  // see autobot_shared/auth/permissions.py.
+  // Holds Permission.SERVICE_MANAGEMENT (service.management). Derived from the
+  // generated ROLE_PERMISSIONS map (autobot_shared/auth/permissions.py, #10198),
+  // so it cannot drift: superadmin inherits admin's set (#19125).
   // Fail-safe: unknown role → false (hidden).
   const hasServiceManagement = computed(() => {
-    const role = currentUser.value?.role
-    return role === 'admin' || role === 'operator'
+    const role = currentUser.value?.role as Role | undefined
+    const granted = role ? ROLE_PERMISSIONS[role] : undefined
+    return !!granted && granted.includes('service.management')
   })
 
   const preferences = computed(() => currentUser.value?.preferences || defaultPreferences)

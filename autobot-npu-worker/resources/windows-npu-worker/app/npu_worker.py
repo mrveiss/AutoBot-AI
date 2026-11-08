@@ -58,6 +58,7 @@ from worker_startup import WorkerStartupMixin
 from worker_state import LRUCache, ThreadSafeStats
 
 logger = logging.getLogger(__name__)
+ALLOW_MOCK_INFERENCE = os.environ.get("NPU_WORKER_ALLOW_MOCK_INFERENCE", "false").lower() == "true"
 
 
 # #16428 review: FastAPI's default 422 body echoes the submitted payload
@@ -117,7 +118,7 @@ class WindowsNPUWorker(
         self._use_real_inference = True
         # Mock vectors are only valid for explicit development/test runs. They
         # must never be silently returned by a production worker.
-        self._allow_mock_inference = os.environ.get("NPU_WORKER_ALLOW_MOCK_INFERENCE", "false").lower() == "true"
+        self._allow_mock_inference = ALLOW_MOCK_INFERENCE
 
         # Thread-safe LRU cache (Issue #68 - race condition + memory growth fix)
         cache_size = cache_config.get("max_size", DEFAULT_EMBEDDING_CACHE_SIZE)
@@ -188,7 +189,9 @@ def main():
 
     if tls_enabled:
         cert_dir = tls_config.get(
-            "cert_dir", os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs")  # ssot-config-exempt: NPU worker
+            # Standalone worker, no autobot_shared: pinned copy of env_registry_tls.DEFAULT_TLS_CERT_DIR (#19317)
+            "cert_dir",
+            os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs"),
         )
         ssl_keyfile = os.path.join(cert_dir, "server-key.pem")
         ssl_certfile = os.path.join(cert_dir, "server-cert.pem")

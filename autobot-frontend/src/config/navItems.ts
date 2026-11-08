@@ -74,16 +74,18 @@ export interface NavItem {
  * An icon-only control in the header's right-hand cluster (#18240). The
  * accessible name (`ariaKey`) and the tooltip (`tipKey`) are i18n keys; an
  * entry with `href` is an external destination opened in a new tab instead of
- * a router route. `requires` gates it on a permission the user store exposes.
+ * a router route. `requires` gates it on what the user store says of the role.
  */
 export interface NavIconItem extends Omit<NavItem, 'to'> {
   to?: string;
   href?: () => string;
   ariaKey: string;
   tipKey: string;
-  requires?: 'serviceManagement';
+  requires?: 'admin';
   /** Renders after the Minimal/Full toggle rather than before it. */
   afterToggle?: boolean;
+  /** A count shown on the icon while above zero; the cluster maps the source to its number (#20917). */
+  badgeSource?: 'approvals';
 }
 
 /**
@@ -149,11 +151,13 @@ export const profileMenuItems: NavItem[] = [
 // nav (see INTENTIONALLY_HIDDEN in nav-items-coverage.test.ts). Routes of the
 // internal entries must carry hideInNav: true in router/index.ts.
 export const navIconItems: NavIconItem[] = [
+  // #20917: what is waiting for the person to decide, from any page; the badge is the count.
+  { to: '/approvals', labelKey: 'nav.approvals.aria', ariaKey: 'nav.approvals.aria', tipKey: 'nav.approvals.tip', badgeSource: 'approvals', keywords: ['nav.keywords.approvals'], iconPaths: ['M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'], iconViewBox: '0 0 24 24', iconStroke: true },
   { to: '/secrets', labelKey: 'nav.secrets', ariaKey: 'nav.secrets', tipKey: 'nav.vaultTip', adv: true, keywords: ['nav.keywords.vault'], iconPaths: ['M4 12a4 4 0 108 0 4 4 0 00-8 0z', 'M12 12h9M18 12v3M21 12v2'], iconViewBox: '0 0 24 24', iconStroke: true },
   { to: '/preferences', labelKey: 'nav.preferences', ariaKey: 'nav.preferences', tipKey: 'nav.preferencesTip', keywords: ['nav.keywords.preferences'], iconPaths: [ICONS.cog], iconViewBox: '0 0 24 24', iconStroke: true },
-  // Platform admin: the SLM console, in a new tab. The permission gate is the
-  // old SLM link's (admin and operator roles carry service.management).
-  { href: getSLMAdminUrl, labelKey: 'nav.platformAdmin', ariaKey: 'nav.platformAdminAria', tipKey: 'nav.platformAdminTip', adv: true, requires: 'serviceManagement', afterToggle: true, iconPaths: ['M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z', 'M9 12l2 2 4-4'], iconViewBox: '0 0 24 24', iconStroke: true },
+  // Platform admin: the SLM console, in a new tab. Admins only, as the SLM itself is (#20631);
+  // the operator role holds service.management and is still refused there.
+  { href: getSLMAdminUrl, labelKey: 'nav.platformAdmin', ariaKey: 'nav.platformAdminAria', tipKey: 'nav.platformAdminTip', adv: true, requires: 'admin', afterToggle: true, iconPaths: ['M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z', 'M9 12l2 2 4-4'], iconViewBox: '0 0 24 24', iconStroke: true },
 ];
 
 // ─── Admin-only menu items (GH#8748) ─────────────────────────────────────────
@@ -183,6 +187,10 @@ export const adminMenuItems: NavItem[] = [
   { to: '/admin/mcp-servers', labelKey: 'nav.adminMcpServers', icon: 'M21.75 17.25v-.228a4.5 4.5 0 00-.12-1.03l-2.268-9.64a3.375 3.375 0 00-3.285-2.602H7.923a3.375 3.375 0 00-3.285 2.602l-2.268 9.64a4.5 4.5 0 00-.12 1.03v.228m19.5 0a3 3 0 01-3 3H5.25a3 3 0 01-3-3m19.5 0a3 3 0 00-3-3H5.25a3 3 0 00-3 3', iconViewBox: '0 0 24 24', iconStroke: true },
   // Issue #16825: permission scopes -- a "coming in a later release" panel, not a working
   // feature yet, unlike the two entries above.
+  // Issue #17832: org conversation review -- the server gates and audits; this entry is presentation only.
+  { to: '/admin/conversations', labelKey: 'nav.adminConversations', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z', iconViewBox: '0 0 24 24', iconStroke: true },
+  // Issue #20567: propose the decided install cleanups -- the server gates and audits; this entry is presentation only.
+  { to: '/admin/cleanup-proposals', labelKey: 'nav.adminCleanupProposals', icon: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16', iconViewBox: '0 0 24 24', iconStroke: true },
   { to: '/admin/permission-scopes', labelKey: 'nav.adminPermissionScopes', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', iconViewBox: '0 0 24 24', iconStroke: true },
 ];
 

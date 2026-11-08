@@ -35,6 +35,10 @@ find_python() {
         echo "$VIRTUAL_ENV/bin/python"
     elif [[ -f "$(git rev-parse --show-toplevel 2>/dev/null)/venv/bin/python" ]]; then
         echo "$(git rev-parse --show-toplevel)/venv/bin/python"
+    elif command -v python3.14 &> /dev/null; then
+        # autobot_shared refuses an interpreter below the .python-version floor
+        # (#20903); bare python3 may be older (3.10 on Ubuntu 22.04).
+        echo "python3.14"
     elif command -v python3 &> /dev/null; then
         echo "python3"
     elif command -v python &> /dev/null; then

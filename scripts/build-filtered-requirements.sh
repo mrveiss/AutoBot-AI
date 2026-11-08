@@ -52,7 +52,8 @@ code_source_dir="${2:?usage: build-filtered-requirements.sh <requirements_file> 
 # pip. Defaults to the source root, which is the single-machine case.
 rewrite_root="${3:-${code_source_dir}}"
 
-# #14272: the `\.\./` prefix is matched at ANY depth, not just one level.
+# #14272: the `\.\./` prefix is matched at ANY depth, not just one level -- zero
+# included for `-c`, so a repo-root manifest's `-c constraints/...` resolves too (#19330).
 # The pattern used to be a literal `\.\./`, which fitted the backend's
 # requirements.txt (one level up from autobot-backend/) and silently did not
 # match autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt, which
@@ -60,4 +61,4 @@ rewrite_root="${3:-${code_source_dir}}"
 # not transfer to the next caller, and the failure is a provisioning abort:
 #   ERROR: Could not open constraint file: '/constraints/shared.txt'
 grep -Ev '^-e.*autobot[-_]shared' "${requirements_file}" \
-  | sed -E "s|^-c (\\.\\./)+constraints/|-c ${rewrite_root}/constraints/|; s|^-r (\\.\\./)+requirements\\.txt|-r ${rewrite_root}/requirements.txt|"
+  | sed -E "s|^-c (\\.\\./)*constraints/|-c ${rewrite_root}/constraints/|; s|^-r (\\.\\./)+requirements\\.txt|-r ${rewrite_root}/requirements.txt|"

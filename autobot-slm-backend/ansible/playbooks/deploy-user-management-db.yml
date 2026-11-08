@@ -31,7 +31,7 @@
     databases:
       - slm
       - slm_users
-    postgresql_listen_addresses: "localhost"
+    # listen_addresses: the postgresql role's single definition (#19239), never set per play.
 
   pre_tasks:
     - name: Display SLM database deployment info
@@ -80,7 +80,8 @@
     db_host: "127.0.0.1"
     databases:
       - autobot_users
-    postgresql_listen_addresses: "*"
+    # listen_addresses: the postgresql role's single definition (#19239) -- loopback plus this
+    # host's own address; remote clients are the /32 pg_hba entries and firewall rules below.
     # #12214: on a co-located single box the node is in both slm and redis groups,
     # so this DB-VM play also runs here — but slm_host/backend_host (separate-VM
     # addresses) may be undefined. Build the remote-access + firewall sets from

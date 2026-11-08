@@ -30,6 +30,7 @@
  */
 
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { BaseAlert, PollingPausedAlert, createLogger } from '@autobot/ui'
 import { useRoute, useRouter } from 'vue-router'
 import { readSlmToken } from '@/utils/authStorage'
 import { useOrchestrationManagement } from '@/composables/useOrchestrationManagement'
@@ -43,7 +44,6 @@ import {
   parseSystemdUnits,
 } from '@/composables/useRoles'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { createLogger } from '@/utils/debugUtils'
 import ServiceStatusBadge from '@/components/orchestration/ServiceStatusBadge.vue'
 import ServiceActionButtons from '@/components/orchestration/ServiceActionButtons.vue'
 import NodeHealthCard from '@/components/orchestration/NodeHealthCard.vue'
@@ -57,6 +57,7 @@ import type { NodeStatus, ServiceStatus } from '@/types/slm'
 import { normalizeServiceStatus } from '@/utils/node-status'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 
 const logger = createLogger('OrchestrationView')
 
@@ -71,7 +72,6 @@ const { t } = useI18n()
 
 // Role ownership map: role_name -> node_id (#1389)
 const roleOwners = ref<Record<string, string>>({})
-const ORCH_INFRA_ROLES = ['autobot_shared', 'slm-agent']
 
 // The Redis panel acts on the node holding the `redis` role, through that role's unit (#16245).
 // #16025 made systemd_service a sequence (a role can own >1 unit); redis owns exactly one.
@@ -140,7 +140,6 @@ const categoryFilter = ref<'autobot' | 'system' | 'all'>('autobot')
 const statusFilter = ref<string>('all')
 const expandedNodes = ref<Set<string>>(new Set())
 const autoRefresh = ref(true)
-let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 // Status filter options (parity with ServicesView.vue — #15224)
 const statusFilterOptions = computed(() => [
@@ -258,6 +257,10 @@ function toggleFleetService(serviceName: string): void {
     next.add(serviceName)
   }
   expandedFleetServices.value = next
+}
+
+function fleetServiceCount(nodeId: string): number {
+  return orchestration.fleetServices.reduce((sum, svc) => sum + svc.nodes.filter((n) => n.node_id === nodeId).length, 0)
 }
 
 function getNodeHostname(nodeId: string): string {
@@ -388,11 +391,7 @@ function warnIfNothingWillDeploy(unreachable?: string[]): void {
 async function assignRoleToNode(nodeId: string, roleName: string): Promise<void> {
   // Warn if role is already assigned to another node (#1389)
   const currentOwner = roleOwners.value[roleName]
-  if (
-    currentOwner &&
-    currentOwner !== nodeId &&
-    !ORCH_INFRA_ROLES.includes(roleName)
-  ) {
+  if (currentOwner && currentOwner !== nodeId) {
     const ownerLabel = getRoleOwnerLabel(roleName)
     const confirmed = confirm(
       `Role "${roleName}" is currently assigned to ${ownerLabel}. ` +
@@ -913,9 +912,15 @@ async function executePlaybookMigration(): Promise<void> {
 // Lifecycle
 // =============================================================================
 
-async function refresh(): Promise<void> {
+const REFRESH_READS = ['fleetServices', 'fleetStatus', 'serviceDefinitions', 'nodes', 'roles', 'fleetHealth']
+
+// A loader that catches its own failure resolves null/false (or rejects); only a real result is a success
+const readSucceeded = (r: PromiseSettledResult<unknown>): boolean =>
+  r.status === 'fulfilled' && r.value !== null && r.value !== false
+
+async function refresh(): Promise<boolean> {
   try {
-    // Use Promise.allSettled to continue even if some calls fail
+    // allSettled so one failed read does not stop the others
     const results = await Promise.allSettled([
       orchestration.fetchFleetServices(),
       orchestration.fetchFleetStatus(),
@@ -924,27 +929,26 @@ async function refresh(): Promise<void> {
       roles.fetchRoles(),
       roles.fetchFleetHealth(),
     ])
-
-    // Log any failures for debugging
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        const names = ['fleetServices', 'fleetStatus', 'serviceDefinitions', 'nodes', 'roles', 'fleetHealth']
-        logger.warn(`Failed to fetch ${names[index]}:`, result.reason)
-      }
-    })
+    const failed = REFRESH_READS.filter((_, i) => !readSucceeded(results[i]))
+    if (failed.length) logger.warn(`Failed to fetch: ${failed.join(', ')}`)
+    return failed.length < results.length
   } catch (err) {
     logger.error('Unexpected error during refresh:', err)
+    return false
   }
 }
 
+// #19482: shared dashboard policy; refresh() is false when every read failed. Refresh/Retry restart it
+let latestRefresh: Promise<boolean> = Promise.resolve(true)
+const refreshPoller = useDashboardPoller(async () => {
+  throwUnlessLoaded(await (latestRefresh = refresh()))
+}, 15000)
+const restartRefresh = () => (autoRefresh.value ? refreshPoller.start('') : (latestRefresh = refresh()))
+
 function toggleAutoRefresh(): void {
   autoRefresh.value = !autoRefresh.value
-  if (autoRefresh.value) {
-    refreshInterval = setInterval(refresh, 15000)
-  } else if (refreshInterval) {
-    clearInterval(refreshInterval)
-    refreshInterval = null
-  }
+  if (autoRefresh.value) refreshPoller.start('')
+  else refreshPoller.stop()
 }
 
 onMounted(async () => {
@@ -956,7 +960,8 @@ onMounted(async () => {
   }
 
   logger.info('Calling refresh()')
-  await refresh()
+  restartRefresh()
+  await latestRefresh
   fetchRoleOwners()
   logger.info('After refresh:', {
     nodes: orchestration.fleetStore.nodeList.length,
@@ -981,23 +986,17 @@ onMounted(async () => {
     logger.debug('Service status update:', nodeId, data.service_name, data.status)
   })
 
-  if (autoRefresh.value) {
-    refreshInterval = setInterval(refresh, 15000)
-  }
-
   document.addEventListener('click', handleClickOutsideCategoryMenu)
 })
 
 onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
   document.removeEventListener('click', handleClickOutsideCategoryMenu)
 })
 </script>
 
 <template>
   <div class="p-6">
+    <PollingPausedAlert :poller="refreshPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="refreshPoller.start('')" />
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
@@ -1028,7 +1027,7 @@ onUnmounted(() => {
           {{ $t('orchestrationView.autoRefresh') }}
         </label>
         <button
-          @click="refresh"
+          @click="restartRefresh"
           :disabled="orchestration.loading"
           class="btn btn-secondary flex items-center gap-2"
         >
@@ -1051,23 +1050,22 @@ onUnmounted(() => {
     </div>
 
     <!-- ERROR DISPLAY -->
-    <div v-if="orchestration.error" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-      <div class="flex items-start gap-3">
-        <svg class="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-        </svg>
-        <div class="flex-1">
-          <h3 class="text-sm font-medium text-red-800">{{ $t('orchestrationView.errorLoadingData') }}</h3>
-          <p class="mt-1 text-sm text-red-700">{{ orchestration.error }}</p>
-          <button
-            @click="refresh"
-            class="mt-2 text-sm text-red-600 hover:text-red-800 underline"
-          >
-            {{ $t('orchestrationView.retry') }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <BaseAlert
+      v-if="orchestration.error"
+      variant="error"
+      class="mb-4"
+      :title="$t('orchestrationView.errorLoadingData')"
+      :message="orchestration.error"
+    >
+      <template #actions>
+        <button
+          @click="restartRefresh"
+          class="text-sm underline"
+        >
+          {{ $t('orchestrationView.retry') }}
+        </button>
+      </template>
+    </BaseAlert>
 
     <!-- LOADING STATE -->
     <div v-if="orchestration.loading && !orchestration.fleetServices?.length" class="mb-4 p-8 bg-blue-50 border border-blue-200 rounded-lg text-center">
@@ -1329,7 +1327,7 @@ onUnmounted(() => {
               : $t('orchestrationView.tryChangingTheFilterOrSearch') }}
           </p>
           <button
-            @click="refresh"
+            @click="restartRefresh"
             class="px-4 py-2 text-sm bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200"
           >
             {{ $t('orchestrationView.refresh') }}
@@ -2133,15 +2131,7 @@ onUnmounted(() => {
                   <ServiceStatusBadge :status="node.status" />
                 </td>
                 <td class="px-4 py-2 text-sm text-gray-600">
-                  {{
-                    orchestration.fleetServices.length > 0
-                      ? orchestration.fleetServices.reduce(
-                          (sum, svc) => sum + svc.nodes.filter((n) => n.node_id === node.node_id).length,
-                          0
-                        )
-                      : 0
-                  }}
-                  services
+                  {{ t('orchestrationView.serviceCount', fleetServiceCount(node.node_id)) }}
                 </td>
                 <td class="px-4 py-2">
                   <div class="flex flex-wrap gap-1">

@@ -28,10 +28,18 @@ from api.anthropic_compat import router as anthropic_router
 from llm_shared.fallback_chain import FallbackChain, FallbackChainManager
 from llm_shared.models import LLMRequest, LLMResponse, ProviderType
 from llm_shared.optimization.rate_limiter import RateLimitError
+from llm_shared.provider_degradation import ProviderDegradationStore
 
 # ---------------------------------------------------------------------------
 # Test fixtures and helpers
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _fresh_degradation_store():
+    """A hop is skipped while its model is degraded (#19753), so one test's marks must not reach the next."""
+    with patch("llm_shared.model_fallback_coordinator.get_degradation_store", return_value=ProviderDegradationStore()):
+        yield
 
 
 @pytest.fixture
@@ -120,6 +128,9 @@ def _make_mock_provider(side_effects: list):
     call_count = [0]
 
     async def dispatch(request: LLMRequest) -> LLMResponse:
+        # BaseProvider.chat_completion records the serving provider before the call, so a
+        # failure carries its origin to the failover locality rule (#19753).
+        request.metadata["selected_provider"] = provider.provider_name
         idx = call_count[0]
         call_count[0] += 1
         effect = side_effects[min(idx, len(side_effects) - 1)]

@@ -28,7 +28,9 @@ from config import settings
 from models.database import Deployment, DeploymentStatus, Node, NodeStatus
 from models.schemas import DeploymentCreate, DeploymentResponse
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
+from services.ansible_utils import ansible_config_env, ansible_run_failure
 from services.encryption import decrypt_data
+from services.node_ssh_password import propose_password_deletion
 from services.yaml_scalar import yaml_double_quoted
 
 logger = logging.getLogger(__name__)
@@ -231,8 +233,8 @@ class DeploymentService:
         ssh_user = node.ssh_user or "autobot"
         ssh_port = node.ssh_port or 22
         ssh_password = None
-
-        if node.extra_data:
+        # #19483: a key-auth node keeps its stored password until a human removes it, but never logs in with it.
+        if node.extra_data and node.auth_method != "key":
             encrypted_password = node.extra_data.get("ssh_password")
             if encrypted_password:
                 # Check if password is encrypted (new format) or plaintext (legacy)
@@ -357,16 +359,14 @@ class DeploymentService:
             cmd.extend(["-e", f"ansible_port={ssh_port}"])
 
     def _get_ansible_environment(self) -> Dict[str, str]:
-        """Build the environment dict for Ansible execution.
-
-        Helper for _execute_ansible_playbook (Issue #665).
-        """
+        """Build the environment dict for Ansible execution (Issue #665)."""
         return {
             **os.environ,
             "ANSIBLE_FORCE_COLOR": "0",
             "ANSIBLE_NOCOLOR": "1",
             "ANSIBLE_HOST_KEY_CHECKING": "False",
             "ANSIBLE_SSH_RETRIES": "3",
+            **ansible_config_env(self.ansible_dir),
         }
 
     async def _execute_ansible_playbook(
@@ -405,7 +405,7 @@ class DeploymentService:
         try:
             if secrets_path:
                 cmd.extend(["-e", "@" + secrets_path])
-            return await self._run_ansible_command(cmd, "Ansible playbook failed")
+            return await self._run_ansible_command(cmd, "Ansible playbook failed", host)
         finally:
             if secrets_path:
                 Path(secrets_path).unlink(missing_ok=True)
@@ -444,7 +444,7 @@ class DeploymentService:
             return encrypted_password
 
     async def _handle_enrollment_success(self, db: AsyncSession, node: Node, output: str) -> None:
-        """Update node status and clear password after successful enrollment.
+        """Update node status after successful enrollment; the stored password stays (#19483).
 
         Helper for enroll_node (Issue #665).
 
@@ -459,13 +459,8 @@ class DeploymentService:
         # Update auth method to key-based (SSH keys deployed during enrollment)
         node.auth_method = "key"
 
-        # Clear stored password from extra_data (no longer needed)
-        if node.extra_data and "ssh_password" in node.extra_data:
-            extra_data = dict(node.extra_data)
-            del extra_data["ssh_password"]
-            node.extra_data = extra_data
-
         await db.commit()
+        await propose_password_deletion(node)  # #19483/#20046: proposed to the review queue, never deleted here
 
         logger.info("Enrollment completed for node %s - auth_method set to key", node.node_id)
 
@@ -519,7 +514,7 @@ class DeploymentService:
                 ssh_password=effective_password,
             )
 
-            # Handle success: update status, clear password, commit
+            # Handle success: update status, commit; the stored password stays (#19483)
             await self._handle_enrollment_success(db, node, output)
 
             return True, f"Agent deployed successfully. Output:\n{output}"
@@ -594,8 +589,8 @@ class DeploymentService:
             raise
         return path
 
-    async def _run_ansible_command(self, cmd: List[str], failure: str) -> str:
-        """Run an ansible-playbook command; return its output or raise on non-zero exit."""
+    async def _run_ansible_command(self, cmd: List[str], failure: str, host: str) -> str:
+        """Run a single-host ansible-playbook; raise unless the recap proves ``host`` ran (#19475)."""
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -603,10 +598,9 @@ class DeploymentService:
             cwd=str(self.ansible_dir),
             env=self._get_ansible_environment(),
         )
-        stdout, _ = await process.communicate()
-        output = stdout.decode("utf-8", errors="replace")
-        if process.returncode != 0:
-            raise RuntimeError(f"{failure}:\n{output}")
+        output = (await process.communicate())[0].decode("utf-8", errors="replace")
+        if problem := ansible_run_failure(output, host, process.returncode):
+            raise RuntimeError(f"{failure}:\n{problem}")
         return output
 
     async def _execute_enrollment_playbook(
@@ -631,7 +625,7 @@ class DeploymentService:
             if secrets_path:
                 cmd.extend(["-e", "@" + secrets_path])
             logger.debug("Running enrollment: %s", " ".join(cmd[:10]) + " ...")
-            return await self._run_ansible_command(cmd, "Enrollment playbook failed")
+            return await self._run_ansible_command(cmd, "Enrollment playbook failed", host)
         finally:
             if secrets_path:
                 Path(secrets_path).unlink(missing_ok=True)

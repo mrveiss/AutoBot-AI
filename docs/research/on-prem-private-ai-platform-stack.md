@@ -504,3 +504,21 @@ scope.
 Re-verified the file:line citations published in the filed issues against the working tree. Confirmed exactly: `tool_dispatch_guards.py:310`, `models/approval.py` (0 hits for `session_id`), `llm_shared/models.py:172`, `ssot_config.py:2138`, `models/process_run.py:104`, `sso_integration.py` 916 lines, `mfa.py` 19 lines. **Wrong by ~18 lines and corrected in #17221 and #17223:** the allow-list guard is at `openai_compat.py:331` (not :313) and provider selection at :361 (not :343); anthropic equivalents :275/:308. Every finding held on re-verification — only the coordinates were off.
 
 **Second citation audit:** running the new `verify-citations` gate over this doc flagged an ambiguous bare `search.py` reference at line 619. Resolving it showed the coordinate was also wrong — line 619 is `category: str | None = None`; the `mode: str = "hybrid"` default is at `knowledge/search.py:622`, `_run_search` at :614, and `enable_reranking: bool = False` at :230 (not :229). The finding held; the coordinates did not. The gate caught what the spot-check missed.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #17217 — Umbrella: declared controls that do not execute — the regulated-readiness gap
+- #17218 — guard(ci): fail when a declared control has no production call path
+- #17219 — security(audit): three audit writers document tamper-resistance they do not implement
+- #17220 — security(approvals): the sensitive-tool gate is inert without a work item, and credential read is ungated by construction
+- #17221 — security(llm-api): model allow-list is skipped for JWT callers, and the rate limiter is keyed by IP rather than credential
+- #17222 — feat(auth): product end users have no SSO or MFA path — the enterprise identity code is unreachable
+- #17223 — arch(llm): LLM request policy is enforced at three independent surfaces, and tenancy reaches none of them
+- #17224 — observability: no correlation id spans input, tool calls, model decisions, approvals and output
+- #17225 — tech-debt(audit): #6475 closed on three parallel audit systems — there are now six
+- #17226 — feat(deploy): air-gapped operation is achievable by hand but is not a mode, and nothing tests that it holds
+- #17227 — reliability(agents): internal tool dispatch has no replay protection — idempotency covers opt-in HTTP only
+- #17228 — arch(data): no data-residency register, and vector isolation is a query predicate rather than a boundary
+- #17229 — feat(agents): an agent run leaves no durable record designed to be read back

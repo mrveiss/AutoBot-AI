@@ -12,6 +12,8 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.task_result import task_success
+from knowledge.search_filters import filter_for_user_id
+from knowledge.write_scope import caller_write_scope
 from models.task_context import TaskExecutionContext
 
 from .base import TaskHandler
@@ -28,7 +30,9 @@ class KBAddFileHandler(TaskHandler):
         file_type = ctx.require_payload_value("file_type")
         metadata = ctx.get_payload_value("metadata")
 
-        result = await ctx.worker.knowledge_base.add_file(file_path, file_type, metadata)
+        kb = await ctx.worker.resolve_knowledge_base()
+        with caller_write_scope(ctx.metadata.get("user_id"), ctx.metadata.get("org_id"), ctx.user_role):  # #19517
+            result = await kb.add_file(file_path, file_type, metadata)
 
         ctx.audit_log(
             "kb_add_file",
@@ -47,7 +51,11 @@ class KBSearchHandler(TaskHandler):
         query = ctx.require_payload_value("query")
         n_results = ctx.get_payload_value("n_results", 5)
 
-        kb_results = await ctx.worker.knowledge_base.search(query, n_results)
+        kb = await ctx.worker.resolve_knowledge_base()
+        kb_results = await kb.search(query, n_results)
+        # #16665: the task's triggering user, stamped by the orchestration layer in ctx.metadata -- never the
+        # payload, which a caller controls. No user, no results.
+        kb_results = await filter_for_user_id(kb_results, kb, ctx.metadata.get("user_id"))
 
         result = task_success("KB search successful.", data={"results": kb_results})
 
@@ -68,7 +76,9 @@ class KBStoreFactHandler(TaskHandler):
         content = ctx.require_payload_value("content")
         metadata = ctx.get_payload_value("metadata")
 
-        result = await ctx.worker.knowledge_base.store_fact(content, metadata)
+        kb = await ctx.worker.resolve_knowledge_base()
+        with caller_write_scope(ctx.metadata.get("user_id"), ctx.metadata.get("org_id"), ctx.user_role):  # #19517
+            result = await kb.store_fact(content, metadata)
 
         ctx.audit_log(
             "kb_store_fact",

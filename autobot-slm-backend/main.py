@@ -66,6 +66,7 @@ from api import (
 )
 from api.code_source import router as code_source_router
 from api.memory_lifecycle_proxy import router as memory_lifecycle_router
+from api.node_ssh_password_internal import router as node_ssh_password_internal_router
 from api.performance import metrics_router as performance_metrics_router
 from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
@@ -97,7 +98,7 @@ from services.generated_system_secrets import (
 )
 from services.git_tracker import start_version_checker
 from services.local_admin_socket import start_local_admin_socket
-from services.node_seeder import sync_slm_node_roles
+from services.node_seeder import heal_existing_slm_node_roles
 from services.reconciler import reconciler_service
 from services.schedule_executor import start_schedule_executor, stop_schedule_executor
 from services.security_posture_auditor import (
@@ -197,7 +198,7 @@ async def _startup_database() -> None:
         await db_service.initialize()
         logger.info("Database initialized")
     except Exception as e:
-        logger.error("Database initialization failed: %s", e, exc_info=True)
+        logger.error("Database initialization failed: %s (%s)", db_service.describe_failure(e), e, exc_info=True)
         raise
 
 
@@ -441,11 +442,7 @@ async def _ensure_local_node() -> None:
                     local_ip,
                 )
                 existing.ip_address = local_ip
-            # Heal detected_roles so the fleet role view shows the SLM roles as
-            # running (older rows predate this).
-            if list(existing.detected_roles or []) != _SLM_ROLES:
-                existing.detected_roles = _SLM_ROLES
-            await sync_slm_node_roles(session, _SLM_NODE_ID, list(existing.roles or []), _SLM_ROLES)
+            await heal_existing_slm_node_roles(session, existing, _SLM_NODE_ID, _SLM_ROLES)
             await session.commit()
             return
 
@@ -479,20 +476,18 @@ async def _ensure_admin_user():
     """Create or sync the admin user.
 
     When SLM_ADMIN_PASSWORD is set (Ansible-managed), ensures the
-    admin password always matches. This makes the secrets file the
-    single source of truth for the admin credential.
+    admin password always matches. SLM_ADMIN_PASSWORD_FILE seeds a fresh
+    install only (#19368); services/admin_seed_password.py resolves both.
 
     Uses the user_management UserService and slm_users database (Issue #1900).
     """
-    import os
     import secrets
 
     from autobot_shared.user_management.user_service_errors import DuplicateUserError
-    from services.auth import auth_service
+    from services.admin_password_sync import sync_admin_password_at_startup
+    from services.admin_seed_password import RANDOM_ADMIN_NOTICE, password_for_existing_admin, password_for_new_admin
     from user_management.database import get_slm_session
     from user_management.services import TenantContext, UserService
-
-    env_password = os.getenv("SLM_ADMIN_PASSWORD", "")
 
     async with get_slm_session() as db:
         context = TenantContext(is_platform_admin=True)
@@ -501,16 +496,15 @@ async def _ensure_admin_user():
         existing = await user_service.get_user_by_username("admin")
 
         if existing:
-            if env_password:
-                existing.password_hash = auth_service.hash_password(env_password)
-                await db.flush()
-                logger.info("Admin password synced from SLM_ADMIN_PASSWORD")
+            env_password = password_for_existing_admin()
+            if env_password:  # rehash + revoke older sessions only on a real change; an epoch outage logs, never aborts
+                await sync_admin_password_at_startup(db, existing, env_password)
             return
 
-        password = env_password
+        password = password_for_new_admin()
         if not password:
             password = secrets.token_urlsafe(16)
-            logger.critical("Initial admin password set — CHANGE IMMEDIATELY")
+            logger.critical(RANDOM_ADMIN_NOTICE)
 
         try:
             await user_service.create_user(
@@ -584,10 +578,9 @@ app = FastAPI(
     root_path=os.getenv("SLM_ROOT_PATH", ""),
     docs_url="/api/docs" if settings.debug else None,
     redoc_url="/api/redoc" if settings.debug else None,
-    # Security: MVA-3397 - Trust X-Forwarded-For from nginx proxy for rate limiting
-    proxy_headers=True,
-    forwarded_allow_ips=settings.trusted_proxies,
 )
+# MVA-3397 / #9616: the client IP behind nginx comes from get_client_ip(..., settings.trusted_proxies);
+# proxy-header trust is a uvicorn setting, never a FastAPI() argument (0.145 rejects it).
 # #16428 review: FastAPI's default 422 body echoes the submitted payload --
 # SlmAdminUserCreate.password and VNCCredentialCreate.password have the same
 # exposure the audit found on autobot-backend's secrets endpoint.
@@ -608,11 +601,8 @@ install_middleware(app, cors_origins=settings.cors_origins)  # the whole stack, 
 #
 # Two routes below are declared here rather than moved into a router, because
 # the idiom itself — not the auth outcome — is what has to be visible:
-#   root (@app.get("/")) — service banner; no credentials exist yet to check,
-#       and it discloses only a static name/version string
-#   prometheus_registry_metrics (@app.get("/metrics")) — top-level prometheus
-#       scrape target (#10851); a scraper cannot authenticate, same reasoning
-#       as performance_metrics_router above
+#   root (@app.get("/")) — static name/version banner; no credentials exist yet to check
+#   prometheus_registry_metrics (@app.get("/metrics")) — top-level scrape target (#10851); a scraper cannot authenticate
 #
 # This list is enforced, not decorative: tests/api/
 # test_prometheus_scrape_is_unauthenticated_14339.py fails if any router is
@@ -625,14 +615,14 @@ install_middleware(app, cors_origins=settings.cors_origins)  # the whole stack, 
 # entirely because the check only ever looked for `app.include_router(...)`.
 
 # Service-management gate (#10198, epic #10193): all other routers require
-# Permission.SERVICE_MANAGEMENT.  Ordinary users (role=user/readonly/analyst/editor)
-# do not have this permission and receive 403.  Admin and Operator do.
+# Permission.SERVICE_MANAGEMENT.  #20631: the SLM is admin only, so the operator role, which
+# holds it, still gets 403: get_current_user, run first by this gate, refuses non-admins.
 _SM = [Depends(require_service_management)]
 
 # #11450: routers that ALSO carry machine-to-machine agent-ingest endpoints
 # (heartbeat/enroll, roles/definitions, code-sync/notify, events/sync). The
 # node agent presents AUTOBOT_INTERNAL_API_KEY (no user JWT), so these mount
-# with a gate that accepts the internal key OR a service.management user —
+# with a gate that accepts the internal key OR an admin session (as _SM above) —
 # preserving #10198's human-surface gate while un-breaking the agent plane.
 _SM_OR_AGENT = [Depends(require_service_management_or_internal)]
 
@@ -670,6 +660,7 @@ app.include_router(errors_router, prefix="/api", dependencies=_SM)
 app.include_router(events_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(external_agents_router, prefix="/api", dependencies=_SM)
 app.include_router(node_rdp_router, prefix="/api", dependencies=_SM)
+app.include_router(node_ssh_password_internal_router, prefix="/api", dependencies=_SM_OR_AGENT)  # key-only, #20046
 app.include_router(rdp_router, prefix="/api", dependencies=_SM)
 app.include_router(node_vnc_router, prefix="/api", dependencies=_SM)
 app.include_router(vnc_router, prefix="/api", dependencies=_SM)
@@ -745,9 +736,9 @@ async def prometheus_registry_metrics() -> Response:
 
 
 if __name__ == "__main__":
-    import os
-
     import uvicorn
+
+    from autobot_shared.env_registry_tls import DEFAULT_TLS_REMOTE_CERT_DIR
 
     # TLS Configuration - Issue #725 Phase 5
     tls_enabled = os.getenv("SLM_TLS_ENABLED", "false").lower() == "true"
@@ -756,7 +747,7 @@ if __name__ == "__main__":
     port = settings.port
 
     if tls_enabled:
-        cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "/etc/autobot/certs")
+        cert_dir = os.getenv("AUTOBOT_TLS_REMOTE_CERT_DIR", DEFAULT_TLS_REMOTE_CERT_DIR)  # node's flat dir (#19317)
         ssl_keyfile = os.path.join(cert_dir, "server-key.pem")
         ssl_certfile = os.path.join(cert_dir, "server-cert.pem")
         port = int(os.getenv("SLM_TLS_PORT", "8443"))

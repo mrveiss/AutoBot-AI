@@ -126,9 +126,9 @@ class _ProviderRouter:
             logger.error("Built-in provider search failed: %s", exc)
             return []
 
-    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
+    async def get_entity(self, entity_id: str, *, owner: Any = None) -> Dict[str, Any] | None:
         try:
-            return await self.built_in.get_entity(entity_id)
+            return await self.built_in.get_entity(entity_id, owner=owner)
         except Exception as exc:
             logger.error("Error getting entity: %s", exc)
             return None

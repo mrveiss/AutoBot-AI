@@ -14,6 +14,7 @@ query enhancement (Issue #249 Phase 3).
 import pytest
 
 from advanced_rag_optimizer import RAGMetrics, RankedResult
+from knowledge.search_filters import SYSTEM_SCOPE
 from services.chat_knowledge_service import (
     ChatKnowledgeService,
     ConversationContextEnhancer,
@@ -42,6 +43,7 @@ async def test_retrieve_relevant_knowledge_success(mock_rag_service, sample_sear
         query="How to configure Redis?",
         top_k=5,
         score_threshold=0.7,  # Should filter out fact3
+        principal=SYSTEM_SCOPE,
     )
 
     assert "KNOWLEDGE CONTEXT:" in context
@@ -61,7 +63,7 @@ async def test_retrieve_relevant_knowledge_empty_results(mock_rag_service) -> No
     mock_rag_service.advanced_search.return_value = ([], RAGMetrics())
     service = ChatKnowledgeService(mock_rag_service)
 
-    context, citations = await service.retrieve_relevant_knowledge(query="Nonexistent topic")
+    context, citations = await service.retrieve_relevant_knowledge(query="Nonexistent topic", principal=SYSTEM_SCOPE)
 
     assert context == ""
     assert citations == []
@@ -75,7 +77,7 @@ async def test_retrieve_relevant_knowledge_graceful_degradation(mock_rag_service
     service = ChatKnowledgeService(mock_rag_service)
 
     # Execute - should not raise exception
-    context, citations = await service.retrieve_relevant_knowledge(query="Test query")
+    context, citations = await service.retrieve_relevant_knowledge(query="Test query", principal=SYSTEM_SCOPE)
 
     # Verify - returns empty results instead of failing
     assert context == ""
@@ -369,8 +371,7 @@ async def test_smart_retrieve_knowledge_skips_for_commands(mock_rag_service, sam
     service = ChatKnowledgeService(mock_rag_service)
 
     context, citations, intent = await service.smart_retrieve_knowledge(
-        query="git status",
-        force_retrieval=False,
+        query="git status", force_retrieval=False, principal=SYSTEM_SCOPE
     )
 
     assert context == ""
@@ -391,8 +392,7 @@ async def test_smart_retrieve_knowledge_retrieves_for_questions(mock_rag_service
     service = ChatKnowledgeService(mock_rag_service)
 
     context, citations, intent = await service.smart_retrieve_knowledge(
-        query="How do I configure Redis?",
-        force_retrieval=False,
+        query="How do I configure Redis?", force_retrieval=False, principal=SYSTEM_SCOPE
     )
 
     assert "KNOWLEDGE CONTEXT:" in context
@@ -415,6 +415,7 @@ async def test_smart_retrieve_knowledge_force_retrieval(mock_rag_service, sample
     context, citations, intent = await service.smart_retrieve_knowledge(
         query="git status",
         force_retrieval=True,  # Force retrieval
+        principal=SYSTEM_SCOPE,
     )
 
     assert "KNOWLEDGE CONTEXT:" in context
@@ -430,8 +431,7 @@ async def test_smart_retrieve_knowledge_skips_for_greetings(mock_rag_service, sa
     service = ChatKnowledgeService(mock_rag_service)
 
     context, citations, intent = await service.smart_retrieve_knowledge(
-        query="Hello!",
-        force_retrieval=False,
+        query="Hello!", force_retrieval=False, principal=SYSTEM_SCOPE
     )
 
     assert context == ""
@@ -574,6 +574,7 @@ async def test_conversation_aware_retrieve_with_context(mock_rag_service, sample
         query="How do I restart it?",
         conversation_history=conversation_history,
         force_retrieval=False,
+        principal=SYSTEM_SCOPE,
     )
 
     assert intent.intent == QueryKnowledgeIntent.KNOWLEDGE_QUERY
@@ -597,9 +598,7 @@ async def test_conversation_aware_retrieve_skips_commands(mock_rag_service, samp
 
     # Command should skip retrieval even with conversation history
     context, citations, intent, enhanced = await service.conversation_aware_retrieve(
-        query="git status",
-        conversation_history=conversation_history,
-        force_retrieval=False,
+        query="git status", conversation_history=conversation_history, force_retrieval=False, principal=SYSTEM_SCOPE
     )
 
     assert context == ""
@@ -621,9 +620,7 @@ async def test_conversation_aware_retrieve_force_retrieval(mock_rag_service, sam
     service = ChatKnowledgeService(mock_rag_service)
 
     context, citations, intent, enhanced = await service.conversation_aware_retrieve(
-        query="git status",
-        conversation_history=[],
-        force_retrieval=True,
+        query="git status", conversation_history=[], force_retrieval=True, principal=SYSTEM_SCOPE
     )
 
     assert "KNOWLEDGE CONTEXT:" in context
@@ -647,6 +644,7 @@ async def test_conversation_aware_retrieve_without_enhancement(mock_rag_service,
         query="What is the default Redis port configuration?",
         conversation_history=[],
         force_retrieval=False,
+        principal=SYSTEM_SCOPE,
     )
 
     assert "KNOWLEDGE CONTEXT:" in context

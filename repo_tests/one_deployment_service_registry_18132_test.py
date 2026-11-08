@@ -30,6 +30,7 @@ import functools
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 _TREE = "autobot-infrastructure/"
@@ -59,20 +60,25 @@ _CONSUMERS = tuple(
 )
 
 
+#: What a consumer may import: the class, or the shared process-wide accessor that builds it (#18964).
+_SHARED_REGISTRY_NAMES = frozenset({"ServiceRegistry", "get_deployment_registry"})
+
+
 def _defines_registry(source: str) -> bool:
     """True when `source` declares a class named ServiceRegistry at any depth."""
     return any(
-        isinstance(node, ast.ClassDef) and node.name == "ServiceRegistry" for node in ast.walk(ast.parse(source))
+        isinstance(node, ast.ClassDef) and node.name == "ServiceRegistry"
+        for node in ast.walk(parse_cache.parse(source))
     )
 
 
 def _imports_shared_registry(source: str) -> bool:
-    """True when `source` takes ServiceRegistry from the sibling deployment_registry."""
+    """True when `source` takes the registry, or its one accessor (#18964), from the sibling deployment_registry."""
     return any(
         isinstance(node, ast.ImportFrom)
         and node.module == "deployment_registry"
-        and any(alias.name == "ServiceRegistry" for alias in node.names)
-        for node in ast.walk(ast.parse(source))
+        and any(alias.name in _SHARED_REGISTRY_NAMES for alias in node.names)
+        for node in ast.walk(parse_cache.parse(source))
     )
 
 
@@ -89,7 +95,7 @@ def _definers() -> tuple[tuple[str, ...], int]:
         if not rel.endswith(".py"):
             continue
         source = _read(rel)
-        if "ServiceRegistry" not in source:
+        if not any(name in source for name in _SHARED_REGISTRY_NAMES):
             continue
         parsed += 1
         if _defines_registry(source):
@@ -111,7 +117,7 @@ def test_the_matcher_tells_a_definition_from_a_mention(label: str, source: str, 
 
 
 def test_the_scan_is_not_vacuous() -> None:
-    """Every consumer mentions the class, so a scan parsing fewer has looked elsewhere."""
+    """Every consumer mentions the class or its accessor, so a scan parsing fewer has looked elsewhere."""
     _, parsed = _definers()
     assert parsed >= len(_CONSUMERS) + 1, f"parsed {parsed} files mentioning ServiceRegistry"
 
@@ -128,12 +134,12 @@ def test_the_infrastructure_tree_has_one_service_registry() -> None:
 def test_each_former_copy_imports_the_shared_registry(rel: str) -> None:
     assert _imports_shared_registry(
         _read(rel)
-    ), f"#18132: {rel} no longer imports ServiceRegistry from deployment_registry"
+    ), f"#18132: {rel} no longer imports ServiceRegistry or get_deployment_registry from deployment_registry"
 
 
 def test_service_status_is_the_canonical_health_enum() -> None:
     """#6973: the scripts' status type is an alias of HealthStatus, never a fresh Enum."""
-    tree = ast.parse(_read(_CANONICAL))
+    tree = parse_cache.parse(_read(_CANONICAL))
     aliases = [
         node.value.id
         for node in tree.body
@@ -166,7 +172,7 @@ def _declares_service_table(source: str | ast.AST) -> bool:
 
 
 def _tree(source: str | ast.AST) -> ast.AST:
-    return ast.parse(source) if isinstance(source, str) else source
+    return parse_cache.parse(source) if isinstance(source, str) else source
 
 
 def _calls_with_slash(fn: ast.AST, attr: str) -> bool:
@@ -258,7 +264,7 @@ def _repo_scan() -> tuple[tuple[str, ...], tuple[str, ...], int, int]:
             source = _read(rel)
             if not _could_declare(source):
                 continue
-            tree = ast.parse(source)
+            tree = parse_cache.parse(source)
         except (OSError, SyntaxError, UnicodeDecodeError):
             continue
         parsed += 1
@@ -298,7 +304,7 @@ def test_no_url_join_is_declared_outside_the_core() -> None:
 
 @pytest.mark.parametrize("rel", ("autobot-backend/utils/service_registry.py", _CANONICAL))
 def test_both_registries_consume_the_core(rel: str) -> None:
-    tree = ast.parse(_read(rel))
+    tree = parse_cache.parse(_read(rel))
     imported = {
         alias.name
         for node in ast.walk(tree)

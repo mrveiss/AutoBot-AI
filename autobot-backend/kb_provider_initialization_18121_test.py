@@ -143,10 +143,25 @@ def test_canonical_factories_still_initialize_before_returning() -> None:
     """
     factory = _REPO / "autobot-backend" / "knowledge_factory.py"
     tree = _parse(factory)
-    for name in ("_create_new_knowledge_base", "get_knowledge_base_async"):
+    # #18122 S1: get_knowledge_base_async delegates to _create_under_lock, which calls
+    # _create_new_knowledge_base -- the one function that constructs and initializes.
+    for name in ("_create_new_knowledge_base",):
         fn = _find_function(tree, name)
         assert fn is not None, f"knowledge_factory.{name} not found"
         assert "initialize" in _called_names(fn), (
             f"knowledge_factory.{name} no longer calls initialize(); every provider that "
             "delegates to it would start handing out uninitialized instances"
         )
+
+    delegate = _find_function(tree, "get_knowledge_base_async")
+    assert delegate is not None and "_create_under_lock" in _called_names(delegate)
+
+    # The chain must be unbroken from both public entry points down to the constructor.
+    entry = _find_function(tree, "get_or_create_knowledge_base")
+    assert entry is not None and "_create_under_lock" in _called_names(
+        entry
+    ), "knowledge_factory.get_or_create_knowledge_base no longer reaches _create_under_lock"
+    locked = _find_function(tree, "_create_under_lock")
+    assert locked is not None and "_create_new_knowledge_base" in _called_names(
+        locked
+    ), "knowledge_factory._create_under_lock no longer reaches _create_new_knowledge_base"

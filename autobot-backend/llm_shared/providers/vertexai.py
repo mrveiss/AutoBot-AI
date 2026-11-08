@@ -31,6 +31,14 @@ from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from autobot_shared.ssot_constants import (
+    GOOGLE_GEMINI15_FLASH,
+    GOOGLE_GEMINI15_PRO,
+    GOOGLE_GEMINI20_FLASH,
+    GOOGLE_GEMINI25_FLASH,
+    GOOGLE_GEMINI25_PRO,
+)
+from autobot_shared.ssot_hosted_models import hosted_default_model
 from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
 
@@ -42,17 +50,17 @@ from .cache_utils import sorted_for_cache
 logger = get_logger(__name__)
 
 _DEFAULT_LOCATION = "us-central1"
-_DEFAULT_MODEL = "gemini-2.5-flash"
+_DEFAULT_MODEL = hosted_default_model("vertexai")  # #15501
 
 # Models routed through AnthropicVertex instead of the vertexai SDK.
 _CLAUDE_MODEL_PREFIXES = ("claude-",)
 
 _VERTEX_GEMINI_MODELS = [
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
+    GOOGLE_GEMINI25_PRO,
+    GOOGLE_GEMINI25_FLASH,
+    GOOGLE_GEMINI20_FLASH,
+    GOOGLE_GEMINI15_PRO,
+    GOOGLE_GEMINI15_FLASH,
 ]
 
 _VERTEX_CLAUDE_MODELS = [

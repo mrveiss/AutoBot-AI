@@ -3,6 +3,8 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 
+import { isHttpError } from '@autobot/ui'
+
 /**
  * Shared "logout on 401" guard for auth-flow endpoints (#12654).
  *
@@ -23,7 +25,7 @@ export function createAuthGuard(logout: () => void) {
     try {
       return await op()
     } catch (error) {
-      if (error instanceof Error && error.message.startsWith('HTTP 401')) {
+      if (isHttpError(error) && error.status === 401) {
         logout()
       }
       throw error

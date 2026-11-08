@@ -333,3 +333,10 @@ through `ParallelToolExecutor` is NOT-DETERMINED, which affects G3's severity; a
 
 One untrusted-content note: the harness neutralised instruction-shaped control tags in one
 subagent's report before it reached this session. Nothing in it was acted on as an instruction.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #12497 — kb/web: fetch reliability (proxy/egress, SSL surfacing, per-domain politeness/rate-limit)
+- #17258 — tracking(docs): standing cross-link for research analyses with no umbrella of their own

@@ -20,15 +20,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from llc.models.company_os import LLCProcess, LLCWorkflowNode
 from llc.models.company_os_enums import NodeKind, WorkflowKind
 from models.workflow import Workflow
-from user_management.models.role import Role
 
+from .._role_guard import role_exists_in_company
 from .errors import CompanyOsNotFound
 from .skill_resolution import MetaSkillDef
 
 
 async def require_role_in_company(session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> None:
-    result = await session.execute(select(Role.id).where(Role.id == role_id, Role.org_id == company_id))
-    if result.scalar_one_or_none() is None:
+    if not await role_exists_in_company(session, company_id, role_id):
         raise CompanyOsNotFound(f"role {role_id} does not exist in this company")
 
 

@@ -37,6 +37,7 @@ from repo_tests.python_filter_uncovered_reads import (
 )
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 yaml = pytest.importorskip("yaml")
 
@@ -99,7 +100,7 @@ def _composed_reads(source: str) -> set[str]:
     written yet composes that way too.
     """
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return set()
 
@@ -161,7 +162,15 @@ def _is_covered(path: str, patterns: list[str]) -> bool:
             return True
         if fnmatch.fnmatch(path, pattern.replace("**/", "*/").replace("**", "*")):
             return True
+        if pattern.startswith("**/") and fnmatch.fnmatch(path, pattern[3:].replace("**", "*")):
+            return True  # the real filter's `**/` also matches zero directories (#19817)
     return False
+
+
+def test_a_leading_double_star_covers_the_repository_root_too() -> None:
+    assert _is_covered("Dockerfile.x", ["**/Dockerfile*"])
+    assert _is_covered("docker/slm/Dockerfile", ["**/Dockerfile*"])
+    assert not _is_covered("notes/Dockerfile.md", ["**/*.Dockerfile"])
 
 
 def _record(candidate: str, guard: str, patterns: list[str], reads: dict[str, set[str]]) -> None:

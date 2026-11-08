@@ -1,5 +1,6 @@
 <!-- Issue #1359: i18n string extraction -->
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -12,12 +13,23 @@
 
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useToast } from '@/composables/useToast'
 import { useBrowserAutomation } from '@/composables/useBrowserAutomation'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
+const { showToast } = useToast()
 const logger = createLogger('BrowserAutomationView')
+
+// Each flag returns with its route (#18747); no backend route serves these controls yet.
+// Launch: POST /browser/launch is not served.
+const LAUNCH_ENABLED = false
+// Run automation script: POST /browser/automation/run is not served.
+const AUTOMATION_SCRIPT_ENABLED = false
+// Type text / Execute script: the served MCP routes key a Browser VM context by session_id,
+// which is not the research-browser session id this view lists (playwright-server.js getSessionEntry).
+const SESSION_INPUT_ENABLED = false
 
 const {
   workerStatus,
@@ -43,6 +55,13 @@ const selectorInput = ref('')
 const textInput = ref('')
 const scriptInput = ref('')
 const automationScriptInput = ref('')
+// The full result stays readable and copyable here; the toast only reports status.
+const lastResult = ref<{ title: string; output: string } | null>(null)
+
+function showResult(title: string, result: unknown) {
+  lastResult.value = { title, output: JSON.stringify(result, null, 2) ?? '' }
+  showToast(title, 'success')
+}
 
 const statusColor = computed(() => {
   if (!workerStatus.value) return 'status-unknown'
@@ -101,14 +120,14 @@ async function handleExecuteScript() {
   if (!currentSession.value || !scriptInput.value.trim()) return
   const result = await executeScript(currentSession.value.id, scriptInput.value)
   logger.debug('Script result:', result)
-  alert(`${t('views.browserAutomation.scriptResult')}:\n\n${JSON.stringify(result, null, 2)}`)
+  showResult(t('views.browserAutomation.scriptResult'), result)
 }
 
 async function handleRunAutomation() {
   if (!automationScriptInput.value.trim()) return
   const result = await runAutomationScript(automationScriptInput.value)
   logger.debug('Automation result:', result)
-  alert(`${t('views.browserAutomation.automationCompleted')}:\n\n${JSON.stringify(result, null, 2)}`)
+  showResult(t('views.browserAutomation.automationCompleted'), result)
 }
 
 function selectSession(session: typeof sessions.value[0]) {
@@ -153,7 +172,7 @@ function selectSession(session: typeof sessions.value[0]) {
       <button @click="activeTab = 'sessions'" :class="['tab-btn', { active: activeTab === 'sessions' }]">
         <Icon name="window-restore" /> {{ $t('views.browserAutomation.sessionsTab', { count: sessions.length }) }}
       </button>
-      <button @click="activeTab = 'scripts'" :class="['tab-btn', { active: activeTab === 'scripts' }]">
+      <button v-if="AUTOMATION_SCRIPT_ENABLED" @click="activeTab = 'scripts'" :class="['tab-btn', { active: activeTab === 'scripts' }]">
         <Icon name="code" /> {{ $t('views.browserAutomation.automationScripts') }}
       </button>
     </nav>
@@ -168,22 +187,22 @@ function selectSession(session: typeof sessions.value[0]) {
               <span class="card-title">{{ $t('views.browserAutomation.activeSession') }}</span>
               <span class="session-url">{{ currentSession.url }}</span>
             </div>
-            <button @click="closeSession(currentSession.id)" class="btn-action-danger">
+            <BaseButton variant="error" size="sm" @click="closeSession(currentSession.id)">
               {{ $t('views.browserAutomation.closeSession') }}
-            </button>
+            </BaseButton>
           </div>
         </div>
 
-        <div v-if="!currentSession" class="card">
+        <div v-if="LAUNCH_ENABLED && !currentSession" class="card">
           <div class="card-header">
             <span class="card-title">{{ $t('views.browserAutomation.launchNewSession') }}</span>
           </div>
           <div class="card-body">
             <div class="input-action-row">
               <input v-model="urlInput" type="url" placeholder="https://example.com" class="field-input">
-              <button @click="handleLaunchSession" :disabled="isLoading" class="btn-action-primary">
+              <BaseButton size="sm" @click="handleLaunchSession" :disabled="isLoading">
                 {{ $t('views.browserAutomation.launchBrowser') }}
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -195,9 +214,9 @@ function selectSession(session: typeof sessions.value[0]) {
           <div class="card-body">
             <div class="input-action-row">
               <input v-model="urlInput" type="url" placeholder="https://example.com" class="field-input">
-              <button @click="handleNavigate" :disabled="isLoading" class="btn-action-primary">
+              <BaseButton size="sm" @click="handleNavigate" :disabled="isLoading">
                 {{ $t('views.browserAutomation.navigate') }}
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -209,15 +228,15 @@ function selectSession(session: typeof sessions.value[0]) {
           <div class="card-body interaction-fields">
             <div class="input-action-row">
               <input v-model="selectorInput" type="text" :placeholder="$t('views.browserAutomation.cssSelectorPlaceholder')" class="field-input">
-              <button @click="handleClick" :disabled="isLoading" class="btn-action-primary">
+              <BaseButton size="sm" @click="handleClick" :disabled="isLoading">
                 {{ $t('views.browserAutomation.click') }}
-              </button>
+              </BaseButton>
             </div>
-            <div class="input-action-row">
+            <div v-if="SESSION_INPUT_ENABLED" class="input-action-row">
               <input v-model="textInput" type="text" :placeholder="$t('views.browserAutomation.textToType')" class="field-input">
-              <button @click="handleType" :disabled="isLoading" class="btn-action-primary">
+              <BaseButton size="sm" @click="handleType" :disabled="isLoading">
                 {{ $t('views.browserAutomation.typeText') }}
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -227,14 +246,14 @@ function selectSession(session: typeof sessions.value[0]) {
             <span class="card-title">{{ $t('views.browserAutomation.actions') }}</span>
           </div>
           <div class="card-body actions-panel">
-            <button @click="handleScreenshot" :disabled="isLoading" class="btn-action-secondary btn-full">
+            <BaseButton variant="secondary" size="sm" block @click="handleScreenshot" :disabled="isLoading">
               <Icon name="camera" /> {{ $t('views.browserAutomation.takeScreenshot') }}
-            </button>
-            <div class="script-block">
+            </BaseButton>
+            <div v-if="SESSION_INPUT_ENABLED" class="script-block">
               <textarea v-model="scriptInput" rows="4" :placeholder="$t('views.browserAutomation.jsPlaceholder')" class="field-input code-textarea"></textarea>
-              <button @click="handleExecuteScript" :disabled="isLoading" class="btn-action-primary btn-full">
+              <BaseButton size="sm" block @click="handleExecuteScript" :disabled="isLoading">
                 {{ $t('views.browserAutomation.executeScript') }}
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -294,7 +313,7 @@ function selectSession(session: typeof sessions.value[0]) {
       </div>
 
       <!-- Scripts Tab -->
-      <div v-show="activeTab === 'scripts'" class="tab-panel">
+      <div v-if="AUTOMATION_SCRIPT_ENABLED" v-show="activeTab === 'scripts'" class="tab-panel">
         <div class="card">
           <div class="card-header">
             <span class="card-title">{{ $t('views.browserAutomation.runAutomationScript') }}</span>
@@ -302,11 +321,21 @@ function selectSession(session: typeof sessions.value[0]) {
           <div class="card-body">
             <textarea v-model="automationScriptInput" rows="12" :placeholder="$t('views.browserAutomation.automationScriptPlaceholder')" class="field-input code-textarea"></textarea>
             <div class="action-row">
-              <button @click="handleRunAutomation" :disabled="isLoading || !automationScriptInput.trim()" class="btn-action-primary">
+              <BaseButton size="sm" @click="handleRunAutomation" :disabled="isLoading || !automationScriptInput.trim()">
                 {{ $t('views.browserAutomation.runAutomation') }}
-              </button>
+              </BaseButton>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Last script / automation result -->
+      <div v-if="lastResult" class="card">
+        <div class="card-header">
+          <span class="card-title">{{ lastResult.title }}</span>
+        </div>
+        <div class="card-body">
+          <div class="script-block"><pre>{{ lastResult.output }}</pre></div>
         </div>
       </div>
     </div>
@@ -340,12 +369,9 @@ function selectSession(session: typeof sessions.value[0]) {
 .input-action-row .field-input { flex: 1; }
 .interaction-fields { display: flex; flex-direction: column; gap: var(--spacing-4); }
 .actions-panel { display: flex; flex-direction: column; gap: var(--spacing-4); }
-.btn-full { width: 100%; }
 .script-block { display: flex; flex-direction: column; gap: var(--spacing-2); }
 .code-textarea { font-family: var(--font-mono); font-size: var(--text-sm); resize: vertical; }
 .action-row { display: flex; gap: var(--spacing-3); margin-top: var(--spacing-4); }
-.btn-action-danger { display: inline-flex; align-items: center; gap: var(--spacing-2); padding: var(--spacing-2) var(--spacing-4); font-size: var(--text-sm); font-weight: var(--font-medium); color: var(--text-on-error); background: var(--color-error); border: none; border-radius: var(--radius-md); cursor: pointer; transition: background var(--duration-150) var(--ease-in-out); }
-.btn-action-danger:hover { background: var(--color-error-hover); }
 .screenshots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--spacing-4); }
 .screenshot-item { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); overflow: hidden; }
 .screenshot-item img { width: 100%; height: auto; display: block; }
@@ -364,4 +390,5 @@ function selectSession(session: typeof sessions.value[0]) {
   .input-action-row { flex-direction: column; }
   .screenshots-grid { grid-template-columns: 1fr 1fr; }
 }
+.script-block pre { margin: 0; padding: var(--spacing-3); max-height: 24rem; overflow: auto; font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-primary); background: var(--bg-secondary); border-radius: var(--radius-md); white-space: pre-wrap; word-break: break-word; user-select: text; }
 </style>

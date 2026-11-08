@@ -19,17 +19,18 @@ import asyncio
 import threading
 import time
 
-from celery.result import AsyncResult
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
 from api.codebase_analytics.source_scope import SourceIdQuery, cached_task_result, source_scoped_prefix
+from api.codebase_analytics.task_routes import add_clear_stuck_route
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import AnalyticsConfig
 from tasks.analytics_tasks import run_duplicate_analysis
 from utils.cancel_tokens import new_cancel_token, signal_cancel_token, submit_cancellable
-from utils.celery_task_status import celery_result_to_status, store_latest_task_id
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 from utils.io_executor import get_analytics_executor
 
 from ..duplicate_detector import DuplicateCodeDetector, detect_duplicates_async
@@ -464,20 +465,11 @@ async def start_duplicate_analysis(source_id: SourceIdQuery):
     return {"task_id": result.id, "status": "pending"}
 
 
-@router.get("/duplicates/status/{task_id}")
+@router.get("/duplicates/status/{task_id}", dependencies=[Depends(get_current_user)])
 @bounded(180.0)
 async def get_duplicate_status(task_id: str):
     """Get duplicate analysis task status."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
-@router.post("/duplicates/tasks/clear-stuck")
-@bounded(180.0)
-async def clear_stuck_dup_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-):
-    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
+add_clear_stuck_route(router, "/duplicates/tasks/clear-stuck", name="clear_stuck_dup_tasks", bounded_s=180.0)

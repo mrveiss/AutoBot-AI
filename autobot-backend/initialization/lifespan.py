@@ -23,11 +23,7 @@ from fastapi import FastAPI
 from autobot_shared.env_utils import env_raw, truthy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
-from autobot_shared.tracing import (
-    instrument_aiohttp,
-    instrument_redis,
-    shutdown_tracing,
-)
+from autobot_shared.tracing import instrument_aiohttp, instrument_redis, shutdown_tracing
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
 from config.manager import get_config_manager
@@ -36,6 +32,7 @@ from initialization import lifespan_shutdown as shutdown_steps
 from initialization.background_workers import start_background_workers
 from initialization.neural_mesh_wiring import wire_neural_mesh_components
 from initialization.startup_error_file import persist_startup_error
+from initialization.system_knowledge_import import start_system_knowledge_import
 from knowledge_factory import get_or_create_knowledge_base
 from llm_shared.pricing.sync_cache_scheduler import start_pricing_cache_scheduler
 from security_layer import SecurityLayer
@@ -555,7 +552,6 @@ async def _init_transcriber_db(app: FastAPI) -> None:
     injection layer (``transcriber.deps.get_transcriber_db_from_request``).
     """
     import os
-    from pathlib import Path as _Path
 
     enabled = os.getenv("TRANSCRIBER_ENABLED", "true").lower() == "true"
     if not enabled:
@@ -563,19 +559,17 @@ async def _init_transcriber_db(app: FastAPI) -> None:
         return
     try:
         from transcriber.database import Database
+        from transcriber.upload_security import get_upload_base_dir, transcriber_data_dir
 
-        # Resolve to an absolute path: ``create_recording`` rejects relative
-        # filepaths, and relying on cwd is fragile across launch contexts
-        # (GH#12310 — every upload 500'd because the default was relative).
-        data_dir = _Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber")).resolve()
+        data_dir = transcriber_data_dir()
         data_dir.mkdir(parents=True, exist_ok=True)
-        (data_dir / "uploads").mkdir(exist_ok=True)
+        upload_dir = get_upload_base_dir()  # the one the path guard allows (#19823)
         (data_dir / "processed").mkdir(exist_ok=True)
         (data_dir / "exports").mkdir(exist_ok=True)
         db = Database(str(data_dir / "transcriber.db"))
         await db.connect()
         app.state.transcriber_db = db
-        app.state.transcriber_upload_dir = str(data_dir / "uploads")
+        app.state.transcriber_upload_dir = str(upload_dir)
         app.state.transcriber_export_dir = str(data_dir / "exports")
         logger.info("Transcriber DB initialized")
     except Exception as _tc_err:
@@ -712,6 +706,7 @@ async def _init_knowledge_base(app: FastAPI):
         knowledge_base = await get_or_create_knowledge_base(app)
         await update_app_state("knowledge_base", knowledge_base)
         logger.info("✅ [ 70%] Knowledge Base: Knowledge base ready")
+        start_system_knowledge_import(app)  # #19347: once per startup, after the KB is ready
 
         # Issue #2309: Wire KB into the already-initialized chat workflow manager.
         # Phase 1 initializes the manager before the KB is ready, leaving
@@ -862,10 +857,10 @@ async def _run_background_doc_indexing():
 
         # Fix HNSW pickle format after indexing (#1390)
         from autobot_shared.paths import chromadb_data_dir
-        from utils.chromadb_client import _fix_hnsw_pickle_format
+        from utils.chromadb_store_repairs import repair_hnsw_pickles_locked
 
         chroma_path = chromadb_data_dir()
-        _fix_hnsw_pickle_format(chroma_path)
+        await asyncio.to_thread(repair_hnsw_pickles_locked, chroma_path)  # flock wait + fsync: off the loop
     except Exception as e:
         logger.warning("Background doc indexing failed (non-critical): %s", e)
 
@@ -1151,7 +1146,7 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
         from services.rag_service import RAGService, register_shared_mesh_components
 
         if app.state.knowledge_base:
-            # #18141: the shared RAGConfig -- graph-RAG no longer runs on its own 10 s budget.
+            # #18141: both services read the shared RAGConfig; graph-RAG's deadline is RAGConfig.graph_timeout_seconds.
             rag_service = RAGService(knowledge_base=app.state.knowledge_base)
             await rag_service.initialize()
 
@@ -1248,6 +1243,7 @@ async def _init_slm_client():
     # the decorator only fires on import, and a node whose SLM init raises is
     # precisely the node whose link state must be reported. Registering inside
     # the try would omit the component on exactly the broken nodes.
+    from services import first_admin_link_probe  # noqa: F401
     from services import slm_link_probe  # noqa: F401
 
     try:
@@ -1427,17 +1423,14 @@ async def _seed_agent_registry() -> None:
 
 
 async def _seed_default_admin() -> None:
-    """Seed the default platform-admin into autobot_users (#10199).
-
-    Idempotent — skips if any admin user already exists or if
-    AUTOBOT_ADMIN_PASSWORD is not configured.  Non-fatal: errors are
-    logged and swallowed so a seed failure never blocks startup.
-    """
+    """Seed the default platform-admin (#10199) after linking the SLM's first admin (#10200). Non-fatal."""
     logger.info("[ 97%%] Admin Seed: seeding default admin user...")
     try:
         from user_management.database import get_async_session_factory
+        from user_management.services import person_link_service
         from user_management.services.seed import seed_default_admin
 
+        await person_link_service.link_first_slm_admin_at_startup()
         async with get_async_session_factory()() as session:
             await seed_default_admin(session)
             # seed_default_admin (via UserService) only flushes; without an
@@ -1559,9 +1552,9 @@ async def _init_orchestrator(app: FastAPI) -> None:
 
 
 async def _wire_npu_task_queue() -> None:
-    """Wire NPUWorkerManager into the global TaskQueue for per-worker task tracking (#2985).
+    """Wire NPUWorkerManager into the global RedisTaskQueue for per-worker task tracking (#2985).
 
-    TaskQueue._worker_loop already calls assign_task_to_worker / release_worker_task
+    RedisTaskQueue._worker_loop already calls assign_task_to_worker / release_worker_task
     behind an ``if self.npu_worker_manager is not None:`` guard, but the attribute was
     never set to an actual instance — making all tracking code dead (#2944).  This helper
     runs during Phase 2 (non-critical) so that startup is never blocked by NPU issues.
@@ -1904,11 +1897,9 @@ async def _init_web_researcher(app: FastAPI) -> None:
     try:
         from agents.web_researcher import _load_web_research_config, get_web_researcher
 
-        # Load stored config then enable — passing only {"enabled": True} would
-        # discard all other settings (rate limits, timeouts, circuit breaker).
-        config = _load_web_research_config()
-        config["enabled"] = True
-        researcher = get_web_researcher(config=config)
+        # The saved settings, enabled included: an admin's "off" survives a restart (#19226).
+        # Unsaved, web research defaults to on (services/web_research_config.py).
+        researcher = get_web_researcher(config=_load_web_research_config())
         await researcher.initialize()
         app.state.web_researcher = researcher
         logger.info("[ 99%%] WebResearcher: Browser automation ready")
@@ -1985,6 +1976,9 @@ async def initialize_background_services(app: FastAPI):
         )
         logger.info("=== PHASE 2: Background Services Initialization ===")
 
+        await _recover_agent_sessions(app)
+        await _init_heartbeat_scheduler(app)
+        await _init_llc_routine_scheduler(app)
         # Issue #876: Root cause fixed — metrics collector no longer calls backend
         # self-health endpoint (circular deadlock). Phase 2 re-enabled (#970).
         await _init_knowledge_base(app)
@@ -1998,9 +1992,6 @@ async def initialize_background_services(app: FastAPI):
         await start_background_workers(app)
         await _auto_index_documentation()
         await _init_log_forwarding()
-        await _recover_agent_sessions(app)
-        await _init_heartbeat_scheduler(app)
-        await _init_llc_routine_scheduler(app)
         await _init_skill_health_scheduler(app)
         await _init_skill_distillation_scheduler(app)
         await _init_liveness_monitor(app)
@@ -2288,10 +2279,10 @@ def create_lifespan_manager():
         loop.set_default_executor(_executor)
         logger.info("🧵 Bounded thread pool configured (max %d workers)", MAX_WORKER_THREADS)
 
-        # Register the running event loop for sync-endpoint audit scheduling (#1568)
-        from middleware.audit_middleware import set_main_event_loop
+        # Register the running event loop for sync-endpoint audit scheduling (#1568), run_or_schedule (#20887)
+        from initialization.main_loop import register_main_loops
 
-        set_main_event_loop(asyncio.get_running_loop())
+        register_main_loops(asyncio.get_running_loop())
 
         # Phase 1: Critical initialization (BLOCKING)
         await initialize_critical_services(app)

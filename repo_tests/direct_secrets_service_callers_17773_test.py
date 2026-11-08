@@ -44,6 +44,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 #: Class names whose import means "this module talks to a secrets service directly".
 _SERVICE_CLASSES = frozenset({"EnvelopeSecretsService", "SecretsService"})
 
@@ -159,7 +161,7 @@ def _imports_a_service_class(source: str) -> bool:
     as a skip instead, and ``test_every_module_in_the_population_parses`` makes
     it loud.
     """
-    module = ast.parse(source)
+    module = parse_cache.parse(source)
 
     imported: set[str] = set()
     for node in ast.walk(module):
@@ -216,18 +218,16 @@ def _discover(root: Path) -> list[str]:
 #: two trees, production only, minus the two service definitions. Different
 #: populations, so neither number validates the other.
 #:
-#: floor=2600 against a measured 2704 leaves **104 files of downward margin** --
-#: the number to watch when re-pinning. It is chosen to still fire on the failure
+#: The floor is computed from the base commit (#19676) and still fires on the failure
 #: this guard exists to catch: losing ``autobot_shared`` drops the walk to 2493
-#: and losing the backend drops it to 211, both well under the floor. growth=200
+#: and losing the backend drops it to 211, both far below it. growth=200
 #: (~7% of the population, this repo's rough maintenance interval) keeps
-#: ``verify_floor`` quiet until the tree reaches 2800. skips=0 is measured, not
+#: ``verify_floor`` quiet through ordinary growth. skips=0 is measured, not
 #: assumed: nothing is skipped silently, because an unparseable file fails
 #: ``test_every_module_in_the_population_parses`` outright.
 REACH = declare(
     "direct-secrets-service-callers",
     discover=_discover,
-    floor=2773,
     growth=200,
     # Scope as data (#17844): "the backend and shared trees" named neither, and this guard is
     # one of the seven whose unqualified claim #17844 measured.
@@ -312,7 +312,7 @@ def test_the_delete_path_still_takes_no_authorizing_vault() -> None:
     delete = next(
         (
             node
-            for node in ast.walk(ast.parse(source))
+            for node in ast.walk(parse_cache.parse(source))
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "delete"
         ),
         None,

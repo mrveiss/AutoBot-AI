@@ -35,6 +35,7 @@ import asyncio
 import contextlib
 import importlib
 import sys
+import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -159,6 +160,16 @@ with _real_modules_swapped():
 # Any already-authenticated principal — the route functions only receive the
 # decoded payload (the auth dependency itself is not exercised here).
 _PRINCIPAL = {"admin": True, "role": "admin", "sub": "tester"}
+
+
+def _use_service_double(monkeypatch, **methods) -> None:
+    """Bind ``_stateful.replication_service`` to a plain double carrying *methods*.
+
+    The global is the conftest's MagicMock stub. pytest >= 9.2 ``monkeypatch.setattr``
+    reads the original statically, misses a mock's auto-child, and its undo
+    ``delattr``s it, so the next test's patch raises ``AttributeError`` (#19878).
+    """
+    monkeypatch.setattr(_stateful, "replication_service", types.SimpleNamespace(**methods))
 
 
 async def _close_session_and_engine(session, engine) -> None:
@@ -540,11 +551,7 @@ class TestStatefulReplications:
 
     async def test_promote_translates_service_success(self, db, monkeypatch):
         """promote_replica maps a service (True, msg) into an ActionResponse."""
-        monkeypatch.setattr(
-            _stateful.replication_service,
-            "promote_replica",
-            AsyncMock(return_value=(True, "promoted")),
-        )
+        _use_service_double(monkeypatch, promote_replica=AsyncMock(return_value=(True, "promoted")))
         result = await _stateful.promote_replica(replication_id="rep-x", db=db, _=_PRINCIPAL)
         assert result.action == "promote"
         assert result.success is True
@@ -552,22 +559,14 @@ class TestStatefulReplications:
         assert result.resource_id == "rep-x"
 
     async def test_promote_service_failure_400(self, db, monkeypatch):
-        monkeypatch.setattr(
-            _stateful.replication_service,
-            "promote_replica",
-            AsyncMock(return_value=(False, "not a replica")),
-        )
+        _use_service_double(monkeypatch, promote_replica=AsyncMock(return_value=(False, "not a replica")))
         with pytest.raises(HTTPException) as exc:
             await _stateful.promote_replica(replication_id="rep-x", db=db, _=_PRINCIPAL)
         assert exc.value.status_code == 400
         assert exc.value.detail == "not a replica"
 
     async def test_stop_translates_service_success(self, db, monkeypatch):
-        monkeypatch.setattr(
-            _stateful.replication_service,
-            "stop_replication",
-            AsyncMock(return_value=(True, "stopped")),
-        )
+        _use_service_double(monkeypatch, stop_replication=AsyncMock(return_value=(True, "stopped")))
         result = await _stateful.stop_replication(replication_id="rep-y", db=db, _=_PRINCIPAL)
         assert result.action == "stop"
         assert result.success is True

@@ -35,14 +35,14 @@ from urllib.parse import quote
 
 import aiohttp
 
-from autobot_shared.auth import BearerAuth
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import redact_content
 from autobot_shared.time_utils import now_utc, parse_utc_iso
-from knowledge.connectors.base import VENDOR_API_EGRESS, AbstractConnector
+from knowledge.connectors.base import VENDOR_API_EGRESS
 from knowledge.connectors.content_extraction import extract_pdf_document as _extract_pdf_document
 from knowledge.connectors.content_extraction import extract_text_from_docx as _extract_text_from_docx
+from knowledge.connectors.drive_base import DriveConnector
 from knowledge.connectors.egress import next_link_on_base
 from knowledge.connectors.models import (
     ChangeInfo,
@@ -106,17 +106,14 @@ def _extract_text_from_pptx(content_bytes: bytes) -> str:
         return ""
 
 
-# Issue #12659: detect_changes()/_classify_change() moved to AbstractConnector
-# (byte-identical to gdrive.py's copies — see
-# AbstractConnector._detect_changes_via_file_listing()/_classify_change()).
-# _load_ts()/_store_ts() are KEPT as connector-specific overrides below: this
-# connector's checks (explicit `redis is None` guard, strict `isinstance(value, str)`)
-# differ from the other 6 connectors' copies, so folding them into the base
-# implementation would silently drop that defensive behavior.
+# Issue #12659: detect_changes()/_classify_change() live on AbstractConnector
+# (_detect_changes_via_file_listing()). _load_ts()/_store_ts() stay as overrides below:
+# this connector's `redis is None` guard and strict `isinstance(value, str)` check
+# differ from the other connectors' copies and the base would drop them.
 
 
 @ConnectorRegistry.register("onedrive")
-class OneDriveConnector(AbstractConnector):
+class OneDriveConnector(DriveConnector):
     """Knowledge connector for OneDrive and SharePoint document libraries.
 
     Indexes documents from OneDrive personal/business or SharePoint libraries
@@ -129,51 +126,21 @@ class OneDriveConnector(AbstractConnector):
     connector_type = "onedrive"
     # Issue #4421: needs OAuth2 access token (tier 2 = credentials/OAuth)
     tier = 2
+    drive_label = "OneDrive"
+    _default_extensions = _DEFAULT_EXTENSIONS
+    _extra_output_properties = {
+        "site_id": {"type": "string", "description": "SharePoint site ID (if applicable)"},
+    }
     # Issue #12659: Graph API's per-file last-modified key (base default is
     # "modifiedTime", which matches gdrive.py's Drive API field instead).
     _modified_time_field = "lastModifiedDateTime"
 
-    @classmethod
-    def auth_schema(cls) -> type:
-        """OneDrive requires a bearer token (OAuth2 access token) — Issue #8145."""
-        return BearerAuth
-
-    @classmethod
-    def output_schema(cls) -> Dict[str, Any]:
-        """Return JSONSchema for ContentResult.metadata (Issue #8147)."""
-        return {
-            "type": "object",
-            "required": ["file_id", "file_name", "file_extension", "last_modified"],
-            "properties": {
-                "file_id": {"type": "string", "description": "OneDrive file ID"},
-                "file_name": {"type": "string", "description": "File name with extension"},
-                "file_extension": {"type": "string", "description": "File extension (e.g., .docx)"},
-                "file_path": {"type": "string", "description": "Full path in drive"},
-                "file_size": {"type": "integer", "description": "File size in bytes"},
-                "last_modified": {"type": "string", "description": "ISO-8601 last modified datetime"},
-                "web_url": {"type": "string", "description": "Web URL to view file"},
-                "drive_id": {"type": "string", "description": "Drive ID"},
-                "site_id": {"type": "string", "description": "SharePoint site ID (if applicable)"},
-            },
-        }
-
-    @property
-    def max_concurrency(self) -> int:
-        """Max parallel file fetches (Issue #8148). Default 4 for OneDrive."""
-        cfg_val = self.config.max_concurrency
-        return cfg_val if cfg_val is not None else 4
-
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
         cfg = config.config
-        self._token: str = cfg.get("token", "")
         self._source_type: str = cfg.get("source_type", "onedrive")  # "onedrive" or "sharepoint"
-        self._drive_id: Optional[str] = cfg.get("drive_id")
         self._site_id: Optional[str] = cfg.get("site_id")
         self._folder_path: str = cfg.get("folder_path", "/")
-        self._sync_subfolders: bool = cfg.get("sync_subfolders", True)
-        self._max_file_size: int = cfg.get("max_file_size_mb", 100) * 1024 * 1024
-        self._supported_extensions: List[str] = cfg.get("supported_extensions", _DEFAULT_EXTENSIONS)
         self._graph_url: str = cfg.get("graph_api_base", _GRAPH_API_BASE).rstrip("/")
 
     # ------------------------------------------------------------------
@@ -195,16 +162,6 @@ class OneDriveConnector(AbstractConnector):
         except Exception as exc:
             self.logger.error("OneDrive test_connection raised: %s", exc)
             return False
-
-    async def discover_sources(self) -> List[SourceInfo]:
-        """Return a SourceInfo for every supported file in the configured drive/folder."""
-        files = await self._list_all_files()
-        sources: List[SourceInfo] = []
-        for file_item in files:
-            source_info = self._file_to_source_info(file_item)
-            if source_info:
-                sources.append(source_info)
-        return sources
 
     async def fetch_content(self, source_id: str) -> ContentResult | None:
         """Fetch and extract text content for a OneDrive file by ID."""

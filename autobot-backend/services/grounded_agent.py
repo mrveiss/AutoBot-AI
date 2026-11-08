@@ -37,6 +37,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import CLAIM_VERIFICATION_ENABLED
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.search_filters import filter_for_user_id
 from knowledge_factory import get_or_create_knowledge_base
 from llm_shared.types import LLMType
 from services.ai_stack_client import get_ai_stack_client
@@ -108,6 +109,7 @@ class GroundedAgent:
         user_query: str,
         agent_response: str,
         context: Dict[str, Any] | None = None,
+        user_id: str | None = None,
     ) -> GroundedResponse:
         """
         Main entry point: Ground an agent response with KB verification.
@@ -124,6 +126,7 @@ class GroundedAgent:
             user_query: Original user query
             agent_response: Response to ground
             context: Optional context dict (metadata, conversation_id, etc.)
+            user_id: The user the KB is read as (#16665); None grounds on no KB facts
 
         Returns:
             GroundedResponse with all claims grounded and sourced
@@ -146,7 +149,7 @@ class GroundedAgent:
         conflicts = []
 
         for claim in claims:
-            verified = await self._classify_and_verify_claim(claim)
+            verified = await self._classify_and_verify_claim(claim, user_id)
             # UNKNOWN = not found in KB / needs research — it must count as
             # unverified, not verified (#11834: _classify_and_verify_claim
             # returns UNKNOWN, never UNVERIFIABLE, so unknown claims were
@@ -318,7 +321,7 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
             logger.warning("Skipping malformed claim item: %s", e)
             return None
 
-    async def _classify_and_verify_claim(self, claim: Claim) -> VerifiedClaim:
+    async def _classify_and_verify_claim(self, claim: Claim, user_id: str | None = None) -> VerifiedClaim:
         """Classify claim against KB and verify if needed.
 
         When AUTOBOT_CLAIM_VERIFICATION_ENABLED=true, UNKNOWN claims are escalated
@@ -340,9 +343,10 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
                 top_k=5,
                 filters=RESEARCH_QUARANTINE_FILTER,
             )
+            search_results = await filter_for_user_id(search_results or [], self.kb, user_id)  # #16665
 
             if not search_results:
-                return await self._escalate_to_claim_verifier(claim, "No matching KB facts found")
+                return await self._escalate_to_claim_verifier(claim, "No matching KB facts found", user_id)
 
             best_match = search_results[0]
             match_confidence = best_match.get("similarity_score", 0.0)
@@ -353,7 +357,7 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
             elif match_confidence > 0.5:
                 status = ClaimStatus.VERIFIED
             else:
-                return await self._escalate_to_claim_verifier(claim, best_match.get("content", "")[:200])
+                return await self._escalate_to_claim_verifier(claim, best_match.get("content", "")[:200], user_id)
 
             return VerifiedClaim(
                 claim=claim,
@@ -373,7 +377,9 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
                 evidence=[f"Classification error: {str(e)[:100]}"],
             )
 
-    async def _escalate_to_claim_verifier(self, claim: Claim, kb_evidence: str) -> VerifiedClaim:
+    async def _escalate_to_claim_verifier(
+        self, claim: Claim, kb_evidence: str, user_id: str | None = None
+    ) -> VerifiedClaim:
         """Escalate a low-confidence claim to ClaimVerifier when enabled (#10602).
 
         Returns UNKNOWN VerifiedClaim when CLAIM_VERIFICATION_ENABLED=false (default).
@@ -391,7 +397,7 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
 
         try:
             verifier = _make_claim_verifier(self.kb)
-            rag_result = await verifier.kb_rag_search(claim.claim_text)
+            rag_result = await verifier.kb_rag_search(claim.claim_text, user_id)
 
             if rag_result and rag_result.confidence >= 0.7:
                 logger.info(

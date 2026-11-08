@@ -161,12 +161,16 @@ def harness(real_auth_middleware, monkeypatch):
     gates = MagicMock()
     for method in _GATE_ACTIONS.values():
         setattr(gates.return_value, method, AsyncMock(return_value=_gate_approval()))
+    # a visible row: ownership has its own tests (#18413); this file is about the human-decider check
+    gates.return_value.get_visible = AsyncMock(return_value=_gate_approval())
     logger = MagicMock()
     with (
         patch.object(llc_api.ApprovalService, "decide", new=decide),
         patch.object(llc_api.ApprovalService, "publish_decided", new=AsyncMock()),
         patch.object(llc_api.ApprovalService, "log_decision_to_kb", new=AsyncMock()),
         patch.object(llc_api, "logger", new=logger),
+        # The real board check runs: this caller is an owner of the approval's company.
+        patch("llc.services.authz.membership_role", new=AsyncMock(return_value="owner")),
         patch.object(gates_api, "ApprovalGateService", new=gates),
     ):
         yield SimpleNamespace(

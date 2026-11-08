@@ -23,3 +23,11 @@ class GraphInvalid(CompanyOsError):
     def __init__(self, errors: List[str]) -> None:
         super().__init__("; ".join(errors))
         self.errors = errors
+
+
+class ConversionBlocked(CompanyOsConflict):
+    """A plan cannot be previewed, approved or converted yet (409); carries the unmet gate items."""
+
+    def __init__(self, missing: List) -> None:
+        super().__init__("; ".join(f"{m.gate}: {m.message}" for m in missing))
+        self.missing = missing

@@ -36,12 +36,11 @@ before collection reaches anything here, which is what this move buys.
 from __future__ import annotations
 
 import importlib.util
-import subprocess
 import sys
 import types
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, isolated_git_env, make_repo
 
 _SERVICES_DIR = Path(__file__).parent.parent.parent / "services"
 
@@ -106,23 +105,16 @@ _is_lexically_contained = _sd._is_lexically_contained
 # Fixture git repo helpers
 # ---------------------------------------------------------------------------
 
-_GIT_ENV = {
-    **scrubbed_git_env(),
-    "GIT_AUTHOR_NAME": "t",
-    "GIT_AUTHOR_EMAIL": "t@e",
-    "GIT_COMMITTER_NAME": "t",
-    "GIT_COMMITTER_EMAIL": "t@e",
-}
+_GIT_ENV = isolated_git_env()
 
 
 def _git(repo: Path, *args: str) -> str:
-    result = subprocess.run(["git", "-C", str(repo), *args], check=True, env=_GIT_ENV, capture_output=True, text=True)
-    return result.stdout.strip()
+    return git(repo, *args).stdout.strip()
 
 
 def _init_repo(repo: Path) -> None:
     repo.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True, env=_GIT_ENV)
+    make_repo(repo, default_branch="main")
 
 
 def _commit_all(repo: Path, message: str) -> str:

@@ -51,6 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from check_run_status import (  # noqa: E402
     ACCEPTABLE,
     RUNNING,
+    CheckRunsIncomplete,
     all_pages,
     check_runs_for,
     latest_per_name,
@@ -156,7 +157,7 @@ EXIT_GATE_ERROR = 2
 #: a bare `except Exception` here would convert a genuine bug in the verdict
 #: logic into a tidy "could not reach a verdict", which is the same substitution
 #: of a plausible answer for a real one that the narrow list avoids.
-GATE_ERRORS = (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, OSError)
+GATE_ERRORS = (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, OSError, CheckRunsIncomplete)
 
 
 def declared(verdict: str, detail: str = "") -> str:

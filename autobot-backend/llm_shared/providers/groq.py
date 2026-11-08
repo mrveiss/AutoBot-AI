@@ -27,6 +27,7 @@ from __future__ import annotations
 from typing import List
 
 from autobot_shared.ssot_config import config
+from autobot_shared.ssot_hosted_models import hosted_default_model
 from constants.model_constants import (
     GROQ_GEMMA2_9B,
     GROQ_LLAMA3_8B,
@@ -49,7 +50,7 @@ GROQ_MODELS: List[str] = [
     GROQ_GEMMA2_9B,
 ]
 
-_DEFAULT_MODEL = GROQ_LLAMA31_8B
+_DEFAULT_MODEL = hosted_default_model("groq")  # #15501
 
 
 class GroqProvider(OpenAICompatibleProvider):

@@ -21,15 +21,15 @@ from dataclasses import dataclass
 import pytest
 
 from user_management import database as user_db
-from user_management.config import DeploymentMode, FeatureFlags
+from user_management.config import UserManagementMode, UserModeFeatures
 
 
 @dataclass
 class _StubDeploymentConfig:
     """Minimal stand-in for ``DeploymentConfig`` -- postgres enabled, fixed URL."""
 
-    mode: DeploymentMode = DeploymentMode.SINGLE_COMPANY
-    features: FeatureFlags = None
+    mode: UserManagementMode = UserManagementMode.SINGLE_COMPANY
+    features: UserModeFeatures = None
     postgres_enabled: bool = True
     postgres_host: str = "test-host"
     postgres_port: int = 5432
@@ -39,7 +39,7 @@ class _StubDeploymentConfig:
 
     def __post_init__(self):
         if self.features is None:
-            self.features = FeatureFlags()
+            self.features = UserModeFeatures()
 
     @property
     def postgres_url(self) -> str:

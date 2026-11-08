@@ -99,7 +99,7 @@ declare -A HV_SSOT_PORTS=(
     ["6080"]="config.port.vnc (AUTOBOT_VNC_PORT)"
     ["8080"]="config.port.aistack (AUTOBOT_AI_STACK_PORT)"
     ["8081"]="config.port.npu (AUTOBOT_NPU_WORKER_PORT)"
-    ["8082"]="config.port.npu (AUTOBOT_NPU_WORKER_PORT)"
+    ["8082"]="config.port.npu_windows (AUTOBOT_NPU_WORKER_WINDOWS_PORT)"
     ["3000"]="config.port.* from ssot_config"
     # #14371: 8443, 5432 and 9090 come from detector 1's PORT_PATTERN, which was
     # DECLARED AND NEVER USED — the variable was assigned at the top of the
@@ -227,7 +227,7 @@ _HV_EXCLUDE_RE+='|(^|/)repo_tests/'
 # every exempted file traceable to the reason it exists.
 _HV_EXCLUDE_RE+='|(^|/)tests/fixtures/defect_[0-9]+/'
 _HV_EXCLUDE_RE+='|(ssot_config\.py|ssot-config\.ts|ssot_mappings\.py|registry_defaults\.py|threshold_constants\.py)'
-_HV_EXCLUDE_RE+='|(path_constants\.py|network_constants\.py|security_constants\.py|constants/network\.ts)'
+_HV_EXCLUDE_RE+='|(path_constants\.py|network_constants\.py|security_constants\.py|fleet_constants\.py|constants/network\.ts)'
 _HV_EXCLUDE_RE+='|(/constants/|config\.py$|config\.yaml$|\.env|\.example$|\.lock$)'
 # The detectors themselves: their bodies are literal tables of every SSOT IP,
 # port and model. They are SSOT-definition files exactly like ssot_mappings.py,
@@ -642,14 +642,14 @@ hv_scan_tree() {
     # ~790MB tree on the way. Pruning the directory is the same decision made
     # one step earlier.
     for skip in node_modules .venv venv dist build __pycache__; do args+=("--exclude-dir=${skip}"); done
-    [ -d "$root" ] || return 0
+    [ -e "$root" ] || return 0
     while IFS= read -r raw; do
         [ -n "$raw" ] || continue
         file="${raw%%:*}"; raw="${raw#*:}"
         n="${raw%%:*}";   line="${raw#*:}"
         hv_file_in_scope "$file" || continue
         hv_scan_line "$file" "$n" "$line"
-    done < <(grep -rnE "${args[@]}" -e "$(hv_prefilter_pattern)" "$root" 2>/dev/null || true)
+    done < <(grep -rnHE "${args[@]}" -e "$(hv_prefilter_pattern)" "$root" 2>/dev/null || true)
     return 0
 }
 

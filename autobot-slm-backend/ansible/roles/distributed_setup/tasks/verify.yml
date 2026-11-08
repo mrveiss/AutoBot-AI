@@ -9,7 +9,9 @@
   command: redis-cli --version
   register: redis_cli_verify
   changed_when: false
-  when: redis_cli_install
+  when:
+    - redis_cli_install
+    - not ansible_check_mode
 
 - name: Verify SSH key exists
   stat:
@@ -53,7 +55,7 @@
   debug:
     msg:
       - "=== Distributed Setup Verification ==="
-      - "Redis CLI: {{ 'Installed' if redis_cli_verify.rc == 0 else 'Not installed' }}"
+      - "Redis CLI: {{ 'not probed under --check' if redis_cli_verify.rc is not defined else ('Installed' if redis_cli_verify.rc == 0 else 'Not installed') }}"
       - "SSH Key: {{ 'Present' if ssh_key_verify.stat.exists else 'Missing' }}"
       - "Configuration files: {{ config_files_verify.results | selectattr('stat.exists') | list | length }}/{{ config_files_verify.results | length }}"
       - "Script files: {{ script_files_verify.results | selectattr('stat.exists') | list | length }}/{{ script_files_verify.results | length }}"

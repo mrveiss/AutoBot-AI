@@ -42,6 +42,7 @@ from typing import Any, Dict, List, Mapping, Sequence, Tuple
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from media.document.sections import Section
 from media.document.zip_formats import SUFFIX_BY_FORMAT, sniff_zip_format
 
 logger = get_logger(__name__)
@@ -185,6 +186,9 @@ class ExtractedDocument:
     # never looked", and the caller cannot tell which — PDF always returned []
     # while DOCX did real work, from an identical-looking result.
     tables_attempted: bool = False
+    # #18826: heading/section structure in document order (media/document/sections.py). HTML
+    # populates it; DOCX (outline levels, tables in position) is #17985; PDF none yet.
+    sections: Tuple[Section, ...] = ()
 
     @property
     def char_count(self) -> int:

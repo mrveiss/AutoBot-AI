@@ -18,12 +18,19 @@ from functools import cached_property
 from pathlib import Path
 from typing import Optional
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, field_validator
 from pydantic_settings import BaseSettings
 
+from autobot_shared import postgres_identity as pg
+from autobot_shared.fleet_constants import DEFAULT_HEARTBEAT_INTERVAL
 from autobot_shared.secret_redaction import RedactedReprMixin
+from autobot_shared.service_registry_core import DeploymentMode, resolve_deployment_mode
+from user_management.config import get_autobot_db_config, get_slm_db_config
 
 logger = logging.getLogger(__name__)
+
+#: The boolean spellings pydantic accepts for a ``bool`` setting.
+_BOOL_WORDS = frozenset({"1", "0", "true", "false", "yes", "no", "on", "off", "t", "f", "y", "n"})
 
 # Filename for the auto-generated persistent keys file inside data_dir.
 # Issue #1726 — keeps keys stable across restarts when env vars are absent.
@@ -172,6 +179,36 @@ def _get_ssot_backend_url() -> str:
         return "http://127.0.0.1:8001"  # canonical: ignore py-hardcoded-url - bootstrap: ssot_config unavailable
 
 
+#: #19322: the backend's old name for the manager's node id, now a deprecated alias of
+#: AUTOBOT_SLM_NODE_ID. The name stays live as the SLM agent's OWN per-host id
+#: (slm-agent.service sets it on every node), which is why the manager's id left it.
+_LEGACY_SLM_NODE_ID_VAR = "SLM_NODE_ID"
+
+
+def _resolve_slm_node_id() -> str:
+    """The SLM manager's node id: ``MiscConfig.slm_node_id`` (AUTOBOT_SLM_NODE_ID), the one home.
+
+    A deployment that set only the legacy ``SLM_NODE_ID`` keeps the id it registered under,
+    with a deprecation warning, so no existing manager row is orphaned (#19322). A blank value
+    of either name counts as unset, as ``ssot-config.sh`` treats it: canonical, then legacy,
+    then the field default -- never an empty id.
+    """
+    from autobot_shared.ssot_config import get_config
+
+    misc = get_config().misc
+    canonical = misc.slm_node_id.strip()
+    default = type(misc).model_fields["slm_node_id"].default
+    legacy = os.environ.get(_LEGACY_SLM_NODE_ID_VAR, "").strip()
+    if not legacy or legacy == canonical:
+        return canonical or default
+    # Set explicitly (environment or .env), even to the default value: the canonical name wins.
+    if canonical and "slm_node_id" in misc.model_fields_set:
+        logger.error("SLM_NODE_ID=%s ignored: AUTOBOT_SLM_NODE_ID=%s is set and wins", legacy, canonical)
+        return canonical
+    logger.warning("SLM_NODE_ID is deprecated for the manager's node id; set AUTOBOT_SLM_NODE_ID=%s", legacy)
+    return legacy
+
+
 # Load SSOT defaults at module level so Settings class can reference them.
 _SSOT_POOL_SIZE, _SSOT_MAX_OVERFLOW, _SSOT_POOL_RECYCLE = _get_ssot_pool_defaults()
 _SSOT_BACKEND_URL = _get_ssot_backend_url()
@@ -185,6 +222,22 @@ class Settings(RedactedReprMixin, BaseSettings):
     data_dir: Path = Path(os.getenv("SLM_DATA_DIR", str(Path(__file__).parent / "data")))
     config_dir: Path = Path(os.getenv("SLM_CONFIG_DIR", str(Path(__file__).parent / "config")))
     ansible_dir: Path = Path(__file__).parent / "ansible"
+    # #18892: where the SLM SPA is served (vite `base: '/slm/'`). Browser redirects
+    # the backend issues -- the SSO callback -- must carry it: a bare `/sso-callback`
+    # is served by the USER frontend on the shared vhost. Read from SLM_FRONTEND_BASE_PATH
+    # (env_prefix) and normalised below: one leading slash, no trailing slash.
+    frontend_base_path: str = "/slm"
+
+    @field_validator("frontend_base_path")
+    @classmethod
+    def _normalise_frontend_base_path(cls, raw: str) -> str:
+        """`slm`, `/slm/` and `/slm` all mean `/slm`; `/` or blank is the root (#18892).
+
+        Without the leading slash the SSO redirect would be relative and resolve under `/api/auth/sso/`.
+        """
+        trimmed = raw.strip().strip("/")
+        return f"/{trimmed}" if trimmed else ""
+
     # #13307: was `Path.home() / "slm-backups"`, which put every backup in the
     # service account's home directory — on the root filesystem, in a place
     # nobody thinks to look, chosen by a fallback rather than a decision. It also
@@ -205,20 +258,16 @@ class Settings(RedactedReprMixin, BaseSettings):
     # Main SLM operational database (nodes, deployments, backups, etc.)
     database_url: str = os.getenv(
         "SLM_DATABASE_URL",
-        "postgresql+asyncpg://slm_app@127.0.0.1:5432/slm",
+        f"postgresql+asyncpg://{pg.SLM_DB_ROLE}@{pg.SLM_DB_HOST}:{pg.DB_PORT}/{pg.SLM_DB_NAME}",
     )
 
     # SLM admin users database (fleet administrators)
-    slm_users_database_url: str = os.getenv(
-        "SLM_USERS_DATABASE_URL",
-        "postgresql+asyncpg://slm_app@127.0.0.1:5432/slm_users",
-    )
+    # #18094: the one resolver (SLM_USERS_DATABASE_URL, else the SLM_POSTGRES_* parts)
+    # lives in user_management.config; a literal DSN here was a second default for it.
+    slm_users_database_url: str = get_slm_db_config().url
 
     # AutoBot application users database (colocated on SLM server)
-    autobot_users_database_url: str = os.getenv(
-        "AUTOBOT_USERS_DATABASE_URL",
-        "postgresql+asyncpg://slm_app@127.0.0.1:5432/autobot_users",
-    )
+    autobot_users_database_url: str = get_autobot_db_config().url
 
     # Database connection pool settings (#2860) — SSOT-coordinated defaults.
     # SLM_DB_POOL_* env vars still override for per-service tuning.
@@ -231,14 +280,13 @@ class Settings(RedactedReprMixin, BaseSettings):
     port: int = 8000
     debug: bool = False
 
-    # SLM self-identity (#9956, #10110)
-    # The SLM manager's own DB node_id — the one well-known, stable identity
-    # in the registry-driven model (#10110: the DB node registry is the source
-    # of truth; every other node self-registers with a uuid4()[:8] node_id).
-    # Deployments may rename the manager, so this is read from the environment
-    # instead of being hardcoded; the default matches the legacy slm_server
-    # fallback host in slm-nodes.yml.
-    slm_node_id: str = os.getenv("SLM_NODE_ID", "00-SLM-Manager")
+    # SLM self-identity (#9956, #10110): the SLM manager's own DB node_id -- the one
+    # well-known, stable identity in the registry-driven model (every other node
+    # self-registers with a uuid4()[:8] node_id). A property, not a field: as a
+    # field, env_prefix also bound it to a third name, SLM_SLM_NODE_ID (#19322).
+    @cached_property
+    def slm_node_id(self) -> str:
+        return _resolve_slm_node_id()
 
     # Authentication
     secret_key: str = os.getenv("SLM_SECRET_KEY", "")
@@ -257,10 +305,10 @@ class Settings(RedactedReprMixin, BaseSettings):
     # HTTP connect+read timeout for JWKS endpoint calls (seconds).
     jwks_fetch_timeout_seconds: float = float(os.getenv("SLM_JWKS_FETCH_TIMEOUT", "10"))
 
-    # HMAC signing key for API key hashing (#2160).
-    # Default preserves backward compatibility with existing hashed keys.
-    # Override in production via SLM_HMAC_API_KEY_SECRET env var.
-    hmac_api_key_secret: str = os.getenv("SLM_HMAC_API_KEY_SECRET", "autobot-api-key-v1")
+    # API-key pepper (#2160, #16299, #19120). The pepper lives in the SLM secrets
+    # store (services/api_key_pepper.py); this env value is only a one-time import
+    # source for installs that already have it. No in-repo default.
+    hmac_api_key_secret: str = os.getenv("SLM_HMAC_API_KEY_SECRET", "")
 
     # Encryption for sensitive data (credentials, etc.)
     encryption_key: str = os.getenv("SLM_ENCRYPTION_KEY", "")
@@ -402,12 +450,41 @@ class Settings(RedactedReprMixin, BaseSettings):
     )
 
     # Health checks
-    heartbeat_interval: int = 30  # seconds
+    heartbeat_interval: int = DEFAULT_HEARTBEAT_INTERVAL  # seconds; the agent's default too (#18094)
     health_check_timeout: int = 10  # seconds
     unhealthy_threshold: int = 3  # missed heartbeats
 
     # Reconciliation
     reconcile_interval: int = 60  # seconds
+
+    # Compose fleet nodes (#9761): surface each compose container as a fleet node. The one
+    # default (#19323): unset follows the deployment mode -- on in a container (docker_local,
+    # the compose stack, and a dev checkout run inside a container), off on a bare-metal/VM
+    # fleet and in a dev checkout on the host.
+    # SLM_COMPOSE_NODES=true|false overrides it; compose passes it through, never restates it.
+    compose_nodes: bool | None = None
+
+    @field_validator("compose_nodes", mode="before")
+    @classmethod
+    def _unreadable_compose_nodes_is_unset(cls, raw: object) -> object:
+        """A blank or unrecognised value means unset (follow the deployment mode), never an import crash.
+
+        Compose passes the name through, so a blank arrives as ``""``; a typo is warned about once.
+        """
+        if not isinstance(raw, str):
+            return raw
+        value = raw.strip().lower()
+        if value in _BOOL_WORDS:
+            return value
+        if value:
+            logger.warning("SLM_COMPOSE_NODES value %r is not true/false; following the deployment mode (#19323)", raw)
+        return None
+
+    @property
+    def compose_nodes_enabled(self) -> bool:
+        if self.compose_nodes is not None:
+            return self.compose_nodes
+        return resolve_deployment_mode() is DeploymentMode.DOCKER_LOCAL
 
     # CORS settings
     cors_origins: list = _get_cors_origins()

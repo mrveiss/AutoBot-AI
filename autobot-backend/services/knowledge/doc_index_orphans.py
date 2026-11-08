@@ -10,20 +10,16 @@ old ids are read first and only those the new run did not rewrite are removed.
 """
 
 import asyncio
-import hashlib
 import uuid
 from typing import Any, Callable, Iterable, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.chunk_identity import DOC_ID_LENGTH, doc_chunk_id
 
 logger = get_logger(__name__)
 
-BASE_ID_LENGTH = 12  # sub-splits append "_L<depth>" / "_R<depth>" to the base id
-
-
-def chunk_base_id(rel_path: str, section: str, index: int) -> str:
-    """The deterministic id of a chunk before any oversize split."""
-    return hashlib.md5(f"{rel_path}:{section}:{index}".encode(), usedforsecurity=False).hexdigest()[:BASE_ID_LENGTH]
+BASE_ID_LENGTH = DOC_ID_LENGTH
+chunk_base_id = doc_chunk_id  # the one definition lives in knowledge.chunk_identity (#18142)
 
 
 def _ids_for(collection: Any, rel_path: str, run_token: str | None = None) -> Set[str]:

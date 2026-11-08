@@ -29,10 +29,11 @@ from __future__ import annotations
 import asyncio
 import os
 import socket
-from typing import Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_value
 
 logger = get_logger(__name__)
 
@@ -74,6 +75,7 @@ class LeaderLease:
         poll_s: float = DEFAULT_POLL_S,
         worker_id: Optional[str] = None,
         label: str = "",
+        client_factory: Optional[Callable[..., Awaitable[Any]]] = None,
     ) -> None:
         self.key = key
         self.database = database
@@ -83,17 +85,29 @@ class LeaderLease:
         self.worker_id = worker_id or "%s-%d" % (socket.gethostname(), os.getpid())
         self.label = label or key
         self._is_leader = False
+        self._client_factory = client_factory
+
+    async def _client(self) -> Any:
+        """The Redis client for this lease: the injected factory, else the shared async client."""
+        factory = self._client_factory or get_async_redis_client
+        return await factory(database=self.database)
 
     @property
     def is_leader(self) -> bool:
         """Whether this worker currently holds the lease."""
         return self._is_leader
 
-    async def try_acquire_or_refresh(self) -> bool:
-        """Take the lease with SET NX, or atomically extend one already held."""
-        redis = await get_async_redis_client(database=self.database)
+    async def _attempt(self) -> Optional[bool]:
+        """SET NX, or the atomic extend of a lease already held: True held, False another owner's, None unknown."""
+        try:
+            redis = await self._client()
+        except Exception as exc:
+            if not self._is_leader:
+                raise  # while contesting, a factory failure (an unknown database) reaches the caller
+            logger.warning("Leader election Redis error for %s: %s", self.label, exc)
+            return None  # while holding, it is "no answer" (as a failed refresh): the heartbeat carries on
         if redis is None:
-            return False
+            return None
         try:
             if self._is_leader:
                 held = await redis.eval(_REFRESH_LUA, 1, self.key, self.worker_id, str(self.ttl_ms))
@@ -102,7 +116,23 @@ class LeaderLease:
             return acquired is not None
         except Exception as exc:
             logger.warning("Leader election Redis error for %s: %s", self.label, exc)
-            return False
+            return None
+
+    async def try_acquire_or_refresh(self) -> bool:
+        """Take the lease with SET NX, or atomically extend one already held."""
+        return await self._attempt() is True
+
+    async def hold_or_refresh(self) -> Optional[bool]:
+        """Like :meth:`_attempt`, and leadership follows only a definite answer (#20556).
+
+        True: held, its TTL reset. False: another worker owns the key, so leadership ends now.
+        None: Redis did not answer. Leadership is left as it was, since the key still names this
+        worker until its TTL runs out; the caller decides how long to keep trying.
+        """
+        state = await self._attempt()
+        if state is not None:
+            self._is_leader = state
+        return state
 
     async def update_leadership(
         self,
@@ -153,26 +183,20 @@ class LeaderLease:
     async def release(self) -> None:
         """Drop the lease if held, so another worker can take over immediately.
 
-        Best-effort: deletes only when the key still carries this worker's id,
-        so a lease that already expired and was retaken is never deleted.
+        Best-effort: deletes only when the key still carries this worker's id, in
+        one atomic compare-and-delete, so a lease that expired and was retaken --
+        even between a read and a delete -- is never deleted.
         """
         if not self._is_leader:
             return
         self._is_leader = False
-        redis = await get_async_redis_client(database=self.database)
-        if redis is None:
-            return
         try:
-            current = await redis.get(self.key)
-            if _decode(current) == self.worker_id:
-                await redis.delete(self.key)
+            redis = await self._client()
+            if redis is None:
+                return
+            await delete_if_value(redis, self.key, self.worker_id)
         except Exception as exc:
             logger.warning("Failed to release leader lease %s: %s", self.label, exc)
-
-
-def _decode(val: object) -> str:
-    """Decode bytes to str; pass through str. Redis may return either."""
-    return val.decode() if isinstance(val, bytes) else (val or "")  # type: ignore[return-value]
 
 
 async def _call(hook: Hook | None) -> None:

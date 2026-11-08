@@ -8,7 +8,7 @@
     <h3>
       <Icon name="clone" /> {{ $t('analytics.codebase.duplicates.configTitle') }}
       <span v-if="analysis" class="total-count">
-        ({{ analysis.duplicates_found }} duplicates)
+        ({{ $t('analytics.codebase.shared.duplicates', { count: analysis.duplicates_found }, analysis.duplicates_found) }})
       </span>
       <button
         @click="emit('refresh')"
@@ -67,32 +67,26 @@
 
       <div class="duplicates-list">
         <div
-          v-for="(dup, index) in analysis.duplicates?.slice(0, 20)"
+          v-for="(dup, index) in visible('duplicates', analysis.duplicates)"
           :key="'config-dup-' + index"
           class="list-item item-warning"
         >
           <div class="item-header">
             <span class="config-value-badge">{{ truncateValue(dup.value) }}</span>
-            <span class="location-count">{{ dup.locations?.length || 0 }} locations</span>
+            <span class="location-count">{{ $t('analytics.codebase.duplicates.locationsCount', { count: dup.locations?.length || 0 }, dup.locations?.length || 0) }}</span>
           </div>
           <div class="item-locations">
             <div
-              v-for="(loc, locIdx) in dup.locations?.slice(0, 5)"
+              v-for="(loc, locIdx) in visible('loc-' + index, dup.locations, LOCATIONS_STEP)"
               :key="'loc-' + locIdx"
               class="location-item"
             >
               📁 {{ loc.file }}:{{ loc.line }}
             </div>
-            <div v-if="dup.locations?.length > 5" class="more-locations">
-              ... and {{ dup.locations.length - 5 }} more locations
-            </div>
+            <TruncationNotice :shown="shown('loc-' + index, dup.locations?.length ?? 0, LOCATIONS_STEP)" :total="dup.locations?.length ?? 0" :step="LOCATIONS_STEP" @show-more="showMore('loc-' + index, LOCATIONS_STEP)" />
           </div>
         </div>
-        <div v-if="analysis.duplicates?.length > 20" class="show-more">
-          <span class="muted">
-            Showing 20 of {{ analysis.duplicates.length }} duplicate patterns
-          </span>
-        </div>
+        <TruncationNotice :shown="shown('duplicates', analysis.duplicates.length)" :total="analysis.duplicates.length" :step="20" @show-more="showMore('duplicates')" />
       </div>
 
       <div class="recommendation-box">
@@ -119,6 +113,8 @@
 
 <script setup lang="ts">
 import EmptyState from '@/components/ui/EmptyState.vue'
+import { useShowMore } from '@autobot/ui'
+import TruncationNotice from '../TruncationNotice.vue'
 import Icon from '@/components/ui/Icon.vue'
 
 interface ConfigDuplicatesResult {
@@ -127,11 +123,16 @@ interface ConfigDuplicatesResult {
   report: string
 }
 
-defineProps<{
+const props = defineProps<{
   analysis: ConfigDuplicatesResult | null
   loading: boolean
   error: string | null
 }>()
+
+// #12741: a capped list is expandable; the notice below it is the control.
+const PAGE_SIZE = 20
+const LOCATIONS_STEP = 5
+const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => props.analysis)
 
 const emit = defineEmits<{
   refresh: []
@@ -238,13 +239,6 @@ function truncateValue(value: string, maxLength = 50): string {
   color: var(--text-muted);
   font-size: 0.85em;
   padding: var(--spacing-0-5) var(--spacing-0);
-}
-
-.config-duplicates-section .more-locations {
-  color: var(--text-tertiary);
-  font-size: 0.8em;
-  font-style: italic;
-  padding-top: var(--spacing-1);
 }
 
 .config-duplicates-section .recommendation-box {

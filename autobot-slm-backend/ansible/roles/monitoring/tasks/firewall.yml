@@ -24,6 +24,9 @@
     - ufw_installed.rc == 0
     - monitoring_install_prometheus | bool
 
+# No UFW rule for Alertmanager (#18556): it listens on loopback only
+# (alertmanager_listen_address), reached by the co-located Prometheus.
+
 - name: Configure UFW for Grafana
   community.general.ufw:
     rule: allow

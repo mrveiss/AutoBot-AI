@@ -103,7 +103,7 @@ from .sub_workflow import (
     extract_sub_workflow_step,
     is_sub_workflow_step,
 )
-from .subagent_dispatcher import SubagentDispatcher, SubagentTask, get_subagent_dispatcher
+from .subagent_dispatcher import SubagentDispatcher, SubagentDispatchTask, get_subagent_dispatcher
 from .success_criteria import (  # noqa: F401
     CriteriaResult,
     EvaluationResult,
@@ -164,7 +164,7 @@ __all__ = [
     "WorkflowRunner",
     "CollaborationCoordinator",
     "SubagentDispatcher",
-    "SubagentTask",
+    "SubagentDispatchTask",
     "get_subagent_dispatcher",
     "BlockedPlanResumer",
     "ExecutionStrategyHandler",

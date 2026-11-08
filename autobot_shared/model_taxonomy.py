@@ -37,3 +37,16 @@ class ArchitectureFamily(str, Enum):
     LINEAR_ATTENTION = "linear_attention"
     HYBRID = "hybrid"  # Jamba-style mixed architectures
     MOE = "moe"  # Mixture-of-Experts (from NPU registry, #10892)
+
+
+class UnsupportedArchitectureError(ValueError):
+    """A consumer has no code path for a known architecture family (#13049 C1).
+
+    The one definition shared by the NPU worker dispatcher and the backend layer
+    layout. ``family`` is the offending family or model_type; ``message``
+    overrides the default text when the consumer can say what it does support.
+    """
+
+    def __init__(self, family: str, message: "str | None" = None) -> None:
+        self.family = family
+        super().__init__(message or f"architecture '{family}' is not supported by this consumer")

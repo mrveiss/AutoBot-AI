@@ -109,13 +109,13 @@ async function handleLanguageChange() {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin: var(--spacing-0);
 }
 
-.panel-title i {
+.panel-title .icon {
   color: var(--color-primary);
 }
 
@@ -139,20 +139,21 @@ async function handleLanguageChange() {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-.preference-label i {
-  font-size: var(--font-size-xs);
+.preference-label .icon {
+  width: var(--text-xs);
+  height: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .preference-hint {
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: var(--spacing-0);
   line-height: var(--leading-normal);
@@ -171,7 +172,7 @@ async function handleLanguageChange() {
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   appearance: none;
@@ -193,7 +194,7 @@ async function handleLanguageChange() {
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-tertiary);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   pointer-events: none;
 }
 

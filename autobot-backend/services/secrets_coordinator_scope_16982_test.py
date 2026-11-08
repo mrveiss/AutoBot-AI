@@ -25,6 +25,7 @@ from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
 from services.secrets_authz import PrincipalFacts
 from services.secrets_coordinator import SecretsCoordinator
+from testkit.fake_async_session import FakeAsyncSession
 
 _USER = uuid.uuid4()
 _OTHER = uuid.uuid4()
@@ -149,37 +150,20 @@ class TestTheReadPathActuallyAsksIt:
         async def list_for_vaults(self, session, *, accessible_vaults):
             return list(self.listed)
 
-    class _FakeResult:
-        def __init__(self, ids):
-            self._ids = list(ids)
+    class _FakeSession(FakeAsyncSession):
+        """``get`` returns the seeded secret; ``execute`` answers the direct-grant lookup with the seeded ids.
 
-        def first(self):
-            return (self._ids[0],) if self._ids else None
+        The statements are recorded (``statements``) so a test can assert what the lookup BOUND.
+        Without that, this fake answers every query the same way and the test would pass
+        on a lookup keyed to the wrong vault or the wrong secret -- a stub that
+        agrees with anything (#17824 review).
+        """
 
-        def scalars(self):
-            return iter(self._ids)
-
-    class _FakeSession:
         def __init__(self, secret, granted=()):
-            self._secret = secret
-            self._granted = list(granted)
-
-        async def get(self, _model, _pk):
-            return self._secret
-
-        async def execute(self, stmt):
-            """Stands in for the direct-grant lookup; the ids it was seeded with.
-
-            The statement is kept so a test can assert what the lookup BOUND. Without
-            that, this fake answers every query the same way and the test would pass
-            on a lookup keyed to the wrong vault or the wrong secret -- a stub that
-            agrees with anything (#17824 review).
-            """
-            self.last_stmt = stmt
-            return TestTheReadPathActuallyAsksIt._FakeResult(self._granted)
+            super().__init__(on_get=lambda _model, _pk: secret, default_result=list(granted))
 
         def bound_params(self) -> set:
-            return set(self.last_stmt.compile().params.values())
+            return set(self.statements[-1].compile().params.values())
 
     async def test_read_refuses_when_the_scope_does_not_permit(self, monkeypatch):
         from services.envelope_secrets_service import SecretAccessError

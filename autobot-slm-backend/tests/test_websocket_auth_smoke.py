@@ -137,3 +137,45 @@ async def test_revocation_check_failure_rejected_4001():
     async_decode.assert_awaited_once_with("good-token")
     ws.close.assert_awaited_once()
     assert ws.close.call_args.kwargs.get("code") == 4001
+
+
+@pytest.mark.asyncio
+async def test_revocation_store_unavailable_closes_1013_not_4001():
+    """#18892: a 503 ("could not decide") must not read as an auth failure to the client."""
+    from fastapi import HTTPException, status
+
+    ws = _fake_ws()
+    async_decode = AsyncMock(
+        side_effect=HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="revocation_check_unavailable",
+            headers={"Retry-After": "5"},
+        )
+    )
+    with (
+        patch("api.websocket._extract_ws_token", return_value="good-token"),
+        patch("api.websocket.auth_service.decode_token_async", async_decode),
+    ):
+        result = await _authenticate_websocket_token(ws)
+    assert result is None
+    assert ws.close.call_args.kwargs.get("code") == 1013
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status_code", "logged_reason"),
+    [(503, "revocation check unavailable"), (401, "token rejected")],
+)
+async def test_decode_error_log_reason_names_what_happened(caplog, status_code, logged_reason):
+    """#18892: a rejected token is not logged as a revocation-check failure, and vice versa."""
+    from fastapi import HTTPException
+
+    ws = _fake_ws()
+    async_decode = AsyncMock(side_effect=HTTPException(status_code=status_code, detail="x"))
+    with (
+        caplog.at_level("WARNING"),
+        patch("api.websocket._extract_ws_token", return_value="good-token"),
+        patch("api.websocket.auth_service.decode_token_async", async_decode),
+    ):
+        await _authenticate_websocket_token(ws)
+    assert f"WebSocket rejected ({logged_reason})" in caplog.text

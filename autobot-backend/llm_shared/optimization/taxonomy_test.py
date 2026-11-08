@@ -6,7 +6,9 @@
 
 import pytest
 
-from ..model_param_registry import _MODEL_TYPE_MAP
+from autobot_shared.model_taxonomy import ArchitectureFamily, UnsupportedArchitectureError
+
+from ..model_param_registry import _MODEL_TYPE_MAP, family_for_model_type
 from .kv_cache import KVCacheConfig
 from .layer_inference import (
     LayerInferenceConfig,
@@ -15,7 +17,7 @@ from .layer_inference import (
     _layer_prefix_for_arch,
 )
 from .pipeline import PipelineConfig
-from .taxonomy import Compression, Dtype
+from .taxonomy import Compression, Dtype, layer_layout_for
 
 #: The kv_cache._DTYPE_BYTES literal as it stood before #13049, frozen here.
 _OLD_DTYPE_BYTES = {"fp16": 2, "bf16": 2, "fp32": 4, "float16": 2, "bfloat16": 2, "float32": 4}
@@ -70,20 +72,72 @@ def _old_layout(model_type):
     return "model.layers.", "model.embed_tokens", "lm_head"
 
 
-#: Every model_type the registry classifies, plus unrecognised and edge spellings.
+#: Known state-space / linear-attention / hybrid families raise (owner decision 2026-10-22).
+_NON_LAYERED = ("mamba", "mamba2", "jamba", "rwkv", "retnet", "gla", "hgrn")
+_LAYERED_FAMILIES = (ArchitectureFamily.TRANSFORMER, ArchitectureFamily.MOE)
+
+#: Every model_type the registry classifies as layered, plus unrecognised and edge spellings.
 _MODEL_TYPE_CORPUS = sorted(
-    set(_MODEL_TYPE_MAP) | _OLD_GPT2_STYLE | {"", "novelarch", "GPT2", "gpt-neox", "mamba", "gpt2 "}
+    {t for t in _MODEL_TYPE_MAP if family_for_model_type(t) in _LAYERED_FAMILIES}
+    | _OLD_GPT2_STYLE
+    | {"", "novelarch", "GPT2", "gpt-neox", "gpt2 "}
 )
 
 
 @pytest.mark.parametrize("model_type", _MODEL_TYPE_CORPUS)
-def test_layout_is_identical_for_every_known_model_type(model_type):
+def test_layout_is_identical_for_every_layered_model_type(model_type):
     got = (
         _layer_prefix_for_arch(model_type),
         _embedding_name_for_arch(model_type),
         _head_name_for_arch(model_type),
     )
     assert got == _old_layout(model_type)
+
+
+def test_the_non_layered_list_is_exactly_what_the_registry_marks_non_layered():
+    registry = {t for t in _MODEL_TYPE_MAP if family_for_model_type(t) not in _LAYERED_FAMILIES}
+    assert registry == set(_NON_LAYERED)
+
+
+@pytest.mark.parametrize("model_type", _NON_LAYERED)
+def test_known_non_transformer_type_raises_on_every_accessor(model_type):
+    for accessor in (layer_layout_for, _layer_prefix_for_arch, _embedding_name_for_arch, _head_name_for_arch):
+        with pytest.raises(UnsupportedArchitectureError, match=model_type) as exc:
+            accessor(model_type)
+        assert isinstance(exc.value, ValueError) and exc.value.family == model_type
+
+
+@pytest.mark.parametrize(
+    ("model_type", "family"),
+    [
+        ("llama", ArchitectureFamily.TRANSFORMER),
+        ("mixtral", ArchitectureFamily.MOE),
+        ("mamba", ArchitectureFamily.SSM),
+        ("jamba", ArchitectureFamily.HYBRID),
+        ("retnet", ArchitectureFamily.LINEAR_ATTENTION),
+    ],
+)
+def test_family_dispatch_transformer_moe_and_non_layered(model_type, family):
+    assert family_for_model_type(model_type) == family
+    if family in _LAYERED_FAMILIES:
+        assert layer_layout_for(model_type).layer_prefix == "model.layers."
+    else:
+        with pytest.raises(UnsupportedArchitectureError):
+            layer_layout_for(model_type)
+
+
+def test_contrast_transformer_gets_layout_state_space_raises_unknown_falls_back():
+    assert layer_layout_for("gpt2").layer_prefix == "transformer.h."
+    with pytest.raises(UnsupportedArchitectureError):
+        layer_layout_for("mamba")
+    assert family_for_model_type("novelarch") is None
+    assert layer_layout_for("novelarch") == layer_layout_for("llama")
+
+
+def test_one_error_class_is_shared_with_the_npu_dispatcher():
+    from autobot_shared import model_taxonomy
+
+    assert UnsupportedArchitectureError is model_taxonomy.UnsupportedArchitectureError
 
 
 def test_contrast_pair_gpt2_style_differs_from_llama_style():

@@ -7,7 +7,7 @@
  * Handles connection lifecycle, reconnection, and cleanup.
  *
  * NOTE: This is for individual WebSocket connections (e.g., /api/logs/stream, /api/terminal).
- * For the global singleton WebSocket, use useGlobalWebSocket instead.
+ * For channel-based real-time events, use useEventBus instead.
  */
 
 import { backoffDelay } from '@autobot/ui'

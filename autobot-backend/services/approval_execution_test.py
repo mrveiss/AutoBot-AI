@@ -10,22 +10,9 @@ from types import SimpleNamespace
 import pytest
 
 from services import approval_execution
+from testkit.fake_async_session import FakeAsyncSession
 
 pytestmark = pytest.mark.asyncio
-
-
-class _FakeSession:
-    """Records every ApprovalComment added and every commit, nothing else."""
-
-    def __init__(self):
-        self.added = []
-        self.commits = 0
-
-    def add(self, obj):
-        self.added.append(obj)
-
-    async def commit(self):
-        self.commits += 1
 
 
 @pytest.fixture(autouse=True)
@@ -68,7 +55,7 @@ class TestRunPostApprovalActions:
             "known", lambda a, s: None, proposed_by="services.approval_execution_test"
         )
         approval = _approval({"action": "unknown"})
-        session = _FakeSession()
+        session = FakeAsyncSession()
 
         await approval_execution.run_post_approval_actions(approval, session)
 
@@ -115,7 +102,7 @@ class TestRunPostApprovalActions:
             "do-thing", handler, proposed_by="services.approval_execution_test"
         )
         approval = _approval({"action": "do-thing"})
-        session = _FakeSession()
+        session = FakeAsyncSession()
 
         await approval_execution.run_post_approval_actions(approval, session)
         # No raise reaching here is half the assertion; the rest is the trail:
@@ -141,7 +128,7 @@ class TestRunPostApprovalActions:
             "do-thing", handler, proposed_by="services.approval_execution_test"
         )
         approval = _approval({"action": "do-thing"})
-        session = _FakeSession()
+        session = FakeAsyncSession()
 
         await approval_execution.run_post_approval_actions(approval, session)
 
@@ -174,13 +161,6 @@ class TestRunPostApprovalActions:
         """The recording path shares the same never-crash-approve() guarantee
         as dispatch itself: a session that cannot commit must not surface."""
 
-        class _BrokenSession:
-            def add(self, obj):
-                pass
-
-            async def commit(self):
-                raise RuntimeError("db is down")
-
         async def handler(approval, session):
             raise RuntimeError("boom")
 
@@ -188,5 +168,7 @@ class TestRunPostApprovalActions:
             "do-thing", handler, proposed_by="services.approval_execution_test"
         )
 
-        await approval_execution.run_post_approval_actions(_approval({"action": "do-thing"}), _BrokenSession())
+        await approval_execution.run_post_approval_actions(
+            _approval({"action": "do-thing"}), FakeAsyncSession(commit_error=RuntimeError("db is down"))
+        )
         # No raise reaching here is the assertion.

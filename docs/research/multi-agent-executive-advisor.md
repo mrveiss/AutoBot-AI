@@ -374,3 +374,18 @@ no human-review option — the same governance surface every other company
 deliverable already gets. Effort: **significant** — this is an integration
 layer, not a content pack, with the content itself (18 templates × domain
 structure) as a second, separately-schedulable cost on top.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #16762 — Company OS: wire workflow engine in + add executive-deliverable content
+- #16763 — Bridge the workflow engine into the Company OS object model
+- #16764 — Add an executive-deliverable workflow category + content
+- #16765 — Curated built-in domain-expert knowledge seeded per company role
+- #16767 — Layer prompt-cache blocks for role-holder agent prompts, with a written invariants contract
+- #16768 — No anti-spam guard on proactive outbound agent messages (dedup + rate cap + quiet hours)
+- #16769 — No bounded self-review pass on role-holder agent responses before they ship
+- #16836 — feat(llm): a written prompt-cache layering contract, enforced at assembly and observable when it regresses
+- #16837 — feat(llc): bounded, opt-in self-review pass before a role-holder agent's response goes outward (closed)
+- #16838 — umbrella(llc): close the four Company OS gaps — outbound governance, prompt-cache contract, self-review, per-role knowledge

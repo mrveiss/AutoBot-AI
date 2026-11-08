@@ -36,6 +36,13 @@ from chat_workflow.browser_tool_handler import (
     record_browser_success,
     validate_browser_params,
 )
+from chat_workflow.command_execution_record import (
+    _create_execution_result,
+    _unsuccessful_approval_record,
+    approval_result_of,
+    command_params,
+    current_terminal_session,
+)
 from chat_workflow.compose_tool_handler import (
     build_compose_dispatch,
     compose_auto_approvable,
@@ -49,8 +56,11 @@ from chat_workflow.compose_tool_handler import (
     poll_compose_approval,
     reject_delegated_compose,
 )
+from chat_workflow.mcp_approval_message import build_mcp_approval_message as _build_mcp_approval_message
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
+from chat_workflow.tool_call_loop import stamp_call_fingerprint
 from chat_workflow.tool_dispatch_guards import (
+    COMMAND_FORCE_APPROVAL_KEY,
     enforce_ai_line,
     enforce_config_protection,
     enforce_fact_forcing,
@@ -58,6 +68,7 @@ from chat_workflow.tool_dispatch_guards import (
     enforce_peer_messages,
     enforce_pre_action_verifier,
     enforce_repetition,
+    is_held_message,
     is_registered_tool,
     llc_scope_error,
     unknown_tool_error,
@@ -898,102 +909,6 @@ def _record_failed_step(
     )
 
 
-def _create_execution_result(command: str, host: str, result: dict[str, Any], approved: bool = False) -> dict[str, Any]:
-    """Create standardized execution result record (Issue #315: extracted).
-
-    Args:
-        command: The command that was executed
-        host: Target host
-        result: Execution result dict
-        approved: Whether user approved the command
-
-    Returns:
-        Standardized execution result dict for continuation loop
-    """
-    # #14141: `status` is derived from the exit code, not hardcoded. It used to
-    # be the literal "success" regardless of `return_code`, and this dict feeds
-    # `_format_execution_step`, which prints `- Status: {status}` straight into
-    # the model's continuation prompt. So a command that failed was reported to
-    # the model as having succeeded, with stderr as the only hint — and a test
-    # runner writes its failure report to *stdout*, so the model saw a
-    # full-looking report under "success" and no signal that the suite failed.
-    #
-    # Reachability, so nobody mistakes this for the protection: both call sites
-    # are gated on ``status == "success"`` upstream (`_handle_approved_command`
-    # at the approval branch, `_handle_successful_command` in
-    # `_dispatch_command_by_status`), so this mapping cannot currently observe a
-    # non-zero code. It is kept as a correct restatement of the invariant for
-    # the day a caller stops gating -- not deleted, because a dict feeding the
-    # model's prompt with a hardcoded "success" is exactly the defect that got
-    # filed. The single *reachable* decision is
-    # `command_executor._build_pty_result`, which every layer here propagates
-    # rather than re-derives; that is where the invariant is asserted.
-    return_code = result.get("return_code", 0)
-    return {
-        "command": command,
-        "host": host,
-        "stdout": result.get("stdout", ""),
-        "stderr": result.get("stderr", ""),
-        "return_code": return_code,
-        "status": _status_for_return_code(return_code),
-        "approved": approved,
-    }
-
-
-def _status_for_return_code(return_code: Any) -> str:
-    """Map an exit code to the status the model is shown (#14141).
-
-    Only an exit code that is *known* to be 0 reports success. `None` — the
-    shape an execution path produces when it never captured one — and anything
-    unparseable both report ``error``, because "we do not know whether that
-    worked" is far closer to failure than to success as far as the next turn is
-    concerned. Reporting an unknown outcome as success is the defect this
-    function exists to remove, and defaulting it would reintroduce it.
-    """
-    try:
-        return "success" if int(return_code) == 0 else "error"
-    except (TypeError, ValueError):
-        logger.warning("[#14141] unusable return_code %r — reporting the step as error, not success", return_code)
-        return "error"
-
-
-def _build_mcp_approval_message(
-    tool_name: str,
-    bridge: str,
-    raw_result: dict,
-    execution_results: list[dict[str, Any]],
-) -> WorkflowMessage:
-    """Build a WorkflowMessage for MCP bridge approval requests (Issue #2622)."""
-    approval_msg = raw_result.get("message", "This operation requires approval.")
-    execution_results.append(
-        {
-            "tool": tool_name,
-            "bridge": bridge,
-            "result": approval_msg,
-            "status": "approval_required",
-        }
-    )
-    logger.info(
-        "[Issue #2622] MCP approval required: tool=%s bridge=%s",
-        tool_name,
-        bridge,
-    )
-    return WorkflowMessage(
-        type="tool_result",
-        content=(
-            f"[{bridge}] **Approval required:** {approval_msg}\n"
-            "Ask the user to confirm, then retry with `approved: true` "
-            "in the arguments."
-        ),
-        metadata={
-            "tool_name": tool_name,
-            "bridge": bridge,
-            "mcp_dispatch": True,
-            "approval_required": True,
-        },
-    )
-
-
 def _build_schema_validation_error(
     tool_name: str,
     tool: dict[str, Any],
@@ -1449,7 +1364,7 @@ class ToolHandlerMixin:
             )
 
     async def _execute_terminal_command(
-        self, session_id: str, command: str, host: str = "main", description: str = ""
+        self, session_id: str, command: str, host: str = "main", description: str = "", force_approval: bool = False
     ) -> dict[str, Any]:
         """
         Execute terminal command via terminal tool.
@@ -1459,6 +1374,7 @@ class ToolHandlerMixin:
             command: Command to execute
             host: Target host
             description: Command description
+            force_approval: The AI line held this call: a person decides it (#19951)
 
         Returns:
             Execution result
@@ -1478,7 +1394,7 @@ class ToolHandlerMixin:
                 return session_result
 
         result = await self.terminal_tool.execute_command(
-            conversation_id=session_id, command=command, description=description
+            conversation_id=session_id, command=command, description=description, force_approval=force_approval
         )
 
         return result
@@ -1569,7 +1485,7 @@ class ToolHandlerMixin:
         if mismatch_result is not None:
             return mismatch_result
 
-        approval_result = last_command.get("result", {})
+        approval_result = approval_result_of(last_command)
         logger.info(
             "Completion detected! Command: %s, Status: %s, Approved by: %s",
             command,
@@ -1922,7 +1838,8 @@ class ToolHandlerMixin:
         else:
             error_msg, additional_text = self._handle_approval_failure(command, approval_result)
             yield error_msg
-            yield (None, additional_text)
+            # #19951: the model's next prompt is built from these records, so without one it cannot know.
+            yield (_unsuccessful_approval_record(command, host, approval_result, additional_text), additional_text)
 
     async def _handle_direct_execution(
         self,
@@ -2042,13 +1959,6 @@ class ToolHandlerMixin:
         async for msg in self._collect_workflow_results(workflow_gen, execution_results, additional_response_parts):
             yield msg
 
-    def _extract_command_params(self, tool_call: dict[str, Any]) -> tuple[str, str, str]:
-        """Extract command parameters from tool call dict. Issue #620."""
-        command = tool_call["params"].get("command")
-        host = tool_call["params"].get("host", "main")
-        description = tool_call.get("description", "")
-        return command, host, description
-
     async def _dispatch_command_by_status(
         self,
         status: str,
@@ -2119,7 +2029,7 @@ class ToolHandlerMixin:
         Yields:
             WorkflowMessage items
         """
-        command, host, description = self._extract_command_params(tool_call)
+        command, host, description = command_params(tool_call)
         logger.info("[ChatWorkflowManager] Executing command: %s on %s", command, host)
 
         # Issue #4261/#14469: Wire BEFORE_TOOL_EXECUTE hook for execute_command,
@@ -2152,7 +2062,11 @@ class ToolHandlerMixin:
 
         try:
             result = await self._execute_terminal_command(
-                session_id=session_id, command=command, host=host, description=description
+                session_id=session_id,
+                command=command,
+                host=host,
+                description=description,
+                force_approval=bool(tool_call.get(COMMAND_FORCE_APPROVAL_KEY)),
             )
 
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for execute_command on success
@@ -2160,6 +2074,8 @@ class ToolHandlerMixin:
                 stdout = result.get("stdout", "")
                 stdout = await _emit_after_tool_execute("execute_command", stdout, session_id, {})
 
+            # The card binds to the session this execution ran in, not the mapping another request can change.
+            terminal_session_id = current_terminal_session(self.terminal_tool, session_id, terminal_session_id, result)
             async for msg in self._dispatch_command_by_status(
                 result.get("status"),
                 session_id,
@@ -2994,7 +2910,7 @@ class ToolHandlerMixin:
         Orchestrates the two halves above: capture the live DOM snapshot,
         then run the goal-directed LLM sub-extraction over it.
         """
-        from web_fetch.extractors import extract_markdown
+        from web_fetch.profile import IngestProfile, extract_page
 
         goal = (params.get("goal") or "").strip()
         if not goal:
@@ -3004,8 +2920,8 @@ class ToolHandlerMixin:
         if not html_content:
             return "extract_content: no live page content — navigate to a page first."
 
-        _title, markdown = extract_markdown(html_content)
-        return await self._answer_goal_from_markdown(markdown, url, goal)
+        text = extract_page(html_content, IngestProfile.DOCUMENT, base_url=url or "").text
+        return await self._answer_goal_from_markdown(text, url, goal)
 
     async def _execute_web_search(self, query: str, max_pages: int = 5, session_id: str = "") -> str:
         """Run a web search and return formatted results. Issue #2306.
@@ -3650,19 +3566,17 @@ class ToolHandlerMixin:
     ):
         """Process all tool calls from LLM response.
 
-        Issue #315: Refactored to use helper methods for reduced nesting.
         Issue #654: Added support for 'respond' tool with break_loop pattern.
-        Issue #620: Refactored using Extract Method pattern.
         Issue #2310: Accepts optional ctx for consecutive-invalid-tool tracking.
 
         Yields:
-            WorkflowMessage for each stage of execution
-            Also yields execution_summary at end for Issue #352 continuation loop
+            WorkflowMessage for each stage, then execution_summary (#352)
             Finally yields (break_loop, response_content) tuple if respond tool used
         """
         execution_results = []
         additional_response_parts = []
         break_loop_requested = False
+        held = False
         respond_content = None
 
         # #13821: forward the authenticated role. #2629 wired `role` as far as
@@ -3675,6 +3589,7 @@ class ToolHandlerMixin:
         role = ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE
 
         for tool_call in tool_calls:
+            results_before = len(execution_results)
             async for result in self._dispatch_tool_call(
                 tool_call,
                 session_id,
@@ -3690,8 +3605,13 @@ class ToolHandlerMixin:
                     break_loop_requested, respond_content = result
                 else:
                     yield result
+                    # #19951: a held call has no result, so another model call could only guess at one.
+                    held = held or is_held_message(result)
+            stamp_call_fingerprint(execution_results[results_before:], tool_call)  # #19715
+            if held:
+                break
 
         if execution_results:
             yield self._build_execution_summary(execution_results)
 
-        yield (break_loop_requested, respond_content)
+        yield (break_loop_requested or held, respond_content)

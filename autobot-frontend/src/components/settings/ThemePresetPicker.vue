@@ -13,10 +13,10 @@
     <div class="picker-header">
       <h3 class="picker-title">
         <Icon name="palette" size="md" />
-        Theme Presets
+        {{ t('ui.themePresets.title') }}
       </h3>
       <p class="picker-description">
-        Choose a pre-configured theme or customize your own color scheme
+        {{ t('ui.themePresets.description') }}
       </p>
     </div>
 
@@ -34,8 +34,8 @@
           <div class="preview-accent"></div>
         </div>
         <div class="preset-info">
-          <span class="preset-name">{{ THEME_PRESETS[presetKey].name }}</span>
-          <span class="preset-description">{{ THEME_PRESETS[presetKey].description }}</span>
+          <span class="preset-name">{{ t(THEME_PRESETS[presetKey].nameKey) }}</span>
+          <span class="preset-description">{{ t(THEME_PRESETS[presetKey].descriptionKey) }}</span>
         </div>
         <div v-if="preset === presetKey" class="preset-check">
           <Icon name="check-circle" size="sm" />
@@ -47,14 +47,14 @@
     <details class="advanced-controls">
       <summary class="advanced-summary">
         <Icon name="sliders-h" size="sm" />
-        Advanced Customization
+        {{ t('ui.themePresets.advanced') }}
       </summary>
       <div class="advanced-content">
         <!-- Manual Theme Control -->
         <fieldset class="control-section">
           <legend class="control-label">
             <Icon name="sun" size="sm" />
-            Base Theme
+            {{ t('ui.themePresets.baseTheme') }}
           </legend>
           <div class="option-group">
             <button
@@ -75,7 +75,7 @@
         <fieldset class="control-section">
           <legend class="control-label">
             <Icon name="palette" size="sm" />
-            Accent Color
+            {{ t('ui.preferences.accentColor') }}
           </legend>
           <div class="accent-grid">
             <button
@@ -135,7 +135,7 @@ const { announce: announceChange } = useAnnounce()
  */
 function handleSelectPreset(presetKey: ThemePreset): void {
   setPreset(presetKey)
-  announceChange(t('ui.themeToggle.presetChanged', { name: THEME_PRESETS[presetKey].name }))
+  announceChange(t('ui.themeToggle.presetChanged', { name: t(THEME_PRESETS[presetKey].nameKey) }))
   logger.debug(`Theme preset changed to: ${presetKey}`)
 }
 

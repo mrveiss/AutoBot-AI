@@ -11,9 +11,9 @@ this router, so the path is unchanged.
 
 #16270 adds ``permissions`` and ``is_admin`` so the frontend can gate on the
 server's answer instead of on its own copy of the role map (#16243). Both are
-required. Superadmin holds no granular permissions by design (#13854), so a
-frontend that gated on ``permissions`` alone would hide everything from a
-superadmin. ``is_admin`` carries the other kind of server check.
+required. Superadmin holds admin's permissions, derived from admin's set
+(#19125); ``is_admin`` carries the other kind of server check (the
+administrative predicate) and stays authoritative for it.
 """
 
 from typing import List
@@ -21,7 +21,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException, Request
 
 from api.schemas_agent import AuthUserInfoResponse
-from auth_middleware import get_auth_middleware
+from auth_middleware import resolve_human_user
 from autobot_shared.auth.permissions import Permission, Role, is_admin_role, role_has_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -59,7 +59,7 @@ async def get_current_user_info(request: Request):
         from user_management.config import get_deployment_config
 
         config = get_deployment_config()
-        user_data = get_auth_middleware().get_user_from_request(request)
+        user_data = await resolve_human_user(request)  # a revoked JWT is 401, not "signed in" (#18688)
 
         if not user_data:
             raise HTTPException(status_code=401, detail="Not authenticated")

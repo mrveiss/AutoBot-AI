@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
-from api.service_action_guard import FLEET_SERVICE_ACTION_ROUTE
+from api.service_action_guard import FLEET_SERVICE_ACTION_ROUTE, SERVICE_NAME_ACTION_DEPS
 from models.database import Node, Service, SystemdState
 from models.fleet_schemas import FleetServiceActionResponse
 from models.schemas import ServiceActionRequest
@@ -167,7 +167,6 @@ async def _per_node_systemd_action(
 
     success, message = await _run_ssh_service_action(node, service_name, action)
 
-    # Update DB record if action succeeded
     if success:
         svc_result = await db.execute(
             select(Service).where(
@@ -269,8 +268,12 @@ async def get_fleet_status(
 # Individual Service Control Endpoints
 # =============================================================================
 
+_PER_SERVICE_ACTION_ROUTE = dict(
+    response_model=OrchestrationServiceActionResponse, dependencies=SERVICE_NAME_ACTION_DEPS
+)
 
-@router.post("/services/{service_name}/start", response_model=OrchestrationServiceActionResponse)
+
+@router.post("/services/{service_name}/start", **_PER_SERVICE_ACTION_ROUTE)
 async def start_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -307,7 +310,7 @@ async def start_service(
     )
 
 
-@router.post("/services/{service_name}/stop", response_model=OrchestrationServiceActionResponse)
+@router.post("/services/{service_name}/stop", **_PER_SERVICE_ACTION_ROUTE)
 async def stop_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -341,7 +344,7 @@ async def stop_service(
     )
 
 
-@router.post("/services/{service_name}/restart", response_model=OrchestrationServiceActionResponse)
+@router.post("/services/{service_name}/restart", **_PER_SERVICE_ACTION_ROUTE)
 async def restart_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -558,12 +561,9 @@ async def _run_ssh_service_action(
     Control a service via Ansible playbook.
 
     Helper for fleet operations. Returns (success, message).
-
-    Migrated from SSH to Ansible playbook execution.
     """
     from services.playbook_executor import get_playbook_executor
 
-    # Map action to Ansible service state
     action_to_state = {
         "start": "started",
         "stop": "stopped",

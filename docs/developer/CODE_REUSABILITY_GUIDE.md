@@ -63,7 +63,8 @@ Comprehensive formatting utilities eliminating 33+ duplicate implementations.
 #### Date & Time Formatting
 
 ```typescript
-import { formatDate, formatTime, formatDateTime, formatTimeAgo } from '@/utils/formatHelpers'
+import { formatDate, formatTime, formatDateTime } from '@/utils/formatHelpers'
+import { createRecencyFormatter } from '@autobot/ui'
 
 // Date formatting
 formatDate('2025-10-30T18:05:00Z')  // "10/30/2025"
@@ -76,8 +77,9 @@ formatTime(new Date(), true)          // "14:30" (24-hour)
 // Date and time together
 formatDateTime('2025-10-30T14:30:00Z') // "10/30/2025, 2:30 PM"
 
-// Relative time
-formatTimeAgo(Date.now() - 3600000)   // "1 hour ago"
+// Relative time, in the app's language (#19606)
+const timeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value })
+timeAgo(Date.now() - 3600000)         // "1 hour ago"
 ```
 
 #### File Size Formatting
@@ -370,6 +372,18 @@ These components already exist and should be used:
 #### Buttons
 - `BaseButton.vue` - Base button component
 - `TouchFriendlyButton.vue` - Touch-optimized button
+
+#### Form controls
+- `BaseInput` - **Moved to the shared kit** (#14778): `import { BaseInput } from '@autobot/ui'`
+  (`libs/autobot-ui/src/components/BaseInput.vue`). The main app's local copy is deleted. Props:
+  `modelValue`, `type`, `label`, `placeholder`, `helperText`, `error`, `size`, `disabled`,
+  `readonly`, `required`, `clearable`, `clearLabel`, `id`, `autocomplete`; events
+  `update:modelValue`/`clear`; exposed `focus()`/`blur()`; slots `prefix`/`suffix`. `class`,
+  `style` and `data-*` attrs land on the wrapper; every other attr (`aria-label`,
+  `aria-labelledby`, `name`, `maxlength`, listeners) lands on the native `<input>` -- a field
+  with no visible `label` must pass `aria-label` or `aria-labelledby`. Label, helper and
+  clear-button text come from the app (no i18n in the kit). Styled by the `--aui-input-*`
+  tokens, mapped in `libs/autobot-ui/src/tokens/adapter.css`.
 
 #### Progress
 - `ProgressBar.vue` - Progress bar component
@@ -1254,7 +1268,7 @@ const createRipple = (event: TouchEvent) => {
 - **No duplicate code** - Single button component serves both desktop and mobile
 
 **Files Modified**:
-- `autobot-frontend/src/components/base/BaseButton.vue` (extended with touch features)
+- `autobot-frontend/src/components/base/BaseButton.vue` (extended with touch features) — superseded (#18849): the main app now uses the shared kit button, `import { BaseButton } from '@autobot/ui'` (`libs/autobot-ui/src/components/BaseButton.vue`); the local file is gone
 
 **TouchFriendlyButton.vue Status**: Recommend deprecation or conversion to lightweight wrapper around `<BaseButton touchOptimized>` for backward compatibility.
 
@@ -2407,6 +2421,8 @@ const createRipple = (event: TouchEvent) => {
 **Goal**: Create reusable BaseAlert component to consolidate inline alert patterns and migrate first component.
 
 **New Component**: BaseAlert.vue (`autobot-frontend/src/components/ui/BaseAlert.vue`)
+
+> **Superseded (#18819):** this component, and `components/base/ErrorBanner.vue`, are consolidated into the shared kit's `BaseAlert` (`libs/autobot-ui/src/components/BaseAlert.vue`, `import { BaseAlert } from '@autobot/ui'`), used by both apps. The local files are gone.
 
 **Features**:
 - 5 variants: success, info, warning, error, critical

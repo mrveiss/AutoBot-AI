@@ -105,7 +105,7 @@ class _AuditResourceType:
 
 
 _audit_mod.AuditLog = _AuditLog
-_audit_mod.AuditAction = _AuditAction
+_audit_mod.IdentityAuditAction = _AuditAction
 _audit_mod.AuditResourceType = _AuditResourceType
 sys.modules["autobot_shared.user_management.audit_rows"].audit_row = lambda **kwargs: _AuditLog(**kwargs)
 

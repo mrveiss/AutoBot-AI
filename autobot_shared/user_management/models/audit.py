@@ -149,7 +149,7 @@ class AuditLog(Base):
 
 
 # Standard audit actions
-class AuditAction:
+class IdentityAuditAction:
     """Standard audit action constants."""
 
     # Authentication

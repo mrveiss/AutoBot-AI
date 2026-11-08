@@ -168,3 +168,10 @@ def test_celery_declares_what_it_depends_on():
     celery = _SERVICE_DEFINITIONS["celery"]
 
     assert "backend" in celery.dependencies
+
+
+def test_chromadb_default_port_is_the_ssot_port():
+    # #19321: was a literal 8100 restating PortConfig.chromadb.
+    from autobot_shared.ssot_config import config
+
+    assert _SERVICE_DEFINITIONS["chromadb"].default_port == config.port.chromadb

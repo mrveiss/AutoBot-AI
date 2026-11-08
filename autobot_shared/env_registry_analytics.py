@@ -14,6 +14,17 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_CHAT_TRACE_OUTPUT_MAX_CHARS",
+        type=int,
+        default=2000,
+        description="Characters of one tool result kept in a chat session trace (session_trace.py, #19963).",
+        component="backend",
+        range=(1, 100000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_DUPLICATE_ORPHAN_LEASE_SECONDS",
         type=float,
         default=300.0,
@@ -50,5 +61,62 @@ register_env_var(
             "`truncated` when the list is shorter (#18067)."
         ),
         component="backend",
+    )
+)
+
+# --- indexing subprocess watchdog (#18057) ------------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_INDEXING_HARD_TIMEOUT",
+        type=int,
+        default=1800,
+        description="Seconds a codebase indexing subprocess may run in total before it is killed.",
+        component="analytics",
+        range=(60, 86400),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_INDEXING_PROGRESS_TIMEOUT",
+        type=int,
+        default=300,
+        description="Seconds a codebase indexing subprocess may show no progress before it is killed.",
+        component="analytics",
+        range=(30, 14400),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_INDEXING_WATCHDOG_INTERVAL",
+        type=int,
+        default=30,
+        description="Seconds between the indexing watchdog's progress checks.",
+        component="analytics",
+        range=(1, 300),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODE_INDEX_RUN_TIMEOUT_SECONDS",
+        type=float,
+        default=180.0,
+        description="Seconds the code-index subprocess may run before the analytics run reports it timed out (#18056).",
+        component="analytics",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MODEL_PULL_TIMEOUT_SECONDS",
+        type=float,
+        default=1800.0,
+        description=(
+            "Seconds one `ollama pull` may run in the model optimizer before it is reported timed out (#18056)."
+        ),
+        component="analytics",
     )
 )

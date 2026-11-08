@@ -3,6 +3,7 @@
 <!-- AutoBot - AI-Powered Automation Platform -->
 <!-- Vision automation panel — backed by /api/vision/* endpoints. -->
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 /**
  * VisionAutomationView — Screen analysis, element detection, OCR, and
  * automation opportunity discovery backed by /api/vision/* endpoints.
@@ -195,13 +196,12 @@ onMounted(async () => {
         <div class="card">
           <div class="card-header">
             <span class="card-title">{{ t('vision.visionAutomation.analysis.cardTitle') }}</span>
-            <button
-              class="btn-action-primary"
+            <BaseButton size="sm"
               :disabled="isLoading"
               @click="handleAnalyze"
             >
               {{ isLoading ? t('vision.visionAutomation.analyzing') : t('vision.visionAutomation.analysis.trigger') }}
-            </button>
+            </BaseButton>
           </div>
           <div v-if="screenAnalysis" class="card-body">
             <div class="stats-row">
@@ -289,13 +289,12 @@ onMounted(async () => {
               />
               <span class="range-value">{{ Math.round(minConfidence * 100) }}%</span>
             </label>
-            <button
-              class="btn-action-primary"
+            <BaseButton size="sm"
               :disabled="isLoading"
               @click="handleDetectElements"
             >
               {{ isLoading ? t('vision.visionAutomation.detecting') : t('vision.visionAutomation.elements.trigger') }}
-            </button>
+            </BaseButton>
           </div>
         </div>
 
@@ -347,13 +346,12 @@ onMounted(async () => {
         <div class="card">
           <div class="card-header">
             <span class="card-title">{{ t('vision.visionAutomation.ocr.cardTitle') }}</span>
-            <button
-              class="btn-action-primary"
+            <BaseButton size="sm"
               :disabled="isLoading"
               @click="handleExtractOCR"
             >
               {{ isLoading ? t('vision.visionAutomation.extracting') : t('vision.visionAutomation.ocr.trigger') }}
-            </button>
+            </BaseButton>
           </div>
           <div v-if="ocrResult" class="card-body">
             <p class="result-summary">
@@ -395,13 +393,12 @@ onMounted(async () => {
         <div class="card">
           <div class="card-header">
             <span class="card-title">{{ t('vision.visionAutomation.opportunities.cardTitle') }}</span>
-            <button
-              class="btn-action-primary"
+            <BaseButton size="sm"
               :disabled="isLoading"
               @click="handleFetchOpportunities"
             >
               {{ isLoading ? t('vision.visionAutomation.scanning') : t('vision.visionAutomation.opportunities.trigger') }}
-            </button>
+            </BaseButton>
           </div>
           <div v-if="opportunities" class="card-body">
             <div class="stats-row">
@@ -602,28 +599,6 @@ onMounted(async () => {
   font-weight: 600;
   color: var(--text-primary);
   min-width: 3rem;
-}
-
-.btn-action-primary {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-on-primary);
-  background: var(--color-primary);
-  border: none;
-  border-radius: 0.375rem;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s;
-}
-
-.btn-action-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.btn-action-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .stats-row {

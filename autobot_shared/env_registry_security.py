@@ -369,3 +369,142 @@ register_env_var(
         component="security",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_THREAT_INTEL_CACHE_TTL",
+        type=int,
+        default=7200,
+        description=(
+            "Seconds a threat-intelligence verdict (VirusTotal/URLVoid) stays cached in-process "
+            "(#18888). Measured on a monotonic clock, so a wall-clock step cannot extend it. Clamped to 1-604800."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_FEATURE_FLAG_CACHE_TTL_SECONDS",
+        type=float,
+        default=5.0,
+        description=(
+            "Seconds this process serves the access-control enforcement mode and per-endpoint "
+            "overrides from memory (#18998). A write in the same process invalidates at once; "
+            "a write from another process is seen within this window. 0 disables the cache. "
+            "Clamped to 0-60."
+        ),
+        component="security",
+        range=(0, 60),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONFIG_REGISTRY_CACHE_TTL_SECONDS",
+        type=float,
+        default=60.0,
+        description=(
+            "Seconds the config registry serves a resolved value, and the fact that "
+            "Redis holds nothing for a key, from process memory before asking Redis "
+            "again. A change written by another process is visible within this window. "
+            "Clamped to 0-3600: an hour is the longest a stale config value is tolerable "
+            "without a restart; 0 disables the cache."
+        ),
+        component="redis",
+        range=(0, 3600),
+    )
+)
+
+# --- LLM provider sign-in (#19241) -------------------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_OAUTH_UNUSABLE_TTL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "How long a signed-in LLM provider token whose refresh failed is skipped before "
+            "another refresh is tried (llm_shared/provider_token_refresh.py). While skipped, "
+            "calls fall through to the next credential (the system token, then the API key). "
+            "Floored at 60 so the backoff cannot become a re-POST on every call."
+        ),
+        component="auth",
+        range=(60, None),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_ALLOWED_ORIGINS",
+        type=str,
+        default="",
+        description=(
+            "Comma-separated exact origins (scheme://host[:port]) an LLM tracing destination may use "
+            "(#19933), e.g. a self-hosted collector on a private address. Empty: none. A listed origin is "
+            "allowed even when private or loopback; link-local, cloud-metadata and unspecified hosts are "
+            "refused, and an entry with userinfo, a backslash or other non-strict shape never matches. "
+            "SSOT service origins are not trusted for tracing."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_ALLOW_EXTERNAL",
+        type=bool,
+        default=False,
+        description=(
+            "Allow an LLM tracing destination on a public address that is not listed in "
+            "AUTOBOT_LLM_TRACING_ALLOWED_ORIGINS (#19933). Off: a tracing key alone never moves prompt "
+            "metadata off the install, and the destination is refused at startup. On: a public destination "
+            "is allowed; private, loopback and link-local ones are still refused."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_INCLUDE_CONTENT",
+        type=bool,
+        default=False,
+        description=(
+            "Send prompt and response text to an enabled LLM tracing destination (#19933). "
+            "Off: only metadata (ids, model, token usage, latency) is sent. "
+            "On: the text is sent after the outbound credential redaction."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MEMBER_EPOCH_WRITE_CONCURRENCY",
+        type=int,
+        default=10,
+        description=(
+            "Members whose token-revocation marker is written at once when an organisation is "
+            "deactivated or deleted (#20443); bounds the store's concurrent writes however large the "
+            "organisation is; read by autobot_shared/user_management/password_epoch.py."
+        ),
+        component="security",
+        range=(1, 100),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ROLE_DENIED_AUDIT_WINDOW_S",
+        type=int,
+        default=300,
+        description=(
+            "Seconds between role_denied audit records for one user on one route (#16333); repeats in "
+            "the window are counted into the next record, so a non-admin cannot flood the audit log; "
+            "read by autobot-backend/auth_rbac.py."
+        ),
+        component="security",
+        range=(1, 86400),
+    )
+)

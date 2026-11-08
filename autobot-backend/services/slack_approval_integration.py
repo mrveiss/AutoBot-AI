@@ -48,7 +48,7 @@ class SlackApprovalManager:
     """
 
     # Circuit breaker thresholds
-    _FAILURE_THRESHOLD = 3  # Failures before opening circuit
+    _REDIS_BREAKER_FAILURE_THRESHOLD = 3  # Thread-store failures before opening its own breaker (#19730)
     _RECOVERY_TIMEOUT = 60  # Seconds before attempting to recover
     _HALF_OPEN_TIMEOUT = 30  # Seconds for half-open testing window
 
@@ -305,7 +305,7 @@ class SlackApprovalManager:
         self._failure_count += 1
         self._last_failure_time = time.time()
 
-        if self._failure_count >= self._FAILURE_THRESHOLD:
+        if self._failure_count >= self._REDIS_BREAKER_FAILURE_THRESHOLD:
             if self._circuit_state != CircuitState.OPEN:
                 self._circuit_state = CircuitState.OPEN
                 logger.warning(

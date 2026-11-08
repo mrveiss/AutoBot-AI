@@ -142,3 +142,77 @@ register_env_var(
         range=(60, 172800),
     )
 )
+
+
+# --- issue-claims CLI API transport (#18811): the session ledger reaches the registry via AutoBot's API ---
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ISSUE_CLAIMS_API_URL",
+        type=str,
+        default="",
+        description=(
+            "Base URL of AutoBot's backend for the issue-claims CLI (#18811). When set, "
+            "`python -m autobot_shared.coordination.issue_claims` talks to /api/coordination/issue-claims "
+            "instead of Redis, so a developer checkout needs no registry credential. Must be https, or http "
+            "to a loopback host. Authenticate once with `issue_claims login` (credential kept in the kernel "
+            "keyring, cleared on reboot). Never derived from the SSOT backend URL. Unset keeps the direct "
+            "Redis transport."
+        ),
+        component="orchestration",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ISSUE_CLAIMS_CREDENTIAL_TTL_S",
+        type=int,
+        default=604800,
+        description=(
+            "Lifetime of an issue-claims client credential minted by `issue_claims login` (#18811). The "
+            "credential is a secret in the minting user's vault; past this age it is refused, so one "
+            "orphaned by a reboot (the kernel keyring is cleared) stops working without a revoke."
+        ),
+        component="orchestration",
+        range=(3600, 7776000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ISSUE_CLAIMS_API_TIMEOUT_S",
+        type=int,
+        default=10,
+        description="Per-request timeout of the issue-claims CLI's API transport; expiry fails closed (#18811).",
+        component="orchestration",
+        range=(1, 120),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ISSUE_CLAIMS_FAILURE_WINDOW_S",
+        type=int,
+        default=300,
+        description=(
+            "Window over which failed issue-claims credential checks are counted per client source and "
+            "aggregated into one audit event (#18811)."
+        ),
+        component="orchestration",
+        range=(10, 86400),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ISSUE_CLAIMS_FAILURE_LIMIT",
+        type=int,
+        default=10,
+        description=(
+            "Failed issue-claims credential checks one client source may make per window; past it the "
+            "source is refused with 429 before any credential lookup (#18811)."
+        ),
+        component="orchestration",
+        range=(1, 10000),
+    )
+)

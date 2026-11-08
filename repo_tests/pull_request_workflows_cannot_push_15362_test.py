@@ -50,6 +50,11 @@ ALLOWED: dict[tuple[str, str | None], str] = {
         "opens a PR from it -- never to the branch under review, so no in-flight check is "
         "invalidated"
     ),
+    ("duplication-guard.yml", "lower-pins"): (
+        "runs only on a push to main (`github.event_name == 'push'`), never on the pull_request "
+        "trigger, and pushes its own `automation/duplication-pins` branch to open a PR (#16324) -- "
+        "never the branch under review and never main"
+    ),
 }
 
 #: Reach floor. A discovery-based guard that finds no workflows reports a clean run having

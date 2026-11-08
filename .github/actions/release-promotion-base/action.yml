@@ -1,0 +1,72 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Composite action: the base a pull request into `release` is judged from (#19466)
+#
+# Owner ruling 2026-10-24: "Gates judge only new commits." A PR into `release` is judged only on
+# the commits NOT already on `main`, because every commit on `main` already passed the same gates
+# on its own PR. A promotion PR (head = main) therefore has zero new commits and nothing to judge.
+# Without this, the gates read the weeks-old release tip as the base and re-judged all of main's
+# history: the trailer gate scanned 1670 already-merged commits (36 with trailers main can never
+# rewrite) and every ceiling main legitimately raised read as a raise in the size ratchets.
+#
+# The one home for this rule. For a `pull_request` whose base is the release branch it outputs the
+# merge base of the head with `main` (`base-sha`) and the number of head commits not on `main`
+# (`new-commits`), from the compare API. Any other event or base outputs empty values, and the
+# caller keeps its usual base. A compare that fails or returns no merge base fails the step:
+# an unreadable base is never "nothing new to judge".
+#
+# Usage (needs actions/checkout first):
+#   - uses: ./.github/actions/release-promotion-base
+#     id: release-base
+#     with:
+#       fetch: 'true'   # fetch base-sha (depth 1) when the clone lacks it
+
+name: Release promotion base
+description: >
+  For a pull request into the release branch, output the merge base with main and the count of
+  commits not already on main, so gates judge only new commits. Empty outputs otherwise.
+
+inputs:
+  fetch:
+    description: '"true" fetches base-sha at depth 1 when the checkout does not hold it.'
+    required: false
+    default: 'false'
+  release-branch:
+    description: 'Base branch whose pull requests are judged only on commits not on the integration branch.'
+    required: false
+    default: release
+  integration-branch:
+    description: 'Branch whose commits were already gated on their own pull requests.'
+    required: false
+    default: main
+  token:
+    description: 'Token allowed to read the compare API.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  base-sha:
+    description: 'Merge base of the head with the integration branch; empty when the rule does not apply.'
+    value: ${{ steps.compare.outputs.base-sha }}
+  new-commits:
+    description: 'Head commits not on the integration branch; empty when the rule does not apply.'
+    value: ${{ steps.compare.outputs.new-commits }}
+
+runs:
+  using: composite
+  steps:
+    - name: Merge base with the integration branch
+      id: compare
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        EVENT_NAME: ${{ github.event_name }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        REPO: ${{ github.repository }}
+        RELEASE_BRANCH: ${{ inputs.release-branch }}
+        INTEGRATION_BRANCH: ${{ inputs.integration-branch }}
+        FETCH: ${{ inputs.fetch }}
+      run: bash "$GITHUB_ACTION_PATH/release_promotion_base.sh"

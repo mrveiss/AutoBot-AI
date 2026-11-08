@@ -17,6 +17,7 @@ import json
 import os
 import socket
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -31,6 +32,16 @@ NO_RESPONSE_STATUS = 0
 
 DEFAULT_API_ROOT = "https://api.github.com"
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 30
+
+# Rate-limit backoff (#19522): a 429, or a 403 that is a primary or secondary rate limit, is
+# retried after the wait GitHub names (Retry-After, else x-ratelimit-reset, else the documented
+# one minute for a secondary limit), at most RATE_LIMIT_RETRIES times, each wait capped.
+RATE_LIMIT_RETRIES = 2
+RATE_LIMIT_MAX_WAIT_SECONDS = 90.0
+SECONDARY_LIMIT_WAIT_SECONDS = 60.0
+
+# The author_association values that mean a maintainer of the repository (#19520, #19522).
+TRUSTED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 
 
 class WatchdogError(RuntimeError):
@@ -51,6 +62,39 @@ class WatchdogApiError(WatchdogError):
     """
 
 
+def _decode_error_body(exc: urllib.error.HTTPError) -> Any:
+    body = exc.read().decode("utf-8", errors="replace")
+    try:
+        return json.loads(body) if body else None
+    except json.JSONDecodeError:
+        return {"message": body}
+
+
+def _header(headers: Any, name: str) -> Optional[str]:
+    value = headers.get(name) if headers is not None else None
+    return str(value).strip() if value is not None else None
+
+
+def rate_limit_wait(status: int, body: Any, headers: Any, now: float) -> Optional[float]:
+    """Seconds to wait before retrying a rate-limited answer, or None when it is not one.
+
+    429 always is. A 403 is only when GitHub says so: Retry-After, an exhausted
+    x-ratelimit-remaining, or a "rate limit" message (the secondary limit). Any other
+    403 is a permission answer and is returned at once.
+    """
+    message = str(body.get("message", "")) if isinstance(body, dict) else ""
+    retry_after = _header(headers, "Retry-After")
+    exhausted = _header(headers, "x-ratelimit-remaining") == "0"
+    if status != 429 and not (status == 403 and (retry_after or exhausted or "rate limit" in message.lower())):
+        return None
+    if retry_after and retry_after.isdigit():
+        return float(retry_after)
+    reset = _header(headers, "x-ratelimit-reset")
+    if exhausted and reset and reset.isdigit():
+        return max(float(reset) - now, 1.0)
+    return SECONDARY_LIMIT_WAIT_SECONDS
+
+
 class GitHubApi:
     """Minimal GitHub REST client — stdlib only, no extra CI dependency."""
 
@@ -68,6 +112,9 @@ class GitHubApi:
         self.repository = repository
         self.api_root = api_root.rstrip("/")
         self.timeout = timeout
+        # #19548: the last response's headers, so a caller can honour a
+        # secondary-rate-limit ``Retry-After`` without a second transport.
+        self.last_headers: Dict[str, str] = {}
 
     def request(self, method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Tuple[int, Any]:
         """
@@ -78,7 +125,24 @@ class GitHubApi:
         ``URLError`` would exit the process with code 1, which this module
         documents as "parked runs could not be approved" — a completely
         different condition, reported with no remediation text.
+
+        A rate-limited answer is retried after the wait GitHub asks for (see
+        ``rate_limit_wait``); the last answer is returned when retries run out.
         """
+        for attempt in range(RATE_LIMIT_RETRIES + 1):
+            status, body, headers = self._send(method, path, payload)
+            wait = rate_limit_wait(status, body, headers, time.time())
+            if wait is None or attempt == RATE_LIMIT_RETRIES:
+                return status, body
+            self.sleep(min(wait, RATE_LIMIT_MAX_WAIT_SECONDS))
+        return status, body
+
+    @staticmethod
+    def sleep(seconds: float) -> None:
+        time.sleep(seconds)
+
+    def _send(self, method: str, path: str, payload: Optional[Dict[str, Any]]) -> Tuple[int, Any, Any]:
+        """One attempt: ``(status, decoded body, response headers or None)``."""
         url = path if path.startswith("http") else f"{self.api_root}/{path.lstrip('/')}"
         data = json.dumps(payload).encode("utf-8") if payload is not None else None
         request = urllib.request.Request(url=url, method=method, data=data)
@@ -87,19 +151,17 @@ class GitHubApi:
         request.add_header("X-GitHub-Api-Version", "2022-11-28")
         if data is not None:
             request.add_header("Content-Type", "application/json")
+        self.last_headers = {}
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - fixed api host
+                self.last_headers = {k.lower(): v for k, v in response.headers.items()}
                 body = response.read().decode("utf-8")
-                return response.status, (json.loads(body) if body else None)
+                return response.status, (json.loads(body) if body else None), None
         except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            try:
-                decoded: Any = json.loads(body) if body else None
-            except json.JSONDecodeError:
-                decoded = {"message": body}
-            return exc.code, decoded
+            self.last_headers = {k.lower(): v for k, v in (exc.headers or {}).items()}
+            return exc.code, _decode_error_body(exc), exc.headers
         except (urllib.error.URLError, socket.timeout, OSError) as exc:
-            return NO_RESPONSE_STATUS, {"message": f"transport failure: {exc}"}
+            return NO_RESPONSE_STATUS, {"message": f"transport failure: {exc}"}, None
 
     def _list_runs(self, params: Dict[str, str], context: str) -> List[Dict[str, Any]]:
         query = urllib.parse.urlencode(params)

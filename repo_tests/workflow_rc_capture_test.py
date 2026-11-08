@@ -167,7 +167,6 @@ def errexit_blocks(root: Path) -> list[RunBlock]:
 REACH = declare(
     "workflow-rc-capture",
     discover=errexit_blocks,
-    floor=330,
     what="workflow run blocks under an errexit shell",
     growth=70,
 )

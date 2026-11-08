@@ -65,13 +65,18 @@ def _docs() -> list[tuple[Path, object]]:
 
 
 def _variables(docs) -> dict[str, str]:
-    """Plain-string values from role defaults, group_vars and play-level vars."""
+    """String values from role defaults, group_vars and play-level vars, with references to
+    other such variables resolved (`"{{ autobot.base_dir }}/x"`, #18880); unresolvable ones drop."""
     values: dict[str, str] = {}
 
     def take(mapping) -> None:
         for key, value in (mapping or {}).items():
-            if isinstance(value, str) and "{{" not in value:
+            if isinstance(value, str):
                 values.setdefault(key, value)
+            elif isinstance(value, dict):  # dotted names, e.g. autobot.base_dir (#15632)
+                for sub, inner in value.items():
+                    if isinstance(inner, str):
+                        values.setdefault(f"{key}.{sub}", inner)
 
     for path, doc in docs:
         if path.match("*/defaults/main.yml") or "group_vars" in path.parts:
@@ -80,7 +85,13 @@ def _variables(docs) -> dict[str, str]:
             for play in doc:
                 if isinstance(play, dict) and isinstance(play.get("vars"), dict):
                     take(play["vars"])
-    return values
+    ref = re.compile(r"\{\{\s*([\w.]+)\s*\}\}")
+    for _ in range(5):  # chains are short: install_dir -> autobot.base_dir
+        values = {
+            k: ref.sub(lambda m: values.get(m[1], m[0]) if "{{" not in values.get(m[1], "{{") else m[0], v)
+            for k, v in values.items()
+        }
+    return {k: v for k, v in values.items() if "{{" not in v}
 
 
 def _walk(node):
@@ -131,6 +142,7 @@ def test_every_deployed_systemd_unit_is_removed_or_kept() -> None:
     assert len(resolved) >= 25, f"read {len(resolved)} deployed units -- the scan is broken"
     unit_dir = "/etc/systemd/system/"
     exact = {unit_dir + u for u in _array("UNITS") + _array("KEPT_UNITS")} | set(_array("UNIT_DROPINS"))
+    exact |= set(_array("RECORDED_PATHS"))  # removed only when the install record lists them (#18556)
     globs = [unit_dir + g for g in _array("UNIT_GLOBS")]
     missed = sorted(d for d in resolved | open_ if not _covered(d, exact, globs))
     assert not missed, f"roles deploy units scripts/uninstall.sh neither removes nor keeps: {missed}"

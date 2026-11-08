@@ -2,7 +2,7 @@
 
 ## Overview
 
-The LLC budget system now supports **two budget modes** to accommodate different user scenarios:
+The Company OS budget system now supports **two budget modes** to accommodate different user scenarios:
 
 1. **DOLLARS mode** (default): Track spend in USD, enforce dollar limits
 2. **TOKENS mode**: Track spend in token counts, enforce token limits
@@ -30,15 +30,15 @@ This allows users on subscription plans (Claude Max, ChatGPT Plus) or free-tier 
 {
   "agent_id": "agent-123",
   "budget_mode": "tokens",
-  
+
   // Dollar fields (always present)
   "budget_limit": "100.00",
   "budget_spent": "42.50",
-  
+
   // Token fields (GH#8997)
   "token_limit": 1000000,
   "tokens_spent": 450000,
-  
+
   "alert_threshold": 0.8,
   "remaining": "550000",  // In active mode (tokens here)
   "is_over_limit": false,

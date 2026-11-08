@@ -16,9 +16,10 @@
 #
 # CUDA torch itself is NOT pinned here (#15162): it lives in
 # requirements-gpu-torch.txt, which the ansible backend role installs
-# whenever a GPU is present, independent of this vLLM opt-in. vllm pins the
-# same torch build, so pip resolves it as already-satisfied when this file
-# is installed on top.
+# whenever a GPU is present, independent of this vLLM opt-in. vllm pins its
+# own torch (2.13.0 for 0.29-0.32), not the 2.14.1 pair in
+# constraints/shared.txt, so this file stays outside that constraint and a
+# host enabling vLLM moves off the pair (maintainer decision on #19682).
 #
 # Requires: CUDA-compatible GPU, Python 3.12.
 

@@ -14,6 +14,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from user_management.models.organization import Organization
+
 
 class LLCBase(DeclarativeBase):
     """Separate declarative base for LLC models.
@@ -52,7 +54,9 @@ class LLCActivityLog(LLCBase):
     )
     company_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        sa.ForeignKey("organizations.id", ondelete="CASCADE"),
+        # The Column object, not the name "organizations.id": that table lives on the user-management
+        # metadata, and a name is looked up in LLCBase's own, where it does not exist (#20150).
+        sa.ForeignKey(Organization.__table__.c.id, ondelete="CASCADE"),
         nullable=False,
     )
     actor_type: Mapped[str] = mapped_column(

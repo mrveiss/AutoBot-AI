@@ -3,8 +3,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import axios from 'axios'
 import BrowserTool from './BrowserTool.vue'
+import { HttpError } from '@autobot/ui'
+import { backendClient } from '@/testing/mockAutobotBackendClient'
 import en from '@/locales/en.json'
 
 /**
@@ -20,28 +21,14 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ token: 'test-token' }),
 }))
 
-vi.mock('axios', () => {
-  const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-  }
-  return { default: { create: vi.fn(() => instance) } }
-})
+vi.mock('@/utils/ApiClient', async (importOriginal) =>
+  (await import('@/testing/mockAutobotBackendClient')).withMockedBackendClient(importOriginal),
+)
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
-type MockedClient = { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn> }
-
-function client(): MockedClient {
-  return (axios.create as unknown as () => MockedClient)()
-}
-
 async function mountWithStatus(body: unknown) {
-  client().get.mockResolvedValue({ data: body })
+  backendClient.get.mockResolvedValue(body)
   const wrapper = mount(BrowserTool, { global: { plugins: [i18n] } })
   await flushPromises()
   return wrapper
@@ -53,8 +40,8 @@ function indicatorClasses(wrapper: Awaited<ReturnType<typeof mountWithStatus>>):
 
 describe('BrowserTool status indicator', () => {
   beforeEach(() => {
-    client().get.mockReset()
-    client().post.mockReset()
+    backendClient.get.mockReset()
+    backendClient.post.mockReset()
   })
 
   it('reads connected when the route reports a healthy browser VM', async () => {
@@ -111,7 +98,7 @@ describe('BrowserTool status indicator', () => {
     const wrapper = await mountWithStatus({ browser_vm: { status: 'unavailable' } })
 
     const detail = "Refused: '10.0.0.5' resolves to a non-public address and is neither a loopback host nor a node the fleet registry knows."
-    client().post.mockRejectedValue({ response: { data: { detail } } })
+    backendClient.post.mockRejectedValue(new HttpError(400, 'Bad Request', { detail }))
     await wrapper.get('button').trigger('click')
     await flushPromises()
 

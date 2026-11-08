@@ -10,7 +10,7 @@ from each other. Before #17225 the canonical service imported its enums from the
 three modules it replaced, which is why those modules could not be retired.
 
 The three legacy enums are vocabularies, not stores: ``AuditAction`` (security
-actions, was ``services/audit/audit_log.py``), ``EventType`` (compliance events,
+actions, was ``services/audit/audit_log.py``), ``ComplianceEventType`` (compliance events,
 was ``services/event_log.py``) and ``AuditEventType`` (knowledge events, was
 ``knowledge/audit_log.py``). Every one of them is recorded as an ``AuditEvent``.
 """
@@ -20,6 +20,8 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict
+
+from autobot_shared.audit_actions import canonical_action, spellings_of
 
 
 class AuditCategory(str, Enum):
@@ -59,21 +61,98 @@ class AuditAction(str, Enum):
     SESSION_CREATE = "session.create"
     SESSION_DELETE = "session.delete"
     SESSION_EXPORT = "session.export"
+    SESSION_OWNER_ASSIGN = "session.owner_assign"
+    SESSION_REASSIGN = "session.reassign"  # #20029: a removed user's chat session handed to a successor
     KNOWLEDGE_ADD = "knowledge.add"
     KNOWLEDGE_REMOVE = "knowledge.remove"
+    KNOWLEDGE_BACKUP_DELETE = "knowledge.backup.delete"
+    KNOWLEDGE_BACKUP_RESTORE = "knowledge.backup.restore"
+    KNOWLEDGE_UPLOAD_SESSION_REMOVE = "knowledge.upload_session.remove"  # #19713: an admin frees an abandoned upload
+    KNOWLEDGE_QUARANTINE_READ = "knowledge.quarantine.read"  # #19163: an opt-out read of the research quarantine
+    KNOWLEDGE_ADMIN_READ = "kb.admin_read"  # #16665: an admin's read of any fact through an explicit read API
     API_KEY_CREATE = "api_key.create"  # pragma: allowlist secret -- an action name, not a key
     API_KEY_REVOKE = "api_key.revoke"  # pragma: allowlist secret -- an action name, not a key
     USER_CREATE = "user.create"
     USER_DELETE = "user.delete"
-    CONFIG_CHANGE = "config.change"
+    USER_UPDATE = "user.update"  # #18716
+    ROLE_ASSIGN = "role.assign"  # #18716
+    ROLE_REVOKE = "role.revoke"  # #18716
+    ROLE_CHANGE = "role.change"  # #18716
+    PASSWORD_CHANGE = "password.change"  # nosec B105  # pragma: allowlist secret -- an action name (#18716)
+    # auth.login / auth.logout (#18716): the outcome column says success or failure. One backend login
+    # writes up to three rows, each a different fact, kept on purpose:
+    #   1. middleware/audit_middleware.py path map -- the HTTP *attempt* (every status, no actor yet);
+    #   2. shared UserService.authenticate via audit_row -- the credential *verdict* with user/org id and
+    #      the failure reason (the only record of a failure the SLM also writes);
+    #   3. api/auth.py emit_compliance -- the *session issued* record that feeds the admin event-log view.
+    # auth_middleware.authenticate_user rows (a legacy file-user path with no production caller) use the same
+    # spelling. A logout writes rows 1 and 3 only.
+    AUTH_LOGIN = "auth.login"
+    AUTH_LOGOUT = "auth.logout"
+    AUTH_PERMISSION_CHECK = "auth.permission_check"  # #18716
+    FILE_UPLOAD = "file.upload"  # #18716
+    FILE_DOWNLOAD = "file.download"  # #18716
+    FILE_CREATE = "file.create"  # #18716
+    FILE_DELETE = "file.delete"  # #18716
+    ELEVATION_REQUEST = "elevation.request"  # #18716
+    ELEVATION_AUTHORIZE = "elevation.authorize"  # #18716
+    ELEVATION_EXECUTE = "elevation.execute"  # #18716
+    CONFIG_UPDATE = "config.update"  # #18716: was config.change; the writers and the dashboard say update
     ADMIN_ACTION = "admin.action"
     RUN_JWT_MINT = "run_jwt.mint"
     RUN_JWT_REVOKE = "run_jwt.revoke"
     RUN_JWT_REFRESH = "run_jwt.refresh"
     DEVICE_JWT_MINT = "device_jwt.mint"  # GH#9493
+    SECRET_ACCESS = "secret.access"  # nosec B105  # pragma: allowlist secret -- an action name (#18811)
+    CLAIMS_CREDENTIAL_MINT = "claims_credential.mint"  # #18811
+    CLAIMS_CREDENTIAL_REVOKE = "claims_credential.revoke"  # #18811
+    CLAIMS_CREDENTIAL_CHECK_FAILURES = "claims_credential.check_failures"  # #18811: one per source per window
+    # #19241: a provider sign-in disconnect (user / org system) or a superadmin's shared-token revoke.
+    PROVIDER_SIGNIN_REVOKE = "provider_signin.revoke"
+    # identity vocabulary (#19035); IdentityAuditAction spellings map here through audit_actions.ACTION_ALIASES.
+    # auth.mfa carries verified / failed / backup-code in the outcome column, like auth.login.
+    AUTH_MFA = "auth.mfa"
+    AUTH_LOCKOUT = "auth.lockout"
+    AUTH_UNLOCK = "auth.unlock"
+    MFA_ENABLE = "mfa.enable"
+    MFA_DISABLE = "mfa.disable"
+    ACCESS_DENIED = "access.denied"
+    PASSWORD_RESET_REQUEST = "password.reset_request"  # nosec B105  # pragma: allowlist secret -- an action name
+    PASSWORD_RESET = "password.reset"  # nosec B105  # pragma: allowlist secret -- an action name
+    SSO_LINK = "sso.link"
+    SSO_UNLINK = "sso.unlink"
+    USER_ACTIVATE = "user.activate"
+    USER_DEACTIVATE = "user.deactivate"
+    TEAM_CREATE = "team.create"
+    TEAM_UPDATE = "team.update"
+    TEAM_DELETE = "team.delete"
+    TEAM_MEMBER_ADD = "team.member_add"
+    TEAM_MEMBER_REMOVE = "team.member_remove"
+    TEAM_MEMBER_ROLE_CHANGE = "team.member_role_change"
+    ORG_CREATE = "org.create"
+    ORG_UPDATE = "org.update"
+    ORG_DELETE = "org.delete"
+    ORG_SUBSCRIPTION_TIER_DROP = "org.subscription_tier.drop"
+    NODE_SSH_PASSWORD_DELETE = (
+        "node.ssh_password.delete"  # nosec B105  # pragma: allowlist secret -- #20046: an action name
+    )
+    CLEANUP_ENV_COPIES = "cleanup.env_copies"  # #20567: old .env.*~ copies removed after approval
+    APPROVAL_APPROVE = "approval.approve"  # #20046: a non-admin refused on an admin-only approval
+    ROLE_CREATE = "role.create"
+    ROLE_UPDATE = "role.update"
+    ROLE_DELETE = "role.delete"
+    API_KEY_USE = "api_key.use"  # pragma: allowlist secret -- an action name, not a key
+    SECURITY_SUSPICIOUS_ACTIVITY = "security.suspicious_activity"
+    CODE_ROLLBACK = "code.rollback"  # #20214: the SLM updater deploys an earlier commit the operator chose
+    CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
+    CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
+    BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
+    LLC_PROJECT_BACKFILL = "llc.project_backfill"  # #18978: an approved project backfill assigned projects
+    # #16333: the internal service key was admitted on a route that names its caller (service_opt_in).
+    SERVICE_KEY_ADMITTED = "auth.service_key_admitted"  # pragma: allowlist secret -- an action name, not a key
 
 
-class EventType(str, Enum):
+class ComplianceEventType(str, Enum):
     """Compliance events (was ``services.event_log.EventType``)."""
 
     USER_LOGIN = "user.login"
@@ -124,8 +203,8 @@ def event_from_dict(data: Dict[str, Any]) -> AuditEvent:
 
 
 def action_name(action: Any) -> str:
-    """The stored action string for an enum member or a plain string."""
-    return action.value if isinstance(action, Enum) else str(action)
+    """The stored action string for an enum member or a plain string, in its canonical spelling (#18716)."""
+    return canonical_action(action)
 
 
 @dataclass(frozen=True)
@@ -149,8 +228,18 @@ class AuditFilter:
     to_ts: float | None = None
 
     def _column_values(self) -> Dict[str, Any]:
-        cols = ("actor_id", "action", "session_id", "outcome", "resource_type", "resource_id")
+        cols = ("actor_id", "session_id", "outcome", "resource_type", "resource_id")
         return {c: getattr(self, c) for c in cols if getattr(self, c) is not None}
+
+    def action_set(self) -> frozenset[str] | None:
+        """Every stored spelling ``action`` / ``actions`` accept, aliases of old rows included (#18716).
+
+        The alias half shrinks once the approved data migration has rewritten the stored rows.
+        """
+        sets = [spellings_of(self.action)] if self.action is not None else []
+        if self.actions is not None:
+            sets.append(frozenset().union(*(spellings_of(a) for a in self.actions)))
+        return frozenset.intersection(*sets) if sets else None
 
     def matches(self, event: Dict[str, Any]) -> bool:
         """True when a stored event dict satisfies every set field."""
@@ -158,7 +247,8 @@ class AuditFilter:
             return False
         if any(event.get(col) != want for col, want in self._column_values().items()):
             return False
-        if self.actions is not None and event.get("action") not in self.actions:
+        accepted = self.action_set()
+        if accepted is not None and event.get("action") not in accepted:
             return False
         meta = event.get("metadata") or {}
         if any(str(meta.get(k)) != v for k, v in self.metadata):

@@ -222,6 +222,9 @@ class TestSixRoutesNoLongerFiveHundred:
         assert data["results"][0]["content"] == "hit-from-manager"
         name, kwargs = stub_manager.calls[0]
         assert name == "search_chat_knowledge"
+        # #16665: the route reads as the caller (org and groups included), never as an admin
+        reader = kwargs.pop("user_id")
+        assert reader.user_id and not reader.is_admin
         assert kwargs == {"query": "redis", "chat_id": CHAT_ID, "include_temporary": True}
 
     def test_context_reads_contexts_and_files_from_the_manager(self, client):

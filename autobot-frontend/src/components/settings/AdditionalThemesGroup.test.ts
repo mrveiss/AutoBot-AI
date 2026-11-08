@@ -9,17 +9,25 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 
+const userState = vi.hoisted(() => ({ isAdmin: true }))
+vi.mock('@/stores/useUserStore', () => ({ useUserStore: () => userState }))
+
 vi.mock('@/composables/useThemeRegistry', () => ({
   fetchInstalledThemes: () =>
     Promise.resolve([{ id: 'aqua', name: 'Aqua', author: 'Northwind', version: '1.2', supports: [] }]),
 }))
 
+import Group from './AdditionalThemesGroup.vue'
+import { useThemeVariant } from '@/composables/useThemeVariant'
+
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
+// #18833: imported statically. `vi.resetModules()` + a dynamic import here made the FIRST
+// test transform and evaluate the component's whole module graph inside its own 10 s
+// budget (4 s idle, past 10 s under parallel load); the second test took 64 ms. Static
+// imports are paid once at collection, outside every test's timeout. Neither test mutates
+// the theme variant, so no per-test module reset is needed.
 async function mountGroup() {
-  vi.resetModules()
-  const { default: Group } = await import('./AdditionalThemesGroup.vue')
-  const { useThemeVariant } = await import('@/composables/useThemeVariant')
   await useThemeVariant().loadInstalledThemes()
   const wrapper = mount(Group, { global: { plugins: [i18n] } })
   await flushPromises()
@@ -27,6 +35,7 @@ async function mountGroup() {
 }
 
 beforeEach(() => {
+  userState.isAdmin = true
   localStorage.clear()
 })
 
@@ -44,5 +53,16 @@ describe('AdditionalThemesGroup', () => {
     const link = wrapper.get('a[target="_blank"]')
     expect(link.attributes('rel')).toContain('noopener')
     expect(link.text()).toBe(en.settings.additionalThemes.slmLink)
+    expect(link.attributes('href')).toMatch(/\/settings\/admin\/themes$/)
+  })
+
+  it('shows a non-admin an administrator note, not an SLM link, and keeps the badge', async () => {
+    userState.isAdmin = false
+    const { wrapper } = await mountGroup()
+    expect(wrapper.find('a[target="_blank"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="additional-themes-admin-note"]').text()).toBe(
+      en.settings.additionalThemes.adminManaged,
+    )
+    expect(wrapper.get('[data-testid="additional-theme-aqua"]').text()).toContain('Deployed via SLM')
   })
 })

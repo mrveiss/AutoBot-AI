@@ -21,6 +21,27 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_UPDATE_CODE_SOURCE_FETCH_RETRY_DELAY_S",
+        type=int,
+        default=5,
+        description="Seconds before retrying a failed git fetch of the code source (#20089).",
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_UPDATE_REPORT_DEPLOY_RUNS",
+        type=int,
+        default=50,
+        description="Newest role deploys listed in the update report (api/update_report.py, #19962).",
+        component="slm",
+        range=(1, 500),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PLAYBOOK_PIPE_LINE_LIMIT",
         type=int,
         default=10 * 1024 * 1024,
@@ -476,6 +497,22 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="SLM_COMPOSE_NODES",
+        type=str,
+        default="",
+        description=(
+            "Surface each compose container as an SLM fleet node (#9761). Unset follows the deployment "
+            "mode: on for docker_local (the compose stack, or a dev checkout run inside a container), off "
+            "on a bare-metal/VM fleet and a host dev checkout; true|false overrides, a blank or unrecognised "
+            "value is warned about and treated as unset. The one default is autobot-slm-backend/config.py "
+            "Settings.compose_nodes_enabled (#19323); docker-compose.yml passes the name through only."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_DOCKER_MGMT_PREFIX",
         type=str,
         default="",
@@ -490,6 +527,32 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_DOCKER_SLM_NGINX_CONF",
+        type=str,
+        default="./docker/nginx/nginx-slm.conf",
+        description=(
+            "nginx config the SLM-only web GUI (compose service autobot-slm-gui) mounts. The default serves "
+            "HTTP; ./docker/nginx/nginx-slm-ssl.conf serves HTTPS with ./docker/certs (#18593)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_SLM_HTTPS_PORT",
+        type=int,
+        default=8443,
+        description=(
+            "Host port the compose SLM GUI publishes for HTTPS (container port 443); the frontend "
+            "holds 443 (#18593, #20620)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_DOCKER_MGMT_POOL",
         type=str,
         default="10.128.0.0/9",
@@ -497,6 +560,39 @@ register_env_var(
             "Private IPv4 block (/24 or larger) that docker/pick_mgmt_prefix.py draws the "
             "compose management /24 from, skipping any range a host route or Docker network uses (#16833)."
         ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REVOCATION_RETRY_AFTER_SECONDS",
+        type=int,
+        default=5,
+        description=(
+            "Seconds in the Retry-After header of the 503 (detail "
+            "revocation_check_unavailable) both backends answer when a token's revocation "
+            "check cannot run (#18892). The token is still refused; the client keeps its "
+            "session and retries. Raising it spaces retries out during a long store "
+            "outage; lowering it recovers faster once the store is back "
+            "(autobot_shared/auth/revocation_unavailable.py). Floor 1."
+        ),
+        component="auth",
+        range=(1, 300),
+    )
+)
+
+# Node-health vars live in a sibling for room (#19292); importing it here
+# registers them whenever this module loads.
+from autobot_shared import env_registry_slm_health  # noqa: E402,F401
+from autobot_shared import env_registry_slm_rollback  # noqa: E402,F401  # #20214
+
+register_env_var(
+    EnvVarSpec(
+        name="SLM_STALE_COMPONENTS_SCAN_TIMEOUT_SECONDS",
+        type=int,
+        default=300,
+        description="Seconds /code-sync/status waits on a drift scan before serving the last result (#20250).",
         component="slm",
     )
 )

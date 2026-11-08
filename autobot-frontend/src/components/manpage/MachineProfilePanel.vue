@@ -1,10 +1,10 @@
 <template>
-  <BasePanel variant="bordered" size="md">
+  <BaseCard scrollable variant="bordered" size="md">
     <template #header>
       <h3><Icon name="desktop" /> {{ $t('manpage.machineProfile.title') }}</h3>
       <BaseButton
         size="sm"
-        variant="outline-solid"
+        variant="outline"
         @click="$emit('refresh')"
         :disabled="loading"
       >
@@ -53,10 +53,11 @@
       <Icon name="spinner" class="animate-spin" />
       {{ $t('manpage.machineProfile.loading') }}
     </div>
-  </BasePanel>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
+import { BaseButton, BaseCard } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -71,8 +72,6 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
-import BasePanel from '@/components/base/BasePanel.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 
 interface MachineProfile {
   machine_id?: string

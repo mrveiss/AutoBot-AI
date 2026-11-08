@@ -53,7 +53,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import DOMPurify from 'dompurify'
+import { escapeHtml, sanitizeHtml } from '@/utils/sanitize'
 import type { HLJSApi } from 'highlight.js'
 
 const { t } = useI18n()
@@ -166,16 +166,11 @@ const highlightCode = async () => {
     }
 
     // Sanitize the highlighted HTML to prevent XSS
-    highlightedCode.value = DOMPurify.sanitize(highlighted, {
-      ALLOWED_TAGS: ['span', 'br'],
-      ALLOWED_ATTR: ['class']
-    })
+    highlightedCode.value = sanitizeHtml(highlighted, 'code')
   } catch {
-    // Fallback to plain text if highlighting fails
-    highlightedCode.value = DOMPurify.sanitize(rawCode.value, {
-      ALLOWED_TAGS: [],
-      ALLOWED_ATTR: []
-    })
+    // Fallback to plain text if highlighting fails: rawCode is source text, not HTML, so it is
+    // escaped (kept intact, e.g. `<template>`) before the kit sanitiser sees it (#19118).
+    highlightedCode.value = sanitizeHtml(escapeHtml(rawCode.value), 'plain')
   }
 }
 
@@ -249,8 +244,9 @@ onMounted(() => {
   gap: var(--spacing-sm);
 }
 
-.placeholder-content i {
-  font-size: 48px;
+.placeholder-content .icon {
+  width: 48px;
+  height: 48px;
   color: var(--text-tertiary);
 }
 
@@ -302,8 +298,9 @@ onMounted(() => {
   color: var(--color-success);
 }
 
-.copy-button i {
-  font-size: var(--text-sm);
+.copy-button .icon {
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 .code-container {

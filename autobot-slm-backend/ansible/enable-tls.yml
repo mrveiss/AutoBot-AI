@@ -44,7 +44,7 @@
         success_msg: "{{ inventory_hostname }} resolves to {{ ansible_host }}"
 
   vars:
-    tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_CERT_DIR') | default('/etc/autobot/certs', true) }}"
+    tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_REMOTE_CERT_DIR') | default('/etc/autobot/certs', true) }}"
     frontend_tls_enabled: true
     frontend_tls_port: 443
     frontend_tls_cert: "{{ tls_cert_dir }}/server-cert.pem"
@@ -85,7 +85,7 @@
       vars:
         frontend_user: autobot
         frontend_group: autobot
-        frontend_install_dir: /opt/autobot
+        frontend_install_dir: "{{ autobot.base_dir }}"
         frontend_log_dir: /var/log/autobot
         frontend_host: "0.0.0.0"
       notify:
@@ -99,7 +99,7 @@
     # Vite's highest-precedence production layer, overriding .env.production.
     - name: Update frontend build env for HTTPS backend (#10084)
       ansible.builtin.lineinfile:
-        path: /opt/autobot/autobot-frontend/.env.production.local
+        path: "{{ autobot.base_dir }}/autobot-frontend/.env.production.local"
         regexp: '^VITE_API_BASE_URL='
         line: "VITE_API_BASE_URL=https://{{ backend_host }}:{{ backend_tls_port }}"
         create: true
@@ -125,7 +125,7 @@
       ansible.builtin.include_tasks: roles/_shared/tasks/build_publish_slm_frontend.yml
       vars:
         slm_frontend_publish_label: "TLS rebuild (user frontend)"
-        slm_frontend_publish_dir: /opt/autobot/autobot-frontend
+        slm_frontend_publish_dir: "{{ autobot.base_dir }}/autobot-frontend"
         slm_frontend_publish_user: autobot
         slm_frontend_publish_build_script: "build"
         slm_frontend_publish_build_env: {}
@@ -159,7 +159,7 @@
         success_msg: "{{ inventory_hostname }} resolves to {{ ansible_host }}"
 
   vars:
-    tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_CERT_DIR') | default('/etc/autobot/certs', true) }}"
+    tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_REMOTE_CERT_DIR') | default('/etc/autobot/certs', true) }}"
     backend_tls_enabled: true
     backend_tls_port: 8443
 
@@ -189,7 +189,7 @@
 
     - name: Update backend environment for TLS
       ansible.builtin.blockinfile:
-        path: /opt/autobot/.env
+        path: "{{ autobot.base_dir }}/.env"
         create: true
         mode: "0600"
         owner: autobot
@@ -234,7 +234,7 @@
         success_msg: "{{ inventory_hostname }} resolves to {{ ansible_host }}"
 
   vars:
-    tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_CERT_DIR') | default('/etc/autobot/certs', true) }}"
+    tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_REMOTE_CERT_DIR') | default('/etc/autobot/certs', true) }}"
     redis_tls_port: 6380
 
   tasks:

@@ -33,6 +33,7 @@ from llc.scheduler.heartbeat_scheduler import (
     _ingest_adapter_usage,
     _next_fire,
 )
+from testkit.fake_async_session import FakeAsyncSession
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -40,6 +41,14 @@ from llc.scheduler.heartbeat_scheduler import (
 
 
 _COMPANY_UUID = uuid.UUID("11111111-1111-1111-1111-111111111111")
+
+
+def _compiled_params(stmt) -> dict:
+    """The bound parameters of *stmt*, or ``{}`` for a statement that will not compile."""
+    try:
+        return dict(stmt.compile().params)
+    except Exception:
+        return {}
 
 
 def _make_agent(**kwargs):
@@ -225,6 +234,7 @@ class TestHandleDueAgent:
             patch.object(scheduler, "_find_rate_limited_run", new=AsyncMock(return_value=None)),
             patch.object(scheduler, "_create_run", new=AsyncMock(return_value=mock_run)),
             patch.object(scheduler, "_run_adapter", new=AsyncMock()),
+            patch(f"{_HBS}.dispatch_block_reason", new=AsyncMock(return_value=None)),
             patch(
                 "llc.scheduler.heartbeat_scheduler.get_async_session_factory",
                 return_value=mock_factory,
@@ -264,45 +274,12 @@ class TestHandleDueAgent:
 # ---------------------------------------------------------------------------
 
 
-class TestTriggerManual:
-    @pytest.mark.asyncio
-    async def test_returns_queued_run(self):
-        scheduler = LLCHeartbeatScheduler()
-        agent = _make_agent()
-
-        mock_run = MagicMock(spec=LLCHeartbeatRun)
-        mock_run.id = uuid.uuid4()
-        mock_run.status = LLCRunStatus.QUEUED.value
-
-        mock_session = AsyncMock()
-        mock_session.flush = AsyncMock()
-
-        with (
-            patch.object(scheduler, "_get_agent_config", new=AsyncMock(return_value=agent)),
-            patch.object(scheduler, "_create_run", new=AsyncMock(return_value=mock_run)),
-            patch.object(scheduler, "_run_adapter", new=AsyncMock()),
-        ):
-            run, agent_cfg = await scheduler.trigger_manual(mock_session, "agent-abc")
-
-        assert run.id == mock_run.id
-        assert run.status == LLCRunStatus.QUEUED.value
-        assert agent_cfg == agent
-
-    @pytest.mark.asyncio
-    async def test_raises_for_unknown_agent(self):
-        scheduler = LLCHeartbeatScheduler()
-        mock_session = AsyncMock()
-
-        with patch.object(scheduler, "_get_agent_config", new=AsyncMock(return_value=None)):
-            with pytest.raises(ValueError, match="not found"):
-                await scheduler.trigger_manual(mock_session, "agent-unknown")
-
-
 # ---------------------------------------------------------------------------
 # Adapter dispatch routing + run-scoped key lifecycle (GH#9622, GH#9623)
 # ---------------------------------------------------------------------------
 
 _HBS = "llc.scheduler.heartbeat_scheduler"
+_INGEST = "llc.services.budget.BudgetService.ingest_cost_event"
 
 
 @pytest.mark.asyncio
@@ -319,9 +296,9 @@ class TestDispatchAdapterRouting:
 
     async def test_claude_code_routed_through_registry(self):
         agent = _make_agent(adapter_type="claude_code")
-        fake_adapter = MagicMock()
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter) as mock_get,
+            patch(f"{_HBS}.adapter_block_reason", return_value=None),  # routing, not this host's CLI
+            patch(f"{_HBS}.get_adapter", return_value=MagicMock()) as mock_get,
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
         ):
             await _dispatch_adapter(agent, {})
@@ -540,8 +517,8 @@ class TestCliAvailabilityGate:
         fake_adapter._required_cli = "claude"
 
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
-            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch("llc.scheduler.dispatch_gate.get_adapter", return_value=fake_adapter),
+            patch("llc.scheduler.dispatch_gate.is_subprocess_adapter", return_value=True),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
             pytest.raises(HeartbeatDispatchSkipped),
         ):
@@ -557,8 +534,8 @@ class TestCliAvailabilityGate:
         fake_adapter._required_cli = "claude"
 
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
-            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch("llc.scheduler.dispatch_gate.get_adapter", return_value=fake_adapter),
+            patch("llc.scheduler.dispatch_gate.is_subprocess_adapter", return_value=True),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
         ):
             await _dispatch_adapter(agent, {})
@@ -577,8 +554,8 @@ class TestCliAvailabilityGate:
         fake_adapter = MagicMock()
 
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
-            patch(f"{_HBS}.is_subprocess_adapter", return_value=False),
+            patch("llc.scheduler.dispatch_gate.get_adapter", return_value=fake_adapter),
+            patch("llc.scheduler.dispatch_gate.is_subprocess_adapter", return_value=False),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
         ):
             await _dispatch_adapter(agent, {})
@@ -593,8 +570,8 @@ class TestCliAvailabilityGate:
         fake_adapter._required_cli = "gh"
 
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
-            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch("llc.scheduler.dispatch_gate.get_adapter", return_value=fake_adapter),
+            patch("llc.scheduler.dispatch_gate.is_subprocess_adapter", return_value=True),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
             pytest.raises(HeartbeatDispatchSkipped),
         ):
@@ -612,31 +589,10 @@ class TestRunAdapterSkipped:
         agent = _make_agent(adapter_type="claude_code")
         run_id = uuid.uuid4()
 
-        sql_text: list = []
-        params: list = []
-
-        class _Session:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *exc):
-                return False
-
-            async def execute(self, stmt, *args, **kwargs):
-                sql_text.append(str(stmt))
-                try:
-                    params.append(dict(stmt.compile().params))
-                except Exception:
-                    params.append({})
-                result = MagicMock()
-                result.scalar_one_or_none.return_value = 0
-                return result
-
-            async def commit(self):
-                return None
+        session = FakeAsyncSession()
 
         with (
-            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: session),
             patch(
                 f"{_HBS}._dispatch_adapter",
                 new=AsyncMock(side_effect=HeartbeatDispatchSkipped("agent-1", "CLI absent")),
@@ -644,8 +600,11 @@ class TestRunAdapterSkipped:
         ):
             await scheduler._run_adapter(agent, run_id, {})
 
-        # No phantom health: the last_heartbeat_at bump is never issued.
-        assert not any("agent_org_nodes" in s for s in sql_text)
+        sql_text = [str(stmt) for stmt in session.statements]
+        params = [_compiled_params(stmt) for stmt in session.statements]
+
+        # No phantom health: the last_heartbeat_at bump is never issued (the claim reads the row, #19582).
+        assert not any("last_heartbeat_at" in s for s in sql_text)
         # The run's final status is written as SKIPPED.
         assert any(p.get("status") == LLCRunStatus.SKIPPED.value for p in params)
 
@@ -937,7 +896,7 @@ class TestIngestAdapterUsage:
 
         with (
             patch(f"{_HBS}.get_async_session_factory", return_value=factory),
-            patch(f"{_HBS}.BudgetService.ingest_cost_event", new=mock_ingest),
+            patch(_INGEST, new=mock_ingest),
         ):
             await _ingest_adapter_usage(agent, result)
 
@@ -949,7 +908,7 @@ class TestIngestAdapterUsage:
         agent = _make_agent(adapter_type="claude_code")
         result = AdapterRunStatus(status=LLCRunStatus.COMPLETED)  # tokens None
         mock_ingest = AsyncMock()
-        with patch(f"{_HBS}.BudgetService.ingest_cost_event", new=mock_ingest):
+        with patch(_INGEST, new=mock_ingest):
             await _ingest_adapter_usage(agent, result)
         mock_ingest.assert_not_awaited()
 
@@ -965,10 +924,7 @@ class TestIngestAdapterUsage:
 
         with (
             patch(f"{_HBS}.get_async_session_factory", return_value=factory),
-            patch(
-                f"{_HBS}.BudgetService.ingest_cost_event",
-                new=AsyncMock(side_effect=BudgetExhausted("agent", 100.0, 50.0)),
-            ),
+            patch(_INGEST, new=AsyncMock(side_effect=BudgetExhausted("agent", 100.0, 50.0))),
             pytest.raises(BudgetExhausted),
         ):
             await _ingest_adapter_usage(agent, result)
@@ -982,7 +938,7 @@ class TestIngestAdapterUsage:
         factory.return_value.__aexit__ = AsyncMock(return_value=False)
         with (
             patch(f"{_HBS}.get_async_session_factory", return_value=factory),
-            patch(f"{_HBS}.BudgetService.ingest_cost_event", new=AsyncMock(side_effect=RuntimeError("db down"))),
+            patch(_INGEST, new=AsyncMock(side_effect=RuntimeError("db down"))),
         ):
             await _ingest_adapter_usage(agent, result)  # must not raise
 
@@ -1015,25 +971,11 @@ class TestQuotaExhausted:
         scheduler = LLCHeartbeatScheduler()
         agent = _make_agent(adapter_type="claude_code_subscription")
         run_id = uuid.uuid4()
-        executed: list = []
-
-        class _Session:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *exc):
-                return False
-
-            async def execute(self, stmt, *a, **k):
-                executed.append(str(stmt))
-                return MagicMock()
-
-            async def commit(self):
-                return None
+        session = FakeAsyncSession()
 
         mock_pause = AsyncMock()
         with (
-            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: session),
             patch(f"{_HBS}.ControlsService.pause_agent", new=mock_pause),
         ):
             await scheduler._handle_quota_exhausted(
@@ -1041,6 +983,7 @@ class TestQuotaExhausted:
             )
 
         # Run was updated (status write) and the agent was system-paused.
+        executed = [str(stmt) for stmt in session.statements]
         assert any("UPDATE" in s or "llc_heartbeat_runs" in s for s in executed)
         mock_pause.assert_awaited_once()
         kwargs = mock_pause.await_args.kwargs
@@ -1051,22 +994,11 @@ class TestQuotaExhausted:
         agent = _make_agent(adapter_type="claude_code_subscription", company_id=None)
         run_id = uuid.uuid4()
 
-        class _Session:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *exc):
-                return False
-
-            async def execute(self, stmt, *a, **k):
-                return MagicMock()
-
-            async def commit(self):
-                return None
+        session = FakeAsyncSession()
 
         mock_pause = AsyncMock()
         with (
-            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: session),
             patch(f"{_HBS}.ControlsService.pause_agent", new=mock_pause),
         ):
             await scheduler._handle_quota_exhausted(

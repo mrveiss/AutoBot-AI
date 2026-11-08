@@ -34,9 +34,10 @@ Usage:
 
 from typing import Callable, List
 
-from fastapi import Request
+from fastapi import Depends, Request
 
-from auth_middleware import get_auth_middleware
+from auth_middleware import check_admin_permission, resolve_human_user
+from autobot_shared.auth.mcp_tool_permissions import required_permission
 from autobot_shared.auth.permission_gate import PermissionGate
 from autobot_shared.auth.permissions import (  # noqa: F401 — re-exported for callers
     ADMIN_ROLES,
@@ -46,7 +47,9 @@ from autobot_shared.auth.permissions import (  # noqa: F401 — re-exported for 
     is_admin_role,
     role_value,
 )
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.repeat_grouping import RepeatGrouper
 from autobot_shared.singleton_factory import lazy_singleton
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
@@ -63,9 +66,12 @@ _get_security_layer = lazy_singleton(SecurityLayer)
 # callers keep working.
 
 
-def _request_caller(request: Request) -> dict | None:
-    """The authenticated caller of *request*, or None: the backend's caller for the shared gate."""
-    return get_auth_middleware().get_user_from_request(request)
+async def _request_caller(request: Request) -> dict | None:
+    """The authenticated caller of *request*, or None: the backend's caller for the shared gate.
+
+    The canonical resolution, so a token revoked by a password change is 401 here too (#18688).
+    """
+    return await resolve_human_user(request)
 
 
 def _wire_rbac() -> None:
@@ -83,6 +89,59 @@ require_permission = _permission_gate.require_permission
 require_any_permission = _permission_gate.require_any_permission
 
 
+async def check_mcp_tool_permission(request: Request) -> None:
+    """Router dependency for a bridge's ``/mcp/<tool>`` routes: the caller holds the tool's permission (#19087).
+
+    The permission is read from ``mcp_tool_permissions.TOOL_PERMISSIONS`` (the SSOT), never named per route. An
+    undeclared tool is refused, as the dispatcher refuses it (#14523). Routes outside ``/mcp/<tool>`` (and the
+    ``/mcp/tools`` listing) pass; the router's own gate still applies to them.
+    """
+    route_path = getattr(request.scope.get("route"), "path", "")
+    parts = route_path.rstrip("/").split("/")
+    if len(parts) < 2 or parts[-2] != "mcp" or parts[-1] == "tools":
+        return
+    permission = required_permission(parts[-1])
+    if permission is None:
+        raise_auth_error("AUTH_0003", f"MCP tool {parts[-1]} has no declared permission")
+    await _permission_gate.enforce(request, await _request_caller(request), (permission,))
+
+
+async def check_admin_mcp_tool_permission(request: Request, _admin: bool = Depends(check_admin_permission)) -> None:
+    """The admin-role gate (a sub-dependency), then the tool's declared permission (#19087)."""
+    await check_mcp_tool_permission(request)
+
+
+#: One role_denied record per user and route per window; the next record counts the repeats (#16333).
+_UNMATCHED_ROUTE = "<unmatched>"
+_DENIALS = RepeatGrouper(env_int_clamped("AUTOBOT_ROLE_DENIED_AUDIT_WINDOW_S", 300, 1, 86400))
+
+
+def audit_role_denied(user_data: dict, allowed_roles: List[str], user_role: str, request: Request) -> None:
+    """Record a refused role check; every admin gate writes the same row (#16333).
+
+    Grouped per user, role and route template, so a non-admin repeating a request can't flood the log.
+    An unmatched route groups under one constant: the raw path is caller-chosen and would fill the tracker.
+    Repeats ride on the next row of the same key; a burst followed by silence shows as its first row (#20787).
+    """
+    user = user_data.get("username", "unknown")
+    route = getattr(request.scope.get("route"), "path", None) or _UNMATCHED_ROUTE
+    repeats = _DENIALS.repeats_to_record((user, user_role, route))
+    if repeats is None:
+        return
+    _get_security_layer().audit_log(
+        action="role_denied",
+        user=user,
+        outcome="denied",
+        details={
+            "roles_required": allowed_roles,
+            "user_role": user_role,
+            "endpoint": str(request.url.path),  # the first path of the window
+            "route": route,  # what the row groups: every path of this template (#20787)
+            "repeats_since_last_record": repeats,
+        },
+    )
+
+
 def _deny_role_access(user_data: dict, allowed_roles: List[str], user_role: str, request: Request) -> None:
     """
     Log denied role access and raise auth error. Issue #620.
@@ -96,16 +155,7 @@ def _deny_role_access(user_data: dict, allowed_roles: List[str], user_role: str,
     Raises:
         HTTPException via raise_auth_error
     """
-    _get_security_layer().audit_log(
-        action="role_denied",
-        user=user_data.get("username", "unknown"),
-        outcome="denied",
-        details={
-            "roles_required": allowed_roles,
-            "user_role": user_role,
-            "endpoint": str(request.url.path),
-        },
-    )
+    audit_role_denied(user_data, allowed_roles, user_role, request)
     raise_auth_error(
         "AUTH_0003",
         f"One of roles {allowed_roles} required for this operation",
@@ -133,9 +183,9 @@ def require_role(*roles: Role | str) -> Callable:
     Issue #744: RBAC role decorator for API endpoints.
     """
 
-    def dependency(request: Request) -> bool:
-        """Check role and return True or raise error."""
-        user_data = get_auth_middleware().get_user_from_request(request)
+    async def dependency(request: Request) -> bool:
+        """Check role and return True or raise error; a revoked JWT is 401 (#18688)."""
+        user_data = await resolve_human_user(request)
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
 

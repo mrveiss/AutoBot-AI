@@ -17,6 +17,7 @@
  */
 
 import { ref, reactive, readonly, type Ref } from 'vue'
+import { isHttpError } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { useLoadingState } from '@/composables/useLoadingState'
@@ -46,7 +47,7 @@ export interface EntityGraphHealthStatus {
  * (HTTP 503) so the caller can degrade calmly without retry spam or toasts.
  */
 function _isServiceUnavailable(error: unknown): boolean {
-  return error instanceof Error && error.message.includes('HTTP 503')
+  return isHttpError(error) && error.status === 503
 }
 
 // ============================================================================

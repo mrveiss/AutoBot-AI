@@ -46,7 +46,7 @@ This will:
 - `noVNC` (HTML5 VNC client, downloaded from GitHub)
 
 **Pre-installed:**
-- ✅ `tigervnc-standalone-server` 
+- ✅ `tigervnc-standalone-server`
 - ✅ `python3`
 - ✅ `git`
 - ✅ `xfce4-session`
@@ -99,10 +99,10 @@ vncserver :2 -geometry 1440x900 -depth 16
 
 # 4. Start websockify bridge
 cd ~/.novnc
-python3 -m websockify 6081 localhost:5902
+python3 -m websockify 6080 localhost:5902
 
 # 5. Access via browser
-open http://localhost:6081/vnc.html
+open http://localhost:6080/vnc.html
 ```
 
 ## 🎯 Integration

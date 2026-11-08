@@ -25,6 +25,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _NAME = "is_credential_field"
@@ -74,8 +75,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "credential-field-name-only-callers",
     discover=_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the commit, not here.
-    floor=6782,  # re-pinned mid-window (train 29): population 6932, window [6632, 6932]
     what="tracked python in every tree that holds any",
     roots=SCAN_ROOTS,
     growth=300,
@@ -89,7 +88,7 @@ def _sites(source: str) -> int:
     twice), plus an aliased import. The `def` itself is a FunctionDef and not a reference.
     """
     count = 0
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Name) and node.id == _NAME and isinstance(node.ctx, ast.Load):
             count += 1
         elif isinstance(node, ast.Attribute) and node.attr == _NAME:

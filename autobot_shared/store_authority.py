@@ -163,11 +163,16 @@ STORE_AUTHORITY: dict[str, Concept] = {
             "autobot-backend/llc/services/company_os/workflows.py",
             "autobot-backend/llc/services/company_os/graphs.py",
             "autobot-backend/llc/services/company_os/role_skills.py",
+            "autobot-backend/llc/services/company_os/plans.py",
+            "autobot-backend/llc/services/company_os/plan_store.py",
+            "autobot-backend/llc/services/budget.py",
         ),
         rebuilt_by="Postgres is the only copy: roles -> workflows -> processes live in the workflows "
         "table (the existing Automation store, extended with kind, owner role and trigger) and the "
-        "llc_processes, llc_workflow_nodes, llc_workflow_transitions and llc_role_skills tables. "
-        "There is no projection to rebuild (#18390).",
+        "llc_processes, llc_workflow_nodes, llc_workflow_transitions and llc_role_skills tables; "
+        "a Workflow Planner plan is one JSONB document per revision in company_os_workflow_plans; "
+        "each LLM call an agent reports is one company_os_cost_events row tied to its work item. "
+        "There is no projection to rebuild (#18390, #19934, #16016).",
     ),
     "device_credentials": Concept(
         name="device_credentials",
@@ -278,13 +283,27 @@ STORE_AUTHORITY: dict[str, Concept] = {
             # #18293: writes only the chat:conversation:* LLM-context cache, a
             # projection of these messages -- never a durable copy of a turn.
             "autobot-backend/chat_workflow/conversation.py",
+            # #20852: writes only chat:rolling_summary:*, a summary projection of these turns.
+            "autobot-backend/chat_history/rolling_summary.py",
         ),
         rebuilt_by="ChatHistoryCacheMixin repopulates a session's cache entry from its session "
         "file on the next load; the file is written atomically and is the session. The "
         "chat:conversation:* LLM-context cache is re-projected from load_session() on a miss "
-        "(chat_history/turn_projection.project_turn_pairs).",
+        "(chat_history/turn_projection.project_turn_pairs). chat:rolling_summary:* is rebuilt "
+        "from the same messages by the next rolling-summary refresh "
+        "(chat_history/rolling_summary.refresh_summary), which folds the durable turns from the oldest.",
         note="The one system of record for conversation turns (#18293). The per-turn transcript "
         "files that once duplicated them are legacy_conversation_transcripts: read-only.",
+    ),
+    "chat_attachment_use": Concept(
+        name="chat_attachment_use",
+        system_of_record=Store.DISK,
+        projections=(),
+        write_sites=("autobot-backend/chat_attachment_marks.py",),
+        rebuilt_by="Nothing copies it: the chat_attachment_marks table in the conversation files SQLite store "
+        "is the only home (#20195). It cannot be rebuilt from file rows, which a delete removes.",
+        note="Whether a chat ever ran an attachment turn, so every later tool call keeps asking. Durable by "
+        "design: losing it silently lifts the approval floor, so there is no evictable copy.",
     ),
     "legacy_conversation_transcripts": Concept(
         name="legacy_conversation_transcripts",

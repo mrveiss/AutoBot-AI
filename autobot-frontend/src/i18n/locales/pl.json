@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "Złóż",
     "cancel": "Anulować",
     "save": "Ratować",
@@ -103,7 +104,14 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "Niski",
+      "medium": "Średni",
+      "high": "Wysoki",
+      "critical": "Krytyczny"
+    },
+    "logsLoadFailed": "Nie udało się wczytać dzienników: {error}"
   },
   "chat": {
     "sendMessage": "Wyślij wiadomość...",
@@ -255,6 +263,13 @@
     },
     "input": {
       "retryUpload": "Spróbuj przesłać ponownie",
+      "uploadError": {
+        "http": "Przesyłanie nie powiodło się (status {status})",
+        "invalidResponse": "Serwer wysłał nieczytelną odpowiedź",
+        "network": "Błąd sieci podczas przesyłania",
+        "cancelled": "Przesyłanie anulowano",
+        "unknown": "Przesyłanie nie powiodło się"
+      },
       "filesAttached": "Załączone pliki {count}",
       "clearAll": "Wyczyść wszystko",
       "removeFile": "Usuń plik",
@@ -299,7 +314,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "Plik „{name}” jest zbyt duży (maks. {max})",
+      "voiceUnsupported": "Wprowadzanie głosowe wymaga przeglądarki Chrome, Edge lub Safari 15+. Transkrypcja nie jest dostępna w tej przeglądarce.",
+      "micDenied": "Odmówiono dostępu do mikrofonu. Zezwól na dostęp do mikrofonu w ustawieniach przeglądarki."
     },
     "translate": {
       "title": "Przetłumacz tekst",
@@ -515,6 +533,7 @@
         "pending": "Aż do",
         "running": "Działanie",
         "streaming": "Przesyłanie",
+        "waiting_explanation": "Oczekiwanie na wyjaśnienie",
         "explaining": "Wyjaśnianie",
         "completed": "Zakończony",
         "failed": "Przegrany"
@@ -765,6 +784,16 @@
       "browser": "Przeglądarka",
       "novnc": "Pulpit zdalny",
       "ariaLabel": "Sekcje czatu"
+    },
+    "attachmentNotice": {
+      "unavailable": "Nie znaleziono załączonego pliku w tej rozmowie, więc nie został użyty.",
+      "too_many": "Użyto tylko pierwszych {limit} załączonych plików; pozostałe pominięto.",
+      "image": "\"{filename}\" jest obrazem i nie można go odczytać jako tekstu, więc nie został użyty.",
+      "unsupported": "\"{filename}\" nie jest plikiem tekstowym, który asystent potrafi odczytać, więc nie został użyty.",
+      "unreadable": "Nie udało się odczytać pliku \"{filename}\", więc nie został użyty.",
+      "empty": "Plik \"{filename}\" nie zawiera czytelnego tekstu, więc nie został użyty.",
+      "truncated": "Plik \"{filename}\" jest długi, więc użyto tylko jego początku.",
+      "over_budget": "Załączone pliki osiągnęły limit rozmiaru, więc plik \"{filename}\" nie został użyty."
     }
   },
   "settings": {
@@ -777,15 +806,7 @@
     "logging": "Wycięcie lasu",
     "prompts": "Podpowiedzi",
     "backend": "Backend",
-    "save": "Zapisz ustawienia",
     "reset": "Przywróć ustawienia domyślne",
-    "panelLoadFailed": "Nie udało się załadować panelu ustawień",
-    "loadingSettings": "Ładowanie ustawień...",
-    "backendOffline": "Backend offline — wyświetlanie ustawień zapisanych w pamięci podręcznej",
-    "saving": "Oszczędność...",
-    "discardChanges": "Odrzuć zmiany",
-    "cacheApiUnavailable": "Interfejs API pamięci podręcznej jest niedostępny",
-    "cachedSettings": "Korzystanie z ustawień buforowanych (backend offline)",
     "appearanceDesc": "Dostosuj wygląd i styl swojego miejsca pracy",
     "voiceDesc": "Skonfiguruj profile głosowe i głosowe zamiany tekstu na mowę",
     "languageDesc": "Wybierz preferowany język interfejsu i odpowiedzi AI",
@@ -795,31 +816,11 @@
     "languageChanged": "Język został pomyślnie zaktualizowany",
     "languageChangeFailed": "Nie udało się zaktualizować języka",
     "webResearch": {
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
       "title": "Web Research",
-      "methodLabel": "Search method",
-      "confirmationLabel": "Require confirmation",
-      "rateLimitRequests": "Requests",
-      "timeoutLabel": "Timeout (seconds)",
-      "enabledLabel": "Enable web research",
       "methodBasic": "Basic",
-      "thresholdLabel": "Auto-research threshold",
       "methodAdvanced": "Advanced",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "rateLimitLabel": "Rate limiting",
-      "methodHint": "Choose how web searches are performed",
-      "maxResultsLabel": "Max results",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "methodApiBased": "API-based",
-      "storeInKbHint": "Save research results to the knowledge base",
-      "filterAdultHint": "Filter adult content from search results",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "privacyLabel": "Privacy & storage",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "rateLimitWindow": "Window (s)",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "rateLimitHint": "Limit how many requests are sent in a given time window"
+      "methodApiBased": "API-based"
     },
     "apiKeys": {
       "enterKey": "Enter API key...",
@@ -941,8 +942,6 @@
       "noApiKeyRequired": "Klucz API nie jest wymagany.",
       "redirecting": "Przekierowywanie...",
       "disconnectFailed": "Nie udało się rozłączyć",
-      "redirectNeedsCallback": "Przepływ OAuth z przekierowaniem w przeglądarce wymaga konfiguracji wywołania zwrotnego po stronie serwera. W środowiskach bez interfejsu użyj kodu urządzenia.",
-      "deviceNotConfigured": "Uwierzytelnianie urządzenia nie jest skonfigurowane dla tego dostawcy",
       "deviceInitFailed": "Nie udało się rozpocząć przepływu urządzenia",
       "stillWaiting": "Nadal oczekiwanie na zatwierdzenie — spróbuj ponownie za chwilę.",
       "pollFailed": "Sprawdzanie nie powiodło się"
@@ -1538,21 +1537,16 @@
       "duplicateCode": "Duplicate Code",
       "locations": "{count} locations",
       "linesSaveable": "{count} lines saveable",
-      "moreLocations": "+{count} more locations",
-      "showingOfDuplicates": "Showing {shown} of {total} duplicate patterns",
       "regexOpportunities": "Regex Opportunities",
       "current": "Current",
       "suggested": "Suggested",
-      "showingOfOpportunities": "Showing {shown} of {total} opportunities",
       "complexityHotspots": "Complexity Hotspots",
       "location": "Location",
       "cc": "CC",
       "cognitive": "Cognitive",
       "mi": "MI",
       "nesting": "Nesting",
-      "showingOfHotspots": "Showing {shown} of {total} hotspots",
       "refactoringSuggestions": "Refactoring Suggestions",
-      "showingOfSuggestions": "Showing {shown} of {total} suggestions",
       "patternsInChromaDB": "{count} patterns in ChromaDB",
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
@@ -2226,14 +2220,12 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total} {type}",
       "emptyMessage": "No code smells detected"
     },
     "declarations": {
       "title": "Declarations",
       "total": "Total",
       "exported": "Exported",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No declarations found",
       "types": {
         "function": "Function",
@@ -2256,7 +2248,6 @@
       "totalLines": "Total Lines",
       "similar": "similar",
       "lines": "lines",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No duplicate code detected",
       "similarityGroups": {
         "high": "High Similarity",
@@ -2277,7 +2268,6 @@
       "variable": "Zmienna",
       "value": "Wartość",
       "suggestedEnvVar": "Sugerowana zmienna środowiskowa",
-      "showingOf": "Wyświetlanie {shown} z {total}",
       "emptyMessage": "Nie wykryto zakodowanych wartości",
       "severityGroups": {
         "high": "Wysoka istotność",
@@ -2292,7 +2282,6 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No problems detected",
       "exportMarkdown": "Export Markdown",
       "exportJson": "Export JSON"
@@ -2517,8 +2506,6 @@
         "docs": "Documentation"
       },
       "justNow": "Just now",
-      "minutesAgo": "{count}m ago",
-      "hoursAgo": "{count}h ago",
       "installSuccess": "Pre-commit hooks installed successfully",
       "installFailed": "Failed to install hooks",
       "uninstallSuccess": "Pre-commit hooks uninstalled",
@@ -3206,6 +3193,7 @@
       "reasonUnknown": "nie podano przyczyny"
     },
     "connectors": {
+      "syncNotStarted": "The sync didn't start. This connector may already be syncing; try again when it finishes.",
       "title": "Konektory źródeł",
       "addConnector": "Dodaj konektor",
       "loadingConnectors": "Ładowanie konektorów...",
@@ -3837,10 +3825,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4249,6 +4238,9 @@
       "errorEnterBoth": "Podaj encję źródłową i docelową.",
       "notInGraph": "Te encje nie znajdują się jeszcze w grafie relacji.",
       "notInGraphHint": "Istnieją, ale nie mają powiązań w grafie, więc nie można prześledzić połączenia. Uruchom ponownie wyodrębnianie encji."
+    },
+    "chromaExplorer": {
+      "subtitle": "Przeglądaj i przeszukuj kolekcje wektorów"
     }
   },
   "workflow": {
@@ -4259,6 +4251,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "s",
+      "durationMinutes": "min",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "Completed",
@@ -4374,7 +4368,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Otwieranie automatyzacji Twojej firmy…",
-      "companyRequired": "Wybierz firmę, aby otworzyć automatyzację."
+      "companyRequired": "Wybierz firmę, aby otworzyć automatyzację.",
+      "planBeforeBuilding": "Zaplanuj przed budową"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -4682,7 +4677,9 @@
       "channelSlack": "Slack",
       "emailHint": "Comma-separated email addresses",
       "channelWebhook": "Webhook",
-      "sectionDesc": "Configure per-workflow notification routing"
+      "sectionDesc": "Configure per-workflow notification routing",
+      "invalidEmail": "Nieprawidłowy adres e-mail: {emails}",
+      "invalidUrl": "Nieprawidłowy format adresu URL"
     },
     "liveDashboard": {
       "activeExecutions": "Active Executions",
@@ -5017,7 +5014,8 @@
       "emergencyKillFailed": "❌ Awaryjne zatrzymanie nie powiodło się: {message}",
       "interrupted": "^C (Proces przerwany przez użytkownika)",
       "error": "Błąd: {error}"
-    }
+    },
+    "urlCopied": "Skopiowano adres URL terminala do schowka!"
   },
   "llm": {
     "unavailable": "Niedostępny",
@@ -5787,18 +5785,6 @@
       "postExecutionFailed": "Polecenie zostało wykonane, ale kolejny krok się nie powiódł. Wynik jest wyświetlany; niektóre aktualizacje mogą być niekompletne.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "dataTable": {
-      "sortBy": "Sort by {column}",
-      "actions": "Actions",
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "pageOf": "Page {current} of {total}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
-    },
     "hostSelection": {
       "title": "Select Host",
       "defaultPurpose": "Select a host for this operation",
@@ -5897,6 +5883,7 @@
       "dismiss": "Dismiss"
     },
     "themeToggle": {
+      "accentPurpleDescription": "Fiolet — kreatywny i elegancki",
       "system": "System",
       "highContrast": "Wysoki kontrast",
       "monochrome": "Monochromatyczny",
@@ -5945,10 +5932,6 @@
       "actions": "Akcje",
       "noDataAvailable": "Brak dostępnych danych",
       "selectRow": "Zaznacz wiersz {row}"
-    },
-    "panel": {
-      "collapse": "Zwiń panel",
-      "expand": "Rozwiń panel"
     }
   },
   "views": {
@@ -6164,8 +6147,6 @@
       "createNewDashboard": "Create new dashboard",
       "availableWidgets": "Available Widgets",
       "configure": "Configure",
-      "expand": "Expand",
-      "shrink": "Shrink",
       "remove": "Remove",
       "noWidgets": "No Widgets Added",
       "noWidgetsHint": "Click \"Edit Layout\" to add widgets to your dashboard",
@@ -6211,48 +6192,11 @@
       "subtitle": "Code search, generation, and productivity tools",
       "actionsToday": "Actions Today",
       "error": "Error",
-      "quickSearch": "Quick Search",
-      "snippetsTab": "Snippets ({count})",
-      "templatesTab": "Templates ({count})",
-      "quickActions": "Quick Actions",
-      "quickCodeSearch": "Quick Code Search",
-      "searchPlaceholder": "Search for files, code, or symbols...",
-      "allTypes": "All Types",
-      "files": "Files",
-      "code": "Code",
-      "symbols": "Symbols",
-      "search": "Search",
-      "results": "Results ({count})",
-      "line": "Line {num}",
-      "score": "Score: {value}",
-      "noResults": "No results found",
-      "generateCodeSnippet": "Generate Code Snippet",
-      "language": "Language",
-      "description": "Description",
-      "snippetPlaceholder": "Describe what you want the code to do...",
-      "generateSnippet": "Generate Snippet",
       "copy": "Copy",
-      "created": "Created: {date}",
-      "noSnippets": "No snippets yet. Generate your first one above!",
       "allCategories": "All Categories",
       "refresh": "Refresh",
       "variables": "Variables",
-      "noTemplates": "No templates available",
-      "quickCodeActions": "Quick Code Actions",
-      "action": "Action",
-      "suggestRefactorings": "Suggest Refactorings",
-      "optimizeCode": "Optimize Code",
-      "formatCode": "Format Code",
-      "fixLinting": "Fix Linting Issues",
-      "generateTests": "Generate Tests",
-      "codePlaceholder": "Paste your code here...",
-      "processing": "Processing...",
-      "runAction": "Run Action",
-      "refactorSuggestions": "Refactor Suggestions ({count})",
-      "impact": "{level} impact",
-      "before": "Before",
-      "after": "After",
-      "generatedTests": "Generated Tests ({count})"
+      "noTemplates": "No templates available"
     },
     "plugins": {
       "title": "Plugin Manager",
@@ -6570,7 +6514,6 @@
       "sessionLabel": "Sesja {id}",
       "invitedAt": "Zaproszono {time}",
       "justNow": "przed chwilą",
-      "minutesAgo": "{count} min temu",
       "accept": "Akceptuj",
       "decline": "Odrzuć",
       "respondError": "Nie udało się przetworzyć tej odpowiedzi. Spróbuj ponownie.",
@@ -6660,9 +6603,6 @@
       "title": "Dziennik audytu sekretów",
       "allActions": "Wszystkie akcje",
       "access": "Dostęp",
-      "inject": "Wstaw",
-      "copy": "Kopiuj",
-      "reveal": "Pokaż",
       "allUsers": "Wszyscy użytkownicy",
       "by": "przez",
       "details": "Szczegóły",
@@ -6673,8 +6613,10 @@
       "hoursAgo": "{hours} godz. temu",
       "create": "Create",
       "delete": "Delete",
-      "read": "Read",
-      "update": "Update"
+      "update": "Update",
+      "list": "Lista",
+      "transfer": "Przeniesienie",
+      "bulkDelete": "Usuwanie zbiorcze"
     },
     "vault": {
       "title": "Skarbiec sekretów",
@@ -6880,12 +6822,6 @@
       "loadingValue": "Loading...",
       "timeJustNow": "just now",
       "timeInAMoment": "in a moment",
-      "timeMinutesAgo": "{count}m ago",
-      "timeInMinutes": "in {count}m",
-      "timeHoursAgo": "{count}h ago",
-      "timeInHours": "in {count}h",
-      "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d",
       "categories": {
         "api_key": "Klucze API",
         "token": "Tokeny dostępu",
@@ -7408,7 +7344,16 @@
       "initComplete": "Inicjalizacja zakończona"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Reguły alertów",
+      "overview": "Przegląd",
+      "slos": "SLO",
+      "traces": "Ślady"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -7423,7 +7368,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "Sprawdź limity rozmiaru pliku i wymagania dotyczące formatu"
     },
     "header": {
       "title": "File Browser",
@@ -7612,13 +7558,6 @@
       "actionEnforced": "Full enforcement mode was enabled",
       "system": "System",
       "justNow": "Just now",
-      "minuteAgo": "1 minute ago",
-      "minutesAgo": "{count} minute(s) ago",
-      "hourAgo": "1 hour ago",
-      "hoursAgo": "{count} hour(s) ago",
-      "dayAgo": "1 day ago",
-      "daysAgo": "{count} day(s) ago",
-      "longAgo": "Long ago",
       "modeLegend": "Mode Legend:",
       "legendDisabled": "Disabled",
       "legendLogOnly": "Log Only",
@@ -7707,7 +7646,6 @@
       "vmName": "Nazwa VM",
       "vmSource": "Źródło VM",
       "ipAddress": "Adres IP",
-      "errorMessage": "Komunikat błędu",
       "details": "Szczegóły",
       "loading": "Ładowanie dzienników audytu...",
       "viewDetails": "Zobacz szczegóły"
@@ -8131,6 +8069,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Nie udało się aktywować okna konserwacji",
+      "completeWindowFailed": "Nie udało się zakończyć okna konserwacji",
+      "deleteWindowFailed": "Nie udało się usunąć okna konserwacji",
+      "drainNodeFailed": "Nie udało się opróżnić węzła. Spróbuj ponownie.",
+      "resumeNodeFailed": "Nie udało się wznowić węzła. Spróbuj ponownie.",
+      "saveKeysFailed": "Nie udało się zapisać kluczy API. Szczegóły znajdziesz w konsoli.",
+      "addNodeFailed": "Nie udało się dodać węzła"
     }
   },
   "mobile": {
@@ -8642,7 +8589,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Informacje o narzędziach są obecnie niedostępne — ta lista może być niepełna.",
       "canvasNoToolsDefined": "Żadne narzędzie nie jest dołączone do żadnej roli w tej firmie.",
-      "deepLinkNodeNotFound": "Ten link wskazuje węzeł, którego nie można tu znaleźć. Mógł zostać usunięty lub nie masz do niego dostępu."
+      "deepLinkNodeNotFound": "Ten link wskazuje węzeł, którego nie można tu znaleźć. Mógł zostać usunięty lub nie masz do niego dostępu.",
+      "viewPlanner": "Planer"
     },
     "executorRollup": {
       "title": "Zestawienie wykonawców",
@@ -8987,6 +8935,170 @@
         "unavailable": "Nie można połączyć się z rejestrem; nic nie wysłano.",
         "error": "Coś poszło nie tak i nie udało się potwierdzić doręczenia. Odśwież, aby sprawdzić, czy blokada jest nadal utrzymywana."
       }
+    },
+    "workflowPlanner": {
+      "title": "Planer przepływów pracy",
+      "plans": "Plany",
+      "newPlan": "Nowy plan",
+      "open": "Otwórz",
+      "back": "Wróć do planów",
+      "retry": "Spróbuj ponownie",
+      "loading": "Wczytywanie planów...",
+      "loadFailed": "Nie udało się wczytać planu.",
+      "stale": {
+        "plan": "Nie udało się odświeżyć tego planu, więc wyświetlane dane mogą być nieaktualne. {reason}",
+        "gate": "Nie udało się odświeżyć kontroli gotowości, więc lista brakujących elementów może być nieaktualna. {reason}",
+        "both": "Nie udało się odświeżyć ani planu, ani jego kontroli gotowości, więc wyświetlane dane mogą być nieaktualne. {reason}"
+      },
+      "rereadRetry": "Wczytaj plan ponownie",
+      "saveFailed": "Nie udało się zapisać zmiany.",
+      "createFailed": "Nie udało się utworzyć planu.",
+      "emptyTitle": "Brak planów",
+      "emptyHint": "Zacznij plan, aby odwzorować jeden proces, zmierzyć go i wybrać jedną liczbę do poprawy.",
+      "unavailableTitle": "Planer przepływów pracy jest niedostępny",
+      "unavailableHint": "Ta funkcja jest wyłączona w Twojej przestrzeni roboczej, więc nie ma jeszcze nic do pokazania.",
+      "statusFlow": "Postęp planu",
+      "status": {
+        "draft": "Szkic",
+        "measured": "Zmierzony",
+        "labeled": "Oznaczony",
+        "approved": "Zatwierdzony",
+        "converted": "Przekonwertowany"
+      },
+      "col": {
+        "name": "Plan",
+        "revision": "Wersja",
+        "status": "Status",
+        "actions": "Akcje"
+      },
+      "form": {
+        "name": "Nazwa planu",
+        "startsAt": "Gdzie proces się zaczyna",
+        "endsAt": "Gdzie proces się kończy",
+        "create": "Utwórz plan"
+      },
+      "steps": {
+        "map": "Odwzoruj",
+        "measure": "Zmierz",
+        "oneNumber": "Wybierz jedną liczbę",
+        "label": "Rozbij i oznacz",
+        "convert": "Utwórz przepływ pracy"
+      },
+      "map": {
+        "empty": "Nic jeszcze nie odwzorowano",
+        "emptyHint": "Najpierw dodaj uczestników (tory), potem kroki każdego z nich.",
+        "handoffs": "Przekazania: {count}",
+        "waitNote": "Co czeka przy tym przekazaniu?",
+        "laneName": "Nazwa toru",
+        "addLane": "Dodaj tor",
+        "stepLabel": "Krok",
+        "stepLane": "Tor kroku",
+        "addStep": "Dodaj krok"
+      },
+      "source": {
+        "self_reported": "Tak twierdzisz",
+        "email": "Sprawdzono w poczcie",
+        "calendar": "Sprawdzono w kalendarzu"
+      },
+      "measure": {
+        "hint": "Jak często zdarza się każdy krok i ile trwa?",
+        "needSteps": "Najpierw odwzoruj co najmniej jeden krok.",
+        "perWeek": "Tygodniowo",
+        "duration": "Czas trwania",
+        "unit": "Jednostka czasu",
+        "save": "Zapisz",
+        "clear": "Wyczyść"
+      },
+      "unit": {
+        "minutes": "minuty",
+        "hours": "godziny",
+        "days": "dni"
+      },
+      "oneNumber": {
+        "hint": "Zmierzone kroki, od najdłuższych oczekiwań. To Ty decydujesz, który się liczy.",
+        "needMetrics": "Najpierw zmierz co najmniej jeden krok.",
+        "rate": "{freq} tygodniowo, {dur} {unit}",
+        "title": "Nazwij tę liczbę",
+        "returnKind": "Co odzyskujesz",
+        "target": "Cel",
+        "save": "Zapisz jako moją jedną liczbę"
+      },
+      "returnKind": {
+        "hours_back": "Odzyskane godziny",
+        "more_yeses": "Więcej zgód",
+        "money_sooner": "Szybciej pieniądze"
+      },
+      "label": {
+        "needNumber": "Najpierw wybierz swoją jedną liczbę; jej krok rozbijasz tutaj.",
+        "subStep": "Podkrok",
+        "addSubStep": "Dodaj podkrok",
+        "unlabel": "Usuń oznaczenie",
+        "edgeCase": "Przypadek brzegowy: {text}",
+        "byHandNote": "To zostaje po stronie ludzi. AI nigdy tego nie wykonuje.",
+        "acknowledge": "Przeczytałem listę Ręcznie",
+        "acknowledged": "Lista Ręcznie przeczytana"
+      },
+      "labels": {
+        "ai": "AI",
+        "automation": "Automatyzacja",
+        "by_hand": "Ręcznie"
+      },
+      "gate": {
+        "missing": "Nadal brakuje",
+        "title": "Gotowe do utworzenia?",
+        "unknown": "Inna kontrola",
+        "state": {
+          "met": "Spełnione",
+          "open": "Otwarte",
+          "pending": "Jeszcze nie sprawdzono"
+        },
+        "name": {
+          "G1": "Mapa jest poprawna",
+          "G2": "Każdy krok jest zmierzony",
+          "G3": "Wybrany krok jest rozbity na części",
+          "G4": "Każdy podkrok i przypadek brzegowy ma etykietę",
+          "G5": "Lista „Ręcznie” przeczytana, a kroki AI objęte zatwierdzeniami",
+          "G6": "Podgląd nie ma błędów",
+          "G7": "Zatwierdzono ten plan",
+          "converted": "Przepływy pracy są utworzone"
+        }
+      },
+      "readOnly": "Ten plan ma status: {status}, więc kroki 1–4 są tylko do odczytu.",
+      "firstProcess": {
+        "title": "Twoja firma jest gotowa",
+        "body": "Zaplanuj swój pierwszy proces: odwzoruj go, zmierz i wybierz jedną liczbę do poprawy.",
+        "plan": "Zaplanuj mój pierwszy proces",
+        "later": "Później"
+      },
+      "convert": {
+        "notReady": "Najpierw dokończ kroki 1–4. Kontrole powyżej pokazują, czego jeszcze brakuje.",
+        "previewTitle": "Co zostanie utworzone (podgląd, nic jeszcze nie istnieje)",
+        "createdTitle": "Co zostało utworzone",
+        "counts": "Przepływy pracy: {workflows}. Procesy: {processes}.",
+        "ownerLane": "Właściciel: {lane}",
+        "errors": "Błędy do poprawienia przed zatwierdzeniem",
+        "warnings": "Ostrzeżenia",
+        "documented": "Zachowane jako tekst podręcznika, nie zbudowane:",
+        "failedProposals": "Nie udało się złożyć propozycji linii AI: {count}. Ponów próbę, aby je złożyć.",
+        "turnOnNotAvailable": "Włączanie przepływów pracy nie jest jeszcze dostępne: do tego czasu nic ich nie uruchamia.",
+        "openWorkflows": "Otwórz przepływy pracy",
+        "unavailable": "Ta czynność jest niedostępna: Planer przepływów pracy jest wyłączony w Twojej przestrzeni roboczej albo plan już nie istnieje.",
+        "blocked": "Jeszcze nie gotowe. Kontrole powyżej pokazują, czego brakuje.",
+        "approvedBy": "Zatwierdził(a) {by}, {at}.",
+        "preview": "Pokaż podgląd tego, co powstanie",
+        "previewAgain": "Odśwież podgląd",
+        "approve": "Zatwierdź",
+        "create": "Utwórz przepływy pracy",
+        "retry": "Ponów propozycje linii AI",
+        "approveTitle": "Zatwierdzić ten plan?",
+        "approveMessage": "Zatwierdzasz wyświetlony podgląd. Każda późniejsza zmiana planu unieważnia to zatwierdzenie.",
+        "previewFailed": "Nie udało się utworzyć podglądu.",
+        "approveFailed": "Nie udało się zatwierdzić planu.",
+        "approveBlocked": "Zatwierdzenie jest zablokowane, dopóki nie zostanie rozwiązane:",
+        "approveDetail": "Szczegóły z serwera: {detail}",
+        "convertFailed": "Nie udało się utworzyć przepływów pracy.",
+        "retryFailed": "Nie udało się ponowić propozycji linii AI."
+      }
     }
   },
   "code": {
@@ -8999,13 +9111,10 @@
   "devices": {
     "addDevice": "Add device",
     "confirmDelete": "Confirm delete",
-    "daysAgo": "Days ago",
     "error": "Error",
-    "hoursAgo": "Hours ago",
     "justNow": "Just now",
     "lastSeen": "Last seen",
     "loading": "Loading",
-    "minutesAgo": "Minutes ago",
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
@@ -9392,6 +9501,11 @@
       "subtitle": "Szczegółowe słownictwo uprawnień i pakiety zakresów dla kluczy API",
       "comingSoonTitle": "Dostępne w kolejnej wersji",
       "comingSoonMessage": "Szczegółowe zakresy uprawnień — słownictwo uprawnień, pakiety zakresów oraz egzekwowanie zakresów kluczy API — nie są dostępne w tej wersji. Ta strona umożliwi ich definiowanie i przypisywanie po ich udostępnieniu."
+    },
+    "layout": {
+      "title": "Administracja",
+      "subtitle": "Narzędzia zaplecza dla administratorów",
+      "ariaLabel": "Sekcja administracji"
     }
   },
   "components": {

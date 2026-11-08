@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = REPO_ROOT / "pipeline-scripts" / "check-pre-commit-hook-pr.sh"
@@ -32,7 +32,7 @@ NO_PRINT_CONSOLE_HOOK = (
     REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "hooks" / "pre-commit-no-print-console"
 )
 
-E = scrubbed_git_env()  # 15246: ambient GIT_DIR would redirect these git calls to the live repo
+E = isolated_git_env()  # 15246: ambient GIT_DIR would redirect these git calls to the live repo
 
 
 def _make_pr(tmp_path: Path, files: dict[str, str]) -> tuple[str, str]:
@@ -196,7 +196,7 @@ class TestForwardsArgvToHooks:
 
     def test_no_direct_redis_blocks_bare_redis(self, tmp_path: Path) -> None:
         # `redis.Redis()` direct instantiation in production code
-        base, head = _make_pr(tmp_path, {"src/r.py": "import redis\nclient = redis.Redis()\n"})
+        base, head = _make_pr(tmp_path, {"scripts/r.py": "import redis\nclient = redis.Redis()\n"})
         result = _run_wrapper(tmp_path, "pre-commit-no-direct-redis", base, head)
         assert result.returncode != 0
 

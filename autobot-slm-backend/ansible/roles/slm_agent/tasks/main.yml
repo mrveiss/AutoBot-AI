@@ -94,7 +94,7 @@
   become: false
   ansible.builtin.command:
     cmd: git rev-parse HEAD
-    chdir: "{{ playbook_dir }}/../../.."
+    chdir: "{{ role_path }}/../../../.."
   register: git_commit_result
   changed_when: false
   # (#2872) Intentional: git may not be available on the Ansible controller
@@ -124,6 +124,14 @@
   become: true
   tags: ['slm_agent', 'packages']
 
+# #20932: the agent venv is built on the floor interpreter (.python-version),
+# not whatever `python3` the node ships -- autobot_shared refuses one below it.
+- name: "SLM Agent | Install target Python interpreter (#20932)"
+  ansible.builtin.include_role:
+    name: python_interpreter
+    public: true
+  tags: ['slm_agent', 'packages']
+
 # #14278: into a venv, not system Python. Every other component on the platform
 # already works this way (ai-stack, npu-worker, tts-worker, slm-backend); the
 # agent was the only exception, and it is the one that could not be provisioned
@@ -131,12 +139,25 @@
 #
 # `--break-system-packages` is gone with it: inside a venv it is neither needed
 # nor meaningful.
+# #20932: a venv already built on an older interpreter is removed here so the
+# pip task below rebuilds it on the floor (no `creates:` guards that task).
+- name: "SLM Agent | Enforce venv target Python version (#20932)"
+  ansible.builtin.include_role:
+    name: python_interpreter
+    tasks_from: ensure_venv_version
+    apply:
+      tags: ['slm_agent', 'packages']
+  vars:
+    venv_path: "{{ slm_agent_venv }}"
+    venv_python: "{{ python_interpreter_binary }}"
+  tags: ['slm_agent', 'packages']
+
 - name: "SLM Agent | Install Python dependencies into the agent venv (#14278)"
   ansible.builtin.pip:
     name: "{{ slm_agent_python_packages }}"
     state: present
     virtualenv: "{{ slm_agent_venv }}"
-    virtualenv_command: python3 -m venv
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
   become: true
   become_user: "{{ slm_agent_user }}"
   environment:
@@ -144,13 +165,11 @@
   timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
   tags: ['slm_agent', 'packages']
 
-- name: "SLM Agent | Copy agent source - __init__.py (slm package)"
-  copy:
-    content: |
-      # AutoBot - AI-Powered Automation Platform
-      # Copyright (c) 2025 mrveiss
-      # Author: mrveiss
-      """SLM Package."""
+# #19040: the package marker is the canonical slm/__init__.py from the same code_source
+# tree as the modules below, not an inline copy that drifts from it.
+- name: "SLM Agent | Copy agent source - __init__.py (slm package) (#19040)"
+  ansible.builtin.copy:
+    src: "{{ slm_agent_source_dir | dirname }}/__init__.py"
     dest: "{{ slm_agent_dir }}/slm/__init__.py"
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
@@ -309,7 +328,7 @@
 - name: "SLM Agent | Read AUTOBOT_INTERNAL_API_KEY from node secrets (fallback when var unset) (#11480)"
   ansible.builtin.shell: >-
     set -o pipefail;
-    for f in /etc/autobot/slm-secrets.env /etc/autobot/autobot-backend.env; do
+    for f in /etc/autobot/slm-secrets.env {{ autobot_backend_env_file | quote }}; do
       if [ -r "$f" ]; then
         v=$(grep -m1 '^AUTOBOT_INTERNAL_API_KEY=' "$f" | cut -d= -f2-);
         if [ -n "$v" ]; then printf '%s' "$v"; exit 0; fi;

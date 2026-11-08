@@ -21,13 +21,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from models.database import (
-    AuditLog,
     Certificate,
     PolicyStatus,
     SecurityEventSeverity,
     SecurityEventType,
-    SecurityPolicy,
+    SlmNodeAuditLog,
     SlmSecurityEvent,
+    SlmSecurityPolicy,
 )
 from models.schemas import (
     AuditLogListResponse,
@@ -73,9 +73,9 @@ async def create_audit_log(
     success: bool = True,
     error_message: str | None = None,
     extra_data: dict | None = None,
-) -> AuditLog:
+) -> SlmNodeAuditLog:
     """Create an audit log entry."""
-    log = AuditLog(
+    log = SlmNodeAuditLog(
         log_id=str(uuid.uuid4())[:16],
         user_id=user_id,
         username=username,
@@ -242,41 +242,41 @@ async def list_audit_logs(
     per_page: int = Query(50, ge=1, le=200),
 ) -> AuditLogListResponse:
     """List audit logs with optional filtering."""
-    query = select(AuditLog)
+    query = select(SlmNodeAuditLog)
 
     if category:
-        query = query.where(AuditLog.category == category)
+        query = query.where(SlmNodeAuditLog.category == category)
     if username:
-        query = query.where(AuditLog.username.ilike(f"%{username}%"))
+        query = query.where(SlmNodeAuditLog.username.ilike(f"%{username}%"))
     if action:
-        query = query.where(AuditLog.action.ilike(f"%{action}%"))
+        query = query.where(SlmNodeAuditLog.action.ilike(f"%{action}%"))
     if success is not None:
-        query = query.where(AuditLog.success == success)
+        query = query.where(SlmNodeAuditLog.success == success)
     if since:
-        query = query.where(AuditLog.timestamp >= since)
+        query = query.where(SlmNodeAuditLog.timestamp >= since)
     if until:
-        query = query.where(AuditLog.timestamp <= until)
+        query = query.where(SlmNodeAuditLog.timestamp <= until)
 
     # Count total
-    count_query = select(func.count(AuditLog.id))
+    count_query = select(func.count(SlmNodeAuditLog.id))
     if category:
-        count_query = count_query.where(AuditLog.category == category)
+        count_query = count_query.where(SlmNodeAuditLog.category == category)
     if username:
-        count_query = count_query.where(AuditLog.username.ilike(f"%{username}%"))
+        count_query = count_query.where(SlmNodeAuditLog.username.ilike(f"%{username}%"))
     if action:
-        count_query = count_query.where(AuditLog.action.ilike(f"%{action}%"))
+        count_query = count_query.where(SlmNodeAuditLog.action.ilike(f"%{action}%"))
     if success is not None:
-        count_query = count_query.where(AuditLog.success == success)
+        count_query = count_query.where(SlmNodeAuditLog.success == success)
     if since:
-        count_query = count_query.where(AuditLog.timestamp >= since)
+        count_query = count_query.where(SlmNodeAuditLog.timestamp >= since)
     if until:
-        count_query = count_query.where(AuditLog.timestamp <= until)
+        count_query = count_query.where(SlmNodeAuditLog.timestamp <= until)
 
     count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
 
     # Paginate
-    query = query.order_by(AuditLog.timestamp.desc())
+    query = query.order_by(SlmNodeAuditLog.timestamp.desc())
     query = query.offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(query)
     logs = result.scalars().all()
@@ -296,7 +296,7 @@ async def get_audit_log(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> AuditLogResponse:
     """Get a specific audit log entry."""
-    result = await db.execute(select(AuditLog).where(AuditLog.log_id == log_id))
+    result = await db.execute(select(SlmNodeAuditLog).where(SlmNodeAuditLog.log_id == log_id))
     log = result.scalar_one_or_none()
 
     if not log:
@@ -625,29 +625,29 @@ async def list_security_policies(
     per_page: int = Query(50, ge=1, le=200),
 ) -> SecurityPolicyListResponse:
     """List security policies."""
-    query = select(SecurityPolicy)
+    query = select(SlmSecurityPolicy)
 
     if category:
-        query = query.where(SecurityPolicy.category == category)
+        query = query.where(SlmSecurityPolicy.category == category)
     if status_filter:
-        query = query.where(SecurityPolicy.status == status_filter)
+        query = query.where(SlmSecurityPolicy.status == status_filter)
     if is_enforced is not None:
-        query = query.where(SecurityPolicy.is_enforced == is_enforced)
+        query = query.where(SlmSecurityPolicy.is_enforced == is_enforced)
 
     # Count total
-    count_query = select(func.count(SecurityPolicy.id))
+    count_query = select(func.count(SlmSecurityPolicy.id))
     if category:
-        count_query = count_query.where(SecurityPolicy.category == category)
+        count_query = count_query.where(SlmSecurityPolicy.category == category)
     if status_filter:
-        count_query = count_query.where(SecurityPolicy.status == status_filter)
+        count_query = count_query.where(SlmSecurityPolicy.status == status_filter)
     if is_enforced is not None:
-        count_query = count_query.where(SecurityPolicy.is_enforced == is_enforced)
+        count_query = count_query.where(SlmSecurityPolicy.is_enforced == is_enforced)
 
     count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
 
     # Paginate
-    query = query.order_by(SecurityPolicy.name)
+    query = query.order_by(SlmSecurityPolicy.name)
     query = query.offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(query)
     policies = result.scalars().all()
@@ -671,7 +671,7 @@ async def create_security_policy(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityPolicyResponse:
     """Create a new security policy."""
-    policy = SecurityPolicy(
+    policy = SlmSecurityPolicy(
         policy_id=str(uuid.uuid4())[:16],
         name=policy_data.name,
         description=policy_data.description,
@@ -700,7 +700,7 @@ async def get_security_policy(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityPolicyResponse:
     """Get a specific security policy."""
-    result = await db.execute(select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id))
+    result = await db.execute(select(SlmSecurityPolicy).where(SlmSecurityPolicy.policy_id == policy_id))
     policy = result.scalar_one_or_none()
 
     if not policy:
@@ -720,7 +720,7 @@ async def update_security_policy(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityPolicyResponse:
     """Update a security policy."""
-    result = await db.execute(select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id))
+    result = await db.execute(select(SlmSecurityPolicy).where(SlmSecurityPolicy.policy_id == policy_id))
     policy = result.scalar_one_or_none()
 
     if not policy:
@@ -751,7 +751,7 @@ async def delete_security_policy(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> None:
     """Delete a security policy."""
-    result = await db.execute(select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id))
+    result = await db.execute(select(SlmSecurityPolicy).where(SlmSecurityPolicy.policy_id == policy_id))
     policy = result.scalar_one_or_none()
 
     if not policy:
@@ -773,7 +773,7 @@ async def activate_security_policy(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityPolicyResponse:
     """Activate a security policy and enable enforcement."""
-    result = await db.execute(select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id))
+    result = await db.execute(select(SlmSecurityPolicy).where(SlmSecurityPolicy.policy_id == policy_id))
     policy = result.scalar_one_or_none()
 
     if not policy:
@@ -800,7 +800,7 @@ async def deactivate_security_policy(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityPolicyResponse:
     """Deactivate a security policy and disable enforcement."""
-    result = await db.execute(select(SecurityPolicy).where(SecurityPolicy.policy_id == policy_id))
+    result = await db.execute(select(SlmSecurityPolicy).where(SlmSecurityPolicy.policy_id == policy_id))
     policy = result.scalar_one_or_none()
 
     if not policy:

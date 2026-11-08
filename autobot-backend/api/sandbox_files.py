@@ -75,8 +75,8 @@ def ensure_sandbox_files_root() -> None:
 router = APIRouter(dependencies=[Depends(ensure_sandbox_files_root)])
 
 
-def _check_permission(request: Request, permission: str) -> dict:
-    return _check_file_permission(request, permission)
+async def _check_permission(request: Request, permission: str) -> dict:
+    return await _check_file_permission(request, permission)
 
 
 def _validate_path(path: str) -> Path:
@@ -100,7 +100,7 @@ def _validate_path(path: str) -> Path:
 )
 async def view_file(request: Request, file_path: str):
     """View file content (for text files) or get file metadata."""
-    _check_permission(request, "view")
+    await _check_permission(request, "view")
     target_file = _validate_path(file_path)
 
     if not await run_in_file_executor(target_file.exists):
@@ -133,7 +133,7 @@ async def view_file(request: Request, file_path: str):
 )
 async def rename_file_or_directory(request: Request, path: str = Form(...), new_name: str = Form(...)):
     """Rename a file or directory within the sandbox."""
-    _check_permission(request, "upload")
+    await _check_permission(request, "upload")
 
     if is_invalid_name(new_name):
         raise HTTPException(status_code=400, detail="Invalid file/directory name")
@@ -164,7 +164,7 @@ async def rename_file_or_directory(request: Request, path: str = Form(...), new_
 )
 async def preview_file(request: Request, path: str):
     """Get file preview with content and metadata."""
-    _check_permission(request, "view")
+    await _check_permission(request, "view")
     target_file = _validate_path(path)
 
     if not await run_in_file_executor(target_file.exists):
@@ -333,7 +333,7 @@ async def delete_file(request: Request, path: str, recursive: bool = False, forc
     A non-empty directory needs `recursive`, and one holding uncommitted work
     needs `force` on top of it -- see #15777.
     """
-    user = _check_permission(request, "delete")
+    user = await _check_permission(request, "delete")
     target_path = _validate_path(path)
 
     if not await run_in_file_executor(target_path.exists):
@@ -370,7 +370,7 @@ async def delete_file(request: Request, path: str, recursive: bool = False, forc
 )
 async def create_directory(request: Request, path: str = Form(...), name: str = Form(...)):
     """Create a new directory within the sandbox."""
-    _check_permission(request, "upload")
+    await _check_permission(request, "upload")
 
     if is_invalid_name(name):
         raise HTTPException(status_code=400, detail="Invalid directory name")
@@ -397,7 +397,7 @@ async def create_directory(request: Request, path: str = Form(...), name: str = 
 )
 async def get_directory_tree(request: Request, path: str = ""):
     """Get directory tree structure."""
-    _check_permission(request, "view")
+    await _check_permission(request, "view")
     target_path = _validate_path(path)
 
     if not await run_in_file_executor(target_path.exists):
@@ -417,7 +417,7 @@ async def get_directory_tree(request: Request, path: str = ""):
 )
 async def get_file_stats(request: Request):
     """Get file system statistics for the sandbox root."""
-    _check_permission(request, "view")
+    await _check_permission(request, "view")
 
     total_files, total_directories, total_size = await run_in_file_executor(collect_directory_stats, SANDBOX_FILES_ROOT)
 

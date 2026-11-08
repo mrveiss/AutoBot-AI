@@ -20,6 +20,7 @@ from types import SimpleNamespace
 import pytest
 
 from llc.services.workspace_disposal import DisposalCheck, DisposalVerdict
+from testkit.fake_async_session import FakeAsyncSession
 
 COMPANY = uuid.uuid4()
 
@@ -44,19 +45,11 @@ def _compiled_limit(statement) -> "int | None":
     return int(match.group(1)) if match else None
 
 
-class _Session:
-    def __init__(self, approvals=None):
-        self.committed = False
-        self._approvals = approvals
-        self.statements = [] or []
+def _session(approvals=None):
+    """A FakeAsyncSession whose every ``execute`` answers the approvals, honouring a SQL LIMIT."""
+    rows = approvals if approvals is not None else []
 
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *_exc):
-        return False
-
-    async def execute(self, statement):
+    def answer(statement):
         # The fake HONOURS a SQL LIMIT. Without this it silently ignores one, and a test
         # asserting "the backlog does not hide the unexecuted proposal" passes whether or
         # not the LIMIT is there -- a test that cannot fail, which is the exact defect
@@ -69,27 +62,13 @@ class _Session:
         # quietly. `str(statement.compile(...))` is the public surface and says LIMIT
         # in every version that emits one. `test_the_fake_session_honours_a_limit`
         # below fails if this stops working, so the degradation cannot be silent.
-        rows = self._approvals
-        # Recorded so a test can assert WHICH predicates the query carried.
-        # Without this, removing a WHERE clause from the sweep's query left every
-        # test green -- the fake does not filter, so a missing predicate is
-        # invisible to any assertion about the rows that come back.
-        self.statements.append(statement)
+        # `FakeAsyncSession` records every statement, so a test can assert WHICH predicates the
+        # query carried; without that, removing a WHERE clause from the sweep's query left every
+        # test green -- the fake does not filter.
         limit = _compiled_limit(statement)
-        if limit is not None:
-            rows = rows[:limit]
+        return rows[:limit] if limit is not None else rows
 
-        class _R:
-            def scalars(self):
-                return self
-
-            def all(self):
-                return rows
-
-        return _R()
-
-    async def commit(self):
-        self.committed = True
+    return FakeAsyncSession(default_result=answer)
 
 
 def _lease(path="/w/merged", branch="issue-1"):
@@ -110,7 +89,7 @@ def _approval(paths, executed=False):
 
 
 def _install(sweep, monkeypatch, *, reclaimed=(), landed=None, approvals=(), disposals=None, leases=None):
-    session = _Session(list(approvals))
+    session = _session(list(approvals))
     session.published = []
     monkeypatch.setattr(sweep, "get_async_session_factory", lambda: (lambda: session))
 
@@ -439,7 +418,7 @@ async def test_the_fake_session_honours_a_limit():
 
     from models.approval import Approval
 
-    session = _Session([_approval(["/w/a"]), _approval(["/w/b"])])
+    session = _session([_approval(["/w/a"]), _approval(["/w/b"])])
 
     limited = await session.execute(select(Approval).limit(1))
     assert len(limited.scalars().all()) == 1, "the fake ignored a LIMIT 1 over two rows"
@@ -467,7 +446,7 @@ async def test_an_approval_older_than_the_window_is_not_executed():
     aged = start - timedelta(days=1)
     fresh = start + timedelta(days=EXECUTION_WINDOW_DAYS / 2)
 
-    # The window is a SQL predicate, and `_Session` does not filter -- so what is
+    # The window is a SQL predicate, and `_session` does not filter -- so what is
     # asserted here is the boundary the predicate is built from, and that it is a
     # boundary at all. A window of 0 days would place every decision outside it
     # and disable the sweep silently, which is why the floor is asserted too.
@@ -480,7 +459,7 @@ async def test_an_approval_older_than_the_window_is_not_executed():
     # filter, so nothing about the returned rows can show a missing WHERE clause.
     from llc.scheduler.workspace_lease_sweep import _approved_proposals
 
-    session = _Session([])
+    session = _session([])
     await _approved_proposals(session)
     sql = str(session.statements[0].compile(compile_kwargs={"literal_binds": True}))
     assert "decided_at >=" in sql, (
@@ -562,7 +541,7 @@ async def test_the_aged_out_count_query_bounds_decided_at_from_above(sweep):
     `decided_at <` bound it would re-count the rows the live query already returned and
     warn about proposals that are being executed normally.
     """
-    session = _Session([])
+    session = _session([])
     await sweep._approved_proposals(session)
 
     assert len(session.statements) == 2, (

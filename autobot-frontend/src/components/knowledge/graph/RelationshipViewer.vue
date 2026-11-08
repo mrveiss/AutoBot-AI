@@ -166,7 +166,7 @@ watch(() => props.entityId, fetchRelationships)
   margin: var(--spacing-0);
 }
 
-.viewer-header h4 i {
+.viewer-header h4 .icon {
   color: var(--color-primary);
 }
 
@@ -221,9 +221,10 @@ watch(() => props.entityId, fetchRelationships)
   gap: var(--spacing-md);
 }
 
-.loading-state i,
-.empty-state i {
-  font-size: var(--text-2xl);
+.loading-state .icon,
+.empty-state .icon {
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 .error-banner {

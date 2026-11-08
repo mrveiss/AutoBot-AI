@@ -20,10 +20,10 @@ autobot-monitoring/
 Start the monitoring stack:
 
 ```bash
-docker compose --env-file docker/.env.docker --profile monitoring up -d
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile monitoring up -d
 ```
 
-Grafana: http://localhost:3000 (admin / set via `GRAFANA_ADMIN_PASSWORD` env var, default: `autobot`)
+Grafana: http://localhost:3000 (user `admin`; the password is `GRAFANA_ADMIN_PASSWORD`, which `docker/generate-secrets.sh` writes to `docker/.env.secrets`. There is no default.)
 Prometheus: http://localhost:9090
 
 ---

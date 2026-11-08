@@ -18,9 +18,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api import provider_auth as mod
+from api import provider_auth_flow_state as flow_state
 from api import provider_auth_poll_limit as limit
+from api.provider_auth_scope import provider_caller_is_admin
 from api.user_management.dependencies import get_db_session
-from auth_middleware import check_admin_permission, get_current_user
+from auth_middleware import get_current_user
+from knowledge.connectors.oauth_flow import OAuthProvider
+from llm_shared.llm_oauth_registry import LlmOAuthClient
 
 
 class _FakeResp:
@@ -61,6 +65,18 @@ class _FakeSession:
 
 _ADMIN = types.SimpleNamespace(user_id="admin-1")
 _POLL = "/api/llm-auth/device/poll"
+# #19241: the device/token endpoints and client id come from the server-side registry.
+_CLIENT = LlmOAuthClient(
+    provider=OAuthProvider(
+        name="acme",
+        authorize_url="",
+        token_url="https://token.example.com/token",  # nosec B106  # endpoint URL, not a credential
+        client_id_setting="acme_client_id",
+        client_secret_setting="ACME_CLIENT_SECRET",  # nosec B106  # pragma: allowlist secret  # setting NAME
+        device_authorization_url="https://token.example.com/device",
+    ),
+    client_id="cid",
+)
 
 
 @pytest.fixture
@@ -75,22 +91,22 @@ def ctx(monkeypatch, single_use_fake_redis):
     # test never does real DNS on the fake token host.
     monkeypatch.setattr(mod, "_pinned_connector", AsyncMock(return_value=None))
     monkeypatch.setattr(mod, "assert_public_egress", AsyncMock(return_value=None))  # no DNS in unit tests (#17576)
+    monkeypatch.setattr(mod, "resolve_client", lambda name, flow=None: _CLIENT)
+    # #19241: /device/initiate left this context behind; poll is bound to it.
+    fake_redis.store[flow_state.device_context_key("dev-code-1")] = json.dumps(
+        {"initiator_id": "admin-1", "provider_name": "acme", "scope": "system", "subject": "global"}
+    )
 
     app = FastAPI()
     app.include_router(mod.router, prefix="/api")
     app.dependency_overrides[get_current_user] = lambda: _ADMIN
-    app.dependency_overrides[check_admin_permission] = lambda: True
+    app.dependency_overrides[provider_caller_is_admin] = lambda: True
     app.dependency_overrides[get_db_session] = lambda: AsyncMock()
     return TestClient(app), fake_redis
 
 
 def _body(device_code="dev-code-1"):
-    return {
-        "provider_name": "acme",
-        "token_url": "https://token.example.com/token",
-        "client_id": "cid",
-        "device_code": device_code,
-    }
+    return {"provider_name": "acme", "device_code": device_code}
 
 
 def test_poll_too_fast_returns_429_before_provider_call(ctx):

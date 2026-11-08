@@ -21,6 +21,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _real_auth_import import load_real_auth  # noqa: E402
 from _real_orm_import import SLM_ROOT, import_modules_with_real_orm  # noqa: E402
@@ -112,26 +114,13 @@ async def test_each_section_is_bounded(monkeypatch):
     assert "xxxxxx" not in text
 
 
-class _Result:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def scalars(self):
-        return SimpleNamespace(all=lambda: self._rows)
-
-
-class _FakeDb:
-    def __init__(self):
-        self._answers = [
+def _fake_db() -> FakeAsyncSession:
+    return FakeAsyncSession(
+        results=[
             [SimpleNamespace(service_name=_UNIT, node_id="n1"), SimpleNamespace(service_name=_UNIT, node_id="n2")],
             [SimpleNamespace(node_id="n1", hostname="a"), SimpleNamespace(node_id="n2", hostname="b")],
         ]
-
-    async def execute(self, _q):
-        return _Result(self._answers.pop(0))
-
-    async def commit(self):
-        return None
+    )
 
 
 @pytest.fixture
@@ -145,7 +134,7 @@ def fleet(monkeypatch):
 
 
 async def test_a_failed_node_carries_its_diagnostics_and_the_original_error(fleet):
-    response = await _services_api._run_fleet_action(_FakeDb(), _UNIT, "restart")
+    response = await _services_api._run_fleet_action(_fake_db(), _UNIT, "restart")
     assert (response.success, response.message) == (False, "Restarted on 1/2 nodes")
     assert response.diagnostics == {"n2": "DIAG"}
     fleet.diag.assert_awaited_once()
@@ -156,6 +145,6 @@ async def test_a_failed_node_carries_its_diagnostics_and_the_original_error(flee
 
 async def test_success_everywhere_makes_no_diagnostics_call(fleet):
     fleet.action.side_effect = [(True, "ok"), (True, "ok")]
-    response = await _services_api._run_fleet_action(_FakeDb(), _UNIT, "start")
+    response = await _services_api._run_fleet_action(_fake_db(), _UNIT, "start")
     assert response.success is True and response.diagnostics is None
     fleet.diag.assert_not_awaited()

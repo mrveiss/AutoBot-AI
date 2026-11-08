@@ -13,13 +13,14 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
+from autobot_shared.fleet_constants import FLEET_AGENT_DIR
 from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 
 # Default paths
 VERSION_FILE_PATH = Path("/var/lib/slm-agent/version.json")
-AGENT_CODE_PATH = Path("/opt/autobot/autobot-slm-agent")  # #1121/#1129
+AGENT_CODE_PATH = Path(FLEET_AGENT_DIR)  # #1121/#1129; one home since #18094
 
 
 class AgentVersion:

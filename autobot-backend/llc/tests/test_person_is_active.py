@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from llc.api.companies import _person_is_active
+from llc.services.member_standing import person_is_active as _person_is_active
 
 
 def test_an_active_user_may_be_given_work() -> None:

@@ -25,9 +25,9 @@ def _get_subagent_dispatcher(max_parallel: int):
 
     Exposed as a module-level function so tests can patch it.
     """
-    from orchestration.subagent_dispatcher import SubagentTask, get_subagent_dispatcher  # noqa: PLC0415
+    from orchestration.subagent_dispatcher import SubagentDispatchTask, get_subagent_dispatcher  # noqa: PLC0415
 
-    return SubagentTask, get_subagent_dispatcher(max_parallel=max_parallel)
+    return SubagentDispatchTask, get_subagent_dispatcher(max_parallel=max_parallel)
 
 
 class ParallelStrategy(BaseExecutionStrategy):
@@ -107,9 +107,9 @@ class ParallelStrategy(BaseExecutionStrategy):
         is actually set.  Falls back to direct _safe_execute on any dispatcher error.
         """
         try:
-            SubagentTask, dispatcher = _get_subagent_dispatcher(self.max_parallel_tasks)
+            SubagentDispatchTask, dispatcher = _get_subagent_dispatcher(self.max_parallel_tasks)
             subtasks = [
-                SubagentTask(
+                SubagentDispatchTask(
                     task_id=t.task_id,
                     func=self._safe_execute,
                     args=(t, ctx),

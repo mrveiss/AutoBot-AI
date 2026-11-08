@@ -37,6 +37,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge import get_knowledge_base
+from knowledge.search_filters import caller_reader, scoped_reader
 
 logger = get_logger(__name__)
 
@@ -52,7 +53,7 @@ router = APIRouter(tags=["knowledge-suggestions"], dependencies=[Depends(get_cur
     operation="suggest_tags",
     error_code_prefix="KNOWLEDGE_SUGGESTIONS",
 )
-async def suggest_tags(request: SuggestTagsRequest):
+async def suggest_tags(request: SuggestTagsRequest, current_user: dict = Depends(get_current_user)):
     """
     Suggest tags for content based on similar documents.
 
@@ -89,7 +90,9 @@ async def suggest_tags(request: SuggestTagsRequest):
     """
     try:
         kb = await get_knowledge_base()
+        user_id = caller_reader(current_user)  # #16665: 401 when unresolved
         result = await kb.suggest_tags(
+            user_id=user_id,
             content=request.content,
             limit=request.limit,
             min_confidence=request.min_confidence,
@@ -122,7 +125,7 @@ async def suggest_tags(request: SuggestTagsRequest):
     operation="suggest_categories",
     error_code_prefix="KNOWLEDGE_SUGGESTIONS",
 )
-async def suggest_categories(request: SuggestCategoriesRequest):
+async def suggest_categories(request: SuggestCategoriesRequest, current_user: dict = Depends(get_current_user)):
     """
     Suggest categories for content based on similar documents.
 
@@ -157,7 +160,9 @@ async def suggest_categories(request: SuggestCategoriesRequest):
     """
     try:
         kb = await get_knowledge_base()
+        user_id = caller_reader(current_user)  # #16665: 401 when unresolved
         result = await kb.suggest_categories(
+            user_id=user_id,
             content=request.content,
             limit=request.limit,
             min_confidence=request.min_confidence,
@@ -184,10 +189,11 @@ async def suggest_categories(request: SuggestCategoriesRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-async def _call_kb_suggest_all(request: "SuggestAllRequest") -> dict:
+async def _call_kb_suggest_all(request: "SuggestAllRequest", user_id: str) -> dict:
     """Helper for suggest_all. Ref: #1088."""
     kb = await get_knowledge_base()
     result = await kb.suggest_all(
+        user_id=user_id,
         content=request.content,
         tag_limit=request.tag_limit,
         category_limit=request.category_limit,
@@ -214,7 +220,7 @@ async def _call_kb_suggest_all(request: "SuggestAllRequest") -> dict:
     operation="suggest_all",
     error_code_prefix="KNOWLEDGE_SUGGESTIONS",
 )
-async def suggest_all(request: SuggestAllRequest):
+async def suggest_all(request: SuggestAllRequest, current_user: dict = Depends(get_current_user)):
     """Suggest both tags and categories in a single call.
 
     More efficient than calling /suggestions/tags and /suggestions/categories
@@ -223,7 +229,7 @@ async def suggest_all(request: SuggestAllRequest):
     Returns: {success, tag_suggestions, category_suggestions, similar_docs_analyzed}
     """
     try:
-        return await _call_kb_suggest_all(request)
+        return await _call_kb_suggest_all(request, caller_reader(current_user))  # #16665
     except HTTPException:
         raise
     except Exception as e:
@@ -237,7 +243,7 @@ async def suggest_all(request: SuggestAllRequest):
     operation="suggest_by_context",
     error_code_prefix="KNOWLEDGE_SUGGESTIONS",
 )
-async def suggest_by_context(request: ContextSuggestionsRequest):
+async def suggest_by_context(request: ContextSuggestionsRequest, current_user: dict = Depends(get_current_user)):
     """
     Suggest KB documents relevant to the current conversation context (Issue #3284).
 
@@ -290,7 +296,9 @@ async def suggest_by_context(request: ContextSuggestionsRequest):
     """
     try:
         kb = await get_knowledge_base()
+        user_id = caller_reader(current_user)  # #16665: 401 when unresolved
         result = await kb.suggest_by_context(
+            user_id=user_id,
             context=request.context,
             limit=request.limit,
             recency_weight=request.recency_weight,
@@ -324,7 +332,7 @@ def _validate_fact_id(fact_id: str) -> None:
         raise HTTPException(status_code=400, detail="Invalid fact_id")
 
 
-async def _call_auto_apply_kb(fact_id: str, request: AutoApplySuggestionsRequest) -> dict:
+async def _call_auto_apply_kb(fact_id: str, request: AutoApplySuggestionsRequest, user_id: str) -> dict:
     """Helper for auto_apply_suggestions. Ref: #1088."""
     kb = await get_knowledge_base()
     result = await kb.auto_apply_suggestions(
@@ -333,6 +341,7 @@ async def _call_auto_apply_kb(fact_id: str, request: AutoApplySuggestionsRequest
         apply_tags=request.apply_tags,
         apply_category=request.apply_category,
         min_confidence=request.min_confidence,
+        user_id=user_id,
     )
     if not result.get("success"):
         raise HTTPException(
@@ -358,7 +367,9 @@ def _log_auto_apply_result(fact_id: str, result: dict) -> None:
     operation="auto_apply_suggestions",
     error_code_prefix="KNOWLEDGE_SUGGESTIONS",
 )
-async def auto_apply_suggestions(fact_id: str, request: AutoApplySuggestionsRequest):
+async def auto_apply_suggestions(
+    fact_id: str, request: AutoApplySuggestionsRequest, current_user: dict = Depends(get_current_user)
+):
     """
     Automatically apply high-confidence suggestions to a fact.
 
@@ -401,7 +412,7 @@ async def auto_apply_suggestions(fact_id: str, request: AutoApplySuggestionsRequ
     """
     try:
         _validate_fact_id(fact_id)
-        result = await _call_auto_apply_kb(fact_id, request)
+        result = await _call_auto_apply_kb(fact_id, request, scoped_reader(current_user))  # #16665
         _log_auto_apply_result(fact_id, result)
         return result
     except HTTPException:

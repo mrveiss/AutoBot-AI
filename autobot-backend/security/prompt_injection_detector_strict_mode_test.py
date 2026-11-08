@@ -92,45 +92,9 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
     return found
 
 
-#: Re-pinned 2912 -> 2925 (#17133): measured population 3225 exceeded the
-#: declared allowance (skips=0 + growth=300 = 300) by 13. Population minus
-#: the unchanged growth allowance. Previously 2900 against 3133 at #16561,
-#: 2910 against 3210 at #17129.
-#: Re-pinned 2925 -> 2940 (#17134): measured population 3240 after the same merge.
-#: Population minus the unchanged growth allowance.
-#: Re-pinned 2940 -> 2944 (#17072): measured population 3244 (`git ls-files --
-#: 'autobot-backend/*.py' | grep -v '_test\.py$' | wc -l`, independently
-#: cross-checked -- a local reach-test pass is not reliable evidence for this
-#: one, per #17072 review). Population minus the unchanged growth allowance.
-#: Re-pinned 2944 -> 2945 (#16937): measured population 3245 -- that PR added
-#: one new non-test .py file (security/unicode_normalization.py). Landed via
-#: #17155.
-#: Re-pinned 2945 -> 2948 (#16974) and 2945 -> 2946 (#17125) on their own
-#: branches, each correctly measured against its own tree and neither
-#: surviving the other. #16974 adds llc/org_role_authority.py plus two
-#: llc/tests/test_*.py files that count here because this guard excludes
-#: only `endswith("_test.py")`; #17125 adds a re-parented migration.
-#: Re-pinned again on the tree that actually merges both, plus #17156,
-#: #17168, #17182 and #17186 -- the number below is measured there, not
-#: carried from either branch. This is the third instance tonight of the
-#: shape #17142 describes: every input value was right and the merge of
-#: them was not.
-#: Re-pinned 2949 -> 2950 (#17256): measured 3250 tracked non-test backend python
-#: files. This branch adds api/knowledge_code_indexing.py, the module split out of
-#: knowledge_population.py so its size ceiling did not have to rise -- which puts
-#: the population one past the 300 allowance. Floor = population - growth.
-#: Re-pinned 2950 -> 2955 (#16230): measured 3255. Two independent readings, not
-#: one -- CI reported 3255 and `git ls-files -- 'autobot-backend/*.py' | grep -v
-#: _test.py$ | wc -l` on the merged tree returns 3255 -- because this floor was
-#: nearly re-pinned on a local run that silently did not check it at all. Floor =
-#: population - growth. This branch's own contribution is three non-test backend
-#: files (api/analytics_cost_pricing.py, api/schemas_analytics_pricing.py,
-#: llm_shared/pricing/sync_cache_scheduler.py) plus llc/tests/_pricing_seed.py,
-#: which counts because the discover excludes `_test.py` and nothing else.
-#:
 #: Worth knowing before trusting a local run of this floor: `declare(...)` here
 #: registers into the shared REGISTRY that `repo_tests/reach_declarations_test.py`
-#: parametrises over, but that file's `_import_every_guard` only imports modules
+#: parametrises over, but the sweep's `import_every_guard` only imports modules
 #: under `repo_tests/`. This declaration therefore reaches the sweep only when
 #: something else in the same pytest session has already imported THIS module --
 #: true in CI's whole-suite run, false when `repo_tests/` is run alone, where the
@@ -138,35 +102,7 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 REACH = declare(
     "prompt-injection-detector-strict-mode",
     discover=_tracked_backend_python_files,
-    # Re-pinned 2955 -> 2956 (#17300): measured 3256, confirmed by CI and by
-    # `git ls-files -- 'autobot-backend/*.py' | grep -v _test.py$ | wc -l` on the
-    # merged tree. Two readings because a local run of this floor is only
-    # trustworthy since #17298 made the sweep import declarations from outside
-    # repo_tests/ -- before that it silently checked a smaller set.
-    # Re-pinned 2956 -> 2958 (#17305, #17306) and 2958 -> 2960 here (#17307,
-    # #17308): measured 3258 tracked backend python files (tests excluded) on
-    # the parent branch and 3260 on this one. The previous pin was taken at
-    # 3256, exactly the 300 allowance, so the four non-test backend modules
-    # this stack adds -- llm_shared/{structured_output,validated_llm,decisions}.py
-    # and providers/anthropic_request.py -- are the entire overage. Pinned at
-    # `population - growth`.
-    #
-    # #13049 keeps 3100 instead of main's 2960, by agreement with autobot-ai-f8
-    # and autobot-ai-63 rather than unilaterally: 63 held back an identical pin
-    # so it would resolve here rather than race.
-    #
-    # 2960 is `population - growth` and therefore has ZERO headroom by
-    # construction -- main itself sits exactly at the allowance, so the next
-    # branch adding one non-test backend module turns it red. This branch is
-    # that branch. 3100 is mid-window and absorbs it.
-    #
-    # NO MEASURED NUMBERS IN THIS COMMENT, deliberately. Four orphaned
-    # narratives accumulated in these floor files tonight because prose citing a
-    # population survives a rebase that changes it -- the resolver owns the
-    # value and nothing owns the sentence. The arithmetic for this pin lives in
-    # the commit message, which cannot drift from the tree it describes. Re-derive
-    # rather than trusting any figure written here or in the blocks above.
-    floor=3233,
+    # The floor is computed from the base commit (#19676); growth=300 is the maintenance interval.
     growth=300,
     what="tracked backend python files (tests excluded)",
 )

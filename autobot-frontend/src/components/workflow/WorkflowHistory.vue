@@ -38,7 +38,7 @@
           <span class="item-desc">{{ wf.description }}</span>
           <div class="item-meta">
             <span><Icon name="list-ol" /> {{ $t('workflow.history.stepsCount', { count: wf.total_steps }) }}</span>
-            <span><Icon name="clock" /> {{ formatDuration(wf) }}</span>
+            <span><Icon name="clock" /> {{ workflowDuration(wf) }}</span>
             <span><Icon name="calendar" /> {{ formatDate(wf.created_at) }}</span>
           </div>
         </div>
@@ -72,6 +72,8 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { formatDuration, createDateFormatter } from '@/utils/formatHelpers';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
 
 const props = defineProps<{
@@ -168,19 +170,26 @@ function getSkippedCount(wf: ActiveWorkflow): number {
   return wf.steps.filter(s => s.status === 'skipped').length;
 }
 
-function formatDuration(wf: ActiveWorkflow): string {
+const { t } = useI18n();
+
+// Whole seconds, floored, as 'N<s>' or 'N<m> N<s>' with translated unit labels; '-' unless the
+// run has both a start and an end.
+const durationFormat = computed(() => ({
+  style: 'msMinutesSeconds',
+  rounding: 'floor',
+  nullText: '-',
+  units: {
+    seconds: t('workflow.history.durationSeconds'),
+    minutes: t('workflow.history.durationMinutes'),
+  },
+}) as const)
+
+function workflowDuration(wf: ActiveWorkflow): string {
   if (!wf.started_at || !wf.completed_at) return '-';
-  const ms = new Date(wf.completed_at).getTime() - new Date(wf.started_at).getTime();
-  const sec = Math.floor(ms / 1000);
-  if (sec < 60) return `${sec}s`;
-  const min = Math.floor(sec / 60);
-  return `${min}m ${sec % 60}s`;
+  return formatDuration(wf.started_at, wf.completed_at, durationFormat.value);
 }
 
-function formatDate(date?: string): string {
-  if (!date) return '-';
-  return new Date(date).toLocaleDateString();
-}
+const formatDate = createDateFormatter({ kind: 'date', emptyText: '-' })
 </script>
 
 <style scoped>
@@ -188,14 +197,14 @@ function formatDate(date?: string): string {
 
 .history-filters { display: flex; justify-content: space-between; align-items: center; gap: var(--spacing-4); margin-bottom: var(--spacing-5); flex-wrap: wrap; }
 .search-box { display: flex; align-items: center; gap: var(--spacing-2-5); padding: var(--spacing-2-5) var(--spacing-3-5); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); flex: 1; min-width: 200px; }
-.search-box i { color: var(--text-muted); }
+.search-box .icon { color: var(--text-muted); }
 .search-box input { flex: 1; background: none; border: none; color: var(--text-primary); font-size: var(--text-sm); outline: none; }
 .search-box input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .filter-group { display: flex; gap: var(--spacing-2); }
 .filter-group select { padding: var(--spacing-2-5) var(--spacing-3); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); color: var(--text-primary); font-size: var(--text-sm); cursor: pointer; }
 
 .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-tertiary); padding: var(--spacing-10); }
-.empty-state i { font-size: var(--text-5xl); margin-bottom: var(--spacing-4); }
+.empty-state > .icon { width: var(--text-5xl); height: var(--text-5xl); margin-bottom: var(--spacing-4); }
 .empty-state h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
 
 .history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--spacing-3); }

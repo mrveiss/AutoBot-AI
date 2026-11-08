@@ -132,7 +132,7 @@ def _configured_lock_ttl_ms() -> int:
     consequence rather than a performance one.
     """
     derived = _derived_lock_ttl_ms()
-    raw = os.getenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "").strip()
+    raw = os.getenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "").strip()  # ssot-config-exempt: unset -> derived TTL
     if not raw:
         return derived
     try:

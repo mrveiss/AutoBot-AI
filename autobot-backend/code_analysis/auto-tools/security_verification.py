@@ -11,13 +11,14 @@ to the HTML files and tests the protection mechanisms.
 import logging
 
 from autobot_shared.logging_manager import get_logger
+from utils.file_categorization import HTML_EXTENSIONS
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = get_logger(__name__)
 
 # Issue #380: Module-level constant for HTML extensions (performance optimization)
-_HTML_EXTENSIONS = (".html", ".htm")
+_HTML_EXTENSIONS = tuple(sorted(HTML_EXTENSIONS))
 
 import os
 import sys

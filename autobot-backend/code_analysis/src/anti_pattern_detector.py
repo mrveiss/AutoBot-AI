@@ -33,6 +33,7 @@ from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.repo_path import to_repo_relative
 from autobot_shared.status_enums import Severity  # #7253: consolidated onto canonical (#6689)
+from utils.file_categorization import SKIP_DIRS
 
 # Anti-pattern severity → 0-100 integer score. Kept as a module-level helper
 # rather than an enum method so the canonical `Severity` enum stays clean
@@ -92,16 +93,16 @@ logger = get_logger(__name__)
 _COMPLEXITY_BRANCH_TYPES = (ast.If, ast.While, ast.For, ast.ExceptHandler)
 
 # Issue #1183: Module-level defaults extracted from analyze() to reduce function length
+# Directory patterns are "/name/" (whole components of the "/"-prefixed relative
+# path, see _should_skip); the canonical dirs come from SKIP_DIRS (#19339).
 _DEFAULT_EXCLUDE_PATTERNS = [
-    "__pycache__",
-    ".git",
-    "node_modules",
-    ".venv",
-    "venv",
+    *(f"/{name}/" for name in sorted(SKIP_DIRS)),
     "test_",
     "_test.py",
     "tests/",
     "migrations/",
+    "/.github/",  # the old bare ".git" substring also skipped these
+    "/.gitlab/",
 ]
 
 # Issue #1183: Entry-point suffixes extracted from _detect_dead_code() to reduce function length
@@ -663,7 +664,7 @@ class AntiPatternDetector:
 
         Issue #510: Accepts frozenset for O(1) membership check.
         """
-        path_str = self._path_for_exclusion(file_path, root)
+        path_str = "/" + self._path_for_exclusion(file_path, root).lstrip("/")
         return any(pattern in path_str for pattern in exclude_patterns)
 
     async def _parse_file(self, file_path: str) -> ModuleInfo | None:

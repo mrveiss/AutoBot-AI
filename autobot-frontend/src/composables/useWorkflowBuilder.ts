@@ -17,10 +17,13 @@ import { ref, computed } from 'vue';
 import { getBackendWsUrl, getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import httpClient from '@/utils/ApiClient';
+import { isHttpError } from '@autobot/ui';
 import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
 import { useWebSocket } from '@/composables/useWebSocket';
+import { useStepAnswerState, stepSendResult } from '@/composables/useStepAnswerState';
+import { refreshIfDisplayed, useWorkflowSocketNotices } from '@/composables/useWorkflowSocketNotices';
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl';
 import { useLoadingState } from '@/composables/useLoadingState';
 
@@ -44,6 +47,10 @@ import type {
 } from '@/types/workflowTemplates'
 export type { WorkflowStepStatus, RiskLevel, AutomationWorkflowStep }
 
+// Workflow phase from the state machine (#1380), generated from the backend enum (#19334).
+import type { ExecutionStrategy, WorkflowPhase } from '@/types/_generated/workflow'
+export type { ExecutionStrategy, WorkflowPhase }
+
 /** Automation execution modes */
 export type AutomationMode = 'manual' | 'semi_automatic' | 'automatic';
 
@@ -60,14 +67,6 @@ export type PlanApprovalStatus =
   | 'modified'
   | 'timeout';
 
-/** Execution strategy */
-export type ExecutionStrategy =
-  | 'sequential'
-  | 'parallel'
-  | 'pipeline'
-  | 'collaborative'
-  | 'adaptive';
-
 /**
  * Workflow step definition (#7123).
  *
@@ -80,14 +79,6 @@ export type ExecutionStrategy =
  * `services/workflow_automation/WorkflowStep.to_status_dict()`.
  */
 export type WorkflowStep = AutomationWorkflowStep;
-
-/** Workflow phase from state machine (#1380) */
-export type WorkflowPhase =
-  | 'planning'
-  | 'executing'
-  | 'validating'
-  | 'complete'
-  | 'failed';
 
 /** State machine info for a workflow (#1380) */
 export interface WorkflowStateInfo {
@@ -277,8 +268,7 @@ class WorkflowBuilderApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
-    // Base URL resolved by httpClient/apiClient (#12363); `endpoint` is the
-    // getApiBase()-prefixed relative path proxied by nginx/Vite.
+    // Base URL resolved by httpClient (#12363); `endpoint` is the getApiBase()-prefixed relative path.
     try {
       const method = ((options.method as string) || 'GET').toUpperCase();
       let data: T;
@@ -292,7 +282,7 @@ class WorkflowBuilderApiClient {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('API request failed:', { endpoint, error: message });
-      return { success: false, error: message };
+      return { success: false, error: message, httpStatus: isHttpError(error) ? error.status : undefined };
     }
   }
 
@@ -579,6 +569,8 @@ const apiClient = new WorkflowBuilderApiClient();
 // ==================================================================================
 
 export function useWorkflowBuilder() {
+  const { showWorkflowNotice } = useWorkflowSocketNotices();
+  const stepAnswers = useStepAnswerState();
   // ==================================================================================
   // STATE
   // ==================================================================================
@@ -658,6 +650,8 @@ export function useWorkflowBuilder() {
   const isWorkflowPaused = computed(() => currentWorkflow.value?.is_paused ?? false);
   const currentStepIndex = computed(() => currentWorkflow.value?.current_step ?? 0);
   const totalSteps = computed(() => currentWorkflow.value?.total_steps ?? 0);
+  /** Steps the server reports as waiting: the approval card derives from this, not from socket frames (#17677). */
+  const stepsAwaitingApproval = computed(() => currentWorkflow.value?.steps?.filter((s) => s.status === 'waiting_approval') ?? []);
   const progress = computed(() => {
     if (totalSteps.value === 0) return 0;
     return Math.round((currentStepIndex.value / totalSteps.value) * 100);
@@ -868,6 +862,7 @@ export function useWorkflowBuilder() {
     await wrapLoading(async () => {
       const response = await apiClient.getActiveWorkflows();
       if (response.success && response.data) {
+        stepAnswers.forgetRemoved(activeWorkflows.value, response.data.workflows);
         activeWorkflows.value = response.data.workflows;
         logger.debug('Active workflows loaded:', response.data);
       } else {
@@ -889,7 +884,7 @@ export function useWorkflowBuilder() {
 
   /** Get workflow status */
   async function getWorkflowStatus(workflowId: string): Promise<ActiveWorkflow | null> {
-    const response = await apiClient.getWorkflowStatus(workflowId);
+    const response = await stepAnswers.fetchStatus(workflowId, () => apiClient.getWorkflowStatus(workflowId));
     if (response.success && response.data) {
       currentWorkflow.value = response.data.workflow;
       return response.data.workflow;
@@ -1002,27 +997,11 @@ export function useWorkflowBuilder() {
     return false;
   }
 
-  /** Approve workflow step */
-  async function approveStep(workflowId: string, stepId: string): Promise<boolean> {
-    const response = await apiClient.controlWorkflow(workflowId, 'approve_step', stepId);
-    if (response.success) {
-      logger.info('Step approved:', { workflowId, stepId });
-      await getWorkflowStatus(workflowId);
-      return true;
-    }
-    return false;
-  }
-
-  /** Skip workflow step */
-  async function skipStep(workflowId: string, stepId: string): Promise<boolean> {
-    const response = await apiClient.controlWorkflow(workflowId, 'skip_step', stepId);
-    if (response.success) {
-      logger.info('Step skipped:', { workflowId, stepId });
-      await getWorkflowStatus(workflowId);
-      return true;
-    }
-    return false;
-  }
+  /** Answer a waiting step (approve or skip), then re-read its server status; see `useStepAnswerState.answer`. */
+  const answerStep = (workflowId: string, stepId: string, action: 'approve_step' | 'skip_step') =>
+    stepAnswers.answer(workflowId, stepId, async () => stepSendResult(await apiClient.controlWorkflow(workflowId, action, stepId)), () => getWorkflowStatus(workflowId));
+  const approveStep = (workflowId: string, stepId: string) => answerStep(workflowId, stepId, 'approve_step');
+  const skipStep = (workflowId: string, stepId: string) => answerStep(workflowId, stepId, 'skip_step');
 
   /** Approve plan */
   async function approvePlan(workflowId: string): Promise<boolean> {
@@ -1158,37 +1137,28 @@ export function useWorkflowBuilder() {
         : 'executing';
   }
 
+  /** Tell the user, then refresh the workflow the step belongs to (#17677). */
+  function onWorkflowNotice(data: Record<string, unknown>): void {
+    const workflowId = showWorkflowNotice(data);
+    if (data.type === 'automation_control_refused') return;
+    if (workflowId) void refreshIfDisplayed(currentWorkflow, workflowId, (id) => apiClient.getWorkflowStatus(id)); // the step's new status lives on the workflow
+    loadActiveWorkflows();
+  }
+
   /**
    * Handle WebSocket messages.
    *
-   * #17643: these cases are reconciled against **this** transport's producer,
-   * which is `services/workflow_automation/*` sending `{"type": ...}` over
-   * `workflow_ws/{session_id}` -- not `api/workflow.py`'s bus publishes, which
-   * reach the live dashboard instead. The two vocabularies are disjoint, and
-   * three of the four cases here were matching names that producer never
-   * sends:
+   * #17643: the cases are reconciled against **this** transport's producer,
+   * `services/workflow_automation/*` over `workflow_ws/{session_id}` -- not
+   * `api/workflow.py`'s bus publishes, which reach the live dashboard. The
+   * vocabularies are disjoint. Names this producer never sends and that were
+   * dropped: `workflow_status_update` (no producer anywhere; the capability is
+   * `applyWorkflowProgress`), `step_completed` and `approval_required` (the
+   * plan approval is `workflow_plan_presented`, request under `plan`).
    *
-   *   `workflow_status_update`  no producer on any transport. It carried the
-   *                             in-place update of `currentWorkflow`; nothing
-   *                             on this socket sends a whole workflow object,
-   *                             so there is no data source to wire it to. The
-   *                             capability itself is delivered by
-   *                             `applyWorkflowProgress` above, on the
-   *                             transport that does carry the fields.
-   *   `step_completed`          this producer's step events are `step_failed`,
-   *                             `step_confirmation_required` and
-   *                             `step_rejected_by_judge`; there is no
-   *                             `step_completed`.
-   *   `approval_required`       the plan approval arrives as
-   *                             `workflow_plan_presented`, with the request
-   *                             under `plan` rather than `approval`.
-   *
-   * `start_workflow`, `step_confirmation_required`, `step_rejected_by_judge`
-   * and `automation_control_refused` are sent by the producer and still
-   * unhandled here -- they need user-facing surfaces that do not exist yet, so
-   * they are filed as #17677 rather than stubbed. `step_confirmation_required`
-   * is the consequential one: the executor blocks waiting for a confirmation
-   * this UI never asks for.
+   * #17677: `step_confirmation_required`, `step_rejected_by_judge` and
+   * `automation_control_refused` raise a notice and are never answered here;
+   * `start_workflow` is server-to-client only and refreshes the list.
    */
   function handleWebSocketMessage(data: Record<string, unknown>): void {
     const messageType = data.type as string;
@@ -1197,6 +1167,12 @@ export function useWorkflowBuilder() {
       case 'workflow_plan_presented':
         pendingApproval.value = data.plan as PlanApprovalRequest;
         break;
+      case 'step_confirmation_required':
+      case 'step_rejected_by_judge':
+      case 'automation_control_refused':
+        onWorkflowNotice(data);
+        break;
+      case 'start_workflow':
       case 'step_failed':
       case 'workflow_completed':
       case 'workflow_cancelled':
@@ -1205,7 +1181,7 @@ export function useWorkflowBuilder() {
         loadActiveWorkflows();
         break;
       default:
-        logger.debug('Unhandled WebSocket message:', data);
+        logger.warn('Unhandled WebSocket message:', data);
     }
   }
 
@@ -1282,6 +1258,7 @@ export function useWorkflowBuilder() {
     pauseWorkflow,
     resumeWorkflow,
     cancelWorkflow,
+    stepsAwaitingApproval,
     approveStep,
     skipStep,
     approvePlan,

@@ -37,7 +37,7 @@
     <p v-if="!companyId" class="roles-state">{{ t('llcRoles.noCompany') }}</p>
 
     <template v-else>
-      <ErrorBanner v-if="errorMessage" :message="errorMessage" class="roles-error" />
+      <BaseAlert variant="error" v-if="errorMessage" :message="errorMessage" class="roles-error" dismissible :dismiss-label="t('common.dismiss')" />
 
       <p v-if="isLoading" class="roles-state">{{ t('llcRoles.loading') }}</p>
 
@@ -337,11 +337,8 @@ import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import type { components } from '@/types/generated/api'
 import { createLogger } from '@/utils/debugUtils'
-import BaseButton from '@/components/base/BaseButton.vue'
-import BaseCard from '@/components/base/BaseCard.vue'
 import RoleAttachmentPanel from '@/components/llc/RoleAttachmentPanel.vue'
-import { BaseBadge, BaseModal } from '@autobot/ui'
-import ErrorBanner from '@/components/base/ErrorBanner.vue'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal } from '@autobot/ui'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
 
 interface RoleRow {
@@ -869,7 +866,7 @@ onMounted(loadRoles)
 
 .roles-title {
   margin: 0;
-  font-size: var(--font-size-xl);
+  font-size: var(--text-xl);
   color: var(--text-primary);
 }
 
@@ -929,7 +926,7 @@ onMounted(loadRoles)
 
 .roles-detail-name {
   margin: 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   color: var(--text-primary);
 }
 
@@ -966,7 +963,7 @@ onMounted(loadRoles)
   background: var(--color-surface-hover);
   color: var(--text-primary);
   font-family: var(--font-family-mono, monospace);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .roles-chip-note {

@@ -54,7 +54,7 @@
             @select="handleCompletionSelect"
           />
           <div class="terminal-input-line">
-            <span class="prompt" v-html="currentPrompt"></span>
+            <span class="prompt" v-html="promptHtml"></span>
             <input
               ref="terminalInput"
               v-model="currentInput"
@@ -142,9 +142,11 @@
 </template>
 
 <script>
+import { saveTextFile } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
+import { useToast } from '@/composables/useToast';
 import { useTerminalService } from '@/services/TerminalService';
 import { useRoute } from 'vue-router';
 import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue';
@@ -153,9 +155,8 @@ import CompletionSuggestions from './CompletionSuggestions.vue';
 import TerminalHeader from './TerminalHeader.vue';
 import { createLogger } from '@/utils/debugUtils';
 import { useTabCompletion } from '@/composables/useTabCompletion';
-import { escapeHtml } from '@/utils/sanitize';
+import { escapeHtml, sanitizeHtml } from '@/utils/sanitize';
 import { buildAutomationSteps, exampleWorkflow, useAutomationPacing, workflowStartedLines } from '@/composables/useAutomationPacing';
-
 const logger = createLogger('TerminalWindow');
 
 export default {
@@ -169,6 +170,7 @@ export default {
   setup() {
     const { t } = useI18n();
     const { confirm } = useConfirmDialog();
+    const { showToast } = useToast();
     const route = useRoute();
 
     // Get the terminal service with all its methods
@@ -210,6 +212,7 @@ export default {
     const outputLines = ref([]);
     const currentInput = ref('');
     const currentPrompt = ref('$ ');
+    const promptHtml = computed(() => sanitizeHtml(escapeHtml(currentPrompt.value), 'plain')); // #19118: raw prompt, escaped at render
     const connectionStatus = ref('disconnected');
     const connecting = ref(false);
     const showCursor = ref(true);
@@ -903,15 +906,7 @@ export default {
         })
         .join('\n');
 
-      const blob = new Blob([logContent], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `terminal-${sessionId.value}-${new Date().toISOString().split('T')[0]}.log`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      saveTextFile(logContent, `terminal-${sessionId.value}-${new Date().toISOString().split('T')[0]}.log`);
     };
 
     const shareSession = async () => {
@@ -932,7 +927,7 @@ export default {
         // Fallback: copy to clipboard
         try {
           await navigator.clipboard.writeText(url);
-          alert('Terminal URL copied to clipboard!');
+          showToast(t('terminal.urlCopied'), 'success');
         } catch {
           prompt('Copy this URL:', url);
         }
@@ -952,9 +947,7 @@ export default {
       });
     };
 
-    const handlePromptChange = (prompt) => {
-      currentPrompt.value = prompt;
-    };
+    const handlePromptChange = (prompt) => { currentPrompt.value = prompt; };
 
     const handleStatusChange = (status) => {
       const oldStatus = connectionStatus.value;
@@ -1064,7 +1057,6 @@ export default {
         const rect = terminalMain.value.getBoundingClientRect();
         const charWidth = 8; // Approximate character width
         const charHeight = 16; // Approximate character height
-
         const cols = Math.floor((rect.width - 20) / charWidth);
         const rows = Math.floor((rect.height - 100) / charHeight);
 
@@ -1184,6 +1176,7 @@ export default {
       outputLines,
       currentInput,
       currentPrompt,
+      promptHtml,
       connectionStatus,
       connecting,
       showCursor,
@@ -1333,58 +1326,6 @@ export default {
   color: var(--terminal-text);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   overflow: hidden;
-}
-
-.window-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: var(--terminal-chrome-bg);
-  padding: var(--spacing-2) var(--spacing-4);
-  border-bottom: 1px solid var(--terminal-border-subtle);
-  user-select: none;
-}
-
-.window-title {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.terminal-icon {
-  font-size: var(--text-base);
-}
-
-.window-controls {
-  display: flex;
-  gap: var(--spacing-2);
-}
-
-.control-button {
-  background-color: var(--terminal-border);
-  border: 1px solid var(--terminal-border-strong);
-  color: var(--terminal-text);
-  padding: var(--spacing-1) var(--spacing-2);
-  border-radius: var(--radius-default);
-  cursor: pointer;
-  font-size: var(--text-xs);
-  transition: all var(--duration-200);
-}
-
-.control-button:hover:not(:disabled) {
-  background-color: var(--terminal-btn-hover-bg);
-  transform: translateY(-1px);
-}
-
-.control-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.control-button.danger:hover:not(:disabled) {
-  background-color: var(--color-error);
 }
 
 .terminal-status-bar {
@@ -1553,7 +1494,7 @@ export default {
 }
 
 .footer-button.workflow-test {
-  background-color: var(--color-info);
+  background-color: var(--color-info-solid);
   border-color: var(--color-info-hover);
   color: var(--text-on-primary);
   font-weight: 600;
@@ -1561,54 +1502,6 @@ export default {
 
 .footer-button.workflow-test:hover {
   background-color: var(--color-info-hover);
-}
-
-/* Emergency control button styles */
-.control-button.emergency-kill {
-  background-color: var(--color-error);
-  color: var(--text-on-error);
-  font-weight: bold;
-  border-color: var(--color-error-hover);
-}
-
-.control-button.emergency-kill:hover:not(:disabled) {
-  background-color: var(--color-error-hover);
-  border-color: var(--color-error-dark);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px var(--color-error-bg);
-}
-
-.control-button.interrupt {
-  background-color: var(--color-warning);
-  color: var(--text-on-warning);
-  border-color: var(--color-warning-hover);
-}
-
-.control-button.interrupt:hover:not(:disabled) {
-  background-color: var(--color-warning-hover);
-  border-color: var(--color-warning-dark);
-}
-
-.control-button.takeover {
-  background-color: var(--color-info);
-  color: var(--text-on-primary);
-  border-color: var(--color-info-hover);
-  font-weight: 600;
-}
-
-.control-button.takeover:hover:not(:disabled) {
-  background-color: var(--color-info-hover);
-  border-color: var(--color-info-dark);
-}
-
-.control-button.takeover.active {
-  background-color: var(--color-success);
-  border-color: var(--color-success-hover);
-  animation: pulse-success 2s infinite;
-}
-
-.control-button.takeover.active:hover {
-  background-color: var(--color-success-hover);
 }
 
 /* Process status indicators */
@@ -1629,16 +1522,6 @@ export default {
 .line-command.critical {
   border-left: 3px solid var(--color-error);
   background-color: var(--color-danger-bg);
-}
-
-/* Animation for active automation state */
-@keyframes pulse-success {
-  0%, 100% {
-    box-shadow: 0 0 0 0 var(--color-success-bg);
-  }
-  50% {
-    box-shadow: 0 0 0 8px transparent;
-  }
 }
 
 /* Terminal line styles for automation */
@@ -1702,10 +1585,6 @@ export default {
 
 /* Responsive */
 @media (max-width: 768px) {
-  .window-header {
-    padding: var(--spacing-1-5) var(--spacing-3);
-  }
-
   .terminal-status-bar {
     padding: 3px 12px;
   }

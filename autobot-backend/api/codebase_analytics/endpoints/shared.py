@@ -24,15 +24,20 @@ from autobot_shared.code_graph import (
     is_external_module,
 )
 from autobot_shared.logging_manager import get_logger
+from utils.file_categorization import SKIP_DIRS
 
 # Logger
 logger = get_logger(__name__)
+
+# Canonical skip dirs plus extras: virtualenv-style env dirs and archived code are not analysed.
+EXCLUDED_DIRS = SKIP_DIRS | {".env", "archive", "env"}
 
 # In-memory storage fallback
 _in_memory_storage = {}
 
 __all__ = [
     "COMMON_THIRD_PARTY",
+    "EXCLUDED_DIRS",
     "INTERNAL_MODULE_PREFIXES",
     "STDLIB_MODULES",
     "ImportContext",

@@ -43,9 +43,9 @@
               :placeholder="t('security.threatSettings.vtApiKeyPlaceholder')"
               class="form-input"
             />
-            <button class="btn-toggle" @click="showVtKey = !showVtKey">
+            <BaseButton variant="secondary" size="sm" @click="showVtKey = !showVtKey">
               {{ showVtKey ? '👁️' : '👁️‍🗨️' }}
-            </button>
+            </BaseButton>
           </div>
           <p class="form-hint">{{ t('security.threatSettings.vtEnvHint') }}</p>
         </div>
@@ -89,9 +89,9 @@
               :placeholder="t('security.threatSettings.uvApiKeyPlaceholder')"
               class="form-input"
             />
-            <button class="btn-toggle" @click="showUvKey = !showUvKey">
+            <BaseButton variant="secondary" size="sm" @click="showUvKey = !showUvKey">
               {{ showUvKey ? '👁️' : '👁️‍🗨️' }}
-            </button>
+            </BaseButton>
           </div>
           <p class="form-hint">{{ t('security.threatSettings.uvEnvHint') }}</p>
         </div>
@@ -130,9 +130,9 @@
             <span class="stat-value">{{ t('security.threatSettings.cacheTtlValue') }}</span>
           </div>
         </div>
-        <button class="btn-secondary" @click="clearCache" :disabled="loading">
+        <BaseButton variant="secondary" @click="clearCache" :disabled="loading">
           {{ t('security.threatSettings.clearCache') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -194,17 +194,18 @@ URLVOID_API_KEY=your_api_key_here</pre>
 
     <!-- Actions -->
     <div class="settings-actions">
-      <button class="btn-primary" @click="saveSettings" :disabled="loading">
+      <BaseButton @click="saveSettings" :disabled="loading">
         {{ loading ? t('security.threatSettings.saving') : t('security.threatSettings.saveSettings') }}
-      </button>
-      <button class="btn-secondary" @click="refreshStatus" :disabled="loading">
+      </BaseButton>
+      <BaseButton variant="secondary" @click="refreshStatus" :disabled="loading">
         {{ t('security.threatSettings.refreshStatus') }}
-      </button>
+      </BaseButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -471,18 +472,6 @@ onMounted(() => {
   color: var(--text-primary);
 }
 
-.btn-toggle {
-  padding: var(--spacing-2);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-}
-
-.btn-toggle:hover {
-  background: var(--bg-hover);
-}
-
 .form-hint {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
@@ -607,46 +596,5 @@ onMounted(() => {
 .settings-actions {
   display: flex;
   gap: var(--spacing-3);
-}
-
-.btn-primary {
-  padding: var(--spacing-3) var(--spacing-6);
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-md);
-  font-weight: var(--font-medium);
-  cursor: pointer;
-  transition: background var(--duration-200) var(--ease-in-out);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.btn-primary:disabled {
-  background: var(--color-secondary);
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  padding: var(--spacing-3) var(--spacing-6);
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  font-weight: var(--font-medium);
-  cursor: pointer;
-  transition: all var(--duration-200) var(--ease-in-out);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--border-strong);
-}
-
-.btn-secondary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 </style>

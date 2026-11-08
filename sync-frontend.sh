@@ -151,7 +151,7 @@ else
         echo -e "${RED}❌ Could not create ${REMOTE_FRONTEND_DIR} on ${SSH_TARGET}${NC}"
         exit 1
     fi
-    if ! rsync -avz --delete \
+    if ! rsync -avz --chmod=o-w --delete \
         --exclude 'node_modules' --exclude 'dist' --exclude 'dist-*' \
         --exclude 'current' --exclude 'previous' --exclude '.git' \
         -e "ssh ${SSH_KEY_OPTS[*]}" \

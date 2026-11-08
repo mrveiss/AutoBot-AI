@@ -119,7 +119,7 @@ def test_frontend_sync_never_invokes_the_pricing_post_sync_step() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_a_failing_pricing_refresh_records_the_reason_and_the_sync_still_succeeds(monkeypatch) -> None:
+def test_a_failing_pricing_refresh_records_the_reason_and_the_sync_still_succeeds(tmp_path, monkeypatch) -> None:
     """rc != 0 from the refresh CLI: recorded as failed, sync unaffected (#16231 AC4).
 
     The real ``run_pricing_refresh_post_sync`` runs here (not mocked); only the
@@ -128,9 +128,10 @@ def test_a_failing_pricing_refresh_records_the_reason_and_the_sync_still_succeed
     ``deployed_dir_resolver`` (#16236) -- under the conftest stub,
     ``deployed_root()`` is a MagicMock and the guard raises before the
     subprocess is ever spawned, recording a "failed to start" step instead of
-    the rc!=0 one this test asserts on. The default root ("/opt/autobot")
-    already matches this test's hardcoded deployed_dir, so no
-    SLM_DEPLOYED_ROOT override is needed.
+    the rc!=0 one this test asserts on. The root is ``tmp_path``, never the
+    default ("/opt/autobot"): on a host with a live install that root holds a
+    real ``autobot-backend/.env`` the guard then reads, and an unreadable one
+    turns this into a "failed to start" step too.
     """
 
     async def _fake_exec(*cmd, **kw):
@@ -140,11 +141,11 @@ def test_a_failing_pricing_refresh_records_the_reason_and_the_sync_still_succeed
         return proc
 
     with contextlib.ExitStack() as stack:
-        patch_real_deployed_root(monkeypatch)
+        patch_real_deployed_root(monkeypatch, tmp_path)
         _patch_backend_branch_helpers(stack)
         stack.enter_context(patch("asyncio.create_subprocess_exec", side_effect=_fake_exec))
         _, steps, pip_ok = _run(
-            cs._run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend")
+            cs._run_post_sync_steps("autobot-backend", "/src/autobot-backend", str(tmp_path / "autobot-backend"))
         )
 
     assert pip_ok is True, "a failed pricing refresh must never fail the sync"
@@ -153,7 +154,7 @@ def test_a_failing_pricing_refresh_records_the_reason_and_the_sync_still_succeed
     ), f"no step names the pricing refresh failure: {steps!r}"
 
 
-def test_a_timed_out_pricing_refresh_records_the_reason_and_the_sync_still_succeeds(monkeypatch) -> None:
+def test_a_timed_out_pricing_refresh_records_the_reason_and_the_sync_still_succeeds(tmp_path, monkeypatch) -> None:
     """A refresh that does not finish in time: recorded as timed out, sync unaffected (#16231 AC4).
 
     Needs the real ``deployed_dir_resolver`` (#16236) for the same reason as
@@ -168,12 +169,12 @@ def test_a_timed_out_pricing_refresh_records_the_reason_and_the_sync_still_succe
         return proc
 
     with contextlib.ExitStack() as stack:
-        patch_real_deployed_root(monkeypatch)
+        patch_real_deployed_root(monkeypatch, tmp_path)
         _patch_backend_branch_helpers(stack)
         stack.enter_context(patch("asyncio.create_subprocess_exec", side_effect=_fake_exec))
         stack.enter_context(patch("asyncio.wait_for", side_effect=asyncio.TimeoutError))
         _, steps, pip_ok = _run(
-            cs._run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend")
+            cs._run_post_sync_steps("autobot-backend", "/src/autobot-backend", str(tmp_path / "autobot-backend"))
         )
 
     assert pip_ok is True, "a timed-out pricing refresh must never fail the sync"
@@ -250,6 +251,25 @@ def test_load_env_file_missing_file_under_the_root_returns_empty(tmp_path, monke
     result = cs._load_env_file(tmp_path / "autobot-backend" / ".env")
 
     assert result == {}
+
+
+def test_load_env_file_raises_when_the_env_file_is_unreadable(tmp_path, monkeypatch) -> None:
+    """An .env that exists but cannot be read is an error, not "no env" (#19232 review).
+
+    The shared reader logs and returns {} for an unreadable file; this path must not,
+    or the refresh subprocess would run without the deployment's env and secrets.
+    A directory named .env is unreadable as a file on every platform.
+    """
+    patch_real_deployed_root(monkeypatch, tmp_path)
+    unreadable = tmp_path / "autobot-backend" / ".env"
+    unreadable.mkdir(parents=True)
+
+    try:
+        cs._load_env_file(unreadable)
+    except OSError:
+        pass
+    else:
+        raise AssertionError("an unreadable .env must raise OSError, not return {}")
 
 
 def test_load_env_file_refuses_a_sibling_directory_sharing_the_root_as_a_string_prefix(tmp_path, monkeypatch) -> None:

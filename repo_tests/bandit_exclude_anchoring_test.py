@@ -65,7 +65,7 @@ import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
@@ -320,7 +320,7 @@ def test_audit_entrypoint_fails_on_the_pre_fix_config(tmp_path):
         capture_output=True,
         text=True,
         check=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     )
     reached, problems = checker.audit_excludes(tmp_path)
 

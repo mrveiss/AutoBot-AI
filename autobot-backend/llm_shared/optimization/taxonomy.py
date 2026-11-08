@@ -8,13 +8,18 @@ One definition each, for the whole ``llm_shared.optimization`` package. Both are
 ``str`` enums, so a member compares equal to its raw string and every existing
 string-typed field, log line and caller keeps working unchanged.
 
-The architecture-family taxonomy (#13049 C1) is NOT defined here: it already
-has its single backend definition in ``llm_shared.types.ArchitectureFamily``.
+The architecture-family taxonomy (#13049 C1) is NOT defined here: it lives in
+``autobot_shared.model_taxonomy.ArchitectureFamily`` (re-exported by
+``llm_shared.types``).
 """
 
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict
+
+from autobot_shared.model_taxonomy import ArchitectureFamily, UnsupportedArchitectureError
+
+from ..model_param_registry import family_for_model_type
 
 
 class Dtype(str, Enum):
@@ -84,11 +89,26 @@ class LayerLayout:
 GPT2_STYLE_MODEL_TYPES = frozenset({"gpt2", "gptj", "gpt_neo", "gpt_neox"})
 _GPT2_LAYOUT = LayerLayout("transformer.h.", "transformer.wte", "lm_head")
 #: LLaMA, Mistral, Falcon, Qwen, Gemma, Phi, etc. Also what every unrecognised
-#: ``model_type`` resolves to: that fallback is preserved byte-for-byte; making it
-#: an explicit unsupported-family error is an open behaviour change (#13049 C1).
+#: ``model_type`` resolves to (unchanged fallback).
 _LLAMA_LAYOUT = LayerLayout("model.layers.", "model.embed_tokens", "lm_head")
+#: Families whose checkpoints are a transformer-style layer stack. Every other
+#: *known* family (state-space, linear-attention, hybrid) has no such layout.
+_LAYERED_FAMILIES = frozenset({ArchitectureFamily.TRANSFORMER, ArchitectureFamily.MOE})
 
 
 def layer_layout_for(model_type: str) -> LayerLayout:
-    """Layer layout for a lower-cased HuggingFace ``model_type``."""
+    """Layer layout for a lower-cased HuggingFace ``model_type``.
+
+    Raises ``UnsupportedArchitectureError`` for a known non-transformer family
+    (mamba, jamba, rwkv, retnet, ...): layer-by-layer loading would otherwise
+    silently apply LLaMA names to a checkpoint that has none of them (#13049 C1).
+    An unrecognised ``model_type`` keeps the LLaMA fallback.
+    """
+    family = family_for_model_type(model_type)
+    if family is not None and family not in _LAYERED_FAMILIES:
+        raise UnsupportedArchitectureError(
+            model_type,
+            f"model_type '{model_type}' is a {family.value} architecture; layer-by-layer "
+            "inference only supports transformer-style layer stacks",
+        )
     return _GPT2_LAYOUT if model_type in GPT2_STYLE_MODEL_TYPES else _LLAMA_LAYOUT

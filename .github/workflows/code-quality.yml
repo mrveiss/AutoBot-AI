@@ -11,7 +11,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   push:
-    branches: [ release, main, develop ]
+    branches: [ release, main ]
     paths:
       - '**/*.py'
       - '**/*.sh'
@@ -84,7 +84,7 @@ on:
     # draft == false, and marking a PR ready fires ONLY this event. Without
     # it a required context stays `skipped` and the PR can never merge.
     types: [opened, synchronize, reopened, ready_for_review]
-    branches: [ release, main, develop ]
+    branches: [ release, main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -325,8 +325,12 @@ jobs:
         # one from copying the pattern forward.
         bash pipeline-scripts/check-pre-commit-hook-pr.sh --python tools/lint/check_no_live_install_sys_path_default.py --ext py
 
-    - name: Block direct redis client regressions (#1086, #6785)
-      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis
+    - name: Block direct redis client regressions (#1086, #6785, #18553)
+      # The hook runs tools/lint/check_no_direct_redis.py against the frozen baseline: the same
+      # matcher and baseline as repo_tests/redis_direct_constructor_18553_test.py (one guard).
+      # --ext py,sh: the matcher reads .sh too; the wrapper's default pathspec has no .sh, so a
+      # shell-only change would otherwise never reach it.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis --ext py,sh
 
     - name: Block print/console regressions (#1082, #6785)
       # --changed-lines-only (#14051, same treatment #13950 gave the
@@ -798,6 +802,9 @@ jobs:
     - name: The open CodeQL alert backlog may not grow (#15333, #17300)
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # #18123 review: on pull_request GITHUB_SHA is the MERGE commit, which analyses are
+        # recorded against -- but check runs attach to the PR HEAD. The check-run reads use this.
+        CODEQL_CHECK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       run: |
         set -euo pipefail
         # BLOCKING, and in this job rather than in codeql.yml on purpose: this is

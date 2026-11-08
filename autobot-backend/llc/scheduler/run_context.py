@@ -9,11 +9,12 @@ and this is the piece with no scheduling in it -- it answers "what should the ag
 know?", not "when should it run?". Extracted rather than the ceiling raised.
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 async def fetch_recent_decisions(company_id: str, n: int = 5) -> list[Dict[str, Any]]:

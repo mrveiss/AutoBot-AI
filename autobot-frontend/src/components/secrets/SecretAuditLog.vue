@@ -10,11 +10,13 @@
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createDateFormatter, createRecencyFormatter } from '@autobot/ui'
 import { useSecretsAuditApi } from '@/composables/useSecretsAuditApi'
 import { createLogger } from '@/utils/debugUtils'
+import { auditTimestampToDate } from '@/types/audit'
 
 const logger = createLogger('SecretAuditLog')
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 // API composable
 const auditApi = useSecretsAuditApi()
@@ -22,28 +24,39 @@ const auditApi = useSecretsAuditApi()
 /**
  * Secret action types for filtering
  */
-type SecretAction = 'access' | 'inject' | 'copy' | 'reveal' | 'create' | 'read' | 'update' | 'delete'
+type SecretAction =
+  | 'access'
+  | 'create'
+  | 'list'
+  | 'update'
+  | 'delete'
+  | 'transfer'
+  | 'bulk_delete'
+
+/** i18n label key of each action, spelled out so key-usage checks can see them. */
+const ACTION_LABEL_KEYS: Record<SecretAction, string> = {
+  access: 'secrets.auditLog.access',
+  create: 'secrets.auditLog.create',
+  list: 'secrets.auditLog.list',
+  update: 'secrets.auditLog.update',
+  delete: 'secrets.auditLog.delete',
+  transfer: 'secrets.auditLog.transfer',
+  bulk_delete: 'secrets.auditLog.bulkDelete'
+}
 
 /**
  * Transformed audit entry for display
  */
 interface DisplayAuditEntry {
   id: string
-  secretId: string
   secretName: string
   action: SecretAction
   userId: string
   username: string
   timestamp: Date
-  metadata?: Record<string, unknown>
+  details: Record<string, unknown>
   rawOperation: string
 }
-
-// Props
-const props = defineProps<{
-  /** Filter by specific secret ID */
-  secretId?: string
-}>()
 
 // Local state
 const filterAction = ref<SecretAction | 'all'>('all')
@@ -93,29 +106,29 @@ const loadAuditLogs = async () => {
 const transformedEntries = computed((): DisplayAuditEntry[] => {
   return auditApi.entries.value
     .filter(entry => {
-      // Only include secret-related operations
-      return entry.operation && entry.operation.startsWith('secrets.')
+      // The backend writes `secret.<verb>` (api/secrets_audit.py SECRET_OPERATIONS)
+      return entry.operation && entry.operation.startsWith('secret.')
     })
     .map(entry => {
-      // Extract action from operation (e.g., 'secrets.access' -> 'access')
+      // Extract action from operation (e.g., 'secret.access' -> 'access')
       const action = (entry.operation?.split('.')[1] || 'access') as SecretAction
 
-      // Extract secret name and ID from metadata or resource
-      const secretName = (entry.metadata?.secret_name as string) || 'Unknown Secret'
-      const secretId = (entry.metadata?.secret_id as string) || entry.resource || 'unknown'
+      // The name travels in `details` (create only); `resource` is a one-way
+      // hash of the id, never the id, so it is only a correlator.
+      const details = entry.details || {}
+      const secretName = (details.name as string) || entry.resource || t('common.unknown')
 
-      // Extract username from user_id or metadata
-      const username = (entry.metadata?.username as string) || entry.user_id || 'Unknown'
+      // The backend sends a user id, never a username
+      const username = entry.user_id || t('common.unknown')
 
       return {
         id: entry.id,
-        secretId,
         secretName,
         action,
-        userId: entry.user_id || 'unknown',
+        userId: entry.user_id || t('common.unknown'),
         username,
-        timestamp: new Date(entry.timestamp),
-        metadata: entry.metadata || {},
+        timestamp: auditTimestampToDate(entry.timestamp),
+        details,
         rawOperation: entry.operation
       }
     })
@@ -127,11 +140,6 @@ const transformedEntries = computed((): DisplayAuditEntry[] => {
  */
 const filteredLog = computed(() => {
   let log = [...transformedEntries.value]
-
-  // Filter by secret ID if provided
-  if (props.secretId) {
-    log = log.filter(e => e.secretId === props.secretId)
-  }
 
   // Filter by action
   if (filterAction.value !== 'all') {
@@ -159,20 +167,14 @@ const uniqueUsers = computed(() => {
   return Array.from(users).sort((a, b) => a.name.localeCompare(b.name))
 })
 
-/**
- * Format timestamp to relative or absolute format
- */
-const formatTime = (date: Date): string => {
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(minutes / 60)
-
-  if (minutes < 1) return t('secrets.auditLog.justNow')
-  if (minutes < 60) return t('secrets.auditLog.minutesAgo', { minutes })
-  if (hours < 24) return t('secrets.auditLog.hoursAgo', { hours })
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+/** Relative text under a day, a short date and time past it. */
+const formatTime = createRecencyFormatter({
+  justNow: () => t('secrets.auditLog.justNow'),
+  locale: () => locale.value,
+  style: 'narrow',
+  olderThanMs: 86_400_000,
+  older: createDateFormatter({ kind: 'date', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } }),
+})
 
 /**
  * Get styling for action type
@@ -180,19 +182,17 @@ const formatTime = (date: Date): string => {
 const getActionStyle = (action: SecretAction): { color: string; icon: string } => {
   switch (action) {
     case 'access':
-    case 'read':
       return { color: 'text-blue-400 bg-blue-400/10', icon: 'key' }
-    case 'inject':
-      return { color: 'text-green-400 bg-green-400/10', icon: 'arrow-down-circle' }
-    case 'copy':
-      return { color: 'text-yellow-400 bg-yellow-400/10', icon: 'clipboard' }
-    case 'reveal':
-      return { color: 'text-orange-400 bg-orange-400/10', icon: 'eye' }
+    case 'list':
+      return { color: 'text-autobot-primary bg-autobot-primary/10', icon: 'list-ul' }
+    case 'transfer':
+      return { color: 'text-yellow-400 bg-yellow-400/10', icon: 'arrow-left-right' }
     case 'create':
       return { color: 'text-green-500 bg-green-500/10', icon: 'plus-circle' }
     case 'update':
       return { color: 'text-purple-400 bg-purple-400/10', icon: 'pencil' }
     case 'delete':
+    case 'bulk_delete':
       return { color: 'text-red-400 bg-red-400/10', icon: 'trash' }
     default:
       return { color: 'text-autobot-text-muted bg-gray-400/10', icon: 'info-circle' }
@@ -237,13 +237,12 @@ const prevPage = async () => {
         >
           <option value="all">{{ $t('secrets.auditLog.allActions') }}</option>
           <option value="access">{{ $t('secrets.auditLog.access') }}</option>
-          <option value="read">{{ $t('secrets.auditLog.read') }}</option>
-          <option value="inject">{{ $t('secrets.auditLog.inject') }}</option>
-          <option value="copy">{{ $t('secrets.auditLog.copy') }}</option>
-          <option value="reveal">{{ $t('secrets.auditLog.reveal') }}</option>
+          <option value="list">{{ $t('secrets.auditLog.list') }}</option>
           <option value="create">{{ $t('secrets.auditLog.create') }}</option>
           <option value="update">{{ $t('secrets.auditLog.update') }}</option>
           <option value="delete">{{ $t('secrets.auditLog.delete') }}</option>
+          <option value="transfer">{{ $t('secrets.auditLog.transfer') }}</option>
+          <option value="bulk_delete">{{ $t('secrets.auditLog.bulkDelete') }}</option>
         </select>
         <select
           v-model="filterUser"
@@ -316,7 +315,7 @@ const prevPage = async () => {
                   {{ entry.secretName }}
                 </div>
                 <div class="text-xs text-autobot-text-muted">
-                  <span class="capitalize">{{ entry.action }}</span> {{ $t('secrets.auditLog.by') }}
+                  <span>{{ $t(ACTION_LABEL_KEYS[entry.action]) }}</span> {{ $t('secrets.auditLog.by') }}
                   <span class="font-medium">{{ entry.username }}</span>
                 </div>
               </div>
@@ -326,10 +325,10 @@ const prevPage = async () => {
             </div>
 
             <!-- Metadata -->
-            <div v-if="entry.metadata && Object.keys(entry.metadata).length > 0" class="text-xs text-autobot-text-muted mt-1">
+            <div v-if="Object.keys(entry.details).length > 0" class="text-xs text-autobot-text-muted mt-1">
               <details class="cursor-pointer">
                 <summary class="hover:text-autobot-text-muted">{{ $t('secrets.auditLog.details') }}</summary>
-                <pre class="mt-1 p-2 bg-autobot-bg-secondary rounded text-xs overflow-x-auto">{{ JSON.stringify(entry.metadata, null, 2) }}</pre>
+                <pre class="mt-1 p-2 bg-autobot-bg-secondary rounded text-xs overflow-x-auto">{{ JSON.stringify(entry.details, null, 2) }}</pre>
               </details>
             </div>
           </div>

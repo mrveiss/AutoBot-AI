@@ -17,6 +17,7 @@ from async_chat_workflow import WorkflowMessage
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
+from chat_history.rolling_summary import prompt_summary
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from dependencies import provide_config_manager
@@ -662,29 +663,11 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             "that printed output is what you receive back — tool-call plumbing is handled for you.\n"
         )
 
-    def _build_conversation_context(self, session: WorkflowSession) -> str:
-        """Build conversation context from recent history.
+    def _build_conversation_context(self, session: WorkflowSession, rolling_summary: str = "") -> str:
+        """Rolling summary of older turns (#20852) + the recent turns verbatim."""
+        from chat_history.rolling_summary import render_context
 
-        Issue #715: Now handles incomplete entries (empty assistant response)
-        that are registered before LLM call to fix race conditions.
-        """
-        if not session.conversation_history:
-            return ""
-
-        # Filter out incomplete entries (where assistant response is empty placeholder)
-        # These are messages currently being processed
-        complete_messages = [
-            msg
-            for msg in session.conversation_history
-            if msg.get("assistant")  # Only include if assistant response exists
-        ]
-
-        if not complete_messages:
-            return ""
-
-        context_parts = ["\n**Recent Context:**\n"]
-        context_parts.extend(f"User: {msg['user']}\nYou: {msg['assistant']}\n\n" for msg in complete_messages[-2:])
-        return "".join(context_parts)
+        return render_context(session.conversation_history, rolling_summary)
 
     async def _retrieve_knowledge_context(self, message: str, session: WorkflowSession) -> tuple:
         """Retrieve knowledge context for RAG. Returns (context, citations)."""
@@ -698,8 +681,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 query=message,
                 conversation_history=session.conversation_history or [],
                 top_k=5,
-                score_threshold=0.3,  # Issue #1526: lowered from 0.7
-                force_retrieval=False,
+                principal=session.kb_principal(),  # #16664: retrieve as the turn's user
             )
             if knowledge_context:
                 logger.info(
@@ -884,53 +866,11 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # When false the pre-existing unconditional EssentialStory path is used.
         # Issue MVA-1992: Skip memory graph lookup when lightweight_mode=True.
         if not lightweight_mode:
-            try:
-                from chat_history.layers import TIERED_CONTEXT_ENABLED, TieredContextBuilder
+            from chat_workflow import tiered_context_sources as tcs
 
-                if TIERED_CONTEXT_ENABLED:
-                    # #13686: the memory graph was read off an object that never
-                    # had it, so L2 returned "" on every turn. #13687/#13704: the
-                    # goal ancestry comes from the *server-side* session binding,
-                    # never the request body, and both hops are company-scoped.
-                    # Both resolvers degrade to None rather than failing the turn.
-                    from chat_workflow.tiered_context_sources import (
-                        resolve_goal_ancestry,
-                        resolve_memory_graph,
-                    )
-
-                    tiered_ctx = await TieredContextBuilder().build(
-                        user_message=message,
-                        model_name=selected_model,
-                        session_id=session.session_id,
-                        memory_graph=await resolve_memory_graph(),
-                        # #13742: deliberately NOT self.knowledge_service. The RAG
-                        # path below (:914) retrieves for every use_knowledge turn
-                        # via the same conversation_aware_retrieve L3 would call,
-                        # then applies budget_grounded_context for trimming and
-                        # citation rebinding (#3770/#10837). Handing L3 the service
-                        # here bought a second identical vector search and the same
-                        # chunks twice in the prompt — with the copy inside the
-                        # tiered block escaping that budgeting entirely.
-                        #
-                        # L3 keeps its retrieval path for callers that have no
-                        # separate RAG stage; at this call site the main path owns
-                        # retrieval, so L3 correctly stays silent.
-                        knowledge_service=None,
-                        goal_ancestry=await resolve_goal_ancestry(session.session_id),
-                    )
-                    if tiered_ctx:
-                        system_prompt = tiered_ctx + "\n\n" + system_prompt
-                else:
-                    # Issue #3787: legacy always-loaded compact memory summary.
-                    from memory.essential_story import EssentialStoryGenerator
-
-                    story = await EssentialStoryGenerator().generate(model_name=selected_model)
-                    if story:
-                        system_prompt = story + "\n\n" + system_prompt
-            except Exception as _ctx_exc:
-                logger.warning("Context injection failed: %s", _ctx_exc)
+            system_prompt = await tcs.prepend_memory_context(system_prompt, session, message, selected_model)
         system_prompt = await _emit_system_prompt_ready(system_prompt, session)
-        conversation_context = self._build_conversation_context(session)
+        conversation_context = self._build_conversation_context(session, await prompt_summary(session))
 
         # Knowledge retrieval for RAG
         # Issue MVA-1992: Skip RAG when lightweight_mode=True
@@ -1230,7 +1170,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             logger.warning(f"[interpret_terminal_command] Redis timeout getting session " f"data for {session_id}")
             return None
 
-    async def _persist_to_conversation_history(self, session_id: str, interpretation: str) -> None:
+    async def _persist_to_conversation_history(self, session_id: str, interpretation: str, model: str = "") -> None:
         """
         Persist terminal interpretation to conversation history for LLM context.
 
@@ -1240,6 +1180,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         Args:
             session_id: Chat session ID
             interpretation: Interpretation text to persist
+            model: The model that produced it; the rolling-summary refresh folds with it (#20852)
 
         Raises:
             Exception: If persistence fails (logged, not propagated)
@@ -1264,6 +1205,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 session=session,
                 message=last_user_message,
                 llm_response=interpretation,
+                model=model or None,
             )
             logger.info(
                 f"✅ [interpret_terminal_command] Persisted user message + "
@@ -1331,7 +1273,8 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 return interpretation
 
             await self._save_to_chat_history(session_id, interpretation)
-            await self._persist_to_conversation_history(session_id, interpretation)
+            model = provide_config_manager().get_selected_model()  # the rolling-summary refresh folds with it
+            await self._persist_to_conversation_history(session_id, interpretation, model)
 
             return interpretation
 

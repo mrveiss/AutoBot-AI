@@ -48,7 +48,9 @@ router = APIRouter(prefix="/secrets", tags=["llc-secrets"])
 class SecretSetRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     value: str = Field(..., min_length=1)
-    actor: str = Field(..., description="Agent ID performing the operation")
+    actor: Optional[str] = Field(
+        None, description="Deprecated and ignored: the actor is the authenticated caller (#20102)"
+    )
 
 
 class SecretSummary(BaseModel):
@@ -149,6 +151,7 @@ async def set_secret(
     company_id: str = Depends(_require_secret_admin),
     session: AsyncSession = Depends(get_async_session),
     svc: SecretService = Depends(_get_service),
+    current_user: dict = Depends(get_current_user),
 ) -> SecretSetResponse:
     """Create or update a secret.  Version increments on update."""
     secret = await svc.set(
@@ -156,7 +159,7 @@ async def set_secret(
         company_id=company_id,
         name=body.name,
         value=body.value,
-        actor=body.actor,
+        actor=str(actor_id(current_user)),
     )
     await session.commit()
     return SecretSetResponse(
@@ -192,14 +195,15 @@ async def get_secret(
 @router.delete("/{company_id}/{name}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def revoke_secret(
     name: str,
-    actor: str,
+    actor: Optional[str] = None,  # deprecated and ignored: the actor is the authenticated caller (#20102)
     company_id: str = Depends(_require_secret_admin),
     session: AsyncSession = Depends(get_async_session),
     svc: SecretService = Depends(_get_service),
+    current_user: dict = Depends(get_current_user),
 ) -> None:
     """Revoke a secret.  The value becomes permanently inaccessible."""
     try:
-        await svc.revoke(session=session, company_id=company_id, name=name, actor=actor)
+        await svc.revoke(session=session, company_id=company_id, name=name, actor=str(actor_id(current_user)))
     except SecretNotFound as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from exc
     await session.commit()

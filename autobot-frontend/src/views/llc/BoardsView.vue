@@ -87,7 +87,7 @@ import { BaseModal } from '@autobot/ui'
 import { useApiClient } from '@/plugins/api'
 import { useKanbanBoardsApi, type BoardSummary } from '@/composables/llc/useKanbanBoardsApi'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDate as fmtDate } from '@/utils/formatHelpers'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 interface ProjectOption {
   id: string
@@ -109,9 +109,7 @@ const selectedProjectId = ref('')
 const creating = ref(false)
 const createError = ref('')
 
-function formatDate(value: string): string {
-  return fmtDate(value) || '—'
-}
+const formatDate = createDateFormatter({ kind: 'date', emptyText: '—', invalidText: '—' })
 
 function openBoard(b: BoardSummary): void {
   const name = b.type === 'sprint' ? 'llc-sprint-board' : 'llc-kanban-board'
@@ -178,15 +176,15 @@ onMounted(listBoards)
 }
 
 .browser-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .browser-count {
-  font-size: 0.875rem;
-  color: var(--text-secondary, #9ca3af);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .new-board-btn {
@@ -199,7 +197,7 @@ onMounted(listBoards)
   align-items: flex-start;
   gap: 0.75rem;
   padding: 2rem 0;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 .empty-text {
@@ -220,13 +218,13 @@ onMounted(listBoards)
   text-align: left;
   cursor: pointer;
   border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--border-default, #e5e7eb);
-  background: var(--bg-surface, #ffffff);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .entity-card:hover {
-  border-color: var(--color-accent, #c4651a);
+  border-color: var(--color-accent);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
@@ -238,15 +236,15 @@ onMounted(listBoards)
 }
 
 .card-name {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .card-meta {
-  font-size: 0.75rem;
-  color: var(--text-secondary, #9ca3af);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -258,18 +256,18 @@ onMounted(listBoards)
   letter-spacing: 0.03em;
   padding: 0.125rem 0.5rem;
   border-radius: 999px;
-  background: var(--bg-hover, #f3f4f6);
-  color: var(--text-secondary, #6b7280);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
 }
 
 .type-kanban {
-  background: #bfdbfe;
-  color: #1d4ed8;
+  background: var(--color-info-bg);
+  color: var(--color-info-dark);
 }
 
 .type-sprint {
-  background: #ddd6fe;
-  color: #5b21b6;
+  background: var(--chart-purple-bg);
+  color: var(--color-purple-dark);
 }
 
 .create-form {
@@ -285,31 +283,31 @@ onMounted(listBoards)
 }
 
 .field-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .field-input {
   padding: 0.4rem 0.5rem;
   border-radius: var(--radius-sm, 6px);
-  border: 1px solid var(--border-default, #d1d5db);
-  background: var(--bg-surface, #fff);
-  color: var(--text-primary, #111827);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .form-hint {
   margin: 0;
   font-size: 0.8rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .form-error {
   margin: 0;
   font-size: 0.8rem;
-  color: var(--color-error, #dc2626);
+  color: var(--color-error);
 }
 
 .btn {
@@ -322,13 +320,13 @@ onMounted(listBoards)
 
 .btn-ghost {
   background: transparent;
-  border-color: var(--border-default, #d1d5db);
-  color: var(--text-secondary, #6b7280);
+  border-color: var(--border-default);
+  color: var(--text-secondary);
 }
 
 .btn-primary {
-  background: var(--color-accent, #c4651a);
-  color: #fff;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 
 .btn-primary:disabled {

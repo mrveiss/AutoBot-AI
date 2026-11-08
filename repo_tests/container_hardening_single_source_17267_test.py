@@ -20,6 +20,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared.container_hardening import DENIED_RUN_KWARGS
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot_shared/container_hardening.py"
@@ -46,7 +47,7 @@ def _is_key(node: ast.AST | None) -> bool:
 
 def builds_hardening_inline(source: str) -> bool:
     """True when `source` spells a hardening kwarg as a dict key, subscript target or keyword."""
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Dict) and any(_is_key(k) for k in node.keys):
             return True
         if isinstance(node, ast.keyword) and node.arg in _KEYS:
@@ -59,7 +60,7 @@ def builds_hardening_inline(source: str) -> bool:
 def _calls_builder(source: str) -> bool:
     return any(
         isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in _BUILDERS
-        for n in ast.walk(ast.parse(source))
+        for n in ast.walk(parse_cache.parse(source))
     )
 
 
@@ -115,7 +116,7 @@ def unhardened_run_sites(source: str, builders: frozenset[str] = _BUILDERS) -> l
     also pass a keyword in ``DENIED_RUN_KWARGS``."""
     return [
         n.lineno
-        for n in ast.walk(ast.parse(source))
+        for n in ast.walk(parse_cache.parse(source))
         if _is_run_site(n) and (not _spreads_builder(n, builders) or _names_denied_keyword(n))
     ]
 
@@ -159,7 +160,7 @@ def test_the_run_site_matcher_tells_hardened_from_bare(label: str, source: str, 
 
 def test_every_execution_backend_run_site_takes_the_builder() -> None:
     source = (repo_root() / _RUN_SITES_FILE).read_text(encoding="utf-8")
-    sites = [n for n in ast.walk(ast.parse(source)) if _is_run_site(n)]
+    sites = [n for n in ast.walk(parse_cache.parse(source)) if _is_run_site(n)]
     assert len(sites) == 2, f"#17267: expected the cold-start and snapshot-restore run sites, found {len(sites)}"
     assert not unhardened_run_sites(source, _EXECUTION_BUILDER), (
         f"#17267: {_RUN_SITES_FILE} containers.run at lines {unhardened_run_sites(source, _EXECUTION_BUILDER)} "
@@ -218,7 +219,7 @@ def test_every_run_and_create_site_in_the_tree_takes_the_builder_or_is_allowlist
 def test_each_allowlisted_file_has_exactly_its_pinned_run_or_create_sites() -> None:
     root = repo_root()
     for rel, expected in _ALLOWED_SITE_COUNTS.items():
-        tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+        tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         found = sum(1 for n in ast.walk(tree) if _is_run_site(n))
         assert found == expected, (
             f"#17267: {rel} has {found} containers.run/create sites, pinned at {expected}; a new site must "
@@ -228,7 +229,7 @@ def test_each_allowlisted_file_has_exactly_its_pinned_run_or_create_sites() -> N
 
 def test_the_warm_pool_run_kwargs_come_from_the_full_builder() -> None:
     source = (repo_root() / _POOL_FILE).read_text(encoding="utf-8")
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     run_kwargs = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_run_kwargs"]
     assert len(run_kwargs) == 1
     called = {c.func.id for c in ast.walk(run_kwargs[0]) if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)}
@@ -251,8 +252,6 @@ def _source_population(root) -> list[str]:
 REACH = declare(
     "container-hardening-inline",
     discover=_source_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=2702,
     what="non-test python source",
     roots=("autobot-backend", "autobot_shared"),
     growth=300,

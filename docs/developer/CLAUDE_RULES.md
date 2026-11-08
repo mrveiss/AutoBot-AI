@@ -164,10 +164,9 @@ const logger = createLogger('ComponentName')
 
 No `console.*` or `print()` — pre-commit blocks these.
 
-Bare `logging.getLogger(__name__)` is the **exception, not the pattern**: it is permitted
-only where a config-mocking test harness cannot tolerate the manager's import-time config
-read (see `autobot_shared/user_management/password_epoch.py`). New backend code uses
-`get_logger`.
+Backend code uses `get_logger`. A config-mocking test harness is not a reason for a bare
+`logging.getLogger(__name__)`: `get_logger` validates every config value it reads and falls
+back to its defaults (#19288).
 
 > Violation: Hardcoding a value that belongs in SSOT config, or writing a private helper that duplicates a public one.
 

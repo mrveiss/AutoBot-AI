@@ -114,7 +114,7 @@ def test_every_report_site_uses_the_excerpt() -> None:
     """Reverting one site to a fixed tail fails here, not silently."""
     source = _HOOK.read_text(encoding="utf-8")
     calls = re.findall(r'failure_excerpt "\$(\w+)" >&2', source)
-    assert sorted(calls) == ["group_output", "kit_output", "vitest_output"]
+    assert sorted(calls) == ["group_output", "guard_output", "kit_output", "vitest_output"]  # + train guards #19472
     body = _FUNC.search(source).group(0)
     assert source.count("tail -25") == body.count("tail -25") == 1
 
@@ -139,3 +139,11 @@ def test_app_log_noise_cannot_crowd_out_the_failing_tests() -> None:
     assert "× translates the collection placeholder" in out
     assert "[SessionCollaboration]" not in out
     assert "Tests  2 failed | 2879 passed" in out
+
+
+def test_a_long_assertion_diff_cannot_crowd_out_the_failing_test_name() -> None:
+    """#18808: 60 `E   ` lines of a dict diff precede pytest's short summary; the name went missing."""
+    diff = "".join(f"E     'guard-{i}': ('autobot-backend/',),\n" for i in range(80))
+    output = f"{diff}=========================== short test summary info ============================\nFAILED repo_tests/x_test.py::test_y - AssertionError: scopes\n"
+    out = _excerpt(output)
+    assert out.splitlines()[0].startswith("FAILED repo_tests/x_test.py::test_y")

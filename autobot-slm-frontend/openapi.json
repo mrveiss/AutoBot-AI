@@ -582,7 +582,7 @@
         "type": "object"
       },
       "AgentResponse": {
-        "description": "Agent response with LLM config.",
+        "description": "Agent response with LLM config (the LLM fields are AgentLLMConfig's, #19730).",
         "properties": {
           "agent_id": {
             "title": "Agent Id",
@@ -669,11 +669,11 @@
           }
         },
         "required": [
+          "llm_provider",
+          "llm_model",
           "id",
           "agent_id",
           "name",
-          "llm_provider",
-          "llm_model",
           "created_at",
           "updated_at"
         ],
@@ -1836,7 +1836,7 @@
         "type": "object"
       },
       "BackupResponse": {
-        "description": "Backup response.",
+        "description": "Backup response; ``restorable`` tells the GUI where to offer Restore (#19455).",
         "properties": {
           "backup_id": {
             "title": "Backup Id",
@@ -1900,6 +1900,11 @@
             "title": "Node Id",
             "type": "string"
           },
+          "restorable": {
+            "readOnly": true,
+            "title": "Restorable",
+            "type": "boolean"
+          },
           "service_type": {
             "title": "Service Type",
             "type": "string"
@@ -1932,7 +1937,8 @@
           "service_type",
           "status",
           "size_bytes",
-          "created_at"
+          "created_at",
+          "restorable"
         ],
         "title": "BackupResponse",
         "type": "object"
@@ -3258,6 +3264,11 @@
             },
             "title": "Stale Components",
             "type": "array"
+          },
+          "stale_scan_unknown": {
+            "default": false,
+            "title": "Stale Scan Unknown",
+            "type": "boolean"
           },
           "total_nodes": {
             "default": 0,
@@ -4875,6 +4886,55 @@
         "title": "FileVerdictModel",
         "type": "object"
       },
+      "FirstAdminResponse": {
+        "description": "What the main app needs to create and link this person.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "password_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password Hash"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "email",
+          "display_name",
+          "password_hash"
+        ],
+        "title": "FirstAdminResponse",
+        "type": "object"
+      },
       "FleetHealthResponse": {
         "description": "Fleet health status response.",
         "properties": {
@@ -4898,6 +4958,14 @@
               "type": "string"
             },
             "title": "Required Down",
+            "type": "array"
+          },
+          "roles_with_nodes_down": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RoleNodeHealth"
+            },
+            "title": "Roles With Nodes Down",
             "type": "array"
           }
         },
@@ -7649,9 +7717,9 @@
             "type": "string"
           },
           "timeout": {
-            "default": 30,
+            "default": 30.0,
             "title": "Timeout",
-            "type": "integer"
+            "type": "number"
           }
         },
         "required": [
@@ -8422,6 +8490,25 @@
           "services"
         ],
         "title": "NodeServiceOrderResponse",
+        "type": "object"
+      },
+      "NodeSshPasswordDeleteResponse": {
+        "description": "What a deletion removed. Carries the node and a flag, never a value.",
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_id",
+          "deleted"
+        ],
+        "title": "NodeSshPasswordDeleteResponse",
         "type": "object"
       },
       "NodeStatus": {
@@ -10733,6 +10820,36 @@
         "title": "RoleListResponse",
         "type": "object"
       },
+      "RoleNodeHealth": {
+        "description": "A multi-node role with at least one of its nodes down.",
+        "properties": {
+          "nodes_down": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Nodes Down",
+            "type": "array"
+          },
+          "nodes_up": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Nodes Up",
+            "type": "array"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "nodes_up",
+          "nodes_down"
+        ],
+        "title": "RoleNodeHealth",
+        "type": "object"
+      },
       "RolePurgeRequest": {
         "description": "Request to purge roles from a node.",
         "properties": {
@@ -10912,6 +11029,158 @@
           "roles"
         ],
         "title": "RolesUpdateRequest",
+        "type": "object"
+      },
+      "RollbackCandidates": {
+        "description": "The picker's contents: ancestors of the branch head, newest first.",
+        "properties": {
+          "branch": {
+            "title": "Branch",
+            "type": "string"
+          },
+          "commits": {
+            "items": {
+              "$ref": "#/components/schemas/RollbackCommit"
+            },
+            "title": "Commits",
+            "type": "array"
+          },
+          "deployed_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployed Commit"
+          }
+        },
+        "required": [
+          "branch",
+          "commits"
+        ],
+        "title": "RollbackCandidates",
+        "type": "object"
+      },
+      "RollbackCommit": {
+        "description": "One commit the operator may roll back to.",
+        "properties": {
+          "commit": {
+            "title": "Commit",
+            "type": "string"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "is_deployed": {
+            "default": false,
+            "title": "Is Deployed",
+            "type": "boolean"
+          },
+          "short": {
+            "title": "Short",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commit",
+          "short",
+          "date",
+          "subject"
+        ],
+        "title": "RollbackCommit",
+        "type": "object"
+      },
+      "RollbackDatabaseCheck": {
+        "description": "Whether a database migration is in the way, for one database.",
+        "properties": {
+          "database": {
+            "title": "Database",
+            "type": "string"
+          },
+          "in_the_way": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "In The Way",
+            "type": "array"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database",
+          "status"
+        ],
+        "title": "RollbackDatabaseCheck",
+        "type": "object"
+      },
+      "RollbackPreview": {
+        "description": "What the confirmation step shows before anything runs.",
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/RollbackDatabaseCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "commit": {
+            "$ref": "#/components/schemas/RollbackCommit"
+          },
+          "refusal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refusal"
+          }
+        },
+        "required": [
+          "commit",
+          "allowed",
+          "checks"
+        ],
+        "title": "RollbackPreview",
+        "type": "object"
+      },
+      "RollbackRequest": {
+        "description": "The commit the operator picked from the list; validated again server-side.",
+        "properties": {
+          "commit": {
+            "description": "Full commit id from the candidates list",
+            "maxLength": 200,
+            "title": "Commit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commit"
+        ],
+        "title": "RollbackRequest",
         "type": "object"
       },
       "SLOCreateRequest": {
@@ -15445,6 +15714,72 @@
         "title": "UpdatePolicyResponse",
         "type": "object"
       },
+      "UpdateProgress": {
+        "description": "A running self-update's position in its own log (#20254).",
+        "properties": {
+          "elapsed_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Seconds"
+          },
+          "last_line_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Line At"
+          },
+          "play": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Play"
+          },
+          "state": {
+            "enum": [
+              "waiting",
+              "running",
+              "quiet",
+              "exited_without_recap",
+              "finished",
+              "unknown"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "UpdateProgress",
+        "type": "object"
+      },
       "UpdateSummaryResponse": {
         "description": "Lightweight summary for sidebar badge polling.",
         "properties": {
@@ -17233,7 +17568,7 @@
     },
     "/api/auth/proxy-check": {
       "get": {
-        "description": "nginx auth_request target for the /autobot-api/ internal-key gate (#16374).\n\nA side-effect-free membership check, deliberately separate from ``/me``:\n``/me`` answers \"is this a live SLM session?\", which any backend login\ntoken satisfies by design (epic #10193) -- every read-only or non-admin\nuser therefore passed the old gate too, and nginx then attached the\ntrusted internal key that ``autobot-backend/auth_middleware.py`` treats\nas full admin. This answers \"does this session hold the role the key\nactually confers?\": 204 for a session whose role grants\n``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it\n-- including SUPERADMIN, which holds no granular permissions (#13854)\nand is refused here as on every other permission-gated SLM admin route\n-- and an unknown role resolves to USER, so it also fails closed. 401\ncovers a missing Authorization header (the upstream ``HTTPBearer``'s\n``auto_error=True`` raises it before this dependency runs) or an\ninvalid/expired token (``get_current_user`` raises it). Returns no body\neither way -- an ``auth_request`` subrequest's body is discarded, only\nthe status code is read.",
+        "description": "nginx auth_request target for the /autobot-api/ internal-key gate (#16374).\n\nA side-effect-free membership check, deliberately separate from ``/me``:\n``/me`` answers \"is this a live SLM session?\", which any backend login\ntoken satisfies by design (epic #10193) -- every read-only or non-admin\nuser therefore passed the old gate too, and nginx then attached the\ntrusted internal key that ``autobot-backend/auth_middleware.py`` treats\nas full admin. This answers \"does this session hold the role the key\nactually confers?\": 204 for a session whose role grants\n``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it\n-- SUPERADMIN is admitted, since it holds admin's permissions (#19125),\nincluding ``ADMIN_SYSTEM`` -- and an unknown role resolves to USER, so it also fails closed. 401\ncovers a missing Authorization header (the upstream ``HTTPBearer``'s\n``auto_error=True`` raises it before this dependency runs) or an\ninvalid/expired token (``get_current_user`` raises it). Returns no body\neither way -- an ``auth_request`` subrequest's body is discarded, only\nthe status code is read.",
         "operationId": "proxy_check_api_auth_proxy_check_get",
         "responses": {
           "204": {
@@ -20457,6 +20792,194 @@
         ]
       }
     },
+    "/api/code-sync/rollback": {
+      "post": {
+        "description": "Deploy the chosen earlier commit. Refused while an update runs or when a migration is in the way.",
+        "operationId": "start_rollback_api_code_sync_rollback_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateAllJob"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Rollback",
+        "tags": [
+          "code-sync",
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/rollback/candidates": {
+      "get": {
+        "description": "The newest commits of the tracked branch, with dates and subjects, for the picker.",
+        "operationId": "rollback_candidates_api_code_sync_rollback_candidates_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollbackCandidates"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rollback Candidates",
+        "tags": [
+          "code-sync",
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/rollback/preview": {
+      "get": {
+        "description": "Validate one commit and say whether a database migration is in the way.",
+        "operationId": "rollback_preview_api_code_sync_rollback_preview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "commit",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "title": "Commit",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollbackPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rollback Preview",
+        "tags": [
+          "code-sync",
+          "code-sync"
+        ]
+      }
+    },
     "/api/code-sync/schedules": {
       "get": {
         "description": "List all update schedules (Issue #741 - Phase 7).",
@@ -21003,6 +21526,200 @@
           }
         ],
         "summary": "Start Update All",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/update-all/nodes-offline": {
+      "get": {
+        "description": "Nodes the last self-update left offline and still are (#20250), with when that update ran.",
+        "operationId": "get_nodes_offline_after_update_api_code_sync_update_all_nodes_offline_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "title": "Response Get Nodes Offline After Update Api Code Sync Update All Nodes Offline Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Nodes Offline After Update",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/update-all/progress": {
+      "get": {
+        "description": "What the running self-update is doing, from its own log, across the SLM's restart (#20254).",
+        "operationId": "get_update_progress_api_code_sync_update_all_progress_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateProgress"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Update Progress",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/update-all/report": {
+      "get": {
+        "description": "The last update's target, stage, result, failed task, error and role deploys.",
+        "operationId": "get_update_report_api_code_sync_update_all_report_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Update Report Api Code Sync Update All Report Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Update Report",
         "tags": [
           "code-sync"
         ]
@@ -23416,6 +24133,131 @@
         "summary": "Get Playbook",
         "tags": [
           "infrastructure"
+        ]
+      }
+    },
+    "/api/internal/first-admin": {
+      "get": {
+        "description": "The earliest active admin. 404 until the SLM has one.",
+        "operationId": "get_first_admin_api_internal_first_admin_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-internal-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirstAdminResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get First Admin",
+        "tags": [
+          "health",
+          "internal"
+        ]
+      }
+    },
+    "/api/internal/nodes/{node_id}/ssh-password": {
+      "delete": {
+        "description": "Delete the node's stored SSH password under a human's approval; ``deleted`` is False when it held none.",
+        "operationId": "delete_node_ssh_password_api_internal_nodes__node_id__ssh_password_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "node_id",
+            "required": true,
+            "schema": {
+              "title": "Node Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Approval Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeSshPasswordDeleteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Node Ssh Password",
+        "tags": [
+          "internal"
         ]
       }
     },
@@ -31852,7 +32694,7 @@
     },
     "/api/roles/owners": {
       "get": {
-        "description": "Return role -> node_id mapping for all assigned service roles (#1389).\n\nUsed by deployment/migration UIs to show which node owns each role.",
+        "description": "Return role -> node ids, and which roles may hold several (#1389, #19706).",
         "operationId": "get_role_owners_endpoint_api_roles_owners_get",
         "parameters": [
           {
@@ -37949,7 +38791,7 @@
     },
     "/scim/v2/Users/{user_id}": {
       "delete": {
-        "description": "DELETE /scim/v2/Users/{id} — deactivate/soft-delete a user.",
+        "description": "DELETE /scim/v2/Users/{id} — deactivate/soft-delete a user.\n\nA soft-deleted user is found again, so a delete answered 503 can be repeated (#20443).",
         "operationId": "scim_delete_user_scim_v2_Users__user_id__delete",
         "parameters": [
           {

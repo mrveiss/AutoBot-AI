@@ -294,9 +294,8 @@ export interface paths {
          *     as full admin. This answers "does this session hold the role the key
          *     actually confers?": 204 for a session whose role grants
          *     ``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it
-         *     -- including SUPERADMIN, which holds no granular permissions (#13854)
-         *     and is refused here as on every other permission-gated SLM admin route
-         *     -- and an unknown role resolves to USER, so it also fails closed. 401
+         *     -- SUPERADMIN is admitted, since it holds admin's permissions (#19125),
+         *     including ``ADMIN_SYSTEM`` -- and an unknown role resolves to USER, so it also fails closed. 401
          *     covers a missing Authorization header (the upstream ``HTTPBearer``'s
          *     ``auto_error=True`` raises it before this dependency runs) or an
          *     invalid/expired token (``get_current_user`` raises it). Returns no body
@@ -1479,6 +1478,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/code-sync/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Rollback
+         * @description Deploy the chosen earlier commit. Refused while an update runs or when a migration is in the way.
+         */
+        post: operations["start_rollback_api_code_sync_rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/rollback/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rollback Candidates
+         * @description The newest commits of the tracked branch, with dates and subjects, for the picker.
+         */
+        get: operations["rollback_candidates_api_code_sync_rollback_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/rollback/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rollback Preview
+         * @description Validate one commit and say whether a database migration is in the way.
+         */
+        get: operations["rollback_preview_api_code_sync_rollback_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/code-sync/schedules": {
         parameters: {
             query?: never;
@@ -1629,6 +1688,66 @@ export interface paths {
          *     Returns 202 Accepted with the initial job state (polling via GET /update-all/status).
          */
         post: operations["start_update_all_api_code_sync_update_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/update-all/nodes-offline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Nodes Offline After Update
+         * @description Nodes the last self-update left offline and still are (#20250), with when that update ran.
+         */
+        get: operations["get_nodes_offline_after_update_api_code_sync_update_all_nodes_offline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/update-all/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Update Progress
+         * @description What the running self-update is doing, from its own log, across the SLM's restart (#20254).
+         */
+        get: operations["get_update_progress_api_code_sync_update_all_progress_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/update-all/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Update Report
+         * @description The last update's target, stage, result, failed task, error and role deploys.
+         */
+        get: operations["get_update_report_api_code_sync_update_all_report_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2539,6 +2658,46 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/first-admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get First Admin
+         * @description The earliest active admin. 404 until the SLM has one.
+         */
+        get: operations["get_first_admin_api_internal_first_admin_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/nodes/{node_id}/ssh-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Node Ssh Password
+         * @description Delete the node's stored SSH password under a human's approval; ``deleted`` is False when it held none.
+         */
+        delete: operations["delete_node_ssh_password_api_internal_nodes__node_id__ssh_password_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5422,9 +5581,7 @@ export interface paths {
         };
         /**
          * Get Role Owners Endpoint
-         * @description Return role -> node_id mapping for all assigned service roles (#1389).
-         *
-         *     Used by deployment/migration UIs to show which node owns each role.
+         * @description Return role -> node ids, and which roles may hold several (#1389, #19706).
          */
         get: operations["get_role_owners_endpoint_api_roles_owners_get"];
         put?: never;
@@ -7342,6 +7499,8 @@ export interface paths {
         /**
          * Scim Delete User
          * @description DELETE /scim/v2/Users/{id} — deactivate/soft-delete a user.
+         *
+         *     A soft-deleted user is found again, so a delete answered 503 can be repeated (#20443).
          */
         delete: operations["scim_delete_user_scim_v2_Users__user_id__delete"];
         options?: never;
@@ -7619,7 +7778,7 @@ export interface components {
         };
         /**
          * AgentResponse
-         * @description Agent response with LLM config.
+         * @description Agent response with LLM config (the LLM fields are AgentLLMConfig's, #19730).
          */
         AgentResponse: {
             /** Agent Id */
@@ -8133,7 +8292,7 @@ export interface components {
         };
         /**
          * BackupResponse
-         * @description Backup response.
+         * @description Backup response; ``restorable`` tells the GUI where to offer Restore (#19455).
          */
         BackupResponse: {
             /** Backup Id */
@@ -8155,6 +8314,8 @@ export interface components {
             id: number;
             /** Node Id */
             node_id: string;
+            /** Restorable */
+            readonly restorable: boolean;
             /** Service Type */
             service_type: string;
             /** Size Bytes */
@@ -8786,6 +8947,11 @@ export interface components {
              * @default []
              */
             stale_components: string[];
+            /**
+             * Stale Scan Unknown
+             * @default false
+             */
+            stale_scan_unknown: boolean;
             /**
              * Total Nodes
              * @default 0
@@ -9577,6 +9743,27 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * FirstAdminResponse
+         * @description What the main app needs to create and link this person.
+         */
+        FirstAdminResponse: {
+            /** Display Name */
+            display_name: string | null;
+            /** Email */
+            email: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Password Hash */
+            password_hash: string | null;
+            /** Username */
+            username: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * FleetHealthResponse
          * @description Fleet health status response.
          */
@@ -9589,6 +9776,11 @@ export interface components {
             optional_down: string[];
             /** Required Down */
             required_down: string[];
+            /**
+             * Roles With Nodes Down
+             * @default []
+             */
+            roles_with_nodes_down: components["schemas"]["RoleNodeHealth"][];
         } & {
             [key: string]: unknown;
         };
@@ -11406,6 +11598,18 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * NodeSshPasswordDeleteResponse
+         * @description What a deletion removed. Carries the node and a flag, never a value.
+         */
+        NodeSshPasswordDeleteResponse: {
+            /** Deleted */
+            deleted: boolean;
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * NodeStatus
          * @description Node status enumeration.
          * @enum {string}
@@ -12430,6 +12634,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * RoleNodeHealth
+         * @description A multi-node role with at least one of its nodes down.
+         */
+        RoleNodeHealth: {
+            /** Nodes Down */
+            nodes_down: string[];
+            /** Nodes Up */
+            nodes_up: string[];
+            /** Role */
+            role: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * RolePurgeRequest
          * @description Request to purge roles from a node.
          */
@@ -12524,6 +12742,91 @@ export interface components {
         RolesUpdateRequest: {
             /** Roles */
             roles: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackCandidates
+         * @description The picker's contents: ancestors of the branch head, newest first.
+         */
+        RollbackCandidates: {
+            /** Branch */
+            branch: string;
+            /** Commits */
+            commits: components["schemas"]["RollbackCommit"][];
+            /** Deployed Commit */
+            deployed_commit?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackCommit
+         * @description One commit the operator may roll back to.
+         */
+        RollbackCommit: {
+            /** Commit */
+            commit: string;
+            /** Date */
+            date: string;
+            /**
+             * Is Deployed
+             * @default false
+             */
+            is_deployed: boolean;
+            /** Short */
+            short: string;
+            /** Subject */
+            subject: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackDatabaseCheck
+         * @description Whether a database migration is in the way, for one database.
+         */
+        RollbackDatabaseCheck: {
+            /** Database */
+            database: string;
+            /**
+             * In The Way
+             * @default []
+             */
+            in_the_way: string[];
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackPreview
+         * @description What the confirmation step shows before anything runs.
+         */
+        RollbackPreview: {
+            /** Allowed */
+            allowed: boolean;
+            /** Checks */
+            checks: components["schemas"]["RollbackDatabaseCheck"][];
+            commit: components["schemas"]["RollbackCommit"];
+            /** Refusal */
+            refusal?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackRequest
+         * @description The commit the operator picked from the list; validated again server-side.
+         */
+        RollbackRequest: {
+            /**
+             * Commit
+             * @description Full commit id from the candidates list
+             */
+            commit: string;
         } & {
             [key: string]: unknown;
         };
@@ -14776,6 +15079,27 @@ export interface components {
             };
             /** Reboot Strategy */
             reboot_strategy?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * UpdateProgress
+         * @description A running self-update's position in its own log (#20254).
+         */
+        UpdateProgress: {
+            /** Elapsed Seconds */
+            elapsed_seconds?: number | null;
+            /** Last Line At */
+            last_line_at?: string | null;
+            /** Play */
+            play?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "waiting" | "running" | "quiet" | "exited_without_recap" | "finished" | "unknown";
+            /** Task */
+            task?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -17662,6 +17986,105 @@ export interface operations {
             };
         };
     };
+    start_rollback_api_code_sync_rollback_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateAllJob"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_candidates_api_code_sync_rollback_candidates_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollbackCandidates"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_preview_api_code_sync_rollback_preview_get: {
+        parameters: {
+            query: {
+                commit: string;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollbackPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_schedules_api_code_sync_schedules_get: {
         parameters: {
             query?: never;
@@ -17946,6 +18369,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UpdateAllJob"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_nodes_offline_after_update_api_code_sync_update_all_nodes_offline_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number | string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_update_progress_api_code_sync_update_all_progress_get: {
+        parameters: {
+            query?: {
+                since?: string | null;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateProgress"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_update_report_api_code_sync_update_all_report_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -19426,6 +19948,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaybookInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_first_admin_api_internal_first_admin_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-internal-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirstAdminResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_node_ssh_password_api_internal_nodes__node_id__ssh_password_delete: {
+        parameters: {
+            query: {
+                approval_id: string;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeSshPasswordDeleteResponse"];
                 };
             };
             /** @description Validation Error */

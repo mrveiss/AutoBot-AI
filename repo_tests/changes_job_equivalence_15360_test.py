@@ -81,11 +81,18 @@ ISSUE_17822_ENTRIES = tuple(
         (Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json").read_text(encoding="utf-8")
     )
 )
-# 13 = the eleven #17822 entries plus `services/__init__.py` and `services/approval_gate_service.py`,
-# which the migration tests import.
+# 28 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
+# `llc/services/workspace_lease.py` (#17996), `llc/services/company.py` + `company_ceo.py` (#15907's
+# concurrent-move test), `llc/services/authz.py` + `membership_service.py` (the move's authorization,
+# #19634), `llc/services/company_move_lock.py` (the move's row locks, #19593), `autobot_shared/db_errors.py`
+# (its deadlock SQLSTATE) and `llc/scheduler/run_status.py` (#19582's concurrent-claim test), which the
+# migration tests import, `llc/services/membership_policy.py` (#19985's two-session membership-lock test), and
+# `llc/services/budget.py` + `llc/exceptions.py` (#20168's cost event foreign key test), and
+# `llc/services/company_os/**` + `llc/services/goal.py` (#20115's two-session plan convert lock test), and
+# `services/ai_line_change_proposal.py` + `autobot_shared/ai_lines.py` (imported by `plan_convert_lines.py`, which that test runs, #20086).
 assert (
-    len(ISSUE_17822_ENTRIES) == 13
-), "the pinned migration-gate set is 13 entries; an emptied fixture would pin nothing"
+    len(ISSUE_17822_ENTRIES) == 28
+), "the pinned migration-gate set is 28 entries; an emptied fixture would pin nothing"
 ISSUE_17822_WORKFLOW = "migration-gate"
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared
@@ -156,6 +163,18 @@ ALLOWED_ADDITIONS = {
             f"{WORKFLOWS}/_changes.yml",
             f"{WORKFLOWS}/migration-gate.yml",
             f"{WORKFLOWS}/ai-security-review.yml",
+            # #16568: workflow_types_gate_16568_test reads the required generated-types gate.
+            f"{WORKFLOWS}/verify-generated-types.yml",
+            # #19503: install_and_code_sync_modes_19503_test reads this shell sync by concrete literal.
+            "autobot-slm-frontend/scripts/sync-to-admin.sh",
+            # #19503: its rsync guard exempts wiki.yml by concrete literal.
+            f"{WORKFLOWS}/wiki.yml",
+            # #20067: cancel_gate_survives_transient_error_20067_test runs this action's step.
+            ".github/actions/cancel-run-on-cancelled-upstream/action.yml",
+            # #19523: dependabot_root_coverage_19523_test reads dependabot.yml by concrete literal.
+            ".github/dependabot.yml",
+            # #19769: pr_conflict_gate_19769_test.py reads the conflict gate workflow.
+            f"{WORKFLOWS}/pr-merge-conflict-gate.yml",
             # #17856: frontend_api_timeout_ssot_17856_test reads both .env.example files.
             ".env.example",
             "autobot-frontend/.env.example",
@@ -163,10 +182,24 @@ ALLOWED_ADDITIONS = {
             "INSTALL.md",
             "docker-compose.yml",
             "docker/frontend/Dockerfile",
+            # #19868: proxy_upload_cap_one_home_19868_test.py reads it
+            "docker/nginx/nginx-common.conf",
+            "docker/nginx/nginx-locations.conf",
+            "docker/nginx/nginx-slm-locations.conf",
+            # #19817: guards sweep every tracked Dockerfile, under either naming.
+            "**/Dockerfile*",
+            "**/*.Dockerfile",
             # #18556: one_static_data_copy_18556_test.py reads the canonical static data files.
             "autobot-backend/config/permission_rules.yaml",
             "autobot-backend/static/error_messages.yaml",
             "autobot-monitoring/prometheus.yml",
+            "autobot-monitoring/grafana/provisioning/datasources/prometheus.yml",
+            "autobot-backend/config/llm_models.yaml",
+            "autobot-infrastructure/shared/config/permission_rules.yaml",
+            "**/error_messages.yaml",
+            "**/prometheus.yml",
+            "**/permission_rules.yaml",
+            "**/llm_models.yaml",
             # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
             "autobot-browser-worker/playwright-server.js",
             "autobot-browser-worker/session-store.js",
@@ -178,17 +211,75 @@ ALLOWED_ADDITIONS = {
             "autobot-slm-frontend/public/favicon.svg",
             # #18500: the autofix steps moved into a composite action with a dispatch-only caller; its guards read both.
             ".github/actions/generated-types-autofix/action.yml",
+            ".github/actions/install-ci-requirements/action.yml",  # #20191: the shared install step
             f"{WORKFLOWS}/dispatch-generated-types.yml",
             # #18555: env_file_family_18555_test.py reads every tracked env file.
             "**/.env*",
+            # #18555: root-level env files; `**/` alone does not match the root.
+            ".env*",
+            "autobot-slm-frontend/package.json",
             "**/*.env",
             # #18653: uninstall_covers_role_packages_18653_test.py reads .python-version.
             ".python-version",
+            # #18729: docker_admin_seed_18729_test.py reads every Docker entrypoint.
+            "docker/*/*entrypoint*.sh",
+            # #17500: compose_exposure_and_credentials_17500_test.py checks every compose file.
+            "docker-compose.hardened.yml",
+            "docker-compose.override.example.yml",
+            "docker/mcp-bridges.yml",
+            # #18666: install_release_signed_18666_test.py compares release.yml's cosign pin with this one.
+            f"{WORKFLOWS}/image-sign.yml",
+            # #18666: the same test runs the signing-key gate against the real cosign.pub.
+            "cosign.pub",
+            # #17793: compose_exposure_and_credentials_17500_test.py checks that both smoke jobs export
+            # exactly the credentials compose requires, so editing either workflow must run the suite.
+            f"{WORKFLOWS}/docker-smoke-test.yml",
+            f"{WORKFLOWS}/co-located-smoke.yml",
+            # #17500, #18729: both guards read the secrets generator, so editing it must run the suite.
+            "docker/generate-secrets.sh",
+            "docker/postgres/init-databases.sh",
+            "docker/docker-proxy/proxy.py",  # #20629
+            "docker/postgres/copy-slm-databases.sh",  # #20639
+            # #19178: user_docs_stay_consistent_19178_test.py reads docs/README.md.
+            "docs/README.md",
+            # #18266: social_preview_18266_test.py pins the rendered preview image.
+            "docs/assets/social-preview.png",
+            # #19527: this test checks the docker filter's declared additions, so editing it must run the suite.
+            ".github/filters/docker-paths.yml",
+            # #19184: the same 19178 guard reads the five Company OS docs (_COMPANY_OS_DOCS).
+            "docs/GLOSSARY.md",
+            "docs/INDEX.md",
+            "docs/architecture/PLATFORM_MODEL.md",
+            "docs/features/CATALOG.md",
+            "docs/llc/_index.md",
+            # #19459: the disaster-recovery guard reads the runbook for the units it names.
+            "docs/operations/disaster-recovery.md",
+            ".github/workflows/dependabot-close-stale.yml",
+            # #19611: the playbook-reference guard reads this guide for its declared exemption.
+            "docs/guides/slm-docker-ansible-deployment.md",
+            # #20903: python_version_declaration_drift_test.py sweeps this file's python floor lines.
+            "docs/DEPENDENCIES.md",
+            # #20903: the same guard sweeps every tracked pyproject's requires-python.
+            "**/pyproject.toml",
+            # #19279: the landing-page guard reads the page for the libraries and placeholders it renders.
+            "docs/index.html",
+            # #18559: both duplication-guard tests read the pins file.
+            ".github/duplication-pins.json",
+            # #19324: browser_port_single_home_19324_test.py pins this file's browser-port fallback.
+            "autobot-frontend/vite.config.js",
+            # #19328: node_major_one_home_19328_test.py reads the Node home and the frontend lock.
+            ".nvmrc",
+            "autobot-frontend/package-lock.json",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the
     # `_changes.yml` entry the workflow gained has to be here too.
     ".github/filters/frontend-paths.yml": {"frontend": [f"{WORKFLOWS}/_changes.yml"]},
+    # #19527: the smoke job builds through this composite action and sizes its disk with the other,
+    # so editing either one must run the smoke test it can break.
+    ".github/filters/docker-paths.yml": {
+        "docker": [".github/actions/build-smoke-images/**", ".github/actions/free-disk-space/**"]
+    },
 }
 
 

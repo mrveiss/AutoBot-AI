@@ -27,6 +27,7 @@ from knowledge.backends import get_async_default_client
 from knowledge.pipeline.base import PipelineContext
 from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCognifier
 from knowledge.pipeline.models.chunk import ProcessedChunk
+from knowledge.quarantine import without_quarantine
 from knowledge.schemas.vectorization import (
     BackgroundVectorizationResponse,
     BatchVectorizeRequest,
@@ -1459,7 +1460,7 @@ async def _fetch_unenriched_ids(collection, batch_size: int) -> list:
     offset = 0
     while True:
         results = await collection.get(
-            where={"has_context": {"$ne": True}},
+            where=without_quarantine({"has_context": {"$ne": True}}),  # #19163
             limit=batch_size,
             offset=offset,
             include=["metadatas"],
@@ -1479,18 +1480,17 @@ async def _fetch_chunks_by_ids(collection, chunk_ids: list) -> list:
     """
     results = await collection.get(
         ids=chunk_ids,
+        where=without_quarantine(),  # #19163: the enricher sends chunk text to an LLM
         include=["documents", "metadatas"],
     )
     ids = results.get("ids", [])
     documents = results.get("documents", [])
     metadatas = results.get("metadatas", [])
 
-    chunks = []
-    for i, chunk_id in enumerate(ids):
-        meta = metadatas[i] if i < len(metadatas) else {}
-        doc = documents[i] if i < len(documents) else ""
-        chunks.append((chunk_id, doc, meta))
-    return chunks
+    return [
+        (cid, documents[i] if i < len(documents) else "", metadatas[i] if i < len(metadatas) else {})
+        for i, cid in enumerate(ids)
+    ]
 
 
 async def _enrich_document_group(

@@ -142,8 +142,9 @@ function handleThemeChange(): void {
   color: var(--text-secondary);
 }
 
-.theme-toggle__label i {
-  font-size: var(--text-base);
+.theme-toggle__label .icon {
+  width: var(--text-base);
+  height: var(--text-base);
 }
 
 /* Dropdown styles */

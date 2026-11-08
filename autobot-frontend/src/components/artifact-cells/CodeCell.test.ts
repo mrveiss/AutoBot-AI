@@ -1,7 +1,8 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
+import hljs from 'highlight.js'
 import CodeCell from './CodeCell.vue'
 import { createI18n } from 'vue-i18n'
 
@@ -121,6 +122,20 @@ describe('CodeCell.vue', () => {
       })
 
       expect(wrapper.vm.rawCode).toBe(pythonCode)
+    })
+
+    it('keeps markup-like source text intact when the language is unknown (#19118)', async () => {
+      vi.mocked(hljs.highlight).mockImplementationOnce(() => {
+        throw new Error('Unknown language')
+      })
+      const source = '<template><div>x</div></template>'
+      const wrapper = mount(CodeCell, {
+        props: { richPayload: { code: source }, language: 'not-a-language' },
+        global: { stubs: { i: true }, plugins: [i18n] }
+      })
+
+      await flushPromises()
+      expect(wrapper.find('code').text()).toBe(source)
     })
   })
 

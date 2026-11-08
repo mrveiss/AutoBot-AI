@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "جمع کروائیں",
     "cancel": "منسوخ کریں",
     "save": "محفوظ کریں",
@@ -103,7 +104,14 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "کم",
+      "medium": "درمیانہ",
+      "high": "زیادہ",
+      "critical": "Critical"
+    },
+    "logsLoadFailed": "لاگز لوڈ کرنے میں ناکامی: {error}"
   },
   "nav": {
     "chat": "چیٹ",
@@ -896,21 +904,16 @@
       "duplicateCode": "Duplicate Code",
       "locations": "{count} locations",
       "linesSaveable": "{count} lines saveable",
-      "moreLocations": "+{count} more locations",
-      "showingOfDuplicates": "Showing {shown} of {total} duplicate patterns",
       "regexOpportunities": "Regex Opportunities",
       "current": "Current",
       "suggested": "Suggested",
-      "showingOfOpportunities": "Showing {shown} of {total} opportunities",
       "complexityHotspots": "Complexity Hotspots",
       "location": "Location",
       "cc": "CC",
       "cognitive": "Cognitive",
       "mi": "MI",
       "nesting": "Nesting",
-      "showingOfHotspots": "Showing {shown} of {total} hotspots",
       "refactoringSuggestions": "Refactoring Suggestions",
-      "showingOfSuggestions": "Showing {shown} of {total} suggestions",
       "patternsInChromaDB": "{count} patterns in ChromaDB",
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
@@ -1584,14 +1587,12 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total} {type}",
       "emptyMessage": "No code smells detected"
     },
     "declarations": {
       "title": "Declarations",
       "total": "Total",
       "exported": "Exported",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No declarations found",
       "types": {
         "function": "Function",
@@ -1614,7 +1615,6 @@
       "totalLines": "Total Lines",
       "similar": "similar",
       "lines": "lines",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No duplicate code detected",
       "similarityGroups": {
         "high": "High Similarity",
@@ -1635,7 +1635,6 @@
       "variable": "ویریبل",
       "value": "ویلیو",
       "suggestedEnvVar": "تجویز کردہ ماحولیاتی ویریبل",
-      "showingOf": "{shown} میں سے {total} دکھا رہا ہے",
       "emptyMessage": "کوئی ہارڈ کوڈڈ ویلیوز نہیں ملیں",
       "severityGroups": {
         "high": "اعلیٰ شدت",
@@ -1650,7 +1649,6 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No problems detected",
       "exportMarkdown": "Export Markdown",
       "exportJson": "Export JSON"
@@ -1875,8 +1873,6 @@
         "docs": "Documentation"
       },
       "justNow": "Just now",
-      "minutesAgo": "{count}m ago",
-      "hoursAgo": "{count}h ago",
       "installSuccess": "Pre-commit hooks installed successfully",
       "installFailed": "Failed to install hooks",
       "uninstallSuccess": "Pre-commit hooks uninstalled",
@@ -2293,6 +2289,7 @@
       "promptDeleteAll": "Type \"DELETE ALL\" to confirm (case sensitive):"
     },
     "connectors": {
+      "syncNotStarted": "The sync didn't start. This connector may already be syncing; try again when it finishes.",
       "config": {
         "typeFileServerDesc": "Monitor a directory for new and changed files",
         "back": "Back",
@@ -3316,11 +3313,12 @@
       "preservedSuffix": "; {count} preserved"
     },
     "treeNode": {
-      "vectorizeFolderTitle": "Vectorize folder title",
+      "itemsCount": "Items count",
       "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
-      "itemsCount": "Items count",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeFolderTitle": "Vectorize folder title",
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "memoryOrphan": {
       "title": "Title",
@@ -3607,6 +3605,9 @@
       "errorEnterBoth": "براہ کرم ماخذ اور ہدف دونوں اکائیاں درج کریں۔",
       "notInGraph": "یہ اکائیاں ابھی تعلقات کے گراف میں نہیں ہیں۔",
       "notInGraphHint": "وہ موجود ہیں مگر گراف میں ان کے روابط نہیں، اس لیے کوئی رابطہ تلاش نہیں کیا جا سکتا۔ اکائیوں کا اخراج دوبارہ چلائیں۔"
+    },
+    "chromaExplorer": {
+      "subtitle": "ویکٹر مجموعوں کو براؤز اور تلاش کریں"
     }
   },
   "reasoningTrace": {
@@ -3653,6 +3654,8 @@
       "executionStrategies": "Execution Strategies"
     },
     "history": {
+      "durationSeconds": "سیکنڈ",
+      "durationMinutes": "منٹ",
       "allStatus": "All Status",
       "reRun": "Re-run",
       "passed": "passed",
@@ -3768,7 +3771,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "آپ کی کمپنی کی آٹومیشن کھولی جا رہی ہے…",
-      "companyRequired": "آٹومیشن کھولنے کے لیے کمپنی منتخب کریں۔"
+      "companyRequired": "آٹومیشن کھولنے کے لیے کمپنی منتخب کریں۔",
+      "planBeforeBuilding": "بنانے سے پہلے منصوبہ بنائیں"
     },
     "runner": {
       "completed": "Completed",
@@ -3981,7 +3985,9 @@
       "loading": "Loading configuration...",
       "emailHint": "Comma-separated email addresses",
       "selectWorkflow": "Workflow",
-      "channelMappingHint": "Select which channels receive notifications for each event type."
+      "channelMappingHint": "Select which channels receive notifications for each event type.",
+      "invalidEmail": "ای میل ایڈریس غلط ہے: {emails}",
+      "invalidUrl": "URL کا فارمیٹ غلط ہے"
     },
     "modal": {
       "saveWorkflowAriaLabel": "Save workflow",
@@ -4281,7 +4287,8 @@
       "emergencyKillFailed": "❌ ہنگامی بندش ناکام: {message}",
       "interrupted": "^C (صارف نے عمل روک دیا)",
       "error": "خرابی: {error}"
-    }
+    },
+    "urlCopied": "ٹرمینل URL کلپ بورڈ پر کاپی ہو گیا!"
   },
   "manpage": {
     "manager": {
@@ -4842,6 +4849,7 @@
   },
   "ui": {
     "themeToggle": {
+      "accentPurpleDescription": "بنفشی — تخلیقی اور نفیس",
       "system": "سسٹم",
       "highContrast": "اعلیٰ کنٹراسٹ",
       "monochrome": "یک رنگی",
@@ -4948,18 +4956,6 @@
       "failedToConnect": "Failed to connect to host",
       "cancel": "Cancel",
       "commandToExecute": "Command to Execute"
-    },
-    "dataTable": {
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "actions": "Actions",
-      "pageOf": "Page {current} of {total}",
-      "sortBy": "Sort by {column}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
     },
     "systemStatus": {
       "lastCheck": "Last Check:",
@@ -5165,7 +5161,6 @@
       "sessionLabel": "سیشن {id}",
       "invitedAt": "مدعو کیا گیا {time}",
       "justNow": "ابھی ابھی",
-      "minutesAgo": "{count} منٹ پہلے",
       "accept": "قبول کریں",
       "decline": "مسترد کریں",
       "respondError": "اس جواب پر عمل نہیں ہو سکا۔ براہ کرم دوبارہ کوشش کریں۔",
@@ -5242,6 +5237,7 @@
       "status": {
         "failed": "Failed",
         "streaming": "Streaming",
+        "waiting_explanation": "وضاحت کا انتظار",
         "explaining": "Explaining",
         "pending": "Pending",
         "completed": "Completed",
@@ -5509,6 +5505,13 @@
       "chatMessage": "Chat message",
       "attachFile": "Attach file",
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "اپ لوڈ ناکام ہو گیا (اسٹیٹس {status})",
+        "invalidResponse": "سرور نے ناقابل مطالعہ جواب بھیجا",
+        "network": "اپ لوڈ کے دوران نیٹ ورک کی خرابی",
+        "cancelled": "اپ لوڈ منسوخ کر دیا گیا",
+        "unknown": "اپ لوڈ ناکام ہو گیا"
+      },
       "removeFile": "Remove file",
       "overseerLabel": "Overseer",
       "managePresets": "Manage slash command presets",
@@ -5525,7 +5528,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "فائل \"{name}\" بہت بڑی ہے (زیادہ سے زیادہ {max})",
+      "voiceUnsupported": "صوتی ان پٹ کے لیے Chrome، Edge یا Safari 15+ درکار ہے۔ اس براؤزر میں ٹرانسکرپشن دستیاب نہیں ہے۔",
+      "micDenied": "مائیکروفون تک رسائی مسترد کر دی گئی۔ براہ کرم براؤزر کی ترتیبات میں مائیکروفون تک رسائی کی اجازت دیں۔"
     },
     "visualBrowser": {
       "disconnected": "Disconnected",
@@ -5832,6 +5838,16 @@
       "browser": "براؤزر",
       "novnc": "ریموٹ ڈیسک ٹاپ",
       "ariaLabel": "چیٹ کے حصے"
+    },
+    "attachmentNotice": {
+      "unavailable": "اس گفتگو میں ایک منسلک فائل نہیں ملی، اس لیے استعمال نہیں کی گئی۔",
+      "too_many": "صرف پہلی {limit} منسلک فائلیں استعمال کی گئیں؛ باقی چھوڑ دی گئیں۔",
+      "image": "\"{filename}\" ایک تصویر ہے اور اسے متن کے طور پر نہیں پڑھا جا سکتا، اس لیے استعمال نہیں کی گئی۔",
+      "unsupported": "\"{filename}\" ایسی متنی فائل نہیں جسے اسسٹنٹ پڑھ سکے، اس لیے استعمال نہیں کی گئی۔",
+      "unreadable": "\"{filename}\" نہیں پڑھی جا سکی، اس لیے استعمال نہیں کی گئی۔",
+      "empty": "\"{filename}\" میں پڑھنے کے قابل متن نہیں ہے، اس لیے استعمال نہیں کی گئی۔",
+      "truncated": "\"{filename}\" لمبی ہے، اس لیے صرف اس کا آغاز استعمال کیا گیا۔",
+      "over_budget": "منسلک فائلیں سائز کی حد تک پہنچ گئیں، اس لیے \"{filename}\" استعمال نہیں کی گئی۔"
     }
   },
   "serviceMessages": {
@@ -5867,13 +5883,11 @@
       "createCredential": "Create Credential",
       "scopeGeneral": "General",
       "refresh": "Refresh",
-      "timeHoursAgo": "{count}h ago",
       "quickAddTemplates": "Quick Add Templates",
       "sshAlwaysEnabled": "SSH (Always enabled)",
       "vncDesktop": "VNC Desktop",
       "noCredentialsHint": "Create your first credential to get started",
       "osLinux": "Linux",
-      "timeMinutesAgo": "{count}m ago",
       "save": "Save",
       "transferring": "Transferring...",
       "sidebarTitle": "Credentials",
@@ -5905,14 +5919,12 @@
       "apiKey": "API Key",
       "scopeAlerts": "Alerts",
       "namePlaceholder": "Enter credential name",
-      "timeInHours": "in {count}h",
       "capSsh": "SSH",
       "name": "Name",
       "changeType": "Change type",
       "deleteConfirmTitle": "Delete Credential",
       "noCredentials": "No credentials found",
       "noCredentialsFiltered": "No credentials match your filters.",
-      "timeDaysAgo": "{count}d ago",
       "statsTotal": "Total",
       "viewDetails": "View Details",
       "deleting": "Deleting...",
@@ -5999,7 +6011,6 @@
       "delete": "Delete",
       "authType": "Authentication Type",
       "hideKey": "Hide key",
-      "timeInMinutes": "in {count}m",
       "gridView": "Grid view",
       "typeAPI": "API Key",
       "expires6Months": "6 months",
@@ -6009,7 +6020,6 @@
       "passwordPlaceholder": "Enter password",
       "visibilityShared": "Shared",
       "statsExpiring": "Expiring",
-      "timeInDays": "in {count}d",
       "sshPasswordPlaceholder": "Enter SSH password",
       "scopeHint": "Original scope field (maintained for backward compatibility)",
       "deleteCredential": "Delete Credential",
@@ -6456,7 +6466,6 @@
       "template": "Template",
       "defaultTitle": "Custom Dashboard",
       "widgetArchitectureDesc": "Interactive system architecture diagram",
-      "shrink": "Shrink",
       "save": "Save",
       "subtitle": "Customizable dashboard with drag-and-drop widgets",
       "widgetWorkflowDesc": "Interactive workflow execution flowcharts",
@@ -6478,7 +6487,6 @@
       "addWidgetTitle": "Add Widget",
       "widgetHeatmap": "Resource Heatmap",
       "saveChanges": "Save Changes",
-      "expand": "Expand",
       "refreshInterval": "Refresh Interval (seconds)",
       "configureWidget": "Configure Widget",
       "metric": "Metric",
@@ -6495,52 +6503,15 @@
       "dashboardSaved": "Dashboard saved"
     },
     "devSpeedup": {
-      "after": "After",
       "title": "Developer Speedup",
-      "symbols": "Symbols",
-      "generateCodeSnippet": "Generate Code Snippet",
-      "quickActions": "Quick Actions",
-      "processing": "Processing...",
-      "quickCodeActions": "Quick Code Actions",
-      "created": "Created: {date}",
       "allCategories": "All Categories",
-      "language": "Language",
-      "refactorSuggestions": "Refactor Suggestions ({count})",
-      "code": "Code",
-      "before": "Before",
-      "noResults": "No results found",
-      "generateTests": "Generate Tests",
-      "suggestRefactorings": "Suggest Refactorings",
-      "generatedTests": "Generated Tests ({count})",
-      "noSnippets": "No snippets yet. Generate your first one above!",
       "noTemplates": "No templates available",
       "subtitle": "Code search, generation, and productivity tools",
-      "score": "Score: {value}",
       "variables": "Variables",
-      "snippetsTab": "Snippets ({count})",
-      "quickCodeSearch": "Quick Code Search",
-      "files": "Files",
       "actionsToday": "Actions Today",
-      "search": "Search",
-      "searchPlaceholder": "Search for files, code, or symbols...",
-      "quickSearch": "Quick Search",
-      "results": "Results ({count})",
       "copy": "Copy",
-      "templatesTab": "Templates ({count})",
-      "snippetPlaceholder": "Describe what you want the code to do...",
-      "generateSnippet": "Generate Snippet",
-      "fixLinting": "Fix Linting Issues",
-      "line": "Line {num}",
-      "formatCode": "Format Code",
       "error": "Error",
-      "impact": "{level} impact",
-      "runAction": "Run Action",
-      "allTypes": "All Types",
-      "codePlaceholder": "Paste your code here...",
-      "action": "Action",
-      "refresh": "Refresh",
-      "optimizeCode": "Optimize Code",
-      "description": "Description"
+      "refresh": "Refresh"
     },
     "browserAutomation": {
       "runAutomationScript": "Run Automation Script",
@@ -6810,7 +6781,6 @@
     "changeHistory": {
       "noChanges": "No changes recorded yet.",
       "logOnly": "Log Only",
-      "hoursAgo": "{count} hour(s) ago",
       "system": "System",
       "legendDisabled": "Disabled",
       "title": "Change History",
@@ -6821,19 +6791,13 @@
       "legendLogOnly": "Log Only",
       "legendEnforced": "Enforced",
       "actionUpdated": "Configuration was updated",
-      "minuteAgo": "1 minute ago",
       "actionLogOnly": "Switched to log-only mode for safe testing",
-      "daysAgo": "{count} day(s) ago",
       "modeEnforced": "Enforced",
-      "dayAgo": "1 day ago",
       "modeLegend": "Mode Legend:",
       "justNow": "Just now",
-      "minutesAgo": "{count} minute(s) ago",
       "description": "Recent changes to access control configuration.",
       "modeDisabled": "Disabled",
-      "longAgo": "Long ago",
-      "disabled": "Disabled",
-      "hourAgo": "1 hour ago"
+      "disabled": "Disabled"
     },
     "loading": "Loading feature flags...",
     "retry": "Retry",
@@ -6857,31 +6821,11 @@
   },
   "settings": {
     "webResearch": {
-      "enabledLabel": "Enable web research",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "filterAdultHint": "Filter adult content from search results",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
-      "methodHint": "Choose how web searches are performed",
-      "methodLabel": "Search method",
-      "rateLimitHint": "Limit how many requests are sent in a given time window",
-      "rateLimitLabel": "Rate limiting",
       "methodApiBased": "API-based",
-      "rateLimitRequests": "Requests",
       "title": "Web Research",
-      "confirmationLabel": "Require confirmation",
-      "timeoutLabel": "Timeout (seconds)",
-      "storeInKbHint": "Save research results to the knowledge base",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "maxResultsLabel": "Max results",
-      "privacyLabel": "Privacy & storage",
-      "rateLimitWindow": "Window (s)",
       "methodBasic": "Basic",
-      "methodAdvanced": "Advanced",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "thresholdLabel": "Auto-research threshold"
+      "methodAdvanced": "Advanced"
     },
     "backend": "Backend",
     "apiKeys": {
@@ -6907,29 +6851,21 @@
     },
     "languageHint": "Select your preferred language. The interface will switch immediately if translations are available. AI responses will also use this language.",
     "languageTitle": "Language Preferences",
-    "cachedSettings": "Using cached settings (backend offline)",
     "languageChangeFailed": "Failed to update language",
     "developer": "Developer",
-    "discardChanges": "Discard Changes",
     "voiceDesc": "Configure text-to-speech voice and voice profiles",
-    "save": "Save Settings",
     "languageSelect": "Interface Language",
     "general": "General",
     "language": "Language",
     "appearance": "Appearance",
     "voice": "Voice",
     "logging": "Logging",
-    "cacheApiUnavailable": "Cache API not available",
     "languageChanged": "Language updated successfully",
     "languageDesc": "Choose your preferred language for the interface and AI responses",
-    "loadingSettings": "Loading settings...",
     "prompts": "Prompts",
-    "saving": "Saving...",
-    "panelLoadFailed": "Failed to load settings panel",
     "reset": "Reset to Defaults",
     "appearanceDesc": "Customize the look and feel of your workspace",
     "title": "Settings",
-    "backendOffline": "Backend offline — showing cached settings",
     "connection": {
       "title": "Connection",
       "desc": "Configure backend connection settings",
@@ -7029,8 +6965,6 @@
       "noApiKeyRequired": "API کلید درکار نہیں۔",
       "redirecting": "ری ڈائریکٹ ہو رہا ہے...",
       "disconnectFailed": "منقطع کرنا ناکام رہا",
-      "redirectNeedsCallback": "براؤزر ری ڈائریکٹ والے OAuth فلو کے لیے سرور کی جانب callback کنفیگریشن درکار ہے۔ بغیر انٹرفیس والے ماحول میں ڈیوائس کوڈ استعمال کریں۔",
-      "deviceNotConfigured": "اس فراہم کنندہ کے لیے ڈیوائس کی تصدیق کنفیگر نہیں ہے",
       "deviceInitFailed": "ڈیوائس فلو شروع کرنا ناکام رہا",
       "stillWaiting": "ابھی منظوری کا انتظار ہے — تھوڑی دیر بعد دوبارہ کوشش کریں۔",
       "pollFailed": "جانچ ناکام رہی"
@@ -7198,7 +7132,6 @@
       "noLogs": "No audit logs found",
       "moreAvailable": "(more available)",
       "vmName": "VM Name",
-      "errorMessage": "Error Message",
       "vm": "VM",
       "sortByOperation": "Sort by operation",
       "next": "Next",
@@ -7313,7 +7246,16 @@
     },
     "progress": {}
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "الرٹ کے اصول",
+      "overview": "جائزہ",
+      "slos": "SLOs",
+      "traces": "ٹریسز"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "treeView": {
       "noStructure": "No directory structure available",
       "title": "Directory Structure",
@@ -7334,7 +7276,8 @@
       "listView": "List View",
       "refreshAriaLabel": "Refresh files",
       "errorRenamingFile": "Error renaming file",
-      "errorLoadingContents": "Error loading contents"
+      "errorLoadingContents": "Error loading contents",
+      "uploadFailedHint": "براہ کرم فائل کے سائز کی حدود اور فارمیٹ کی ضروریات چیک کریں"
     },
     "fileTypes": {
       "shell": "Shell Script",
@@ -7516,8 +7459,6 @@
       "shareWithParticipants": "Share with participants"
     },
     "auditLog": {
-      "copy": "Copy",
-      "inject": "Inject",
       "allUsers": "All Users",
       "noEntries": "No audit entries",
       "noEntriesHint": "Secret usage will be logged here",
@@ -7526,14 +7467,15 @@
       "access": "Access",
       "by": "by",
       "hoursAgo": "{hours}h ago",
-      "reveal": "Reveal",
       "title": "Secret Audit Log",
       "minutesAgo": "{minutes}m ago",
       "allActions": "All Actions",
       "delete": "Delete",
-      "read": "Read",
       "create": "Create",
-      "update": "Update"
+      "update": "Update",
+      "list": "فہرست",
+      "transfer": "منتقلی",
+      "bulkDelete": "اجتماعی حذف"
     }
   },
   "research": {
@@ -7569,10 +7511,6 @@
     },
     "input": {
       "clearInput": "Clear input"
-    },
-    "panel": {
-      "collapse": "Collapse panel",
-      "expand": "Expand panel"
     }
   },
   "voice": {
@@ -8131,6 +8069,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "مینٹیننس ونڈو فعال کرنے میں ناکامی",
+      "completeWindowFailed": "مینٹیننس ونڈو مکمل کرنے میں ناکامی",
+      "deleteWindowFailed": "مینٹیننس ونڈو حذف کرنے میں ناکامی",
+      "drainNodeFailed": "نوڈ کو خالی کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔",
+      "resumeNodeFailed": "نوڈ کو دوبارہ شروع کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔",
+      "saveKeysFailed": "API کیز محفوظ کرنے میں ناکامی۔ تفصیلات کے لیے کنسول دیکھیں۔",
+      "addNodeFailed": "نوڈ شامل کرنے میں ناکامی"
     }
   },
   "mobile": {
@@ -8642,7 +8589,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "ٹول کی معلومات اس وقت دستیاب نہیں ہیں — یہ فہرست نامکمل ہو سکتی ہے۔",
       "canvasNoToolsDefined": "اس کمپنی میں کسی کردار کے ساتھ کوئی ٹول منسلک نہیں۔",
-      "deepLinkNodeNotFound": "یہ لنک ایک ایسے نوڈ کی طرف اشارہ کرتا ہے جو یہاں نہیں ملا۔ ہو سکتا ہے یہ ہٹا دیا گیا ہو، یا آپ کو اس تک رسائی حاصل نہ ہو۔"
+      "deepLinkNodeNotFound": "یہ لنک ایک ایسے نوڈ کی طرف اشارہ کرتا ہے جو یہاں نہیں ملا۔ ہو سکتا ہے یہ ہٹا دیا گیا ہو، یا آپ کو اس تک رسائی حاصل نہ ہو۔",
+      "viewPlanner": "پلانر"
     },
     "executorRollup": {
       "title": "عمل کنندہ خلاصہ",
@@ -8987,6 +8935,170 @@
         "unavailable": "لیجر تک رسائی نہیں ہو سکی؛ کچھ نہیں بھیجا گیا۔",
         "error": "کچھ غلط ہو گیا اور ترسیل کی تصدیق نہیں ہو سکی۔ یہ دیکھنے کے لیے ریفریش کریں کہ آیا دعویٰ اب بھی برقرار ہے۔"
       }
+    },
+    "workflowPlanner": {
+      "title": "ورک فلو پلانر",
+      "plans": "منصوبے",
+      "newPlan": "نیا منصوبہ",
+      "open": "کھولیں",
+      "back": "منصوبوں پر واپس",
+      "retry": "دوبارہ کوشش کریں",
+      "loading": "منصوبے لوڈ ہو رہے ہیں...",
+      "loadFailed": "منصوبہ لوڈ نہیں ہو سکا۔",
+      "stale": {
+        "plan": "یہ منصوبہ تازہ نہیں ہو سکا، اس لیے جو دکھایا جا رہا ہے وہ پرانا ہو سکتا ہے۔ {reason}",
+        "gate": "تیاری کی جانچ تازہ نہیں ہو سکی، اس لیے باقی ماندہ چیزوں کی فہرست پرانی ہو سکتی ہے۔ {reason}",
+        "both": "نہ منصوبہ اور نہ اس کی تیاری کی جانچ تازہ ہو سکی، اس لیے جو دکھایا جا رہا ہے وہ پرانا ہو سکتا ہے۔ {reason}"
+      },
+      "rereadRetry": "منصوبہ دوبارہ لوڈ کریں",
+      "saveFailed": "تبدیلی محفوظ نہیں ہو سکی۔",
+      "createFailed": "منصوبہ بنایا نہیں جا سکا۔",
+      "emptyTitle": "ابھی کوئی منصوبہ نہیں",
+      "emptyHint": "ایک منصوبہ شروع کریں تاکہ ایک عمل کا نقشہ بنائیں، اسے ناپیں اور بہتر بنانے کے لیے ایک عدد چنیں۔",
+      "unavailableTitle": "ورک فلو پلانر دستیاب نہیں ہے",
+      "unavailableHint": "یہ فیچر آپ کے ورک اسپیس کے لیے بند ہے، اس لیے یہاں ابھی دکھانے کو کچھ نہیں۔",
+      "statusFlow": "منصوبے کی پیش رفت",
+      "status": {
+        "draft": "مسودہ",
+        "measured": "ناپا گیا",
+        "labeled": "لیبل لگا",
+        "approved": "منظور شدہ",
+        "converted": "تبدیل شدہ"
+      },
+      "col": {
+        "name": "منصوبہ",
+        "revision": "نظرثانی",
+        "status": "حالت",
+        "actions": "کارروائیاں"
+      },
+      "form": {
+        "name": "منصوبے کا نام",
+        "startsAt": "عمل کہاں سے شروع ہوتا ہے",
+        "endsAt": "عمل کہاں ختم ہوتا ہے",
+        "create": "منصوبہ بنائیں"
+      },
+      "steps": {
+        "map": "نقشہ بنائیں",
+        "measure": "ناپیں",
+        "oneNumber": "ایک عدد چنیں",
+        "label": "تقسیم کریں اور لیبل لگائیں",
+        "convert": "ورک فلو بنائیں"
+      },
+      "map": {
+        "empty": "ابھی کچھ نقشے میں نہیں",
+        "emptyHint": "پہلے شامل افراد (لینز) اور پھر ہر ایک کے مراحل شامل کریں۔",
+        "handoffs": "{count} حوالگیاں",
+        "waitNote": "اس حوالگی پر کیا رکا ہوا ہے؟",
+        "laneName": "لین کا نام",
+        "addLane": "لین شامل کریں",
+        "stepLabel": "مرحلہ",
+        "stepLane": "مرحلے کی لین",
+        "addStep": "مرحلہ شامل کریں"
+      },
+      "source": {
+        "self_reported": "آپ نے کہا",
+        "email": "ای میل سے جانچا گیا",
+        "calendar": "کیلنڈر سے جانچا گیا"
+      },
+      "measure": {
+        "hint": "ہر مرحلہ کتنی بار ہوتا ہے اور کتنا وقت لیتا ہے؟",
+        "needSteps": "پہلے کم از کم ایک مرحلے کا نقشہ بنائیں۔",
+        "perWeek": "فی ہفتہ",
+        "duration": "دورانیہ",
+        "unit": "دورانیے کی اکائی",
+        "save": "محفوظ کریں",
+        "clear": "صاف کریں"
+      },
+      "unit": {
+        "minutes": "منٹ",
+        "hours": "گھنٹے",
+        "days": "دن"
+      },
+      "oneNumber": {
+        "hint": "ناپے گئے مراحل، سب سے لمبے انتظار پہلے۔ آپ طے کرتے ہیں کون سا اہم ہے۔",
+        "needMetrics": "پہلے کم از کم ایک مرحلہ ناپیں۔",
+        "rate": "{freq} فی ہفتہ، {dur} {unit}",
+        "title": "اس عدد کو نام دیں",
+        "returnKind": "آپ کو کیا واپس ملتا ہے",
+        "target": "ہدف",
+        "save": "میرے ایک عدد کے طور پر محفوظ کریں"
+      },
+      "returnKind": {
+        "hours_back": "واپس ملے گھنٹے",
+        "more_yeses": "زیادہ ہاں",
+        "money_sooner": "رقم جلدی"
+      },
+      "label": {
+        "needNumber": "پہلے اپنا ایک عدد چنیں؛ اس کا مرحلہ یہاں تقسیم ہوتا ہے۔",
+        "subStep": "ذیلی مرحلہ",
+        "addSubStep": "ذیلی مرحلہ شامل کریں",
+        "unlabel": "لیبل ہٹائیں",
+        "edgeCase": "حدی صورت: {text}",
+        "byHandNote": "یہ لوگوں کے پاس رہتا ہے۔ اے آئی اس پر کبھی عمل نہیں کرتا۔",
+        "acknowledge": "میں نے ہاتھ سے کی فہرست پڑھ لی ہے",
+        "acknowledged": "ہاتھ سے کی فہرست پڑھ لی گئی"
+      },
+      "labels": {
+        "ai": "اے آئی",
+        "automation": "آٹومیشن",
+        "by_hand": "ہاتھ سے"
+      },
+      "gate": {
+        "missing": "ابھی کمی ہے",
+        "title": "بنانے کے لیے تیار ہیں؟",
+        "unknown": "دوسری جانچ",
+        "state": {
+          "met": "پوری",
+          "open": "کھلی",
+          "pending": "ابھی جانچی نہیں گئی"
+        },
+        "name": {
+          "G1": "نقشہ درست ہے",
+          "G2": "ہر مرحلہ ناپا گیا ہے",
+          "G3": "منتخب مرحلہ تفصیل میں توڑا گیا ہے",
+          "G4": "ہر ذیلی مرحلے اور حدی صورت پر لیبل ہے",
+          "G5": "«ہاتھ سے» فہرست پڑھ لی گئی اور مصنوعی ذہانت کے مراحل منظوریوں سے ڈھکے ہیں",
+          "G6": "پیش منظر میں کوئی غلطی نہیں",
+          "G7": "آپ نے اس منصوبے کی منظوری دی",
+          "converted": "ورک فلو بنا دیے گئے ہیں"
+        }
+      },
+      "readOnly": "اس منصوبے کی حالت {status} ہے، اس لیے مراحل 1 تا 4 صرف پڑھنے کے لیے ہیں۔",
+      "firstProcess": {
+        "title": "آپ کی کمپنی تیار ہے",
+        "body": "اپنا پہلا عمل منصوبہ بند کریں: اس کا نقشہ بنائیں، ناپیں اور بہتر کرنے کے لیے ایک عدد چنیں۔",
+        "plan": "میرا پہلا عمل منصوبہ بند کریں",
+        "later": "بعد میں"
+      },
+      "convert": {
+        "notReady": "پہلے مراحل 1 تا 4 مکمل کریں۔ اوپر کی جانچیں دکھاتی ہیں کہ ابھی کیا کم ہے۔",
+        "previewTitle": "کیا بنے گا (پیش منظر، ابھی کچھ موجود نہیں)",
+        "createdTitle": "کیا بنایا گیا",
+        "counts": "ورک فلو: {workflows}۔ عمل: {processes}۔",
+        "ownerLane": "ذمہ دار: {lane}",
+        "errors": "منظوری سے پہلے درست کرنے کی غلطیاں",
+        "warnings": "انتباہات",
+        "documented": "دستی متن کے طور پر رکھا گیا، بنایا نہیں گیا:",
+        "failedProposals": "{count} مصنوعی ذہانت کی لائن تجاویز جمع نہیں ہو سکیں۔ انہیں جمع کرنے کے لیے دوبارہ کوشش کریں۔",
+        "turnOnNotAvailable": "ورک فلو آن کرنا ابھی دستیاب نہیں: تب تک انہیں کچھ نہیں چلاتا۔",
+        "openWorkflows": "ورک فلو کھولیں",
+        "unavailable": "یہ عمل دستیاب نہیں: ورک فلو پلانر آپ کے ورک اسپیس کے لیے بند ہے، یا منصوبہ اب موجود نہیں۔",
+        "blocked": "ابھی تیار نہیں۔ اوپر کی جانچیں دکھاتی ہیں کہ کیا کم ہے۔",
+        "approvedBy": "{by} نے {at} پر منظور کیا۔",
+        "preview": "جو بنے گا اس کا پیش منظر دیکھیں",
+        "previewAgain": "پیش منظر تازہ کریں",
+        "approve": "منظور کریں",
+        "create": "ورک فلو بنائیں",
+        "retry": "مصنوعی ذہانت کی لائن تجاویز دوبارہ آزمائیں",
+        "approveTitle": "اس منصوبے کی منظوری دیں؟",
+        "approveMessage": "آپ دکھائے گئے پیش منظر کی منظوری دے رہے ہیں۔ منصوبے میں بعد کی کوئی بھی تدوین اس منظوری کو ختم کر دیتی ہے۔",
+        "previewFailed": "پیش منظر نہیں بن سکا۔",
+        "approveFailed": "منصوبے کی منظوری نہیں ہو سکی۔",
+        "approveBlocked": "منظوری اس وقت تک بلاک ہے جب تک یہ حل نہ ہوں:",
+        "approveDetail": "سرور کی تفصیل: {detail}",
+        "convertFailed": "ورک فلو نہیں بن سکے۔",
+        "retryFailed": "مصنوعی ذہانت کی لائن تجاویز دوبارہ نہیں آزمائی جا سکیں۔"
+      }
     }
   },
   "code": {
@@ -8999,13 +9111,10 @@
   "devices": {
     "addDevice": "Add device",
     "confirmDelete": "Confirm delete",
-    "daysAgo": "Days ago",
     "error": "Error",
-    "hoursAgo": "Hours ago",
     "justNow": "Just now",
     "lastSeen": "Last seen",
     "loading": "Loading",
-    "minutesAgo": "Minutes ago",
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
@@ -9392,6 +9501,11 @@
       "subtitle": "API کیز کے لیے تفصیلی اجازت کی لغت اور دائرہ بنڈل",
       "comingSoonTitle": "بعد کے ورژن میں آ رہا ہے",
       "comingSoonMessage": "تفصیلی اجازت کے دائرے — ایک اجازت کی لغت، دائرہ بنڈل، اور API کیز کے دائرے کا نفاذ — اس ورژن میں دستیاب نہیں ہیں۔ یہ صفحہ لانچ ہونے کے بعد انہیں متعین اور تفویض کرنے کی سہولت دے گا۔"
+    },
+    "layout": {
+      "title": "انتظامیہ",
+      "subtitle": "منتظمین کے لیے بیک آفس ٹولز",
+      "ariaLabel": "انتظامیہ کا سیکشن"
     }
   },
   "components": {

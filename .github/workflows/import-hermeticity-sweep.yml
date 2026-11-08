@@ -137,14 +137,16 @@ jobs:
       # torch>=2.11.0 plus transitive vllm 0.19.x (which requires torch==2.10.0), an
       # unsatisfiable resolver state (#7018). Same install as startup-import-smoke,
       # which asks the closest question to this one.
+      - name: Install CI requirements
+        if: steps.mode.outputs.mode != 'none'
+        uses: ./.github/actions/install-ci-requirements
+
       - name: Install declared dependencies
         if: steps.mode.outputs.mode != 'none'
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip >/dev/null
           python -m pip install pytest >/dev/null
-          python -m pip install -r requirements-ci.txt --prefer-binary
           python -m pip install -e autobot_shared
 
       - name: Sweep the modules this run examines

@@ -46,7 +46,9 @@ from fastapi import (
     Request,
 )
 
+from api.knowledge_chunked_upload import router as chunked_upload_router
 from api.knowledge_office_upload import OFFICE_EXTENSIONS, extract_office_upload, verified_upload_extension
+from api.knowledge_upload_limit import router as upload_limit_router
 from api.schemas_knowledge import (
     AddFactsRequest,
     AddUrlRequest,
@@ -109,6 +111,7 @@ from knowledge.schemas.stats import (
     KnowledgeMainCategoriesResponse,
     KnowledgeStatsBasic,
 )
+from knowledge.upload_limit import MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB, reject_oversize_file, reject_oversize_request
 from knowledge.upload_pages import clean_upload_text
 from knowledge.upload_rejections import (
     UploadRejection,
@@ -121,6 +124,7 @@ from knowledge.upload_rejections import no_text_rejection as _no_text_rejection
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (SearchRequest) defined in schemas_knowledge.py (#10666 B1)
 from knowledge_factory import get_or_create_knowledge_base
+from security.upload_filename_policy import is_safe_file, require_safe_upload
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 from services.knowledge.stats_service import fetch_kb_core_stats  # Issue #11554 canonical stats
 from utils.path_validation import contains_path_traversal
@@ -130,9 +134,6 @@ from utils.path_validation import contains_path_traversal
 # =============================================================================
 
 
-# File upload constants (Issue #549 Code Review)
-MAX_FILE_SIZE_MB = 10
-MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".json", ".csv", ".html"} | OFFICE_EXTENSIONS  # #16775
 
 # Import RAG Agent for enhanced search capabilities
@@ -819,6 +820,22 @@ def _sanitize_html_content(html_content: str) -> tuple:
     return plain_text, extractor.title
 
 
+def require_safe_kb_name(filename: str) -> None:
+    """The one KB upload-name gate: the canonical policy, with the KB's own stable rejection codes (#19088)."""
+    import os
+
+    if is_safe_file(filename, ALLOWED_EXTENSIONS):
+        return
+    if os.path.splitext(filename.lower())[1] not in ALLOWED_EXTENSIONS:
+        allowed = sorted(ALLOWED_EXTENSIONS)
+        raise UploadRejection(
+            UploadRejectionCode.UNSUPPORTED_TYPE,
+            f"File type not allowed. Allowed: {', '.join(allowed)}",
+            allowed=allowed,
+        )
+    raise UploadRejection(UploadRejectionCode.INVALID_FILENAME, "Invalid filename")
+
+
 def _validate_file_upload(filename: str, file_size: int) -> None:
     """
     Validate file upload for security (Issue #549 Code Review: Security fix).
@@ -830,7 +847,6 @@ def _validate_file_upload(filename: str, file_size: int) -> None:
     Raises:
         HTTPException: If validation fails
     """
-    import os
 
     # Check file size
     if file_size > MAX_FILE_SIZE_BYTES:
@@ -840,19 +856,7 @@ def _validate_file_upload(filename: str, file_size: int) -> None:
             max_mb=MAX_FILE_SIZE_MB,
         )
 
-    # Check extension
-    ext = os.path.splitext(filename.lower())[1]
-    if ext not in ALLOWED_EXTENSIONS:
-        allowed = sorted(ALLOWED_EXTENSIONS)
-        raise UploadRejection(
-            UploadRejectionCode.UNSUPPORTED_TYPE,
-            f"File type not allowed. Allowed: {', '.join(allowed)}",
-            allowed=allowed,
-        )
-
-    # Check for path traversal
-    if contains_path_traversal(filename):
-        raise UploadRejection(UploadRejectionCode.INVALID_FILENAME, "Invalid filename")
+    require_safe_kb_name(filename)
 
 
 @router.post("/facts", response_model=AddFactResponse)
@@ -1183,7 +1187,6 @@ async def upload_file_to_knowledge(
     Supports: .txt, .md, .pdf, .docx, .json, .csv, .html files
     Issue #744: Requires admin authentication.
     """
-    import os
 
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
@@ -1194,27 +1197,33 @@ async def upload_file_to_knowledge(
         autobot_kb_degradation_total.labels(endpoint="upload", reason="kb_uninit").inc()
         raise InternalError("Knowledge base not initialized")
 
+    reject_oversize_request(req.headers)
     form = await req.form()
     file = form.get("file")
     if not file or not hasattr(file, "read"):
         raise UploadRejection(UploadRejectionCode.FILE_REQUIRED, "File is required")
 
-    # Get filename and sanitize (Issue #549 Code Review: Security)
-    filename = os.path.basename(getattr(file, "filename", "unknown"))
+    filename = getattr(file, "filename", None) or ""
+    require_safe_kb_name(filename)  # #19088: name and type gate BEFORE the body is read
+    reject_oversize_file(getattr(file, "size", None))
     file_content = await file.read()
-
-    # Validate file upload BEFORE processing (Issue #549 Code Review: Security)
-    _validate_file_upload(filename, len(file_content))
+    _validate_file_upload(filename, len(file_content))  # #549: BEFORE processing
 
     title = form.get("title", "") or filename
     category = form.get("category", "uploads")
     tags = _parse_upload_tags(form.get("tags", "[]"))
 
+    return await ingest_uploaded_document(kb_to_use, req, filename, file_content, title, category, tags)
+
+
+async def ingest_uploaded_document(
+    kb_to_use, req: Request, filename: str, file_content: bytes, title: str, category: str, tags: list
+) -> UploadFileResponse:
+    """Extract, clean and store a document whose bytes have passed the size gate of the way they arrived."""
     content, extracted_doc = await extract_within_deadline(_extract_file_content, filename, file_content)
     if not _has_usable_content(content, extracted_doc):
-        # #13884: distinguish "we could not read it" from "it is empty". A scanned
-        # PDF parses fine and yields nothing, and a generic message left the user
-        # with no way to tell that OCR — not a different file — is what is needed.
+        # #13884: "could not read it" isn't "it is empty". A scanned PDF parses fine and yields nothing,
+        # and a generic message left the user no way to tell that OCR, not another file, is what's needed.
         raise _no_text_rejection(extracted_doc)
 
     # Issue #5064: sanitize against prompt injection; #13708: also the redact_content chokepoint,
@@ -1408,7 +1417,6 @@ async def upload_audio_file(
         whisper_model: Whisper model size (default "base").
         language:      ISO-639-1 language hint (optional).
     """
-    import json as _json
     import os as _os
     import tempfile as _tmp
 
@@ -1426,16 +1434,8 @@ async def upload_audio_file(
     if not file or not hasattr(file, "read"):
         raise HTTPException(status_code=400, detail="Audio file is required")
 
-    filename = _os.path.basename(getattr(file, "filename", "audio.mp3"))
-    if contains_path_traversal(filename):
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
+    filename = require_safe_upload(getattr(file, "filename", None), _AUDIO_ALLOWED_EXTS)  # #19088: before the read
     ext = _os.path.splitext(filename.lower())[1]
-    if ext not in _AUDIO_ALLOWED_EXTS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported audio format. Allowed: {', '.join(sorted(_AUDIO_ALLOWED_EXTS))}",
-        )
 
     file_bytes = await file.read()
     if len(file_bytes) > _AUDIO_MAX_BYTES:
@@ -1445,14 +1445,7 @@ async def upload_audio_file(
     category = form.get("category", "audio")
     whisper_model = form.get("whisper_model", "base")
     language = form.get("language") or None
-    try:
-        raw_tags = form.get("tags", "[]")
-        tags = _json.loads(raw_tags) if isinstance(raw_tags, str) else raw_tags
-        if not isinstance(tags, list):
-            tags = []
-        tags = [str(t)[:50] for t in tags[:20]]
-    except (_json.JSONDecodeError, TypeError):
-        tags = []
+    tags = _parse_upload_tags(form.get("tags", "[]"))
 
     # Write to a temp file so AudioConnector can read it by path
     with _tmp.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
@@ -3060,6 +3053,8 @@ async def set_org_model_config(
 from api.knowledge_maintenance import router as maintenance_router
 
 router.include_router(maintenance_router)
+router.include_router(upload_limit_router)
+router.include_router(chunked_upload_router)
 
 # ===== CONSOLIDATED KNOWLEDGE ROUTERS (Issue #708) =====
 # These routers were previously registered separately in feature_routers.py

@@ -28,7 +28,7 @@
 
       <!-- In-progress indicator -->
       <div v-if="isGenerating" class="video-progress" role="status" aria-live="polite">
-        <div class="spinner" aria-hidden="true"></div>
+        <BaseSpinner size="sm" />
         <div class="progress-track">
           <div class="progress-bar" :style="{ width: `${progressPct}%` }"></div>
         </div>
@@ -85,6 +85,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { computed, ref } from 'vue'
 
@@ -189,7 +190,7 @@ const copyVideoUrl = async (url: string) => {
 
 .provider-badge,
 .size-badge {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.125rem 0.5rem;
   border-radius: var(--radius-full);
   background: var(--color-surface-2, var(--videocell-surface-2));
@@ -222,15 +223,6 @@ const copyVideoUrl = async (url: string) => {
   max-width: 640px;
 }
 
-.spinner {
-  width: 1.75rem;
-  height: 1.75rem;
-  border: 3px solid var(--color-surface-2, var(--videocell-surface-2));
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
 .progress-track {
   width: 100%;
   height: 0.375rem;
@@ -258,7 +250,7 @@ const copyVideoUrl = async (url: string) => {
   border-radius: 0.5rem;
   background: var(--color-surface-2, var(--videocell-surface-2));
   color: var(--color-error);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   max-width: 640px;
 }
 
@@ -284,7 +276,7 @@ const copyVideoUrl = async (url: string) => {
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem 0.625rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   background: var(--bg-surface);
@@ -298,16 +290,7 @@ const copyVideoUrl = async (url: string) => {
   background: var(--color-surface-2, var(--videocell-surface-2));
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation: none;
-  }
   .generated-video,
   .action-btn,
   .progress-bar {

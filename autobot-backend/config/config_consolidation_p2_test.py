@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import pytest
 
+from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER
 from config import unified_config_manager
 from config.defaults import get_default_config
 from config.loader import apply_env_overrides
@@ -83,8 +84,8 @@ def test_sensitive_data_filtering() -> None:
         "api": {"endpoint": "http://api.example.com", "api_key": "key123"},
     }
     filtered = unified_config_manager._filter_sensitive_data(test_data)
-    assert filtered["redis"]["password"] == "***REDACTED***"
-    assert filtered["api"]["api_key"] == "***REDACTED***"
+    assert filtered["redis"]["password"] == REDACTED_PLACEHOLDER
+    assert filtered["api"]["api_key"] == REDACTED_PLACEHOLDER
     assert filtered["redis"]["host"] == "localhost"
     assert filtered["redis"]["port"] == 6379
 

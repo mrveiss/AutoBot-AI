@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
 from tasks.man_page_indexing import run_indexing_subprocess
 from type_defs.common import Metadata
@@ -122,32 +123,16 @@ def reindex_knowledge_base(self) -> Metadata:
 
         logger.info("Starting knowledge base reindex (background task)...")
 
-        # Import here to avoid circular dependencies
-        import asyncio
+        stats = _run_async_in_loop(_reindex_stats())
 
-        from knowledge_base import KnowledgeBase
+        logger.info(f"Knowledge base reindex complete: {stats.get('total_vectors', 0)} vectors")
 
-        # Run async reindex in new event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        try:
-            kb = KnowledgeBase()
-            loop.run_until_complete(kb.initialize())
-
-            # Get updated stats
-            stats = loop.run_until_complete(kb.get_stats())
-
-            logger.info(f"Knowledge base reindex complete: {stats.get('total_vectors', 0)} vectors")
-
-            return {
-                "status": "success",
-                "total_vectors": stats.get("total_vectors", 0),
-                "total_facts": stats.get("total_facts", 0),
-                "message": "Knowledge base reindexed successfully",
-            }
-        finally:
-            loop.close()
+        return {
+            "status": "success",
+            "total_vectors": stats.get("total_vectors", 0),
+            "total_facts": stats.get("total_facts", 0),
+            "message": "Knowledge base reindexed successfully",
+        }
 
     except Exception as e:
         logger.exception("Knowledge base reindex task failed: %s", e)
@@ -163,24 +148,23 @@ def reindex_knowledge_base(self) -> Metadata:
 # =========================================================================
 
 
+async def _reindex_stats() -> dict:
+    """Initialise a KnowledgeBase and return its stats (runs on the worker loop)."""
+    from knowledge_base import KnowledgeBase
+
+    kb = KnowledgeBase()
+    await kb.initialize()
+    return await kb.get_stats()
+
+
 def _run_async_in_loop(coro):
-    """Run async coroutine in a new event loop (helper for Celery tasks).
+    """Run an async coroutine on the worker's persistent loop (helper for Celery tasks).
 
-    Resets stale async Redis pools before entering the loop so each task
-    invocation gets fresh pool connections bound to its own event loop.
-    Without this, pools created in a previous loop survive in the singleton
-    but their internal connections reference a closed loop, causing
-    get_async_redis_client() to catch the error and return None (#10936).
+    The async Redis pools are created once on that loop and reused by every task
+    (#20887). They are deliberately NOT reset per call: a reset abandons live
+    pools and builds a new one per task (the #10936 workaround this replaces).
     """
-    from autobot_shared.redis_client import reset_async_redis_pools
-
-    reset_async_redis_pools()
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+    return run_in_worker_loop(coro)
 
 
 async def _store_man_pages_to_kb(kb, man_pages: list, delay: float) -> tuple[int, int]:
@@ -618,9 +602,8 @@ def _resolve_cache_directories() -> list:
     """Return list of cache/temp directory Paths that cleanup_generated_files manages.
 
     Covered directories and the modules that write to them:
-    - ``DATA_DIR/cache`` — ``utils/graceful_degradation.py`` writes
-      ``data/cache/claude_responses/*.json`` via ``GracefulDegradationManager``;
-      rglob covers all subdirectories recursively.
+    - ``response_cache_dir()`` — ``GracefulDegradationManager``'s ``*.json`` fallback responses,
+      in the user cache, never the repo (#19553); rglob covers subdirectories.
     - ``TEMP_DIR`` — miscellaneous temporary scratch space.
 
     Directories intentionally excluded:
@@ -635,9 +618,10 @@ def _resolve_cache_directories() -> list:
     from pathlib import Path
 
     from constants.path_constants import PATH
+    from utils.degradation_cache import response_cache_dir
 
     candidates = [
-        PATH.DATA_DIR / "cache",
+        response_cache_dir(),
         PATH.TEMP_DIR,
     ]
 

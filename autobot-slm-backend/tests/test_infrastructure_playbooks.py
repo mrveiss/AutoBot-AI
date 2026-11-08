@@ -7,7 +7,8 @@
 Guards against the #12095 bug class — catalog ``playbook_file`` values that point at
 a path which does not exist under ``ansible/`` (missing ``playbooks/`` prefix or a
 renamed/removed playbook), so clicking the entry raised ``FileNotFoundError`` at
-``os.path.join(PLAYBOOKS_DIR, playbook_file)`` in ``api/infrastructure.py``.
+the playbook-path join in ``api/infrastructure.py`` (then on ``PLAYBOOKS_DIR``, retired in #18094 for
+``_ansible_dir()``).
 """
 
 from __future__ import annotations
@@ -64,3 +65,12 @@ def test_playbook_file_resolves_to_real_file(playbook):
         f"Catalog entry {playbook.id!r} points at {playbook.playbook_file!r} "
         f"which does not exist under {_ANSIBLE_DIR} (resolved: {resolved})"
     )
+
+
+def test_setup_ai_stack_provisions_chromadb_on_the_ssot_port():
+    # #19321: the catalog passed `-e chromadb_port=8080` -- the AI-stack's own port -- which beats the
+    # playbook's 8100, so a UI-run "Setup AI Stack Node" put ChromaDB where no client dials it.
+    from autobot_shared.ssot_config import config
+
+    entry = next(p for p in _CATALOG if p.id == "setup-ai-stack")
+    assert entry.variables["chromadb_port"] == config.port.chromadb

@@ -30,16 +30,11 @@
 
     <section v-if="active === 'now'" id="ledger-panel-now" role="tabpanel" aria-labelledby="ledger-tab-now" tabindex="0">
       <LedgerSectionState :section="ledger.presence.value" :empty="t('llc.ledger.empty.presence')">
-        <table class="w-full border-collapse text-start [&_th]:p-2 [&_td]:p-2 [&_th]:text-start [&_tr]:border-b [&_tr]:border-autobot-border">
-          <thead><tr><th>{{ t('llc.ledger.col.agent') }}</th><th>{{ t('llc.ledger.col.kind') }}</th><th>{{ t('llc.ledger.col.status') }}</th><th>{{ t('llc.ledger.col.task') }}</th><th>{{ t('llc.ledger.col.detail') }}</th></tr></thead>
-          <tbody>
-            <tr v-for="a in ledger.presence.value.rows" :key="`${a.kind}:${a.name}`">
-              <td>{{ a.name }}</td><td>{{ a.kind }}</td>
-              <td>{{ a.busy ? t('llc.ledger.busy') : t('llc.ledger.idle') }}</td>
-              <td data-testid="ledger-current-task" class="max-w-xs truncate" :title="a.current_task?.title">{{ a.current_task?.title ?? '' }}</td><td>{{ a.detail ?? '' }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <BaseTable :columns="presenceColumns" :rows="presenceRows" size="compact" :aria-label="t('llc.ledger.col.agent')">
+          <template #cell-task="{ row }">
+            <span data-testid="ledger-current-task" class="inline-block max-w-xs truncate align-bottom" :title="row.task ? String(row.task) : undefined">{{ row.task }}</span>
+          </template>
+        </BaseTable>
       </LedgerSectionState>
       <h2 class="mt-3 mb-0 text-base text-autobot-text-primary">{{ t('llc.ledger.peerMessages') }}</h2>
       <LedgerSectionState :section="ledger.peerMessages.value" :empty="t('llc.ledger.empty.peerMessages')">
@@ -62,15 +57,7 @@
 
     <section v-else-if="active === 'claims'" id="ledger-panel-claims" role="tabpanel" aria-labelledby="ledger-tab-claims" tabindex="0">
       <LedgerSectionState :section="ledger.claims.value" :empty="t('llc.ledger.empty.claims')">
-        <table class="w-full border-collapse text-start [&_th]:p-2 [&_td]:p-2 [&_th]:text-start [&_tr]:border-b [&_tr]:border-autobot-border" data-testid="ledger-claims">
-          <thead><tr><th>{{ t('llc.ledger.col.scope') }}</th><th>{{ t('llc.ledger.col.agent') }}</th><th>{{ t('llc.ledger.col.mode') }}</th><th>{{ t('llc.ledger.col.intent') }}</th><th>{{ t('llc.ledger.col.expires') }}</th><th>{{ t('llc.ledger.col.renewals') }}</th></tr></thead>
-          <tbody>
-            <tr v-for="c in ledger.claims.value.rows" :key="`${c.scope}:${c.task_id}`">
-              <td><code>{{ c.scope }}</code></td><td>{{ c.agent_id }}</td><td>{{ c.mode }}</td>
-              <td>{{ c.intent }}</td><td>{{ c.expires_at }}</td><td>{{ c.renewals }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <BaseTable :columns="claimColumns" :rows="claimRows" size="compact" data-testid="ledger-claims" :aria-label="t('llc.ledger.col.scope')" />
       </LedgerSectionState>
     </section>
 
@@ -119,6 +106,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { BaseTable, type BaseTableColumn } from '@autobot/ui'
 import { askHolderToRelease, useAgentLedger, type AskOutcome } from '@/composables/useAgentLedger'
 import { useUiMode } from '@/composables/useUiMode'
 import LedgerSectionState from '@/components/llc/ledger/LedgerSectionState.vue'
@@ -128,6 +116,34 @@ type TabId = 'now' | 'claims' | 'contention' | 'activity'
 const { t } = useI18n()
 const { uiMode } = useUiMode()
 const ledger = useAgentLedger()
+
+// #17562: both ledger tables are the kit table. Row keys are the ones the old v-for used.
+const presenceColumns = computed<BaseTableColumn[]>(() => [
+  { key: 'name', label: t('llc.ledger.col.agent') },
+  { key: 'kind', label: t('llc.ledger.col.kind') },
+  { key: 'status', label: t('llc.ledger.col.status') },
+  { key: 'task', label: t('llc.ledger.col.task') },
+  { key: 'detail', label: t('llc.ledger.col.detail') },
+])
+const presenceRows = computed(() =>
+  ledger.presence.value.rows.map((a) => ({
+    id: `${a.kind}:${a.name}`,
+    name: a.name,
+    kind: a.kind,
+    status: a.busy ? t('llc.ledger.busy') : t('llc.ledger.idle'),
+    task: a.current_task?.title ?? '',
+    detail: a.detail ?? '',
+  })),
+)
+const claimColumns = computed<BaseTableColumn[]>(() => [
+  { key: 'scope', label: t('llc.ledger.col.scope'), monospace: true },
+  { key: 'agent_id', label: t('llc.ledger.col.agent') },
+  { key: 'mode', label: t('llc.ledger.col.mode') },
+  { key: 'intent', label: t('llc.ledger.col.intent') },
+  { key: 'expires_at', label: t('llc.ledger.col.expires') },
+  { key: 'renewals', label: t('llc.ledger.col.renewals'), numeric: true },
+])
+const claimRows = computed(() => ledger.claims.value.rows.map((c) => ({ ...c, id: `${c.scope}:${c.task_id}` })))
 const active = ref<TabId>('now')
 const tabEls = ref<HTMLButtonElement[]>([])
 

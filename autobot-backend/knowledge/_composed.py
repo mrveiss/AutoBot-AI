@@ -11,9 +11,6 @@ imports from here so that ``knowledge.pipeline.*`` can be used without
 pulling in the full dependency tree.
 """
 
-import asyncio
-import threading
-
 from autobot_shared.logging_manager import get_logger
 from knowledge.base import KnowledgeBaseCore
 from knowledge.bulk import BulkOperationsMixin
@@ -64,34 +61,32 @@ class KnowledgeBase(
         return success
 
 
-# Singleton factory
-_knowledge_base_instance: KnowledgeBase | None = None
-_initialization_lock = asyncio.Lock()
-_reset_lock = threading.Lock()
-
-
+# Facade over the one store (#18122 S2)
 async def get_knowledge_base(
     force_new: bool = False,
 ) -> KnowledgeBase:
-    """Get or create the singleton KnowledgeBase instance."""
-    global _knowledge_base_instance
+    """Return the shared KnowledgeBase from ``knowledge_factory`` (#18122).
 
-    async with _initialization_lock:
-        if force_new or _knowledge_base_instance is None:
-            logger.info("Creating new KnowledgeBase instance...")
-            kb = KnowledgeBase()
-            success = await kb.initialize()
-            if not success:
-                raise RuntimeError("Failed to initialize knowledge base")
-            _knowledge_base_instance = kb
-            logger.info("KnowledgeBase singleton instance created and initialized")
+    This module keeps no instance and no lock; creation, the retry cooldown and
+    legacy-fact adoption all live in ``knowledge_factory``. ``force_new`` is accepted
+    for call-site compatibility, logged and ignored (owner D3), matching
+    ``knowledge_base_factory``'s ``force_reinit``.
 
-        return _knowledge_base_instance
+    Raises:
+        RuntimeError: when the factory returns None (init failed or cooling down).
+    """
+    from knowledge_factory import get_knowledge_base_async
+
+    if force_new:
+        logger.warning("get_knowledge_base(force_new=True) ignored: the shared instance is returned")
+    kb = await get_knowledge_base_async()
+    if kb is None:
+        raise RuntimeError("Failed to initialize knowledge base")
+    return kb
 
 
-def reset_knowledge_base() -> None:
-    """Reset the singleton (thread-safe, Issue #613)."""
-    global _knowledge_base_instance
-    with _reset_lock:
-        _knowledge_base_instance = None
-        logger.info("KnowledgeBase singleton instance reset")
+def reset_knowledge_base(app=None) -> None:
+    """Clear the shared singleton, and ``app``'s projection if given (Issue #613, #18122)."""
+    from knowledge_factory import reset_knowledge_base as _reset
+
+    _reset(app)

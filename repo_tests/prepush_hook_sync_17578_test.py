@@ -36,7 +36,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, isolated_git_env, make_repo
 
 REPO_ROOT = repo_root()
 _INSTALLER = REPO_ROOT / "scripts" / "install-git-hooks.sh"
@@ -53,10 +53,9 @@ _UNMANAGED = "#!/usr/bin/env bash\n# my own hook\nexit 0\n"
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
-    """#15246: env scrubbed — an inherited GIT_DIR would aim these calls,
-    `checkout` included, at the real repository instead of tmp_path.
-    """
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=False, env=scrubbed_git_env())
+    """#15246/#18940: isolated env -- an inherited GIT_DIR would point these calls at
+    the real repository instead of the throwaway one under tmp_path."""
+    return git(cwd, *args, check=False)
 
 
 def _seed(tmp_path: Path) -> Path:
@@ -64,9 +63,7 @@ def _seed(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     (repo / "scripts" / "hooks").mkdir(parents=True)
     (repo / "tools" / "git-hooks").mkdir(parents=True)
-    _git(tmp_path, "init", "--quiet", "--initial-branch=main", str(repo))
-    _git(repo, "config", "user.email", "t@t")
-    _git(repo, "config", "user.name", "t")
+    make_repo(repo, default_branch="main")
 
     for src, dest in (
         (_INSTALLER, repo / "scripts" / "install-git-hooks.sh"),
@@ -190,7 +187,7 @@ class TestWhatTheSyncMustNotDo:
             capture_output=True,
             text=True,
             check=False,
-            env={**scrubbed_git_env(), "HOOKS_DEST": str(repo / ".git" / "hooks")},
+            env={**isolated_git_env(), "HOOKS_DEST": str(repo / ".git" / "hooks")},
         )
 
         configured = _git(repo, "config", "--local", "--get-all", "core.hooksPath").stdout.strip()
@@ -207,7 +204,7 @@ class TestWhatTheSyncMustNotDo:
             capture_output=True,
             text=True,
             check=False,
-            env={**scrubbed_git_env(), "HOOKS_DEST": str(repo / ".git" / "hooks")},
+            env={**isolated_git_env(), "HOOKS_DEST": str(repo / ".git" / "hooks")},
         )
 
         assert completed.returncode == 0
@@ -227,7 +224,7 @@ class TestWhatTheSyncMustNotDo:
             capture_output=True,
             text=True,
             check=False,
-            env={**scrubbed_git_env(), "HOOKS_DEST": str(repo / ".git" / "hooks")},
+            env={**isolated_git_env(), "HOOKS_DEST": str(repo / ".git" / "hooks")},
         )
 
         assert "pre-push" in completed.stdout
@@ -246,7 +243,7 @@ class TestTheSyncModeItself:
             capture_output=True,
             text=True,
             check=False,
-            env={**scrubbed_git_env(), "HOOKS_DEST": str(repo / ".git" / "hooks")},
+            env={**isolated_git_env(), "HOOKS_DEST": str(repo / ".git" / "hooks")},
         )
 
         assert completed.returncode == 2
@@ -261,7 +258,7 @@ class TestTheSyncModeItself:
             capture_output=True,
             text=True,
             check=False,
-            env={**scrubbed_git_env(), "HOOKS_DEST": str(repo / ".git" / "hooks")},
+            env={**isolated_git_env(), "HOOKS_DEST": str(repo / ".git" / "hooks")},
         )
 
         assert completed.returncode == 2
@@ -336,7 +333,7 @@ class TestTheVersionSkewBetweenHookAndInstaller:
             capture_output=True,
             text=True,
             check=False,
-            env={**scrubbed_git_env(), "HOOKS_DEST": str(repo / ".git" / "hooks")},
+            env={**isolated_git_env(), "HOOKS_DEST": str(repo / ".git" / "hooks")},
         )
 
         assert completed.returncode == 2

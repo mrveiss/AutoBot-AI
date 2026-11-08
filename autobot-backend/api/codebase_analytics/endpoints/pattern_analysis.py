@@ -14,9 +14,11 @@ import json
 from typing import Any, Dict, List
 
 from celery.result import AsyncResult
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from api.codebase_analytics.task_routes import HUMAN_ADMIN_DEPENDENCIES, add_clear_stuck_route
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import bounded
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
@@ -147,8 +149,6 @@ async def start_pattern_analysis(request: PatternAnalysisRequest, http_request: 
     # cannot gate it. Authorize the caller against it in-handler, mirroring the
     # index endpoint, so one admin cannot scope a task to another's private source.
     if request.source_id:
-        from auth_middleware import get_current_user  # noqa: PLC0415
-
         from .shared import authorize_source_access  # noqa: PLC0415
 
         user = await get_current_user(http_request)
@@ -162,7 +162,7 @@ async def start_pattern_analysis(request: PatternAnalysisRequest, http_request: 
 
 @router.get("/patterns/status/{task_id}", response_model=PatternAnalysisStatus)
 @bounded(60.0)
-async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
+async def get_analysis_status(task_id: str, _user: dict = Depends(get_current_user)) -> PatternAnalysisStatus:
     """Get status of a pattern analysis task."""
     task = celery_result_to_status(AsyncResult(task_id))
     if task is None:
@@ -181,7 +181,7 @@ async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
 
 @router.get("/patterns/result/{task_id}")
 @bounded(60.0)
-async def get_analysis_result(task_id: str) -> Dict[str, Any]:
+async def get_analysis_result(task_id: str, _user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """Get full results of a completed pattern analysis."""
     task = celery_result_to_status(AsyncResult(task_id))
     if task is None:
@@ -191,7 +191,7 @@ async def get_analysis_result(task_id: str) -> Dict[str, Any]:
     return task.get("result") or {}
 
 
-@router.delete("/patterns/task/{task_id}")
+@router.delete("/patterns/task/{task_id}", dependencies=HUMAN_ADMIN_DEPENDENCIES)
 @bounded(60.0)
 async def cancel_analysis(task_id: str) -> Dict[str, str]:
     """Revoke a pending/running pattern analysis task (GH#8440: async-safe)."""
@@ -203,7 +203,7 @@ async def cancel_analysis(task_id: str) -> Dict[str, str]:
 
 @router.get("/patterns/tasks")
 @bounded(60.0)
-async def list_analysis_tasks() -> Dict[str, Any]:
+async def list_analysis_tasks(_user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """List active pattern analysis tasks (GH#8440: async-safe Celery inspect)."""
     from celery_app import celery_app
 
@@ -212,16 +212,12 @@ async def list_analysis_tasks() -> Dict[str, Any]:
     return {"tasks": analytics_tasks, "count": len(analytics_tasks)}
 
 
-@router.post("/patterns/tasks/clear-stuck")
-@bounded(60.0)
-async def clear_stuck_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-) -> Dict[str, Any]:
-    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
+add_clear_stuck_route(
+    router, "/patterns/tasks/clear-stuck", name="clear_stuck_tasks", bounded_s=60.0, response_model=Dict[str, Any]
+)
 
 
-@router.post("/patterns/tasks/clear-all")
+@router.post("/patterns/tasks/clear-all", dependencies=HUMAN_ADMIN_DEPENDENCIES)
 @bounded(60.0)
 async def clear_all_tasks() -> Dict[str, str]:
     """Revoke active analytics tasks without purging other Celery queues (GH#8438)."""
@@ -283,7 +279,7 @@ async def start_pattern_summary_analysis(
 
 @router.get("/patterns/summary/status/{task_id}")
 @bounded(60.0)
-async def get_pattern_summary_status(task_id: str):
+async def get_pattern_summary_status(task_id: str, _user: dict = Depends(get_current_user)):
     """Get pattern summary task status."""
     status = celery_result_to_status(AsyncResult(task_id))
     if status is None:
@@ -291,13 +287,7 @@ async def get_pattern_summary_status(task_id: str):
     return status
 
 
-@router.post("/patterns/summary/tasks/clear-stuck")
-@bounded(60.0)
-async def clear_stuck_summary_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-):
-    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
+add_clear_stuck_route(router, "/patterns/summary/tasks/clear-stuck", name="clear_stuck_summary_tasks", bounded_s=60.0)
 
 
 @router.get("/patterns/duplicates")

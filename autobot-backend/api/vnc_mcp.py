@@ -46,7 +46,7 @@ from api.schemas_system import (
     VncStatusMcpResponse,
     VNCStatusRequest,
 )
-from auth_middleware import check_admin_permission
+from auth_rbac import check_admin_mcp_tool_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
@@ -58,10 +58,7 @@ from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
-router = APIRouter(
-    tags=["vnc_mcp", "mcp", "vnc"],
-    dependencies=[Depends(check_admin_permission)],
-)
+router = APIRouter(tags=["vnc_mcp", "mcp", "vnc"], dependencies=[Depends(check_admin_mcp_tool_permission)])
 
 # Lock for thread-safe access to vnc_observations
 _vnc_observations_lock = asyncio.Lock()

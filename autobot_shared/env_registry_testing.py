@@ -40,14 +40,33 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_LIVE_TESTS",
+        type=bool,
+        default=False,
+        description=(
+            "Opt a test run into driving live AutoBot services (#19479). Without it, every "
+            "test that calls require_live_endpoint (autobot_shared/live_service_probe.py) "
+            "skips, even when a service is listening: on a machine that also runs an "
+            "install, the configured URL is the user's live system, and some of these tests "
+            "write to it (knowledge-base decisions). Set it only for a run whose target is a "
+            "stack you mean to test."
+        ),
+        component="testing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE",
         type=bool,
         default=False,
         description=(
-            "Set to 1 to let `git push` proceed when the pre-push pytest gate COULD NOT RUN on the "
-            "local interpreter -- llc/scheduler/base.py refuses to import below Python 3.11, which "
-            "takes whole pytest groups down at collect time on a sub-floor machine (the platform "
-            "floor and CI are 3.14). Distinct from AUTOBOT_PREPUSH_ALLOW_TIMEOUT, which covers a "
+            "Set to 1 to let `git push` proceed when any pre-push gate COULD NOT RUN, i.e. cannot "
+            "produce a verdict here. Examples: pytest on a sub-floor interpreter "
+            "(llc/scheduler/base.py refuses to import below Python 3.11, taking whole pytest groups "
+            "down at collect time; the platform floor and CI are 3.14), or vitest handed a file it "
+            "does not collect, such as a Playwright spec under tests/ before #18694's root filter "
+            "is installed. Distinct from AUTOBOT_PREPUSH_ALLOW_TIMEOUT, which covers a "
             "check that started and ran out of time. Neither is a substitute for --no-verify: both "
             "switch off exactly the one check that could not produce a verdict and leave every "
             "other hook blocking (#16230)."
@@ -116,3 +135,53 @@ register_env_var(
         component="tooling",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REQUIRE_REAL_TORCH",
+        type=bool,
+        default=False,
+        description=(
+            "Set to 1 to make the real-torch oracle tests under "
+            "autobot-backend/llm_shared/optimization fail, instead of skip, when torch is "
+            "a stub (meta_eviction_equivalence_test.py, #13049). Set by the "
+            "llm-optimization-real-torch CI job so a broken torch install cannot pass silently."
+        ),
+        component="testing",
+    )
+)
+
+# --- machine-wide queue for heavy local work (#20518, repo_tests/machine_slot.py) ---
+for _name, _type, _default, _description in (
+    ("AUTOBOT_MACHINE_SLOTS", int, 2, "How many heavy local runs (hooks, floor checks, big pytest runs) go at once."),
+    (
+        "AUTOBOT_MACHINE_SLOT_MAX_LOAD",
+        float,
+        14.0,
+        "The pre-push queue takes no slot while the 1-minute load average is at or above this (#21098).",
+    ),
+    (
+        "AUTOBOT_MACHINE_SLOT_LOADAVG",
+        str,
+        "/proc/loadavg",
+        "File the pre-push queue reads the 1-minute load average from; tests point it at a fake (#21098).",
+    ),
+    (
+        "AUTOBOT_MACHINE_SLOT_REPORT",
+        float,
+        60.0,
+        "Seconds between 'still queued' lines while waiting for a machine slot.",
+    ),
+    ("AUTOBOT_MACHINE_SLOT_POLL", float, 5.0, "Seconds between attempts while queued for a machine slot."),
+    (
+        "AUTOBOT_MACHINE_SLOT_DIR",
+        str,
+        "",
+        "Directory of the slot lock files; empty means the user's runtime directory.",
+    ),
+    ("AUTOBOT_MACHINE_SLOT_HELD", str, "", "Set by a holder so its child processes do not queue for a second slot."),
+    ("AUTOBOT_MACHINE_SLOT_BIG_RUN", int, 100, "Tests in a non-xdist pytest run at which it queues for a slot."),
+):
+    register_env_var(
+        EnvVarSpec(name=_name, type=_type, default=_default, description=_description, component="testing")
+    )

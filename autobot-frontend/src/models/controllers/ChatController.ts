@@ -1,16 +1,16 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-import { useChatStore } from '@/stores/useChatStore'
+import { useChatStore, type ChatSession } from '@/stores/useChatStore'
 import { useAppStore } from '@/stores/useAppStore'
 import { chatRepository } from '@/models/repositories'
 import apiClient from '@/utils/ApiClient'
-import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
-import { extractErrorMessage } from '@/utils/errorExtract'
+import { extractErrorMessage, streamErrorText } from '@/utils/errorExtract'
 import i18n from '@/i18n'
 import type { ChatMessage, ChatMessageDisplayType } from '@/types/api'
 import { requestQueue } from '@/composables/useRequestQueue'
 import { stripBracketTags, stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
+import { showAttachmentNotice } from '@/utils/attachmentNotice'
 
 const logger = createLogger('ChatController')
 
@@ -325,7 +325,7 @@ export class ChatController {
     }, ChatController.PREVIEW_THROTTLE_MS)
   }
 
-  private async handleStreamingResponse(response: Response): Promise<void> {
+  async handleStreamingResponse(response: Response): Promise<void> {
     const reader = response.body?.getReader()
     if (!reader) {
       throw new Error('No response stream available')
@@ -396,10 +396,11 @@ export class ChatController {
         logger.debug('Stream started:', data.session_id)
         return fallbackMessageId
       }
-      if (data.type === 'end') {
-        logger.debug('Stream ended')
+      if (data.type === 'end' || data.type === 'cancelled') { // #17829: a stopped turn keeps its shown text
+        logger.debug('Stream ended:', data.type)
         return fallbackMessageId
       }
+      if (data.type === 'attachment_notice') { showAttachmentNotice(data.metadata); return fallbackMessageId } // #20195
       if (data.type === 'segment_complete') {
         logger.debug(`Segment complete: ${data.metadata?.completed_type}`)
         const backendId = data.metadata?.message_id
@@ -417,7 +418,7 @@ export class ChatController {
         })
         if (!errorMsgId) return fallbackMessageId
         this.chatStore.updateMessage(errorMsgId, {
-          content: `Error: ${data.content || data.message || 'Unknown error'}`,
+          content: streamErrorText(data),
           status: 'error'
         })
         return fallbackMessageId
@@ -688,15 +689,15 @@ export class ChatController {
       // Update store with loaded sessions
       if (Array.isArray(sessions)) {
         sessions.forEach(session => {
-          // #9724: normalize the repository session (snake_case ISO strings)
-          // to the store shape — pushing it raw left createdAt/updatedAt/
-          // isActive undefined on every imported session.
+          // #9724: the store needs isActive. Dates are taken as the repository
+          // mapped them (#20865) — re-deriving them from snake_case fields the
+          // repository does not return produced Invalid Date.
           this.chatStore.importSession({
             id: session.id,
             title: session.title ?? '',
             messages: session.messages,
-            createdAt: new Date(session.created_at),
-            updatedAt: new Date(session.updated_at),
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
             isActive: false,
           })
         })
@@ -979,7 +980,6 @@ export class ChatController {
   async resetCurrentChat(): Promise<void> {
     return this.resetChat()
   }
-
 
   // Enhanced validation helpers
   validateMessage(content: string): { valid: boolean; error?: string } {

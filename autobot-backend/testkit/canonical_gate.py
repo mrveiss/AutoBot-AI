@@ -30,14 +30,32 @@ def no_user_middleware() -> MagicMock:
     return middleware
 
 
-def install_canonical_gate(monkeypatch, middleware):
-    """Point the delegate at the real gate, seeing *middleware*. Returns the real module."""
+def install_canonical_resolver(monkeypatch, target: str, middleware):
+    """Bind *target* (a module's ``resolve_human_user``) to the REAL one, seeing *middleware*.
+
+    The real resolver applies password-change revocation to a JWT user (#18688), so a
+    test that wants it to pass hands in a user whose ``auth_method`` is not ``jwt``, or
+    patches the epoch check. Returns the real module.
+    """
     from tests.conftest import load_real_auth_middleware  # noqa: PLC0415
 
     real = load_real_auth_middleware()
     monkeypatch.setattr(real, "get_auth_middleware", lambda: middleware)
+    monkeypatch.setattr(target, real.resolve_human_user)
+    return real
+
+
+@contextmanager
+def canonical_resolver(target: str, middleware):
+    """Within the block, *target* is the REAL ``resolve_human_user``, seeing *middleware*."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        yield install_canonical_resolver(monkeypatch, target, middleware)
+
+
+def install_canonical_gate(monkeypatch, middleware):
+    """Point the delegate at the real gate, seeing *middleware*. Returns the real module."""
+    real = install_canonical_resolver(monkeypatch, _HUMAN_DELEGATE, middleware)
     monkeypatch.setattr(_DELEGATE, real.get_current_user)
-    monkeypatch.setattr(_HUMAN_DELEGATE, real.resolve_human_user)
     return real
 
 
@@ -47,3 +65,35 @@ def unauthenticated_canonical_gate():
     with pytest.MonkeyPatch.context() as monkeypatch:
         install_canonical_gate(monkeypatch, no_user_middleware())
         yield
+
+
+@contextmanager
+def real_admin_gate(middleware):
+    """Within the block, ``wire(client)`` makes a client's ``check_admin_permission`` routes run the REAL gate (#16333).
+
+    Under pytest ``auth_middleware`` is the stub, whose ``check_admin_permission`` admits everyone, and a
+    route captured that stub at import. ``wire`` overrides it on the client's app with the real gate,
+    which sees *middleware* (``no_user_middleware()`` for an anonymous caller).
+    """
+    from auth_middleware import check_admin_permission as stub_gate  # noqa: PLC0415
+    from tests.conftest import load_real_auth_middleware  # noqa: PLC0415
+
+    real = load_real_auth_middleware()
+    wired = []  # (app, the override it held before, or a sentinel when it had none)
+    absent = object()
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(real, "get_auth_middleware", lambda: middleware)
+
+        def wire(client):
+            wired.append((client.app, client.app.dependency_overrides.get(stub_gate, absent)))
+            client.app.dependency_overrides[stub_gate] = real.check_admin_permission
+            return client
+
+        try:
+            yield wire
+        finally:  # a module-level app is shared by later tests: leave it as found
+            for app, before in reversed(wired):
+                if before is absent:
+                    app.dependency_overrides.pop(stub_gate, None)
+                else:
+                    app.dependency_overrides[stub_gate] = before

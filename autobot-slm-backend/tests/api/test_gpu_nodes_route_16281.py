@@ -27,6 +27,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 pytest.importorskip("fastapi")
 
 from fastapi import Depends, FastAPI, status  # noqa: E402
@@ -63,14 +65,6 @@ def _node(hostname: str, **extra) -> SimpleNamespace:
     )
 
 
-class _Db:
-    def __init__(self, nodes):
-        self._nodes = nodes
-
-    async def execute(self, _statement):
-        return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: self._nodes))
-
-
 async def _requires_bearer(credentials: HTTPAuthorizationCredentials = Depends(_BEARER)) -> dict:
     return {"sub": "tester"}
 
@@ -80,7 +74,7 @@ def _client(nodes) -> TestClient:
     app.include_router(gpu_api.router, prefix="/api/monitoring")
 
     async def _db():
-        yield _Db(nodes)
+        yield FakeAsyncSession(default_result=list(nodes))
 
     app.dependency_overrides[gpu_api.get_db] = _db
     app.dependency_overrides[gpu_api.get_current_user] = _requires_bearer

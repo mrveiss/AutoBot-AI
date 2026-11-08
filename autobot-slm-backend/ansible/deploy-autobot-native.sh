@@ -174,9 +174,20 @@ configure_backend() {
     log "INFO" "Configuring WSL backend services..."
 
     # Install backend dependencies if needed
+    # shellcheck source=scripts/lib/python_floor.sh
+    source "$SCRIPT_DIR/../../scripts/lib/python_floor.sh" || {
+        echo "ERROR: cannot source scripts/lib/python_floor.sh" >&2
+        exit 1
+    }
+    if [[ -f ../venv/bin/activate ]] && ! python_floor_venv_matches "$SCRIPT_DIR/../.." ../venv; then
+        log "WARN" "Existing venv is not on the floor interpreter; rebuilding it (#20932)"
+        rm -rf ../venv
+    fi
     if [[ ! -f ../venv/bin/activate ]]; then
         log "INFO" "Creating Python virtual environment..."
-        python3 -m venv ../venv
+        # #20932: the floor interpreter from .python-version, never a bare python3
+        PYTHON_BIN="$(python_floor_ensure "$SCRIPT_DIR/../..")" || { log "ERROR" "No floor Python interpreter available"; exit 1; }
+        "$PYTHON_BIN" -m venv ../venv
         source ../venv/bin/activate
         pip install -r ../requirements.txt
     fi
@@ -200,7 +211,7 @@ NOVNC_PORT=6080
 REDIS_PORT=6379
 AI_STACK_PORT=${AUTOBOT_AI_STACK_PORT}
 NPU_WORKER_PORT=8081
-BROWSER_PORT=3000
+AUTOBOT_BROWSER_SERVICE_PORT=${AUTOBOT_BROWSER_SERVICE_PORT}
 EOF
 
     log "SUCCESS" "Backend configured for native deployment"

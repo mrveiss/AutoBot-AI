@@ -7,12 +7,12 @@
  *
  * Single entry point for channel-based real-time events.  Wraps the existing
  * LiveEventService, which already handles channel-scoped subscriptions and
- * WebSocket lifecycle.  The eventual migration target when the three WebSocket
- * managers (useWebSocket, useGlobalWebSocket, useLiveEvents) are fully merged.
+ * WebSocket lifecycle.  The migration target for the WebSocket managers:
+ * useGlobalWebSocket's callers moved here (#9062) and it was retired (#15402).
  *
  * Today's scope (Phase 1):
  *   - One composable replaces useLiveEvents for new code
- *   - Existing callers of useWebSocket / useGlobalWebSocket continue to work
+ *   - useWebSocket stays for connections to one specific endpoint
  *   - Full consolidation deferred to Phase 2 (#6488 follow-up) once the
  *     backend bus facade (#6486) is in place and endpoint unification is done
  *

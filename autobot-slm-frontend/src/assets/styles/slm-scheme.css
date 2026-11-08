@@ -43,9 +43,16 @@
   --color-primary-hover: var(--color-primary-600);
   --color-primary-active: var(--color-primary-700);
   --text-on-primary: var(--color-white);
-  --text-on-success: var(--color-white);
-  --text-on-warning: var(--color-white);
+  /* #19872: white on the green and yellow fills is 2.28 / 1.92:1, so those two
+     take dark ink (as the main app does). Red and sky carry white on their
+     darker solid-fill shades below, not on --color-error / --color-info. */
+  --text-on-success: var(--color-black);
+  --text-on-warning: var(--color-black);
   --text-on-error: var(--color-white);
+  --text-on-info: var(--color-white);
+  --color-error-solid: var(--color-error-600);
+  --color-error-solid-hover: var(--color-error-700);
+  --color-info-solid: var(--color-primary-700);
   --border-strong: var(--a11y-text-muted);
   --border-focus: var(--a11y-focus-ring);
   --focus-ring-width: var(--a11y-focus-width);
@@ -377,6 +384,43 @@
 /* ===== Shared token names (the contract with the user frontend) =====
    Identical mapping to autobot-frontend css/themes/refined-map.css: the
    existing semantic names resolve to the Refined name of the active theme. */
+/* Table metrics the kit adapter reads (#14778), in every theme including high-contrast. */
+:root[data-app='slm'] {
+  --tbl-font-size: 13px;
+  --tbl-row-h: 44px;
+  --tbl-cell-px: 16px;
+  --tbl-cell-py: 10px;
+  --tbl-head-h: 36px;
+  --tbl-head-font: 600 11.5px/1.2 var(--font-sans);
+  --tbl-head-case: uppercase;
+  --tbl-head-ls: .05em;
+  --tbl-check-col-w: 44px;
+  --tbl-min-col: 96px;
+  --tbl-num: tabular-nums;
+}
+
+/* Input metrics the kit adapter reads (#14778), in every theme including high-contrast. */
+:root[data-app='slm'] {
+  --input-height-sm: 32px;
+  --input-height-md: 40px;
+  --input-height-lg: 48px;
+  --input-padding-x: var(--spacing-3);
+}
+
+/* High-contrast table colours come from the accessibility palette (main.css, #754). */
+:root[data-app='slm'][data-theme='high-contrast'] {
+  --tbl-head-bg: var(--a11y-bg-muted);
+  --tbl-head-fg: var(--a11y-text);
+  --tbl-head-border: 1px solid var(--a11y-border);
+  --tbl-border: 1px solid var(--a11y-border);
+  --tbl-row-hover: var(--a11y-bg-muted);
+  --tbl-row-selected: var(--a11y-bg-muted);
+  --tbl-selected-edge: 3px solid var(--a11y-focus-ring);
+  --tbl-zebra-bg: var(--a11y-bg-surface);
+  --input-bg: var(--a11y-bg-surface);
+  --input-border: var(--a11y-border);
+}
+
 :root[data-app='slm']:not([data-theme='high-contrast']) {
   --bg-primary: var(--bg);
   --bg-secondary: var(--surface);
@@ -400,6 +444,15 @@
   --table-header-bg: var(--surface2);
   --table-row-bg: var(--surface);
   --table-border: var(--border);
+  /* Table colours the kit adapter reads (#14778); same names and values as the main app. */
+  --tbl-head-bg: var(--surface2);
+  --tbl-head-fg: var(--muted);
+  --tbl-head-border: var(--bw) solid var(--border);
+  --tbl-border: var(--bw) solid var(--line);
+  --tbl-row-hover: var(--surface2);
+  --tbl-row-selected: var(--surface2);
+  --tbl-selected-edge: 3px solid var(--primary);
+  --tbl-zebra-bg: var(--surface2);
   --input-bg: var(--surface);
   --input-border: var(--border);
   --color-focus: var(--focus);
@@ -443,10 +496,12 @@
   --color-autobot-warning-light: var(--color-warning-light);
   --color-autobot-warning-bg: var(--color-warning-bg);
   --color-autobot-error: var(--color-error);
+  --color-autobot-error-solid: var(--color-error-solid);
   --color-autobot-error-hover: var(--color-error-hover);
   --color-autobot-error-light: var(--color-error-light);
   --color-autobot-error-bg: var(--color-error-bg);
   --color-autobot-info: var(--color-info);
+  --color-autobot-info-solid: var(--color-info-solid);
   --color-autobot-info-hover: var(--color-info-hover);
   --color-autobot-info-light: var(--color-info-light);
   --color-autobot-info-bg: var(--color-info-bg);

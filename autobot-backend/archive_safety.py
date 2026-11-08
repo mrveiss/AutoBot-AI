@@ -14,6 +14,8 @@ from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
 
+from security.upload_filename_policy import ZIP_EXTENSIONS, require_safe_upload
+
 MAX_ZIP_UNCOMPRESSED_BYTES = 256 * 1024 * 1024
 MAX_ZIP_ENTRIES = 5000
 MAX_UPLOAD_BYTES = 512 * 1024 * 1024
@@ -101,6 +103,8 @@ def move_into_target(source: Path, target: Path) -> None:
 
 
 async def stream_upload_to(upload: UploadFile, dest: Path) -> None:
+    # #19088: the one type gate for every archive upload (plugin and theme installs stream through here).
+    require_safe_upload(upload.filename, ZIP_EXTENSIONS)
     bytes_written = 0
     with dest.open("wb") as out:
         while chunk := await upload.read(1024 * 1024):

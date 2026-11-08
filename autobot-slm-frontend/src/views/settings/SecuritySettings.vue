@@ -4,7 +4,8 @@
 // Author: mrveiss
 
 import { ref, reactive, onMounted } from 'vue'
-import { formatDateTime } from '@/composables/useTimezone'
+import { useI18n } from 'vue-i18n'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import {
   useMfaApi,
   type MFASetupResponse,
@@ -16,7 +17,9 @@ import {
   type APIKeyCreate,
   type APIKeyCreateResponse,
 } from '@/composables/useApiKeyApi'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 
+const { t } = useI18n()
 const mfaApi = useMfaApi()
 const apiKeyApi = useApiKeyApi()
 
@@ -51,7 +54,7 @@ async function loadMFAStatus(): Promise<void> {
   try {
     mfaStatus.value = await mfaApi.getMFAStatus()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load MFA status'
+    error.value = e instanceof Error ? e.message : t('settings.securitySettings.failedToLoadMfaStatus')
   }
 }
 
@@ -62,7 +65,7 @@ async function startMFASetup(): Promise<void> {
     setupData.value = await mfaApi.setupMFA()
     showMFASetupModal.value = true
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to start MFA setup'
+    error.value = e instanceof Error ? e.message : t('settings.securitySettings.failedToStartMfaSetup')
   } finally {
     loading.value = false
   }
@@ -70,7 +73,7 @@ async function startMFASetup(): Promise<void> {
 
 async function verifyMFASetup(): Promise<void> {
   if (!mfaSetupCode.value || mfaSetupCode.value.length < 6) {
-    error.value = 'Please enter a valid 6-digit code'
+    error.value = t('settings.securitySettings.pleaseEnterAValid6DigitCode')
     return
   }
 
@@ -79,7 +82,7 @@ async function verifyMFASetup(): Promise<void> {
   try {
     const result = await mfaApi.verifySetup(mfaSetupCode.value)
     if (result.success) {
-      success.value = 'MFA enabled successfully'
+      success.value = t('settings.securitySettings.mFAEnabledSuccessfully')
       backupCodes.value = setupData.value?.backup_codes || []
       showMFASetupModal.value = false
       showBackupCodes.value = true
@@ -87,10 +90,10 @@ async function verifyMFASetup(): Promise<void> {
       setupData.value = null
       await loadMFAStatus()
     } else {
-      error.value = result.message || 'Verification failed'
+      error.value = result.message || t('settings.securitySettings.verificationFailed')
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to verify MFA code'
+    error.value = e instanceof Error ? e.message : t('settings.securitySettings.failedToVerifyMfaCode')
   } finally {
     loading.value = false
   }
@@ -104,7 +107,7 @@ function cancelMFASetup(): void {
 
 async function disableMFA(): Promise<void> {
   if (!disablePassword.value) {
-    error.value = 'Password is required'
+    error.value = t('settings.securitySettings.passwordIsRequired')
     return
   }
 
@@ -112,12 +115,12 @@ async function disableMFA(): Promise<void> {
   error.value = null
   try {
     await mfaApi.disableMFA(disablePassword.value)
-    success.value = 'MFA disabled successfully'
+    success.value = t('settings.securitySettings.mFADisabledSuccessfully')
     showDisableModal.value = false
     disablePassword.value = ''
     await loadMFAStatus()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to disable MFA'
+    error.value = e instanceof Error ? e.message : t('settings.securitySettings.failedToDisableMfa')
   } finally {
     loading.value = false
   }
@@ -125,7 +128,7 @@ async function disableMFA(): Promise<void> {
 
 async function regenerateBackupCodes(): Promise<void> {
   if (!regeneratePassword.value) {
-    error.value = 'Password is required'
+    error.value = t('settings.securitySettings.passwordIsRequired')
     return
   }
 
@@ -140,7 +143,7 @@ async function regenerateBackupCodes(): Promise<void> {
     await loadMFAStatus()
   } catch (e) {
     error.value =
-      e instanceof Error ? e.message : 'Failed to regenerate backup codes'
+      e instanceof Error ? e.message : t('settings.securitySettings.failedToRegenerateBackupCodes')
   } finally {
     loading.value = false
   }
@@ -151,7 +154,7 @@ async function loadAPIKeys(): Promise<void> {
     const result = await apiKeyApi.listKeys()
     apiKeys.value = result.keys
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load API keys'
+    error.value = e instanceof Error ? e.message : t('settings.securitySettings.failedToLoadApiKeys')
   }
 }
 
@@ -159,7 +162,7 @@ async function loadScopes(): Promise<void> {
   try {
     availableScopes.value = await apiKeyApi.getScopes()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load scopes'
+    error.value = e instanceof Error ? e.message : t('settings.securitySettings.failedToLoadScopes')
   }
 }
 
@@ -173,7 +176,7 @@ function openCreateKeyModal(): void {
 
 async function createAPIKey(): Promise<void> {
   if (!newKeyForm.name || newKeyForm.scopes.length === 0) {
-    error.value = 'Name and at least one scope are required'
+    error.value = t('settings.securitySettings.nameAndAtLeastOneScopeAre')
     return
   }
 
@@ -185,26 +188,24 @@ async function createAPIKey(): Promise<void> {
     showKeyCreatedModal.value = true
     await loadAPIKeys()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to create API key'
+    error.value = e instanceof Error ? e.message : t('settings.securitySettings.failedToCreateApiKey')
   } finally {
     loading.value = false
   }
 }
 
 async function revokeAPIKey(keyId: string): Promise<void> {
-  const confirmed = confirm(
-    'Are you sure you want to revoke this API key? This action cannot be undone.'
-  )
+  const confirmed = confirm(t('settings.securitySettings.confirmRevokeApiKey'))
   if (!confirmed) return
 
   loading.value = true
   error.value = null
   try {
     await apiKeyApi.revokeKey(keyId)
-    success.value = 'API key revoked successfully'
+    success.value = t('settings.securitySettings.aPIKeyRevoked')
     await loadAPIKeys()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to revoke API key'
+    error.value = e instanceof Error ? e.message : t('settings.securitySettings.failedToRevokeApiKey')
   } finally {
     loading.value = false
   }
@@ -212,12 +213,8 @@ async function revokeAPIKey(keyId: string): Promise<void> {
 
 function copyToClipboard(text: string): void {
   navigator.clipboard.writeText(text)
-  success.value = 'Copied to clipboard'
+  success.value = t('settings.securitySettings.copiedToClipboard')
   setTimeout(() => (success.value = null), 3000)
-}
-
-function formatDate(dateStr: string | null | undefined): string {
-  return formatDateTime(dateStr)
 }
 
 onMounted(async () => {
@@ -232,36 +229,9 @@ onMounted(async () => {
 
 <template>
   <div class="p-6 space-y-6">
-    <div v-if="error" class="bg-red-50 border border-red-200 rounded-lg p-4">
-      <div class="flex items-center gap-2 text-red-700">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <span class="text-sm">{{ error }}</span>
-      </div>
-    </div>
+    <BaseAlert v-if="error" variant="error" :message="error" />
 
-    <div
-      v-if="success"
-      class="bg-green-50 border border-green-200 rounded-lg p-4"
-    >
-      <div class="flex items-center gap-2 text-green-700">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <span class="text-sm">{{ success }}</span>
-      </div>
-    </div>
+    <BaseAlert v-if="success" variant="success" :message="success" />
 
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-xl font-semibold text-gray-900 mb-4">
@@ -269,31 +239,13 @@ onMounted(async () => {
       </h2>
 
       <div v-if="mfaStatus?.enabled" class="space-y-4">
-        <div
-          class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3"
-        >
-          <svg
-            class="w-6 h-6 text-green-600 mt-0.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-            />
-          </svg>
-          <div class="flex-1">
-            <h3 class="font-semibold text-green-900">{{ $t('settings.securitySettings.mFAIsEnabled') }}</h3>
-            <p class="text-sm text-green-700 mt-1">{{ $t('settings.securitySettings.yourAccountIsProtectedWithValue0', { value0: mfaStatus.method }) }}</p>
-            <div class="mt-2 text-sm text-green-700">
-              <p>{{ $t('settings.securitySettings.backupCodesRemainingValue0', { value0: mfaStatus.backup_codes_remaining }) }}</p>
-              <p v-if="mfaStatus.last_verified_at">{{ $t('settings.securitySettings.lastVerifiedValue0', { value0: formatDate(mfaStatus.last_verified_at) }) }}</p>
-            </div>
+        <BaseAlert variant="success" :title="$t('settings.securitySettings.mFAIsEnabled')">
+          <p>{{ $t('settings.securitySettings.yourAccountIsProtectedWithValue0', { value0: mfaStatus.method }) }}</p>
+          <div class="mt-2">
+            <p>{{ $t('settings.securitySettings.backupCodesRemainingValue0', { value0: mfaStatus.backup_codes_remaining }) }}</p>
+            <p v-if="mfaStatus.last_verified_at">{{ $t('settings.securitySettings.lastVerifiedValue0', { value0: formatFleetDateTime(mfaStatus.last_verified_at) }) }}</p>
           </div>
-        </div>
+        </BaseAlert>
 
         <div class="flex gap-3">
           <button
@@ -312,29 +264,11 @@ onMounted(async () => {
       </div>
 
       <div v-else class="space-y-4">
-        <div
-          class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3"
-        >
-          <svg
-            class="w-6 h-6 text-yellow-600 mt-0.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-            />
-          </svg>
-          <div>
-            <h3 class="font-semibold text-yellow-900">{{ $t('settings.securitySettings.mFAIsNotEnabled') }}</h3>
-            <p class="text-sm text-yellow-700 mt-1">
-              {{ $t('settings.securitySettings.enableTwoFactorAuthentication') }}
-            </p>
-          </div>
-        </div>
+        <BaseAlert
+          variant="warning"
+          :title="$t('settings.securitySettings.mFAIsNotEnabled')"
+          :message="$t('settings.securitySettings.enableTwoFactorAuthentication')"
+        />
 
         <button
           @click="startMFASetup"
@@ -443,10 +377,10 @@ onMounted(async () => {
               </td>
               <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                 <div>{{ $t('settings.securitySettings.value0Uses', { value0: key.usage_count }) }}</div>
-                <div class="text-xs">{{ formatDate(key.last_used_at) }}</div>
+                <div class="text-xs">{{ formatFleetDateTime(key.last_used_at) }}</div>
               </td>
               <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDate(key.expires_at) }}
+                {{ formatFleetDateTime(key.expires_at) }}
               </td>
               <td class="px-4 py-3 whitespace-nowrap text-sm">
                 <button
@@ -462,346 +396,311 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div
-      v-if="showMFASetupModal"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+    <BaseModal
+      v-model="showMFASetupModal"
+      :title="$t('settings.securitySettings.enableTwoFactorAuthentication1')"
+      size="sm"
+      locked
+      :close-label="$t('ui.modal.closeDialog')"
     >
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          {{ $t('settings.securitySettings.enableTwoFactorAuthentication1') }}
-        </h3>
-
-        <div class="space-y-4">
-          <div class="text-sm text-gray-600">
-            <p class="mb-2">
-              {{ $t('settings.securitySettings.scanTheQRCode') }}
-            </p>
-            <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
-              <p class="font-mono text-xs break-all mb-2">
-                {{ setupData?.secret }}
-              </p>
-              <button
-                @click="copyToClipboard(setupData?.secret || '')"
-                class="text-xs text-primary-600 hover:text-primary-700"
-              >
-                {{ $t('settings.securitySettings.copySecret') }}
-              </button>
-            </div>
-            <p class="mt-3 text-xs">
-              {{ $t('settings.securitySettings.manualEntryURIFor') }}
-            </p>
-            <div class="bg-gray-50 p-2 rounded-sm border border-gray-200 mt-1">
-              <p class="font-mono text-xs break-all">
-                {{ setupData?.otpauth_uri }}
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              {{ $t('settings.securitySettings.enterVerificationCode') }}
-            </label>
-            <input
-              v-model="mfaSetupCode"
-              type="text"
-              inputmode="numeric"
-              maxlength="6"
-              class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              placeholder="000000"
-            />
-          </div>
-
-          <div class="flex gap-3">
-            <button
-              @click="verifyMFASetup"
-              :disabled="loading || mfaSetupCode.length < 6"
-              class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
-            >
-              {{ $t('settings.securitySettings.verifyAndEnable') }}
-            </button>
-            <button
-              @click="cancelMFASetup"
-              :disabled="loading"
-              class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-            >
-              {{ $t('settings.securitySettings.cancel') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div
-      v-if="showBackupCodes"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-    >
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          {{ $t('settings.securitySettings.backupCodes') }}
-        </h3>
-
-        <div class="space-y-4">
-          <div
-            class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800"
-          >
-            {{ $t('settings.securitySettings.saveTheseBackupCodes') }}
-          </div>
-
-          <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
-            <div class="grid grid-cols-2 gap-2">
-              <code
-                v-for="(code, idx) in backupCodes"
-                :key="idx"
-                class="text-sm font-mono"
-              >{{ code }}</code>
-            </div>
-          </div>
-
-          <div class="flex gap-3">
-            <button
-              @click="copyToClipboard(backupCodes.join('\n'))"
-              class="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-            >
-              {{ $t('settings.securitySettings.copyAll') }}
-            </button>
-            <button
-              @click="showBackupCodes = false"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-            >
-              {{ $t('settings.securitySettings.done') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div
-      v-if="showDisableModal"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-    >
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.securitySettings.disableMFA') }}</h3>
-
-        <div class="space-y-4">
-          <p class="text-sm text-gray-600">
-            {{ $t('settings.securitySettings.enterYourPasswordTo') }}
+      <div class="space-y-4">
+        <div class="text-sm text-gray-600">
+          <p class="mb-2">
+            {{ $t('settings.securitySettings.scanTheQRCode') }}
           </p>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              {{ $t('settings.securitySettings.password') }}
-            </label>
-            <input
-              v-model="disablePassword"
-              type="password"
-              class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              :placeholder="$t('settings.securitySettings.enterYourPassword')"
-            />
-          </div>
-
-          <div class="flex gap-3">
-            <button
-              @click="disableMFA"
-              :disabled="loading || !disablePassword"
-              class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-            >
-              {{ $t('settings.securitySettings.disableMFA') }}
-            </button>
-            <button
-              @click="
-                (showDisableModal = false), (disablePassword = '')
-              "
-              :disabled="loading"
-              class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-            >
-              {{ $t('settings.securitySettings.cancel') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div
-      v-if="showRegenerateModal"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-    >
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          {{ $t('settings.securitySettings.regenerateBackupCodes') }}
-        </h3>
-
-        <div class="space-y-4">
-          <div
-            class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800"
-          >
-            {{ $t('settings.securitySettings.thisWillInvalidateYour') }}
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              {{ $t('settings.securitySettings.password') }}
-            </label>
-            <input
-              v-model="regeneratePassword"
-              type="password"
-              class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              :placeholder="$t('settings.securitySettings.enterYourPassword')"
-            />
-          </div>
-
-          <div class="flex gap-3">
-            <button
-              @click="regenerateBackupCodes"
-              :disabled="loading || !regeneratePassword"
-              class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
-            >
-              {{ $t('settings.securitySettings.regenerate') }}
-            </button>
-            <button
-              @click="
-                (showRegenerateModal = false),
-                  (regeneratePassword = '')
-              "
-              :disabled="loading"
-              class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-            >
-              {{ $t('settings.securitySettings.cancel') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div
-      v-if="showCreateKeyModal"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-    >
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          {{ $t('settings.securitySettings.createAPIKey') }}
-        </h3>
-
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              {{ $t('settings.securitySettings.name') }}
-            </label>
-            <input
-              v-model="newKeyForm.name"
-              type="text"
-              class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              :placeholder="$t('settings.securitySettings.myAPIKey')"
-            />
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              {{ $t('settings.securitySettings.descriptionOptional') }}
-            </label>
-            <input
-              v-model="newKeyForm.description"
-              type="text"
-              class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              :placeholder="$t('settings.securitySettings.whatThisKeyIsFor')"
-            />
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              {{ $t('settings.securitySettings.scopes') }}
-            </label>
-            <div class="space-y-2 max-h-48 overflow-y-auto">
-              <label
-                v-for="(description, scope) in availableScopes"
-                :key="scope"
-                class="flex items-start gap-2"
-              >
-                <input
-                  v-model="newKeyForm.scopes"
-                  type="checkbox"
-                  :value="scope"
-                  class="mt-1"
-                />
-                <div>
-                  <div class="text-sm font-medium">{{ scope }}</div>
-                  <div class="text-xs text-gray-500">{{ description }}</div>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              {{ $t('settings.securitySettings.expiration') }}
-            </label>
-            <select
-              v-model="newKeyForm.expires_days"
-              class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-            >
-              <option :value="undefined">{{ $t('settings.securitySettings.never') }}</option>
-              <option :value="30">{{ $t('settings.securitySettings.30Days') }}</option>
-              <option :value="60">{{ $t('settings.securitySettings.60Days') }}</option>
-              <option :value="90">{{ $t('settings.securitySettings.90Days') }}</option>
-              <option :value="365">{{ $t('settings.securitySettings.1Year') }}</option>
-            </select>
-          </div>
-
-          <div class="flex gap-3">
-            <button
-              @click="createAPIKey"
-              :disabled="loading || !newKeyForm.name || newKeyForm.scopes.length === 0"
-              class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
-            >
-              {{ $t('settings.securitySettings.createKey') }}
-            </button>
-            <button
-              @click="showCreateKeyModal = false"
-              :disabled="loading"
-              class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-            >
-              {{ $t('settings.securitySettings.cancel') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div
-      v-if="showKeyCreatedModal"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-    >
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          {{ $t('settings.securitySettings.aPIKeyCreated') }}
-        </h3>
-
-        <div class="space-y-4">
-          <div
-            class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800"
-          >
-            {{ $t('settings.securitySettings.thisKeyWillNot') }}
-          </div>
-
           <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
-            <code class="text-sm font-mono break-all">{{ createdKey?.key }}</code>
+            <p class="font-mono text-xs break-all mb-2">
+              {{ setupData?.secret }}
+            </p>
+            <button
+              @click="copyToClipboard(setupData?.secret || '')"
+              class="text-xs text-primary-600 hover:text-primary-700"
+            >
+              {{ $t('settings.securitySettings.copySecret') }}
+            </button>
           </div>
+          <p class="mt-3 text-xs">
+            {{ $t('settings.securitySettings.manualEntryURIFor') }}
+          </p>
+          <div class="bg-gray-50 p-2 rounded-sm border border-gray-200 mt-1">
+            <p class="font-mono text-xs break-all">
+              {{ setupData?.otpauth_uri }}
+            </p>
+          </div>
+        </div>
 
-          <div class="flex gap-3">
-            <button
-              @click="copyToClipboard(createdKey?.key || '')"
-              class="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-            >
-              {{ $t('settings.securitySettings.copyKey') }}
-            </button>
-            <button
-              @click="showKeyCreatedModal = false"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-            >
-              {{ $t('settings.securitySettings.done') }}
-            </button>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            {{ $t('settings.securitySettings.enterVerificationCode') }}
+          </label>
+          <input
+            v-model="mfaSetupCode"
+            type="text"
+            inputmode="numeric"
+            maxlength="6"
+            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            placeholder="000000"
+          />
+        </div>
+      </div>
+      <template #actions>
+        <button
+          @click="verifyMFASetup"
+          :disabled="loading || mfaSetupCode.length < 6"
+          class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+        >
+          {{ $t('settings.securitySettings.verifyAndEnable') }}
+        </button>
+        <button
+          @click="cancelMFASetup"
+          :disabled="loading"
+          class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+        >
+          {{ $t('settings.securitySettings.cancel') }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <BaseModal
+      v-model="showBackupCodes"
+      :title="$t('settings.securitySettings.backupCodes')"
+      size="sm"
+      locked
+      :close-label="$t('ui.modal.closeDialog')"
+    >
+      <div class="space-y-4">
+        <BaseAlert variant="warning" size="compact" :message="$t('settings.securitySettings.saveTheseBackupCodes')" />
+
+        <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
+          <div class="grid grid-cols-2 gap-2">
+            <code
+              v-for="(code, idx) in backupCodes"
+              :key="idx"
+              class="text-sm font-mono"
+            >{{ code }}</code>
           </div>
         </div>
       </div>
-    </div>
+      <template #actions>
+        <button
+          @click="copyToClipboard(backupCodes.join('\n'))"
+          class="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+        >
+          {{ $t('settings.securitySettings.copyAll') }}
+        </button>
+        <button
+          @click="showBackupCodes = false"
+          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+        >
+          {{ $t('settings.securitySettings.done') }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <BaseModal
+      v-model="showDisableModal"
+      :title="$t('settings.securitySettings.disableMFA')"
+      size="sm"
+      @close="disablePassword = ''"
+      :close-label="$t('ui.modal.closeDialog')"
+    >
+      <div class="space-y-4">
+        <p class="text-sm text-gray-600">
+          {{ $t('settings.securitySettings.enterYourPasswordTo') }}
+        </p>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            {{ $t('settings.securitySettings.password') }}
+          </label>
+          <input
+            v-model="disablePassword"
+            type="password"
+            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            :placeholder="$t('settings.securitySettings.enterYourPassword')"
+          />
+        </div>
+      </div>
+      <template #actions>
+        <button
+          @click="disableMFA"
+          :disabled="loading || !disablePassword"
+          class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+        >
+          {{ $t('settings.securitySettings.disableMFA') }}
+        </button>
+        <button
+          @click="
+            (showDisableModal = false), (disablePassword = '')
+          "
+          :disabled="loading"
+          class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+        >
+          {{ $t('settings.securitySettings.cancel') }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <BaseModal
+      v-model="showRegenerateModal"
+      :title="$t('settings.securitySettings.regenerateBackupCodes')"
+      size="sm"
+      @close="regeneratePassword = ''"
+      :close-label="$t('ui.modal.closeDialog')"
+    >
+      <div class="space-y-4">
+        <BaseAlert variant="warning" size="compact" :message="$t('settings.securitySettings.thisWillInvalidateYour')" />
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            {{ $t('settings.securitySettings.password') }}
+          </label>
+          <input
+            v-model="regeneratePassword"
+            type="password"
+            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            :placeholder="$t('settings.securitySettings.enterYourPassword')"
+          />
+        </div>
+      </div>
+      <template #actions>
+        <button
+          @click="regenerateBackupCodes"
+          :disabled="loading || !regeneratePassword"
+          class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+        >
+          {{ $t('settings.securitySettings.regenerate') }}
+        </button>
+        <button
+          @click="
+            (showRegenerateModal = false),
+              (regeneratePassword = '')
+          "
+          :disabled="loading"
+          class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+        >
+          {{ $t('settings.securitySettings.cancel') }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <BaseModal
+      v-model="showCreateKeyModal"
+      :title="$t('settings.securitySettings.createAPIKey')"
+      size="sm"
+      :close-label="$t('ui.modal.closeDialog')"
+    >
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            {{ $t('settings.securitySettings.name') }}
+          </label>
+          <input
+            v-model="newKeyForm.name"
+            type="text"
+            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            :placeholder="$t('settings.securitySettings.myAPIKey')"
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            {{ $t('settings.securitySettings.descriptionOptional') }}
+          </label>
+          <input
+            v-model="newKeyForm.description"
+            type="text"
+            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            :placeholder="$t('settings.securitySettings.whatThisKeyIsFor')"
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            {{ $t('settings.securitySettings.scopes') }}
+          </label>
+          <div class="space-y-2 max-h-48 overflow-y-auto">
+            <label
+              v-for="(description, scope) in availableScopes"
+              :key="scope"
+              class="flex items-start gap-2"
+            >
+              <input
+                v-model="newKeyForm.scopes"
+                type="checkbox"
+                :value="scope"
+                class="mt-1"
+              />
+              <div>
+                <div class="text-sm font-medium">{{ scope }}</div>
+                <div class="text-xs text-gray-500">{{ description }}</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            {{ $t('settings.securitySettings.expiration') }}
+          </label>
+          <select
+            v-model="newKeyForm.expires_days"
+            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          >
+            <option :value="undefined">{{ $t('settings.securitySettings.never') }}</option>
+            <option :value="30">{{ $t('settings.securitySettings.30Days') }}</option>
+            <option :value="60">{{ $t('settings.securitySettings.60Days') }}</option>
+            <option :value="90">{{ $t('settings.securitySettings.90Days') }}</option>
+            <option :value="365">{{ $t('settings.securitySettings.1Year') }}</option>
+          </select>
+        </div>
+      </div>
+      <template #actions>
+        <button
+          @click="createAPIKey"
+          :disabled="loading || !newKeyForm.name || newKeyForm.scopes.length === 0"
+          class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+        >
+          {{ $t('settings.securitySettings.createKey') }}
+        </button>
+        <button
+          @click="showCreateKeyModal = false"
+          :disabled="loading"
+          class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+        >
+          {{ $t('settings.securitySettings.cancel') }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <BaseModal
+      v-model="showKeyCreatedModal"
+      :title="$t('settings.securitySettings.aPIKeyCreated')"
+      size="sm"
+      locked
+      :close-label="$t('ui.modal.closeDialog')"
+    >
+      <div class="space-y-4">
+        <BaseAlert variant="warning" size="compact" :message="$t('settings.securitySettings.thisKeyWillNot')" />
+
+        <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
+          <code class="text-sm font-mono break-all">{{ createdKey?.key }}</code>
+        </div>
+      </div>
+      <template #actions>
+        <button
+          @click="copyToClipboard(createdKey?.key || '')"
+          class="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+        >
+          {{ $t('settings.securitySettings.copyKey') }}
+        </button>
+        <button
+          @click="showKeyCreatedModal = false"
+          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+        >
+          {{ $t('settings.securitySettings.done') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>

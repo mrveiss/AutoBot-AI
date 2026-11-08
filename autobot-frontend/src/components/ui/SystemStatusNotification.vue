@@ -22,10 +22,7 @@
                 :is="statusIcon"
                 :class="[
                   'h-5 w-5',
-                  severity === 'info' ? 'text-blue-400' :
-                  severity === 'warning' ? 'text-yellow-400' :
-                  severity === 'error' ? 'text-red-400' :
-                  'text-green-400'
+                  tone(severity).text
                 ]"
               />
             </div>
@@ -36,7 +33,7 @@
             <div class="ml-4 shrink-0 flex">
               <button
                 @click="dismissNotification"
-                class="bg-autobot-bg-card rounded-md inline-flex text-autobot-text-muted hover:text-autobot-text-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                class="bg-autobot-bg-card rounded-md inline-flex text-autobot-text-muted hover:text-autobot-text-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-autobot-primary"
                 :title="t('ui.systemStatus.dismissNotification')"
               >
                 <span class="sr-only">{{ t('ui.systemStatus.close') }}</span>
@@ -66,10 +63,7 @@
           <!-- Header -->
           <div :class="[
             'px-4 py-3 border-b border-autobot-border',
-            notificationData.severity === 'error' ? 'bg-red-50 border-red-200' :
-            notificationData.severity === 'warning' ? 'bg-yellow-50 border-yellow-200' :
-            notificationData.severity === 'info' ? 'bg-blue-50 border-blue-200' :
-            'bg-green-50 border-green-200'
+            tone(notificationData.severity).header
           ]">
             <div class="flex items-center justify-between">
               <div class="flex items-center">
@@ -77,18 +71,12 @@
                   :is="statusIcon"
                   :class="[
                     'h-6 w-6 mr-2',
-                    notificationData.severity === 'error' ? 'text-red-600' :
-                    notificationData.severity === 'warning' ? 'text-yellow-600' :
-                    notificationData.severity === 'info' ? 'text-blue-600' :
-                    'text-green-600'
+                    tone(notificationData.severity).text
                   ]"
                 />
                 <h3 :class="[
                   'text-lg font-semibold',
-                  notificationData.severity === 'error' ? 'text-red-900' :
-                  notificationData.severity === 'warning' ? 'text-yellow-900' :
-                  notificationData.severity === 'info' ? 'text-blue-900' :
-                  'text-green-900'
+                  tone(notificationData.severity).text
                 ]">
                   {{ notificationData.title }}
                 </h3>
@@ -97,10 +85,7 @@
                 @click="dismissNotification"
                 :class="[
                   'text-autobot-text-muted hover:text-autobot-text-secondary transition-colors',
-                  notificationData.severity === 'error' ? 'hover:text-red-700' :
-                  notificationData.severity === 'warning' ? 'hover:text-yellow-700' :
-                  notificationData.severity === 'info' ? 'hover:text-blue-700' :
-                  'hover:text-green-700'
+                  tone(notificationData.severity).hover
                 ]"
                 :aria-label="t('ui.systemStatus.closeNotification')"
                 :title="t('ui.systemStatus.dismissNotification')"
@@ -125,13 +110,8 @@
                 <dl class="space-y-1">
                   <div class="flex justify-between text-sm">
                     <dt class="text-autobot-text-secondary">{{ t('ui.systemStatus.status') }}</dt>
-                    <dd :class="[
-                      'font-medium',
-                      notificationData.statusDetails.status === 'online' ? 'text-green-600' :
-                      notificationData.statusDetails.status === 'degraded' ? 'text-yellow-600' :
-                      'text-red-600'
-                    ]">
-                      {{ notificationData.statusDetails.status }}
+                    <dd :class="['font-medium', stateTone(notificationData.statusDetails.status)]">
+                      {{ stateLabel(notificationData.statusDetails.status) }}
                     </dd>
                   </div>
                   <div class="flex justify-between text-sm">
@@ -142,13 +122,13 @@
                   </div>
                   <div v-if="notificationData.statusDetails.consecutiveFailures" class="flex justify-between text-sm">
                     <dt class="text-autobot-text-secondary">{{ t('ui.systemStatus.consecutiveFailures') }}</dt>
-                    <dd class="text-red-600 font-medium">
+                    <dd class="text-autobot-pill-bad-fg font-medium">
                       {{ notificationData.statusDetails.consecutiveFailures }}
                     </dd>
                   </div>
                   <div v-if="notificationData.statusDetails.error" class="mt-2">
                     <dt class="text-sm text-autobot-text-secondary mb-1">{{ t('ui.systemStatus.errorDetails') }}</dt>
-                    <dd class="text-xs text-red-600 bg-red-50 p-2 rounded font-mono">
+                    <dd class="text-xs text-autobot-pill-bad-fg bg-autobot-pill-bad-bg p-2 rounded font-mono">
                       {{ notificationData.statusDetails.error }}
                     </dd>
                   </div>
@@ -163,10 +143,7 @@
               @click="dismissNotification"
               :class="[
                 'px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
-                notificationData.severity === 'error' ? 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500' :
-                notificationData.severity === 'warning' ? 'bg-yellow-600 hover:bg-yellow-700 text-white focus:ring-yellow-500' :
-                notificationData.severity === 'info' ? 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500' :
-                'bg-green-600 hover:bg-green-700 text-white focus:ring-green-500'
+                tone(notificationData.severity).button
               ]"
             >
               {{ t('ui.systemStatus.dismiss') }}
@@ -190,13 +167,8 @@ import ExclamationTriangleIcon from '@heroicons/vue/24/outline/ExclamationTriang
 import InformationCircleIcon from '@heroicons/vue/24/outline/InformationCircleIcon'
 import XCircleIcon from '@heroicons/vue/24/outline/XCircleIcon'
 import CheckCircleIcon from '@heroicons/vue/24/outline/CheckCircleIcon'
-
-export interface SystemStatusDetails {
-  status: string
-  lastCheck: number
-  consecutiveFailures?: number
-  error?: string
-}
+import type { SystemStatusDetails } from '@/types/system'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 export interface SystemStatusNotificationProps {
   visible?: boolean
@@ -320,13 +292,48 @@ watch(() => notificationData.value.visible, (newValue) => {
   }
 }, { immediate: true })
 
-const formatTimestamp = (timestamp: number): string => {
-  return new Date(timestamp).toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
+// The monitor's states (#16253): a translated label and a token tone, never the raw value.
+const STATE_TONE: Record<string, string> = {
+  healthy: 'text-autobot-pill-ok-fg',
+  degraded: 'text-autobot-pill-warn-fg',
+  critical: 'text-autobot-pill-bad-fg',
 }
+const stateTone = (state: string): string => STATE_TONE[state] ?? 'text-autobot-text-secondary'
+const stateLabel = (state: string): string =>
+  state in STATE_TONE || state === 'unknown' ? t(`ui.systemStatus.states.${state}`) : state
+
+// Severity colours are the theme's status pill pairs (#16253): each text/background pair is
+// AA in every theme, which the plain state colours were not as text on a light card.
+// Spelled out in full: Tailwind generates only the class names it finds in source.
+const TONES = {
+  error: {
+    text: 'text-autobot-pill-bad-fg',
+    header: 'bg-autobot-pill-bad-bg border-autobot-pill-bad-fg',
+    hover: 'hover:text-autobot-pill-bad-fg',
+    button: 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg border border-autobot-pill-bad-fg hover:opacity-90 focus:ring-autobot-pill-bad-fg',
+  },
+  warning: {
+    text: 'text-autobot-pill-warn-fg',
+    header: 'bg-autobot-pill-warn-bg border-autobot-pill-warn-fg',
+    hover: 'hover:text-autobot-pill-warn-fg',
+    button: 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg border border-autobot-pill-warn-fg hover:opacity-90 focus:ring-autobot-pill-warn-fg',
+  },
+  info: {
+    text: 'text-autobot-pill-info-fg',
+    header: 'bg-autobot-pill-info-bg border-autobot-pill-info-fg',
+    hover: 'hover:text-autobot-pill-info-fg',
+    button: 'bg-autobot-pill-info-bg text-autobot-pill-info-fg border border-autobot-pill-info-fg hover:opacity-90 focus:ring-autobot-pill-info-fg',
+  },
+  success: {
+    text: 'text-autobot-pill-ok-fg',
+    header: 'bg-autobot-pill-ok-bg border-autobot-pill-ok-fg',
+    hover: 'hover:text-autobot-pill-ok-fg',
+    button: 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg border border-autobot-pill-ok-fg hover:opacity-90 focus:ring-autobot-pill-ok-fg',
+  },
+} as const
+const tone = (severity: string | undefined) => TONES[severity as keyof typeof TONES] ?? TONES.success
+
+const formatTimestamp = createDateFormatter({ kind: 'time', intl: { hour: '2-digit', minute: '2-digit', second: '2-digit' } })
 
 // Cleanup on unmount
 onUnmounted(() => {

@@ -69,6 +69,7 @@ from dataclasses import dataclass
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import project_root as repo_root  # noqa: E402
 
 # lint job, and `autobot_shared.logging_manager` would drag config loading into
 # that path. Same trade as `tools/lint/check_undefined_names.py`.
@@ -153,11 +154,6 @@ EXEMPTIONS: tuple[Exemption, ...] = (
         reason="a parametrised case asserting the ansible guard skips paths it cannot resolve statically",
     ),
 )
-
-
-def repo_root() -> pathlib.Path:
-    """Repo root, derived from this file's location (``tools/lint/`` is two deep)."""
-    return pathlib.Path(__file__).resolve().parents[2]
 
 
 def discover_python_files(base: pathlib.Path | None = None) -> list[pathlib.Path]:
@@ -289,7 +285,9 @@ def _format_findings(findings: dict[str, list[tuple[int, str]]]) -> str:
     return "\n".join(lines)
 
 
-def check_paths(paths: list[pathlib.Path], base: pathlib.Path) -> tuple[dict[str, list[tuple[int, str]]], list[str]]:
+def scan_python_for_shell_placeholders(
+    paths: list[pathlib.Path], base: pathlib.Path
+) -> tuple[dict[str, list[tuple[int, str]]], list[str]]:
     """Scan *paths*, skipping exempt files. Returns (findings by path, parse problems)."""
     exempt = {e.path for e in EXEMPTIONS}
     findings: dict[str, list[tuple[int, str]]] = {}
@@ -325,7 +323,7 @@ def audit(base: pathlib.Path | None = None) -> tuple[int, list[str]]:
 
     problems.extend(exemption_problems(base))
 
-    findings, parse_problems = check_paths(files, base)
+    findings, parse_problems = scan_python_for_shell_placeholders(files, base)
     problems.extend(parse_problems)
     if findings:
         total = sum(len(v) for v in findings.values())
@@ -360,7 +358,9 @@ def main(argv: list[str]) -> int:
         scope = f"{reached} Python file(s)"
     elif args.paths:
         selected = [pathlib.Path(p) if pathlib.Path(p).is_absolute() else base / p for p in args.paths]
-        findings, problems = check_paths([p for p in selected if p.suffix == ".py" and p.is_file()], base)
+        findings, problems = scan_python_for_shell_placeholders(
+            [p for p in selected if p.suffix == ".py" and p.is_file()], base
+        )
         if findings:
             problems.append(
                 "unexpanded shell placeholder(s) in the given files:\n"

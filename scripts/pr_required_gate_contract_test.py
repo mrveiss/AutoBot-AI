@@ -468,3 +468,55 @@ def test_the_premerge_script_resolves_the_gate_by_default():
         "scripts/pr-merge-gate.sh no longer defaults GATE_SCRIPT to scripts/pr_required_gate.py; "
         f"expected the line {INVOCATION_DEFAULT!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# #19085: a check-runs listing that does not add up (total_count != runs read).
+# The helper retries once; a second mismatch must surface as GATE-ERROR (exit 2,
+# not a verdict, not clearing) -- never a crash and never green.
+# ---------------------------------------------------------------------------
+
+
+def _drive_gate_with_check_runs(monkeypatch, capsys, listings):
+    """Run `main` with `gh api --slurp` answering `listings` in turn; returns (rc, out, calls)."""
+    import check_run_status as helper
+
+    calls: list[int] = []
+    answers = iter(listings)
+
+    class _Result:
+        def __init__(self, stdout):
+            self.stdout = stdout
+
+    def _fake_run(argv, **_kwargs):
+        calls.append(1)
+        return _Result(json.dumps(next(answers)))
+
+    def _fake_gh(*args: str) -> str:
+        if "api" in args:
+            return json.dumps({"required_status_checks": {"contexts": ["smoke-test"]}})
+        return json.dumps({"headRefOid": "0" * 40, "state": "OPEN", "isDraft": False})
+
+    monkeypatch.setattr(helper.subprocess, "run", _fake_run)
+    monkeypatch.setattr(helper.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(gate_module, "_gh", _fake_gh)
+    monkeypatch.setattr(gate_module, "_all_pages", lambda endpoint: [])
+    rc = gate_module.main(["1"])
+    return rc, capsys.readouterr().out, calls
+
+
+_SHORT = [{"total_count": 2, "check_runs": [{"name": "smoke-test", "conclusion": "success"}]}]
+_FULL = [{"total_count": 1, "check_runs": [{"name": "smoke-test", "conclusion": "success"}]}]
+
+
+def test_a_persistently_short_check_runs_read_is_gate_error_never_green(monkeypatch, capsys):
+    rc, out, calls = _drive_gate_with_check_runs(monkeypatch, capsys, [_SHORT, _SHORT])
+    assert len(calls) == 2, "the short read must be retried exactly once"
+    assert rc == gate_module.EXIT_GATE_ERROR
+    assert "GATE-ERROR" in out and "GREEN" not in out
+
+
+def test_a_transiently_short_check_runs_read_recovers_on_the_retry(monkeypatch, capsys):
+    rc, out, calls = _drive_gate_with_check_runs(monkeypatch, capsys, [_SHORT, _FULL])
+    assert len(calls) == 2
+    assert rc == 0 and "CONTEXTS-GREEN" in out

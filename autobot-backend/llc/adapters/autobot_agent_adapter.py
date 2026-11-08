@@ -40,6 +40,7 @@ from .base import AdapterRunStatus
 from .subprocess_support import is_rate_limit_output as _is_rate_limit_output
 
 logger = logging.getLogger(__name__)
+_CANCEL_WAIT_S = 5.0  # one value for the wait and its timeout message (#18056)
 
 # ── Rate-limit detection helpers (GH#8502, GH#9773) ──────────────────────────
 # _RL_KEYWORDS is now canonical in subprocess_support (shared with subprocess
@@ -279,11 +280,12 @@ class AutoBotAgentAdapter:
             return
         self._cancel_requested.add(run_id)
         task.cancel()
-        done, _ = await asyncio.wait({task}, timeout=5.0)
+        done, _ = await asyncio.wait({task}, timeout=_CANCEL_WAIT_S)
         if task not in done:
             logger.warning(
-                "AutoBotAgentAdapter: cancel() timed out after 5 s for run_id=%s"
+                "AutoBotAgentAdapter: cancel() timed out after %.0f s for run_id=%s"
                 " (task still running — will be discarded when it finishes)",
+                _CANCEL_WAIT_S,
                 run_id,
             )
 
@@ -407,10 +409,12 @@ class AutoBotAgentAdapter:
             return
 
         try:
-            from llc.services.budget import BudgetService
+            from llc.services.accessors import get_budget_service
 
             async with self._budget_session_factory() as session:
-                await BudgetService().ingest_cost_event(session, agent_id, company_id, tokens_in, tokens_out, model)
+                await get_budget_service().ingest_cost_event(
+                    session, agent_id, company_id, tokens_in, tokens_out, model
+                )
         except BudgetExhausted:
             raise  # Hard-stop from GH#8215: propagate so run is marked FAILED
         except Exception:

@@ -13,6 +13,7 @@ Composes all functionality through mixins:
 """
 
 import asyncio
+import functools
 import json
 import os
 from contextlib import aclosing
@@ -32,14 +33,20 @@ from chat_workflow.tool_call_grammar import (
     normalize_tool_call_text,
     strip_unparsed_tool_tags,
 )
+from chat_workflow.tool_call_loop import framed_tool_output
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
-from llm_shared.providers.reasoning_effort import map_effort_to_provider_params
+from llm_shared.run_credentials import llm_principal_scope_for
 from services.tool_output_filter import cap_unmatched_output, get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
+from .attachment_context import apply_attachments, attachment_notice_messages
+from .budget_refusal import budget_refusal_message
 from .conversation import ConversationHandlerMixin
+from .kb_sources import _kb_sources_from_citations
+from .lightweight_mode import decide_lightweight_mode
+from .llm_failover import IterationCall, stream_with_failover
 from .llm_handler import LLMHandlerMixin, _emit_after_continuation, _emit_before_continuation
 from .models import (
     LLMIterationContext,
@@ -48,8 +55,10 @@ from .models import (
     build_governed_identity,
     filter_internal_prompts,
 )
+from .plan_runner import open_for_ctx
+from .reasoning_kwargs import build_reasoning_api_kwargs
 from .session_handler import SessionHandlerMixin
-from .session_role import resolve_auth_role
+from .session_role import resolve_auth_role, stamp_verified_identity
 from .thought_markers import detect_content_type, find_last_tag_positions, find_new_segment_start
 from .tool_handler import ToolHandlerMixin
 from .turn_control import CHAT_LLM_CALL_TIMEOUT_SECONDS, stream_graph_turn, stream_legacy_turn
@@ -81,54 +90,6 @@ _TOOL_CALL_OPENING_RE = TOOL_CALL_OPENING_RE
 
 # Issue #716/#11867: internal-prompt-echo patterns are consolidated into the
 # canonical `filter_internal_prompts` in chat_workflow.models (imported above).
-
-
-def _kb_sources_from_citations(citations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Map raw knowledge-base citation dicts to the persisted sources shape.
-
-    Issue #13296: extracted from ``_persist_workflow_messages`` — was
-    duplicated inline for the per-``WorkflowMessage`` citation list (already
-    tagged ``type='knowledge_base'`` by ``_build_source_list``) and, per
-    #13292, for the completed streamed reply's citations (the raw
-    ``rag_citations`` list, which never carries the always-appended
-    ``llm_training`` placeholder in the first place).
-    """
-    return [
-        {
-            "title": c.get("title") or c.get("source", ""),
-            "path": c.get("source", ""),
-            "score": c.get("score", 0.0),
-            "chunk_id": c.get("id", ""),
-        }
-        for c in citations
-    ]
-
-
-async def _resolve_reasoning_effort(context: Dict[str, Any]) -> str:
-    """Resolve reasoning effort with priority: per-request > user-default > 'auto'.
-
-    Resolution order (#9017):
-      1. context["reasoning_effort"] — per-conversation value from the request
-      2. Redis user:{id}:preferences:reasoning_effort — account-level default
-      3. 'auto' — no extra params, provider decides
-
-    Invalid or missing values are returned as 'auto' (inert).
-    """
-    effort: str | None = context.get("reasoning_effort")
-    if effort:
-        return effort
-
-    user_id: str | None = context.get("user_id")
-    if user_id:
-        try:
-            from api.users import _get_user_preferences_from_redis
-
-            prefs = await _get_user_preferences_from_redis(user_id)
-            return prefs.reasoning_effort
-        except Exception as exc:
-            logger.warning("[#9017] Failed to load user reasoning_effort pref: %s", exc)
-
-    return "auto"
 
 
 # Issue #11538: vision-in-the-loop. OpenManus threads the current screenshot
@@ -1798,9 +1759,6 @@ class ChatWorkflowManager(
         told the result was unavailable, it was told the tool ran fine and
         returned nothing, which makes answering from memory the rational next
         move. Very likely #12508's mechanism.
-
-        Handler names rather than line numbers on purpose — the numbers in the
-        first version of this docstring were already wrong when it was written.
         """
         cmd = result.get("command") or result.get("tool") or "unknown"
         stdout = _as_output_text(result.get("stdout"))
@@ -1824,7 +1782,7 @@ class ChatWorkflowManager(
 
         output_text = _filter_step_output(cmd, output_text, is_shell=bool(result.get("command")))
 
-        return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:\n```\n{output_text}\n```"
+        return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:{framed_tool_output(output_text)}"
 
     def _build_tools_reminder(self, consecutive_invalid_tool_calls: int) -> str:
         """Build an optional tool-name correction block for continuation prompts. Issue #2735.
@@ -2051,22 +2009,12 @@ before summarizing.
         return tool_calls
 
     def _create_llm_service_error(self, status_code: int) -> WorkflowMessage:
-        """
-        Create an error WorkflowMessage for LLM service failures.
-
-        Issue #620: Extracted from _process_single_llm_iteration to reduce function length.
-
-        Args:
-            status_code: HTTP status code from the failed request
-
-        Returns:
-            WorkflowMessage with error details. Issue #620.
-        """
+        """Error WorkflowMessage for an LLM service failure with HTTP ``status_code`` (#620)."""
         logger.error("[ChatWorkflowManager] Ollama request failed: %s", status_code)
         return WorkflowMessage(
             type="error",
             content=f"LLM service error: {status_code}",
-            metadata={"error": True},
+            metadata={"error": True, "status_code": status_code},
         )
 
     async def _stream_and_collect_llm_chunks(
@@ -2109,14 +2057,18 @@ before summarizing.
         api_kwargs: dict | None = None,
         image_b64: str | None = None,
     ):
-        """Process a single LLM iteration. Yields chunks, then (llm_response, tool_calls). Issue #620.
+        """One LLM iteration: yields chunks, then (llm_response, tool_calls) (#620). ``image_b64`` (#11538) is
+        gated on vision support and attached in the shape ``ollama_endpoint`` consumes — see _attach_vision_payload.
 
-        Issue #11538: ``image_b64`` (the latest browser/VNC screenshot, if any) is
-        threaded into the payload, gated on vision support and attached in the shape
-        ``ollama_endpoint`` (the actual POST target) consumes — see _attach_vision_payload.
+        Spend exemption (#16924): records no LLM spend. True only while ``ollama_endpoint`` is self-hosted inference
+        with no per-token bill; pointed at a metered endpoint, this must record via ``services.llm_usage_recording``.
         """
         import aiohttp
 
+        if (refusal := await budget_refusal_message()) is not None:  # budget gate, before any spend (#16845)
+            yield refusal
+            yield (None, None)
+            return
         payload = self._get_llm_request_payload(
             selected_model,
             current_prompt,
@@ -2419,45 +2371,8 @@ before summarizing.
         llm_response = None
         tool_calls = None
 
-        # Issue #8993: Wire thinking mode from request context for Anthropic models.
-        api_kwargs = None
-        if ctx.context.get("thinking_mode_enabled") and "claude" in ctx.selected_model.lower():
-            budget_tokens = int(ctx.context.get("thinking_budget_tokens", 10000))
-            api_kwargs = {
-                "thinking": {"type": "enabled", "budget_tokens": budget_tokens},
-                "max_tokens": max(budget_tokens + 1000, 8192),
-                "temperature": 1,
-                "betas": ["interleaved-thinking-2025-05-14"],
-            }
-            logger.info(
-                "[#8993] Thinking mode enabled for model=%s budget_tokens=%d",
-                ctx.selected_model,
-                budget_tokens,
-            )
-
-        # #9017: Reasoning effort — per-conversation override > user-default > 'auto'.
-        # Only applied when thinking_mode is NOT already set (avoid double-config).
-        if api_kwargs is None:
-            effort = await _resolve_reasoning_effort(ctx.context)
-            if effort and effort != "auto":
-                effort_params = map_effort_to_provider_params(effort, ctx.selected_model)
-                if effort_params:
-                    thinking_tokens = effort_params.get("thinking_tokens")
-                    if thinking_tokens and "claude" in ctx.selected_model.lower():
-                        api_kwargs = {
-                            "thinking": {"type": "enabled", "budget_tokens": thinking_tokens},
-                            "max_tokens": max(thinking_tokens + 1000, 8192),
-                            "temperature": 1,
-                            "betas": ["interleaved-thinking-2025-05-14"],
-                        }
-                    else:
-                        api_kwargs = effort_params
-                    logger.info(
-                        "[#9017] Reasoning effort=%s applied for model=%s params=%s",
-                        effort,
-                        ctx.selected_model,
-                        list(effort_params),
-                    )
+        # #8993 thinking mode / #9017 reasoning effort (see reasoning_kwargs).
+        api_kwargs = await build_reasoning_api_kwargs(ctx.context, ctx.selected_model)
         # Issue #11538: thread the most recent browser/VNC screenshot (last
         # VISION_TOOL_LOOKBACK_MESSAGES tool results) into this iteration's payload.
         latest_screenshot = _extract_latest_tool_screenshot(ctx.execution_history)
@@ -2465,7 +2380,8 @@ before summarizing.
         # nothing outside it is ever consulted again (#11538 MINOR: retention).
         _prune_stale_screenshots(ctx.execution_history)
 
-        async for item in self._process_single_llm_iteration(
+        open_stream = functools.partial(
+            self._process_single_llm_iteration,
             http_client,
             ctx.ollama_endpoint,
             ctx.selected_model,
@@ -2477,7 +2393,9 @@ before summarizing.
             system_prompt=ctx.system_prompt or "",
             api_kwargs=api_kwargs,
             image_b64=latest_screenshot,
-        ):
+        )
+        # #19753: a provider failure before any output fails over (not-acted guard); see llm_failover.
+        async for item in stream_with_failover(IterationCall(self, ctx, iteration, current_prompt), open_stream):
             if isinstance(item, tuple):
                 llm_response, tool_calls = item
             else:
@@ -2937,6 +2855,8 @@ before summarizing.
         current_prompt = ctx.initial_prompt
 
         self._log_iteration_start(ctx)
+        plan = await open_for_ctx(self, ctx)  # #21023: the same plan_runner as the graph; NoPlan when off
+        current_prompt = plan.with_block(current_prompt)
 
         for iteration in range(1, self.MAX_CONTINUATION_ITERATIONS + 1):
             # Issue #4264: Fire BEFORE_CONTINUATION hook before iteration starts
@@ -2948,7 +2868,7 @@ before summarizing.
                 )
                 break
 
-            llm_response, should_continue = None, False
+            llm_response, should_continue, seen = None, False, len(execution_history)
 
             async for item in self._run_continuation_loop_iteration(http_client, current_prompt, iteration, ctx):
                 if isinstance(item, tuple) and len(item) == 2:
@@ -2962,6 +2882,7 @@ before summarizing.
                 return
 
             all_llm_responses.append(llm_response)
+            await plan.advance(execution_history[seen:])
 
             # Issue #4264: Fire AFTER_CONTINUATION hook after iteration completes
             llm_response = await _emit_after_continuation(iteration, llm_response, ctx.session_id, ctx.context)
@@ -2977,7 +2898,7 @@ before summarizing.
                 self._log_task_complete(iteration, len(execution_history))
                 break
 
-            current_prompt = self._build_and_log_continuation_prompt(ctx, execution_history)
+            current_prompt = plan.with_block(self._build_and_log_continuation_prompt(ctx, execution_history))
 
         self._log_max_iterations_warning(iteration)
         yield (all_llm_responses, execution_history, None)
@@ -3401,10 +3322,9 @@ before summarizing.
         if language:
             session.metadata["language"] = language
 
-        # #11261: stash caller identity so the prompt-build path can scope
-        # trajectory retrieval to this user/tenant (strict isolation, #11089).
+        # #11261/#18825: tenant scopes trajectory reads (#11089); user/org are the VERIFIED principal, every turn.
+        stamp_verified_identity(session.metadata, context)
         if context:
-            session.metadata["user_id"] = context.get("user_id") or ""
             session.metadata["tenant_id"] = context.get("tenant_id") or context.get("org_id") or ""
             # #11501 T2: CEO-chat path carries company_id — used to append the
             # board-tool teaching to the system prompt for this turn only.
@@ -3414,41 +3334,14 @@ before summarizing.
             if context.get("model"):
                 session.metadata["model_override"] = str(context["model"])
 
-        # Issue MVA-1992: Determine if query qualifies for lightweight mode.
-        # Trivial tier (GH#9050, score < trivial_threshold) is the primary
-        # signal; simple tier (score < complexity_threshold) is used as a
-        # fallback when trivial tier is not configured.
-        lightweight_mode = False
-        try:
-            from llm_shared.tiered_routing.complexity_router import ComplexityRouter
-            from llm_shared.tiered_routing.tier_config import TierConfig
-
-            tier_config = TierConfig.from_config()
-            if tier_config.enabled:
-                router = ComplexityRouter(config=tier_config)
-                messages = [{"role": "user", "content": message}]
-                _, complexity_result = router.route(messages)
-                # Trivial tier is the canonical lightweight signal (GH#9050).
-                # Fall back to simple tier when trivial is not configured.
-                is_trivial = complexity_result.tier == "trivial"
-                is_simple_fallback = complexity_result.tier == "simple" and not getattr(
-                    tier_config.models, "trivial", ""
-                )
-                lightweight_mode = is_trivial or is_simple_fallback
-                if lightweight_mode:
-                    logger.info(
-                        "[MVA-1992] Lightweight mode enabled (tier=%s, score=%.1f)",
-                        complexity_result.tier,
-                        complexity_result.score,
-                    )
-        except Exception as e:
-            logger.warning("[MVA-1992] Complexity routing failed, defaulting to full mode: %s", e)
+        lightweight_mode = decide_lightweight_mode([{"role": "user", "content": message}])  # MVA-1992, GH#9050
 
         llm_params = await self._prepare_llm_request_params(
             session, message, use_knowledge=use_knowledge, language=language, lightweight_mode=lightweight_mode
         )
         # MVA-1993: Store lightweight_mode in params for response metadata
         llm_params["lightweight_mode_used"] = lightweight_mode
+        await apply_attachments(session, context, llm_params)  # #20195: attached files reach the prompt
 
         logger.info(
             "[ChatWorkflowManager] Initial prompt length: %d characters",
@@ -3461,7 +3354,7 @@ before summarizing.
             self._fire_pre_compact_hook(
                 session_id=session.session_id,
                 conversation_history=session.conversation_history or [],
-                user_id=context.get("user_id") if context else None,
+                user_id=session.metadata.get("user_id"),  # the verified identity stamped above (#18825)
                 model_name=llm_params.get("model", ""),
             )
         )
@@ -3539,6 +3432,8 @@ before summarizing.
             yield progress.to_workflow_message()
 
         llm_params = await self._prepare_llm_workflow_params(session, message, context)
+        for notice in attachment_notice_messages(llm_params):  # #20195: say why an attached file was not used
+            yield notice
 
         ctx = self._create_llm_iteration_context(
             llm_params, session_id, terminal_session_id, message, workflow_messages, context
@@ -3561,7 +3456,7 @@ before summarizing.
         # matched within one iteration's own text.
         filtered_responses = [self._filter_internal_prompts(r) for r in all_llm_responses]
         combined_response = "\n\n".join(filtered_responses)
-        await self._persist_conversation(session_id, session, message, combined_response)
+        await self._persist_conversation(session_id, session, message, combined_response, model=ctx.selected_model)
         await self._persist_workflow_messages(
             session_id,
             workflow_messages,
@@ -3711,39 +3606,10 @@ before summarizing.
     async def _apply_session_role(
         self, session_id: str, context: Dict[str, Any] | None, auth_role: str | None = None, scope: dict | None = None
     ) -> Dict[str, Any] | None:
-        """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202).
+        """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202/#20195)."""
+        from chat_workflow.session_role import apply_session_governance
 
-        A server-set session role overrides any client-supplied ``agent_id`` so the
-        pinned agent's ``forbidden_work`` is enforced at the tool seam and cannot be
-        lifted by the caller. GH#11202: when the approval gate flag is on and the
-        session declares approval categories, they are overlaid as
-        ``requires_approval_before`` so the AI-line point (``_enforce_ai_line``, #18430) holds
-        matching tools BEFORE they execute — the correct pre-execution stage. The backend decides.
-        """
-        from chat_workflow.approval_baseline import with_baseline_categories
-        from chat_workflow.session_role import (
-            CHAT_APPROVAL_GATE_ENABLED,
-            SessionRoleService,
-            apply_auth_role,
-            apply_role,
-        )
-        from chat_workflow.session_work_item import SessionWorkItemService, apply_work_item
-
-        svc = SessionRoleService()
-        # #13821: the authenticated caller's RBAC role, from the endpoint's
-        # server-side identity. Applied unconditionally (it strips on a missing
-        # role) so a client-supplied auth_role can never reach the tool seam.
-        context = apply_auth_role(context, auth_role, scope)  # scope: #18430, the AI lines' verified principal
-        context = apply_role(context, await svc.get_role(session_id))
-        # #13704: same trust model for the work-item binding. A server-set value
-        # overrides any client-supplied work_item_id, and an unbound session has
-        # the client's value stripped — otherwise a caller could select whose
-        # goal chain L4 reads on their behalf (#13687).
-        context = apply_work_item(context, await SessionWorkItemService().get_work_item(session_id))
-        if CHAT_APPROVAL_GATE_ENABLED:
-            # #18294: all categories gated by default; only the SLM setting relaxes one.
-            context = await with_baseline_categories(context, await svc.get_approval_categories(session_id))
-        return context
+        return await apply_session_governance(session_id, context, auth_role, scope)
 
     async def process_message_stream(
         self,
@@ -3766,18 +3632,16 @@ before summarizing.
         context = await self._apply_session_role(session_id, context, auth_role, auth_scope)
         self._active_streams += 1
         try:
-            try:
-                async with aclosing(self._process_via_graph(session_id, message, context)) as graph_stream:
-                    async for msg in graph_stream:
-                        yield msg
-            except Exception as graph_err:
-                logger.warning(
-                    "LangGraph flow failed, falling back to legacy: %s",
-                    graph_err,
-                )
-                async with aclosing(stream_legacy_turn(self, session_id, message, context)) as legacy:
-                    async for msg in legacy:
-                        yield msg
+            with llm_principal_scope_for(auth_scope):  # #19241: this turn's signed-in provider tokens, reset after
+                try:
+                    async with aclosing(self._process_via_graph(session_id, message, context)) as graph_stream:
+                        async for msg in graph_stream:
+                            yield msg
+                except Exception as graph_err:
+                    logger.warning("LangGraph flow failed, falling back to legacy: %s", graph_err)
+                    async with aclosing(stream_legacy_turn(self, session_id, message, context)) as legacy:
+                        async for msg in legacy:
+                            yield msg
         finally:
             self._active_streams -= 1
 
@@ -3851,20 +3715,19 @@ before summarizing.
         self,
         session_id: str,
         decision: Dict[str, Any],
+        attachment_access: bool = False,
+        auth_scope: dict | None = None,
     ):
-        """Resume a paused graph after command approval interrupt.
-
-        Issue #1043: Called when the user approves or denies a command.
-        The graph resumes from its checkpointed state with the decision.
-        """
-        from langgraph.types import Command
-
+        """Resume a paused graph after approval (#1043) as the caller (#16845); attachment verdict fresh (#20195)."""
+        from .attachment_context import resume_command
         from .graph import get_compiled_graph
 
         graph = await get_compiled_graph(self)
-        async with aclosing(stream_graph_turn(self, graph, session_id, Command(resume=decision))) as turn:
-            async for msg in turn:
-                yield msg
+        resume = await resume_command(graph, session_id, decision, attachment_access)
+        with llm_principal_scope_for(auth_scope):
+            async with aclosing(stream_graph_turn(self, graph, session_id, resume)) as turn:
+                async for msg in turn:
+                    yield msg
 
     async def shutdown(self):
         """Shutdown the workflow manager and clean up resources."""

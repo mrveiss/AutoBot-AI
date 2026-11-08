@@ -60,7 +60,7 @@ infrastructure:
     npu_worker: 8081
     redis: 6379
     ai_stack: "{{ ai_stack_port }}"
-    browser: 3000
+    browser: 9001  # #19324: the browser service, not Grafana
     vnc: 6080
     ollama: 11434
 

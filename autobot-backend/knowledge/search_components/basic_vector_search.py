@@ -7,6 +7,9 @@
 Extracted so the dispatcher in ``search.py`` stays within the function-length
 limit (#620).  The path delegates to VectorSearchEngine and falls back to a
 direct ChromaDB query.  Issue #398, #934, #3828.
+
+The serving predicate (#18820) is not applied here: ``SearchMixin.search`` applies it
+once to what every mode returns, so this path stays a plain store read.
 """
 
 from __future__ import annotations

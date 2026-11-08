@@ -17,7 +17,7 @@ sys.path.insert(0, os.getcwd())
 
 from config import global_config_manager
 from services.config_service import ConfigService
-from tests.test_helpers import get_test_backend_url
+from tests.test_helpers import live_backend_url
 
 
 async def test_config_service():
@@ -73,7 +73,7 @@ async def test_api_endpoint():
     try:
         timeout = aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(get_test_backend_url() + "/api/settings/") as response:
+            async with session.get(live_backend_url() + "/api/settings/") as response:
                 end_time = time.time()
 
                 if response.status == 200:

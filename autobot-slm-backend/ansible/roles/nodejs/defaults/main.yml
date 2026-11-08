@@ -1,4 +1,4 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 ---
-nodejs_major_version: "20"
+nodejs_major_version: "{{ node_major }}"

@@ -26,7 +26,7 @@ from services.knowledge.sync_queue import (
     SyncReason,
     SyncStatus,
 )
-from tests.helpers.fake_redis import AsyncFullFakeRedis
+from tests.helpers._fake_redis import AsyncFullFakeRedis
 
 
 @pytest.fixture

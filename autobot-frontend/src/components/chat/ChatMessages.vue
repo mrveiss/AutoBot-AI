@@ -442,7 +442,8 @@
                 <span>{{ $t('chat.approval.approve') }}</span>
               </BaseButton>
               <BaseButton
-                variant="outline-solid"
+                v-if="!isGraphApproval(message.metadata)"
+                variant="outline"
                 size="sm"
                 @click="promptForComment((message.metadata as any).terminal_session_id as string)"
                 :disabled="processingApproval || showCommentInput"
@@ -579,8 +580,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
 import StableLoadingState from '@/components/ui/StableLoadingState.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
@@ -591,6 +591,7 @@ import VideoCell from '@/components/artifact-cells/VideoCell.vue'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandApproval } from '@/composables/useCommandApproval'
+import { isGraphApproval, useApprovalRouting } from '@/composables/useGraphApproval'
 import { sanitizeChatHtml } from '@/utils/sanitize'
 
 const logger = createLogger('ChatMessages')
@@ -639,31 +640,8 @@ const {
   getRiskClass,
 } = useCommandApproval()
 
-/**
- * Thin wrapper: calls the composable's approveCommand with the store's
- * message-update callback wired in.
- */
-const approveCommand = (
-  terminal_session_id: string,
-  approved: boolean,
-  comment?: string,
-  command_id?: string,
-  commandInfo?: { command: string; risk_level: string }
-) => {
-  const onMessageUpdate = (sessionId: string, status: string, updateComment?: string) => {
-    const targetMessage = store.currentMessages.find(
-      msg => msg.metadata?.terminal_session_id === sessionId &&
-             msg.metadata?.requires_approval === true
-    )
-    if (targetMessage && targetMessage.metadata) {
-      targetMessage.metadata.approval_status = status
-      targetMessage.metadata.approval_comment = updateComment
-    } else {
-      logger.warn('Could not find message to update approval status')
-    }
-  }
-  return _approveCommand(terminal_session_id, approved, comment, command_id, onMessageUpdate, commandInfo)
-}
+/** A graph-interrupt card posts to /chats/{id}/resume; any other card keeps the terminal route (#20195). */
+const approveCommand = useApprovalRouting(_approveCommand)
 
 // Refs
 const messagesContainer = ref<HTMLElement>()
@@ -1570,8 +1548,8 @@ onUnmounted(() => {
 
 .message-wrapper.type-overseer_step::after {
   content: 'Step';
-  background: var(--color-info);
-  color: var(--text-inverse);
+  background: var(--color-info-solid);
+  color: var(--text-on-info);
 }
 
 .message-wrapper.type-overseer_plan,

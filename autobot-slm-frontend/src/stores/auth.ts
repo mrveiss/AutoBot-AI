@@ -13,12 +13,15 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 import { slmApiClient } from '@/utils/ApiClient'
 import { clearSlmSession, readSlmToken, readSlmUserRaw, writeSlmToken, writeSlmUser } from '@/utils/authStorage'
 import type { components } from '@/types/generated/api'
 
 const logger = createLogger('AuthStore')
+
+/** `detail` of the 403 the SLM backend answers a non-admin session with (services/auth.py). */
+const ADMIN_ONLY_DETAIL = 'This console is for administrators.'
 
 interface User {
   username: string
@@ -156,6 +159,22 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
   }
 
+  /**
+   * A 403 on `/auth/me` has two causes: the session is not an admin's (detail
+   * ADMIN_ONLY_DETAIL, services/auth.py), or the request carried an `X-API-Key` to a route
+   * that takes none (middleware/api_key_allow_list.py). Only the first says anything about
+   * the user; the second leaves the stored user alone (#20631).
+   */
+  async function applyForbidden(response: Response): Promise<void> {
+    const body = await response.json().catch(() => null)
+    if (body?.detail !== ADMIN_ONLY_DETAIL) {
+      logger.warn('Forbidden for a reason other than admin-only; keeping session', body?.detail)
+      return
+    }
+    user.value = { username: user.value?.username ?? '', isAdmin: false }
+    writeSlmUser(JSON.stringify(user.value))
+  }
+
   async function fetchCurrentUser(): Promise<void> {
     if (!token.value) return
 
@@ -165,8 +184,19 @@ export const useAuthStore = defineStore('auth', () => {
       // from localStorage does not depend on the ref having been hydrated first.
       const response = await slmApiClient.rawRequest('/auth/me')
 
+      if (response.status === 401) {
+        // The only response that means the session is dead (#18892).
+        logout()
+        return
+      }
+      if (response.status === 403) {
+        await applyForbidden(response)
+        return
+      }
       if (!response.ok) {
-        throw new Error('Failed to fetch user')
+        // 503 (revocation store unavailable), other 5xx: keep the session.
+        logger.warn('Could not fetch current user; keeping session', response.status)
+        return
       }
 
       const data = await response.json()
@@ -175,8 +205,9 @@ export const useAuthStore = defineStore('auth', () => {
         isAdmin: data.is_admin,
       }
       writeSlmUser(JSON.stringify(user.value))
-    } catch {
-      logout()
+    } catch (e) {
+      // Network error / timeout / 499: the session was not rejected (#18892).
+      logger.warn('Could not fetch current user; keeping session', e)
     }
   }
 
@@ -264,7 +295,8 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       await fetchCurrentUser()
-      return !!user.value
+      // A 401 logs out (token cleared); a transient failure keeps the token.
+      return !!user.value || !!token.value
     } catch {
       return false
     }

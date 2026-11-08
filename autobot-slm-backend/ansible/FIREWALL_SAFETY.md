@@ -13,6 +13,9 @@ When modifying firewall rules on remote machines, **ALWAYS ensure SSH access is 
 3. ✅ Test SSH connection from management machine
 4. ✅ Have console/direct access available as backup
 
+
+> Firewall changes have no builtin-updater path yet, so this procedure is still run by hand; the gap is tracked in #19629.
+
 ## Safety Playbook
 
 We have a dedicated playbook to ensure SSH stays accessible:
@@ -35,7 +38,7 @@ ansible-playbook -i inventory/slm-nodes.yml playbooks/ensure-ssh-access.yml
 ansible-playbook -i inventory/slm-nodes.yml playbooks/ensure-ssh-access.yml
 
 # 2. THEN: Make your firewall changes
-ansible-playbook -i inventory/slm-nodes.yml playbooks/your-firewall-changes.yml
+ansible-playbook -i inventory/slm-nodes.yml playbooks/<your-firewall-playbook>.yml
 
 # 3. VERIFY: Test SSH still works
 ansible all -i inventory/slm-nodes.yml -m ping

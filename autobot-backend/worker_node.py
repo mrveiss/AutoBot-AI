@@ -52,7 +52,7 @@ from autobot_shared.redis_client import get_redis_client
 # AttributeError: 'AutoBotConfig' object has no attribute 'get_nested' (#11971).
 from config import config_manager as global_config_manager
 from events.bus import PersistStrategy, publish_event
-from knowledge_base import KnowledgeBase
+from knowledge_factory import get_knowledge_base_async
 from security_layer import SecurityLayer
 from services.llm_service import get_llm_service
 from system_integration import SystemIntegration
@@ -119,13 +119,21 @@ class WorkerNode:
         # Initialize modules that worker might need for task execution
         # #6983: migrated from LLMInterface to LLMService (#3185 missed this caller)
         self.llm_service = get_llm_service()
-        self.knowledge_base = KnowledgeBase()
+        # #18122: resolved lazily from the canonical instance (see resolve_knowledge_base)
+        self.knowledge_base = None
         self.gui_controller = GUIController()
         self.system_integration = SystemIntegration()
         self.security_layer = SecurityLayer()
 
         # Initialize the task executor with Strategy Pattern
         self.task_executor = TaskExecutor(self)
+
+    async def resolve_knowledge_base(self):
+        """Return the canonical KnowledgeBase (an injected one wins); raise while it is unavailable."""
+        kb = self.knowledge_base or await get_knowledge_base_async()
+        if kb is None:
+            raise RuntimeError("Knowledge base unavailable (init failed or cooling down)")
+        return kb
 
     def detect_capabilities(self) -> Dict[str, Any]:
         """Detects and returns hardware and software capabilities."""

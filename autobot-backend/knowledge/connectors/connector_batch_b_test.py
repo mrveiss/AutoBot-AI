@@ -46,7 +46,14 @@ for _p in (_WORKTREE_ROOT, _BACKEND_DIR):
 # them (they already bound `from web_fetch import X` names into their own
 # module namespace) restores the old isolation without depending on import
 # order elsewhere.
-_WF_STUB_NAMES = ("web_fetch", "web_fetch.extractors", "web_fetch.frontier", "web_fetch.cache", "web_fetch.fetcher")
+_WF_STUB_NAMES = (
+    "web_fetch",
+    "web_fetch.profile",
+    "web_fetch.content_types",
+    "web_fetch.frontier",
+    "web_fetch.cache",
+    "web_fetch.fetcher",
+)
 _installed_wf_stub = "web_fetch" not in sys.modules
 if _installed_wf_stub:
 
@@ -65,7 +72,8 @@ if _installed_wf_stub:
     _wf.RenderMode = MagicMock  # type: ignore[attr-defined]
     _wf.RobotsCache = MagicMock  # type: ignore[attr-defined]
     _wf.WebFetcher = MagicMock  # type: ignore[attr-defined]
-    _make_wf_stub("web_fetch.extractors").extract_markdown = MagicMock()  # type: ignore[attr-defined]
+    _make_wf_stub("web_fetch.profile")  # #18826: web_crawler imports IngestProfile/require_implemented
+    _make_wf_stub("web_fetch.content_types")  # #18826: web_crawler imports UnsupportedContentType
     _make_wf_stub("web_fetch.frontier").extract_links = MagicMock()  # type: ignore[attr-defined]
     _make_wf_stub("web_fetch.cache")
     _make_wf_stub("web_fetch.fetcher")

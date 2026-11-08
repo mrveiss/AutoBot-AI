@@ -638,3 +638,19 @@ This study faulted the reference work for having no file-size discipline (a 3,30
 ratchet only covers `.py` (plus `.sh`, since #17353). The Ansible plane has the same disease we
 named in theirs; the ratchet simply cannot see it. Counted across the tree: **17 YAML files over
 600 lines, 33,996 lines in them**, 7 of them Ansible. Filed as **#17675**.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #15826 — tech-debt(guards): 79 of 133 tree-scanning guards can report clean having examined nothing
+- #16036 — System updates drain borrowable roles; make reboot_strategy live declaration
+- #17038 — Umbrella: SLM Data hygiene page — detect and safely clean up orphaned data across services
+- #17656 — Umbrella(slm): the node plane declares controls it never enforces — five findings from a deploy-platform comparison
+- #17657 — bug(slm): `rollback_deployment` runs no playbook — it edits the DB and the node keeps the software
+- #17658 — bug(slm): node operations write no audit row, so #17038's durable-paper-trail rule is unenforced for exactly the operations it names
+- #17659 — feat(slm): separate "a node is behind" from "interrupt the user" — the severity we already measure escalates nothing
+- #17660 — bug(slm): five node-health sites turn a failed measurement into a real-looking value — including eleven lines from the file's own correct pattern
+- #17661 — bug(slm): maintenance windows and drain are enforced by nothing — reboot's only gate is "not already offline"
+- #17662 — security(agents): the generic HTTP tool blocklists six credential headers and not `x-internal-api-key`, which mints admin before any JWT check
+- #17675 — guard(size): YAML has no size ratchet, so the Ansible plane absorbs the scope the `.py` guard rejects

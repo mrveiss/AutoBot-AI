@@ -31,7 +31,7 @@
     # so the role's `backend_install_dir | dirname` derivation of the deploy
     # root (autobot_shared PYTHONPATH entry, uvicorn --log-config) still
     # resolves to /opt/autobot instead of /opt.
-    backend_deployed_root: /opt/autobot
+    backend_deployed_root: "{{ autobot.base_dir }}"
     backend_code_dir: "{{ backend_deployed_root }}/autobot-backend"
     backend_install_dir: "{{ backend_code_dir }}"
     backend_log_dir: /var/log/autobot

@@ -8,7 +8,7 @@
 # Service configuration
 service_user: autobot
 service_group: autobot
-project_root: /opt/autobot
+project_root: "{{ autobot.base_dir }}"
 config_dir: /etc/autobot
 logs_dir: /var/log/autobot
 

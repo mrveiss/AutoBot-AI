@@ -25,6 +25,8 @@ from fastapi import Depends, FastAPI, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.testclient import TestClient
 
+from testkit.fake_async_session import FakeAsyncSession
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 _orm = importlib.import_module("_real_orm_import")  # a sibling helper, not on the package path
 SLM_ROOT = _orm.SLM_ROOT
@@ -214,16 +216,9 @@ async def _requires_bearer(credentials: HTTPAuthorizationCredentials = Depends(_
     return {"sub": "tester"}
 
 
-class _Db:
-    def __init__(self, scalars):
-        self._queue = list(scalars)
-
-    async def execute(self, _statement):
-        value = self._queue.pop(0)
-        return SimpleNamespace(
-            scalar_one_or_none=lambda: value,
-            scalars=lambda: SimpleNamespace(all=lambda: value),
-        )
+def _db(scalars) -> FakeAsyncSession:
+    """One queued answer per execute(), in order; an execute beyond the queue raises."""
+    return FakeAsyncSession(results=list(scalars), strict=True)
 
 
 def _client(db) -> TestClient:
@@ -257,16 +252,16 @@ _ROW = SimpleNamespace(
 
 
 def test_get_returns_the_recorded_rows():
-    body = _client(_Db([[_ROW, _ROW]])).get("/api/code-sync/post-sync-runs/run1", headers=_SIGNED_IN).json()
+    body = _client(_db([[_ROW, _ROW]])).get("/api/code-sync/post-sync-runs/run1", headers=_SIGNED_IN).json()
     assert body["run_id"] == "run1" and [a["label"] for a in body["actions"]] == ["Restart a", "Restart a"]
 
 
 def test_get_gives_404_for_an_unknown_run():
-    assert _client(_Db([[]])).get("/api/code-sync/post-sync-runs/nope", headers=_SIGNED_IN).status_code == 404
+    assert _client(_db([[]])).get("/api/code-sync/post-sync-runs/nope", headers=_SIGNED_IN).status_code == 404
 
 
 def test_node_sync_gives_404_for_an_unknown_node():
-    assert _client(_Db([None])).post("/api/nodes/ghost/sync", headers=_SIGNED_IN).status_code == 404
+    assert _client(_db([None])).post("/api/nodes/ghost/sync", headers=_SIGNED_IN).status_code == 404
 
 
 @pytest.mark.parametrize(
@@ -274,7 +269,7 @@ def test_node_sync_gives_404_for_an_unknown_node():
     [("post", "/api/nodes/n1/sync"), ("get", "/api/code-sync/post-sync-runs/run1")],
 )
 def test_an_anonymous_request_is_refused(method, path):
-    response = getattr(_client(_Db([])), method)(path)
+    response = getattr(_client(_db([])), method)(path)
     assert response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
 
 
@@ -301,3 +296,37 @@ def test_both_new_routers_are_mounted_on_routers_main_gates_with_the_role_sync_d
     main = (SLM_ROOT / "main.py").read_text(encoding="utf-8")
     for router in ("nodes_router", "code_sync_router"):
         assert f'app.include_router({router}, prefix="/api", dependencies=_SM_OR_AGENT)' in main
+
+
+class _CapturingDb:
+    """Stands in for ``db_service``: keeps every row the recorder writes."""
+
+    def __init__(self):
+        self.rows = []
+
+    def session(self):
+        db = self
+
+        class _Ctx:
+            async def __aenter__(self):
+                return SimpleNamespace(add=db.rows.append, commit=AsyncMock())
+
+            async def __aexit__(self, *exc):
+                return False
+
+        return _Ctx()
+
+
+async def test_a_secret_in_post_sync_output_is_redacted_in_the_stored_row_and_the_get_response_18522(monkeypatch):
+    """#18522: stored record and GET response both carry the redacted output, never the secret."""
+    secret = "hunter2-s3cr3t-value"  # pragma: allowlist secret
+    capture = _CapturingDb()
+    monkeypatch.setattr(recorder, "db_service", capture)
+    ctx = recorder.RunContext("run1", "n1", "r")
+    out = recorder.ActionOutcome(True, 0, f"migrating\napi_key={secret}\ndone", None, _NOW, _NOW)
+    await recorder.record_action_run(ctx, "post_sync", "Post-sync command", f"deploy --password={secret}", None, out)
+    (row,) = capture.rows
+    assert secret not in row.output_tail and secret not in row.command
+    assert "migrating" in row.output_tail and "done" in row.output_tail  # only the secret is masked
+    response = _client(_db([[row]])).get("/api/code-sync/post-sync-runs/run1", headers=_SIGNED_IN)
+    assert response.status_code == 200 and secret not in response.text

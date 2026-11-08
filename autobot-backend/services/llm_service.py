@@ -49,8 +49,10 @@ from llm_shared.fallback_chain import get_fallback_chain_manager
 from llm_shared.models import LLMRequest, LLMResponse
 from llm_shared.optimization.prompt_compressor import CompressionConfig, PromptCompressor
 from llm_shared.rate_limit_backoff import extract_rate_limit_info
-from llm_shared.tiered_routing import TierConfig, TieredModelRouter
+from llm_shared.tiered_routing.base_strategy import RoutingStrategy
+from llm_shared.tiered_routing.registry import get_active_router
 from llm_shared.types import LLMType
+from services.chat_budget_gate import chat_budget_refusal, enforce_chat_budget
 from services.llm_fallback_chain import (
     StreamRetry,
     apply_rate_limit_fallback,
@@ -59,7 +61,8 @@ from services.llm_fallback_chain import (
     resolve_attempt_provider,
     track_attempt,
 )
-from services.llm_usage_recording import record_response_usage
+from services.llm_optimized_prompt import build_optimized_system_prompt, vllm_default_model
+from services.llm_usage_recording import record_response_usage, recorded_stream
 
 try:
     from services.provider_health import ProviderHealthManager, ProviderHealthStatus
@@ -162,9 +165,9 @@ class LLMService:
         self._prompt_compressor = PromptCompressor(CompressionConfig(min_length_to_compress=0))
         # Runtime provider override set via switch_provider() (#3185).
         self._active_provider: str | None = None
-        # Tiered model routing — mirrors LLMInterface._init_tiered_routing() (#3185).
+        # Tiered routing (#3185) via the strategy registry: routing_strategy applies (#18297).
         try:
-            self._tier_router: TieredModelRouter | None = TieredModelRouter(TierConfig.from_config())
+            self._tier_router: RoutingStrategy | None = get_active_router()
         except Exception as exc:  # pragma: no cover
             logger.warning("Tiered routing init failed, disabled: %s", exc)
             self._tier_router = None
@@ -253,6 +256,8 @@ class LLMService:
         )
         if cached is not None:
             return cached
+        if (refusal := await chat_budget_refusal(request)) is not None:  # budget gate, before any spend (#16845)
+            return refusal
 
         # GH#8998: Track attempted models to avoid infinite loops
         attempted_models: List[str] = []
@@ -346,6 +351,7 @@ class LLMService:
             timeout=timeout,
             **kwargs,
         )
+        await enforce_chat_budget()  # raises ChatBudgetExceeded before any spend (#16845)
 
         # GH#8998: Track attempted models to avoid infinite loops
         attempted_models: List[str] = []
@@ -482,9 +488,7 @@ class LLMService:
         and routes the request directly to vLLM.  Cache hit rate is attached
         to ``response.metadata["cache_hit_rate"]``.
 
-        Ported from ``LLMInterface.chat_completion_optimized`` (interface.py
-        line 1381).  Renamed to match the ``chat()`` / ``stream()`` naming
-        convention already established on this class.
+        Ported from ``LLMInterface.chat_completion_optimized``.
 
         Args:
             agent_type: Agent type string used to select the base prompt.
@@ -504,75 +508,21 @@ class LLMService:
             LLMResponse.  ``response.metadata["cache_hit_rate"]`` is set when
             vLLM prefix-cache data is available in ``response.usage``.
         """
-        from agent_tier_classifier import get_base_prompt_for_agent
-        from prompt_manager import get_optimized_prompt
-        from tools import get_tool_registry
-
-        # Issue #5870: default to full registry when caller omits available_tools.
-        if available_tools is None:
-            available_tools = get_tool_registry().get_available_tools()
-
-        tool_descriptions: Dict | None = None
-        try:
-            registry = get_tool_registry()
-            tool_set = set(available_tools)
-            uncompressed = {n: d for n, d in registry.get_raw_descriptions().items() if n in tool_set}
-            compressed_map = await registry.get_compressed_descriptions()
-            tool_descriptions = {n: d for n, d in compressed_map.items() if n in tool_set}
-            uncompressed_bytes = sum(len(d) for d in uncompressed.values())
-            compressed_bytes = sum(len(d) for d in tool_descriptions.values())
-            saving_pct = (1 - compressed_bytes / uncompressed_bytes) * 100 if uncompressed_bytes else 0
-            logger.debug(
-                "[#5827] Tool desc savings: %d tools, %d → %d bytes (%.0f%% reduction)",
-                len(tool_descriptions),
-                uncompressed_bytes,
-                compressed_bytes,
-                saving_pct,
-            )
-        except Exception:
-            logger.warning(
-                "[#5827] compress_description failed; falling back to tool names only",
-                exc_info=True,
-            )
-
-        # #12829: get_optimized_prompt accepts a preference clause (#10545) and a
-        # skill clause (#12810), but nothing ever passed either — both halves were
-        # built, tested and left disconnected, so learned tenant preferences and
-        # ranked skills never reached a prompt. Both are async lookups, which is
-        # why they are pre-fetched here rather than inside the sync assembler.
-        # Each helper returns None on any failure, so prompt assembly is unaffected
-        # when the aggregator or ranker is unavailable.
-        preference_clause, skill_clause = await self._build_prompt_clauses(
+        system_prompt = await build_optimized_system_prompt(
             agent_type=agent_type,
             user_message=user_message,
-            available_tools=available_tools,
-            additional_params=additional_params,
-        )
-
-        system_prompt = get_optimized_prompt(
-            base_prompt_key=get_base_prompt_for_agent(agent_type),
             session_id=session_id,
             user_name=user_name,
             user_role=user_role,
             available_tools=available_tools,
             recent_context=recent_context,
             additional_params=additional_params,
-            tool_descriptions=tool_descriptions,
-            preference_clause=preference_clause,
-            skill_clause=skill_clause,
+            build_clauses=self._build_prompt_clauses,
         )
-
         request_id: str = llm_params.pop("request_id", str(uuid.uuid4()))
         start_time = time.time()
 
-        # Issue #4054: use the vLLM config key directly to avoid cache-key
-        # collisions between Ollama and vLLM calls.
-        try:
-            from config.manager import get_config_manager as _get_cfg
-
-            model_name: str = _get_cfg().get("llm.vllm.default_model", "meta-llama/Llama-3.2-3B-Instruct")
-        except Exception:
-            model_name = "meta-llama/Llama-3.2-3B-Instruct"
+        model_name: str = vllm_default_model()
 
         messages: List[Dict[str, str]] = [
             {"role": "system", "content": system_prompt},
@@ -603,6 +553,8 @@ class LLMService:
                 request_id=request_id,
                 **llm_params,
             )
+            if (refusal := await chat_budget_refusal(request)) is not None:  # budget gate (#16845)
+                return refusal
 
             provider = self._registry.get_provider_by_name("vllm")
             if provider is None:
@@ -622,22 +574,24 @@ class LLMService:
                 self._error_count += 1
                 logger.warning("chat_optimized vLLM error: %s", response.error)
 
-            actual_model = response.model if response.model else model_name
-
-            if cache_key and not response.error and response.content:
-                await self._optimized_store_cache(cache_key, response, request_id)
-
-            processing_time = time.time() - start_time
-            if not response.processing_time:
-                response.processing_time = processing_time
-
-            self._calculate_cache_hit_rate(response)
-            await self._track_usage(response, session_id)
+            await self._finish_optimized(response, cache_key, request_id, start_time, session_id)
+            actual_model = response.model or model_name
 
             span.set_attribute("llm.model", actual_model)
             span.set_attribute("llm.cached", False)
             span.set_attribute("llm.error", bool(response.error))
             return response
+
+    async def _finish_optimized(
+        self, response: LLMResponse, cache_key: str | None, request_id: str, start_time: float, session_id: str
+    ) -> None:
+        """Cache, time, hit-rate and spend bookkeeping after a ``chat_optimized`` provider call."""
+        if cache_key and not response.error and response.content:
+            await self._optimized_store_cache(cache_key, response, request_id)
+        if not response.processing_time:
+            response.processing_time = time.time() - start_time
+        self._calculate_cache_hit_rate(response)
+        await self._track_usage(response, session_id)
 
     # ------------------------------------------------------------------
     # Runtime provider control (#3185)
@@ -748,11 +702,10 @@ class LLMService:
     # ------------------------------------------------------------------
 
     @property
-    def tier_router(self) -> TieredModelRouter | None:
-        """Return the shared TieredModelRouter instance, or None if disabled.
+    def tier_router(self) -> RoutingStrategy | None:
+        """Return the configured routing strategy singleton, or None if disabled.
 
         Callers in api/llm.py reach this to get/set metrics and config.
-        Mirrors ``LLMInterface._tier_router`` (interface.py line 410).
         """
         return self._tier_router
 
@@ -1012,7 +965,7 @@ class LLMService:
         """
         chunks_yielded = False
         try:
-            async for chunk in provider.stream_completion(request):
+            async for chunk in recorded_stream(provider, request, session_id=conversation_id):
                 chunks_yielded = True
                 yield chunk
             await emit_fallback_success(
@@ -1089,7 +1042,7 @@ class LLMService:
         }.get(resolved_type)
         if cheap:
             return cheap
-        # Otherwise defer to complexity-based tier routing.
+        # Otherwise defer to the configured routing strategy (#18297).
         if self._tier_router is not None:
             try:
                 selected, _ = self._tier_router.route(messages)
@@ -1172,12 +1125,7 @@ class LLMService:
         )
 
     async def _track_usage(self, response: LLMResponse, session_id: str | None) -> None:
-        """Persist this response's tokens so cost tracking and budget policy see them.
-
-        ``session_id`` is whichever conversation/session identifier the calling
-        path holds; it lands in the usage record's ``session_id``. See
-        ``services/llm_usage_recording`` for why this is a delegation (#16845).
-        """
+        """Persist this response's tokens for cost tracking and budget policy (#16845)."""
         await record_response_usage(response, session_id)
 
 

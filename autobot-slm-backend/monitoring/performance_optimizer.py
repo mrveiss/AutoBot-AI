@@ -18,6 +18,7 @@ import psutil
 import yaml
 from performance_monitor import FleetPerformanceMonitor
 
+from autobot_shared.status_enums import Severity
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -217,7 +218,7 @@ class PerformanceOptimizer:
 
         # Sort by severity and impact
         recommendations.sort(
-            key=lambda x: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(x.severity, 0),
+            key=lambda x: Severity.rank_of(x.severity),
             reverse=True,
         )
 
@@ -615,13 +616,10 @@ class PerformanceOptimizer:
         severity_threshold = auto_config.get("severity_threshold", "medium")
         max_optimizations = auto_config.get("max_optimizations_per_hour", 3)
 
-        severity_levels = {"low": 1, "medium": 2, "high": 3, "critical": 4}
-        threshold_level = severity_levels.get(severity_threshold, 2)
+        threshold_level = Severity.rank_of(severity_threshold, Severity.MEDIUM.rank)
 
         applicable = [
-            rec
-            for rec in recommendations
-            if severity_levels.get(rec.severity, 0) >= threshold_level and rec.auto_applicable
+            rec for rec in recommendations if Severity.rank_of(rec.severity) >= threshold_level and rec.auto_applicable
         ]
         return applicable[:max_optimizations]
 

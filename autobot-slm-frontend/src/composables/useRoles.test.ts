@@ -200,7 +200,7 @@ describe('useRoles — migrated onto slmApiClient (#12420 Phase 2 batch 7)', () 
       expect(r.error).toBe('role in use')
     })
 
-    it('syncRole returns a failed SyncResult carrying the detail', async () => {
+    it('syncRole returns a failed RoleSyncResult carrying the detail', async () => {
       mockRaw.mockResolvedValue(errorResponse(500, { detail: 'sync exploded' }))
 
       const result = await useRoles().syncRole('backend', ['n1'])
@@ -281,5 +281,27 @@ describe('systemd_service sequence <-> comma-separated text field (#16025)', () 
       const units = ['autobot-backend', 'autobot-celery']
       expect(parseSystemdUnits(joinSystemdUnits(units))).toEqual(units)
     })
+  })
+})
+
+describe('useRoles — loaders report genuine success (#19887)', () => {
+  beforeEach(() => {
+    mockRaw.mockReset()
+  })
+
+  it('fetchRoles resolves true on success and false on a failed read', async () => {
+    mockRaw.mockResolvedValueOnce(jsonResponse([]))
+    expect(await useRoles().fetchRoles()).toBe(true)
+
+    mockRaw.mockResolvedValueOnce(errorResponse(500, { detail: 'down' }))
+    expect(await useRoles().fetchRoles()).toBe(false)
+  })
+
+  it('fetchFleetHealth resolves true on success and false on a failed read', async () => {
+    mockRaw.mockResolvedValueOnce(jsonResponse({}))
+    expect(await useRoles().fetchFleetHealth()).toBe(true)
+
+    mockRaw.mockResolvedValueOnce(errorResponse(500, { detail: 'down' }))
+    expect(await useRoles().fetchFleetHealth()).toBe(false)
   })
 })

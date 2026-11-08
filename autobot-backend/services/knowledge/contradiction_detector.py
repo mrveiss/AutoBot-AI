@@ -84,6 +84,7 @@ class ConflictPair:
     chunk_b: str
     explanation: str
     confidence: float
+    quarantined: bool = False  # either chunk is a research-quarantined fact (#19163)
 
 
 @dataclass
@@ -92,6 +93,7 @@ class ContradictionReport:
 
     contradictions: list[ConflictPair] = field(default_factory=list)
     gaps: list[str] = field(default_factory=list)
+    quarantined_chunk_ids: list[str] = field(default_factory=list)  # #19163: read via the audited opt-out
     checked_at: datetime = field(default_factory=lambda: now_utc())
 
 
@@ -201,6 +203,13 @@ def _parse_llm_response(raw: str) -> tuple[list[ConflictPair], list[str]]:
 # ---------------------------------------------------------------------------
 
 
+def _mark_quarantined(conflicts: list[ConflictPair], chunks: list[dict[str, Any]]) -> None:
+    """Flag each conflict that cites a chunk the lint read through the quarantine opt-out (#19163)."""
+    texts = {c.get("text", "") for c in chunks if c.get("quarantined")}
+    for conflict in conflicts:
+        conflict.quarantined = conflict.chunk_a in texts or conflict.chunk_b in texts
+
+
 class ContradictionDetector:
     """Detect contradictions in a list of KB chunks.
 
@@ -253,9 +262,11 @@ class ContradictionDetector:
             all_conflicts.extend(conflicts)
             all_gaps.extend(gaps)
 
+        _mark_quarantined(all_conflicts, chunks)
         return ContradictionReport(
             contradictions=all_conflicts,
             gaps=list(dict.fromkeys(all_gaps)),  # deduplicate preserving order
+            quarantined_chunk_ids=[str(c["id"]) for c in chunks if c.get("quarantined") and c.get("id")],
         )
 
 

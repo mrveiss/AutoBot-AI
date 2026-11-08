@@ -15,6 +15,8 @@ from pathlib import Path
 
 import requests
 
+from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
+from autobot_shared.redis_client import require_redis_client
 from autobot_shared.slm_rest_url import rest_url
 from autobot_shared.ssot_config import config as ssot_config
 
@@ -103,7 +105,7 @@ class HealthCheck:
         logger.info("Checking ChromaDB...")
         try:
             # ChromaDB health endpoint
-            response = requests.get(f"{self.chromadb_url}/api/v2/heartbeat", timeout=5)
+            response = requests.get(f"{self.chromadb_url}{CHROMADB_HEARTBEAT_PATH}", timeout=5)
             is_healthy = response.status_code == 200
             self.results["chromadb"] = {
                 "status": "OK" if is_healthy else f"FAILED ({response.status_code})",
@@ -223,9 +225,7 @@ class HealthCheck:
         """Check 7: Redis connectivity"""
         logger.info("Checking Redis connectivity...")
         try:
-            import redis
-
-            r = redis.Redis(host="localhost", port=6379, db=0, socket_connect_timeout=5)  # noqa: redis
+            r = require_redis_client(database="main", decode_responses=False)
             r.ping()
             self.results["redis"] = {"status": "OK", "timestamp": datetime.now().isoformat()}
             return True

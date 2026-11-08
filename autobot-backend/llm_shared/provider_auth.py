@@ -47,8 +47,19 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any
 
-from autobot_shared.auth.jwt_core import decode_jwt_claims_unverified
 from autobot_shared.logging_manager import get_logger
+
+from .provider_token_response import (  # noqa: F401  # re-exported (#19241 split)
+    LEGACY_FALLBACK_STOP_KEY,
+    NEEDS_REAUTH_KEY,
+    ProviderAuthError,
+    TokenExpiredError,
+    TokenRevokedError,
+    _decode_jwt_claims,
+    _merge_token_response,
+    build_token_data,
+    validate_token_response,
+)
 
 logger = get_logger(__name__)
 
@@ -79,12 +90,20 @@ def org_vault_subject(org_id: Any | None) -> str:
     return f"org:{org_id}" if org_id else LEGACY_SUBJECT
 
 
-class ProviderAuthError(Exception):
-    """Unrecoverable auth failure — the provider cannot be used."""
+#: Prefix of a per-user subject (#19241): a user's own provider account.
+USER_SUBJECT_PREFIX = "user:"
 
 
-class TokenExpiredError(ProviderAuthError):
-    """Access token expired and no refresh token is available."""
+def user_vault_subject(user_id: Any) -> str:
+    """Return the per-user vault subject for *user_id* (#19241). Raises ValueError when empty.
+
+    A user subject never falls back to the org or legacy subject on read, so one
+    user's lookup can never return another principal's token.
+    """
+    uid = str(user_id or "").strip()
+    if not uid:
+        raise ValueError("a per-user provider token needs a user id")
+    return f"{USER_SUBJECT_PREFIX}{uid}"
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +227,12 @@ async def _vault_read_dual(
         subject=subject,
         owner_vault_str=owner_vault_str,
     )
-    if token_data is not None or subject == LEGACY_SUBJECT:
+    # An org that disconnected its system sign-in no longer falls back to "global" (#19241).
+    if token_data is not None and token_data.get(LEGACY_FALLBACK_STOP_KEY):
+        return None
+    # A user subject (#19241) is single-read: falling back to "global" would hand
+    # a user the shared credential under their own name.
+    if token_data is not None or subject == LEGACY_SUBJECT or subject.startswith(USER_SUBJECT_PREFIX):
         return token_data
     return await _vault_read(
         session,
@@ -326,9 +350,18 @@ class OAuthAuth(ProviderAuthStrategy):
             )
         return await self._ensure_fresh(session, token_data)
 
+    @staticmethod
+    def needs_refresh(token_data: dict) -> bool:
+        """True when the access token is inside the refresh grace window.
+
+        No recorded expiry (the provider sent no expires_in) means valid until revoked,
+        as /status reports it -- not "expired", which would force a refresh every call (#19241).
+        """
+        expires_at = token_data.get("expires_at")
+        return expires_at is not None and time.time() >= expires_at - _REFRESH_GRACE_SECONDS
+
     async def _ensure_fresh(self, session: Any, token_data: dict) -> str:
-        expires_at = token_data.get("expires_at", 0)
-        if time.time() < expires_at - _REFRESH_GRACE_SECONDS:
+        if not self.needs_refresh(token_data):
             return token_data["access_token"]
         refresh_token = token_data.get("refresh_token")
         if not refresh_token:
@@ -336,6 +369,7 @@ class OAuthAuth(ProviderAuthStrategy):
         return await self._refresh(session, token_data, refresh_token)
 
     async def _refresh(self, session: Any, old_data: dict, refresh_token: str) -> str:
+        from autobot_shared.http_egress_guard import assert_public_egress  # noqa: PLC0415
         from autobot_shared.security.ssrf_guard import SSRFError, pinned_connector  # noqa: PLC0415
         from autobot_shared.url_safety import get_oauth_allowed_hosts, require_allowlisted_https  # noqa: PLC0415
         from knowledge.connectors.oauth_flow import refresh_access_token  # noqa: PLC0415
@@ -351,8 +385,9 @@ class OAuthAuth(ProviderAuthStrategy):
         # and pin the outbound POST to that IP so DNS cannot be rebound to a
         # private address between validation and connect (TOCTOU rebinding).
         try:
+            await assert_public_egress(self._token_url)  # public-only, as the sign-in endpoints do (#17576)
             connector = await pinned_connector(self._token_url)
-        except SSRFError as exc:
+        except (SSRFError, ValueError) as exc:
             raise ProviderAuthError(
                 f"OAuth refresh blocked: token_url for {self._provider_name!r} is not publicly routable: {exc}"
             ) from exc
@@ -367,6 +402,8 @@ class OAuthAuth(ProviderAuthStrategy):
                 connector=connector,
             )
         except RuntimeError as exc:
+            if getattr(exc, "error", "") == "invalid_grant":
+                raise TokenRevokedError(f"OAuth refresh token for {self._provider_name!r} was rejected") from exc
             raise ProviderAuthError(f"OAuth refresh failed for {self._provider_name!r}: {exc}") from exc
 
         # Finding #3 (#11497): reject a mismatched token_type / issuer / audience
@@ -514,29 +551,8 @@ class SessionAuth(ProviderAuthStrategy):
 
 
 # ---------------------------------------------------------------------------
-# Token dict helpers
-# ---------------------------------------------------------------------------
-
-
-def _merge_token_response(old: dict, resp: dict) -> dict:
-    """Merge a token response into an existing token dict.
-
-    Preserves ``created_by`` and falls back to the old refresh_token when the
-    provider does not rotate it (some providers omit ``refresh_token`` on
-    refresh — RFC 6749 §6 allows this).
-    """
-    new: dict = dict(old)
-    new["access_token"] = resp["access_token"]
-    if "refresh_token" in resp:
-        new["refresh_token"] = resp["refresh_token"]
-    expires_in = resp.get("expires_in")
-    if expires_in:
-        new["expires_at"] = time.time() + int(expires_in)
-    return new
-
-
-# ---------------------------------------------------------------------------
-# Token audience / issuer / type validation (finding #3, #11497)
+# Token audience / issuer / type validation (finding #3, #11497) -- the checks
+# live in ``llm_shared.provider_token_response``; this is their provider data.
 # ---------------------------------------------------------------------------
 
 # Known OIDC issuers per provider — the ``iss`` claim of an id_token is matched
@@ -547,91 +563,6 @@ _EXPECTED_ISSUER_PREFIXES: dict[str, tuple[str, ...]] = {
     "google": ("https://accounts.google.com",),
     "microsoft": ("https://login.microsoftonline.com/",),
 }
-
-
-def _decode_jwt_claims(id_token: str) -> dict[str, Any]:
-    """Decode (WITHOUT signature verification) the payload of a compact JWS.
-
-    Used only to cross-check the ``iss`` / ``aud`` claims of an OIDC id_token
-    against the expected provider + client_id. The access token's authenticity
-    still rests on the TLS-authenticated token endpoint; this is defence-in-depth
-    against a swapped-audience / wrong-issuer token, not a trust anchor.
-    """
-    try:
-        return decode_jwt_claims_unverified(id_token)
-    except ValueError as exc:
-        raise ProviderAuthError(f"id_token {exc}") from exc
-
-
-def validate_token_response(resp: dict, *, provider_name: str, client_id: str) -> None:
-    """Validate ``token_type`` / ``iss`` / ``aud`` before a token is persisted.
-
-    Finding #3 (#11497). Lenient-but-strict: a field is only rejected when it is
-    PRESENT and wrong, so providers that legitimately omit ``token_type`` or an
-    ``id_token`` (RFC 6749 token responses) keep working with zero regression.
-
-    - ``token_type``: must be ``bearer`` (case-insensitive) when present.
-    - ``id_token`` (OIDC): when present, its ``aud`` must contain *client_id*
-      and its ``iss`` must be an https URL on an allowlisted OAuth host — and,
-      for a known OIDC provider, match that provider's issuer prefix.
-
-    Raises ``ProviderAuthError`` on any mismatch.
-    """
-    token_type = resp.get("token_type")
-    if token_type is not None and str(token_type).lower() != "bearer":
-        raise ProviderAuthError(f"unexpected token_type {token_type!r} for provider {provider_name!r}")
-
-    id_token = resp.get("id_token")
-    if not id_token:
-        return
-
-    claims = _decode_jwt_claims(id_token)
-
-    aud = claims.get("aud")
-    if aud is not None:
-        audiences = {aud} if isinstance(aud, str) else set(aud or [])
-        azp = claims.get("azp")
-        if client_id and client_id not in audiences and client_id != azp:
-            raise ProviderAuthError(f"id_token audience does not include client_id for provider {provider_name!r}")
-
-    iss = claims.get("iss")
-    if iss is not None:
-        _validate_issuer(str(iss), provider_name)
-
-
-def _validate_issuer(iss: str, provider_name: str) -> None:
-    """Reject an id_token issuer that is not an allowlisted / expected host."""
-    from urllib.parse import urlparse  # noqa: PLC0415
-
-    from autobot_shared.url_safety import get_oauth_allowed_hosts  # noqa: PLC0415
-
-    parsed = urlparse(iss)
-    if parsed.scheme != "https" or not parsed.hostname:
-        raise ProviderAuthError(f"id_token issuer {iss!r} is not an https URL for provider {provider_name!r}")
-    if parsed.hostname.lower() not in get_oauth_allowed_hosts():
-        raise ProviderAuthError(f"id_token issuer host {parsed.hostname!r} is not allowlisted")
-
-    expected = _EXPECTED_ISSUER_PREFIXES.get(provider_name.lower())
-    if expected and not any(iss.startswith(prefix) for prefix in expected):
-        raise ProviderAuthError(f"id_token issuer {iss!r} is not valid for provider {provider_name!r}")
-
-
-def build_token_data(
-    resp: dict,
-    *,
-    created_by: str,
-) -> dict[str, Any]:
-    """Build the canonical token dict from a raw token endpoint response."""
-    data: dict[str, Any] = {
-        "access_token": resp["access_token"],
-        "created_by": created_by,
-    }
-    if "refresh_token" in resp:
-        data["refresh_token"] = resp["refresh_token"]
-    expires_in = resp.get("expires_in")
-    if expires_in:
-        data["expires_at"] = time.time() + int(expires_in)
-    return data
 
 
 __all__ = [
@@ -645,6 +576,11 @@ __all__ = [
     "PROVIDER_AUTH_SECRET_TYPE",
     "LEGACY_SUBJECT",
     "org_vault_subject",
+    "user_vault_subject",
+    "NEEDS_REAUTH_KEY",
+    "LEGACY_FALLBACK_STOP_KEY",
+    "TokenRevokedError",
+    "USER_SUBJECT_PREFIX",
     "validate_token_response",
     "build_token_data",
     "_vault_write",

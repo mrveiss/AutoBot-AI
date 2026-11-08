@@ -24,13 +24,15 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from autobot_shared.ssot_config import config
-from constants.model_constants import OPENAI_O1_MINI  # used in _OPENAI_MODELS list
-from constants.model_constants import (
+from autobot_shared.ssot_hosted_models import hosted_default_model
+from constants.model_constants import (  # used in _OPENAI_MODELS list
     OPENAI_GPT4,
     OPENAI_GPT4_TURBO,
     OPENAI_GPT4O,
     OPENAI_GPT4O_MINI,
     OPENAI_GPT35_TURBO,
+    OPENAI_O1_MINI,
+    OPENAI_O1_PREVIEW,
 )
 from llm_shared.models import LLMRequest
 from llm_shared.structured_output import StructuredOutputMode
@@ -46,7 +48,7 @@ _OPENAI_MODELS = [
     OPENAI_GPT4_TURBO,
     OPENAI_GPT4,
     OPENAI_GPT35_TURBO,
-    "o1-preview",
+    OPENAI_O1_PREVIEW,
     OPENAI_O1_MINI,
 ]
 
@@ -60,7 +62,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
     """
 
     provider_name = ProviderType.OPENAI.value
-    default_model = OPENAI_GPT4O_MINI
+    default_model = hosted_default_model("openai")  # #15501
     fallback_models = tuple(_OPENAI_MODELS)
     sort_params_for_cache = True  # #7368: byte-exact payloads keep prompt caching warm
     # #17305: OpenAI implements `response_format: {"type": "json_schema", ...}`,

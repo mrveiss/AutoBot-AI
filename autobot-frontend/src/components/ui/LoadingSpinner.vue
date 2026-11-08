@@ -20,20 +20,7 @@
       <div class="bar"></div>
     </div>
 
-    <div v-else class="loading-circle">
-      <svg class="circular" viewBox="25 25 50 50">
-        <circle
-          class="path"
-          cx="50"
-          cy="50"
-          r="20"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-miterlimit="10"
-        />
-      </svg>
-    </div>
+    <BaseSpinner v-else class="loading-circle" :size="size" />
 
     <div v-if="label" class="loading-label" :class="labelClass" aria-hidden="true">
       {{ label }}
@@ -42,6 +29,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ComponentSize } from '@/types/component-props'
@@ -97,44 +85,6 @@ const customStyle = computed(() => ({
 .loading-spinner.loading-md { width: var(--spacing-6); height: var(--spacing-6); }
 .loading-spinner.loading-lg { width: var(--spacing-8); height: var(--spacing-8); }
 .loading-spinner.loading-xl { width: var(--spacing-10); height: var(--spacing-10); }
-
-/* Circle Spinner */
-.loading-circle {
-  width: 100%;
-  height: 100%;
-}
-
-.circular {
-  animation: rotate 2s linear infinite;
-  width: 100%;
-  height: 100%;
-}
-
-.path {
-  stroke-dasharray: 90, 150;
-  stroke-dashoffset: 0;
-  stroke-linecap: round;
-  animation: dash 1.5s ease-in-out infinite;
-}
-
-@keyframes rotate {
-  100% { transform: rotate(360deg); }
-}
-
-@keyframes dash {
-  0% {
-    stroke-dasharray: 1, 150;
-    stroke-dashoffset: 0;
-  }
-  50% {
-    stroke-dasharray: 90, 150;
-    stroke-dashoffset: -35;
-  }
-  100% {
-    stroke-dasharray: 90, 150;
-    stroke-dashoffset: -124;
-  }
-}
 
 /* Dots Spinner */
 .loading-dots {

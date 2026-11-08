@@ -45,6 +45,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -133,10 +134,6 @@ def _candidate_files(root: Path) -> list[str]:
 REACH = declare(
     "fastapi-validation-handler",
     discover=_candidate_files,
-    # 3300 -> 3384 (#18130): measured against a population of 3484, window
-    # [3284, 3484]. 3300 was 16 files from red on a PR that does not touch this
-    # guard; mid-window per the #17818 check, re-measured here, not carried.
-    floor=3551,
     growth=200,
     skips=0,
     what="git-tracked, non-test python files (candidates for a real FastAPI app construction)",
@@ -152,7 +149,7 @@ def _real_apps_missing_the_handler() -> dict[str, str]:
         source = (REPO_ROOT / rel).read_text(encoding="utf-8")
         read += 1
         try:
-            tree = ast.parse(source)
+            tree = parse_cache.parse(source)
         except SyntaxError:
             continue
         if not _constructs_fastapi_app(tree):
@@ -187,7 +184,7 @@ def test_every_justified_exclusion_still_constructs_a_real_app():
             stale.append(f"{rel}: file no longer exists -- drop the exclusion")
             continue
         source = path.read_text(encoding="utf-8")
-        if not _constructs_fastapi_app(ast.parse(source)):
+        if not _constructs_fastapi_app(parse_cache.parse(source)):
             stale.append(f"{rel}: no longer constructs a FastAPI app -- drop the exclusion")
     assert not stale, stale
 
@@ -196,17 +193,21 @@ def test_a_missing_handler_is_detected():
     """Known positive: the detector fires on the construction form it claims
     to see, and an import line ALONE (no call, no local def) is not enough --
     the exact regression a substring check would have missed."""
-    tree = ast.parse("from fastapi import FastAPI\nfrom x import register_validation_error_handlers\napp = FastAPI()\n")
+    tree = parse_cache.parse(
+        "from fastapi import FastAPI\nfrom x import register_validation_error_handlers\napp = FastAPI()\n"
+    )
     assert _constructs_fastapi_app(tree) is True
     assert _has_the_fix(tree) is False
 
 
 def test_a_registered_handler_is_not_flagged():
     """Known negative: either form of the real fix satisfies the scan."""
-    shared = ast.parse("from fastapi import FastAPI\napp = FastAPI()\nregister_validation_error_handlers(app)\n")
+    shared = parse_cache.parse(
+        "from fastapi import FastAPI\napp = FastAPI()\nregister_validation_error_handlers(app)\n"
+    )
     assert _has_the_fix(shared) is True
 
-    duplicate = ast.parse(
+    duplicate = parse_cache.parse(
         "from fastapi import FastAPI\napp = FastAPI()\n"
         "async def _validation_error_without_input(request, exc):\n    ...\n"
     )

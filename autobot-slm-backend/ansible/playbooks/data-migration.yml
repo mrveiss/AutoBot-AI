@@ -136,11 +136,32 @@
           command: docker cp autobot-backend:/app/config/. "{{ migration_backup_dir }}/config/"
           failed_when: false
 
+        # The repo root is three levels above playbooks/; the old `../` pointed into the ansible
+        # dir, which holds no env file, and `failed_when: false` hid it, so the backup never had
+        # one (#18555). Base + overlay, and a missing file now fails the backup loudly.
+        - name: Check the environment files exist
+          delegate_to: localhost
+          become: false
+          stat:
+            path: "{{ playbook_dir }}/../../../{{ item }}"
+          loop:
+            - .env.base
+            - .env.localhost
+          register: _env_file_stat
+
+        - name: Fail when an environment file is missing
+          fail:
+            msg: "{{ item.item }} not found at {{ item.stat.path | default(item.invocation.module_args.path) }}; the migration backup would lack it"
+          loop: "{{ _env_file_stat.results }}"
+          when: not item.stat.exists
+
         - name: Copy environment files
           copy:
-            src: "{{ playbook_dir }}/../.env.localhost"
-            dest: "{{ migration_backup_dir }}/config/env.localhost"
-          failed_when: false
+            src: "{{ playbook_dir }}/../../../{{ item }}"
+            dest: "{{ migration_backup_dir }}/config/{{ item | regex_replace('^\\.', '') }}"
+          loop:
+            - .env.base
+            - .env.localhost
 
         - name: Copy docker-compose configuration
           copy:

@@ -422,7 +422,7 @@ systemd_services:
     type: "oneshot"
     user: "{{ autobot.user }}"
     group: "{{ autobot.group }}"
-    exec_start: "/opt/autobot/scripts/optimize-models.sh"
+    exec_start: "{{ autobot.base_dir }}/scripts/optimize-models.sh"
 
     # Timer configuration (runs daily)
     timer:
@@ -603,4 +603,4 @@ troubleshooting:
     gpu_test: "nvidia-smi -L"  # or "intel_gpu_top -l" for Intel GPU
 
     # Model loading test
-    model_test: "/opt/autobot/scripts/test-model-loading.py"
+    model_test: "{{ autobot.base_dir }}/scripts/test-model-loading.py"

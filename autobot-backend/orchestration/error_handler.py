@@ -31,6 +31,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_constants import RetryConfig
 from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_30_DAYS
 from retry_mechanism import BackoffStrategy, RetryMechanism, RetryPolicy
@@ -96,7 +97,7 @@ class StepErrorConfig:
     """
 
     action: StepErrorAction = StepErrorAction.ABORT
-    max_retries: int = 3
+    max_retries: int = RetryConfig.DEFAULT_RETRIES  # #19730
     base_delay: float = 1.0
     backoff: BackoffStrategy = BackoffStrategy.EXPONENTIAL
     fallback_step_id: str | None = None
@@ -121,7 +122,7 @@ class StepErrorConfig:
             backoff = BackoffStrategy(raw_backoff)
         return cls(
             action=StepErrorAction(data.get("action", StepErrorAction.ABORT)),
-            max_retries=int(data.get("max_retries", 3)),
+            max_retries=int(data.get("max_retries", RetryConfig.DEFAULT_RETRIES)),
             base_delay=float(data.get("base_delay", 1.0)),
             backoff=backoff,
             fallback_step_id=data.get("fallback_step_id"),

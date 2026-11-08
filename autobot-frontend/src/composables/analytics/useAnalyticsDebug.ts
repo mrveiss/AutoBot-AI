@@ -18,6 +18,7 @@ import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import type { ToastType } from '@/composables/useToast'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('useAnalyticsDebug')
 
@@ -248,17 +249,7 @@ export function useAnalyticsDebug(deps: UseAnalyticsDebugDeps) {
     return 'grade-f'
   }
 
-  const formatTimestamp = (
-    timestamp: string | number | Date | undefined,
-  ): string => {
-    if (!timestamp) return 'Unknown'
-    try {
-      const date = new Date(timestamp)
-      return date.toLocaleString()
-    } catch {
-      return String(timestamp)
-    }
-  }
+  const formatTimestamp = createDateFormatter({ emptyText: 'Unknown' })
 
   const getScoreClass = (score: number): string => {
     if (score >= 80) return 'score-high'

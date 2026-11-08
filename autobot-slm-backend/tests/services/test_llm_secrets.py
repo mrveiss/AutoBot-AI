@@ -289,7 +289,10 @@ class TestRoundTripLeavesTheStoredKeyUntouched:
 
 
 class TestMergeProviderSecret:
-    @pytest.mark.parametrize("mask", [f"{_REAL_KEY[:4]}...{_REAL_KEY[-4:]}", "****"])
+    # "**********" / "***": the canonical placeholders every redactor now emits (#19337).
+    @pytest.mark.parametrize(
+        "mask", [f"{_REAL_KEY[:4]}...{_REAL_KEY[-4:]}", "****", "**********", "***", "***REDACTED***", "<redacted>"]
+    )
     @pytest.mark.asyncio
     async def test_a_display_mask_is_refused_not_stored(self, uvc, monkeypatch, vault_calls, mask):
         """A tab loaded before #17826 still holds masks; the old masking shape must not reach the vault."""

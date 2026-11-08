@@ -10,20 +10,18 @@ for the AutoBot project's existing Redis data.
 
 import asyncio
 import logging
-import os
 import sys
-from pathlib import Path
 import time
+from pathlib import Path
 
-from autobot_shared.paths import project_root
 from autobot_shared.network_constants import ServiceURLs
+from autobot_shared.paths import project_root
+from autobot_shared.redis_client import require_redis_client
+
 # The sibling helper module lives beside this script; put its directory on the path so the import
 # resolves when the file is imported (pytest, tooling) as well as when it is run.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from langchain_redis_arm import INSTALL_HINT, NOT_MEASURED, ModernArmUnavailable, load_redis_vector_store # noqa: E402
-
-# DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
-_DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
+from langchain_redis_arm import INSTALL_HINT, NOT_MEASURED, ModernArmUnavailable, load_redis_vector_store  # noqa: E402
 
 # Add the project root to the Python path
 sys.path.insert(0, str(project_root()))
@@ -37,9 +35,7 @@ async def test_redis_connection():
     """Test basic Redis connectivity"""
     logger.info("=== Testing Redis Connection ===")
     try:
-        import redis
-
-        client = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True)
+        client = require_redis_client(database="knowledge", decode_responses=True)
         client.ping()
         logger.info("✅ Redis connection successful")
 
@@ -308,9 +304,7 @@ async def analyze_existing_data():
     """Analyze the structure of existing Redis vector data"""
     logger.info("\n=== Analyzing Existing Redis Data ===")
     try:
-        import redis
-
-        client = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True)
+        client = require_redis_client(database="knowledge", decode_responses=True)
 
         # Get sample documents
         sample_keys = list(client.scan_iter(match="llama_index/vector*", count=5))

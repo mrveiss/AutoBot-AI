@@ -22,6 +22,7 @@ import uuid
 from sqlalchemy import select
 
 from autobot_shared.env_utils import env_int
+from autobot_shared.ssot_config import config
 from models.database import Node, SecurityEventSeverity, SlmSecurityEvent
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ SENSITIVE_PORTS: "dict[int, tuple[str, str]]" = {
     27017: ("mongodb", SecurityEventSeverity.HIGH.value),
     9200: ("elasticsearch", SecurityEventSeverity.HIGH.value),
     5672: ("rabbitmq", SecurityEventSeverity.HIGH.value),
-    8100: ("chromadb", SecurityEventSeverity.HIGH.value),
+    config.port.chromadb: ("chromadb", SecurityEventSeverity.HIGH.value),  # #19321: the SSOT port
     11434: ("ollama", SecurityEventSeverity.HIGH.value),
     2375: ("docker-api", SecurityEventSeverity.CRITICAL.value),
     2376: ("docker-api-tls", SecurityEventSeverity.HIGH.value),

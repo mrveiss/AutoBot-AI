@@ -34,9 +34,15 @@ that makes the proof automatic rather than a promise.
 from __future__ import annotations
 
 import math
+import os
+import sys
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Generic, Sequence, TypeVar
+
+from repo_tests._reach_base import BaseFloor
+from repo_tests._reach_window import FloorWindow
 
 #: What one ``discover`` returns. ``Reach`` is generic over it so a caller's own element type
 #: survives into ``examined()`` instead of being flattened to ``object`` (#16987). Every guard
@@ -93,10 +99,22 @@ REGISTRY: dict[str, "Reach[Any]"] = {}
 _MEASURED: dict[tuple[str, str], Sequence[Any]] = {}
 
 
-#: How much of ``growth`` must remain unspent for a floor to be accepted (#17356). A tenth:
-#: large enough that a floor pinned at the very bottom is refused on the spot, small enough that
-#: a deliberate mid-window pin is not re-litigated by the next merge.
-_WINDOW_MARGIN = 0.10
+#: #19282: a floor the tree has outgrown -- slack past the allowance, or a pin in the bottom band of
+#: its window -- is STALE, not a reach loss. It is enforced where it is fixed: the merge train sets
+#: this, and scripts/repin_reach_floors.py re-pins every stale floor in one command. A PR whose
+#: author did not grow the tree is not failed for it; it gets a ReachFloorStale warning instead.
+#: A real loss -- the floor above what discovery finds now, or completed() below the floor -- fails
+#: everywhere, always.
+REACH_AUDIT_ENV = "AUTOBOT_REACH_AUDIT"
+
+
+def staleness_enforced() -> bool:
+    """True on a merge train (``AUTOBOT_REACH_AUDIT=1``), where stale floors are re-pinned."""
+    return os.environ.get(REACH_AUDIT_ENV) == "1"
+
+
+class ReachFloorStale(UserWarning):
+    """A floor the tree outgrew, reported outside the audit instead of failing (#19282)."""
 
 
 def floor_div_fraction(total: int, fraction: float) -> int:
@@ -139,7 +157,7 @@ def tracked_file_count(root: Path) -> int:
 
 
 @dataclass(frozen=True)
-class Reach(Generic[T]):
+class Reach(BaseFloor, FloorWindow, Generic[T]):
     """What one guard examines, and the least it may find and still be believed.
 
     ``floor`` is bound to what the sweep **discovered**, never to what it
@@ -149,7 +167,8 @@ class Reach(Generic[T]):
 
     name: str
     discover: Callable[[Path], Sequence[T]]
-    floor: int
+    #: The declared ``floor=``; 0 means "computed from the base commit" (#19676, ``_reach_base``).
+    pinned_floor: int
     what: str
     #: How far the live population may sit **above** ``floor`` before
     #: ``reach_declarations_test`` demands the floor be ratcheted up (#15928).
@@ -218,6 +237,8 @@ class Reach(Generic[T]):
     #: ``what`` so the string cannot disagree with the data, and :meth:`verify_scope` holds the
     #: sweep to it in both directions.
     roots: tuple[str, ...] | None = None
+    #: The module that called ``declare()``: the base floor imports the BASE version of it (#19676).
+    module: str = ""
 
     def examined(self, root: Path) -> Sequence[T]:
         """Discover under *root*, or fail loudly having found implausibly little.
@@ -303,11 +324,28 @@ class Reach(Generic[T]):
                 f"{count} {self.what}. The guard cannot pass; lower the floor to "
                 f"{count} only if the population genuinely shrank."
             )
+        stale = self.staleness(root)
+        if stale is None:
+            return
+        if staleness_enforced():
+            raise ReachFloorError(stale)
+        warnings.warn(ReachFloorStale(f"{stale}\nRe-pin with: python scripts/repin_reach_floors.py"), stacklevel=2)
+
+    def staleness(self, root: Path) -> str | None:
+        """Why this floor is stale for the live tree, or None (#19282). A floor-based declaration
+        is stale when the tree outgrew its allowance or the floor sits in its window's bottom band;
+        a ``min_fraction`` declaration has no recorded constant to go stale."""
+        if self.min_fraction is not None or self.computed:
+            return None
+        count = len(self.population(root))
+        slack = count - self.floor
+        if slack < 0:
+            return None  # a loss, not staleness: verify_floor raises it unconditionally
         allowance = self.skips + self.growth
         if allowance and slack <= allowance:
-            self._require_mid_window(count, slack)
+            return self._bottom_band(count, slack)
         if slack > allowance:
-            raise ReachFloorError(
+            return (
                 f"[{self.name}] floor {self.floor} sits {slack} below its live "
                 f"population of {count} {self.what}, which exceeds the declared "
                 f"allowance of {allowance} (skips={self.skips} + growth={self.growth}).\n"
@@ -319,67 +357,7 @@ class Reach(Generic[T]):
                 f"  growth= ordinary growth tolerated before a deliberate ratchet.\n"
                 f"If neither is short, the floor is stale: {self._window_sentence(count)}"
             )
-
-    def window(self, root: Path) -> tuple[int, int, int]:
-        """``(lowest legal floor, highest legal floor, the value to pin)`` -- #17356.
-
-        BOTH bounds, because a floor has two and every re-pin comment in
-        ``hooks_path_override_15961_test.py`` quotes only the first -- which is why there are
-        seventeen of them. The lower bound is the gap bound :meth:`verify_floor` enforces; the
-        upper is the most :meth:`completed` can clear, since a guard that skips ``skips`` items
-        finishes ``population - skips`` of them and a floor above that fails the stronger of the
-        two checks while satisfying the weaker.
-
-        The third value is the one to write down. ``population - (skips + growth)`` -- the
-        arithmetic every re-pin reached for -- is the BOTTOM of the window and has zero
-        tolerance by construction: correct at the instant of measurement, red for every tree
-        with one more file.
-        """
-        return self._bounds(len(self.population(root)))
-
-    def _bounds(self, count: int) -> tuple[int, int, int]:
-        """The arithmetic, in ONE place. :meth:`window` and the failure messages had a copy
-        each, and two copies of a formula are two chances for a message to recommend a value
-        the check would then refuse."""
-        highest = count - self.skips
-        return highest - self.growth, highest, highest - self.growth // 2
-
-    def _window_sentence(self, count: int) -> str:
-        lowest, highest, mid = self._bounds(count)
-        return (
-            f"the window against a population of {count} is "
-            f"[{lowest}, {highest}] -- its bottom is the gap bound "
-            f"(skips={self.skips} + growth={self.growth}) and its top is the most completed() "
-            f"can clear (population - skips). Pin MID-window, at {mid}."
-        )
-
-    def _require_mid_window(self, count: int, slack: int) -> None:
-        """Refuse a floor pinned at the bottom of its own window (#17356).
-
-        A convention was not enough, and that is measured rather than argued: the author who
-        wrote up *"`population - growth` has zero tolerance"* pinned two new declarations at
-        exactly that value within the hour, and both went red on the next rebase. Seven reds,
-        five declarations, one night. A rule its own author violates belongs in the tool.
-
-        The margin is a tenth of ``growth`` -- the band the caller declared as ordinary
-        movement, not a number chosen here. ``growth=0`` is exempt: an equality pin is the
-        deliberate choice ``growth``'s own docstring asks for when normal work does not move the
-        number, and it has no window to sit in the bottom of.
-        """
-        if not self.growth:
-            return
-        margin = max(1, math.ceil(self.growth * _WINDOW_MARGIN))
-        if slack <= self.skips + self.growth - margin:
-            return
-        raise ReachFloorError(
-            f"[{self.name}] floor {self.floor} sits in the bottom {margin} of its window, which "
-            f"is zero tolerance dressed as an allowance: the next "
-            f"{self.skips + self.growth - slack} file(s) of ordinary growth turn it red on a PR "
-            f"that did not touch this guard.\n"
-            f"{self._window_sentence(count)}\n"
-            f"Re-measure rather than carrying a number across (#15928): the value above is this "
-            f"run's measurement, not a figure from a comment."
-        )
+        return None
 
     def verify_scope(self, root: Path) -> None:
         """Refuse a declared scope the sweep does not match, in either direction (#17844).
@@ -470,6 +448,15 @@ class Reach(Generic[T]):
             )
 
     def _require(self, count: int, verb: str, what: str) -> None:
+        # Nothing found fails every floor, and no floor needs reading to know it: a count floor is
+        # always positive (``declare`` refuses a negative one, ``computed_floor`` a non-positive
+        # computed one). Answering before ``self.floor`` keeps the empty-tree proof from measuring
+        # the base commit, which walks every declaration once per process (#17810).
+        if count == 0:
+            raise ReachFloorError(
+                f"[{self.name}] {verb} 0 {what}; floor is above zero. "
+                f"Fix the sweep, not the tree — a clean result below this floor asserts nothing."
+            )
         if count < self.floor:
             raise ReachFloorError(
                 f"[{self.name}] {verb} {count} {what}; floor is {self.floor}. "
@@ -524,11 +511,8 @@ def declare(
     # carrying both would be read as whichever one the reader happened to look at, and the
     # absolute fields are exactly what #17142 is removing from the guards that adopt a fraction.
     if min_fraction is None:
-        if floor <= 0:
-            raise ValueError(
-                f"[{name}] declare() needs either a positive floor or a min_fraction; "
-                f"got floor={floor} and no min_fraction. A floor of zero asserts nothing."
-            )
+        if floor < 0:
+            raise ValueError(f"[{name}] floor={floor}: omit it to compute the floor from the base (#19676).")
     else:
         if not 0 < min_fraction <= 1:
             raise ValueError(f"[{name}] min_fraction must be in (0, 1]; got {min_fraction}.")
@@ -550,13 +534,14 @@ def declare(
     reach = Reach(
         name=name,
         discover=discover,
-        floor=floor,
+        pinned_floor=floor,
         what=what,
         growth=growth,
         skips=skips,
         min_fraction=min_fraction,
         reference=reference,
         roots=roots,
+        module=sys._getframe(1).f_globals.get("__name__", ""),
     )
     REGISTRY[name] = reach
     return reach

@@ -89,6 +89,9 @@ async def test_rate_limit_fails_open_when_redis_is_down(monkeypatch, caplog):
 
     monkeypatch.setattr(rl_mod, "get_async_redis_client", _down)
     monkeypatch.setattr(mod, "_RATE_LIMIT", 1)
+    # The limiter is module-level and throttles its fail-open warning per instance; an earlier
+    # test in the same worker may already have spent it, so start this test with a fresh throttle.
+    monkeypatch.setattr(mod._post_auth_limiter, "_last_fail_open_warn", None)
     srv = make_server()
     with caplog.at_level(logging.WARNING):
         for _ in range(3):

@@ -25,6 +25,9 @@ Authorization model
 - **rotate** / **delete** — ``authorize("write", owner_vault)``.
 - **register_dependency** / **unregister_dependency** (#10088 Task 8.2) —
   ``authorize("write", owner_vault)``: metadata about the secret, not a grant on it.
+- **verify_bearer** (#18811) — no caller principal: the presented value IS the proof. Only a
+  live secret of the expected type in its owner's own user vault, owner active, matches; every
+  match, and every miss the caller does not aggregate itself, is audited with its accessor.
 
 Every mutation authorizes against the secret's **owner vault** (the authority
 that owns it), not the grantee — sharing with company B is gated by your rights
@@ -34,7 +37,9 @@ in the owning vault, never by B's.
 from __future__ import annotations
 
 import logging
+import secrets
 import uuid
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,6 +55,7 @@ from services.envelope_secrets_service import (
 )
 from services.secret_dependency_service import SecretDependencyService
 from services.secrets_access_audit import SecretAccessReport, describe_secret_access
+from services.secrets_access_log import record_secret_access
 from services.secrets_authz import PrincipalFacts, authorize
 from services.secrets_principal_resolver import resolve_principal_facts
 
@@ -87,6 +93,8 @@ class SecretsCoordinator:
         name: str,
         secret_type: str,
         plaintext: bytes,
+        extra_data: dict | None = None,
+        expires_at: datetime | None = None,
     ) -> Secret:
         facts = await self._facts(session, user_id, permissions)
         if not authorize(facts, "write", owner_vault):
@@ -98,7 +106,53 @@ class SecretsCoordinator:
             secret_type=secret_type,
             plaintext=plaintext,
             created_by=user_id,
+            extra_data=extra_data,
+            expires_at=expires_at,
         )
+
+    async def verify_bearer(
+        self,
+        session: AsyncSession,
+        *,
+        secret_id: uuid.UUID,
+        presented: bytes,
+        secret_type: str,
+        accessor: str,
+        record_failure: bool = True,
+    ) -> Secret | None:
+        """The secret, if *presented* is the value of user-vault secret *secret_id* of *secret_type* (#18811).
+
+        Lookup by id for a credential its holder PRESENTS, rather than a principal who reads: the
+        reference names the secret, the value proves possession, and the secret's owner is the
+        principal it acts as. Nothing is cached -- every call reads the store, so a deleted,
+        deactivated or expired secret, or an owner who is no longer active, fails on the next
+        request. The value is compared in constant time and never leaves this method; every
+        match is recorded with *accessor* (``secrets_access_log``), and so is every miss unless
+        *record_failure* is false: a caller that aggregates failures itself (the issue-claims
+        throttle, one event per source per window) passes that, so a flood is not a row each.
+        """
+        secret = await session.get(Secret, secret_id)
+        matched = await self._bearer_matches(session, secret, presented, secret_type)
+        if matched or record_failure:
+            owner = str(secret.owner_id) if secret is not None else None
+            record_secret_access(secret_id, accessor=accessor, actor_id=owner, granted=matched)
+        return secret if matched else None
+
+    async def _bearer_matches(
+        self, session: AsyncSession, secret: Secret | None, presented: bytes, secret_type: str
+    ) -> bool:
+        """Whether *secret* is live, owned by an active user's own vault, and holds *presented*."""
+        if secret is None or secret.sealed_value is None or secret.type != secret_type:
+            return False
+        if not secret.is_active or secret.is_expired:
+            return False
+        owner_vault = VaultRef(VaultKind.USER, str(secret.owner_id))
+        if secret.owner_vault != owner_vault.to_str():
+            return False
+        if not (await self._facts(session, secret.owner_id, set())).active:
+            return False
+        stored = await self._service.read(session, secret_id=secret.id, accessible_vaults={owner_vault})
+        return secrets.compare_digest(stored, presented)
 
     @staticmethod
     def _scope_permits(secret: Secret, facts: PrincipalFacts, session_id: str | None) -> bool:

@@ -19,6 +19,7 @@ _repo_root = os.path.join(_backend_root, "..")
 sys.path.insert(0, _backend_root)
 sys.path.insert(0, _repo_root)
 
+from knowledge.ownership import KnowledgeOwnership
 from memory.agent_diary import AgentDiaryService, list_with_diaries
 
 # ---------------------------------------------------------------------------
@@ -36,6 +37,7 @@ def _make_kb_mock(
     kb.store_fact.return_value = store_result or {"fact_id": "fact-001", "status": "created"}
     kb.get_all_facts.return_value = all_facts or []
     kb.search.return_value = search_results or []
+    kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
     return kb
 
 
@@ -54,6 +56,8 @@ def _make_diary_fact(
             "session_id": "sess-1",
             "topic": topic,
             "diary_timestamp": timestamp,
+            "owner_id": "alice",
+            "visibility": "private",
         },
     }
 
@@ -96,7 +100,7 @@ async def test_read_filters_by_agent_and_category():
     kb = _make_kb_mock(all_facts=facts)
     with patch("memory.agent_diary._get_kb", new=AsyncMock(return_value=kb)):
         diary = AgentDiaryService()
-        entries = await diary.read("chat", last_n=10)
+        entries = await diary.read("chat", last_n=10, user_id="alice")
 
     assert len(entries) == 2, f"Expected 2 entries for 'chat', got {len(entries)}"
     # Newest first: entry C (11:00) before entry A (10:00)
@@ -111,7 +115,7 @@ async def test_read_respects_last_n():
     kb = _make_kb_mock(all_facts=facts)
     with patch("memory.agent_diary._get_kb", new=AsyncMock(return_value=kb)):
         diary = AgentDiaryService()
-        entries = await diary.read("rag", last_n=3)
+        entries = await diary.read("rag", last_n=3, user_id="alice")
     assert len(entries) == 3, f"Expected 3, got {len(entries)}"
     print("[PASS] test_read_respects_last_n")
 
@@ -129,11 +133,11 @@ async def test_read_swallows_errors():
 
 async def test_search_delegates_to_kb():
     """search() calls kb.search with correct filters and returns results."""
-    hits = [{"content": "found it", "score": 0.9}]
+    hits = [{"content": "found it", "score": 0.9, "metadata": {"owner_id": "alice", "visibility": "private"}}]
     kb = _make_kb_mock(search_results=hits)
     with patch("memory.agent_diary._get_kb", new=AsyncMock(return_value=kb)):
         diary = AgentDiaryService()
-        results = await diary.search("research", "processed", n=3)
+        results = await diary.search("research", "processed", n=3, user_id="alice")
     assert results == hits
     kb.search.assert_awaited_once_with(
         query="processed",
@@ -169,7 +173,7 @@ async def test_list_with_diaries_parallel():
     ]
     kb = _make_kb_mock(all_facts=all_facts)
     with patch("memory.agent_diary._get_kb", new=AsyncMock(return_value=kb)):
-        result = await list_with_diaries(["chat", "rag"], last_n=3)
+        result = await list_with_diaries(["chat", "rag"], last_n=3, user_id="alice")
 
     assert len(result) == 2
     by_name = {r["agent_name"]: r for r in result}

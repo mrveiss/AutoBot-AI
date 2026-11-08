@@ -9,8 +9,8 @@ forever while nothing is actually queued. Both surface identically to any
 tooling that summarises check conclusions (``statusCheckRollup == null``,
 "19 success / 0 failures"), and neither produces a signal of its own:
 
-1. **Parked runs (#12823).** ``auto-update-pr-branches`` refreshes stale PR
-   branches through ``PUT /pulls/{n}/update-branch``. With the default
+1. **Parked runs (#12823).** ``auto-update-pr-branches`` (retired by #19548) refreshed
+   PR branches through ``PUT /pulls/{n}/update-branch``. With the default
    ``GITHUB_TOKEN`` the resulting merge commit is authored and pushed by
    ``github-actions[bot]``. The repository's fork-PR approval policy
    (``all_external_contributors``) treats that bot as an external
@@ -221,7 +221,7 @@ DEFAULT_MAX_JOB_LOOKUPS = 25
 #
 # Derived, not chosen: every self-hosted job in .github/workflows declares
 # `timeout-minutes` of 30 or less (frontend-test's unit-tests and build-test at
-# 30, security-scan at 20, test-summary at 15, auto-update-pr-branches at 15).
+# 30, security-scan at 20, test-summary at 15).
 # 45 is therefore the largest declared ceiling in the repository plus a 50%
 # margin, so no job that is merely slow can reach it while still inside its own
 # declared limit. The case this catches is the one GitHub's own enforcement
@@ -700,7 +700,7 @@ REMEDIATION = (
     "  (a) relax the repository Actions setting 'Require approval for all external contributors' to "
     "'Require approval for first-time contributors', so pushes attributed to the update bot dispatch "
     "normally; or\n"
-    "  (b) run auto-update-pr-branches with a credential that is a repository collaborator "
+    "  (b) push bot-attributed commits with a credential that is a repository collaborator "
     "(a GitHub App installation token or PAT stored as a secret); or\n"
     "  (c) retire the automatic branch update and refresh PR branches from the PR page instead.\n"
     "Until then this watchdog marks affected PRs with a failing commit status so none of them can "

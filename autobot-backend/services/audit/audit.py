@@ -23,6 +23,7 @@ import time
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import fire_and_forget_threadsafe
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.redis_client import get_async_redis_client
@@ -36,12 +37,17 @@ from services.audit.taxonomy import (  # noqa: F401 -- re-exported vocabulary
     AuditEvent,
     AuditEventType,
     AuditFilter,
-    EventType,
+    ComplianceEventType,
     action_name,
     event_from_dict,
 )
 
 logger = get_logger(__name__)
+
+#: Seconds a durable audit insert (``record_committed``) may take before the write counts as failed.
+AUDIT_DURABLE_TIMEOUT_SECONDS = env_float_clamped(
+    "AUTOBOT_AUDIT_DURABLE_TIMEOUT_SECONDS", 5.0, 0.1, 60.0, positive_finite=True
+)
 
 #: The serving loop, captured the first time a record is made on it, so a
 #: producer on a thread with no loop of its own can hand its write over.
@@ -69,8 +75,10 @@ async def _analyse_for_threats(event: AuditEvent) -> None:
         logger.error("Threat analysis could not run for %s: %s", event.action, type(exc).__name__)
 
 
-async def record(event: AuditEvent) -> None:
+async def record(event: AuditEvent) -> bool:
     """Persist one audit event: the ``audit_logs`` row first, then the Redis projection.
+
+    Returns whether the durable row was written, for a caller that must not act without one (#20026).
 
     #13562: this is also where the bus feeds ``ThreatDetectionEngine``. Analysis
     runs BEFORE the write and never depends on it: a detector that only sees the
@@ -80,16 +88,53 @@ async def record(event: AuditEvent) -> None:
     """
     _remember_loop()
     await _analyse_for_threats(event)
-    await _persist(event)
-    await _project(event)
+    written = await _persist(event)
+    await _project_safely(event)
+    return written
 
 
-async def _persist(event: AuditEvent) -> None:
+async def _project_safely(event: AuditEvent) -> None:
+    """:func:`_project` that never fails a committed write: a Redis outage is logged and counted (#19860)."""
+    try:
+        await _project(event)
+    except Exception as exc:  # noqa: BLE001 -- the durable row is already committed; the projection is rebuildable
+        logger.error("audit: projection failed for %s after the row was written: %s", event.action, type(exc).__name__)
+        record_audit_write_failure_safely(event.action, "projection:" + type(exc).__name__)
+
+
+async def _after_commit(event: AuditEvent) -> None:
+    """The analysis and the Redis projection of an event whose row is already committed (off the request)."""
+    await _analyse_for_threats(event)
+    await _project_safely(event)
+
+
+async def record_committed(event: AuditEvent) -> bool:
+    """Commit one audit row, awaited and bounded, and return whether it was written (#19860).
+
+    For a caller that must not act without the row. Only the ``audit_logs`` insert is awaited, under
+    ``AUDIT_DURABLE_TIMEOUT_SECONDS`` (a timeout is a failed write, logged and counted); the threat
+    analysis and the Redis projection run in the background afterwards, so neither a slow detector
+    nor a Redis outage holds the request or turns a committed row into a failure.
+    """
+    _remember_loop()
+    try:
+        written = await asyncio.wait_for(_persist(event), timeout=AUDIT_DURABLE_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        logger.error("audit: durable write of %s timed out after %ss", event.action, AUDIT_DURABLE_TIMEOUT_SECONDS)
+        record_audit_write_failure_safely(event.action, "timeout")
+        return False
+    run_redis_write(_after_commit(event), label="audit")
+    return written
+
+
+async def _persist(event: AuditEvent) -> bool:
     try:
         await store.insert_event(event)
+        return True
     except Exception as exc:  # noqa: BLE001 -- counted below; an audit write must not raise
         logger.error("audit: system-of-record write failed for %s: %s", event.action, type(exc).__name__)
         record_audit_write_failure_safely(event.action, type(exc).__name__)
+        return False
 
 
 async def _project(event: AuditEvent) -> None:
@@ -117,7 +162,7 @@ def emit(event: AuditEvent) -> bool:
     running loop before any loop was seen -- which is logged at ERROR. A sync
     FastAPI handler or a worker thread hands the write to the serving loop.
 
-    #17225: this name used to be redefined further down as an ``EventType``
+    #17225: this name used to be redefined further down as a ``ComplianceEventType``
     bridge, so ``emit(AuditEvent(...))`` -- the call every direct producer made
     -- was recorded as a COMPLIANCE event whose action was the event's repr.
     """
@@ -227,7 +272,7 @@ def emit_compliance(
     metadata: Dict[str, Any] | None = None,
     ip_address: str | None = None,
 ) -> bool:
-    """Record a COMPLIANCE event; *action* may be an ``EventType`` or a string."""
+    """Record a COMPLIANCE event; *action* may be a ``ComplianceEventType`` or a string."""
     return emit(
         AuditEvent(
             category=AuditCategory.COMPLIANCE,

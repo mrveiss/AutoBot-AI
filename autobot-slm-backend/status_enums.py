@@ -134,6 +134,21 @@ class BackupServiceType(str, enum.Enum):
                 return member
         return None
 
+    @classmethod
+    def is_restorable(cls, value: str) -> bool:
+        """Whether the SLM's restore action can restore a stored ``service_type`` (#19455).
+
+        The restore path stops Redis and replaces its ``dump.rdb``, so only a Redis
+        backup may enter it. Restoring a PostgreSQL dump or a secrets snapshot that
+        way destroyed the Redis data and restored nothing. Those are operator
+        restores (docs/operations/disaster-recovery.md). An unknown stored value is
+        not restorable.
+        """
+        try:
+            return cls(value) is cls.REDIS
+        except ValueError:
+            return False
+
 
 # Wire spellings that are not member values. Kept next to the enum so the set of
 # accepted inputs is one greppable place rather than a dispatch-table key.

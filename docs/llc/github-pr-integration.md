@@ -5,14 +5,14 @@ tags:
   - github
   - integration
 aliases:
-  - LLC PR Linking
+  - Company OS PR Linking
   - GitHub PR Integration
 status: current
 ---
 
-# LLC GitHub PR Integration
+# Company OS GitHub PR Integration
 
-Links GitHub Pull Requests to LLC work items (GH#9625), enabling:
+Links GitHub Pull Requests to Company OS work items (GH#9625), enabling:
 
 - PR visibility on work item cards (🔗 badge on the Kanban board)
 - Automatic status transition to `in_review` when a linked PR merges
@@ -23,7 +23,7 @@ Links GitHub Pull Requests to LLC work items (GH#9625), enabling:
 
 ## Branch Naming Convention
 
-To auto-link a PR to an LLC work item, name the branch with one of:
+To auto-link a PR to a Company OS work item, name the branch with one of:
 
 | Pattern | Example |
 |---------|---------|
@@ -115,4 +115,4 @@ repository, links the PR, posts a comment, and transitions status on merge.
 ## See Also
 
 - Issue #9625 — GitHub PR ↔ work item linking
-- [LLC Module PRD](../planning/PRD_AutoBot_LLC_Module.md)
+- [Company OS Module PRD](../planning/PRD_AutoBot_LLC_Module.md)

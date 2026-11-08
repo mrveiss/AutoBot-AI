@@ -125,7 +125,8 @@ class TestLangSmithObserverOnResponse:
         call_args = fake_client.update_run.call_args
         run_id = call_args[0][0]
         assert run_id is not None
-        assert call_args.kwargs["outputs"] == {"content": "hello"}
+        # Text is withheld by default (#19933); the payload itself is asserted in test_tracing_policy_19933.
+        assert "hello" not in repr(call_args.kwargs["outputs"])
         assert "r3" not in observer._pending
 
     @pytest.mark.asyncio
@@ -148,7 +149,7 @@ class TestLangSmithObserverOnError:
         call_args = fake_client.update_run.call_args
         run_id = call_args[0][0]
         assert run_id is not None
-        assert call_args.kwargs["error"] == "boom"
+        assert "boom" not in call_args.kwargs["error"]
         assert "r5" not in observer._pending
 
     @pytest.mark.asyncio

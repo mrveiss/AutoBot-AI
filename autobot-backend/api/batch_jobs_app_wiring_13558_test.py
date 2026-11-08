@@ -32,17 +32,11 @@ executable import; `test_the_detector_finds_a_real_import` is the matching posit
 control, because a detector that finds nothing anywhere would pass the first test
 while asserting nothing.
 
-## What is NOT fixed here
+## What happened to ``batch_load``
 
-``batch_load`` (``POST /api/batch-jobs/load``) keeps its dead import, so the
-assertions above are scoped to the three repaired functions by name rather than to
-the file as a whole. Repairing it means making live an endpoint that carries no
-``Depends(get_current_user)`` while all fourteen of its siblings in this file do --
-a decision about an authentication surface, not a crash fix. The PR body carries
-the options and the evidence.
-
-No test here enshrines that broken state. A guard asserting the import is still
-present would fail on the day someone fixes it, which is worse than no guard.
+It was not repaired: #18765 rebuilt it to dispatch each sub-request through ``request.app``
+(``api/batch_dispatch.py``), so it no longer imports an app at all. The assertions above stay
+scoped to the three helpers by name.
 """
 
 from __future__ import annotations

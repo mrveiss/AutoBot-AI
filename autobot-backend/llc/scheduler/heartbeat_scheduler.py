@@ -28,7 +28,6 @@ Rate-limit recovery (GH#8204):
 """
 
 import asyncio
-import logging
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -42,13 +41,12 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_float, env_float_clamped
-from autobot_shared.feature_flags import is_feature_enabled
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
 from ..adapters import AdapterRunStatus, AutoBotAgentAdapter, get_adapter
-from ..adapters.subprocess_base import is_subprocess_adapter
 from ..config import AGENT_API_BASE_URL
 from ..exceptions import (
     AdapterRunFailed,
@@ -59,21 +57,26 @@ from ..exceptions import (
 )
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
-from ..org_role_authority import apply_org_role_bound
-from ..services.api_key import ApiKeyService
-from ..services.budget import BudgetService
+from ..org_role_authority import apply_org_role_bound, role_bound_enforced
+from ..services.accessors import get_budget_service
 from ..services.controls_service import ControlsService
 from ..services.work_item_queue import has_pending_work
 
 # Aliased to the name `_run_adapter` already calls (#17726). Renaming the call
 # site would put that unrelated 82-line function in scope for the function-length
 # guard, and refactoring it is not this change.
+from .dispatch_gate import adapter_block_reason, dispatch_block_reason, require_dispatchable
 from .replay_recording import record_run_for_replay as _record_run_for_replay
 from .run_context import enrich_run_context
-from .run_status import mark_running
+from .run_key import ADAPTER_MAX_WAIT_SECONDS
+from .run_key import issue_run_key as _issue_run_key
+from .run_key import revoke_run_key as _revoke_run_key
+from .run_status import RunSuperseded, latest_run_in, mark_running
 from .run_workspace import acquire_run_workspace, release_run_workspace, release_workspace_best_effort
+from .schedule_members import agent_due_members, drop_unschedulable_member
+from .usage_billing import ingest_run_cost
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SCHEDULE_KEY = "llc:heartbeat:schedule"
 _POLL_INTERVAL = 5.0  # seconds between sorted-set polls
@@ -86,10 +89,7 @@ _MAX_RATE_LIMIT_RETRIES = 10  # demote to failed after this many consecutive ret
 
 # Registry-adapter (e.g. claude_code) completion polling (GH#9622, GH#9623).
 _ADAPTER_POLL_INTERVAL = env_float("LLC_ADAPTER_POLL_INTERVAL_SECONDS", 5.0)
-_ADAPTER_MAX_WAIT_SECONDS = env_float("LLC_ADAPTER_MAX_WAIT_SECONDS", 7200.0)
-# Ephemeral run-key TTL backstop — must exceed the max wait so a key never
-# expires mid-run; revocation still happens promptly when the run finishes.
-_RUN_KEY_TTL_SECONDS = env_float("LLC_RUN_KEY_TTL_SECONDS", _ADAPTER_MAX_WAIT_SECONDS + 600.0)
+_ADAPTER_MAX_WAIT_SECONDS = ADAPTER_MAX_WAIT_SECONDS
 
 #: #17726: a short-circuited wake writes no run row, so these two keys are the
 #: only evidence it happened. Without them "the queue was empty" and "the
@@ -190,7 +190,7 @@ class LLCHeartbeatScheduler:
             # NX was previously used but prevented cron expression updates from
             # taking effect — an updated schedule would be silently ignored.
             await redis.zadd(_SCHEDULE_KEY, mapping, gt=True)
-            logger.info("Scheduled %d agents in sorted set", len(mapping))
+            logger.info("Scheduled %d of %d heartbeat-enabled agents in sorted set", len(mapping), len(agents))
 
         # Re-queue any rate-limited agents whose retry_after is still in the
         # future — they may have been evicted from Redis if the server restarted.
@@ -258,7 +258,7 @@ class LLCHeartbeatScheduler:
             return
 
         now = datetime.now(tz=timezone.utc).timestamp()
-        due: list[bytes] = await redis.zrangebyscore(_SCHEDULE_KEY, 0, now)
+        due = agent_due_members(await redis.zrangebyscore(_SCHEDULE_KEY, 0, now))
         if not due:
             return
 
@@ -276,10 +276,9 @@ class LLCHeartbeatScheduler:
                     agent_id,
                     int(_POLL_INTERVAL),
                 )
-                retry_ts = datetime.now(tz=timezone.utc).timestamp() + _POLL_INTERVAL
-                await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
+                await self._requeue(redis, agent_id, cycles=1, why="dispatch error")
 
-    async def _requeue(self, redis: Any, agent_id: str, cycles: int = 6) -> None:
+    async def _requeue(self, redis: Any, agent_id: str, cycles: int = 6, why: str = "deferred") -> None:
         """Put *agent_id* back on the schedule a few poll cycles from now.
 
         One place decides how long a deferred wake waits; three copies of a backoff
@@ -287,6 +286,7 @@ class LLCHeartbeatScheduler:
         """
         retry_ts = datetime.now(tz=timezone.utc).timestamp() + _POLL_INTERVAL * cycles
         await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
+        logger.info("Heartbeat agent=%s re-queued in %.0fs (%s)", agent_id, retry_ts - time.time(), why)
 
     async def _handle_due_agent(self, agent_id: str, redis: Any) -> None:
         """Create (or resume) a run record, dispatch adapter, advance sorted-set score.
@@ -300,13 +300,16 @@ class LLCHeartbeatScheduler:
         factory = get_async_session_factory()
         async with factory() as session:
             agent = await self._get_agent_config(session, agent_id)
-            if agent is None:
-                await redis.zrem(_SCHEDULE_KEY, agent_id)
+            if agent is None or not agent.get("heartbeat_cron"):
+                await drop_unschedulable_member(redis, _SCHEDULE_KEY, agent_id, agent)
                 return
 
-            cron_expr = agent.get("heartbeat_cron")
-            if not cron_expr:
-                await redis.zrem(_SCHEDULE_KEY, agent_id)
+            cron_expr = agent["heartbeat_cron"]
+
+            reason = await dispatch_block_reason(session, agent_id, agent.get("company_id"), agent.get("status"))
+            if reason is not None:
+                logger.info("Heartbeat skipped for agent %s: %s", agent_id, reason)
+                await self._reschedule(agent_id, cron_expr, redis)
                 return
 
             # Check for an active rate-limited run to resume.
@@ -348,14 +351,15 @@ class LLCHeartbeatScheduler:
                     )
                 except ValueError as exc:
                     logger.warning("Skipping heartbeat for agent %s (no organization): %s", agent_id, exc)
-                    await self._requeue(redis, agent_id)
+                    await self._requeue(redis, agent_id, why="no organization")
                     return
 
                 await enrich_run_context(agent, context, run)
+                logger.info("Heartbeat run %s created for agent %s", run.id, agent_id)
 
             # #16818: the run leases its workspace, or defers rather than sharing it.
             if not await acquire_run_workspace(session, agent, agent_id, run.id, context):
-                await self._requeue(redis, agent_id)
+                await self._requeue(redis, agent_id, why="workspace lease unavailable")
                 return
             await session.commit()
 
@@ -384,7 +388,7 @@ class LLCHeartbeatScheduler:
             await redis.zrem(_SCHEDULE_KEY, agent_id)
             return
         await redis.zadd(_SCHEDULE_KEY, {agent_id: next_ts})
-        logger.debug("Heartbeat scheduled agent=%s run=%s next=%.0f", agent_id, run_id, next_ts)
+        logger.info("Heartbeat scheduled agent=%s run=%s next=%.0f", agent_id, run_id, next_ts)
 
     async def _has_pending_work(self, session: AsyncSession, agent: Dict[str, Any]) -> bool:
         """Whether a checkout would find anything for this agent (#17726).
@@ -430,21 +434,13 @@ class LLCHeartbeatScheduler:
             await redis.hincrby(key, "count", 1)
             await redis.hset(key, "at", datetime.now(tz=timezone.utc).isoformat())
             await redis.expire(key, int(_IDLE_WAKE_TTL_SECONDS))
+            logger.info("Heartbeat wake skipped for agent %s: no eligible work (idle wake recorded)", agent_id)
         except Exception:
             logger.warning("Could not record idle wake for agent %s", agent_id, exc_info=True)
 
     async def _find_rate_limited_run(self, session: AsyncSession, agent_id: str) -> Optional[LLCHeartbeatRun]:
         """Return the most recent ``rate_limited`` run for *agent_id*, or None."""
-        result = await session.execute(
-            select(LLCHeartbeatRun)
-            .where(
-                LLCHeartbeatRun.agent_id == agent_id,
-                LLCHeartbeatRun.status == LLCRunStatus.RATE_LIMITED.value,
-            )
-            .order_by(LLCHeartbeatRun.created_at.desc())
-            .limit(1)
-        )
-        return result.scalar_one_or_none()
+        return await latest_run_in(session, agent_id, (LLCRunStatus.RATE_LIMITED.value,))
 
     # ------------------------------------------------------------------
     # Manual trigger (called from API)
@@ -454,8 +450,12 @@ class LLCHeartbeatScheduler:
         self,
         session: AsyncSession,
         agent_id: str,
+        source: HeartbeatInvocationSource = HeartbeatInvocationSource.MANUAL,
     ) -> tuple[LLCHeartbeatRun, Dict[str, Any]]:
         """Flush a QUEUED run record; caller must commit then call dispatch_run.
+
+        *source* is ``MANUAL`` for the API trigger and an event source for
+        ``event_wake.wake_agent`` (#19582): one run-creation path for both.
 
         Returns (run, agent_cfg) so the caller can fire the adapter task after
         the DB commit is visible to other connections (avoids the race where
@@ -472,11 +472,8 @@ class LLCHeartbeatScheduler:
         if agent is None:
             raise ValueError(f"Agent {agent_id!r} not found or not configured")
 
-        run = await self._create_run(
-            session,
-            agent=agent,
-            source=HeartbeatInvocationSource.MANUAL,
-        )
+        await require_dispatchable(session, agent)
+        run = await self._create_run(session, agent=agent, source=source)
         await session.flush()
         return run, agent
 
@@ -511,7 +508,7 @@ class LLCHeartbeatScheduler:
         query = """
             SELECT aon.agent_id, aon.name, aon.heartbeat_cron, aon.heartbeat_enabled,
                    aon.adapter_type, aon.adapter_config, aon.context_mode,
-                   aon.company_id, aon.id AS agent_node_id
+                   aon.company_id, aon.id AS agent_node_id, aon.org_role, aon.status
             FROM agent_org_nodes aon
             WHERE aon.agent_id = :agent_id
         """
@@ -551,7 +548,11 @@ class LLCHeartbeatScheduler:
         """
         factory = get_async_session_factory()
 
-        retry_count = await mark_running(factory, run_id)
+        try:
+            retry_count = await mark_running(factory, run_id)
+        except RunSuperseded:  # #19582: another run of this agent holds RUNNING
+            await release_workspace_best_effort(factory, run_id, LLCRunStatus.SKIPPED.value)
+            return
         if retry_count is None:
             # The release stays HERE rather than inside the helper, so every exit from
             # this function keeps its release in view (#17725 review).
@@ -659,22 +660,12 @@ class LLCHeartbeatScheduler:
                 new_retry_count,
                 run_id,
             )
-            factory = get_async_session_factory()
-            try:
-                async with factory() as session:
-                    await session.execute(
-                        update(LLCHeartbeatRun)
-                        .where(LLCHeartbeatRun.id == run_id)
-                        .values(
-                            status=LLCRunStatus.FAILED.value,
-                            finished_at=datetime.now(tz=timezone.utc),
-                            error=f"Rate-limit retries exhausted ({new_retry_count}): {exc}",
-                            retry_count=new_retry_count,
-                        )
-                    )
-                    await session.commit()
-            except Exception:
-                logger.exception("Could not write FAILED status for rate-exhausted run %s", run_id)
+            await _write_rate_limit_outcome(
+                run_id,
+                status=LLCRunStatus.FAILED.value,
+                error=f"Rate-limit retries exhausted ({new_retry_count}): {exc}",
+                retry_count=new_retry_count,
+            )
             return
 
         # Exponential backoff: use provider hint if available, else compute.
@@ -695,23 +686,13 @@ class LLCHeartbeatScheduler:
             retry_after_dt.isoformat(),
         )
 
-        factory = get_async_session_factory()
-        try:
-            async with factory() as session:
-                await session.execute(
-                    update(LLCHeartbeatRun)
-                    .where(LLCHeartbeatRun.id == run_id)
-                    .values(
-                        status=LLCRunStatus.RATE_LIMITED.value,
-                        finished_at=datetime.now(tz=timezone.utc),
-                        error=str(exc),
-                        retry_after=retry_after_dt,
-                        retry_count=new_retry_count,
-                    )
-                )
-                await session.commit()
-        except Exception:
-            logger.exception("Could not write RATE_LIMITED status for run %s", run_id)
+        if not await _write_rate_limit_outcome(
+            run_id,
+            status=LLCRunStatus.RATE_LIMITED.value,
+            error=str(exc),
+            retry_after=retry_after_dt,
+            retry_count=new_retry_count,
+        ):
             return
 
         # Re-queue the agent in Redis at retry_after so it fires automatically.
@@ -791,6 +772,22 @@ def get_heartbeat_scheduler() -> LLCHeartbeatScheduler:
 # ------------------------------------------------------------------
 
 
+async def _write_rate_limit_outcome(run_id: uuid.UUID, *, status: str, **values: Any) -> bool:
+    """Close a rate-limited run; False when the write failed, which is logged here."""
+    try:
+        async with get_async_session_factory()() as session:
+            await session.execute(
+                update(LLCHeartbeatRun)
+                .where(LLCHeartbeatRun.id == run_id)
+                .values(status=status, finished_at=datetime.now(tz=timezone.utc), **values)
+            )
+            await session.commit()
+    except Exception:
+        logger.exception("Could not write %s status for run %s", status, run_id)
+        return False
+    return True
+
+
 def _next_fire(cron_expr: str, base_ts: float) -> float:
     """Return the next scheduled epoch (float) after *base_ts*."""
     if _croniter_cls is None:
@@ -813,7 +810,7 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
     ephemeral, run-scoped LLC API key so the woken agent can authenticate its
     LLC API calls; the key is revoked when the run finishes.
     """
-    if is_feature_enabled("org_role_bound"):
+    if role_bound_enforced():
         # #16950/#16974: bounded by its org role, or refused with the reason. Off by
         # default (owner decision #16974) until copilot_local/copilot_subscription can
         # actually enforce a bound -- see org_role_authority.py's module docstring.
@@ -825,24 +822,12 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
         await _dispatch_autobot_agent(agent, context)
         return None
 
-    try:
-        adapter = get_adapter(adapter_type)
-    except KeyError:
-        # GH#9951: signal a skip (not a phantom COMPLETED) so the run is
-        # recorded as SKIPPED and last_heartbeat_at is not advanced.
-        raise HeartbeatDispatchSkipped(
-            agent["agent_id"], f"no LLC adapter registered for type {adapter_type!r}"
-        ) from None
-
-    # GH#9793: skip dispatch when the required CLI binary can't be resolved
-    # (PATH, configured override, or common install locations — GH#12478).
-    # Converts every-heartbeat FAILED runs into a clean degraded state (GH#9951).
-    if is_subprocess_adapter(adapter) and not adapter.is_cli_available():  # type: ignore[union-attr]
-        message = adapter.cli_not_found_message()  # type: ignore[union-attr]
-        # GH#12478: this is a genuine deployment misconfiguration, not routine
-        # degraded-agent noise — warn so it's visible without polling run history.
-        logger.warning("Heartbeat dispatch skipped for agent %s: %s", agent["agent_id"], message)
-        raise HeartbeatDispatchSkipped(agent["agent_id"], message)
+    # #20519: the same adapter check the agent lists show (GH#9951, GH#9793, GH#12478).
+    reason = adapter_block_reason(adapter_type, agent.get("adapter_config"))
+    if reason is not None:
+        logger.warning("Heartbeat dispatch skipped for agent %s: %s", agent["agent_id"], reason)
+        raise HeartbeatDispatchSkipped(agent["agent_id"], reason)
+    adapter = get_adapter(adapter_type)
 
     return await _dispatch_registry_adapter(adapter, agent, context)
 
@@ -850,12 +835,11 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
 async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]) -> None:
     """Dispatch an in-process AutoBot agent via :class:`AutoBotAgentAdapter`."""
     adapter_config = agent.get("adapter_config") or {}
-    if not adapter_config.get("agent_class"):
-        # No agent_class configured — degraded skip, not a phantom success (GH#9951).
-        raise HeartbeatDispatchSkipped(
-            agent["agent_id"],
-            "no adapter_config.agent_class configured",
-        )
+    # No agent_class configured — degraded skip, not a phantom success (GH#9951).
+    # The same decision the agent lists show (#20519).
+    reason = adapter_block_reason("autobot_agent", adapter_config)
+    if reason is not None:
+        raise HeartbeatDispatchSkipped(agent["agent_id"], reason)
 
     # GH#8502: use run_blocking() so ProviderRateLimited propagates to _run_adapter
     # and triggers exponential-backoff recovery.  _run_adapter is already a
@@ -936,21 +920,21 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     if final_status == LLCRunStatus.QUOTA_EXHAUSTED:
         raise SubscriptionQuotaExhausted(agent_id, str(result.error or "subscription quota exhausted"))
 
-    # GH#9622: surface non-success terminal states so _run_adapter records the
-    # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
-    if final_status != LLCRunStatus.COMPLETED:
-        raise AdapterRunFailed(agent.get("adapter_type") or "", str(external_run_id), final_status)
-
     # GH#10220: forward parsed token usage to the agent's budget. BudgetExhausted
     # is re-raised (GH#8215 hard-stop → run marked FAILED); other cost errors are
     # best-effort and never fail an otherwise-successful run.
     await _ingest_adapter_usage(agent, result)
 
+    # GH#9622: surface non-success terminal states so _run_adapter records the
+    # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
+    if final_status != LLCRunStatus.COMPLETED:
+        raise AdapterRunFailed(agent.get("adapter_type") or "", str(external_run_id), final_status)
+
     return external_run_id
 
 
 async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus) -> None:
-    """Record a completed registry run's token usage against the agent budget."""
+    """Record a finished registry run's token usage: a failed run spent tokens too (#20202)."""
     if result.tokens_in is None and result.tokens_out is None:
         return  # adapter did not report usage (e.g. CLI without stream-json result)
     agent_id: str = agent["agent_id"]
@@ -959,9 +943,8 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
         factory = get_async_session_factory()
         async with factory() as session:
             company = str(agent.get("company_id") or "")
-            await BudgetService().ingest_cost_event(
-                session, agent_id, company, int(result.tokens_in or 0), int(result.tokens_out or 0), model
-            )
+            usage = (int(result.tokens_in or 0), int(result.tokens_out or 0))
+            await ingest_run_cost(get_budget_service(), session, result, agent_id, company, usage, model)
             await session.commit()
     except BudgetExhausted:
         raise  # GH#8215 hard-stop — propagate so the run is recorded FAILED
@@ -975,38 +958,6 @@ async def _safe_cancel(adapter: Any, agent_config: Dict[str, Any], run_id: str) 
         await adapter.cancel(agent_config, run_id)
     except Exception:
         logger.exception("Failed to cancel adapter run %s", run_id)
-
-
-async def _issue_run_key(agent_id: str, company_id: str) -> tuple[Any, Optional[str]]:
-    """Issue an ephemeral run-scoped LLC API key. Returns (record, plaintext).
-
-    Best-effort: on failure the agent still runs, just without a key (returns
-    ``(None, None)``) — the run is logged rather than blocked.
-    """
-    factory = get_async_session_factory()
-    try:
-        async with factory() as session:
-            record, raw = await ApiKeyService().issue_key(
-                session,
-                agent_id=agent_id,
-                company_id=company_id,
-                name=f"heartbeat-{agent_id}-{uuid.uuid4().hex[:8]}",
-                expires_at=datetime.now(tz=timezone.utc) + timedelta(seconds=_RUN_KEY_TTL_SECONDS),
-            )
-        return record, raw
-    except Exception:
-        logger.exception("Failed to issue ephemeral heartbeat key for agent %s", agent_id)
-        return None, None
-
-
-async def _revoke_run_key(agent_id: str, key_id: uuid.UUID, company_id: Optional[str] = None) -> None:
-    """Revoke an ephemeral run-scoped key, company-scoped (#13771, #15930)."""
-    factory = get_async_session_factory()
-    try:
-        async with factory() as session:
-            await ApiKeyService().revoke_key(session, agent_id=agent_id, key_id=key_id, company_id=company_id)
-    except Exception:
-        logger.exception("Failed to revoke ephemeral heartbeat key %s for agent %s", key_id, agent_id)
 
 
 async def _await_adapter_completion(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> AdapterRunStatus:

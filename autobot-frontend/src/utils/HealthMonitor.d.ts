@@ -72,6 +72,8 @@ declare class HealthMonitor {
   config: MonitorConfig;
   eventListeners: Map<string, EventListener>;
   consecutiveFailures: ConsecutiveFailures;
+  /** The last failed backend check's message; null once a check succeeds (#16253). */
+  lastBackendError: string | null;
   healthCheckTimer: number | null;
   listeners: Array<(data: HealthData) => void>;
   isUserViewing: boolean;

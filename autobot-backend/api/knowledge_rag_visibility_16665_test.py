@@ -78,3 +78,18 @@ async def test_advanced_search_gives_an_admin_no_bypass_of_another_users_private
 
     ids = {r["metadata"]["id"] for r in result["results"]}
     assert ids == set(), f"admin u2 must not see u99's private fact (#16654/#16745): {result['results']}"
+
+
+@pytest.mark.asyncio
+async def test_advanced_search_hands_the_service_the_callers_principal():
+    """#16664: the service filters every leg for the principal the route builds from the caller."""
+    rag_service = _make_rag_service([])
+
+    await advanced_search(
+        request=AdvancedSearchRequest(query="test"),
+        rag_service=rag_service,
+        current_user={"user_id": "u1", "org_id": "o1", "role": "admin"},
+    )
+
+    principal = rag_service.advanced_search.await_args.kwargs["principal"]
+    assert (principal.user_id, principal.company_id, principal.is_authenticated) == ("u1", "o1", True)

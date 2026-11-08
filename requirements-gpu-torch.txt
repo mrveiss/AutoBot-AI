@@ -14,10 +14,11 @@
 #
 # The ansible backend role installs this file whenever backend_gpu_available
 # is true, regardless of backend_vllm_enabled. vllm (requirements-gpu.txt)
-# pins the same torch build, so installing both together (GPU + vLLM
-# enabled) resolves torch once, not twice.
+# pins its own torch, not this pair, so enabling vLLM on a GPU host moves
+# torch off it (maintainer decision on #19682).
 #
 # Requires: CUDA-compatible GPU, Python 3.12.
 
-torch==2.14.0
-torchvision==0.29.0
+-c constraints/shared.txt  # the torch/torchvision pair lives once there (#19330); `==` matches the +cuNNN build
+torch
+torchvision

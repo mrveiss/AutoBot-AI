@@ -37,7 +37,7 @@ from pathlib import Path
 import yaml
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 from tools.lint._comment_syntax import code_text
 
 _REPO_ROOT = repo_root()
@@ -280,7 +280,7 @@ def _run_evidence(repo: Path, base: str, ref: str) -> str:
         cwd=repo,
         capture_output=True,
         text=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     ).stdout.strip()
 
 
@@ -289,7 +289,7 @@ def _repo_with_branch(tmp_path: Path) -> Path:
     repo.mkdir()
     # #15246: scrubbed -- an inherited GIT_DIR (the pre-push hook exports one)
     # would init the real repo instead of tmp_path.
-    run = lambda *a: subprocess.run(a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env())  # noqa: E731
+    run = lambda *a: subprocess.run(a, cwd=repo, capture_output=True, check=True, env=isolated_git_env())  # noqa: E731
     run("git", "init", "-q", ".")
     run("git", "config", "user.email", "t@t")
     run("git", "config", "user.name", "t")
@@ -331,7 +331,7 @@ def test_a_branch_whose_new_file_landed_and_then_changed_is_not_reported(tmp_pat
     repo = _repo_with_branch(tmp_path)
     # #15246: scrubbed -- an inherited GIT_DIR (the pre-push hook exports one)
     # would init the real repo instead of tmp_path.
-    run = lambda *a: subprocess.run(a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env())  # noqa: E731
+    run = lambda *a: subprocess.run(a, cwd=repo, capture_output=True, check=True, env=isolated_git_env())  # noqa: E731
     # The file lands on trunk, then diverges completely from the branch's copy.
     (repo / "src" / "introduced.py").write_text("landed, then rewritten entirely\n", encoding="utf-8")
     run("git", "add", "-A")
@@ -353,7 +353,7 @@ def test_a_modified_file_alone_is_not_landing_evidence(tmp_path) -> None:
     repo = _repo_with_branch(tmp_path)
     # #15246: scrubbed -- an inherited GIT_DIR (the pre-push hook exports one)
     # would init the real repo instead of tmp_path.
-    run = lambda *a: subprocess.run(a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env())  # noqa: E731
+    run = lambda *a: subprocess.run(a, cwd=repo, capture_output=True, check=True, env=isolated_git_env())  # noqa: E731
     run("git", "checkout", "-qb", "edit-only", "trunk")
     (repo / "src" / "existing.py").write_text("original\nan unlanded edit\n", encoding="utf-8")
     run("git", "add", "-A")

@@ -38,6 +38,7 @@ import re
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 #: `re` entry points whose first positional argument is a pattern.
@@ -161,6 +162,12 @@ CONCEPTS = (
             "autobot-backend/voice_processing/language_detection.py": (
                 "`.split()` into filename tokens -- tokenising, not sanitising; no output string is built"
             ),
+            "repo_tests/_ui_literal_rederive.py": (
+                "a measurement, not a sanitiser: `_outside_class` strips the characters the #12732 regex "
+                "re-derivation cannot match only to ask whether the REST of a literal would have matched, "
+                "so a parser/regex difference is explained by position rather than waved through; no "
+                "output string is built or shown (#12732)"
+            ),
             "autobot_shared/text_tokens.py": (
                 "the one word tokenizer (`tokenize`): a split into tokens, not a sanitiser; has its own "
                 "`word-tokenizer` concept below"
@@ -216,7 +223,7 @@ def _regex_literals() -> tuple[tuple[str, int, str], tuple[int, ...]]:
     skipped = 0
     for rel in _tracked_python_files():
         try:
-            tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         except (OSError, SyntaxError):
             skipped += 1
             continue

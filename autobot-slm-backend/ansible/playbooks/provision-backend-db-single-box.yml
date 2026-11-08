@@ -136,7 +136,7 @@
           AUTOBOT_DB_USER={{ autobot_db_user }}
           AUTOBOT_DB_PASSWORD={{ autobot_db_password }}
           AUTOBOT_DB_NAME={{ autobot_db_name }}
-          AUTOBOT_DATABASE_URL=postgresql+asyncpg://{{ autobot_db_user }}:{{ autobot_db_password }}@127.0.0.1:5432/{{ autobot_db_name }}
+          AUTOBOT_DATABASE_URL=postgresql+asyncpg://{{ autobot_db_user | urlencode | replace('/', '%2F') }}:{{ autobot_db_password | urlencode | replace('/', '%2F') }}@127.0.0.1:5432/{{ autobot_db_name }}
       no_log: true
 
     - name: "Verify autobot_app can connect to autobot_users"

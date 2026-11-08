@@ -5,7 +5,7 @@
 """KB collection lifecycle manager (GH#8235).
 
 Canonical naming and lifecycle for ChromaDB collections across all LLC entities.
-Collections are created on entity creation and archived on entity deletion,
+Collections are created by their first write (#19725) and archived on entity deletion,
 with document merging support for ephemeral entities (sprints, work items).
 """
 
@@ -73,6 +73,9 @@ class KbCollectionManager:
     ) -> str:
         """Create ChromaDB collection if not exists; idempotent.
 
+        No production caller since entities stopped creating one (#19725); that issue's
+        health-scan proposal is its next caller.
+
         Args:
             entity_type: Type of entity
             entity_id: Unique identifier for the entity
@@ -134,7 +137,7 @@ class KbCollectionManager:
             try:
                 original = await kb._async_chroma_client.get_collection(original_name)
             except Exception:
-                logger.warning(
+                logger.debug(  # the usual case: a collection appears only on its first write (#19725)
                     "Collection %s does not exist; nothing to archive",
                     original_name,
                 )
@@ -305,3 +308,58 @@ class KbCollectionManager:
                 str(e),
             )
             raise RuntimeError(f"Failed to merge KB collection {src_name} -> {dst_name}") from e
+
+
+# ------------------------------------------------------------------
+# The one name builder for LLC entity collections (#19519)
+# ------------------------------------------------------------------
+# Creation (``KbCollectionManager.ensure_collection``) and every reader build
+# names here, so a create and a query for the same ids cannot drift apart again.
+# The format is the one already stored: ``<entity>:<id>``.
+
+
+def company_collection(company_id: uuid.UUID | str, suffix: Optional[str] = None) -> str:
+    """Return a company KB collection name: ``company:<id>`` or ``company:<id>:<suffix>``."""
+    return KbCollectionManager.collection_name(KbCollectionManager.COMPANY_PREFIX, company_id, suffix)
+
+
+def project_collection(project_id: uuid.UUID | str) -> str:
+    """Return the project's KB collection name: ``project:<id>``."""
+    return KbCollectionManager.collection_name(KbCollectionManager.PROJECT_PREFIX, project_id)
+
+
+def agent_collection(agent_id: uuid.UUID | str) -> str:
+    """Return the agent's KB collection name: ``agent:<id>``."""
+    return KbCollectionManager.collection_name(KbCollectionManager.AGENT_PREFIX, agent_id)
+
+
+def work_item_collection(work_item_id: uuid.UUID | str) -> str:
+    """Return the work item's KB collection name: ``work_item:<id>``."""
+    return KbCollectionManager.collection_name(KbCollectionManager.WORK_ITEM_PREFIX, work_item_id)
+
+
+def company_id_of(collection_name: str) -> str:
+    """Parse the company id out of a ``company:<id>[:suffix]`` collection name.
+
+    Raises:
+        ValueError: If the name is not a company collection name.
+    """
+    prefix, _, rest = collection_name.partition(":")
+    company_id = rest.split(":", 1)[0]
+    if prefix != KbCollectionManager.COMPANY_PREFIX or not company_id:
+        raise ValueError(f"not a company KB collection name: {collection_name!r}")
+    return company_id
+
+
+async def kb_chroma_client():
+    """Return the async client LLC KB collections are created through.
+
+    Readers must use this client, not the raw ``utils.async_chromadb_client``:
+    the KB client maps ``:`` to a ChromaDB-valid name, which the raw client
+    does not, so a raw lookup of ``company:<id>`` is rejected by ChromaDB.
+    """
+    kb = await _get_kb()
+    client = kb._async_chroma_client
+    if client is None:
+        raise RuntimeError("KB async ChromaDB client is not initialised")
+    return client

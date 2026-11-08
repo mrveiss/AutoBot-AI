@@ -99,3 +99,17 @@ def _inject_globals():
             g.update(saved)
 
     return _swap
+
+
+@pytest.fixture(autouse=True)
+def _no_dns_in_refresh_egress_check(monkeypatch):
+    """#19241: ``OAuthAuth._refresh`` now runs ``assert_public_egress``, which resolves DNS.
+
+    Unit tests stub it here; that the check runs and blocks is proved in
+    ``test_provider_oauth_credentials.py`` (``test_refresh_runs_the_public_egress_check``).
+    """
+    from unittest.mock import AsyncMock
+
+    import autobot_shared.http_egress_guard as egress
+
+    monkeypatch.setattr(egress, "assert_public_egress", AsyncMock(return_value=None))

@@ -21,6 +21,7 @@ from api.schemas_knowledge import (
     UpdateOrganizationPolicyRequest,
 )
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.ownership import VisibilityLevel
@@ -116,7 +117,7 @@ async def update_organization_policy(
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     user_role = current_user.get("role", "")
-    if user_role not in ("admin", "org_admin"):
+    if not (is_admin_role(user_role) or user_role == "org_admin"):
         raise HTTPException(status_code=403, detail="Organization admin role required")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
@@ -333,7 +334,7 @@ async def cleanup_organization_knowledge(
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     user_role = current_user.get("role", "")
-    if user_role not in ("admin", "org_admin"):
+    if not (is_admin_role(user_role) or user_role == "org_admin"):
         raise HTTPException(status_code=403, detail="Organization admin role required")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)

@@ -50,7 +50,9 @@ from tools.lint._scan_helpers import tracked_paths
 _WORKFLOW = ".github/workflows/test-durations.yml"
 
 #: Largest fraction of collected test modules allowed to carry no recorded timing.
-MAX_UNREPRESENTED_FRACTION = 0.15
+#: Temporarily 0.20 by maintainer decision (2026-10-26, #19703): the SLM file measured 16.6% and every
+#: refresh run that day was cancelled. Back to 0.15 when a refresh lands (#19703 AC3).
+MAX_UNREPRESENTED_FRACTION = 0.20
 
 #: Reach floor: the backend file's roots held 2,459 test modules and the SLM file's
 #: 245 when this was written. Far below either means the enumeration broke. (An

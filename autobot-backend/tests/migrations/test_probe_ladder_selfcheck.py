@@ -17,11 +17,12 @@ No database needed — pure static analysis.
 import ast
 from pathlib import Path
 
-import pytest
+# A plain submodule import, never importorskip (#20146): the backend conftest stubs a missing `alembic`
+# with a MagicMock, so only a submodule import fails when the package is absent, and a failure is a
+# collection error that turns the Migration Gate red instead of a skip that keeps it green.
+import alembic.script  # noqa: F401
 
-pytest.importorskip("alembic", reason="probe-ladder self-checks need alembic")
-
-from migrations.baseline import (  # noqa: E402 — after importorskip by design
+from migrations.baseline import (  # noqa: E402 — after the alembic import by design
     TIMESTAMPTZ_MARKERS,
     Artifacts,
     _script_directory,
@@ -173,6 +174,16 @@ def test_observability_coverage():
         # returns early on a non-postgresql dialect or a missing table. So the
         # adoption re-run this allowlist permits is a genuine no-op rather than a
         # "constraint does not exist" or "relation already exists" failure.
+        "20261101_108",  # llc_agent_wiki_entries company FK (#20156): a constraint, which the
+        # ladder cannot see; re-run skips an existing constraint, and its orphan count only reads
+        "20261101_110",  # approvals pending cleanup-proposal partial unique index (#20234): index-only,
+        # the same structural category as 20260821_081; upgrade() returns early when the index exists,
+        # so the adoption re-run is a no-op (a duplicate refusal only repeats the first run's message)
+        "20261105_111",  # approvals pending chat-session-owner partial unique index (#20030): index-only,
+        # the same category as 20261101_110; upgrade() returns early when the index exists
+        "20261106_113",  # approvals pending SSH-password-deletion and .env copies-cleanup partial unique
+        # indexes (#20046, #20567): index-only, the same category as 20261105_111; upgrade() skips an index
+        # that already exists, so the adoption re-run is a no-op
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "

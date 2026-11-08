@@ -26,6 +26,7 @@ from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ..org_role_authority import describe_role_bound
+from ..scheduler.dispatch_gate import AgentNotDispatchable, run_block_reason
 from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
 from ..services.agent_presence_queries import agent_org_nodes_with_latest_heartbeat
 
@@ -59,36 +60,51 @@ async def list_agents(
         agent_org_nodes_with_latest_heartbeat(effective_company_id).order_by(AgentOrgNode.name)
     )
 
-    return [
-        {
-            # Logical agent_id slug — kept as `id` for backward compatibility with
-            # the heartbeat monitor; also exposed explicitly as `agent_id`.
-            "id": node.agent_id,
-            "agent_id": node.agent_id,
-            # UUID PK — the keyspace work-item / routine assignees are stored in
-            # (llc_work_items.assignee_agent_id); assignee pickers POST this value.
-            "org_node_id": str(node.id),
-            "name": node.name,
-            "org_role": node.org_role,
-            # #16950: the bound this role runs under, and what its adapter cannot enforce.
-            "role_bound": describe_role_bound(node.org_role, node.adapter_type),
-            "title": node.title,
-            "heartbeat_enabled": node.heartbeat_enabled,
-            "last_heartbeat_at": (
-                run.started_at.isoformat()
-                if run is not None and run.started_at
-                else (node.last_heartbeat_at.isoformat() if node.last_heartbeat_at else None)
-            ),
-            "last_run_status": run.status if run is not None else None,
-            "current_run_started_at": (
-                run.started_at.isoformat() if run is not None and run.status == "running" and run.started_at else None
-            ),
-        }
-        for node, run in result.all()
-    ]
+    return [_agent_row(node, run) for node, run in result.all()]
 
 
-@router.post("/{agent_id}/heartbeat/trigger", response_model=AgentHeartbeatTriggerResponse, status_code=202)
+def _agent_row(node: AgentOrgNode, run: Any) -> Dict[str, Any]:
+    """One agent in the list, with whether it can run and, when not, why (#20519)."""
+    reason = run_block_reason(node.status, node.adapter_type, node.adapter_config, org_role=node.org_role)
+    return {
+        # Logical agent_id slug — kept as `id` for backward compatibility with
+        # the heartbeat monitor; also exposed explicitly as `agent_id`.
+        "id": node.agent_id,
+        "agent_id": node.agent_id,
+        # UUID PK — the keyspace work-item / routine assignees are stored in
+        # (llc_work_items.assignee_agent_id); assignee pickers POST this value.
+        "org_node_id": str(node.id),
+        "name": node.name,
+        "org_role": node.org_role,
+        # #16950: the bound this role runs under, and what its adapter cannot enforce.
+        "role_bound": describe_role_bound(node.org_role, node.adapter_type),
+        "title": node.title,
+        "adapter_type": node.adapter_type or "",
+        "can_run": reason is None,
+        "cannot_run_reason": reason,
+        "heartbeat_enabled": node.heartbeat_enabled,
+        "last_heartbeat_at": (
+            run.started_at.isoformat()
+            if run is not None and run.started_at
+            else (node.last_heartbeat_at.isoformat() if node.last_heartbeat_at else None)
+        ),
+        "last_run_status": run.status if run is not None else None,
+        "current_run_started_at": (
+            run.started_at.isoformat() if run is not None and run.status == "running" and run.started_at else None
+        ),
+    }
+
+
+def _owned_by_caller(agent_company: object, org_id: object) -> bool:
+    """True only when both ids are known and equal; two unknown ids prove no ownership."""
+    return agent_company is not None and agent_company == org_id
+
+
+@router.post(
+    "/{agent_id}/heartbeat/trigger",
+    response_model=AgentHeartbeatTriggerResponse,
+    status_code=202,
+)
 async def trigger_heartbeat(
     agent_id: str,
     session: AsyncSession = Depends(get_async_session),
@@ -104,12 +120,20 @@ async def trigger_heartbeat(
     sched = get_heartbeat_scheduler()
     try:
         run, agent_cfg = await sched.trigger_manual(session, agent_id)
+    except AgentNotDispatchable as exc:
+        # An agent outside this company stays a 404: the reason would confirm it exists.
+        if not _owned_by_caller(exc.company_id, ctx.org_id):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Agent {agent_id!r} not found or not configured",
+            )
+        raise HTTPException(status_code=409, detail=f"Cannot run: {exc.reason}")
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
 
     agent_company = agent_cfg.get("company_id")
-    if agent_company is not None and agent_company != ctx.org_id:
+    if ctx.org_id is None or (agent_company is not None and agent_company != ctx.org_id):
         # Return 404 (not 403) to prevent cross-tenant agent-ID enumeration oracle
         raise HTTPException(status_code=404, detail=f"Agent {agent_id!r} not found or not configured")
 

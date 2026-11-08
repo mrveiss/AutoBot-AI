@@ -259,6 +259,20 @@ repos:
         stages: [pre-commit]
         description: "Fails if new os.getenv('AUTOBOT_*') is added without register_env_var, or docs diverge from registry"
 
+  # AutoBot custom: #18094 env forks. One env var read with differing fallbacks, a fallback that
+  # disagrees with the env registry, or a module constant shadowing an SSOT constant. Its own entrypoint,
+  # separate from the ssot_config drift check, so neither verdict can swallow the other (#19215).
+  - repo: local
+    hooks:
+      - id: env-forks
+        name: One env var, one fallback; one SSOT constant, one definition (#18094)
+        entry: tools/lint/check_env_forks.py
+        language: python
+        files: \.py$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Fails when an env var is read with differing fallbacks or a module constant shadows an SSOT constant"
+
   # AutoBot custom: regression-prevention for #6743 (chat-session TTL drift).
   # The root cause was a literal `3600` in setex() with no env-var knob.
   # This hook blocks any new literal integer/float in the TTL position of
@@ -624,7 +638,7 @@ repos:
         # collect it under any python_files pattern, so the naming rule has nothing
         # to enforce there. Was an enumeration that listed `_code_sync_import.py` and
         # silently did not cover `_e2e_harness.py`/`_pricing_seed.py` beside it (#16230).
-        exclude: (_test\.py$|^(tests/|autobot-infrastructure/.*/tests/|autobot-.*/tests/).*(results/|benchmarks/|fixtures/|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py|benchmark_base\.py|api_benchmarks\.py|rag_benchmarks\.py|mocks\.py|system_assessment_report\.py|(?<![A-Za-z0-9])_[a-z0-9_]+\.py$))
+        exclude: (_test\.py$|^(tests/|autobot-infrastructure/.*/tests/|autobot-.*/tests/).*(results/|benchmarks/|fixtures/|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py|comprehensive_test_suite\.py|benchmark_base\.py|api_benchmarks\.py|rag_benchmarks\.py|mocks\.py|system_assessment_report\.py|(?<![A-Za-z0-9])_[a-z0-9_]+\.py$))
 
   # Security checks with bandit
   - repo: https://github.com/PyCQA/bandit
@@ -791,17 +805,19 @@ repos:
         # where it lives, rather than inferring that the frontend was checked.
         description: "Blocks commits with functions >65 lines, warns for 51-65 lines"
 
-  # No direct redis.Redis() in production code (Issue #1086)
+  # No new direct Redis client (Issue #1086, #18553): ONE matcher (tools/lint/check_no_direct_redis.py)
+  # and ONE baseline (repo_tests/redis_direct_constructor_baseline_18553.py), the same pair the
+  # whole-tree ratchet runs. Reads .py and .sh; `# noqa: redis` is retired.
   - repo: local
     hooks:
       - id: no-direct-redis
-        name: 'No Direct Redis Connections in Production Code (Issue #1086)'
+        name: 'No New Direct Redis Clients (Issue #1086, #18553)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-direct-redis
         language: script
-        types: [python]
+        types_or: [python, shell]
         pass_filenames: false
         stages: [pre-commit]
-        description: "Blocks commits with direct redis.Redis() — use get_redis_client() instead"
+        description: "Blocks a direct Redis client outside the baseline — use get_redis_client() instead"
 
   # No new module-level singletons in agent/runtime paths (GH#6630)
   - repo: local
@@ -1065,8 +1081,11 @@ repos:
         description: "Runs at the commit-msg stage against the real message file. At pre-commit time COMMIT_EDITMSG still holds the PREVIOUS subject, and in a linked worktree .git is a file so the path does not resolve at all (#13876)"
 
 # Configuration for specific file types
+# Every `language: python` hook imports autobot_shared, which refuses an
+# interpreter below the .python-version floor (#20903); bare python3 is
+# whatever the machine ships (3.10 on Ubuntu 22.04).
 default_language_version:
-  python: python3
+  python: python3.14
 
 exclude: |
   (?x)^(

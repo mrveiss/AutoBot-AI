@@ -10,7 +10,7 @@ deploy:
   infrastructure: true
 
 system_dependencies:
-  - nodejs   # v20 via NodeSource — shared with slm-backend
+  - nodejs   # major = node_major (= .nvmrc), via NodeSource — shared with slm-backend
 
 # #15603: no services entry. This used to declare a `oneshot` build step
 # (`npm ci && npm run build`, unstaged — the exact defect roles/_shared/tasks/

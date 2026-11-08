@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.security.path_validator import require_path_string
 from config import settings
-from models.database import Backup, BackupStatus, Node
+from models.database import Backup, BackupServiceType, BackupStatus, Node
 from services.backup_ssh import (
     run_command,
     scp_download_command,
@@ -328,13 +328,8 @@ class BackupService:
 
         return True, verify_output
 
-    async def execute_restore(
-        self,
-        db: AsyncSession,
-        backup_id: str,
-        target_node: Node,
-    ) -> Tuple[bool, str]:
-        """Restore a Redis backup to a target node.
+    async def execute_restore(self, db: AsyncSession, backup_id: str, target_node: Node) -> Tuple[bool, str]:
+        """Restore a Redis backup to a target node; any other type is refused before Redis is touched (#19455).
 
         Returns (success, message).
         """
@@ -345,6 +340,8 @@ class BackupService:
 
         if backup.status != BackupStatus.COMPLETED.value:
             return False, f"Cannot restore backup in status: {backup.status}"
+        if not BackupServiceType.is_restorable(backup.service_type):
+            return False, f"A {backup.service_type} backup cannot be restored over Redis"
 
         host = target_node.ip_address
         ssh_user = target_node.ssh_user or "autobot"

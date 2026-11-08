@@ -29,6 +29,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot-backend/services/audit/projection.py"
@@ -50,6 +51,7 @@ _KNOWN_WRITERS: dict[str, str] = {
     "autobot-backend/a2a/trust_score.py": "trust_audit (SQLite), a domain history table -- #18285",
     "autobot-backend/security/enterprise/compliance_manager.py": "encrypted JSONL files, wired through the service in #18286",
     "autobot-slm-backend/api/security.py": "SLM slm_node_audit_logs, a separate table",
+    "autobot-slm-backend/services/rollback_audit.py": "audit_logs via audit_row (D1): the SLM rollback request, #20214",
     # Not an audit record: code-audit daemon state sharing the `audit:` prefix (D4, needs a key move).
     "autobot-backend/workers/audit_tasks.py": "daemon state, D4 pending a key move",
 }
@@ -71,7 +73,7 @@ _WRITE_MODES = ("a", "w", "ab", "wb", "a+", "w+")
 #: ORM rows that ARE audit records, and `audit_row`, the one constructor of an
 #: `audit_logs` row (#17225 D1). A view class whose name merely ends in
 #: "AuditLog" (KnowledgeAuditLog) is not one -- it records through the service.
-_AUDIT_ORM_CLASSES = ("WorkflowAuditLog", "AuditLog", "audit_row")
+_AUDIT_ORM_CLASSES = ("WorkflowAuditLog", "AuditLog", "SlmNodeAuditLog", "audit_row")
 _PATH_WORDS = ("path", "file", "dir", "root")
 _AUDIT_INSERT = re.compile(r"\binsert\s+into\s+\w*audit", re.IGNORECASE)
 
@@ -148,7 +150,7 @@ def _has_audit_insert(tree: ast.AST) -> bool:
 
 def is_audit_writer(source: str) -> bool:
     """True when `source` writes an audit store by one of the shapes in the module doc."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     nodes = list(ast.walk(tree))
     if any(_is_call(n, name=orm) for n in nodes for orm in _AUDIT_ORM_CLASSES):
         return True
@@ -213,8 +215,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "audit-writer-single-source",
     discover=_population,
-    # Mid-window, from REACH.window(): window (2697, 2997, 2847) at authoring.
-    floor=2979,
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,
@@ -265,7 +265,7 @@ def _redis_key_writers() -> list[str]:
     root = repo_root()
     found = []
     for rel in _writers():
-        tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+        tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         if any(_is_call(n, attr_in=_WRITE_VERBS) for n in ast.walk(tree)) and _has_key_literal(tree):
             found.append(rel)
     return found
@@ -300,7 +300,8 @@ def test_nothing_imports_a_retired_module() -> None:
 
 #: The only modules that construct `AuditLog(...)`: the one row builder, and the SLM API, whose
 #: `AuditLog` is its own `slm_node_audit_logs` model, not this table.
-_DIRECT_ROW_CONSTRUCTORS = frozenset({_ROW_BUILDER, "autobot-slm-backend/api/security.py"})
+#: The SLM's security.py builds `SlmNodeAuditLog` (#17312 rename), a separate table, not an audit_logs row.
+_DIRECT_ROW_CONSTRUCTORS = frozenset({_ROW_BUILDER})
 
 
 def test_audit_logs_rows_have_one_constructor() -> None:
@@ -309,6 +310,8 @@ def test_audit_logs_rows_have_one_constructor() -> None:
     direct = sorted(
         rel
         for rel in _writers()
-        if any(_is_call(n, name="AuditLog") for n in ast.walk(ast.parse((root / rel).read_text(encoding="utf-8"))))
+        if any(
+            _is_call(n, name="AuditLog") for n in ast.walk(parse_cache.parse((root / rel).read_text(encoding="utf-8")))
+        )
     )
     assert set(direct) == _DIRECT_ROW_CONSTRUCTORS, f"#17225: build audit_logs rows with audit_rows.audit_row: {direct}"

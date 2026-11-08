@@ -34,6 +34,7 @@ from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from knowledge.backends import BaseCollection, get_async_default_client, get_default_client
+from knowledge.embedding_space_binding import initial_collection
 from services.provider_key_vault import resolve_provider_key
 from utils.knowledge_base_timeouts import kb_timeouts
 
@@ -87,7 +88,8 @@ class KnowledgeBaseCore:
     def _init_chromadb_config(self) -> None:
         """Initialize ChromaDB configuration (Issue #398: extracted)."""
         self.chromadb_path = self.config_manager.get("memory.chromadb.path", "data/chromadb")
-        self.chromadb_collection = self.config_manager.get("memory.chromadb.collection_name", "autobot_memory")
+        configured = self.config_manager.get("memory.chromadb.collection_name", "autobot_memory")
+        self.chromadb_collection = initial_collection(self, configured)  # a switched space wins (#19379)
         # Issue #72: HNSW parameters optimized for 545K+ vectors
         self.hnsw_space = self.config_manager.get("memory.chromadb.hnsw.space", "cosine")
         self.hnsw_construction_ef = self.config_manager.get("memory.chromadb.hnsw.construction_ef", 300)
@@ -277,14 +279,9 @@ class KnowledgeBaseCore:
         Returns:
             Resolved embedding model name
         """
-        stored_model = await self._detect_stored_embedding_model()
-        if stored_model:
-            logger.info("Using stored embedding model for consistency: %s", stored_model)
-            return stored_model
+        from knowledge.embedding_model_resolution import resolve_kb_embedding_model
 
-        embed_model_name = ssot_config.llm.embedding_model
-        logger.info("Using embedding model from config: %s", embed_model_name)
-        return embed_model_name
+        return resolve_kb_embedding_model(await self._detect_stored_embedding_model())
 
     async def _configure_llama_index(self):
         """Configure LlamaIndex with explicit SSOT settings.
@@ -391,39 +388,16 @@ class KnowledgeBaseCore:
             self.hnsw_m,
         )
 
-        abc_collection = await asyncio.to_thread(
-            chroma_client.get_or_create_collection,
-            name=self.chromadb_collection,
-            metadata=hnsw_metadata,
-        )
+        # #19379: built in one place, shared with the embedding-space rebind. Issue #8391: the
+        # buffer's start() is called in lifespan after KB init succeeds.
+        from knowledge.embedding_space_binding import build_binding
 
+        abc_collection, self.vector_store, self._write_buffer = await build_binding(
+            self, chroma_client, self.chromadb_collection, hnsw_metadata
+        )
         self._async_chroma_collection = abc_collection
-        # LlamaIndex ChromaVectorStore requires the raw chromadb collection.
-        # ChromaDBCollection._raw holds the underlying chromadb object.
-        raw_collection = getattr(abc_collection, "_raw", abc_collection)
-        from llama_index.vector_stores.chroma import ChromaVectorStore
 
-        self.vector_store = ChromaVectorStore(chroma_collection=raw_collection)
-
-        # Issue #8391: Instantiate VectorWriteBuffer backed by this collection.
-        # buffer.start() is called in lifespan after KB init succeeds.
-        from knowledge.write_buffer import VectorWriteBuffer, make_chromadb_flush_fn
-
-        # Issue #8406: Decrement total_vectors counter when a flush batch is dropped so
-        # the optimistic increment made at write time is corrected on failure.
-        async def _on_write_buffer_flush_error(count: int, exc: Exception) -> None:
-            logger.error("VectorWriteBuffer flush lost %d vectors; decrementing total_vectors: %s", count, exc)
-            await self._decrement_stat("total_vectors", count)
-
-        self._write_buffer = VectorWriteBuffer(
-            flush_fn=make_chromadb_flush_fn(self.vector_store),  # Issue #8401: LlamaIndex vs raw collection
-            on_flush_error=_on_write_buffer_flush_error,
-        )
-
-        logger.info(
-            "ChromaDB vector store initialized: collection='%s'",
-            self.chromadb_collection,
-        )
+        logger.info("ChromaDB vector store initialized: collection='%s'", self.chromadb_collection)
 
         try:
             collection_count = await asyncio.to_thread(abc_collection.count)

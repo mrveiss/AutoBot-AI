@@ -22,6 +22,7 @@ import pytest
 
 from autobot_shared.ssot_config import config
 from testkit.auth_middleware_stub import install_auth_middleware_stub
+from testkit.celery_stub import install_celery_stub
 
 # Ensure autobot-backend and autobot_shared are importable
 project_root = Path(__file__).parent.parent
@@ -37,12 +38,13 @@ sys.path.insert(0, str(backend_root))
 
 
 # #16483: both moved to testkit/module_stubs.py — reusable, not conftest-specific
-# (78 call sites across this file alone), and it keeps this file under the
-# file-size ratchet without a raised ceiling every time a new module needs
-# real-loading before its dependent imports it.
+# (78 call sites across this file alone); keeps this file under the file-size
+# ratchet without a raised ceiling every time a new module needs real-loading.
+from testkit.llm_failover_modules import load_coordinator as _load_coordinator
 from testkit.module_stubs import make_pkg_stub as _make_pkg_stub
 from testkit.module_stubs import real_load_and_bind as _real_load_and_bind
 from testkit.provider_key_vault_state import empty_reachable_provider_key_vault  # noqa: F401 -- autouse
+from testkit.singleton_state import fake_session_lease, reset_feature_flags_singleton  # noqa: F401 -- autouse
 
 # Stub chromadb before it is imported. chromadb hangs at import time on
 # machines without a local Chroma server (it fires gRPC keep-alive probes via
@@ -113,49 +115,9 @@ if isinstance(_torch_stub, MagicMock):
     _torch_stub.cuda.get_device_capability.return_value = (0, 0)
     sys.modules["torch.cuda"] = _torch_stub.cuda
 
-# Celery stub — issue #4455. When celery isn't installed in the dev venv,
-# provide a tiny shim so modules that do ``@celery_app.task`` import cleanly.
-# The real package is used on production nodes; tests never rely on Beat.
-try:
-    import celery as _celery_real  # noqa: F401
-except ImportError:
-    _celery_stub = types.ModuleType("celery")
-
-    class _StubCelery:
-        def __init__(self, *args, **kwargs) -> None:
-            self.conf = types.SimpleNamespace(
-                update=lambda **_k: None,
-                beat_schedule={},
-            )
-
-        def task(self, *_args, **_kwargs):
-            def decorator(fn):
-                fn.update_state = lambda *a, **k: None
-                return fn
-
-            return decorator
-
-        def autodiscover_tasks(self, *_args, **_kwargs) -> None:
-            return None
-
-    _celery_stub.Celery = _StubCelery
-    sys.modules["celery"] = _celery_stub
-
-    _schedules_stub = types.ModuleType("celery.schedules")
-
-    class _StubCrontab:
-        def __init__(self, **fields) -> None:
-            def _parse(v):
-                try:
-                    return {int(v)}
-                except (TypeError, ValueError):
-                    return set()
-
-            self.minute = _parse(fields.get("minute", 0))
-            self.hour = _parse(fields.get("hour", 0))
-
-    _schedules_stub.crontab = _StubCrontab
-    sys.modules["celery.schedules"] = _schedules_stub
+# Celery stub — issue #4455; the shim lives in testkit/celery_stub.py (it grew past this
+# file's ceiling when `shared_task` and `Task` joined it, #19582).
+install_celery_stub()
 
 # celery_app stub — issue #7766.  The production celery_app.py pulls in the
 # full Redis / config dependency chain which causes a circular import in the
@@ -553,8 +515,8 @@ if "llm_shared" not in sys.modules:
     _real_load_and_bind("llm_shared.structured_ops", _llm_root / "structured_ops.py")
     _real_load_and_bind("llm_shared.optimization.rate_limiter", _llm_root / "optimization" / "rate_limiter.py")
     _real_load_and_bind("llm_shared.fallback_chain", _llm_root / "fallback_chain.py")
-    # #10551/#15022: provider_auth first -- provider_degradation imports its error base
-    # (ProviderAuthError); light deps only.
+    # #10551/#15022/#19241: provider_auth (+ its split-out token helpers) before provider_degradation.
+    _real_load_and_bind("llm_shared.provider_token_response", _llm_root / "provider_token_response.py")
     _real_load_and_bind("llm_shared.provider_auth", _llm_root / "provider_auth.py")
     # #11519: provider degradation store — load real BEFORE model_fallback_coordinator
     # and provider_registry which import it at module level.
@@ -566,17 +528,15 @@ if "llm_shared" not in sys.modules:
     # model_fallback_coordinator, which imports it at module level. events.bus
     # / events.event_types are unstubbed lightweight modules, safe to import here.
     _real_load_and_bind("llm_shared.fallback_events", _llm_root / "fallback_events.py")
-    _real_load_and_bind("llm_shared.model_fallback_coordinator", _llm_root / "model_fallback_coordinator.py")
-    # #9017: reasoning_effort utility is imported by chat_workflow.manager at module level;
-    # load the real file so tests that import manager don't hit the providers MagicMock stub.
-    _real_load_and_bind(
-        "llm_shared.providers.reasoning_effort",
-        _llm_root / "providers" / "reasoning_effort.py",
-    )
-    # #9037: per-run credential primitives (ContextVar + RunCredentialContext) live
-    # in the lightweight run_credentials module; load it real so tests importing
-    # them don't hit the llm_shared MagicMock stub.
+    _load_coordinator(_llm_root)  # #19753: the coordinator + the failover modules it imports (testkit)
+    # #9017: chat_workflow.manager imports reasoning_effort at module level -- real, not the providers stub.
+    _real_load_and_bind("llm_shared.providers.reasoning_effort", _llm_root / "providers" / "reasoning_effort.py")
+    # #9037: per-run credential primitives (ContextVar + RunCredentialContext); #19241: the LLM sign-in
+    # registry + token resolution, which base_provider imports lazily (empty stub __path__, see #10917 below).
     _real_load_and_bind("llm_shared.run_credentials", _llm_root / "run_credentials.py")
+    _real_load_and_bind("llm_shared.llm_oauth_registry", _llm_root / "llm_oauth_registry.py")
+    _real_load_and_bind("llm_shared.provider_token_refresh", _llm_root / "provider_token_refresh.py")
+    _real_load_and_bind("llm_shared.provider_oauth_credentials", _llm_root / "provider_oauth_credentials.py")
     # #11762: credential redaction — was never real-loaded, so its co-located
     # tests silently failed collection and a redaction bug went unnoticed.
     _real_load_and_bind("llm_shared.credential_redaction", _llm_root / "credential_redaction.py")
@@ -590,7 +550,6 @@ if "llm_shared" not in sys.modules:
     # so base_provider (and then provider_registry) load real.
     _real_load_and_bind("llm_shared.cross_worker_rate_limiter", _llm_root / "cross_worker_rate_limiter.py")
     _real_load_and_bind("llm_shared.observability", _llm_root / "observability" / "__init__.py")
-    _real_load_and_bind("llm_shared.rate_limit_backoff", _llm_root / "rate_limit_backoff.py")
     # #15026: header -> headroom-window mapping, imported at module level by base_provider.
     _real_load_and_bind("llm_shared.rate_limit_headers", _llm_root / "rate_limit_headers.py")
     # #11541: pre-request cumulative token budget gate — base_provider imports it
@@ -1267,7 +1226,7 @@ def set_test_environment():
     original_env = dict(os.environ)
 
     config.test_mode = "true"
-    config.env = "test"
+    config.environment = "test"  # #19315: AUTOBOT_ENV and AUTOBOT_ENVIRONMENT are one setting
 
     yield
 

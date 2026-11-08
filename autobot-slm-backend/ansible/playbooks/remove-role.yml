@@ -49,7 +49,7 @@
   gather_facts: true
 
   vars:
-    backup_dir: /opt/autobot/backups
+    backup_dir: "{{ autobot.base_dir }}/backups"
     backup_timestamp: "{{ ansible_facts['date_time'].epoch }}"
     backup_path: "{{ backup_dir }}/{{ role_name }}-{{ backup_timestamp }}"
 
@@ -63,14 +63,14 @@
         - /var/lib/chromadb  # legacy path (kept so old nodes are still cleaned)
         # Real ChromaDB data dir (#11099) — /var/lib/chromadb alone left the
         # live vector store behind on 'remove ai-stack'.
-        - "{{ chromadb_data_dir | default('/opt/autobot/autobot-db-stack/chromadb/data') }}"
+        - "{{ chromadb_data_dir | default(autobot.base_dir ~ '/autobot-db-stack/chromadb/data') }}"
         # Issue #3097: ai-stack data moved to /var/lib/autobot-ai
         - /var/lib/autobot-ai
       llm:
         - /usr/share/ollama/.ollama
         - /var/lib/ollama
       backend:
-        - /opt/autobot/autobot-backend/data
+        - "{{ autobot.base_dir }}/autobot-backend/data"
       monitoring:
         - /var/lib/prometheus
         - /var/lib/grafana

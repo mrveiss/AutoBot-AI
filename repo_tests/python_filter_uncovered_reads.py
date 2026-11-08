@@ -38,15 +38,17 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         ".flake8",
         ".github/actions/setup-python-ci/action.yml",
         ".github/actions/setup-python-suite/action.yml",
-        ".github/dependabot.yml",
         ".github/filters/code-quality-paths.yml",
-        ".github/workflows/auto-merge-base-into-parked-branches.yml",
         ".github/workflows/code-quality-required-context.yml",
         ".github/workflows/code-quality.yml",
         ".github/workflows/frontend-test.yml",
         ".github/workflows/hardened-smoke-test.yml",
         ".github/workflows/marker-tests.yml",
         ".github/workflows/ssot-coverage.yml",
+        # #19548: replaces the parked-branch workflow's entry one-for-one (its
+        # reader moved with it). Covering it means adding a filter line, and
+        # python-paths.yml is held by open PRs #19432/#19456 (one file, one PR).
+        ".github/workflows/sync-branches-with-main.yml",
         ".mcp/autobot-mcp-server.js",
         ".pre-commit-config.yaml",
         "autobot-frontend/scripts/check-ts-delta.sh",
@@ -68,7 +70,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         # -- a synthetic /opt/autobot inside a tmp dir, never a read of a repo tree.
         "autobot",
         "constraints/shared.txt",
-        "docker/generate-secrets.sh",
         "docker/secrets-init.sh",
         "docker/with-secrets.sh",
         "docs/audit/python_314_consistency.md",
@@ -78,11 +79,7 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         "docs/development/MCP_DEBUG_SCENARIOS.md",
         "docs/runbooks/ROTATE_SSH_KEYS.md",
         "pytest.ini",
-        "requirements-ci.txt",
-        "requirements-gpu-torch.txt",
-        "requirements-gpu.txt",
-        "requirements.txt",
-        # #17133: "README.md" is a literal pre_push_open_pr_cap_17006_test.py
+        # #17133: "README.md" is a literal pre_push_no_open_pr_cap_19397_test.py
         # writes inside its own synthetic tmp_path repo fixture (_seed_repo),
         # never a read of the real root-level file -- same shape as the
         # CLAUDE.md entry above (#17129).
@@ -146,7 +143,11 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 # literal reads, which covered six entries recorded here as uncovered.
 #: RAISED 39 -> 40 by #18653: `autobot` above is a tmp_path fixture segment of the
 #: uninstall guard (a fake /opt/autobot tree), a new bypass and not a real read.
-MAX_UNCOVERED_READS = 40
+#: LOWERED 40 -> 39 by the train-81 CodeRabbit round: the filter now covers
+#: `docker/generate-secrets.sh`, which two guards really read (#17500, #18729).
+#: LOWERED 39 -> 38 by #19523: the filter now covers `.github/dependabot.yml`, which the
+#: dependabot coverage guards read; deleting a block's directory touches no .py file.
+MAX_UNCOVERED_READS = 34
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
 #: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not
@@ -158,4 +159,4 @@ MAX_UNCOVERED_READS = 40
 #: It is checked in both directions, like every other baseline on this page: a record
 #: that no longer matches MAX fails as stale, so lowering MAX later cannot leave a
 #: standing permission behind it.
-ACKNOWLEDGED_RAISE: tuple[int, str] | None = (40, "#18653")
+ACKNOWLEDGED_RAISE: tuple[int, str] | None = None

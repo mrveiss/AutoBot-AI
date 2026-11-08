@@ -8,9 +8,9 @@ These options were promoted from the two retired standalone indexers so the one
 service can serve every documented operator command.
 """
 
-import hashlib
 from pathlib import Path
 
+from services.knowledge.doc_indexer import _compute_file_hash
 from services.knowledge.doc_taxonomy import detect_category
 
 from .test_doc_indexer import _make_service
@@ -41,7 +41,7 @@ def test_plan_without_force_honours_the_hash_cache(tmp_path, monkeypatch):
     svc = _make_service(root_dir=tmp_path)
     monkeypatch.setattr("services.knowledge.doc_indexer._load_hash_cache", lambda: {})
     assert len(svc.plan()) == 3
-    cached = {"docs/security/s.md": hashlib.sha256(b"# T\n\nbody\n").hexdigest()}
+    cached = {"docs/security/s.md": _compute_file_hash(str(tmp_path / "docs/security/s.md"))}
     monkeypatch.setattr("services.knowledge.doc_indexer._load_hash_cache", lambda: cached)
     assert "s.md" not in {Path(p).name for p, _ in svc.plan()}
 

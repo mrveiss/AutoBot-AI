@@ -40,9 +40,11 @@ _SCHEDULER_PREFIX = "llc.scheduler"
 # imported and not listed here as a leak, so a task module cannot be added to
 # __init__ silently, and a module listed here cannot quietly stop registering.
 _EAGER_TASK_MODULES = {
+    "llc.scheduler.attachment_file_sweep": "llc.scheduler.attachment_file_sweep.run_attachment_file_sweep",
     "llc.scheduler.project_disposal_sweep": "llc.scheduler.project_disposal_sweep.run_disposal_sweep",
     "llc.scheduler.sprint_autoclose": "llc.scheduler.sprint_autoclose.run_daily_check",
     "llc.scheduler.stalled_run_sweep": "llc.scheduler.stalled_run_sweep.run_stalled_run_sweep",
+    "llc.scheduler.trigger_secret_audit": "llc.scheduler.trigger_secret_audit.run_trigger_secret_audit",  # pragma: allowlist secret
     "llc.scheduler.workspace_lease_sweep": "llc.scheduler.workspace_lease_sweep.run_workspace_lease_sweep",
 }
 

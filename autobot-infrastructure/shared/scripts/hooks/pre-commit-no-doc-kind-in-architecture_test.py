@@ -14,18 +14,14 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-doc-kind-in-architecture"
 REACH_FLOOR = 50
 
 
-def _test_git_env() -> dict[str, str]:
-    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
-
-
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env())
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=isolated_git_env())
 
 
 def _init_repo(tmp_path: Path) -> Path:
@@ -45,7 +41,7 @@ def _seed_baseline_architecture_docs(repo: Path, count: int = REACH_FLOOR) -> No
 
 
 def _run_hook(repo: Path) -> subprocess.CompletedProcess:
-    return subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
+    return subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=isolated_git_env())
 
 
 def test_reach_floor_fails_loudly_on_small_architecture_dir(tmp_path: Path) -> None:

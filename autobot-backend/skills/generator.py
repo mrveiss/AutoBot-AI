@@ -11,7 +11,7 @@ Structured output ensures valid manifests every time.
 
 from typing import Any, Dict
 
-from autobot_shared.frontmatter import parse_frontmatter_mapping as _parse_manifest
+from autobot_shared.frontmatter import parse_frontmatter_mapping
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -74,7 +74,7 @@ class SkillGenerator:
             raise ValueError(f"LLM returned invalid JSON: {e}\nResponse: {response.content[:500]}") from e
         if not isinstance(result, dict) or "skill_md" not in result or "skill_py" not in result:
             raise ValueError(f"LLM response missing required keys: {list(result.keys())}")
-        manifest = _parse_manifest(result["skill_md"])
+        manifest = parse_frontmatter_mapping(result["skill_md"])
         return {
             "name": manifest.get("name", "generated-skill"),
             "skill_md": result["skill_md"],

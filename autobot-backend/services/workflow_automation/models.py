@@ -20,7 +20,12 @@ if TYPE_CHECKING:
 
 from pydantic import BaseModel, Field, field_validator
 
+from autobot_shared.risk_tier import presented_risk_tier_value
 from type_defs.common import Metadata
+
+
+class StepNotAwaitingApproval(Exception):
+    """The step a decision targets is not waiting for one; a route maps it to 409."""
 
 
 class WorkflowStepStatus(Enum):
@@ -113,6 +118,8 @@ class PlanApprovalRequest:
                     "command": step.command,
                     "description": step.description,
                     "risk_level": step.risk_level,
+                    # #13422: the one ladder the frontend badge renders; None when ungradable
+                    "risk_tier": presented_risk_tier_value(step.risk_level),
                     "requires_confirmation": step.requires_confirmation,
                     "estimated_duration": step.estimated_duration,
                 }
@@ -150,6 +157,25 @@ class WorkflowStep:
     # Issue #2397: Step-level configuration dict for vision and future step types.
     step_config: Metadata | None = None
 
+    def begin_after_approval(self) -> None:
+        """Move a parked step to EXECUTING. A repeated approve finds it already past WAITING_APPROVAL and is refused."""
+        if self.status != WorkflowStepStatus.WAITING_APPROVAL:
+            raise StepNotAwaitingApproval(f"Step {self.step_id} is {self.status.value}, not waiting for approval")
+        self.status = WorkflowStepStatus.EXECUTING
+
+    def __post_init__(self) -> None:
+        """Issue #19807: every step that is not a vision step needs confirmation, whoever built it.
+
+        The executor sends any ``step_type`` outside ``VISION_STEP_TYPES`` down the command path
+        (``_resolve_and_run_step``), so an unknown type still runs ``command``. Vision steps call the
+        vision API with ``step_config`` and run no command; their flag stays the creator's choice.
+        """
+        # Here, not at the top: gen_frontend_types.py loads this file alone, with no package around it.
+        from .vision_step_handler import VISION_STEP_TYPES
+
+        if self.step_type not in VISION_STEP_TYPES:
+            self.requires_confirmation = True
+
     # === Issue #372: Feature Envy Reduction Methods ===
 
     def to_status_dict(self) -> Metadata:
@@ -160,6 +186,9 @@ class WorkflowStep:
             "description": self.description,
             "status": self.status.value,
             "requires_confirmation": self.requires_confirmation,
+            # #13422: WorkflowRunner renders the step's risk; this dict never carried it
+            "risk_level": self.risk_level,
+            "risk_tier": presented_risk_tier_value(self.risk_level),
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": (self.completed_at.isoformat() if self.completed_at else None),
         }

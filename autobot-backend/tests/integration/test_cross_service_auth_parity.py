@@ -237,11 +237,9 @@ class TestPermissionCompleteness:
         )
 
     # #13854: the invariant is "a role authorised by GRANT must grant
-    # something" — not "every role must". Administrative roles are authorised
-    # by PREDICATE: ``require_role`` and ``is_admin_role`` admit them directly,
-    # so ``superadmin``'s empty entry is a deliberate statement of policy, not a
-    # wiring omission. Asserting the old, broader form here would contradict
-    # ``roles_are_canonical_test``, which asserts the opposite on purpose.
+    # something". Since #19125 (owner decision 2026-10-21) ``superadmin`` holds
+    # admin's set too, so every role currently grants something; the filter below
+    # keeps the exemption derived for any future purely predicate-authorised role.
     #
     # The exemption is DERIVED from ``is_admin_role`` — the same predicate the
     # live gates use — rather than a second hand-written list of administrative
@@ -261,17 +259,16 @@ class TestPermissionCompleteness:
     def test_the_permissionless_roles_are_exactly_the_administrative_ones(self):
         """The contrapositive, so the exemption above cannot quietly widen.
 
-        Stated as a property over every role rather than as an allowlist: ANY
-        role with an empty grant list must be administrative. A new empty
-        NON-administrative role is excluded from the parametrisation above and
-        would therefore never be checked there — this is the hole that leaves,
-        closed.
+        Stated as a property over every role: ANY role with an empty grant list
+        must be administrative. Since #19125 no role is empty (superadmin holds
+        admin's set), so the expected set is empty; a newly empty role must be
+        recorded here deliberately.
         """
         ungranted = {r.value for r in Role if not ROLE_PERMISSIONS.get(r, [])}
 
-        assert ungranted == {"superadmin"}, (
+        assert ungranted == set(), (
             f"the set of roles holding zero permissions changed to {sorted(ungranted)}. "
-            "Only an administrative, predicate-authorised role may hold none (#13854). "
+            "Only an administrative, predicate-authorised role may hold none. "
             "Confirm the change is deliberate and record it here."
         )
         for value in ungranted:

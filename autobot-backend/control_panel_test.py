@@ -18,7 +18,7 @@ sys.path.append(str(Path(__file__).parent))
 from desktop_streaming_manager import VNCServerManager, get_desktop_streaming
 from memory import TaskPriority
 from takeover_manager import TakeoverTrigger, get_takeover_manager
-from tests.test_helpers import get_test_backend_url
+from tests.test_helpers import live_backend_url
 
 desktop_streaming = get_desktop_streaming()
 takeover_manager = get_takeover_manager()
@@ -30,7 +30,7 @@ def test_api_connectivity():
 
     try:
         # Test health endpoint
-        response = requests.get(get_test_backend_url() + "/api/control/system/health", timeout=5)
+        response = requests.get(live_backend_url() + "/api/control/system/health", timeout=5)
         if response.status_code == 200:
             health_data = response.json()
             print(f"✅ API accessible - Status: {health_data.get('status', 'unknown')}")  # noqa: print  # noqa: print
@@ -39,7 +39,7 @@ def test_api_connectivity():
             print(f"❌ API returned status code: {response.status_code}")  # noqa: print
             return False
     except requests.exceptions.ConnectionError:
-        print(f"❌ Cannot connect to backend API at {get_test_backend_url()}")  # noqa: print
+        print(f"❌ Cannot connect to backend API at {live_backend_url()}")  # noqa: print
         return False
     except Exception as e:
         print(f"❌ API connectivity test failed: {e}")  # noqa: print
@@ -158,7 +158,7 @@ def test_api_endpoints():
     print("\n🔗 Testing API Endpoints...")  # noqa: print
     print("=" * 50)  # noqa: print
 
-    base_url = get_test_backend_url() + "/api/control"
+    base_url = live_backend_url() + "/api/control"
 
     # Test 1: System health
     print("\n1. Testing System Health Endpoint...")  # noqa: print

@@ -65,6 +65,7 @@ from repo_tests._reach import declare
 from repo_tests.env_var_bare_cast_allowlist import BARE_ENV_CASTS, MAX_BARE_ENV_CASTS
 
 from autobot_shared.paths import GitRepoRootUnavailable, git_repo_root, scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 #: A path this scan never reaches: tests (whatever their naming convention),
 #: this guard's own package, and vendored/agent-worktree copies of the tree.
@@ -86,7 +87,7 @@ def repo_root() -> Path:
         pytest.skip("not a git checkout -- this check enumerates tracked files")
 
 
-def tracked_python_files(root: Path) -> list[str]:
+def bare_cast_scanned_files(root: Path) -> list[str]:
     """Tracked ``.py`` files this guard's population covers, relative to *root*."""
     out = subprocess.run(
         ["git", "-C", str(root), "ls-files", "*.py"],
@@ -200,7 +201,7 @@ def bare_casts_in_file(path: Path) -> list[str]:
     Module level only: this walks ``tree.body`` directly and never descends
     into a function or class, matching the guard's own stated scope.
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"), filename=str(path))
     found = []
     for node in tree.body:
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
@@ -227,7 +228,7 @@ def measurement() -> Measurement:
     found: dict[str, list[str]] = {}
     unparsed: list[str] = []
     parsed = 0
-    for rel in tracked_python_files(root):
+    for rel in bare_cast_scanned_files(root):
         try:
             names = bare_casts_in_file(root / rel)
         except (SyntaxError, UnicodeDecodeError, OSError):
@@ -244,7 +245,7 @@ def measurement() -> Measurement:
 #: Measured on main: comfortably above 1000 tracked, non-test .py files.
 #: Re-pinned MID-window 2026-10-04 (#17356): `_reach.verify_floor` now refuses a floor in the
 #: bottom tenth of `growth`. Re-measured by the mechanism, not carried across (#15928).
-MIN_FILES_SCANNED = 3347
+MIN_FILES_SCANNED = 3838  # mid-window: population 4038, window [3638, 4038] (the merge train)
 
 #: See `audio_extension_allowlist_test` for the derivation of `growth`.
 #:
@@ -276,7 +277,7 @@ EXPECTED_SKIPS = 0
 #: is why adoption is measured by declaration rather than by pattern.
 REACH = declare(
     "env-var-bare-cast",
-    discover=tracked_python_files,
+    discover=bare_cast_scanned_files,
     floor=MIN_FILES_SCANNED,
     growth=MAX_GROWTH_BEFORE_RATCHET,
     skips=EXPECTED_SKIPS,
@@ -389,7 +390,7 @@ CAST_CONTRASTS = (
 
 @pytest.mark.parametrize(("source", "expected"), CAST_CONTRASTS)
 def test_bare_cast_classifier_discriminates(source: str, expected: str | None) -> None:
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     assert _is_bare_env_cast(tree.body[0].value) == expected, source
 
 

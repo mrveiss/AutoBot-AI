@@ -41,7 +41,12 @@ def _make_app() -> FastAPI:
 
     app = FastAPI()
     app.include_router(router, prefix="/api/voice/realtime")
-    app.dependency_overrides[get_current_user] = lambda: {"id": "test-user", "username": "test"}
+    app.dependency_overrides[get_current_user] = lambda: {
+        "user_id": "test-user",
+        "sub": "test-sub",
+        "username": "test",
+        "org_id": "test-org",
+    }
     app.dependency_overrides[check_admin_permission] = lambda: True
     return app
 
@@ -388,3 +393,38 @@ class TestRouterIsGated:
         tool_routes = [r for r in router.routes if getattr(r, "path", "") == "/tools/call"]
         assert len(tool_routes) == 1
         assert get_current_user in self._deps(tool_routes[0].dependencies)
+
+
+class TestToolCallIsTheOneScopedHandler:
+    """POST /api/voice/realtime/tools/call has one handler, and it is this one (#18721, #18430)."""
+
+    @staticmethod
+    def _bridge(allowed: list[str]) -> MagicMock:
+        bridge = MagicMock()
+        bridge.list_realtime_tools = AsyncMock(return_value=[MagicMock(**{"name": n}) for n in allowed])
+        for tool, name in zip(bridge.list_realtime_tools.return_value, allowed):
+            tool.name = name
+        bridge.call_tool = AsyncMock(return_value=MagicMock(content="ok", is_error=False))
+        return bridge
+
+    def _post(self, client: TestClient, bridge: MagicMock, headers: dict | None = None):
+        with patch("services.realtime_mcp_bridge.get_realtime_bridge", AsyncMock(return_value=bridge)):
+            return client.post(
+                "/api/voice/realtime/tools/call",
+                json={"call_id": "c1", "name": "crm", "arguments": {"a": 1}},
+                headers=headers or {},
+            )
+
+    def test_a_tool_outside_the_active_bundle_is_refused(self, client: TestClient):
+        bridge = self._bridge(["other"])
+        assert self._post(client, bridge).status_code == 403
+        bridge.call_tool.assert_not_called()
+
+    def test_a_permitted_call_carries_the_authenticated_scope_and_the_session_header(self, client: TestClient):
+        bridge = self._bridge(["crm"])
+        response = self._post(client, bridge, {"X-Session-Id": "sess-1"})
+        assert response.json() == {"call_id": "c1", "content": "ok", "is_error": False}
+        kwargs = bridge.call_tool.call_args.kwargs
+        assert (kwargs["session_id"], kwargs["user_id"]) == ("sess-1", "test-user")
+        assert kwargs["company_id"] == "test-org"
+        bridge.list_realtime_tools.assert_awaited_once_with(user_id="test-user", role="user")

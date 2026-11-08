@@ -37,8 +37,9 @@ from api.schemas_system import (
     FileStatsResponse,
     FileViewResponse,
 )
-from auth_middleware import get_auth_middleware
+from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_http import require_contained_relative_path
 from autobot_shared.security.path_validator import (
@@ -130,7 +131,7 @@ def get_security_layer(request: Request) -> SecurityLayer:
     return request.app.state.security_layer
 
 
-def _check_file_permission(request: Request, permission: str) -> dict:
+async def _check_file_permission(request: Request, permission: str) -> dict:
     """
     Check file permissions and return user data.
 
@@ -146,7 +147,7 @@ def _check_file_permission(request: Request, permission: str) -> dict:
 
     Issue #620.
     """
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, permission)
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, permission)
     if not has_permission:
         raise HTTPException(
             status_code=403,
@@ -263,7 +264,7 @@ async def list_files(request: Request, path: str = ""):
     Args:
         path: Relative path within the sandbox (optional, defaults to root)
     """
-    _check_file_permission(request, "view")
+    await _check_file_permission(request, "view")
     target_path = validate_and_resolve_path(path)
 
     # Issue #358/#718: Use dedicated executor for non-blocking file I/O
@@ -456,7 +457,7 @@ def _log_upload_audit(
     """
     security_layer = get_security_layer(request)
     security_layer.audit_log(
-        "file_upload",
+        "file.upload",
         user_data.get("username", "unknown"),
         "success",
         {
@@ -481,7 +482,7 @@ async def _delete_file_item(target_path: Path, path: str, security_layer, user_d
     await run_in_file_executor(target_path.unlink)
 
     security_layer.audit_log(
-        "file_delete",
+        "file.delete",
         user_data.get("username", "unknown"),
         "success",
         {
@@ -514,7 +515,7 @@ async def _delete_directory_item(
         extra = {"warning": "recursive_delete_performed"}
 
     security_layer.audit_log(
-        "file_delete",
+        "file.delete",
         user_data.get("username", "unknown"),
         "success",
         {
@@ -555,18 +556,18 @@ async def upload_file(
         overwrite: Whether to overwrite existing files
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "upload")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "upload")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file upload")
 
     # Store user data in request state for audit logging
     request.state.user = user_data
 
-    # Read file content
+    if not is_safe_file(file.filename or ""):  # #19088: name/type gate before the body is read
+        raise HTTPException(status_code=400, detail="File type not allowed")
     content = await file.read()
 
-    # Validate file (Issue #281: uses helper)
-    _validate_upload_file(file, content)
+    _validate_upload_file(file, content)  # Issue #281
 
     # Validate and resolve target directory
     target_dir = validate_and_resolve_path(path)
@@ -618,7 +619,7 @@ async def download_file(request: Request, path: str):
         path: File path within the sandbox
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "download")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "download")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file download")
 
@@ -640,7 +641,7 @@ async def download_file(request: Request, path: str):
     # Enhanced audit logging with authenticated user
     security_layer = get_security_layer(request)
     security_layer.audit_log(
-        "file_download",
+        "file.download",
         user_data.get("username", "unknown"),
         "success",
         {
@@ -673,7 +674,7 @@ async def view_file(request: Request, path: str):
         path: File path within the sandbox
     """
     # SECURITY FIX: Use modern auth_middleware instead of deprecated function
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file viewing")
 
@@ -707,11 +708,7 @@ async def view_file(request: Request, path: str):
             # File is binary, don't include content
             logger.debug("File is binary, skipping content read: %s", e)
 
-    return {
-        "file_info": file_info,
-        "content": content,
-        "is_text": content is not None,
-    }
+    return {"file_info": file_info, "content": content, "is_text": content is not None}
 
 
 def _log_rename_audit(
@@ -797,7 +794,7 @@ async def rename_file_or_directory(request: Request, path: str = Form(...), new_
         path: Current path of the file/directory
         new_name: New name for the file/directory (not full path, just name)
     """
-    user_data = _check_file_permission(request, "upload")
+    user_data = await _check_file_permission(request, "upload")
 
     if is_invalid_name(new_name):
         raise HTTPException(status_code=400, detail="Invalid file/directory name")
@@ -887,7 +884,7 @@ async def preview_file(request: Request, path: str):
     Returns:
         Dict with type, url, and content for preview
     """
-    _check_file_permission(request, "view")
+    await _check_file_permission(request, "view")
     target_file = validate_and_resolve_path(path)
 
     # Issue #358/#718: Use dedicated executor for non-blocking file I/O
@@ -932,7 +929,7 @@ async def delete_file(request: Request, path: str):
     Args:
         path: Path to the file/directory to delete (query parameter)
     """
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "delete")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "delete")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file deletion")
 
@@ -1000,7 +997,7 @@ async def create_directory(request: Request, path: str = Form(...), name: str = 
         path: Parent directory path
         name: New directory name
     """
-    user_data = _check_file_permission(request, "upload")
+    user_data = await _check_file_permission(request, "upload")
 
     if is_invalid_name(name):
         raise HTTPException(status_code=400, detail="Invalid directory name")
@@ -1076,7 +1073,7 @@ def collect_directory_stats(root: Path) -> tuple:
 async def get_directory_tree(request: Request, path: str = ""):
     """Get directory tree structure for file browser"""
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
             status_code=403,
@@ -1110,7 +1107,7 @@ async def get_directory_tree(request: Request, path: str = ""):
 async def get_file_stats(request: Request):
     """Get file system statistics for the sandbox"""
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file statistics")
 
@@ -1134,7 +1131,7 @@ async def get_file_stats(request: Request):
 # SLM Admin File Browser (Issue #984) ==========================================
 
 _ADMIN_ALLOWED_DIRS = (
-    "/opt/autobot",
+    FLEET_INSTALL_ROOT,
     "/home/autobot",  # noqa: ssot-path
     "/var/log/autobot",
     "/etc/autobot",
@@ -1196,11 +1193,11 @@ async def admin_list_directory(
     # committed frontend types, disclosing the service account's home directory
     # to every API consumer. Runtime behaviour is unchanged.
     path: str = Query(default_factory=lambda: _ADMIN_DEFAULT_BROWSE_DIR),
+    _: bool = Depends(check_admin_permission),
 ) -> dict:
     """List directory contents at an absolute path.
 
-    No auth required — accessible via /autobot-api/ nginx proxy (Issue #984).
-    Restricted to pre-approved base directories.
+    Admin permission required. Restricted to pre-approved base directories.
     """
     target = _validate_admin_path(path)
     if not target.exists():
@@ -1224,10 +1221,10 @@ async def admin_list_directory(
     operation="admin_read_file",
     error_code_prefix="FILES",
 )
-async def admin_read_file(path: str) -> dict:
+async def admin_read_file(path: str, _: bool = Depends(check_admin_permission)) -> dict:
     """Return text content of a file at an absolute path.
 
-    Limited to 1 MB. No auth required — accessible via /autobot-api/ (Issue #984).
+    Limited to 1 MB. Admin permission required.
     """
     target = _validate_admin_path(path)
     if not target.exists():

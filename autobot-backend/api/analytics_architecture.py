@@ -192,6 +192,11 @@ class PatternTemplate:
     code_patterns: List[str] = field(default_factory=list)
     required_score: float = 0.5
 
+    def __post_init__(self) -> None:
+        """Compile the template regexes once, not per file or per class (#19566)."""
+        self.code_res = tuple(re.compile(p) for p in self.code_patterns)
+        self.method_res = tuple(re.compile(p, re.IGNORECASE) for p in self.method_indicators)
+
 
 PATTERN_TEMPLATES = {
     PatternType.FACTORY: PatternTemplate(
@@ -636,29 +641,20 @@ class ArchitectureAnalyzer:
     def _check_code_patterns(
         self,
         content: str,
-        code_patterns: List[str],
+        code_res: tuple,
         indicators: List[str],
         score_per_match: float = 0.1,
     ) -> float:
-        """
-        Check content against code patterns and accumulate score.
+        """Score ``content`` against a template's precompiled code regexes (#281, #19566).
 
-        Issue #281: Extracted helper to reduce repetition in _match_pattern.
-
-        Args:
-            content: Source code content to search
-            code_patterns: List of regex patterns to match
-            indicators: List to append found indicators (mutated)
-            score_per_match: Score to add per pattern match
-
-        Returns:
-            Score delta from matching patterns
+        Appends one ``code_pattern:`` indicator per matching regex (mutates
+        ``indicators``) and returns the score delta.
         """
         score = 0.0
-        for pattern in code_patterns:
-            if re.search(pattern, content):
+        for rx in code_res:
+            if rx.search(content):
                 score += score_per_match
-                indicators.append(f"code_pattern:{pattern[:30]}")
+                indicators.append(f"code_pattern:{rx.pattern[:30]}")
         return score
 
     def _score_class_indicators(self, class_info: Dict[str, Any], template: PatternTemplate) -> tuple:
@@ -672,8 +668,8 @@ class ArchitectureAnalyzer:
                 indicators.append(f"class_name:{indicator}")
 
         for method in class_info["methods"]:
-            for indicator in template.method_indicators:
-                if re.search(indicator, method, re.IGNORECASE):
+            for rx in template.method_res:
+                if rx.search(method):
                     score += 0.15
                     indicators.append(f"method:{method}")
                     break
@@ -727,11 +723,11 @@ class ArchitectureAnalyzer:
         score = 0.0
         indicators = []
 
-        for pattern in template.code_patterns:
-            matches_found = re.findall(pattern, content)
+        for rx in template.code_res:
+            matches_found = rx.findall(content)
             if matches_found:
                 score += 0.3 * len(matches_found)
-                indicators.append(f"pattern:{pattern[:30]}")
+                indicators.append(f"pattern:{rx.pattern[:30]}")
 
         score += self._check_import_indicators(
             analysis.imports,
@@ -767,7 +763,7 @@ class ArchitectureAnalyzer:
 
         for class_info in analysis.classes:
             score, indicators = self._score_class_indicators(class_info, template)
-            score += self._check_code_patterns(content, template.code_patterns, indicators)
+            score += self._check_code_patterns(content, template.code_res, indicators)
             score += self._check_import_indicators(analysis.imports, template.import_indicators, indicators)
 
             if score >= template.required_score:

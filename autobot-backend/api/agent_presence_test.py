@@ -20,23 +20,13 @@ from api.user_management import dependencies
 from api.user_management.dependencies import get_current_user, require_org_context
 from protocols.agent_kind import AgentKind
 from protocols.agent_presence import AgentPresenceRegistry
+from testkit.fake_async_session import FakeAsyncSession
 from user_management.services import TenantContext
 
 
-class _FakeMembershipSession:
+def _membership_session(*, is_member: bool) -> FakeAsyncSession:
     """Answers `_check_org_membership`'s one query without a real DB."""
-
-    def __init__(self, *, is_member: bool) -> None:
-        self._is_member = is_member
-
-    async def execute(self, *_args, **_kwargs):
-        is_member = self._is_member
-
-        class _Result:
-            def first(self):
-                return ("row",) if is_member else None
-
-        return _Result()
+    return FakeAsyncSession(default_result=[("row",)] if is_member else [])
 
 
 def _db_session_override(*, is_member: bool):
@@ -47,7 +37,7 @@ def _db_session_override(*, is_member: bool):
     """
 
     def _gen():
-        yield _FakeMembershipSession(is_member=is_member)
+        yield _membership_session(is_member=is_member)
 
     return _gen
 

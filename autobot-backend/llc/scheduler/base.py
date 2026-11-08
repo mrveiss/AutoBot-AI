@@ -41,13 +41,13 @@ stop() semantics:
 """
 
 import asyncio
-import logging
 import sys
 from typing import Optional
 
 from autobot_shared.env_utils import env_float
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Bounded-drain timeout shared by every caller of drain_task()/aclose() — a
 # single tunable rather than a hard-coded literal per call site (#13210).
@@ -284,7 +284,7 @@ class PollLoopScheduler:
                     # per-module log-level filtering keeps working as it did
                     # before the extraction; the base logger only carries
                     # lifecycle events.
-                    logging.getLogger(type(self).__module__).exception("%s._tick() failed", type(self).__name__)
+                    get_logger(type(self).__module__).exception("%s._tick() failed", type(self).__name__)
                 honour_pending_cancellation()
                 try:
                     await self._wait_between_polls()

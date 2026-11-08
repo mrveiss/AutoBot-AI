@@ -70,6 +70,8 @@ vi.mock('@/stores/provision', () => ({
     connectWs: vi.fn(),
     disconnectWs: vi.fn(),
     reset: vi.fn(),
+    pollingPaused: ref(false),
+    retryPolling: vi.fn(),
   }),
 }))
 

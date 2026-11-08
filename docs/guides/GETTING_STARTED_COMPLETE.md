@@ -39,7 +39,7 @@ AutoBot is agentic — it talks, sees, and acts, all on hardware you control:
 - **Knowledge graph** — institutional memory built from every conversation, document,
   and node
 - **Multi-user + RBAC** — role-based access control for teams
-- **Modules** — install AutoBot LLC (agents that work together as a company), the
+- **Modules** — install Company OS (agents that work together as a company), the
   Transcriber, and Codebase Analytics *(work in progress)* on the core
 - **Service Lifecycle Manager (SLM)** — deploys, operates, and scales the underlying
   infrastructure for you

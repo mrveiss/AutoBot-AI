@@ -46,60 +46,9 @@ NC='\033[0m'
 # Create log directory
 mkdir -p "$LOG_DIR"
 
-# Logging
-log() {
-    local level="$1"
-    shift
-    local message="$*"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-
-    case "$level" in
-        INFO)  echo -e "${BLUE}ℹ️ ${message}${NC}" | tee -a "$LOG_FILE" ;;
-        WARN)  echo -e "${YELLOW}⚠️ ${message}${NC}" | tee -a "$LOG_FILE" ;;
-        ERROR) echo -e "${RED}❌ ${message}${NC}" | tee -a "$LOG_FILE" ;;
-        SUCCESS) echo -e "${GREEN}✅ ${message}${NC}" | tee -a "$LOG_FILE" ;;
-        DEBUG) echo -e "${timestamp} [DEBUG] ${message}" >> "$LOG_FILE" ;;
-    esac
-}
-
-error_exit() {
-    log "ERROR" "$1"
-    exit 1
-}
-
-success() {
-    log "SUCCESS" "$1"
-}
-
-# Check prerequisites
-check_prerequisites() {
-    log "INFO" "Checking prerequisites..."
-
-    if ! command -v ansible-playbook &> /dev/null; then
-        error_exit "Ansible is not installed. Please install ansible first."
-    fi
-
-    if [[ ! -f "$INVENTORY_FILE" ]]; then
-        error_exit "Inventory file not found: $INVENTORY_FILE"
-    fi
-
-    if [[ ! -f "$PLAYBOOK_FILE" ]]; then
-        error_exit "Playbook file not found: $PLAYBOOK_FILE"
-    fi
-
-    success "Prerequisites checked"
-}
-
-# Test VM connectivity
-test_connectivity() {
-    log "INFO" "Testing connectivity to all VMs..."
-
-    if ansible all -i "$INVENTORY_FILE" -m ping --ask-pass; then
-        success "All VMs are accessible"
-    else
-        error_exit "Some VMs are not accessible. Please check network connectivity."
-    fi
-}
+# Logging + preflight helpers (log, error_exit, success, check_prerequisites, test_connectivity)
+# shellcheck source=scripts/lib/deploy-common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/lib/deploy-common.sh"
 
 # Show deployment plan
 show_deployment_plan() {
@@ -136,7 +85,7 @@ show_deployment_plan() {
     log "INFO" ""
     log "INFO" "VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}) - autobot-browser:"
     log "INFO" "  • Node.js runtime for Playwright"
-    log "INFO" "  • Browser service (port 3000)"
+    log "INFO" "  • Browser service (port ${AUTOBOT_BROWSER_SERVICE_PORT})"
     log "INFO" "  • VNC server for desktop access (port 5900)"
     log "INFO" "  • SystemD services: autobot-browser, autobot-vnc"
     log "INFO" ""
@@ -196,27 +145,19 @@ AUTOBOT_OLLAMA_HOST=${AUTOBOT_AI_STACK_HOST:-localhost}
 AUTOBOT_OLLAMA_PORT=11434
 
 AUTOBOT_BROWSER_SERVICE_HOST=${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}
-AUTOBOT_BROWSER_PORT=3000
+AUTOBOT_BROWSER_SERVICE_PORT=${AUTOBOT_BROWSER_SERVICE_PORT}
 
 AUTOBOT_FRONTEND_HOST=${AUTOBOT_FRONTEND_HOST:-localhost}
-AUTOBOT_FRONTEND_PORT=80
+# nginx serves the UI (#19326): the URL is the HTTP port below, not the Vite port
+AUTOBOT_FRONTEND_SERVED_BY=nginx
+AUTOBOT_FRONTEND_HTTP_PORT=${AUTOBOT_FRONTEND_HTTP_PORT}
 
 # Deployment mode
 AUTOBOT_DEPLOYMENT_MODE=native
 AUTOBOT_USE_CONTAINERS=false
 
-# Database assignments for VM Redis
-AUTOBOT_REDIS_DB_MAIN=0
-AUTOBOT_REDIS_DB_KNOWLEDGE=1
-AUTOBOT_REDIS_DB_PROMPTS=2
-AUTOBOT_REDIS_DB_AGENTS=3
-AUTOBOT_REDIS_DB_METRICS=4
-AUTOBOT_REDIS_DB_LOGS=5
-AUTOBOT_REDIS_DB_SESSIONS=6
-AUTOBOT_REDIS_DB_WORKFLOWS=7
-AUTOBOT_REDIS_DB_VECTORS=8
-AUTOBOT_REDIS_DB_MODELS=9
-AUTOBOT_REDIS_DB_TESTING=15
+# Redis database numbers: redis-databases.yaml (#19232). Set AUTOBOT_REDIS_DB_<NAME> only
+# where this deployment differs; a copy of the whole table here is a second source.
 EOF
 
     success "Backend configuration updated: $env_file"
@@ -235,7 +176,7 @@ validate_deployment() {
         "${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT}|AI Stack"
         "${AUTOBOT_AI_STACK_HOST:-localhost}:8081|NPU Worker"
         "${AUTOBOT_AI_STACK_HOST:-localhost}:11434|Ollama"
-        "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000|Browser Service"
+        "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT}|Browser Service"
     )
 
     local failed_services=()
@@ -299,7 +240,7 @@ show_summary() {
     log "INFO" "  RedisInsight: http://${AUTOBOT_REDIS_HOST:-localhost}:8002"
     log "INFO" "  AI Stack:     http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT}"
     log "INFO" "  Ollama:       http://${AUTOBOT_AI_STACK_HOST:-localhost}:11434"
-    log "INFO" "  Browser:      http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000"
+    log "INFO" "  Browser:      http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT}"
     log "INFO" ""
     log "INFO" "🖥️  Management Access:"
     log "INFO" "  Terminal:     http://${AUTOBOT_BACKEND_HOST:-localhost}:7681 (WSL)"

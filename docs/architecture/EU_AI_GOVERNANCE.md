@@ -56,7 +56,7 @@ third-party SaaS API you cannot inspect.
 ## What does not exist yet — stated as a gap, not implied as done
 
 - **No risk-tier classifier.** Nothing in the codebase determines whether a given module or
-  use case (e.g. an AutoBot LLC agent making a decision with legal or safety effect) falls under
+  use case (e.g. a Company OS agent making a decision with legal or safety effect) falls under
   a higher-risk category. That classification is the deployer's responsibility today, with no
   tooling to help.
 - **No technical-documentation generator.** The Act's higher-risk obligations expect structured

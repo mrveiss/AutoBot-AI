@@ -30,6 +30,7 @@ from api.schemas_agent import (
 )
 from api.user_management.dependencies import (
     _is_platform_admin_claim,
+    _parse_uuid_safe,
     get_current_user,
     get_user_service,
     require_org_context,
@@ -39,7 +40,12 @@ from api.user_management.dependencies import (
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
-from autobot_shared.user_management.user_service_errors import DuplicateUserError, UserNotFoundError
+from autobot_shared.user_management.revocation_outcome import RENAME_REVOCATION_INCOMPLETE_MESSAGE, commit_or_503
+from autobot_shared.user_management.user_service_errors import (
+    DuplicateUserError,
+    SessionReassignError,
+    UserNotFoundError,
+)
 from user_management.schemas import (
     UserCreate,
     UserListResponse,
@@ -182,33 +188,33 @@ async def create_user(
 )
 async def get_current_user_profile(
     current_user: dict = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
 ):
-    """Get current user's profile.
+    """Return the caller's stored profile (#18786).
 
-    Returns the authenticated user's profile from session/JWT claims.
+    The row is looked up by the id the credential carries, as ``GET /{user_id}``
+    does. A principal with no stored row (auth-disabled, env admin) has no
+    profile to return, so it gets a 404 rather than an invented one.
     """
-    username = current_user.get("username")
-
-    if not username:
+    if not current_user.get("username"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unable to identify current user",
         )
 
-    return UserResponse(
-        id=uuid.uuid4(),
-        email=current_user.get("email", f"{username}@autobot.local"),
-        username=username,
-        display_name=username.title(),
-        is_active=True,
-        is_verified=True,
-        mfa_enabled=False,
-        is_platform_admin=_is_platform_admin_claim(current_user),
-        preferences={},
-        roles=[],
-        created_at=None,
-        updated_at=None,
-    )
+    raw_id = current_user.get("user_id") or current_user.get("id") or current_user.get("sub")
+    user_id = _parse_uuid_safe(raw_id)
+    user = await user_service.get_user(user_id) if user_id else None
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No stored profile for the current user",
+        )
+
+    response = _user_to_response(user)
+    # The credential's claims, not the stored flag, decide admin (shared predicate).
+    response.is_platform_admin = _is_platform_admin_claim(current_user)
+    return response
 
 
 @router.get(
@@ -262,8 +268,9 @@ async def update_user(
             avatar_url=user_data.avatar_url,
             preferences=user_data.preferences,
         )
-
-        return _user_to_response(user)
+        response = _user_to_response(user)
+        await commit_or_503(user_service.session, RENAME_REVOCATION_INCOMPLETE_MESSAGE)  # a failed revocation is told
+        return response
 
     except UserNotFoundError:
         raise HTTPException(
@@ -296,6 +303,7 @@ async def delete_user(
     """Delete user account, optionally reassigning memory ownership to *reassign_to*."""
     try:
         await user_service.delete_user(user_id, hard_delete=hard_delete, reassign_to=reassign_to)
+        await commit_or_503(user_service.session)  # a failed revocation is answered, not only logged (#20443)
         return UserDeletedResponse(
             message=f"User {user_id} deleted successfully",
         )
@@ -305,6 +313,8 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
+    except SessionReassignError as exc:  # #20029: refused, so no session is left without an owner
+        raise HTTPException(status_code=exc.status_code, detail=str(exc))
 
 
 # -------------------------------------------------------------------------
@@ -350,6 +360,7 @@ async def deactivate_user(
     """Deactivate user account."""
     try:
         await user_service.deactivate_user(user_id)
+        await commit_or_503(user_service.session)  # a failed revocation is answered, not only logged (#20443)
         user = await user_service.get_user(user_id)
         return _user_to_response(user)
 
@@ -358,6 +369,8 @@ async def deactivate_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
+    except SessionReassignError as exc:  # #20029
+        raise HTTPException(status_code=exc.status_code, detail=str(exc))
 
 
 # Password Management: split into api/user_management/password_change.py (#15743) --

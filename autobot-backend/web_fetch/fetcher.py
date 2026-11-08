@@ -42,7 +42,9 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from web_fetch.cache import WEB_FETCH_MAX_BYTES, get_cached_result, set_cached_result
-from web_fetch.extractors import _MIN_CONTENT_CHARS, extract_markdown, is_spa_content
+from web_fetch.content_types import BodyKind, UnsupportedContentType, decode_body, page_from_body
+from web_fetch.extractors import _MIN_CONTENT_CHARS, is_spa_content
+from web_fetch.profile import IngestProfile, require_implemented
 
 
 def _parse_jina_markdown(jina_text: str) -> tuple:
@@ -66,6 +68,7 @@ from web_fetch.types import (
     ERR_SSRF_BLOCKED,
     ERR_TIMEOUT,
     ERR_UNKNOWN,
+    ERR_UNSUPPORTED_CONTENT_TYPE,
     FetchResult,
     RenderMode,
 )
@@ -180,11 +183,15 @@ async def _fetch_jina_impl(url: str, timeout: float) -> str | None:
     return None
 
 
-async def _fetch_bs4(url: str, timeout: float) -> tuple[str | None, int | None]:
-    """Fetch raw HTML. Returns (html, status_code) or (None, None).
+async def _fetch_bs4(url: str, timeout: float) -> tuple[str | None, int | None, str | None]:
+    """Fetch a raw body. Returns ``(body, status_code, content_type)`` or ``(None, None, None)``.
+
+    ``content_type`` is the response's Content-Type header, ``None`` when absent, so
+    the caller dispatches on what the server said the body is (#18826).
+    The body is decoded in its declared charset (:func:`decode_body`), not always UTF-8.
 
     Single round-trip (#7459): streams the response body in 64 KiB chunks,
-    enforces ``WEB_FETCH_MAX_BYTES``, and returns ``("", status)`` for empty
+    enforces ``WEB_FETCH_MAX_BYTES``, and returns ``("", status, content_type)`` for empty
     bodies — the prior implementation issued a 1-byte probe request and
     then re-fetched the full URL, doubling HTTP load on every fast-path
     attempt.
@@ -201,7 +208,7 @@ async def _fetch_bs4(url: str, timeout: float) -> tuple[str | None, int | None]:
     from autobot_shared.security.ssrf_guard import SSRFError, pinned_request_with_redirects
 
     if not await _is_public_url(url):
-        return None, None
+        return None, None, None
 
     headers = {"User-Agent": _USER_AGENT}
     aio_timeout = aiohttp.ClientTimeout(total=timeout)
@@ -209,21 +216,21 @@ async def _fetch_bs4(url: str, timeout: float) -> tuple[str | None, int | None]:
         async with pinned_request_with_redirects(
             "GET", url, headers=headers, timeout=aio_timeout, max_redirects=_MAX_REDIRECTS
         ) as resp:
+            content_type = resp.headers.get("Content-Type")
             content = b""
             async for chunk in resp.content.iter_chunked(65536):
                 content += chunk
                 if len(content) > WEB_FETCH_MAX_BYTES:
-                    return None, None  # too large
+                    return None, None, None  # too large
             if not content:
-                return "", resp.status
-            html = content.decode("utf-8", errors="replace")
-            return html, resp.status
+                return "", resp.status, content_type
+            return decode_body(content, content_type), resp.status, content_type
     except SSRFError as exc:
         logger.warning("web_fetch BS4 fetch blocked by SSRF guard for %s: %s", url, exc)
-        return None, None
+        return None, None, None
     except Exception as exc:
         logger.debug("BS4 fetch failed for %s: %s", url, exc)
-        return None, None
+        return None, None, None
 
 
 async def _fetch_playwright(url: str, timeout: float) -> str | None:
@@ -297,9 +304,36 @@ class WebFetcher:
             logger.info("fetched markdown: %s", result.markdown)
     """
 
-    def __init__(self, redis_client=None, robots_cache=None) -> None:
+    def __init__(self, redis_client=None, robots_cache=None, profile: IngestProfile = IngestProfile.DOCUMENT) -> None:
         self._redis = redis_client
         self._robots = robots_cache
+        # #18826: validated here, before any cache lookup or network call, so an
+        # unimplemented profile can never be answered from a document-profile cache.
+        self.profile = require_implemented(profile)
+
+    def page_text(self, body: str, url: str, content_type: str | None = None) -> tuple[str, str]:
+        """Return ``(title, text)`` of a fetched *body*, dispatched on *content_type* (#18826).
+
+        HTML goes through the one HTML extractor; text and JSON pass through; an
+        undeclared type is sniffed. Raises :class:`UnsupportedContentType` for
+        anything else, which is never extracted as a page.
+        """
+        _kind, title, text = page_from_body(body, content_type, self.profile, url)
+        return title, text
+
+    def _bs4_page(
+        self, url: str, body: str, status: int, content_type: str | None, mode: RenderMode
+    ) -> tuple[FetchResult, BodyKind | None]:
+        """Build the result for a 2xx direct fetch; an unsupported body is a failed result."""
+        try:
+            kind, title, text = page_from_body(body, content_type, self.profile, url)
+        except UnsupportedContentType as exc:
+            logger.info("web_fetch refused %s: %s", url, exc)
+            return _fail(url, ERR_UNSUPPORTED_CONTENT_TYPE, status=status), None
+        result = FetchResult(
+            url=url, success=True, markdown=text, title=title, render_mode=mode, source="bs4", status_code=status
+        )
+        return result, kind
 
     @classmethod
     async def fetch(
@@ -309,8 +343,9 @@ class WebFetcher:
         timeout: float = 30.0,
         redis_client=None,
         robots_cache=None,
+        profile: IngestProfile = IngestProfile.DOCUMENT,
     ) -> FetchResult:
-        """Fetch url and return FetchResult with markdown content.
+        """Fetch url and return FetchResult with the page's extracted text.
 
         Args:
             url: Absolute URL to fetch.
@@ -318,8 +353,9 @@ class WebFetcher:
             timeout: Per-request timeout in seconds.
             redis_client: Optional async Redis client for caching.
             robots_cache: Optional RobotsCache instance.
+            profile: What to keep from an HTML page (#18826); ``document`` is the only implemented value.
         """
-        instance = cls(redis_client=redis_client, robots_cache=robots_cache)
+        instance = cls(redis_client=redis_client, robots_cache=robots_cache, profile=profile)
         return await instance._fetch(url, render, timeout)
 
     @classmethod
@@ -350,12 +386,22 @@ class WebFetcher:
             on empty body with a successful status — same shape as ``fetch()``
             for empty content.
         """
+        html, status, _content_type = await cls.fetch_raw_page(url, timeout)
+        return html, status
+
+    @classmethod
+    async def fetch_raw_page(cls, url: str, timeout: float = 30.0) -> tuple[str | None, int | None, str | None]:
+        """Like :meth:`fetch_raw_html`, plus the response Content-Type (``None`` when absent).
+
+        Callers that turn the body into stored text pass the header on to
+        :meth:`page_text`, so the page type is declared, not sniffed (#18826).
+        """
         return await _fetch_bs4(url, timeout)
 
     async def _fetch(self, url: str, render: RenderMode, timeout: float) -> FetchResult:
         """Internal fetch dispatcher."""
         # Cache lookup
-        cached = await get_cached_result(url, render.value, self._redis)
+        cached = await get_cached_result(url, render.value, self.profile.value, self._redis)
         if cached is not None:
             logger.debug("web_fetch cache hit for %s", url)
             return FetchResult(**cached)
@@ -381,7 +427,9 @@ class WebFetcher:
             _record_domain_success(netloc)
             await self._cache(url, render, result)
         else:
-            if result.error_code not in (ERR_SSRF_BLOCKED, ERR_ROBOTS_BLOCKED, ERR_CIRCUIT_OPEN):
+            # A refused body type says nothing about the host's health, so it never trips the circuit.
+            _not_host_failures = (ERR_SSRF_BLOCKED, ERR_ROBOTS_BLOCKED, ERR_CIRCUIT_OPEN, ERR_UNSUPPORTED_CONTENT_TYPE)
+            if result.error_code not in _not_host_failures:
                 _record_domain_failure(netloc)
 
         return result
@@ -410,21 +458,14 @@ class WebFetcher:
 
         # Step 2: BS4 — success requires HTTP 2xx and no SPA markers (any length).
         async with _get_fast_sem():
-            html, status = await _fetch_bs4(url, min(timeout, 15.0))
-        if html is None and status is None:
+            body, status, content_type = await _fetch_bs4(url, min(timeout, 15.0))
+        if body is None and status is None:
             pass  # fall through to Playwright
-        elif html is not None and status is not None and status < 400:
-            title, md = extract_markdown(html)
-            if not is_spa_content(md, html):
-                return FetchResult(
-                    url=url,
-                    success=True,
-                    markdown=md,
-                    title=title,
-                    render_mode=RenderMode.AUTO,
-                    source="bs4",
-                    status_code=status,
-                )
+        elif body is not None and status is not None and status < 400:
+            result, kind = self._bs4_page(url, body, status, content_type, RenderMode.AUTO)
+            # Only an HTML shell can need JS rendering; text, JSON and refusals are final.
+            if kind is not BodyKind.HTML or not is_spa_content(result.markdown, body):
+                return result
         elif status is not None and status >= 400:
             return _fail(url, ERR_HTTP_ERROR, status=status)
 
@@ -443,18 +484,9 @@ class WebFetcher:
                 )
 
         async with _get_fast_sem():
-            html, status = await _fetch_bs4(url, min(timeout, 15.0))
-        if html is not None and status is not None and status < 400:
-            title, md = extract_markdown(html)
-            return FetchResult(
-                url=url,
-                success=True,
-                markdown=md,
-                title=title,
-                render_mode=RenderMode.FAST,
-                source="bs4",
-                status_code=status,
-            )
+            body, status, content_type = await _fetch_bs4(url, min(timeout, 15.0))
+        if body is not None and status is not None and status < 400:
+            return self._bs4_page(url, body, status, content_type, RenderMode.FAST)[0]
         if status is not None and status >= 400:
             return _fail(url, ERR_HTTP_ERROR, retryable=False, status=status)
         return _fail(url, ERR_CONNECTION, retryable=True)
@@ -468,7 +500,8 @@ class WebFetcher:
                 return _fail(url, ERR_TIMEOUT, retryable=True)
         if html is None:
             return _fail(url, ERR_UNKNOWN, retryable=True)
-        title, md = extract_markdown(html)
+        # The browser returns its rendered DOM, so the body is HTML whatever the URL served.
+        title, md = self.page_text(html, url, "text/html")
         return FetchResult(
             url=url, success=True, markdown=md, title=title, render_mode=RenderMode.PLAYWRIGHT, source="playwright"
         )
@@ -486,4 +519,4 @@ class WebFetcher:
             "retryable": result.retryable,
             "status_code": result.status_code,
         }
-        await set_cached_result(url, render.value, payload, self._redis)
+        await set_cached_result(url, render.value, self.profile.value, payload, self._redis)

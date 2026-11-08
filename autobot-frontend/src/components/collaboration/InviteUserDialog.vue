@@ -14,7 +14,7 @@
 import { ref, computed, onMounted, toRef, watch } from 'vue'
 import { displayNameOf } from '@/utils/displayName'
 import { useI18n } from 'vue-i18n'
-import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
+import { BaseAvatar, useBodyScrollLock, useFocusRestore, useFocusTrap, useInitialFocus } from '@autobot/ui'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
 import { useDebounce } from '@/composables/useDebounce'
 import { useCollaborationInvites } from '@/composables/useCollaborationInvites'
@@ -90,15 +90,6 @@ const availableUsers = computed(() => {
   return filteredUsers.value.filter(user => !participantIds.has(user.id))
 })
 
-// Get initials
-const getInitials = (username: string): string => {
-  return username
-    .split(/[\s_-]/)
-    .map(part => part[0])
-    .join('')
-    .toUpperCase()
-    .substring(0, 2)
-}
 
 // Get display name or username
 const getDisplayName = (user: CollaborationUser): string => {
@@ -252,9 +243,7 @@ const roleOptions = computed(() => [
                   ]"
                   @click="selectUser(user.id)"
                 >
-                  <div class="w-10 h-10 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-sm font-medium text-autobot-text-primary">
-                    {{ getInitials(getDisplayName(user)) }}
-                  </div>
+                  <BaseAvatar :name="getDisplayName(user)" size="lg" decorative />
                   <div class="flex-1 min-w-0">
                     <div class="text-sm font-medium text-autobot-text-primary truncate">
                       {{ getDisplayName(user) }}
@@ -280,9 +269,7 @@ const roleOptions = computed(() => [
                   :key="user.id"
                   class="w-full flex items-center gap-3 p-3 rounded-lg bg-autobot-bg-tertiary/30 opacity-50 cursor-not-allowed"
                 >
-                  <div class="w-10 h-10 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-sm font-medium text-autobot-text-primary">
-                    {{ getInitials(getDisplayName(user)) }}
-                  </div>
+                  <BaseAvatar :name="getDisplayName(user)" size="lg" decorative />
                   <div class="flex-1 min-w-0">
                     <div class="text-sm font-medium text-autobot-text-primary truncate">
                       {{ getDisplayName(user) }}

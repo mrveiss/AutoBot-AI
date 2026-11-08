@@ -68,6 +68,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import type { CodePayload } from '@/types/canvas'
+import { sanitizeHtml } from '@/utils/sanitize'
 import { createLogger } from '@/utils/debugUtils'
 import { useReducedMotion } from '@/composables/useReducedMotion'
 
@@ -88,16 +89,15 @@ const { prefersReducedMotion } = useReducedMotion()
 const codeContent = computed(() => props.richPayload?.code)
 const codeLanguage = computed(() => props.richPayload?.language || '')
 
-// Lazy-load highlight.js and DOMPurify
-let _cachedLibs: { hljs: typeof import('highlight.js')['default']; dompurify: typeof import('dompurify')['default'] } | null = null
+// Lazy-load highlight.js
+let _cachedLibs: { hljs: typeof import('highlight.js')['default'] } | null = null
 async function loadLibraries() {
   if (_cachedLibs) return _cachedLibs
 
   try {
     const hljs = await import('highlight.js')
-    const dompurify = await import('dompurify')
     highlightJsLoaded.value = true
-    _cachedLibs = { hljs: hljs.default, dompurify: dompurify.default }
+    _cachedLibs = { hljs: hljs.default }
     return _cachedLibs
   } catch (err) {
     renderError.value = `Failed to load libraries: ${err instanceof Error ? err.message : String(err)}`
@@ -118,7 +118,7 @@ async function updateHighlightedCode() {
     const libs = await loadLibraries()
     if (!libs) return
 
-    const { hljs, dompurify } = libs
+    const { hljs } = libs
 
     let highlighted: string
     if (codeLanguage.value) {
@@ -132,10 +132,10 @@ async function updateHighlightedCode() {
     }
 
     // Sanitize HTML before rendering
-    highlightedCode.value = dompurify.sanitize(highlighted, { ALLOWED_TAGS: ['span'], ALLOWED_ATTR: ['class'] })
+    highlightedCode.value = sanitizeHtml(highlighted, 'code')
   } catch (err) {
     renderError.value = `Syntax highlight failed: ${err instanceof Error ? err.message : String(err)}`
-    highlightedCode.value = codeContent.value ?? ''
+    highlightedCode.value = sanitizeHtml(codeContent.value ?? '', 'plain')
   }
 }
 

@@ -408,6 +408,31 @@ class LLMIterationContext:
     # enforces one, so no hop can widen it. None: nothing inherited.
     authority: "Authority | None" = None
 
+    @property
+    def attachment_floor(self) -> bool:
+        """True when this turn carries attached files, or its chat ever did (#20195); server-set keys only."""
+        from autobot_shared.ai_lines import ATTACHMENT_CHAT_KEY, ATTACHMENT_TURN_KEY
+
+        context = self.context or {}
+        return context.get(ATTACHMENT_TURN_KEY) is True or context.get(ATTACHMENT_CHAT_KEY) is True
+
+    @property
+    def attachment_floor_waived(self) -> bool:
+        """True when an admin's ``chat.auto_approve_attachment_turns`` lifts the attachment floor for this turn."""
+        from autobot_shared.ai_lines import ATTACHMENT_AUTO_APPROVE_KEY
+
+        return self.attachment_floor and (self.context or {}).get(ATTACHMENT_AUTO_APPROVE_KEY) is True
+
+    @property
+    def approve_every_call(self) -> bool:
+        """True when every tool call needs a person's approval because of attached files (#20195).
+
+        The turn carries files, or its chat ever did (the model's earlier output derived from them sits in
+        history), unless the admin setting waives that. Read from ``context`` where the workflow stamps it each
+        turn from server state; a client that sends a key can only tighten its own turn, never loosen one.
+        """
+        return self.attachment_floor and not self.attachment_floor_waived
+
 
 def _governable_agent_id(source: Dict[str, Any]) -> str | None:
     """The ``agent_id`` a context may govern its run with (#16950).
@@ -469,3 +494,13 @@ class WorkflowSession:
     message_count: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
     conversation_history: List[Dict[str, str]] = field(default_factory=list)  # Track conversation context
+
+    def kb_principal(self):
+        """The principal chat grounding reads the KB as (#16664).
+
+        Built from the stamped ``metadata["user_id"]`` / ``["org_id"]``. A turn with no user id
+        reads as ``SYSTEM_SCOPE`` -- non-private facts only -- never as an unscoped read.
+        """
+        from knowledge.search_filters import principal_for_identity
+
+        return principal_for_identity(self.metadata.get("user_id"), self.metadata.get("org_id"))

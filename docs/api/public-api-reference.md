@@ -1052,9 +1052,32 @@ Get LLM provider connection status.
 
 Get health status of all configured LLM providers.
 
+### GET /embeddings/models
+
+The embedding models the user can switch to right now: the configured providers' models that are
+embedding models (chat models are never listed), with the active one marked. The active model is
+listed even when no provider reports it, as `available: false`.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response** (`data`):
+
+```json
+{
+  "active": "nomic-embed-text:latest",
+  "models": [
+    {"name": "nomic-embed-text:latest", "provider": "ollama", "available": true, "active": true, "dimension": null}
+  ],
+  "total_count": 1,
+  "providers_errored": []
+}
+```
+
+`dimension` is `null` until the model has embedded once.
+
 ### GET /llm/embedding/models
 
-List available embedding models.
+Moved: answers `308` to [`GET /embeddings/models`](#get-embeddingsmodels) (#19378).
 
 ---
 

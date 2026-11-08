@@ -191,6 +191,7 @@
 </template>
 
 <script setup lang="ts">
+import { saveTextFile } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { formatFileSize, formatDuration } from '@/utils/formatHelpers'
 import { ref, computed, onUnmounted } from 'vue';
@@ -474,14 +475,7 @@ const exportAllResults = () => {
     frames: frameResults.value,
   };
 
-  const dataStr = JSON.stringify(data, null, 2);
-  const blob = new Blob([dataStr], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `video_analysis_${Date.now()}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+  saveTextFile(JSON.stringify(data, null, 2), `video_analysis_${Date.now()}.json`, 'application/json');
 };
 
 const saveToGallery = () => {
@@ -557,8 +551,8 @@ onUnmounted(() => {
   color: var(--text-tertiary);
 }
 
-.drop-placeholder i {
-  font-size: var(--text-5xl);
+.drop-placeholder .icon {
+  width: var(--text-5xl); height: var(--text-5xl);
   color: var(--text-muted);
 }
 

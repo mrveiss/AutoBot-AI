@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Pattern, Set
 
 from autobot_shared.logging_manager import get_logger
+from utils.file_categorization import SKIP_DIRS
 
 from .models import CrossLangPatternCategory, CrossLangPatternType, PatternLocation
 
@@ -73,21 +74,8 @@ _VALIDATION_PATTERNS: Dict[str, Pattern] = {
 }
 
 # Common skip directories
-_SKIP_DIRS: frozenset = frozenset(
-    {
-        "node_modules",
-        "__pycache__",
-        ".git",
-        ".venv",
-        "venv",
-        "dist",
-        "build",
-        ".next",
-        ".nuxt",
-        "coverage",
-        ".pytest_cache",
-    }
-)
+# Canonical skip dirs (utils.file_categorization).
+_SKIP_DIRS: frozenset = frozenset(SKIP_DIRS)
 
 
 # Issue #1217: Truncate code blocks during extraction to limit memory

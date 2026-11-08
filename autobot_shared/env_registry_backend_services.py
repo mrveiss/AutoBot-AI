@@ -24,6 +24,7 @@ Closes GH#7081.
 from __future__ import annotations
 
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 
 register_env_var(
     EnvVarSpec(
@@ -466,7 +467,7 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_CODE_SOURCE_ALLOWED_ROOTS",
         type=str,
-        default="/opt/autobot",
+        default=FLEET_INSTALL_ROOT,
         description=(
             "Comma-separated roots a code-source repo_path may live under (#17300). The value "
             "arrives from a POST body and used to reach Path(...).is_dir()/.iterdir() unconfined, "
@@ -582,3 +583,15 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_DIR",
+        type=str,
+        default="",
+        description="Transcriber uploads, the only base the path guard allows; empty: <TRANSCRIBER_DATA_DIR>/uploads.",
+        component="backend",
+    )
+)
+
+from autobot_shared import env_registry_chat_attachments  # noqa: E402,F401 -- registers #20195 vars; see its docstring

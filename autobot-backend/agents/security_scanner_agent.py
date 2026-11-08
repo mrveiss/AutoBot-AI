@@ -17,7 +17,7 @@ from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 from utils.agent_command_helpers import run_agent_command
 
-from .base_agent import DeploymentMode
+from .base_agent import AgentDeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -49,7 +49,7 @@ class SecurityScannerAgent(StandardizedAgent):
 
     def __init__(self):
         """Initialize security scanner agent (#3387: migrated to StandardizedAgent)."""
-        super().__init__("security_scanner", DeploymentMode.LOCAL)
+        super().__init__("security_scanner", AgentDeploymentMode.LOCAL)
         self.name = "security_scanner"
         self.description = "Performs defensive security scans and vulnerability assessments"
         self.supported_scan_types = _SUPPORTED_SCAN_TYPES

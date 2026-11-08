@@ -4,6 +4,7 @@
 // Author: mrveiss
 import { useApiClient } from '@/plugins/api'
 import { getBackendUrl } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 export interface Project {
   id: number
@@ -164,8 +165,15 @@ export function useTranscriberApi() {
       }),
 
     // AI
-    aiAsk: (recordingId: number, action: string, customQuestion?: string) =>
-      new EventSource(`${base}/recordings/${recordingId}/ai/ask?action=${action}${customQuestion ? `&q=${encodeURIComponent(customQuestion)}` : ''}`),
+    // The route is POST (AiAskRequest body), so EventSource (GET-only) cannot call it.
+    // Returns the raw streaming Response; fetchWithAuth carries no request timeout so the
+    // long-lived stream is not aborted. The live SSE parser is useAiAnalysis.
+    aiAsk: (recordingId: number, action: string, customQuestion?: string): Promise<Response> =>
+      fetchWithAuth(`${getBackendUrl()}${base}/recordings/${recordingId}/ai/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, custom_question: customQuestion ?? null }),
+      }),
 
     // KB
     // #17533: the response carries the outcome. `partial` means the transcript was

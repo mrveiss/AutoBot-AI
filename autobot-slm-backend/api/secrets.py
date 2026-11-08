@@ -28,6 +28,7 @@ from models.schemas import (
 )
 from models.schemas_secrets import DependentRolesResponse
 from services.ansible_secrets import _SECRET_TO_DEPENDENT_ROLES
+from services.api_key_pepper import HMAC_PEPPER_KEY, invalidate_pepper_cache
 from services.auth import require_permission
 from services.database import get_db
 from services.encryption import encrypt_data
@@ -46,6 +47,12 @@ HF_REJECTED_DETAIL = (
     "HuggingFace rejected this token (401): it appears invalid or revoked. "
     "Generate a new token at https://huggingface.co/settings/tokens and try again."
 )
+
+
+def _drop_pepper_cache_for(key: str) -> None:
+    """A page write to the API-key pepper takes effect at once in this process (#19120)."""
+    if key == HMAC_PEPPER_KEY:
+        invalidate_pepper_cache()
 
 
 async def _validate_if_hf_token(key: str, value: str) -> str | None:
@@ -104,6 +111,7 @@ async def create_secret(
     db.add(secret)
     await db.commit()
     await db.refresh(secret)
+    _drop_pepper_cache_for(data.key)
 
     # #14759: the delete path already maintained the vault copy; create did not,
     # so a migrated key edited later served its superseded value to vault readers.
@@ -193,6 +201,7 @@ async def update_secret(
 
     await db.commit()
     await db.refresh(secret)
+    _drop_pepper_cache_for(key)
 
     # Only when the value moved: a category/description edit leaves the stored
     # secret untouched, so re-writing the vault copy would be pure churn.
@@ -226,6 +235,7 @@ async def delete_secret(
 
     await db.delete(secret)
     await db.commit()
+    _drop_pepper_cache_for(key)
     await delete_vault_copy(key)
     logger.info("System secret deleted: %s", key)
 

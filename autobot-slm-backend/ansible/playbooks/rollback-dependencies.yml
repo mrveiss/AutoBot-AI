@@ -47,7 +47,7 @@
   serial: 1
   vars:
     # Use most recent backup if not specified
-    latest_backup: "{{ lookup('pipe', 'ls -t ' ~ backup_base_path | default('/opt/autobot/backups') ~ '/venv-*.tar.gz 2>/dev/null | head -1') | default(omit) }}"
+    latest_backup: "{{ lookup('pipe', 'ls -t ' ~ backup_base_path | default(autobot.base_dir ~ '/backups') ~ '/venv-*.tar.gz 2>/dev/null | head -1') | default(omit) }}"
   tasks:
     - name: Include rollback tasks
       ansible.builtin.include_role:
@@ -61,7 +61,7 @@
   become: true
   serial: 1
   vars:
-    latest_backup: "{{ lookup('pipe', 'ls -t ' ~ backup_base_path | default('/opt/autobot/backups') ~ '/venv-*.tar.gz 2>/dev/null | head -1') | default(omit) }}"
+    latest_backup: "{{ lookup('pipe', 'ls -t ' ~ backup_base_path | default(autobot.base_dir ~ '/backups') ~ '/venv-*.tar.gz 2>/dev/null | head -1') | default(omit) }}"
   tasks:
     - name: Include rollback tasks
       ansible.builtin.include_role:
@@ -75,7 +75,7 @@
   become: true
   serial: 1
   vars:
-    latest_backup: "{{ lookup('pipe', 'ls -t ' ~ backup_base_path | default('/opt/autobot/backups') ~ '/venv-*.tar.gz 2>/dev/null | head -1') | default(omit) }}"
+    latest_backup: "{{ lookup('pipe', 'ls -t ' ~ backup_base_path | default(autobot.base_dir ~ '/backups') ~ '/venv-*.tar.gz 2>/dev/null | head -1') | default(omit) }}"
   tasks:
     - name: Include rollback tasks
       ansible.builtin.include_role:

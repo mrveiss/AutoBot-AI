@@ -301,7 +301,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
-import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock, saveTextFile } from '@autobot/ui'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import { useChatStore } from '@/stores/useChatStore'
@@ -339,7 +339,7 @@ import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
 import VoiceConversationPanel from './VoiceConversationPanel.vue'
 import ChatSettingsModal from './ChatSettingsModal.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { createSpeechShaper, extractCompleteSentences } from '@/utils/ttsSentences'
+import { createSpeechShaper, createTtsStream } from '@/utils/ttsSentences'
 // Issue #3232: chain-of-thought reasoning trace
 import ReasoningTrace from './ReasoningTrace.vue'
 import { useReasoningTrace } from '@/composables/useReasoningTrace'
@@ -773,13 +773,8 @@ const exportSession = async () => {
       exportedAt: new Date().toISOString()
     }
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `chat-${session.title || session.id.slice(-8)}-${new Date().toISOString().split('T')[0]}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    const name = `chat-${session.title || session.id.slice(-8)}-${new Date().toISOString().split('T')[0]}.json`
+    saveTextFile(JSON.stringify(data, null, 2), name, 'application/json')
 
   } catch (error) {
     logger.error('Failed to export session:', error)
@@ -1315,6 +1310,7 @@ let _lastStreamingMsgId: string | null = null
 // Shapes each reply's spoken slices; fence state spans slices (#13102)
 const _newSpeechShaper = () => createSpeechShaper({ url: t('voice.speech.url'), path: t('voice.speech.path') })
 let _speechShaper = _newSpeechShaper()
+let _ttsStream = createTtsStream()
 
 /** Prime TTS cursor to end of current last message. Used on voice-enable and session switch. */
 function _primeTtsCursor(): void {
@@ -1329,6 +1325,7 @@ function _primeTtsCursor(): void {
     // Read the skipped text unspoken so an open code fence is known (#13102)
     _speechShaper = _newSpeechShaper()
     _speechShaper.push(m.content)
+    _ttsStream = createTtsStream(true)
     break
   }
 }
@@ -1370,6 +1367,7 @@ watch(
       _lastStreamingMsgId = current.id
       _lastSpokenIdx = store.isTyping ? 0 : current.content.length
       _speechShaper = _newSpeechShaper()
+      _ttsStream = createTtsStream(!store.isTyping)
     }
 
     if (store.isTyping && current.content) {
@@ -1378,10 +1376,7 @@ watch(
       // by the summed sentence lengths, which drift over multi-paragraph replies
       // and drop/duplicate slices (#12502).
       const newText = current.content.slice(_lastSpokenIdx)
-      const { spans, consumed } = extractCompleteSentences(
-        newText,
-        _MIN_TTS_SENTENCE_CHARS,
-      )
+      const { spans, consumed } = _ttsStream.next(newText)
       for (const span of spans) speakStreaming(_speechShaper.push(span))
       _lastSpokenIdx += consumed
     } else if (!store.isTyping && current.content) {
@@ -1401,11 +1396,6 @@ watch(
     }
   }
 )
-
-// Minimum chars a candidate sentence must have before it is dispatched to TTS (#1485).
-// Short fragments like "Hello there! " (13 chars) sound choppy when spoken alone —
-// buffer them until they combine with the next sentence or flush as a remainder.
-const _MIN_TTS_SENTENCE_CHARS = 20
 
 </script>
 
@@ -1498,7 +1488,7 @@ const _MIN_TTS_SENTENCE_CHARS = 20
   background: var(--color-warning-bg);
   border-bottom: 1px solid var(--color-warning-border);
 }
-.tool-approval-header i { color: var(--color-warning); font-size: 1.25rem; }
+.tool-approval-header .icon { color: var(--color-warning); width: 1.25rem; height: 1.25rem; }
 .tool-approval-header h3 { @apply text-sm font-semibold; color: var(--text-primary); margin: var(--spacing-0); }
 .tool-approval-body { @apply flex flex-col gap-3 px-5 py-4; }
 .tool-approval-row { @apply flex flex-col gap-1; }
@@ -1514,7 +1504,7 @@ const _MIN_TTS_SENTENCE_CHARS = 20
 .tool-approval-btn { @apply flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors; }
 .tool-approval-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .tool-approval-btn--deny { background: var(--color-error-bg); color: var(--color-error); border: 1px solid var(--color-error-border); }
-.tool-approval-btn--deny:hover:not(:disabled) { background: var(--color-error); color: var(--text-on-error); }
+.tool-approval-btn--deny:hover:not(:disabled) { background: var(--color-error-solid); color: var(--text-on-error); }
 .tool-approval-btn--approve { background: var(--color-success-bg); color: var(--color-success); border: 1px solid var(--color-success-border); }
 .tool-approval-btn--approve:hover:not(:disabled) { background: var(--color-success); color: var(--text-on-success); }
 /* Issue #4960: countdown timer */

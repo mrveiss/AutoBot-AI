@@ -18,6 +18,7 @@ from typing import Any, Callable, Coroutine, Protocol
 
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
+from knowledge.chunk_identity import resolve_chunk_id
 from knowledge.search_components.graph_blend import blend_graph_score
 from services.rag_config import RAGConfig, get_rag_config
 from services.rag_mesh_results import coerce_ranked_results
@@ -446,21 +447,8 @@ class NeuralMeshRetriever:
             logger.exception("EdgeLearner.on_retrieval raised an exception")
 
     def _chunk_id(self, result: Any) -> str:
-        """Extract chunk ID from a result dict or SearchResult-like object.
-
-        Priority for dicts:   metadata.chunk_id -> chunk_id -> source_path -> ""
-        Priority for objects: metadata.chunk_id -> source_path -> ""
-
-        Args:
-            result: A dict or object with metadata/source_path attributes.
-
-        Returns:
-            Chunk ID string, empty string on failure.
-        """
-        if isinstance(result, dict):
-            return result.get("metadata", {}).get("chunk_id") or result.get("chunk_id") or result.get("source_path", "")
-        meta = getattr(result, "metadata", {}) or {}
-        return meta.get("chunk_id") or getattr(result, "source_path", "")
+        """Canonical chunk id of a result (dict or object); see ``knowledge.chunk_identity`` (#18142)."""
+        return resolve_chunk_id(result)
 
     async def _rerank(self, query: str, results: list, top_k: int) -> list:
         """Rerank with the shared ``RAGConfig`` blend weights and MMR (#18141)."""
@@ -482,7 +470,7 @@ class NeuralMeshRetriever:
             return out
         base_score = getattr(result, "score", 0.0) or 0.0
         return {
-            "chunk_id": getattr(result, "source_path", ""),
+            "chunk_id": resolve_chunk_id(result),
             "content": getattr(result, "content", ""),
             "score": blend_graph_score(base_score, ppr_boost, self.config.graph_weight),
             "metadata": getattr(result, "metadata", {}),

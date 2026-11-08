@@ -247,7 +247,7 @@ export function usePreferences() {
         accent_color: theme.accentColor.value,
         layout_density: layoutDensity.value,
         font_size: fontSize.value,
-        theme_preset: theme.preset.value,
+        theme_preset: theme.preset.value ?? 'auto',
         ui_mode: uiMode.uiMode.value,
         ui_start: uiMode.uiStart.value,
         theme_variant: variant.themeVariant.value,

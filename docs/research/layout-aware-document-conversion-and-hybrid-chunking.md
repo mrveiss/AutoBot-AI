@@ -170,3 +170,10 @@ Searched open and closed issues in the backlog's vocabulary (25 queries; closest
 | Two semantic chunkers | #14485 | covered | none |
 | Scanned / complex PDFs, layout model | #13892, #16519 | covered | note the heavyweight option on #13892 only if tesseract quality is shown to be the bottleneck |
 | Retrieval quality unmeasurable | #13251 (epic over #13244/#13245/#13246) | covered | gates A2/A3 |
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #17985 — fix(document): extract_docx keeps only paragraph text, so heading level is lost and tables are appended away from the heading that introduced them
+- #17986 — feat(kb): ingest has no partial-success state — a timeout discards every page already read

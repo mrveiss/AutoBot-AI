@@ -53,7 +53,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from autobot_shared.network_constants import NetworkConstants  # noqa: E402
+from autobot_shared.redis_client import require_redis_client  # noqa: E402
 from autobot_shared.paths import project_root  # noqa: E402
 from autobot_shared.store_authority import legacy_conversation_transcripts_dir  # noqa: E402
 
@@ -80,19 +80,16 @@ logger = logging.getLogger(__name__)
 class MemoryGraphInitializer:
     """Initialize and configure Redis Memory Graph infrastructure"""
 
-    def __init__(self, redis_host: str = None, redis_port: int = None):
+    def __init__(self):
         """Initialize Redis connection for Memory Graph
 
         NOTE: RedisSearch requires DB 0, so we use key prefixes for logical separation.
         Memory Graph keys: memory:graph:entity:*, memory:graph:relations:*
 
-        Args:
-            redis_host: Redis host address (defaults to NetworkConstants.REDIS_HOST)
-            redis_port: Redis port (defaults to NetworkConstants.REDIS_PORT)
+        The connection comes from the canonical client (#18553), which reads host, port and
+        credentials from SSOT config; ``memory`` is the registry's DB 0 alias.
         """
-        self.redis_host = redis_host or NetworkConstants.REDIS_HOST
-        self.redis_port = redis_port or NetworkConstants.REDIS_PORT
-        self.redis_db = 0  # RedisSearch limitation - must use DB 0
+        self.redis_database = "memory"  # RedisSearch limitation - must use DB 0
 
         # Key prefixes for logical database separation
         self.entity_prefix = "memory:graph:entity:"
@@ -117,25 +114,11 @@ class MemoryGraphInitializer:
             True if connection successful, False otherwise
         """
         try:
-            logger.info(
-                "Connecting to Redis at %s:%s DB %s...",
-                self.redis_host,
-                self.redis_port,
-                self.redis_db,
-            )
+            logger.info("Connecting to Redis database '%s' (DB 0)...", self.redis_database)
             logger.info("Using key prefix: %s", self.entity_prefix)
 
-            self.redis_client = redis.Redis(
-                host=self.redis_host,
-                port=self.redis_port,
-                db=self.redis_db,
-                decode_responses=False,  # Keep binary for vector operations
-                socket_timeout=10,
-                socket_connect_timeout=10,
-                retry_on_timeout=True,
-            )
-
-            # Test connection
+            # Keep binary for vector operations; ping to test the connection
+            self.redis_client = require_redis_client(database=self.redis_database, decode_responses=False)
             self.redis_client.ping()
             logger.info("✓ Redis connection established successfully")
 
@@ -146,7 +129,7 @@ class MemoryGraphInitializer:
 
             return True
 
-        except redis.ConnectionError as e:
+        except (redis.ConnectionError, ConnectionError) as e:
             logger.error("Failed to connect to Redis: %s", e)
             return False
         except Exception as e:

@@ -118,7 +118,7 @@ _CONSUMERS = [
     ("roles/backend/tasks/main.yml", "backend_redis_password", "backend_redis_username", "backend.env.j2"),
     ("roles/backend/tasks/env_only.yml", "backend_redis_password", "backend_redis_username", "backend.env.j2"),
     ("roles/redis/tasks/main.yml", "redis_client_password", "redis_username", "Wait for Redis to be ready"),
-    ("roles/ai-stack/tasks/main.yml", "ai_redis_password", "ai_redis_username", "ai-stack.env.j2"),
+    ("roles/ai-stack/tasks/env_files.yml", "ai_redis_password", "ai_redis_username", "ai-stack.env.j2"),  # #20724
 ]
 
 
@@ -158,7 +158,9 @@ def test_the_role_clients_send_the_client_credential_and_the_server_is_untouched
     assert 'REDIS_PASSWORD={{ redis_client_password }}"' in exporter
     assert "{{ redis_password }}" not in exporter
     ping = _tasks("roles/redis/tasks/main.yml")[_index(_tasks("roles/redis/tasks/main.yml"), "Wait for Redis")]
-    assert "-a {{ redis_client_password }}" in ping["command"]
+    # #19846: REDISCLI_AUTH, never -a, and rendered: a set password reaches it, an empty one sends no AUTH
+    assert f"'REDISCLI_AUTH': '{_PW}'" in _render(ping["environment"], redis_client_password=_PW)
+    assert "REDISCLI_AUTH" not in _render(ping["environment"], redis_client_password="")
     defaults = yaml.safe_load((_ROLES / "redis" / "defaults" / "main.yml").read_text(encoding="utf-8"))
     assert defaults["redis_client_password"] == "{{ redis_password }}"
     server = (_ROLES / "redis" / "templates" / "redis-stack.conf.j2").read_text(encoding="utf-8")

@@ -203,6 +203,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { HttpError, saveUrl } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 // MIGRATED: Removed environment.js, using AppConfig.js only
 import appConfig from '@/config/AppConfig.js'
@@ -429,7 +430,6 @@ const checkConnectionFn = async () => {
     method: 'HEAD',
     signal: controller.signal
   });
-
   clearTimeout(timeoutId);
 
   if (response.ok) {
@@ -437,7 +437,7 @@ const checkConnectionFn = async () => {
     loading.value = false
     error.value = null
   } else {
-    throw new Error(`HTTP ${response.status}`)
+    throw new HttpError(response.status)
   }
 }
 
@@ -571,10 +571,7 @@ async function pasteFromClipboard() {
 function downloadScreenshot() {
   if (!screenshotData.value) return
 
-  const link = document.createElement('a')
-  link.href = screenshotData.value
-  link.download = `desktop-screenshot-${Date.now()}.png`
-  link.click()
+  saveUrl(screenshotData.value, `desktop-screenshot-${Date.now()}.png`)
 }
 
 onUnmounted(() => {
@@ -709,7 +706,7 @@ onUnmounted(() => {
 .screenshot-modal {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-50);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -759,7 +756,7 @@ onUnmounted(() => {
 .download-btn {
   padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -801,7 +798,7 @@ onUnmounted(() => {
 .type-dialog-modal {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-50);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -861,7 +858,7 @@ onUnmounted(() => {
 .type-btn {
   padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -885,7 +882,7 @@ onUnmounted(() => {
   width: 20rem;
   height: 100%;
   overflow-y: auto;
-  z-index: 10;
+  z-index: var(--z-10);
   padding: var(--spacing-4);
   background-color: var(--bg-card);
   border-left: 1px solid var(--border-default);

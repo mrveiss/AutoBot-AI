@@ -17,13 +17,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from api.schemas_knowledge import (
     KnowledgeMyFactsResponse,
     KnowledgeSharedWithMeResponse,
-    KnowledgeShareFactResponse,
-    KnowledgeUnshareFactResponse,
     KnowledgeUpdateVisibilityResponse,
-    ShareFactRequest,
     UpdateVisibilityRequest,
 )
 from auth_middleware import check_admin_permission
+from autobot_shared.api_routing.deprecated_redirects import add_deprecated_redirects
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.search_filters import can_read_fact, fact_not_found, object_metadata
@@ -32,6 +30,31 @@ from knowledge_factory import get_or_create_knowledge_base
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["knowledge_ownership"])
+
+# #18795: share/unshare live in ``knowledge_collaboration`` (owner or admin). The old
+# paths, and their #18722 doubled-prefix forms, answer a one-hop 308 straight to it for
+# one release; removal is tracked in #18793.
+_COLLAB_SHARE = "/api/knowledge/collaboration/facts/{fact_id}/share"
+_COLLAB_UNSHARE = _COLLAB_SHARE + "/{user_id_to_remove}?entity_type=user"
+add_deprecated_redirects(
+    router,
+    {
+        ("POST", "/facts/{fact_id}/share"): _COLLAB_SHARE,
+        ("DELETE", "/facts/{fact_id}/share/{user_id_to_remove}"): _COLLAB_UNSHARE,
+        ("POST", "/api/knowledge/facts/{fact_id}/share"): _COLLAB_SHARE,
+        ("DELETE", "/api/knowledge/facts/{fact_id}/share/{user_id_to_remove}"): _COLLAB_UNSHARE,
+    },
+    absolute=True,
+)
+# #18722: the remaining doubled paths answer 308 for one release; removal tracked in #18793.
+add_deprecated_redirects(
+    router,
+    {
+        ("PUT", "/api/knowledge/facts/{fact_id}/visibility"): "/facts/{fact_id}/visibility",
+        ("GET", "/api/knowledge/facts/mine"): "/facts/mine",
+        ("GET", "/api/knowledge/facts/shared-with-me"): "/facts/shared-with-me",
+    },
+)
 
 
 def _get_user_from_request(request: Request) -> str | None:
@@ -85,133 +108,7 @@ async def _get_fact_with_ownership(kb, fact_id: str, user_id: str):
     return fact
 
 
-@router.post("/api/knowledge/facts/{fact_id}/share", response_model=KnowledgeShareFactResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="share_fact",
-    error_code_prefix="KB_OWN",
-)
-async def share_fact(
-    fact_id: str,
-    request_body: ShareFactRequest,
-    request: Request,
-    _: dict = Depends(check_admin_permission),
-):
-    """Share a fact with additional users (Issue #688).
-
-    Args:
-        fact_id: Fact ID to share
-        request_body: Share request with user_ids
-        request: FastAPI request
-        _: Admin permission check (required)
-
-    Returns:
-        Success response with updated sharing info
-    """
-    user_id = _get_user_from_request(request)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    kb = await get_or_create_knowledge_base()
-
-    # Get fact and verify ownership
-    fact = await _get_fact_with_ownership(kb, fact_id, user_id)
-
-    # Only owner can share facts
-    metadata = fact["metadata"]  # normalised once by _get_fact_with_ownership (#18220)
-    owner_id = metadata.get("owner_id")
-    if owner_id and owner_id != user_id:
-        raise HTTPException(
-            status_code=403,
-            detail="Only the owner can share this fact",
-        )
-
-    # Update sharing
-    if not kb.ownership_manager:
-        raise HTTPException(
-            status_code=503,
-            detail="Ownership management not available",
-        )
-
-    updated_metadata = await kb.ownership_manager.share_fact(fact_id, request_body.user_ids, metadata)
-
-    # Save updated metadata; a failed write is not a successful share (#16663)
-    result = await kb.update_fact(fact_id=fact_id, metadata=updated_metadata)
-    if result.get("status") != "success":
-        raise HTTPException(status_code=500, detail="Failed to update sharing")
-
-    return {
-        "success": True,
-        "fact_id": fact_id,
-        "shared_with": updated_metadata.get("shared_with", []),
-        "visibility": updated_metadata.get("visibility"),
-    }
-
-
-@router.delete("/api/knowledge/facts/{fact_id}/share/{user_id_to_remove}", response_model=KnowledgeUnshareFactResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="unshare_fact",
-    error_code_prefix="KB_OWN",
-)
-async def unshare_fact(
-    fact_id: str,
-    user_id_to_remove: str,
-    request: Request,
-    _: dict = Depends(check_admin_permission),
-):
-    """Remove user from fact sharing list (Issue #688).
-
-    Args:
-        fact_id: Fact ID to unshare
-        user_id_to_remove: User ID to remove from sharing
-        request: FastAPI request
-        _: Admin permission check (required)
-
-    Returns:
-        Success response with updated sharing info
-    """
-    user_id = _get_user_from_request(request)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    kb = await get_or_create_knowledge_base()
-
-    # Get fact and verify ownership
-    fact = await _get_fact_with_ownership(kb, fact_id, user_id)
-
-    # Only owner can unshare facts
-    metadata = fact["metadata"]  # normalised once by _get_fact_with_ownership (#18220)
-    owner_id = metadata.get("owner_id")
-    if owner_id and owner_id != user_id:
-        raise HTTPException(
-            status_code=403,
-            detail="Only the owner can unshare this fact",
-        )
-
-    # Update sharing
-    if not kb.ownership_manager:
-        raise HTTPException(
-            status_code=503,
-            detail="Ownership management not available",
-        )
-
-    updated_metadata = await kb.ownership_manager.unshare_fact(fact_id, [user_id_to_remove], metadata)
-
-    # Save updated metadata; a failed write is not a successful share (#16663)
-    result = await kb.update_fact(fact_id=fact_id, metadata=updated_metadata)
-    if result.get("status") != "success":
-        raise HTTPException(status_code=500, detail="Failed to update sharing")
-
-    return {
-        "success": True,
-        "fact_id": fact_id,
-        "shared_with": updated_metadata.get("shared_with", []),
-        "visibility": updated_metadata.get("visibility"),
-    }
-
-
-@router.put("/api/knowledge/facts/{fact_id}/visibility", response_model=KnowledgeUpdateVisibilityResponse)
+@router.put("/facts/{fact_id}/visibility", response_model=KnowledgeUpdateVisibilityResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_fact_visibility",
@@ -305,7 +202,7 @@ async def _fetch_fact_details(
     return facts
 
 
-@router.get("/api/knowledge/facts/mine", response_model=KnowledgeMyFactsResponse)
+@router.get("/facts/mine", response_model=KnowledgeMyFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_my_facts",
@@ -361,7 +258,7 @@ async def get_my_facts(
     }
 
 
-@router.get("/api/knowledge/facts/shared-with-me", response_model=KnowledgeSharedWithMeResponse)
+@router.get("/facts/shared-with-me", response_model=KnowledgeSharedWithMeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_shared_facts",

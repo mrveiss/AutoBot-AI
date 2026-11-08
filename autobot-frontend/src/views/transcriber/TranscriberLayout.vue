@@ -4,8 +4,9 @@
 // Layout shell — full sidebar implemented in Plan 4.
 // Hosts the transcriber settings surface, including the cloud ASR provider
 // selector (#10147c).
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { BaseButton } from '@autobot/ui'
 import AsrProviderSelector from '@/components/transcriber/AsrProviderSelector.vue'
 import { useUserStore } from '@/stores/useUserStore'
 
@@ -18,18 +19,21 @@ const settingsOpen = ref(false)
 // admins alone.
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isAdmin)
+// #16335: a demotion closes the panel for good, so a later promotion does not reopen it unasked.
+watch(isAdmin, (admin) => {
+  if (!admin) settingsOpen.value = false
+})
 </script>
 <template>
   <div class="transcriber-layout">
     <header v-if="isAdmin" class="transcriber-layout-bar">
-      <button
-        type="button"
-        class="btn btn-sm"
+      <BaseButton
+        size="sm"
         :aria-expanded="settingsOpen"
         @click="settingsOpen = !settingsOpen"
       >
         {{ settingsOpen ? t('transcriber.layout.hideSettingsButton') : t('transcriber.layout.settingsButton') }}
-      </button>
+      </BaseButton>
     </header>
 
     <section

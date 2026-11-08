@@ -17,10 +17,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from celery.result import AsyncResult
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from api.analytics_shared import no_data_response
+from api.codebase_analytics.task_routes import add_clear_stuck_route
 from api.schemas_analytics import (
     BugPredictionAnalysisResponse,
     BugPredictionAnalyzeResponse,
@@ -42,10 +42,11 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.git_probe import start_git
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.status_enums import Severity
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_5_MINUTES
 from tasks.analytics_tasks import run_bug_prediction_analysis
-from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
+from utils.celery_task_status import get_latest_task_result, known_task_status_or_404, store_latest_task_id
 
 logger = get_logger(__name__)
 
@@ -652,10 +653,9 @@ def _calculate_risk_level_trends(history: List[Dict[str, Any]]) -> Dict[str, Any
     if not history:
         return {}
 
-    risk_levels = ["critical", "high", "medium", "low", "minimal"]
     trends = {}
 
-    for level in risk_levels:
+    for level in [s.value for s in Severity.risk_ladder()]:
         counts = [h.get(f"{level}_count", h.get("risk_distribution", {}).get(level, 0)) for h in history]
         if counts:
             avg = sum(counts) / len(counts)
@@ -922,24 +922,16 @@ async def get_bug_prediction_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Get bug prediction task status."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
-@router.post("/tasks/clear-stuck", response_model=BugPredictionClearStuckResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_stuck_bug_tasks",
-    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+add_clear_stuck_route(
+    router,
+    "/tasks/clear-stuck",
+    name="clear_stuck_bug_tasks",
+    error_prefix="ANALYTICS_BUG_PREDICTION",
+    response_model=BugPredictionClearStuckResponse,
 )
-async def clear_stuck_bug_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-    admin_check: bool = Depends(check_admin_permission),
-):
-    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
 
 
 @router.get("/high-risk", response_model=BugPredictionHighRiskResponse)

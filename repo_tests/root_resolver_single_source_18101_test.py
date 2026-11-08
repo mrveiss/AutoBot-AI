@@ -27,6 +27,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = (
@@ -48,20 +49,7 @@ _BARE_SCRIPT = (
 
 #: path -> why a depth-based resolver may remain. Every value must be non-empty.
 EXEMPT: dict[str, str] = {
-    "tools/lint/check_ci_system_package_provisioning.py": _BARE_SCRIPT,
-    "tools/lint/check_code_quality_guard_reach.py": _BARE_SCRIPT,
-    "tools/lint/check_composite_action_step_keys.py": _BARE_SCRIPT,
-    "tools/lint/check_docs_no_fleet_addressing.py": _BARE_SCRIPT,
     "tools/lint/check_extension_import_boundaries.py": _BARE_SCRIPT,
-    "tools/lint/check_no_shell_placeholder_paths.py": _BARE_SCRIPT,
-    "tools/lint/check_requirements_ci_drift.py": _BARE_SCRIPT,
-    "tools/lint/check_requirements_pin_parity.py": _BARE_SCRIPT,
-    "tools/lint/check_undefined_names.py": _BARE_SCRIPT,
-    "tools/lint/check_bandit_exclude_anchoring.py": "deferred, not exempt in principle: owned by queued branch issue-14896-lint-harness (#18101)",
-    "tools/lint/check_flake8_exclude_anchoring.py": "deferred, not exempt in principle: owned by queued branch issue-14896-lint-harness (#18101)",
-    "scripts/check_frontend_file_size.py": "deferred, not exempt in principle: owned by queued branch issue-17377-one-engine (#18101)",
-    "scripts/check_python_file_size.py": "deferred, not exempt in principle: owned by queued branch issue-17377-one-engine (#18101)",
-    "scripts/check_shell_file_size.py": "deferred, not exempt in principle: owned by queued branch issue-17377-one-engine (#18101)",
     "autobot-backend/api/codebase_analytics/endpoints/shared.py": "deferred, not exempt in principle: owned by queued branch issue-18067-duplicate-tooling (#18101); also carries the #10730 deployed-layout probe",
 }
 
@@ -97,7 +85,7 @@ def _is_path_wrapper(func: ast.AST) -> bool:
 def depth_resolvers(source: str) -> list[str]:
     """Names of functions whose single return climbs from `__file__` by depth."""
     found = []
-    for fn in ast.walk(ast.parse(source)):
+    for fn in ast.walk(parse_cache.parse(source)):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         body = [s for s in fn.body if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant))]
@@ -141,8 +129,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "root-resolver-depth-scan",
     discover=_population,
-    # Mid-window, re-pinned 5880 -> 6061 on main df211d3ba6: population 6211, skips 0, growth 300 -> window [5911, 6211].
-    floor=6364,
     what="tracked python",
     roots=_ROOTS,
     growth=300,

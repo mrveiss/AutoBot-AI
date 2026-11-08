@@ -5,7 +5,7 @@
 - name: Create AutoBot user
   user:
     name: autobot
-    home: /opt/autobot
+    home: "{{ autobot.home_dir }}"
     shell: /bin/bash
     system: true
 
@@ -17,11 +17,11 @@
     group: autobot
     mode: '0755'
   loop:
-    - /opt/autobot/app
-    - /opt/autobot/logs
-    - /opt/autobot/data
-    - /opt/autobot/config
-    - /opt/autobot/venv
+    - "{{ autobot.base_dir }}/app"
+    - "{{ autobot.base_dir }}/logs"
+    - "{{ autobot.base_dir }}/data"
+    - "{{ autobot.base_dir }}/config"
+    - "{{ autobot.base_dir }}/venv"
 
 # #11374: Install the target interpreter BEFORE any venv work. The
 # ensure_venv_version step below removes a wrong-version venv, and the
@@ -41,8 +41,8 @@
     name: python_interpreter
     tasks_from: ensure_venv_version
   vars:
-    venv_path: /opt/autobot/venv
-    venv_python: python3.14
+    venv_path: "{{ autobot.base_dir }}/venv"
+    venv_python: "{{ python_interpreter_binary }}"
 
 # #16641: `virtualenv_python:` alone only applies when `virtualenv_command:`
 # names the standalone `virtualenv` tool -- it is silently ignored for `-m
@@ -66,8 +66,8 @@
 
 - name: Install Python dependencies
   pip:
-    requirements: /opt/autobot/app/requirements.txt
-    virtualenv: /opt/autobot/venv
+    requirements: "{{ autobot.base_dir }}/app/requirements.txt"
+    virtualenv: "{{ autobot.base_dir }}/venv"
     virtualenv_command: "{{ python_interpreter_binary }} -m venv"
     # #15684: constraints/shared.txt applied here too, the same shape every
     # other pip site in this venv now uses.
@@ -79,9 +79,10 @@
 
 - name: Copy AutoBot application files
   synchronize:
-    src: "{{ playbook_dir }}/../"
-    dest: /opt/autobot/app/
+    src: "{{ role_path }}/../../"
+    dest: "{{ autobot.base_dir }}/app/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=.git"
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
@@ -96,6 +97,22 @@
     deployed_embedding_env_files: ["{{ backend_services_env_dest }}"]
   tags: ['backend', 'config']
 
+- name: "Backend | Read the encryption key (#19864)"
+  ansible.builtin.include_tasks: ../../backend/tasks/read_encryption_key.yml
+  tags: ['backend', 'config']
+
+- name: "Backend | Resolve the models for this model server (#19731)"
+  ansible.builtin.include_tasks: ../../backend/tasks/resolve_models.yml
+  tags: ['backend', 'config']
+
+# #20750: the internal key is resolved, and each file keeps its own, as on every other render.
+- name: "Resolve AUTOBOT_INTERNAL_API_KEY (#20750)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/resolve_internal_api_key.yml
+  vars:
+    internal_api_key_current_env_files:
+      - "{{ backend_services_env_dest }}"
+      - "{{ autobot_backend_env_file }}"
+
 - name: Generate environment configuration
   template:
     src: backend.env.j2
@@ -104,6 +121,8 @@
     group: autobot
     mode: '0640'
   notify: restart backend services
+  vars:
+    internal_api_key_render: "{{ (internal_api_key_by_file | default({})).get(backend_services_env_dest, internal_api_key_resolved | default(autobot_internal_api_key)) }}"  # #20750: the file keeps its key
 
 # #10005: Render the backend role's unit template — the single source of truth
 # for autobot-backend.service (carries the #9934 LimitNOFILE directive). This
@@ -120,9 +139,9 @@
   vars:
     backend_user: autobot
     backend_group: autobot
-    backend_install_dir: /opt/autobot/app
-    backend_code_dir: /opt/autobot/app
-    backend_log_dir: /opt/autobot/logs
+    backend_install_dir: "{{ autobot.base_dir }}/app"
+    backend_code_dir: "{{ autobot.base_dir }}/app"
+    backend_log_dir: "{{ autobot.base_dir }}/logs"
     backend_host: "0.0.0.0"
     backend_port: 8001
 

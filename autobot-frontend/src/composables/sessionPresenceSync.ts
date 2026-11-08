@@ -10,9 +10,9 @@
  * `GET /sessions/{id}/presence`. This applies that snapshot to the same
  * presence map the socket feeds, so the collaboration panel has one source.
  *
- * The generated contract types `online_users` as `unknown[]` (the backend
- * response model does not annotate the element; the handler returns user-id
- * strings), so the elements are narrowed here rather than cast.
+ * The contract types `online_users` as `string[]` (annotated in #18447). The
+ * elements are still narrowed, so a malformed payload can never put a non-id
+ * into the presence map.
  */
 import { apiService } from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'

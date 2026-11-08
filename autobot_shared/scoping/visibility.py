@@ -30,12 +30,18 @@ class Principal:
     ``is_authenticated`` defaults to False (fail closed): only the
     SYSTEM/PUBLIC platform-wide rule consumes it, so existing constructors
     keep denying those scopes unless they explicitly assert authentication.
+
+    ``is_superadmin`` (#19860) is consumed ONLY by the knowledge-base read filter
+    (``knowledge.root_read``); :func:`is_visible` deliberately ignores it, so no other
+    subsystem (secrets, agents) widens for a superadmin by accident. It is set from the
+    verified role claim alone.
     """
 
     user_id: str
     company_id: str | None
     group_ids: frozenset[str]
     is_authenticated: bool = False
+    is_superadmin: bool = False
 
 
 @dataclass(frozen=True)

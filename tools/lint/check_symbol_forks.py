@@ -49,6 +49,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -93,6 +94,24 @@ _SHARED_NAMES = {
 }
 
 
+def load_exceptions(path: Path | None = None) -> list[dict]:
+    """The recorded per-service exceptions; none if the record does not exist."""
+    return _shared().fork_load_exceptions(path or EXCEPTIONS)
+
+
+def validate_exception(entry: dict) -> list[str]:
+    """The shared shape checks, plus: an exception links the issue that owns it (a URL or `#N`)."""
+    problems = _shared().fork_validate_exception(entry)
+    if entry.get("issue") and not _ISSUE_LINK.match(str(entry["issue"])):
+        problems.append(f"exception {entry.get('symbol', '?')!r}: 'issue' {entry['issue']!r} is not an issue URL or #N")
+    return problems
+
+
+def apply_exceptions(clusters: dict, exceptions: list[dict]):
+    """The shared application, validated with this ratchet's full checks."""
+    return _shared().fork_apply_exceptions(clusters, exceptions, validate_exception)
+
+
 def __getattr__(name: str):
     """PEP 562: the detector's names, without importing it at module load."""
     if name in _SHARED_NAMES:
@@ -103,14 +122,21 @@ def __getattr__(name: str):
 #: Floor on files successfully PARSED — not on files listed, and never on
 #: findings. "0 new clusters" is meaningless if the sweep collapsed, and a
 #: findings-based floor cannot tell a clean tree from a broken enumeration.
-#: git lists ~5,279 python files; ~2,826 survive `in_population` and are
-#: parsed. 2,000 sits under that and well over any plausible collapse.
-MIN_FILES_PARSED = 2000
+#: Measured 2026-10-20 (#18559) over the ten FORK_ROOTS: git lists 6,401 python
+#: files and 3,396 survive `in_population` and are parsed. The three original
+#: roots alone parse 3,031, so 3,200 sits MID-window: under the full reach and
+#: above the narrowed one, which means dropping the seven roots added in #18559
+#: fails this floor instead of passing it on the old roots alone.
+MIN_FILES_PARSED = 3200
 
 BASELINE = _REPO_ROOT / "repo_tests" / "symbol_fork_baseline.json"
+EXCEPTIONS = _REPO_ROOT / "repo_tests" / "symbol_fork_exceptions.json"
+
+#: A recorded exception links the issue that owns it: a full URL or `#N`.
+_ISSUE_LINK = re.compile(r"^(https://github\.com/[\w.-]+/[\w.-]+/issues/\d+|#\d+)$")
 
 
-def tracked_python_files() -> list[Path]:
+def fork_scan_files() -> list[Path]:
     """`git ls-files` rather than a walk: untracked scratch files are not the tree."""
     shared = _shared()
     return shared.fork_tracked_python_files(_REPO_ROOT, shared.FORK_ROOTS)
@@ -258,8 +284,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--audit-baseline", action="store_true", help="list baseline entries that no longer exist")
     args = parser.parse_args(argv)
 
-    paths = tracked_python_files()
+    paths = fork_scan_files()
     clusters, parsed = find_clusters(paths)
+    clusters, exception_problems = apply_exceptions(clusters, load_exceptions())
     # Floor on files successfully PARSED, not on files git listed and not on
     # findings. `len(paths)` would clear this floor even if `in_population`
     # filtered everything out or every parse failed, which is the exact
@@ -309,7 +336,9 @@ def main(argv: list[str] | None = None) -> int:
             "Delete them. The list may only shrink, and it has to shrink HERE when the "
             "duplication is gone — otherwise the entry tolerates whatever takes that name next."
         )
-    if new or stale:
+    for problem in exception_problems:
+        print(problem)
+    if new or stale or exception_problems:
         return 1
     print(
         f"symbol forks: {len(clusters)} clusters over {parsed} parsed files "

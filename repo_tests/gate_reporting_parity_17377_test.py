@@ -225,7 +225,7 @@ def _wording(message: str, gate) -> str:
     -- which is the actual claim this PR makes.
     """
     floor = next(v for k, v in vars(gate).items() if k.startswith("MIN_TRACKED"))
-    out = message.replace(gate.SELF_REL, "<SELF>").replace(gate.RATCHET_REL, "<BASELINE>")
+    out = message.replace(gate.SELF_REL, "<SELF>")
     # `ts|vue` joined `py|sh` with the frontend gate (#17885): an un-normalised
     # path in one gate's message is a spurious difference, and the comparison
     # would then fail for a reason that has nothing to do with wording.
@@ -273,29 +273,12 @@ def test_every_gate_words_every_branch_identically(branch: str) -> None:
     )
 
 
-def test_the_baseline_a_gate_names_is_the_one_holding_the_entries(gate) -> None:
-    """``RATCHET_REL`` must name the file a developer can actually edit.
+def test_a_gate_message_asks_for_no_second_edit(gate) -> None:
+    """The gate's own messages send the developer to ``SELF_REL`` alone (#19544).
 
-    The Python gate pointed at ``python_file_size_ratchet_test.py``, whose
-    ``RATCHET_BASELINE`` is a single re-export line; the entries live in
-    ``python_file_size_ratchet_baseline.py``. So "lower the matching RATCHET_BASELINE
-    entry in <that file>" sent the developer to a file with no entries in it -- the
-    wrong-copy failure #17872 exists to prevent, emitted by the gate itself.
-
-    Not covered by the wording-parity test above, which normalises ``RATCHET_REL`` away
-    precisely because it legitimately differs per gate: that test compares words, so it
-    cannot see a pointer aimed at the wrong file. This one reads the file named and
-    requires a literal mapping, which a re-export is not.
+    The Python gate once pointed at a file with no entries (#17377), then at a mirror
+    that had to be edited in step (#17872). With one record, the pointer is gone.
     """
-    named = repo_root() / gate.RATCHET_REL
-    assert named.is_file(), f"{gate.SELF_REL} names a baseline that does not exist: {gate.RATCHET_REL}"
-    source = named.read_text(encoding="utf-8")
-    assert "RATCHET_BASELINE: dict[str, int] = {" in source, (
-        f"{gate.RATCHET_REL} does not DEFINE RATCHET_BASELINE as a mapping, so a developer "
-        "told to lower an entry there finds nothing to edit"
-    )
-    entries = source.count('": ')
-    assert entries >= len(gate.KNOWN_LARGE), (
-        f"{gate.RATCHET_REL} holds {entries} entries against the hook's {len(gate.KNOWN_LARGE)} -- "
-        "the gate is naming a file that does not carry the second copy"
-    )
+    assert "RATCHET_BASELINE" not in gate.verdict(
+        sorted(gate.KNOWN_LARGE)[0], gate.MAX_LINES
+    ), "the now-compliant message still asks for a second edit"

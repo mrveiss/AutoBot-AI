@@ -19,10 +19,13 @@ Two of these tests guard against destroying data rather than merely failing:
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+
+from testkit.fake_async_session import FakeAsyncSession
 
 pytestmark = pytest.mark.asyncio
 
@@ -37,36 +40,9 @@ class _FakeBackup:
         self.service_type = svc
 
 
-class _FakeResult:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def scalar_one_or_none(self):
-        return self._rows[0] if self._rows else None
-
-    def scalars(self):
-        return self
-
-    def all(self):
-        return list(self._rows)
-
-
-class _FakeDB:
-    """Enough AsyncSession for the delete/retention paths."""
-
-    def __init__(self, rows):
-        self._rows = rows
-        self.deleted = []
-        self.commits = 0
-
-    async def execute(self, _query):
-        return _FakeResult(self._rows)
-
-    async def delete(self, obj):
-        self.deleted.append(obj)
-
-    async def commit(self):
-        self.commits += 1
+def _fake_db(rows) -> FakeAsyncSession:
+    """Enough AsyncSession for the delete/retention paths: every query answers *rows*."""
+    return FakeAsyncSession(default_result=list(rows))
 
 
 def _real_backup_module():
@@ -183,8 +159,8 @@ def test_import_survives_an_unwritable_destination(backup_module):
 
 async def test_delete_removes_the_record_and_the_file(service, tmp_path):
     stored = tmp_path / "abc_20260804.rdb"
-    stored.write_bytes(b"rdb")
-    db = _FakeDB([_FakeBackup("abc", path=str(stored))])
+    await asyncio.to_thread(stored.write_bytes, b"rdb")
+    db = _fake_db([_FakeBackup("abc", path=str(stored))])
 
     ok, message = await service.delete_backup(db, "abc")
 
@@ -199,7 +175,7 @@ async def test_delete_succeeds_when_the_file_is_already_gone(service, tmp_path):
     Refusing to delete it would make that state unrecoverable through the API —
     which is the situation this issue is about.
     """
-    db = _FakeDB([_FakeBackup("abc", path=str(tmp_path / "vanished.rdb"))])
+    db = _fake_db([_FakeBackup("abc", path=str(tmp_path / "vanished.rdb"))])
 
     ok, _ = await service.delete_backup(db, "abc")
 
@@ -215,8 +191,8 @@ async def test_delete_never_unlinks_a_path_outside_the_backup_store(service, tmp
     node. Unlinking it would destroy the data the backup exists to protect.
     """
     outside = tmp_path.parent / "live-dump.rdb"
-    outside.write_bytes(b"production data")
-    db = _FakeDB([_FakeBackup("abc", path=str(outside))])
+    await asyncio.to_thread(outside.write_bytes, b"production data")
+    db = _fake_db([_FakeBackup("abc", path=str(outside))])
 
     ok, _ = await service.delete_backup(db, "abc")
 
@@ -231,7 +207,7 @@ async def test_an_in_progress_backup_is_not_deletable(service, backup_module):
     # The module's own enum, not a literal: models.database is stubbed in this
     # harness, so a hardcoded "in_progress" would never match its .value.
     in_progress = backup_module.BackupStatus.IN_PROGRESS.value
-    db = _FakeDB([_FakeBackup("abc", status=in_progress)])
+    db = _fake_db([_FakeBackup("abc", status=in_progress)])
 
     ok, message = await service.delete_backup(db, "abc")
 
@@ -241,7 +217,7 @@ async def test_an_in_progress_backup_is_not_deletable(service, backup_module):
 
 
 async def test_deleting_an_unknown_backup_reports_not_found(service):
-    ok, message = await service.delete_backup(_FakeDB([]), "nope")
+    ok, message = await service.delete_backup(_fake_db([]), "nope")
 
     assert not ok
     assert message == "Backup not found"
@@ -255,9 +231,9 @@ async def test_retention_keeps_the_newest_n(service, tmp_path):
     rows = []
     for i in range(5):
         path = tmp_path / f"b{i}.rdb"
-        path.write_bytes(b"x")
+        await asyncio.to_thread(path.write_bytes, b"x")
         rows.append(_FakeBackup(f"b{i}", path=str(path), created=now - timedelta(hours=i)))
-    db = _FakeDB(rows)
+    db = _fake_db(rows)
 
     removed = await service.apply_retention(db, "n1", "redis", keep_count=2, max_age_days=0)
 
@@ -271,8 +247,8 @@ async def test_retention_prunes_by_age_independently_of_count(service, tmp_path)
     fresh = _FakeBackup("fresh", path=str(tmp_path / "f.rdb"), created=now)
     old = _FakeBackup("old", path=str(tmp_path / "o.rdb"), created=now - timedelta(days=40))
     for b in (fresh, old):
-        (tmp_path / f"{b.backup_id[0]}.rdb").write_bytes(b"x")
-    db = _FakeDB([fresh, old])
+        await asyncio.to_thread((tmp_path / f"{b.backup_id[0]}.rdb").write_bytes, b"x")
+    db = _fake_db([fresh, old])
 
     removed = await service.apply_retention(db, "n1", "redis", keep_count=0, max_age_days=30)
 
@@ -281,7 +257,7 @@ async def test_retention_prunes_by_age_independently_of_count(service, tmp_path)
 
 async def test_retention_disabled_on_both_dimensions_removes_nothing(service, tmp_path):
     rows = [_FakeBackup(f"b{i}", path=str(tmp_path / f"b{i}.rdb")) for i in range(5)]
-    db = _FakeDB(rows)
+    db = _fake_db(rows)
 
     removed = await service.apply_retention(db, "n1", "redis", keep_count=0, max_age_days=0)
 
@@ -295,7 +271,7 @@ async def test_a_naive_created_at_is_not_treated_as_ancient(service, tmp_path):
     Getting this wrong would either crash retention or silently prune everything.
     """
     naive_recent = datetime.now(timezone.utc).replace(tzinfo=None)
-    db = _FakeDB([_FakeBackup("b", path=str(tmp_path / "b.rdb"), created=naive_recent)])
+    db = _fake_db([_FakeBackup("b", path=str(tmp_path / "b.rdb"), created=naive_recent)])
 
     removed = await service.apply_retention(db, "n1", "redis", keep_count=0, max_age_days=30)
 

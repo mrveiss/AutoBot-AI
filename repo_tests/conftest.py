@@ -108,16 +108,32 @@ def _serving_openapi() -> dict:
     # here has to answer to that (#14781).
     from repo_tests.sdk_request_shared import _BACKEND, _BACKEND_API_ROOT
 
-    registry = dict(routing.registry_entries(_BACKEND / "initialization" / "router_registry"))
-    assert registry, "the router registry parsed no entries -- the oracles below would have nothing to mount"
-
+    mounts = _served_mount_prefixes(_BACKEND)
     app = FastAPI()
     for module_path in SERVING_MODULES:
-        assert module_path in registry, f"{module_path} is not mounted by initialization/router_registry"
+        assert module_path in mounts, f"{module_path} is not served through initialization/router_registry"
         app.include_router(
-            importlib.import_module(module_path).router, prefix=f"{_BACKEND_API_ROOT}{registry[module_path]}"
+            importlib.import_module(module_path).router, prefix=f"{_BACKEND_API_ROOT}{mounts[module_path]}"
         )
     return get_openapi(title="sdk-request-oracle", version="1", routes=app.routes)
+
+
+def _served_mount_prefixes(backend) -> dict[str, str]:
+    """``dotted module -> mount prefix`` for every router the backend serves.
+
+    A registry entry gives its own prefix; a router reached only through another
+    router's ``include_router`` -- ``api.chat_sessions`` is mounted solely by
+    ``api/chat.py`` since #17325 removed its duplicate registry entry -- takes the
+    prefix ``routing.resolve_registry_targets`` resolves for it. The included
+    module is mounted on its own rather than through its parent, so the oracle
+    still imports only ``SERVING_MODULES`` and not the parent's dependency tree.
+    """
+    registry = dict(routing.registry_entries(backend / "initialization" / "router_registry"))
+    assert registry, "the router registry parsed no entries -- the oracles below would have nothing to mount"
+    mounts = dict(registry)
+    for path, prefix in routing.resolve_registry_targets(backend, registry.items()).items():
+        mounts.setdefault(".".join(path.relative_to(backend).with_suffix("").parts), prefix)
+    return mounts
 
 
 def _body_fields(schema: dict, components: dict) -> tuple[frozenset[str], frozenset[str]] | None:

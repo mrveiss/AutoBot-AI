@@ -194,7 +194,7 @@ class PlaywrightService:
                 "results": [],
             }
 
-    async def test_frontend(self, frontend_url: str = ServiceURLs.FRONTEND_LOCAL) -> Metadata:
+    async def test_frontend(self, frontend_url: str | None = None) -> Metadata:
         """
         Test frontend functionality using embedded Playwright
 
@@ -204,6 +204,7 @@ class PlaywrightService:
         Returns:
             Test results with detailed analysis
         """
+        frontend_url = frontend_url or ServiceURLs.FRONTEND_LOCAL
         try:
             if not await self.is_ready():
                 raise ServiceUnavailableError(
@@ -252,7 +253,7 @@ class PlaywrightService:
     async def send_test_message(
         self,
         message: str = "what network scanning tools do we have available?",
-        frontend_url: str = ServiceURLs.FRONTEND_LOCAL,
+        frontend_url: str | None = None,
     ) -> Metadata:
         """
         Send test message through frontend using embedded Playwright
@@ -264,6 +265,7 @@ class PlaywrightService:
         Returns:
             Message sending results with step-by-step details
         """
+        frontend_url = frontend_url or ServiceURLs.FRONTEND_LOCAL
         try:
             if not await self.is_ready():
                 raise ServiceUnavailableError(
@@ -470,7 +472,7 @@ async def search_web_embedded(query: str, **kwargs) -> Metadata:
 async def test_frontend_embedded(frontend_url: str = None) -> Metadata:
     """Convenience function for frontend testing"""
     async with playwright_service() as service:
-        return await service.test_frontend(frontend_url or ServiceURLs.FRONTEND_LOCAL)
+        return await service.test_frontend(frontend_url)
 
 
 async def send_test_message_embedded(message: str, **kwargs) -> Metadata:

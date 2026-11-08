@@ -56,6 +56,20 @@ import { BaseButton } from '@autobot/ui'
 </template>
 ```
 
+## Loading states (one convention)
+
+| Where | Use |
+|---|---|
+| An action in flight (save, run, refresh button) | `<BaseButton :loading="busy">` — a bespoke-styled button not yet on BaseButton may carry `<BaseSpinner size="sm">` until it migrates |
+| A content area waiting for data of a known shape | `<BaseSkeleton>` (`shape`, `lines`, `width`, `height`) |
+| A content area of unknown shape, or an inline wait | `<BaseSpinner size label>` |
+| Existing content refreshing in place | the main app's `LoadingOverlay` (keeps the content visible) |
+
+Never hand-roll a spinner (`animate-spin`, `fa-spin`, a local `@keyframes spin`): the kit
+owns the one rotation keyframe. `repo_tests/kit_loading_ratchet_19906_test.py` pins the
+count of local `@keyframes spin` and may only go down. Pass a translated `label` to
+`BaseSpinner` when nothing visible names the wait; the kit hardcodes no text.
+
 ## Implementing the contract (each app supplies its own values)
 
 The kit ships ONE adapter, [`src/tokens/adapter.css`](./src/tokens/adapter.css), that maps

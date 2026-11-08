@@ -71,6 +71,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._raw_aiohttp_session import Site, client_session_sites, scan_paths
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 #: Owners allowed to construct a session: the pooled client itself, and the
@@ -94,7 +95,7 @@ SIBLING_GUARD = "autobot-backend/tests/test_raw_client_session_ceiling_12992.py"
 #: needs no argument. Raising one, or adding a key, must also satisfy
 #: ``CATEGORY`` below — the inventory alone cannot authorise it.
 INVENTORY: dict[str, int] = {
-    "autobot-infrastructure/shared/mcp/servers/prometheus-mcp/server.py": 3,
+    "autobot-infrastructure/shared/mcp/servers/prometheus-mcp/server.py": 1,
     "autobot-infrastructure/shared/scripts/analysis/npu_performance_measurement.py": 2,
     "autobot-infrastructure/shared/scripts/automated_testing_procedure.py": 1,
     "autobot-infrastructure/shared/scripts/comprehensive_log_aggregator.py": 1,
@@ -284,7 +285,7 @@ def _is_name_eq_main(test: ast.Compare) -> bool:
 )
 def test_main_guard_requires_eq_and_the_main_constant(source: str, expected: bool) -> None:
     """Contrast fixtures: a lookalike comparison must not satisfy the ``entrypoint`` category."""
-    assert _module_has_main_guard(ast.parse(source)) is expected
+    assert _module_has_main_guard(parse_cache.parse(source)) is expected
 
 
 def _category_holds(path: str, category: str, source: str, sites: tuple[Site, ...]) -> bool:
@@ -299,7 +300,7 @@ def _category_holds(path: str, category: str, source: str, sites: tuple[Site, ..
         # stored session outlives the request it was opened for.
         return bool(sites) and all(site.bound for site in sites)
     if category == "entrypoint":
-        return _module_has_main_guard(ast.parse(source))
+        return _module_has_main_guard(parse_cache.parse(source))
     return False
 
 

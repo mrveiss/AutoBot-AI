@@ -21,6 +21,7 @@ from auth_middleware import get_current_user
 from chat_workflow import graph as graph_module
 from chat_workflow import turn_cancel_bus as bus
 from chat_workflow import turn_control
+from testkit.canonical_gate import install_canonical_resolver
 from tests.helpers._fake_pubsub_redis import FakeRedis
 
 URL = "/chat/sessions/{}/turn/cancel"
@@ -35,9 +36,10 @@ def _app() -> FastAPI:
 
 def _as_user(monkeypatch, username: str, owner: str | None) -> MagicMock:
     """Authenticate *username*; the durable owner of every session is *owner*. Nothing else is mocked."""
-    monkeypatch.setattr(
-        "security.session_posture.get_auth_middleware",
-        lambda: MagicMock(get_user_from_request=lambda _r: {"username": username, "role": "user"}),
+    install_canonical_resolver(
+        monkeypatch,
+        "security.session_posture.resolve_human_user",
+        MagicMock(get_user_from_request=lambda _r: {"username": username, "role": "user"}),
     )
     history = MagicMock(get_session_owner=AsyncMock(return_value=owner))
     monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", lambda _r: history)

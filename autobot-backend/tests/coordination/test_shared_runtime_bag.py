@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
-from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -24,57 +23,11 @@ from autobot_shared.coordination.shared_runtime_bag import (
     _changes_channel,
     _value_key,
 )
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 # ---------------------------------------------------------------------------
 # Helpers / fakes
 # ---------------------------------------------------------------------------
-
-
-class _FakePipeline:
-    """Minimal async context manager simulating aioredis pipeline with WATCH."""
-
-    def __init__(self, store: dict, fail_once: bool = False) -> None:
-        self._store = store
-        self._fail_once = fail_once
-        self._failed = False
-        self._commands: list[tuple[str, Any]] = []
-        self._watched: list[str] = []
-        self._in_multi = False
-
-    async def __aenter__(self) -> "_FakePipeline":
-        return self
-
-    async def __aexit__(self, *args: Any) -> None:
-        pass
-
-    async def watch(self, *keys: str) -> None:
-        self._watched.extend(keys)
-
-    async def get(self, key: str) -> bytes | None:
-        v = self._store.get(key)
-        return v.encode() if isinstance(v, str) else v
-
-    def multi(self) -> None:
-        self._in_multi = True
-
-    def set(self, key: str, value: str, ex: int | None = None) -> None:
-        self._commands.append(("set", key, value, ex))
-
-    async def execute(self) -> list[Any]:
-        if self._fail_once and not self._failed:
-            self._failed = True
-            raise WatchError()
-        results = []
-        for cmd in self._commands:
-            if cmd[0] == "set":
-                self._store[cmd[1]] = cmd[2]
-            results.append(True)
-        self._commands.clear()
-        return results
-
-    async def reset(self) -> None:
-        self._commands.clear()
-        self._in_multi = False
 
 
 class _FakeRedis:
@@ -89,9 +42,10 @@ class _FakeRedis:
         v = self._store.get(key)
         return v.encode() if isinstance(v, str) else None
 
-    async def set(self, key: str, value: str, ex: int | None = None) -> None:
+    async def set(self, key: str, value: str, ex: int | None = None) -> bool:
         self._store[key] = value
         self._ttls[key] = ex
+        return True
 
     async def delete(self, key: str) -> None:
         self._store.pop(key, None)
@@ -105,11 +59,11 @@ class _FakeRedis:
     async def publish(self, channel: str, message: str) -> None:
         self._published.append((channel, message))
 
-    def pipeline(self, transaction: bool = True) -> _FakePipeline:
-        return _FakePipeline(self._store)
+    def pipeline(self, transaction: bool = True) -> FakeAsyncPipeline:
+        return FakeAsyncPipeline(self, transaction=transaction)
 
-    def pipeline_fail_once(self) -> _FakePipeline:
-        return _FakePipeline(self._store, fail_once=True)
+    def pipeline_fail_once(self) -> FakeAsyncPipeline:
+        return FakeAsyncPipeline(self, execute_errors=[WatchError()])
 
     def pubsub(self) -> "_FakePubSub":
         return _FakePubSub(self._published)
@@ -309,29 +263,18 @@ async def test_update_retries_on_watch_error(fake_redis: _FakeRedis) -> None:
     fake_redis._store[_value_key("ns", "counter")] = "10"
 
     call_count = 0
-    original_pipeline = _FakePipeline
+    healthy_pipeline = fake_redis.pipeline
 
-    class _FailOncePipeline(_FakePipeline):
-        def __init__(self, store: dict) -> None:
-            super().__init__(store, fail_once=True)
+    def _fail_first_execute(transaction: bool = True) -> FakeAsyncPipeline:
+        nonlocal call_count
+        call_count += 1
+        return fake_redis.pipeline_fail_once() if call_count == 1 else healthy_pipeline(transaction)
 
-    # Patch pipeline to fail on first execute
+    fake_redis.pipeline = _fail_first_execute
     with patch(
         "autobot_shared.coordination.shared_runtime_bag.get_async_redis_client",
         return_value=fake_redis,
     ):
-        # Override pipeline to inject a fail-once pipe
-        fake_redis._pipeline_factory = _FailOncePipeline
-        original_pipe = fake_redis.pipeline
-
-        def _patched_pipeline(transaction: bool = True) -> _FakePipeline:
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return _FailOncePipeline(fake_redis._store)
-            return _FakePipeline(fake_redis._store)
-
-        fake_redis.pipeline = _patched_pipeline
         result = await bag.update("counter", lambda v: v + 1, retries=3)
     assert result == 11
 
@@ -341,12 +284,8 @@ async def test_update_raises_after_max_retries(fake_redis: _FakeRedis) -> None:
     bag: SharedRuntimeBag[int] = SharedRuntimeBag("ns", int)
     fake_redis._store[_value_key("ns", "counter")] = "5"
 
-    class _AlwaysFailPipeline(_FakePipeline):
-        async def execute(self) -> list[Any]:
-            raise WatchError()
-
-    def _always_fail(transaction: bool = True) -> _FakePipeline:
-        return _AlwaysFailPipeline(fake_redis._store, fail_once=False)
+    def _always_fail(transaction: bool = True) -> FakeAsyncPipeline:
+        return FakeAsyncPipeline(fake_redis, execute_error=WatchError())
 
     fake_redis.pipeline = _always_fail
     with patch(

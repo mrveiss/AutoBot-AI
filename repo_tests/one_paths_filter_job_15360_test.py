@@ -61,8 +61,6 @@ def _workflow_population(root: Path) -> list[str]:
 REACH = declare(
     "paths-filter-workflow-sweep",
     discover=_workflow_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=63,
     what="tracked workflow files",
     roots=(_WORKFLOWS,),
     growth=10,

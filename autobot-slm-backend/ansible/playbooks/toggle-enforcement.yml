@@ -17,7 +17,7 @@
 
   vars:
     enforcement_mode: true
-    env_file: /opt/autobot/.env
+    env_file: "{{ autobot.base_dir }}/.env"
     backend_health_url: "https://{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}:{{ backend_port | default(8443) }}/api/health"
     startup_delay: 5
 
@@ -98,7 +98,7 @@
       ansible.builtin.shell: |
         pkill -f "uvicorn.*8001" || true
         sleep 1
-        cd /opt/autobot/autobot-backend
+        cd {{ autobot.base_dir }}/autobot-backend
         nohup python -m uvicorn autobot_user_backend.main:app \
           --host 0.0.0.0 --port 8001 \
           > /tmp/autobot-backend-toggle.log 2>&1 &

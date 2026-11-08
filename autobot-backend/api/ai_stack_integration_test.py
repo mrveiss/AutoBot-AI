@@ -72,6 +72,7 @@ async def test_knowledge_search_applies_quarantine_filter():
             max_results=10,
             admin_check=True,
             knowledge_base=mock_kb,
+            current_user={"user_id": "u1", "role": "user"},
         )
 
     mock_kb.search.assert_called_once_with(query="what is autobot", top_k=10, filters=RESEARCH_QUARANTINE_FILTER)

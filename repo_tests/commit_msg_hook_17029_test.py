@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, isolated_git_env, make_repo
 
 _ROOT = repo_root()
 _HOOK = _ROOT / "tools" / "git-hooks" / "commit-msg"
@@ -36,7 +36,8 @@ _LINT_SCRIPT = "scripts/lint-conventions.sh"
 # broken. scripts/lint_conventions_test.py already derives its fixture this way
 # for exactly this reason (#15245); this file is the second fixture with the
 # same shape and did not.
-_LIB_REF = re.compile(r"lib/([A-Za-z0-9_.-]+\.(?:sh|ere))")
+# #19645: .py too -- the commit-msg mode runs lib/outward_wording.py.
+_LIB_REF = re.compile(r"lib/([A-Za-z0-9_.-]+\.(?:sh|ere|py))")
 
 
 def _lint_files() -> tuple[str, ...]:
@@ -49,10 +50,6 @@ def _lint_files() -> tuple[str, ...]:
     return rels
 
 
-def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, env=scrubbed_git_env())
-
-
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """A throwaway repo carrying the real lint script, its libraries and the hook."""
@@ -60,17 +57,14 @@ def repo(tmp_path: Path) -> Path:
     for rel in _lint_files():
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(_ROOT / rel, repo / rel)
-    _git(tmp_path, "init", "--quiet", str(repo))
-    _git(repo, "config", "user.email", "t@t")
-    _git(repo, "config", "user.name", "t")
-    return repo
+    return make_repo(repo)
 
 
 def _run_hook(repo: Path, message: str) -> tuple[subprocess.CompletedProcess, str]:
     msg = repo / "MSG"
     msg.write_text(message, encoding="utf-8")
     result = subprocess.run(
-        ["bash", str(_HOOK), str(msg)], cwd=repo, capture_output=True, text=True, env=scrubbed_git_env()
+        ["bash", str(_HOOK), str(msg)], cwd=repo, capture_output=True, text=True, env=isolated_git_env()
     )
     return result, msg.read_text(encoding="utf-8")
 
@@ -119,8 +113,28 @@ def test_a_real_commit_is_refused_then_accepted(repo: Path) -> None:
     shutil.copy2(_HOOK, hooks / "commit-msg")
     (hooks / "commit-msg").chmod(0o755)
 
-    refused = _git(repo, "commit", "--allow-empty", "-m", "fix(hooks): no reference")
-    accepted = _git(repo, "commit", "--allow-empty", "-m", "fix(hooks): with reference (#17029)")
+    refused = git(repo, "commit", "--allow-empty", "-m", "fix(hooks): no reference", check=False)
+    accepted = git(repo, "commit", "--allow-empty", "-m", "fix(hooks): with reference (#17029)", check=False)
 
     assert refused.returncode != 0, refused.stdout + refused.stderr
     assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+
+
+@pytest.mark.parametrize(
+    "subject",
+    [
+        "ci(wording): queued by the trainmaster (#19645)",
+        "ci(wording): handed a0 → 4d (#19645)",
+        "ci(wording): agreed with the M3 owner (#19645)",
+        "ci(wording): picked up from autobot-ai-4d (#19645)",
+    ],
+)
+def test_a_subject_naming_a_session_or_internal_role_is_rejected(repo: Path, subject: str) -> None:
+    """#19645: the hook runs the one wording detector, scripts/lib/outward_wording.py."""
+    result, _ = _run_hook(repo, subject + "\n")
+    assert result.returncode != 0, result.stdout
+    assert "FAIL" in result.stdout and "maintainer decision (YYYY-MM-DD)" in result.stdout
+
+
+def test_a_subject_with_a_hex_sha_and_the_word_train_passes(repo: Path) -> None:
+    assert _run_hook(repo, "ci(wording): the merge train reverts a0b1c2d3e4 (#19645)\n")[0].returncode == 0

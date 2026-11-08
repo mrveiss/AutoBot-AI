@@ -4544,7 +4544,7 @@ class TestBatch26UploadFile:
         # Should preserve audit logging
         assert "security_layer = get_security_layer(request)" in source
         assert "security_layer.audit_log(" in source
-        assert '"file_upload"' in source
+        assert '"file.upload"' in source  # #18716
 
 
 class TestBatch26MigrationStats:
@@ -4656,7 +4656,7 @@ class TestBatch27DownloadFile:
 
         source = inspect.getsource(download_file)
         assert "security_layer.audit_log(" in source
-        assert '"file_download"' in source
+        assert '"file.download"' in source  # #18716
 
 
 class TestBatch27ViewFile:
@@ -21162,7 +21162,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="update_embedding_settings"', source)
         self.assertIn('error_code_prefix="EMBEDDINGS"', source)
-        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=409", source)  # #19377: refuses; no unread settings.json write
 
     def test_batch_126_get_available_embedding_models_simple_pattern(self):
         """Verify get_available_embedding_models endpoint uses Simple Pattern"""
@@ -21393,7 +21393,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Check start uses operator permission
         source_start = inspect.getsource(redis_service.start_redis_service)
-        self.assertIn("check_operator_permission", source_start)
+        self.assertIn("require_human_operator", source_start)  # canonical gate (#18688)
 
         # Check stop uses admin permission
         source_stop = inspect.getsource(redis_service.stop_redis_service)
@@ -21401,7 +21401,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Check restart uses operator permission
         source_restart = inspect.getsource(redis_service.restart_redis_service)
-        self.assertIn("check_operator_permission", source_restart)
+        self.assertIn("require_human_operator", source_restart)  # canonical gate (#18688)
 
     def test_batch_127_migration_preserves_service_manager_operations(self):
         """Verify migration preserves RedisServiceManager operations"""
@@ -29475,15 +29475,12 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="update_llm_provider"', source)
         self.assertIn('error_code_prefix="LLM"', source)
 
-    def test_batch_169_get_available_embedding_models_simple_pattern(self):
-        """Verify get_available_embedding_models endpoint uses Simple Pattern"""
+    def test_batch_169_get_available_embedding_models_redirects(self):
+        """#19378: the old listing redirects to the one options endpoint, which carries the pattern"""
         from api import llm
 
         source = inspect.getsource(llm.get_available_embedding_models)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_available_embedding_models"', source)
-        self.assertIn('error_code_prefix="LLM"', source)
+        self.assertIn('RedirectResponse("/api/embeddings/models", status_code=308)', source)
 
     def test_batch_169_update_embedding_model_simple_pattern(self):
         """Verify update_embedding_model endpoint uses Simple Pattern"""

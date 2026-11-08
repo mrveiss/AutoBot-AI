@@ -45,7 +45,8 @@ Usage:
         messages=[
             {"role": "user", "content": "How do I configure Redis timeout?"},
             {"role": "assistant", "content": "Set timeout to 30s in redis.conf..."}
-        ]
+        ],
+        owner=OwnerScope.for_user(user_id),  # #18825
     )
 
     logger.info(f"Created {result['entities_created']} entities, "
@@ -57,6 +58,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Set, Tuple
 
+from agents.graph_entity_writer import create_entities_in_graph
 from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import error_boundary
@@ -221,6 +223,7 @@ class GraphEntityExtractor:
         messages: List[Dict[str, str]],
         session_metadata: Dict[str, Any] | None,
         result: ExtractionResult,
+        owner: Any,
     ) -> None:
         """
         Execute the main extraction pipeline steps.
@@ -240,7 +243,7 @@ class GraphEntityExtractor:
         # Step 3: Process entity candidates
         entity_candidates = self._facts_to_entity_candidates(high_confidence_facts, conversation_id, session_metadata)
         created_entities = await self._process_entity_candidates(
-            high_confidence_facts, conversation_id, session_metadata, result
+            high_confidence_facts, conversation_id, session_metadata, result, owner
         )
 
         # Step 4: Process relationships
@@ -255,6 +258,8 @@ class GraphEntityExtractor:
         conversation_id: str,
         messages: List[Dict[str, str]],
         session_metadata: Dict[str, Any] | None = None,
+        *,
+        owner: Any,
     ) -> ExtractionResult:
         """
         Extract entities from conversation and populate graph.
@@ -265,6 +270,7 @@ class GraphEntityExtractor:
             conversation_id: Unique conversation identifier
             messages: List of message dicts with 'role' and 'content'
             session_metadata: Optional metadata about the conversation
+            owner: REQUIRED OwnerScope stamped on every created entity (#18825)
 
         Returns:
             ExtractionResult with statistics and errors
@@ -275,7 +281,7 @@ class GraphEntityExtractor:
         try:
             logger.info(f"Extracting entities from conversation {conversation_id} " f"({len(messages)} messages)")
 
-            await self._perform_extraction_pipeline(conversation_id, messages, session_metadata, result)
+            await self._perform_extraction_pipeline(conversation_id, messages, session_metadata, result, owner)
 
             result.processing_time = time.perf_counter() - start_time
             logger.info(
@@ -459,44 +465,9 @@ class GraphEntityExtractor:
 
         return f"{entity_type.replace('_', ' ').title()}: {truncated}... ({conv_suffix})"
 
-    async def _create_entities_in_graph(self, candidates: List[EntityCandidate]) -> List[Dict[str, Any]]:
-        """
-        Create entities in memory graph.
-
-        Uses AutoBotMemoryGraph.create_entity() for each candidate (REUSE).
-
-        Args:
-            candidates: List of entity candidates
-
-        Returns:
-            List of created entity data dictionaries
-        """
-        created_entities = []
-
-        for candidate in candidates:
-            try:
-                # Use existing memory_graph.create_entity() (REUSE)
-                entity = await self.graph.create_entity(
-                    entity_type=candidate.entity_type,
-                    name=candidate.name,
-                    observations=candidate.observations,
-                    metadata={
-                        "confidence": candidate.confidence,
-                        "temporal_type": (candidate.temporal_type.value if candidate.temporal_type else "unknown"),
-                        "priority": "medium",
-                        "status": "active",
-                    },
-                    tags=list(candidate.tags),
-                )
-
-                created_entities.append(entity)
-                logger.debug("Created entity: %s", candidate.name)
-
-            except Exception as e:
-                logger.warning("Failed to create entity '%s': %s", candidate.name, e)
-                continue
-
-        return created_entities
+    async def _create_entities_in_graph(self, candidates: List[EntityCandidate], owner: Any) -> List[Dict[str, Any]]:
+        """Create entities in the memory graph, stamped with ``owner`` (#18825)."""
+        return await create_entities_in_graph(self.graph, candidates, owner)
 
     def _infer_relationships(
         self, entity_candidates: List[EntityCandidate], facts: List[AtomicFact]
@@ -730,6 +701,7 @@ class GraphEntityExtractor:
         conversation_id: str,
         session_metadata: Dict[str, Any] | None,
         result: ExtractionResult,
+        owner: Any,
     ) -> List[Dict[str, Any]]:
         """
         Process facts into entity candidates and create in graph (Issue #281 - extracted helper).
@@ -746,7 +718,7 @@ class GraphEntityExtractor:
         entity_candidates = self._facts_to_entity_candidates(high_confidence_facts, conversation_id, session_metadata)
         logger.info("Generated %s entity candidates", len(entity_candidates))
 
-        created_entities = await self._create_entities_in_graph(entity_candidates)
+        created_entities = await self._create_entities_in_graph(entity_candidates, owner)
         result.entities_created = len(created_entities)
         logger.info("Created %s entities in graph", result.entities_created)
 

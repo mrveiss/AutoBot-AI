@@ -428,3 +428,20 @@ uniform envelope would address (#12363, #12420, #14062, ratcheted at
 `repo_tests/frontend_api_contract_ratchet_test.py:72-91`), and the citation
 key-shape class first fixed in #16708 — F3 is its second sighting at a different
 site, so it is one defect with two witnesses, fixed once in #17828.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #16845 — bug(billing): LLMCostTracker.record() doesn't exist — main chat path's cost tracking and budget enforcement silently broken since April
+- #17273 — bug(chat): a disconnected client leaves the LangGraph turn running, and the LLM call has no total timeout (closed)
+- #17576 — security(egress): rule 8's only enforcement is a five-file literal, and four connectors beside it call tracked_request unguarded
+- #17826 — bug(slm-secrets): saving LLM settings overwrites every provider API key in the vault with its masked display string (closed)
+- #17827 — security(tools): the LLM HTTP tool checks the domain allowlist then follows redirects unguarded
+- #17828 — bug(chat): answer provenance is built at every layer and connected at none — synthetic citation ids, unparsed [Source N], unwired click
+- #17829 — feat(chat): there is no stop control — stopGenerating is translated into 11 locales and referenced by zero components
+- #17830 — bug(kb): add_document never chunks — a whole transcript or PDF becomes one embedding, against its own docstring (closed)
+- #17831 — test(security): nothing enforces core rule 8 — no guard counts outbound call sites that skip guard_egress (closed)
+- #17832 — feat(admin): org-scoped conversation review is built, gated and audited at the API — and has no GUI
+- #17893 — docs(research): an index row can claim a phase the doc contradicts, and nothing compares them (closed)
+- #17930 — ci(docs): an unguarded Liquid tag in prose breaks the Jekyll build, and nothing catches it (closed)

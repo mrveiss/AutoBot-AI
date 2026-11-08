@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import QUALITY_MODEL
+from autobot_shared.status_enums import Severity
 
 from ..analyzers import normalize_hardcode_record
 from .shared import resolve_scan_root
@@ -368,13 +369,10 @@ async def _analyze_and_return_env_result(
 ) -> JSONResponse:
     """Helper for get_environment_analysis. Ref: #1088. Issue #12330: per-source cache."""
     analysis = await _execute_env_analysis(analyzer, path, pattern_list, use_llm_filter, llm_model, filter_priority)
-    if analysis is None:
-        return JSONResponse(
-            _build_error_response(
-                "Analysis timed out after 120s. Try with fewer patterns.",
-                status="partial",
-            )
-        )
+    if analysis is None:  # #18056: the deadline of the path taken, not ANALYSIS_TIMEOUT for both
+        deadline = LLM_ANALYSIS_TIMEOUT if use_llm_filter else ANALYSIS_TIMEOUT
+        message = f"Analysis timed out after {deadline}s. Try with fewer patterns."
+        return JSONResponse(_build_error_response(message, status="partial"))
     result = _build_environment_result(analysis, path, for_display=True)
     full_result = _build_environment_result(analysis, path, for_display=False)
     _add_llm_filtering_metadata(result, analysis, use_llm_filter)
@@ -530,8 +528,7 @@ async def _fetch_live_env_recommendations(path: str) -> JSONResponse:
 # Export Helpers (Issue #665)
 # =============================================================================
 
-# Module-level constant for severity ordering (Issue #380 pattern)
-_SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+# The severities an environment finding may carry (a membership set; ordering is Severity.rank, #19336)
 _VALID_SEVERITIES = {"high", "medium", "low"}
 
 
@@ -555,7 +552,7 @@ def _sort_by_severity(values: list) -> list:
 
     Issue #665: Extracted helper for severity sorting.
     """
-    return sorted(values, key=lambda v: _SEVERITY_ORDER.get(v.get("severity", "low").lower(), 3))
+    return sorted(values, key=lambda v: -Severity.rank_of(v.get("severity", "low")))  # most severe first (#19336)
 
 
 def _calculate_category_breakdown(values: list) -> dict:

@@ -68,7 +68,7 @@ def _world(stored=None, relaxed=None):
 async def _run(svc, stored=None, relaxed=None):
     a, b, c = _world(stored, relaxed)
     with a, b, c:
-        return await svc.execute_command("s", "ls -la")
+        return await svc.execute_command("s", "touch /tmp/ai-line-probe")
 
 
 async def test_line_three_refuses_the_command_before_the_queue_and_before_running():

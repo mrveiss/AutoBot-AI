@@ -83,9 +83,8 @@ jobs:
 
           # Get all branches merged into main (ancestor-based, never
           # patch-equivalence -- #10035).
-          # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
           merged_branches=$(git branch -r --merged "origin/$BASE_BRANCH" \
-            | grep -v "HEAD\|$BASE_BRANCH\|release\|master\|Dev_new_gui" \
+            | grep -v "HEAD\|$BASE_BRANCH\|release\|master" \
             | sed 's|^ *origin/||' || true)
 
           if [ -z "$merged_branches" ]; then
@@ -150,10 +149,9 @@ jobs:
           echo "Looking for branches tied to closed issues..."
 
           # Get all remote branches with issue numbers
-          # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
           remote_branches=$(git branch -r \
             | sed 's|^ *origin/||' \
-            | grep -v "HEAD\|release\|master\|main\|Dev_new_gui" || true)
+            | grep -v "HEAD\|release\|master\|main" || true)
 
           if [ -z "$remote_branches" ]; then
             echo "  No candidate branches found."

@@ -9,7 +9,8 @@ rebase mode to disable and rejects the flag outright::
 
     error: unknown option `no-rebase'
 
-`auto-merge-base-into-parked-branches.yml` passed it, so **every** merge died on
+`auto-merge-base-into-parked-branches.yml` (since folded into
+`sync-branches-with-main.yml`, #19548) passed it, so **every** merge died on
 argument parsing — and the `else` arm that caught the failure was labelled
 ``CONFLICTS``. Measured on the 2026-09-09 02:42 run: ``updated=0
 conflicted=11``, job green. A trial of the same eleven branches without the flag
@@ -47,7 +48,10 @@ SCANNED = ("*.sh", "*.yml", "*.yaml", "*.py")
 #: This file states the pattern in prose and in its own fixtures.
 EXEMPT = {"repo_tests/git_merge_rejects_pull_only_flags_15938_test.py"}
 
-WORKFLOW = ".github/workflows/auto-merge-base-into-parked-branches.yml"
+#: #19548 folded the parked-branch workflow into the branch sync, whose merge
+#: classification is a pure function in this module.
+SYNC_CORE = "pipeline-scripts/branch_sync_core.py"
+SYNC_SCRIPT = "pipeline-scripts/branch_sync.py"
 
 
 def offending_lines(text: str) -> list[tuple[int, str]]:
@@ -100,21 +104,22 @@ def test_no_tracked_file_passes_a_pull_only_flag_to_git_merge() -> None:
 # job says "I am broken" rather than "these branches are".
 
 
-def test_the_parked_branch_job_distinguishes_a_conflict_from_a_failure() -> None:
-    text = (repo_root() / WORKFLOW).read_text(encoding="utf-8")
-    assert "grep -q '^CONFLICT'" in text, (
-        f"{WORKFLOW} must classify a failed merge by looking for git's own CONFLICT "
-        "marker. Without that, every non-conflict failure is reported as a conflict, "
-        "which is how #15938 stayed green for the life of the file."
+def test_the_branch_sync_distinguishes_a_conflict_from_a_failure() -> None:
+    """Structural: the behaviour is executed in branch_sync_19548_test.py (classify_merge, exit_code)."""
+    core = (repo_root() / SYNC_CORE).read_text(encoding="utf-8")
+    script = (repo_root() / SYNC_SCRIPT).read_text(encoding="utf-8")
+    assert 'line.startswith("CONFLICT")' in core, (
+        f"{SYNC_CORE} must classify a failed merge by git's own CONFLICT marker. Without "
+        "that, every non-conflict failure is reported as a conflict, which is how #15938 "
+        "stayed green for the life of the file."
     )
-    assert "errored+=(" in text, (
-        f"{WORKFLOW} must keep non-conflict failures in their own bucket; folding "
-        "them into `conflicted` is the defect, not the reporting of it."
+    assert "return ERROR" in core, (
+        f"{SYNC_CORE} must keep non-conflict failures in their own outcome; folding them "
+        "into `conflict` is the defect, not the reporting of it."
     )
-    assert re.search(r"\$\{#errored\[@\]\} -gt 0 \]; then\s*\n\s+echo \"::error::", text), (
-        f"{WORKFLOW} must FAIL when a merge fails without a conflict. A conflict is "
-        "information about a branch; a non-conflict failure is a defect in the job, "
-        "and a job that cannot fail cannot report one."
+    assert "if results.get(core.ERROR):" in script and "return 1" in script, (
+        f"{SYNC_SCRIPT} must FAIL when a merge fails without a conflict. A conflict is "
+        "information about a branch; a non-conflict failure is a defect in the job."
     )
 
 
@@ -143,7 +148,7 @@ def test_the_matcher_leaves_valid_merges_and_prose_alone() -> None:
 # The other half of #15938. `git worktree add -b <branch> <dir>` with no start
 # point branches from the main tree's HEAD, so a new workspace silently inherits
 # whatever that tree last fetched. Freshness used to be a side effect of having a
-# PR: auto-update-pr-branches.yml keeps PR branches current, and before the first
+# PR: the branch sync (sync-branches-with-main.yml, #19548) keeps PR branches current, and before the first
 # push there was no mechanism at all.
 
 WORKSPACE = "autobot-backend/services/task_workspace.py"

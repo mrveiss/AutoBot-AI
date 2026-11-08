@@ -28,7 +28,7 @@
 
     <!-- Loading state -->
     <div v-if="loading" class="loading-state">
-      <div class="spinner"></div>
+      <BaseSpinner size="md" />
       <span>{{ $t('analytics.findings.table.loading') }}</span>
     </div>
 
@@ -111,6 +111,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -308,19 +309,6 @@ function copyPath(finding: Finding): void {
   justify-content: center;
   padding: var(--spacing-8);
   color: var(--text-secondary);
-}
-
-.spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--border-default);
-  border-top-color: var(--color-info);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .table-container {

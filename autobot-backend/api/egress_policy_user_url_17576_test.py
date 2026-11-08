@@ -18,8 +18,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
-from api import marketplace_sources, provider_auth
+from api import marketplace_sources, provider_auth, schemas_llm_auth
 from autobot_shared import egress_allowlist as al
 from autobot_shared.ssot_config import config
 
@@ -61,25 +62,16 @@ def stubs(monkeypatch):
     return session_ctor
 
 
-async def _initiate(url):
-    req = provider_auth.DeviceInitiateRequest(provider_name="p", device_authorization_url=url, client_id="c")
-    await provider_auth.device_initiate(req, user=None, _admin=True)
-
-
-async def _poll(url):
-    req = provider_auth.DevicePollRequest(provider_name="p", token_url=url, client_id="c", device_code="d")
-    await provider_auth.device_poll(req, session=MagicMock(), user=None, _admin=True)
-
-
 async def _catalog(url):
     await marketplace_sources._fetch_catalog_document(url)
 
 
-#: (site, status of the refusal). provider_auth surfaces an egress refusal like any outbound failure (502,
-#: via its ``except aiohttp.ClientError``); the catalog fetch maps it to 400 with its other URL rejections.
+#: (site, status of the refusal). provider_auth.device_initiate / device_poll are NOT listed: since
+#: #19241/#19259 they take no caller URL (the device and token URLs are operator config, validated server-side
+#: by ``_validate_outbound_url`` and guarded by ``assert_public_egress`` in ``_post_form``, api/provider_auth.py),
+#: so the user-URL surface is closed -- see ``test_device_flow_requests_reject_a_caller_url`` below.
+#: The catalog fetch maps an egress refusal to 400 with its other URL rejections.
 SITES = [
-    pytest.param(_initiate, 502, id="provider_auth.device_initiate"),
-    pytest.param(_poll, 502, id="provider_auth.device_poll"),
     pytest.param(_catalog, 400, id="marketplace_sources.fetch_catalog"),
 ]
 
@@ -110,3 +102,20 @@ async def test_internal_origin_is_trusted_by_policy_but_not_here(stubs):
     await assert_egress_policy(config.backend_url + "/api/x")
     with pytest.raises(HTTPException):
         await _catalog(config.backend_url + "/api/x")
+
+
+@pytest.mark.parametrize(
+    "model,kwargs",
+    [
+        (schemas_llm_auth.DeviceInitiateRequest, {"provider_name": "p", "scope": "user"}),
+        (schemas_llm_auth.DevicePollRequest, {"provider_name": "p", "device_code": "d"}),
+    ],
+    ids=["device_initiate", "device_poll"],
+)
+@pytest.mark.parametrize("field", ["device_authorization_url", "token_url"])
+def test_device_flow_requests_reject_a_caller_url(model, kwargs, field):
+    """Contrast for the removed cases: the surface is closed (#19241/#19259), not the test dropped."""
+    model(**kwargs)  # control: the model is valid without the extra field
+    with pytest.raises(ValidationError) as rejected:
+        model(**kwargs, **{field: PUBLIC_URL})
+    assert rejected.value.errors()[0]["type"] == "extra_forbidden"

@@ -6,10 +6,12 @@
  * Issue #2861: Replaces `catch (err: any)` patterns with type-safe extraction.
  */
 
+import i18n from '@/i18n'
+
 interface AxiosLikeError {
   response?: {
     data?: {
-      detail?: string
+      detail?: string | { message?: string }
       message?: string
     }
   }
@@ -27,7 +29,9 @@ function isAxiosLikeError(err: unknown): err is AxiosLikeError {
 export function extractApiErrorMessage(err: unknown, fallback: string): string {
   if (isAxiosLikeError(err)) {
     const detail = err.response?.data?.detail
-    if (detail) return detail
+    if (typeof detail === 'string' && detail) return detail
+    // A structured detail ({code, message, ...}) is read as its message, never returned as the object.
+    if (detail && typeof detail === 'object' && detail.message) return detail.message
     const message = err.response?.data?.message
     if (message) return message
   }
@@ -142,4 +146,23 @@ export async function describeFailedResponse(response: Response): Promise<string
   const statusLine = `HTTP ${response.status}: ${response.statusText}`
   const detail = await extractResponseErrorDetail(response)
   return detail ? `${statusLine} — ${detail}` : statusLine
+}
+
+/** A streamed `error` event's chat text: its own translation when it names one (#16845), else the raw error. */
+export function streamErrorText(data: {
+  content?: string
+  message?: string
+  metadata?: {
+    i18n_key?: string
+    i18n_params?: Record<string, unknown>
+    i18n_param_keys?: Record<string, string> // params whose values are themselves i18n keys
+  }
+}): string {
+  const key = data.metadata?.i18n_key
+  if (!key) return `Error: ${data.content || data.message || 'Unknown error'}`
+  const params: Record<string, unknown> = { ...data.metadata?.i18n_params }
+  for (const [name, paramKey] of Object.entries(data.metadata?.i18n_param_keys ?? {})) {
+    params[name] = i18n.global.t(paramKey)
+  }
+  return i18n.global.t(key, params) as string
 }

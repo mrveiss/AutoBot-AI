@@ -25,6 +25,8 @@ from typing import Dict, Optional, Tuple
 import aiohttp
 import redis
 
+from autobot_shared.ssot_config import config
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,7 +60,7 @@ def _build_service_definitions():
         ServiceCheck("AI Stack", "10.0.0.5", 8080, "http", "/health", None, 15),
         # Issue #1214: Ollama runs on .20 (autobot-llm-gpu), not .24
         ServiceCheck("Ollama", "10.0.0.1", 11434, "http", "/api/tags", None, 20),
-        ServiceCheck("Browser Service", "10.0.0.6", 3000, "http", "/health"),
+        ServiceCheck("Browser Service", "10.0.0.6", config.port.browser, "http", "/health"),  # #19324
     ]
 
 
@@ -208,7 +210,7 @@ class DeploymentValidator:
             ("NPU Worker", "10.0.0.3", 8081, "/health"),
             # Issue #1214: Ollama on .20 (autobot-llm-gpu)
             ("Ollama", "10.0.0.1", 11434, "/api/tags"),
-            ("Browser Service", "10.0.0.6", 3000, "/health"),
+            ("Browser Service", "10.0.0.6", config.port.browser, "/health"),  # #19324
         ]
 
         for name, host, port, endpoint in http_services:

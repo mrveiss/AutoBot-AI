@@ -297,6 +297,11 @@ class KnowledgeManager:
             logger.error("Failed to initialize unified knowledge manager: %s", e)
             raise RuntimeError(f"Initialization failed: {e}") from e
 
+    @property
+    def import_failures(self) -> List[str]:
+        """Items the last system-knowledge import failed to store; empty when it skipped or succeeded."""
+        return list(getattr(self._system_manager, "import_failures", []))
+
     async def reload(self):
         """
         Reload system knowledge from runtime files
@@ -1101,9 +1106,7 @@ def get_knowledge_manager(
                     raise ValueError("knowledge_base required on first call to get_knowledge_manager()")
 
                 _knowledge_manager_instance = KnowledgeManager(
-                    knowledge_base=knowledge_base,
-                    enable_temporal=enable_temporal,
-                    enable_machine_aware=enable_machine_aware,
+                    knowledge_base, enable_temporal=enable_temporal, enable_machine_aware=enable_machine_aware
                 )
 
     return _knowledge_manager_instance
@@ -1114,16 +1117,12 @@ def get_knowledge_manager(
 # ============================================================================
 
 __all__ = [
-    # Main Manager
-    "KnowledgeManager",
-    # Protocols
-    "ITemporalManager",
+    "KnowledgeManager",  # the facade
+    "ITemporalManager",  # protocols
     "ISystemKnowledgeManager",
     "IMachineAwareManager",
-    # Global Instance
-    "get_knowledge_manager",
-    # Re-export from composed managers for convenience
-    "TemporalMetadata",
+    "get_knowledge_manager",  # global instance
+    "TemporalMetadata",  # re-exported from the composed managers
     "FreshnessStatus",
     "KnowledgePriority",
     "InvalidationJob",

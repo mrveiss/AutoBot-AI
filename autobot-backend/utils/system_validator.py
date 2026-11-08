@@ -16,6 +16,7 @@ from typing import Any, Dict, List
 import aiohttp
 import psutil
 
+from autobot_shared.deployment_profile import try_frontend_url
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -88,10 +89,9 @@ class SystemValidator:
             "error_rate_percent": config.get("validation.thresholds.error_rate_percent", 5.0),
         }
 
-        # Service endpoints
-        self.base_urls = {
+        self.base_urls = {  # service endpoints
             "backend": ssot_config.backend_url,
-            "frontend": ssot_config.frontend_url,
+            "frontend": try_frontend_url(ssot_config),  # None while AUTOBOT_FRONTEND_SERVED_BY is unknown (#19326)
             "ollama": ssot_config.ollama_url,
             "redis": None,  # Special handling for Redis
         }
@@ -166,13 +166,12 @@ class SystemValidator:
 
     async def _validate_kb_integration(self, component: str) -> None:
         """Validate knowledge base integration (Issue #333 - extracted helper)."""
-        from knowledge_base import KnowledgeBase
+        from knowledge_factory import get_knowledge_base_async
 
         try:
-            kb = KnowledgeBase()
-            await kb.ainit()
+            kb = await get_knowledge_base_async()
 
-            if not kb.index:
+            if kb is None or not kb.index:
                 self._add_result(
                     component,
                     "KB Integration",
@@ -868,13 +867,12 @@ class SystemValidator:
         Returns:
             The initialized KnowledgeBase, or None if unavailable
         """
-        from knowledge_base import KnowledgeBase
+        from knowledge_factory import get_knowledge_base_async
 
         start_time = time.time()
-        kb = KnowledgeBase()
-        await kb.ainit()
+        kb = await get_knowledge_base_async()
 
-        if not kb.index:
+        if kb is None or not kb.index:
             self._add_result(
                 component,
                 "Prerequisites",

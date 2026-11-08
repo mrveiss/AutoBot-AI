@@ -174,6 +174,7 @@ class TestRAGServiceSessionAdaptation(unittest.IsolatedAsyncioTestCase):
     async def test_advanced_search_applies_adapted_weights(self):
         """advanced_search() uses adapted weights from session reranker when feature enabled."""
         from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics
+        from knowledge.search_filters import SYSTEM_SCOPE
         from services.rag_config import RAGConfig
         from services.rag_service import RAGService
 
@@ -215,7 +216,7 @@ class TestRAGServiceSessionAdaptation(unittest.IsolatedAsyncioTestCase):
                 new=AsyncMock(side_effect=lambda coro, timeout: coro),
             ),
         ):
-            await service.advanced_search("test query", session_id="sess-z")
+            await service.advanced_search("test query", session_id="sess-z", principal=SYSTEM_SCOPE)
 
         # The applied weight should have been the adapted one (higher than default).
         if applied_sem_values:

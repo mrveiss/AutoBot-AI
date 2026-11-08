@@ -18,7 +18,10 @@ from .base import ThreatAnalyzer
 class InsiderThreatAnalyzer(ThreatAnalyzer):
     """Analyzes events for insider threat indicators"""
 
-    # Module-level for O(1) lookup
+    # Module-level for O(1) lookup. Compared against the *translated* engine action
+    # (`ingest.engine_action`), so a name is reachable only if `ingest` produces it:
+    # today that is `system_configuration_change` (from `config.update`, #18716). The
+    # others have no audit producer yet and cannot match a bus event.
     _HIGH_RISK_ACTIONS = frozenset(
         {
             "bulk_data_export",

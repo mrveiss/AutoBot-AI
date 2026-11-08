@@ -24,7 +24,7 @@ from autobot_shared.proxy_utils import get_client_ip
 from autobot_shared.rate_limiter import RateLimiter
 from config import settings
 from models.schemas import TokenResponse
-from services.auth import auth_service
+from services.auth import ADMIN_ONLY_DETAIL, auth_service
 from services.sso_exchange_code import (
     ExchangeCodeUnavailableError,
     consume_exchange_code,
@@ -135,17 +135,48 @@ def _build_callback_url(request: Request) -> str:
     return f"{scheme}://{netloc}/api/auth/sso/callback"
 
 
+def _spa_url(route: str, query: str) -> str:
+    """An SLM SPA route under the SLM base (#18892); a bare path is the USER app's."""
+    return f"{settings.frontend_base_path}/{route}?{query}"
+
+
+def _sso_callback_url(query: str) -> str:
+    return _spa_url("sso-callback", query)
+
+
+async def _audit_sso_login(audit_db: AsyncSession, user, provider_id: str, ip_address: str | None = None) -> None:
+    """Record the login as what it was: a non-admin's is refused, not a success (#20628)."""
+    try:
+        await create_audit_log(
+            audit_db,
+            category="sso",
+            action="auth.login",
+            user_id=str(user.id),
+            username=user.username,
+            ip_address=ip_address,
+            resource_type="sso_provider",
+            resource_id=provider_id,
+            success=bool(user.is_platform_admin),
+            error_message=None if user.is_platform_admin else ADMIN_ONLY_DETAIL,
+        )
+        await audit_db.commit()
+    except Exception as audit_err:
+        logger.warning("SSO audit write failed: %s", audit_err)
+
+
 async def _redirect_with_session_code(user) -> RedirectResponse:
     """Mint the session for `user`, redirect with a one-time code, never the JWT (#18394)."""
     # #18322: mint from the provisioned User record itself. A stand-in lacked
     # `is_platform_admin`, so create_token_response raised; the role comes only from
     # the record (role_for_user), never from a default.
+    if not user.is_platform_admin:  # #20628: the browser is mid-redirect, so say it there
+        return RedirectResponse(url=_sso_callback_url("error=admin_only"), status_code=status.HTTP_302_FOUND)
     token_response = await auth_service.create_token_response(user)
     try:
         code = await issue_exchange_code(token_response.model_dump())
     except ExchangeCodeUnavailableError:
-        return RedirectResponse(url="/sso-callback?error=sso_unavailable", status_code=status.HTTP_302_FOUND)
-    return RedirectResponse(url=f"/sso-callback?code={code}", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(url=_sso_callback_url("error=sso_unavailable"), status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(url=_sso_callback_url(f"code={code}"), status_code=status.HTTP_302_FOUND)
 
 
 @router.post("/exchange", response_model=TokenResponse)
@@ -285,22 +316,7 @@ async def oauth_callback(
         callback_url = _build_callback_url(request)
         user, resolved_provider_id = await sso_service.complete_oauth_login(code, state, callback_url)
         provider_id_str = str(resolved_provider_id)
-
-        try:
-            await create_audit_log(
-                audit_db,
-                category="sso",
-                action="login",
-                user_id=str(user.id),
-                username=user.username,
-                ip_address=client_ip,
-                resource_type="sso_provider",
-                resource_id=provider_id_str,
-                success=True,
-            )
-            await audit_db.commit()
-        except Exception as audit_err:
-            logger.warning("SSO audit write failed: %s", audit_err)
+        await _audit_sso_login(audit_db, user, provider_id_str, client_ip)
 
         return await _redirect_with_session_code(user)
     except (SSOAuthenticationError, SSOProviderNotFoundError) as e:
@@ -309,7 +325,7 @@ async def oauth_callback(
             await create_audit_log(
                 audit_db,
                 category="sso",
-                action="login",
+                action="auth.login",
                 ip_address=client_ip,
                 resource_type="sso_provider",
                 resource_id=provider_id_str,
@@ -320,7 +336,7 @@ async def oauth_callback(
         except Exception as audit_err:
             logger.warning("SSO audit write failed: %s", audit_err)
         return RedirectResponse(
-            url="/login?error=sso_failed",
+            url=_spa_url("login", "error=sso_failed"),
             status_code=status.HTTP_302_FOUND,
         )
 
@@ -360,21 +376,7 @@ async def ldap_login(
             login_data.username,
             login_data.password,
         )
-
-        try:
-            await create_audit_log(
-                audit_db,
-                category="sso",
-                action="login",
-                user_id=str(user.id),
-                username=user.username,
-                resource_type="sso_provider",
-                resource_id=provider_id_str,
-                success=True,
-            )
-            await audit_db.commit()
-        except Exception as audit_err:
-            logger.warning("SSO audit write failed: %s", audit_err)
+        await _audit_sso_login(audit_db, user, provider_id_str)
 
         # #18322: the token is built from the provisioned User record itself. A stand-in
         # lacked `is_platform_admin`, so create_token_response raised; the role comes only
@@ -390,7 +392,7 @@ async def ldap_login(
             await create_audit_log(
                 audit_db,
                 category="sso",
-                action="login",
+                action="auth.login",
                 username=login_data.username,
                 resource_type="sso_provider",
                 resource_id=provider_id_str,
@@ -531,7 +533,7 @@ async def saml_callback(
             await create_audit_log(
                 audit_db,
                 category="sso",
-                action="login",
+                action="auth.login",
                 user_id=str(user.id),
                 username=user.username,
                 resource_type="sso_provider",
@@ -549,7 +551,7 @@ async def saml_callback(
             await create_audit_log(
                 audit_db,
                 category="sso",
-                action="login",
+                action="auth.login",
                 resource_type="sso_provider",
                 resource_id=provider_id_str,
                 success=False,
@@ -559,6 +561,6 @@ async def saml_callback(
         except Exception as audit_err:
             logger.warning("SSO audit write failed: %s", audit_err)
         return RedirectResponse(
-            url="/login?error=sso_failed",
+            url=_spa_url("login", "error=sso_failed"),
             status_code=status.HTTP_302_FOUND,
         )

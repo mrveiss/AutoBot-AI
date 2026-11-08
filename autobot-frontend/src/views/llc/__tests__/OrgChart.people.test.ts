@@ -172,7 +172,8 @@ const i18n = createI18n({
 
 async function mountChart(fixture?: Fixture) {
   if (fixture) mockApi(fixture)
-  const wrapper = mount(OrgChart, { global: { plugins: [i18n], stubs: { HireAgentModal: true } } })
+  // The node drawer is the kit BaseDrawer, which teleports to body (#14780).
+  const wrapper = mount(OrgChart, { global: { plugins: [i18n], stubs: { HireAgentModal: true, Teleport: true } } })
   await flushPromises()
   return wrapper
 }

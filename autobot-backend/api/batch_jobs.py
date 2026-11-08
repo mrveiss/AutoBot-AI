@@ -21,9 +21,9 @@ from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from api.batch_dispatch import dispatch_batch
 from api.schemas_workflows import (
     APIBatchRequest,
-    APIBatchResponse,
     BatchChatInitResponse,
     BatchJob,
     BatchJobCreate,
@@ -804,15 +804,6 @@ async def probe_batch_jobs(request) -> ComponentHealth:
 # =============================================================================
 
 
-def _find_route_handler(app, endpoint: str, method: str):
-    """Find matching route handler for given endpoint and method"""
-    for route in app.routes:
-        if hasattr(route, "path") and route.path == endpoint:
-            if method in route.methods:
-                return route.endpoint
-    return None
-
-
 def _process_session_file(filename: str, chats_directory: str):
     """Process a single session file and return session metadata"""
     if not (filename.startswith("chat_") and filename.endswith(".json")):
@@ -841,52 +832,13 @@ def _process_session_file(filename: str, chats_directory: str):
     operation="batch_load",
     error_code_prefix="BATCH_JOBS",
 )
-async def batch_load(batch_request: APIBatchRequest, current_user: dict = Depends(get_current_user)):
-    """Execute multiple API calls in parallel and return combined results."""
-    import time
+async def batch_load(batch_request: APIBatchRequest, request: Request, current_user: dict = Depends(get_current_user)):
+    """Run several allow-listed GETs in one call, each dispatched through the ASGI app (#18765).
 
-    from fast_app_factory_fix import app
-
-    responses = {}
-    errors = {}
-    timing = {}
-
-    async def execute_request(req: Dict):
-        endpoint = req.get("endpoint", "")
-        method = req.get("method", "GET").upper()
-        params = req.get("params", {})
-
-        start_time = time.time()
-
-        try:
-            route_handler = _find_route_handler(app, endpoint, method)
-
-            if route_handler:
-                if method == "GET":
-                    response = await route_handler(**params)
-                else:
-                    response = await route_handler(params)
-
-                responses[endpoint] = response
-                timing[endpoint] = time.time() - start_time
-                return
-
-            errors[endpoint] = f"Endpoint {endpoint} not found"
-            timing[endpoint] = time.time() - start_time
-
-        except Exception as e:
-            logger.error(
-                "Error in batch request for %s: %s",
-                endpoint,
-                e,
-            )
-            errors[endpoint] = str(e)
-            timing[endpoint] = time.time() - start_time
-
-    tasks = [execute_request(req) for req in batch_request.requests]
-    await asyncio.gather(*tasks, return_exceptions=True)
-
-    return APIBatchResponse(responses=responses, errors=errors, timing=timing)
+    Every sub-request carries the caller's own credentials, so the target route's dependencies
+    (including admin gates) run and its own status lands in its result slot.
+    """
+    return BatchLoadResponse(results=await dispatch_batch(request, batch_request.requests))
 
 
 async def get_chat_sessions(app):

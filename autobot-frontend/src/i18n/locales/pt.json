@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "Enviar",
     "cancel": "Cancelar",
     "save": "Salvar",
@@ -103,7 +104,14 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "Baixo",
+      "medium": "Médio",
+      "high": "Alto",
+      "critical": "Crítico"
+    },
+    "logsLoadFailed": "Falha ao carregar os registos: {error}"
   },
   "chat": {
     "sendMessage": "Envie uma mensagem...",
@@ -255,6 +263,13 @@
     },
     "input": {
       "retryUpload": "Tentar enviar novamente",
+      "uploadError": {
+        "http": "Falha no envio (estado {status})",
+        "invalidResponse": "O servidor enviou uma resposta ilegível",
+        "network": "Erro de rede durante o envio",
+        "cancelled": "Envio cancelado",
+        "unknown": "Falha no envio"
+      },
       "filesAttached": "Arquivos {count} anexados",
       "clearAll": "Limpar tudo",
       "removeFile": "Remover arquivo",
@@ -299,7 +314,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "O arquivo \"{name}\" é grande demais (máx. {max})",
+      "voiceUnsupported": "A entrada de voz requer Chrome, Edge ou Safari 15+. A transcrição não está disponível neste navegador.",
+      "micDenied": "O acesso ao microfone foi negado. Permita o acesso ao microfone nas configurações do navegador."
     },
     "translate": {
       "title": "Traduzir texto",
@@ -515,6 +533,7 @@
         "pending": "Pendente",
         "running": "Correndo",
         "streaming": "A transmitir",
+        "waiting_explanation": "Aguardando explicação",
         "explaining": "Explicando",
         "completed": "Concluído",
         "failed": "Fracassado"
@@ -765,6 +784,16 @@
       "browser": "Navegador",
       "novnc": "Área de trabalho remota",
       "ariaLabel": "Seções do chat"
+    },
+    "attachmentNotice": {
+      "unavailable": "Não foi possível encontrar um arquivo anexado nesta conversa, por isso ele não foi usado.",
+      "too_many": "Somente os primeiros {limit} arquivos anexados foram usados; os demais foram deixados de fora.",
+      "image": "\"{filename}\" é uma imagem e não pode ser lida como texto, por isso não foi usada.",
+      "unsupported": "\"{filename}\" não é um arquivo de texto que o assistente consiga ler, por isso não foi usado.",
+      "unreadable": "Não foi possível ler \"{filename}\", por isso ele não foi usado.",
+      "empty": "\"{filename}\" não tem texto legível, por isso não foi usado.",
+      "truncated": "\"{filename}\" é longo, por isso apenas o início foi usado.",
+      "over_budget": "Os arquivos anexados atingiram o limite de tamanho, por isso \"{filename}\" não foi usado."
     }
   },
   "settings": {
@@ -777,15 +806,7 @@
     "logging": "Registro",
     "prompts": "Solicitações",
     "backend": "Backend",
-    "save": "Salvar configurações",
     "reset": "Redefinir para os padrões",
-    "panelLoadFailed": "Falha ao carregar o painel de configurações",
-    "loadingSettings": "Carregando configurações...",
-    "backendOffline": "Back-end offline – mostrando configurações em cache",
-    "saving": "Salvando...",
-    "discardChanges": "Descartar alterações",
-    "cacheApiUnavailable": "API de cache não disponível",
-    "cachedSettings": "Usando configurações em cache (backend offline)",
     "appearanceDesc": "Personalize a aparência do seu espaço de trabalho",
     "voiceDesc": "Configurar perfis de voz e voz de conversão de texto em fala",
     "languageDesc": "Escolha seu idioma preferido para a interface e as respostas de IA",
@@ -795,31 +816,11 @@
     "languageChanged": "Idioma atualizado com sucesso",
     "languageChangeFailed": "Falha ao atualizar o idioma",
     "webResearch": {
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
       "title": "Web Research",
-      "methodLabel": "Search method",
-      "confirmationLabel": "Require confirmation",
-      "rateLimitRequests": "Requests",
-      "timeoutLabel": "Timeout (seconds)",
-      "enabledLabel": "Enable web research",
       "methodBasic": "Basic",
-      "thresholdLabel": "Auto-research threshold",
       "methodAdvanced": "Advanced",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "rateLimitLabel": "Rate limiting",
-      "methodHint": "Choose how web searches are performed",
-      "maxResultsLabel": "Max results",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "methodApiBased": "API-based",
-      "storeInKbHint": "Save research results to the knowledge base",
-      "filterAdultHint": "Filter adult content from search results",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "privacyLabel": "Privacy & storage",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "rateLimitWindow": "Window (s)",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "rateLimitHint": "Limit how many requests are sent in a given time window"
+      "methodApiBased": "API-based"
     },
     "apiKeys": {
       "enterKey": "Enter API key...",
@@ -941,8 +942,6 @@
       "noApiKeyRequired": "Nenhuma chave de API necessária.",
       "redirecting": "Redirecionando...",
       "disconnectFailed": "Falha ao desconectar",
-      "redirectNeedsCallback": "O fluxo OAuth com redirecionamento no navegador exige configuração de callback no servidor. Use o código do dispositivo em ambientes sem interface.",
-      "deviceNotConfigured": "A autenticação por dispositivo não está configurada para este provedor",
       "deviceInitFailed": "Falha ao iniciar o fluxo do dispositivo",
       "stillWaiting": "Ainda aguardando aprovação — tente novamente em instantes.",
       "pollFailed": "Falha na verificação"
@@ -1538,21 +1537,16 @@
       "duplicateCode": "Duplicate Code",
       "locations": "{count} locations",
       "linesSaveable": "{count} lines saveable",
-      "moreLocations": "+{count} more locations",
-      "showingOfDuplicates": "Showing {shown} of {total} duplicate patterns",
       "regexOpportunities": "Regex Opportunities",
       "current": "Current",
       "suggested": "Suggested",
-      "showingOfOpportunities": "Showing {shown} of {total} opportunities",
       "complexityHotspots": "Complexity Hotspots",
       "location": "Location",
       "cc": "CC",
       "cognitive": "Cognitive",
       "mi": "MI",
       "nesting": "Nesting",
-      "showingOfHotspots": "Showing {shown} of {total} hotspots",
       "refactoringSuggestions": "Refactoring Suggestions",
-      "showingOfSuggestions": "Showing {shown} of {total} suggestions",
       "patternsInChromaDB": "{count} patterns in ChromaDB",
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
@@ -2226,14 +2220,12 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total} {type}",
       "emptyMessage": "No code smells detected"
     },
     "declarations": {
       "title": "Declarations",
       "total": "Total",
       "exported": "Exported",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No declarations found",
       "types": {
         "function": "Function",
@@ -2256,7 +2248,6 @@
       "totalLines": "Total Lines",
       "similar": "similar",
       "lines": "lines",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No duplicate code detected",
       "similarityGroups": {
         "high": "High Similarity",
@@ -2277,7 +2268,6 @@
       "variable": "Variável",
       "value": "Valor",
       "suggestedEnvVar": "Variável de ambiente sugerida",
-      "showingOf": "Mostrando {shown} de {total}",
       "emptyMessage": "Nenhum valor codificado detectado",
       "severityGroups": {
         "high": "Gravidade alta",
@@ -2292,7 +2282,6 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No problems detected",
       "exportMarkdown": "Export Markdown",
       "exportJson": "Export JSON"
@@ -2517,8 +2506,6 @@
         "docs": "Documentation"
       },
       "justNow": "Just now",
-      "minutesAgo": "{count}m ago",
-      "hoursAgo": "{count}h ago",
       "installSuccess": "Pre-commit hooks installed successfully",
       "installFailed": "Failed to install hooks",
       "uninstallSuccess": "Pre-commit hooks uninstalled",
@@ -3206,6 +3193,7 @@
       "reasonUnknown": "motivo não informado"
     },
     "connectors": {
+      "syncNotStarted": "The sync didn't start. This connector may already be syncing; try again when it finishes.",
       "title": "Conectores de fontes",
       "addConnector": "Adicionar conector",
       "loadingConnectors": "Carregando conectores...",
@@ -3837,10 +3825,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4249,6 +4238,9 @@
       "errorEnterBoth": "Introduza uma entidade de origem e uma de destino.",
       "notInGraph": "Estas entidades ainda não estão no grafo de relações.",
       "notInGraphHint": "Existem, mas não têm ligações no grafo, pelo que não é possível traçar qualquer ligação. Execute novamente a extração de entidades."
+    },
+    "chromaExplorer": {
+      "subtitle": "Navegar e pesquisar coleções de vetores"
     }
   },
   "workflow": {
@@ -4259,6 +4251,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "s",
+      "durationMinutes": "min",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "Completed",
@@ -4374,7 +4368,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "A abrir a automação da sua empresa…",
-      "companyRequired": "Selecione uma empresa para abrir a automação."
+      "companyRequired": "Selecione uma empresa para abrir a automação.",
+      "planBeforeBuilding": "Planejar antes de criar"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -4682,7 +4677,9 @@
       "channelSlack": "Slack",
       "emailHint": "Comma-separated email addresses",
       "channelWebhook": "Webhook",
-      "sectionDesc": "Configure per-workflow notification routing"
+      "sectionDesc": "Configure per-workflow notification routing",
+      "invalidEmail": "Endereço de e-mail inválido: {emails}",
+      "invalidUrl": "Formato de URL inválido"
     },
     "liveDashboard": {
       "activeExecutions": "Active Executions",
@@ -5017,7 +5014,8 @@
       "emergencyKillFailed": "❌ A parada de emergência falhou: {message}",
       "interrupted": "^C (Processo interrompido pelo usuário)",
       "error": "Erro: {error}"
-    }
+    },
+    "urlCopied": "URL do terminal copiada para a área de transferência!"
   },
   "llm": {
     "unavailable": "Indisponível",
@@ -5787,18 +5785,6 @@
       "postExecutionFailed": "O comando foi executado, mas uma etapa posterior falhou. A saída é exibida; algumas atualizações podem estar faltando.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "dataTable": {
-      "sortBy": "Sort by {column}",
-      "actions": "Actions",
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "pageOf": "Page {current} of {total}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
-    },
     "hostSelection": {
       "title": "Select Host",
       "defaultPurpose": "Select a host for this operation",
@@ -5897,6 +5883,7 @@
       "dismiss": "Dismiss"
     },
     "themeToggle": {
+      "accentPurpleDescription": "Violeta — Criativo e elegante",
       "system": "Sistema",
       "highContrast": "Alto contraste",
       "monochrome": "Monocromático",
@@ -5945,10 +5932,6 @@
       "actions": "Ações",
       "noDataAvailable": "Sem dados disponíveis",
       "selectRow": "Selecionar linha {row}"
-    },
-    "panel": {
-      "collapse": "Recolher painel",
-      "expand": "Expandir painel"
     }
   },
   "views": {
@@ -6164,8 +6147,6 @@
       "createNewDashboard": "Create new dashboard",
       "availableWidgets": "Available Widgets",
       "configure": "Configure",
-      "expand": "Expand",
-      "shrink": "Shrink",
       "remove": "Remove",
       "noWidgets": "No Widgets Added",
       "noWidgetsHint": "Click \"Edit Layout\" to add widgets to your dashboard",
@@ -6211,48 +6192,11 @@
       "subtitle": "Code search, generation, and productivity tools",
       "actionsToday": "Actions Today",
       "error": "Error",
-      "quickSearch": "Quick Search",
-      "snippetsTab": "Snippets ({count})",
-      "templatesTab": "Templates ({count})",
-      "quickActions": "Quick Actions",
-      "quickCodeSearch": "Quick Code Search",
-      "searchPlaceholder": "Search for files, code, or symbols...",
-      "allTypes": "All Types",
-      "files": "Files",
-      "code": "Code",
-      "symbols": "Symbols",
-      "search": "Search",
-      "results": "Results ({count})",
-      "line": "Line {num}",
-      "score": "Score: {value}",
-      "noResults": "No results found",
-      "generateCodeSnippet": "Generate Code Snippet",
-      "language": "Language",
-      "description": "Description",
-      "snippetPlaceholder": "Describe what you want the code to do...",
-      "generateSnippet": "Generate Snippet",
       "copy": "Copy",
-      "created": "Created: {date}",
-      "noSnippets": "No snippets yet. Generate your first one above!",
       "allCategories": "All Categories",
       "refresh": "Refresh",
       "variables": "Variables",
-      "noTemplates": "No templates available",
-      "quickCodeActions": "Quick Code Actions",
-      "action": "Action",
-      "suggestRefactorings": "Suggest Refactorings",
-      "optimizeCode": "Optimize Code",
-      "formatCode": "Format Code",
-      "fixLinting": "Fix Linting Issues",
-      "generateTests": "Generate Tests",
-      "codePlaceholder": "Paste your code here...",
-      "processing": "Processing...",
-      "runAction": "Run Action",
-      "refactorSuggestions": "Refactor Suggestions ({count})",
-      "impact": "{level} impact",
-      "before": "Before",
-      "after": "After",
-      "generatedTests": "Generated Tests ({count})"
+      "noTemplates": "No templates available"
     },
     "plugins": {
       "title": "Plugin Manager",
@@ -6570,7 +6514,6 @@
       "sessionLabel": "Sessão {id}",
       "invitedAt": "Convidado {time}",
       "justNow": "agora mesmo",
-      "minutesAgo": "há {count} min",
       "accept": "Aceitar",
       "decline": "Recusar",
       "respondError": "Não foi possível processar esta resposta. Tente novamente.",
@@ -6660,9 +6603,6 @@
       "title": "Registo de auditoria de segredos",
       "allActions": "Todas as ações",
       "access": "Acesso",
-      "inject": "Injetar",
-      "copy": "Copiar",
-      "reveal": "Revelar",
       "allUsers": "Todos os utilizadores",
       "by": "por",
       "details": "Detalhes",
@@ -6673,8 +6613,10 @@
       "hoursAgo": "há {hours} h",
       "create": "Create",
       "delete": "Delete",
-      "read": "Read",
-      "update": "Update"
+      "update": "Update",
+      "list": "Listar",
+      "transfer": "Transferir",
+      "bulkDelete": "Exclusão em massa"
     },
     "vault": {
       "title": "Cofre de segredos",
@@ -6880,12 +6822,6 @@
       "loadingValue": "Loading...",
       "timeJustNow": "just now",
       "timeInAMoment": "in a moment",
-      "timeMinutesAgo": "{count}m ago",
-      "timeInMinutes": "in {count}m",
-      "timeHoursAgo": "{count}h ago",
-      "timeInHours": "in {count}h",
-      "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d",
       "categories": {
         "api_key": "Chaves API",
         "token": "Tokens de acesso",
@@ -7408,7 +7344,16 @@
       "initComplete": "Inicialização concluída"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Regras de alerta",
+      "overview": "Visão geral",
+      "slos": "SLOs",
+      "traces": "Rastreamentos"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -7423,7 +7368,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "Verifique os limites de tamanho de arquivo e os requisitos de formato"
     },
     "header": {
       "title": "File Browser",
@@ -7612,13 +7558,6 @@
       "actionEnforced": "Full enforcement mode was enabled",
       "system": "System",
       "justNow": "Just now",
-      "minuteAgo": "1 minute ago",
-      "minutesAgo": "{count} minute(s) ago",
-      "hourAgo": "1 hour ago",
-      "hoursAgo": "{count} hour(s) ago",
-      "dayAgo": "1 day ago",
-      "daysAgo": "{count} day(s) ago",
-      "longAgo": "Long ago",
       "modeLegend": "Mode Legend:",
       "legendDisabled": "Disabled",
       "legendLogOnly": "Log Only",
@@ -7707,7 +7646,6 @@
       "vmName": "Nome da VM",
       "vmSource": "Origem da VM",
       "ipAddress": "Endereço IP",
-      "errorMessage": "Mensagem de erro",
       "details": "Detalhes",
       "loading": "A carregar registos de auditoria...",
       "viewDetails": "Ver detalhes"
@@ -8131,6 +8069,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Falha ao ativar a janela de manutenção",
+      "completeWindowFailed": "Falha ao concluir a janela de manutenção",
+      "deleteWindowFailed": "Falha ao excluir a janela de manutenção",
+      "drainNodeFailed": "Falha ao drenar o nó. Tente novamente.",
+      "resumeNodeFailed": "Falha ao retomar o nó. Tente novamente.",
+      "saveKeysFailed": "Falha ao salvar as chaves de API. Consulte o console para mais detalhes.",
+      "addNodeFailed": "Falha ao adicionar o nó"
     }
   },
   "mobile": {
@@ -8642,7 +8589,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "As informações de ferramentas estão indisponíveis neste momento — esta lista pode estar incompleta.",
       "canvasNoToolsDefined": "Nenhuma ferramenta está anexada a nenhuma função nesta empresa.",
-      "deepLinkNodeNotFound": "Este link aponta para um nó que não foi encontrado aqui. Ele pode ter sido removido ou você pode não ter acesso a ele."
+      "deepLinkNodeNotFound": "Este link aponta para um nó que não foi encontrado aqui. Ele pode ter sido removido ou você pode não ter acesso a ele.",
+      "viewPlanner": "Planejador"
     },
     "executorRollup": {
       "title": "Resumo de executores",
@@ -8987,6 +8935,170 @@
         "unavailable": "Não foi possível contactar o registo; nada foi enviado.",
         "error": "Ocorreu um erro e não foi possível confirmar a entrega. Atualize para ver se a reserva ainda está ativa."
       }
+    },
+    "workflowPlanner": {
+      "title": "Planejador de fluxos de trabalho",
+      "plans": "Planos",
+      "newPlan": "Novo plano",
+      "open": "Abrir",
+      "back": "Voltar aos planos",
+      "retry": "Tentar novamente",
+      "loading": "Carregando planos...",
+      "loadFailed": "Não foi possível carregar o plano.",
+      "stale": {
+        "plan": "Não foi possível atualizar este plano, por isso o que é exibido pode estar desatualizado. {reason}",
+        "gate": "Não foi possível atualizar as verificações de prontidão, por isso a lista do que falta pode estar desatualizada. {reason}",
+        "both": "Não foi possível atualizar nem o plano nem as suas verificações de prontidão, por isso o que é exibido pode estar desatualizado. {reason}"
+      },
+      "rereadRetry": "Recarregar o plano",
+      "saveFailed": "Não foi possível salvar a alteração.",
+      "createFailed": "Não foi possível criar o plano.",
+      "emptyTitle": "Ainda não há planos",
+      "emptyHint": "Comece um plano para mapear um processo, medi-lo e escolher o número que quer melhorar.",
+      "unavailableTitle": "O planejador de fluxos de trabalho não está disponível",
+      "unavailableHint": "Este recurso está desativado no seu espaço de trabalho, então ainda não há nada para mostrar.",
+      "statusFlow": "Andamento do plano",
+      "status": {
+        "draft": "Rascunho",
+        "measured": "Medido",
+        "labeled": "Rotulado",
+        "approved": "Aprovado",
+        "converted": "Convertido"
+      },
+      "col": {
+        "name": "Plano",
+        "revision": "Revisão",
+        "status": "Status",
+        "actions": "Ações"
+      },
+      "form": {
+        "name": "Nome do plano",
+        "startsAt": "Onde o processo começa",
+        "endsAt": "Onde o processo termina",
+        "create": "Criar plano"
+      },
+      "steps": {
+        "map": "Mapear",
+        "measure": "Medir",
+        "oneNumber": "Escolher um número",
+        "label": "Detalhar e rotular",
+        "convert": "Criar fluxo de trabalho"
+      },
+      "map": {
+        "empty": "Nada mapeado ainda",
+        "emptyHint": "Adicione primeiro quem participa (raias) e depois os passos de cada um.",
+        "handoffs": "{count} repasses",
+        "waitNote": "O que espera neste repasse?",
+        "laneName": "Nome da raia",
+        "addLane": "Adicionar raia",
+        "stepLabel": "Passo",
+        "stepLane": "Raia do passo",
+        "addStep": "Adicionar passo"
+      },
+      "source": {
+        "self_reported": "Você disse",
+        "email": "Conferido com o e-mail",
+        "calendar": "Conferido com a agenda"
+      },
+      "measure": {
+        "hint": "Com que frequência cada passo acontece e quanto tempo leva?",
+        "needSteps": "Mapeie primeiro pelo menos um passo.",
+        "perWeek": "Por semana",
+        "duration": "Duração",
+        "unit": "Unidade de duração",
+        "save": "Salvar",
+        "clear": "Limpar"
+      },
+      "unit": {
+        "minutes": "minutos",
+        "hours": "horas",
+        "days": "dias"
+      },
+      "oneNumber": {
+        "hint": "Os passos que você mediu, das esperas mais longas para as menores. Você decide qual importa.",
+        "needMetrics": "Meça primeiro pelo menos um passo.",
+        "rate": "{freq} por semana, {dur} {unit}",
+        "title": "Dê um nome a este número",
+        "returnKind": "O que você recupera",
+        "target": "Meta",
+        "save": "Salvar como meu número"
+      },
+      "returnKind": {
+        "hours_back": "Horas de volta",
+        "more_yeses": "Mais sins",
+        "money_sooner": "Dinheiro mais cedo"
+      },
+      "label": {
+        "needNumber": "Escolha primeiro o seu número; o passo dele é o que se detalha aqui.",
+        "subStep": "Subpasso",
+        "addSubStep": "Adicionar subpasso",
+        "unlabel": "Remover rótulo",
+        "edgeCase": "Caso extremo: {text}",
+        "byHandNote": "Isto fica com pessoas. A IA nunca age sobre isso.",
+        "acknowledge": "Li a lista Manual",
+        "acknowledged": "Lista Manual lida"
+      },
+      "labels": {
+        "ai": "IA",
+        "automation": "Automação",
+        "by_hand": "Manual"
+      },
+      "gate": {
+        "missing": "Ainda falta",
+        "title": "Pronto para criar?",
+        "unknown": "Outra verificação",
+        "state": {
+          "met": "Cumprido",
+          "open": "Em aberto",
+          "pending": "Ainda não verificado"
+        },
+        "name": {
+          "G1": "O mapa é válido",
+          "G2": "Cada passo está medido",
+          "G3": "O passo escolhido está detalhado",
+          "G4": "Cada subpasso e caso extremo está etiquetado",
+          "G5": "Lista «À mão» lida e passos de IA cobertos por aprovações",
+          "G6": "A pré-visualização não tem erros",
+          "G7": "Aprovou este plano",
+          "converted": "Os fluxos de trabalho estão criados"
+        }
+      },
+      "readOnly": "Este plano está {status}, por isso os passos 1 a 4 são somente leitura.",
+      "firstProcess": {
+        "title": "A sua empresa está pronta",
+        "body": "Planeie o seu primeiro processo: mapeie-o, meça-o e escolha o número a melhorar.",
+        "plan": "Planear o meu primeiro processo",
+        "later": "Mais tarde"
+      },
+      "convert": {
+        "notReady": "Conclua primeiro os passos 1 a 4. As verificações acima mostram o que ainda falta.",
+        "previewTitle": "O que será criado (pré-visualização, ainda não existe nada)",
+        "createdTitle": "O que foi criado",
+        "counts": "Fluxos de trabalho: {workflows}. Processos: {processes}.",
+        "ownerLane": "Responsável: {lane}",
+        "errors": "Erros a corrigir antes de aprovar",
+        "warnings": "Avisos",
+        "documented": "Mantido como texto de manual, não construído:",
+        "failedProposals": "Não foi possível submeter {count} propostas de linha de IA. Tente novamente para as submeter.",
+        "turnOnNotAvailable": "Ativar os fluxos de trabalho ainda não está disponível: nada os executa até lá.",
+        "openWorkflows": "Abrir fluxos de trabalho",
+        "unavailable": "Esta ação não está disponível: o Planeador de fluxos de trabalho está desativado no seu espaço de trabalho, ou o plano já não existe.",
+        "blocked": "Ainda não está pronto. As verificações acima mostram o que falta.",
+        "approvedBy": "Aprovado por {by} em {at}.",
+        "preview": "Pré-visualizar o que será criado",
+        "previewAgain": "Atualizar a pré-visualização",
+        "approve": "Aprovar",
+        "create": "Criar fluxos de trabalho",
+        "retry": "Repetir propostas de linha de IA",
+        "approveTitle": "Aprovar este plano?",
+        "approveMessage": "Aprova a pré-visualização apresentada. Qualquer edição posterior ao plano anula esta aprovação.",
+        "previewFailed": "Não foi possível gerar a pré-visualização.",
+        "approveFailed": "Não foi possível aprovar o plano.",
+        "approveBlocked": "A aprovação está bloqueada até que o seguinte seja resolvido:",
+        "approveDetail": "Detalhe do servidor: {detail}",
+        "convertFailed": "Não foi possível criar os fluxos de trabalho.",
+        "retryFailed": "Não foi possível repetir as propostas de linha de IA."
+      }
     }
   },
   "code": {
@@ -8999,13 +9111,10 @@
   "devices": {
     "addDevice": "Add device",
     "confirmDelete": "Confirm delete",
-    "daysAgo": "Days ago",
     "error": "Error",
-    "hoursAgo": "Hours ago",
     "justNow": "Just now",
     "lastSeen": "Last seen",
     "loading": "Loading",
-    "minutesAgo": "Minutes ago",
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
@@ -9392,6 +9501,11 @@
       "subtitle": "Vocabulário detalhado de permissões e pacotes de escopo para chaves de API",
       "comingSoonTitle": "Chegará em uma versão posterior",
       "comingSoonMessage": "Escopos de permissão detalhados — um vocabulário de permissões, pacotes de escopo e a aplicação de escopos em chaves de API — não estão disponíveis nesta versão. Esta página permitirá defini-los e atribuí-los assim que forem lançados."
+    },
+    "layout": {
+      "title": "Administração",
+      "subtitle": "Ferramentas de back-office para administradores",
+      "ariaLabel": "Seção de administração"
     }
   },
   "components": {

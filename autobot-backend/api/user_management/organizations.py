@@ -29,6 +29,7 @@ from api.user_management.dependencies import (
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
+from autobot_shared.user_management.revocation_outcome import commit_or_503
 from user_management.services import OrganizationService
 from user_management.services.organization_service import (
     DuplicateOrganizationError,
@@ -98,7 +99,6 @@ async def create_organization(
             slug=org_data.slug,
             description=org_data.description,
             settings=org_data.settings,
-            subscription_tier=org_data.subscription_tier,
             max_users=org_data.max_users,
         )
 
@@ -180,7 +180,6 @@ async def update_organization(
             name=org_data.name,
             description=org_data.description,
             settings=org_data.settings,
-            subscription_tier=org_data.subscription_tier,
             max_users=org_data.max_users,
         )
 
@@ -211,6 +210,7 @@ async def delete_organization(
     """Delete organization."""
     try:
         await org_service.delete_organization(org_id, hard_delete=hard_delete)
+        await commit_or_503(org_service.session)  # a failed revocation is answered, not only logged (#20443)
         return OrganizationDeletedResponse(
             message=f"Organization {org_id} deleted successfully",
         )
@@ -244,6 +244,7 @@ async def deactivate_organization(
     """Deactivate organization."""
     try:
         await org_service.deactivate_organization(org_id)
+        await commit_or_503(org_service.session)  # a failed revocation is answered, not only logged (#20443)
         org = await org_service.get_organization(org_id)
         return _org_to_response(org)
 
@@ -295,7 +296,6 @@ def _org_to_response(org) -> OrganizationResponse:
         slug=org.slug,
         description=org.description,
         settings=org.settings or {},
-        subscription_tier=org.subscription_tier or "free",
         max_users=org.max_users if org.max_users is not None else -1,
         is_active=org.is_active,
         created_at=org.created_at.isoformat() if org.created_at else "",

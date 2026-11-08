@@ -24,16 +24,6 @@ BaselineKey = Tuple[str, str, str]
 #: time (see the module docstring).
 SPECIFIC_REASONS: dict[BaselineKey, str] = {
     (
-        "docker/.env.docker",
-        "Secret Keyword",
-        "1ba53c9c3dd2dff0ba71a8b942318082315e6f04",  # pragma: allowlist secret
-    ): (
-        "AUTOBOT_DB_PASSWORD default literal 'autobot' -- the same #16299 "
-        "named default as compose's GRAFANA_ADMIN_PASSWORD fallback. Tracked for "
-        "generate-on-first-run; existing installs deliberately keep their "
-        "current password per the owner's 2026-09-17 ruling."
-    ),
-    (
         "autobot-slm-backend/ansible/roles/backend/defaults/main.yml",
         "Secret Keyword",
         "a5c01e694764bcf09315443c6476e283e6f77906",  # pragma: allowlist secret
@@ -548,6 +538,15 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
         "the audited verdict carries over unchanged because the value is the same "
         "display heading either way."
     ),
+    (
+        "autobot-slm-frontend/src/locales/en.json",
+        "Secret Keyword",
+        "1e3732aec487906e739333e586f2b6ff9e9f1a96",  # pragma: allowlist secret
+    ): (
+        "the i18n display label `Secrets` (settings.nav.secrets, the SLM settings nav entry "
+        "#19217 moved out of hard-coded English), not a credential; the key `secrets` trips the "
+        "Secret Keyword denylist. Plain SHA1 of the literal label reproduces this hash."
+    ),
 }
 
 
@@ -574,3 +573,18 @@ SPECIFIC_REASONS.update(
         for loc, digest, kind, label in _SECRETS_CATEGORY_LABELS
     }
 )
+SPECIFIC_REASONS[
+    (
+        "autobot-slm-frontend/src/locales/en.json",
+        "Secret Keyword",
+        "2f4e787013273291c4660e4215db88b21423f8df",  # pragma: allowlist secret
+    )
+] = (
+    "the i18n display label `Reset Password for {username}` (the SLM user dialog title #14777 moved "
+    "into i18n), not a credential; `Password` in the key trips the Secret Keyword denylist. Plain SHA1 "
+    "of the literal label reproduces this hash."
+)
+
+from repo_tests.secrets_baseline_reason_entries_slm_labels import SLM_LABEL_REASONS  # noqa: E402  (#18863)
+
+SPECIFIC_REASONS.update(SLM_LABEL_REASONS)

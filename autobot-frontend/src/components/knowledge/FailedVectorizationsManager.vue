@@ -105,7 +105,7 @@ import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { formatDateTime } from '@/utils/formatHelpers'
 import { useFailedVectorizationJobs } from '@/composables/knowledge/useFailedVectorizationJobs'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 
 const { t } = useI18n()
 const { confirm } = useConfirmDialog()
@@ -189,11 +189,13 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.loading-state i,
-.error-state i {
-  font-size: var(--text-4xl);
+.loading-state .icon,
+.error-state .icon {
+  width: var(--text-4xl);
+  height: var(--text-4xl);
   margin-bottom: var(--spacing-4);
   display: block;
+  margin-inline: auto;
 }
 
 .error-state {
@@ -258,7 +260,7 @@ onMounted(() => {
   color: var(--color-error);
 }
 
-.job-error i {
+.job-error .icon {
   flex-shrink: 0;
   margin-top: var(--spacing-px);
 }

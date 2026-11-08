@@ -13,56 +13,18 @@ install on top. Everything — your data, memory, agents, and knowledge graph �
 New here? Start with [The AutoBot Platform Model](architecture/PLATFORM_MODEL.md) for the
 core → SLM → modules picture, then follow the quick start below.
 
-## Quick Start (~5 minutes)
+## Quick Start
 
-### Prerequisites
+The canonical getting-started guide is [INSTALL.md](../INSTALL.md): the
+[requirements table](../INSTALL.md#requirements), the
+[one-line installer](../INSTALL.md#quick-start), [Docker deployment](../INSTALL.md#docker-deployment)
+and the [Setup Wizard](../INSTALL.md#setup-wizard). The README summarizes the same two paths,
+including LLM setup and first login: [README Quick Start](../README.md#quick-start).
 
-- Linux or WSL2 (Ubuntu 22.04 LTS recommended)
-- 16 GB+ RAM recommended
-- **Installer path:** `install.sh` installs Python 3.14, Node.js 20, and all dependencies for you
-- **Docker path:** Docker and Docker Compose
+- **Dedicated Ubuntu host:** the one-line installer.
+- **Anything else:** Docker.
 
-### Install — choose one
-
-**Option A — One-line installer (recommended, full platform).** A single Virtualmin-style
-installer that deploys the Service Lifecycle Manager (SLM) and every dependency:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | bash
-# or, after cloning:
-sudo ./install.sh              # add --unattended for a non-interactive install
-```
-
-**Option B — Docker Compose (quick eval / development).**
-
-```bash
-git clone https://github.com/mrveiss/AutoBot-AI.git
-cd AutoBot-AI
-cp .env.example .env
-docker compose up -d
-```
-
-For local backend + frontend development you can also run `./run_agent.sh`. For the
-two-phase deployment model, bare-metal (systemd) installs, and full system requirements,
-see [INSTALL.md](../INSTALL.md) and the [Installation Guide](user-guide/01-installation.md).
-
-### Continue setup in the SLM
-
-Setup finishes in the **Service Lifecycle Manager (SLM)** — AutoBot's management layer —
-not at a static dashboard:
-
-- **Installer (Option A):** the installer's last phase prints your **SLM URL**
-  (`https://<server-ip>/slm/`) and the **admin credentials**. Open that URL and log in
-  (self-signed certificate — expect a browser warning). The **Setup Wizard** launches
-  automatically and walks you through: add fleet nodes → test connections → enroll agents
-  → assign roles → provision the fleet → verify health → Fleet Overview.
-- **Docker (Option B):** the user UI is at **http://localhost**; the SLM admin is at
-  **http://localhost/slm**.
-
-You can re-run the wizard later from **Settings > General > Re-run Setup Wizard**. For the
-full two-phase flow and the setup-wizard steps, see [INSTALL.md](../INSTALL.md); for a
-guided first run see the [Quick Start](user-guide/02-quickstart.md) and
-[Configuration Guide](user-guide/03-configuration.md).
+For local backend and frontend development you can also run `./run_agent.sh`.
 
 ## What You Can Do
 
@@ -76,8 +38,8 @@ AutoBot is agentic — it talks, sees, and acts, all on hardware you control:
 - **Visual workflow builder** — compose multi-step agent workflows on a drag-and-drop canvas
 - **Knowledge graph** — institutional memory built from every conversation, document, and node
 - **Multi-user + RBAC** — role-based access control for teams
-- **Modules** — install AutoBot LLC (agents that work together as a company), Transcriber,
-  and Codebase Analytics *(work in progress)* on the core
+- **Modules** — Company OS (agents that work together as a virtual company), Transcriber,
+  and Codebase Analytics on the core
 - **Service Lifecycle Manager (SLM)** — deploys, operates, and scales the underlying
   infrastructure for you
 
@@ -95,7 +57,7 @@ The full, code-verified feature registry lives in the
 
 ### Install and operate
 
-- [Installation Guide](user-guide/01-installation.md) — bare-metal and Docker
+- [INSTALL.md](../INSTALL.md) — the canonical install guide
 - [Configuration Guide](user-guide/03-configuration.md) — environment and settings
 - [Troubleshooting Guide](user-guide/04-troubleshooting.md) — common issues
 - [Browser + VNC Quick Start](QUICK_START_BROWSER_VNC.md) — desktop/browser worker setup

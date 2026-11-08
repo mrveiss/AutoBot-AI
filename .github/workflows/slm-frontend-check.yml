@@ -15,7 +15,7 @@ name: SLM Frontend Check
 
 on:
   push:
-    branches: [release, main, develop]
+    branches: [release, main]
     paths:
       - 'autobot-slm-frontend/**'
       - '.github/workflows/slm-frontend-check.yml'
@@ -34,7 +34,7 @@ on:
     # draft == false, and marking a PR ready fires ONLY this event. Without
     # it a required context stays `skipped` and the PR can never merge.
     types: [opened, synchronize, reopened, ready_for_review]
-    branches: [release, main, develop]
+    branches: [release, main]
     # #13388: SAFE — "SLM Frontend Check" is NOT one of the ten required contexts
     # on main, so this workflow may skip its run entirely. (The header note
     # above about a path-filtered required check deadlocking a pull request is why
@@ -60,9 +60,6 @@ concurrency:
 
 permissions:
   contents: read
-
-env:
-  NODE_VERSION: '22'
 
 jobs:
   # Always runs so the check reports a conclusion even when nothing matched.
@@ -96,6 +93,11 @@ jobs:
         working-directory: autobot-slm-frontend
     steps:
       - uses: actions/checkout@v7
+        with:
+          # fetch-depth: 2, not the default of 1: the two repo_tests guards below declare their reach
+          # through repo_tests/_reach, which computes the floor from the ratchet base at HEAD^1 (#19676)
+          # and refuses to run without it (#19283).
+          fetch-depth: 2
 
       - name: Self-skip when no SLM frontend changes
         if: needs.changes.outputs.slm_frontend != 'true'
@@ -105,7 +107,7 @@ jobs:
         if: needs.changes.outputs.slm_frontend == 'true'
         uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: autobot-slm-frontend/package-lock.json
 
@@ -139,11 +141,6 @@ jobs:
         if: needs.changes.outputs.slm_frontend == 'true'
         run: npm run check:locales
 
-      - name: Locales match the lifting rule
-        if: needs.changes.outputs.slm_frontend == 'true'
-        working-directory: .
-        run: python3 scripts/lift_locale_translations.py --app autobot-slm-frontend/src/locales --check
-
       # The two repo_tests guards run HERE as well as in the python suite, and
       # the reason is #15900: they declare `*.vue` / `*.json` globs, which the
       # python path filter does not cover. That gap is recorded deliberately in
@@ -162,6 +159,11 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version-file: '.python-version'
+
+      - name: Locales match the lifting rule
+        if: needs.changes.outputs.slm_frontend == 'true'
+        working-directory: .
+        run: python3 scripts/lift_locale_translations.py --app autobot-slm-frontend/src/locales --check
 
       - name: Install pytest
         if: needs.changes.outputs.slm_frontend == 'true'

@@ -13,7 +13,7 @@ export const server = setupServer(...handlers)
 
 beforeAll(() => {
   // Start the server before running integration tests
-  server.listen({ onUnhandledRequest: 'warn' })
+  server.listen({ onUnhandledFrame: 'warn' })
 })
 
 afterAll(() => {

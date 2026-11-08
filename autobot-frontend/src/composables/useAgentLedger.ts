@@ -19,6 +19,12 @@ import {
   sendLedgerAsk,
   type LedgerAskOutcome,
   type LedgerSection,
+  type ActivityRow,
+  type ClaimRow,
+  type ConflictRow,
+  type IdleSubscriberRow,
+  type PeerMessageRow,
+  type PresenceRow,
   type LedgerSectionStatus,
 } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
@@ -26,13 +32,9 @@ import { getApiBase } from '@/config/ssot-config'
 import type { components } from '@/types/generated/api'
 
 type Schemas = components['schemas']
-export type ClaimRow = Schemas['ClaimRow']
+/** The ledger row shapes are the kit's, one declaration for both consoles (#19910). */
+export type { ActivityRow, ClaimRow, ConflictRow, IdleSubscriberRow, PeerMessageRow, PresenceRow }
 export type WaiterRow = Schemas['WaiterRow']
-export type PresenceRow = Schemas['PresenceRow']
-export type ActivityRow = Schemas['ActivityRow']
-export type ConflictRow = Schemas['ConflictRow']
-export type PeerMessageRow = Schemas['PeerMessageRow']
-export type IdleSubscriberRow = Schemas['IdleSubscriberRow']
 
 /** Section states and answers are read by the kit, shared with the SLM ledger view. */
 export type { LedgerSection }

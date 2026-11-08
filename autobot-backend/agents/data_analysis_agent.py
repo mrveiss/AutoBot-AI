@@ -12,15 +12,9 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.ssot_config import (
-    get_agent_endpoint_explicit,
-    get_agent_model_explicit,
-    get_agent_provider_explicit,
-)
 from constants.threshold_constants import LLMDefaults
-from services.llm_service import get_llm_service
 
-from .base_agent import AgentRequest, DeploymentMode
+from .base_agent import AgentRequest
 from .base_modality_agent import BaseModalityAgent
 from .standardized_agent import ActionHandler
 
@@ -39,37 +33,13 @@ class DataAnalysisAgent(BaseModalityAgent):
     QUERY_MAX_TOKENS = LLMDefaults.SYNTHESIS_MAX_TOKENS
     QUERY_ERROR_MESSAGE = "Error analyzing data. Please try rephrasing your request."
     _LOGGER = logger
-
-    def __init__(
-        self,
-        agent_type: str | None = None,
-        deployment_mode: DeploymentMode = DeploymentMode.LOCAL,
-    ):
-        """Initialize the Data Analysis Agent with LLM configuration.
-
-        Issue #6660: Accepts the parent's full constructor signature so factory
-        callers (`cls(agent_type, deployment_mode)`) keep working. Defaults
-        match the historical no-arg call site so existing instantiations are
-        unaffected.
-        """
-        super().__init__(agent_type or self.AGENT_ID, deployment_mode)
-        self.llm_interface = get_llm_service()
-        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
-        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
-        self.model_name = get_agent_model_explicit(self.AGENT_ID)
-        self.capabilities = [
-            "data_analysis",
-            "statistical_analysis",
-            "pattern_detection",
-            "trend_identification",
-            "data_summarization",
-        ]
-        self._register_action_handlers()
-        logger.info(
-            "Data Analysis Agent initialized: provider=%s, model=%s",
-            self.llm_provider,
-            self.model_name,
-        )
+    CAPABILITIES = (
+        "data_analysis",
+        "statistical_analysis",
+        "pattern_detection",
+        "trend_identification",
+        "data_summarization",
+    )
 
     def _register_action_handlers(self):
         """Register action handlers for data analysis operations."""

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from utils.file_categorization import SKIP_DIRS
 
 from .types import CodeLocation, ComplexityHotspot, PatternSeverity
 
@@ -254,17 +255,8 @@ class ComplexityAnalyzer:
     NESTING_THRESHOLD = 4  # Deep nesting is problematic
     LINE_THRESHOLD = 50  # Long functions need review
 
-    EXCLUDE_DIRS = frozenset(
-        {
-            ".venv",
-            "venv",
-            "node_modules",
-            "__pycache__",
-            ".git",
-            "archives",
-            ".mypy_cache",
-        }
-    )
+    # Canonical skip dirs plus extras: archived copies and the type checker's cache.
+    EXCLUDE_DIRS = frozenset(SKIP_DIRS | {"archives", ".mypy_cache"})
 
     def __init__(
         self,
@@ -558,7 +550,7 @@ class ComplexityAnalyzer:
         dir_path = Path(directory)
 
         for py_file in dir_path.rglob("*.py"):
-            if any(exc in py_file.parts for exc in self.exclude_dirs):
+            if any(exc in py_file.relative_to(dir_path).parts for exc in self.exclude_dirs):
                 continue
 
             module = self.analyze_file(str(py_file))
