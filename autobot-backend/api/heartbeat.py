@@ -38,6 +38,7 @@ from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_principal_id
 from autobot_shared.time_utils import now_utc
 from models.heartbeat import (
     AgentRuntimeState,
@@ -47,6 +48,7 @@ from models.heartbeat import (
     HeartbeatStatus,
     WakeupTrigger,
 )
+from services.audit.audit import AuditAction, audit_record
 from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
 
 logger = get_logger(__name__)
@@ -262,6 +264,25 @@ async def trigger_manual(
     return {"agent_id": agent_id, "status": "triggered"}
 
 
+def _actor_id(user: Any) -> str:
+    """The verified caller's principal id, from the auth dependency only (#21136)."""
+    claims = user if isinstance(user, dict) else vars(user)
+    return resolve_principal_id(claims) or str(claims.get("username") or "unknown")
+
+
+def _audit_control(user: Any, action: AuditAction, agent_id: str, reason: str | None = None) -> str:
+    """Record who paused, resumed or terminated an agent; returns the actor id (#21136)."""
+    actor = _actor_id(user)
+    audit_record(
+        user_id=actor,
+        action=action,
+        resource_type="agent_heartbeat",
+        resource_id=agent_id,
+        metadata={"reason": reason} if reason else None,
+    )
+    return actor
+
+
 @router.post("/{agent_id}/pause", response_model=HeartbeatConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -288,7 +309,8 @@ async def pause_agent(
     state.status = HeartbeatStatus.PAUSED.value
     state.paused_reason = body.reason
     state.paused_at = now_utc()
-    state.paused_by = body.paused_by or "user"
+    # The verified caller is the only actor; body.paused_by is never trusted (#21136).
+    state.paused_by = _audit_control(_user, AuditAction.AGENT_PAUSE, agent_id, body.reason)
     await session.commit()
     await session.refresh(state)
     await scheduler.disable_agent(agent_id)
@@ -364,10 +386,12 @@ async def resume_agent(
     state.paused_reason = None
     state.paused_at = None
     state.paused_by = None
+    # No resumer column on the row (would need a migration); the audit event names the caller.
+    resumer = _audit_control(_user, AuditAction.AGENT_RESUME, agent_id)
     await session.commit()
     await session.refresh(state)
     await scheduler.enable_agent(agent_id, state.heartbeat_interval_seconds)
-    logger.info("Agent %s resumed", agent_id)
+    logger.info("Agent %s resumed by %s", agent_id, resumer)
     return _state_to_response(state)
 
 
@@ -395,10 +419,7 @@ async def terminate_agent(
     state.status = HeartbeatStatus.TERMINATED.value
     state.paused_reason = body.reason
     state.paused_at = now_utc()
-    # _user is always a Dict; "id" key does not exist — use "username" (P1)
-    state.paused_by = (
-        _user.get("username", "unknown") if isinstance(_user, dict) else getattr(_user, "username", "unknown")
-    )
+    state.paused_by = _audit_control(_user, AuditAction.AGENT_TERMINATE, agent_id, body.reason)
     await session.commit()
     await session.refresh(state)
     await scheduler.disable_agent(agent_id)
