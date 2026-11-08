@@ -295,6 +295,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatLocalTime } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -741,7 +742,7 @@ const sessionInfo = computed(() => {
 
   const messageCount = session.messages.length
   const lastMessage = session.messages[session.messages.length - 1]
-  const lastMessageTime = lastMessage ? new Date(lastMessage.timestamp).toLocaleTimeString() : null
+  const lastMessageTime = lastMessage ? formatLocalTime(lastMessage.timestamp) : null
   const sessionId = session.id  // Display full UUID
 
   if (messageCount === 0) {
@@ -750,7 +751,6 @@ const sessionInfo = computed(() => {
 
   return t('chat.interface.sessionInfo', { sessionId, count: messageCount, time: lastMessageTime })
 })
-
 
 // Methods
 
