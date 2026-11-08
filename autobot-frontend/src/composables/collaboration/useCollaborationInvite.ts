@@ -5,7 +5,7 @@
  *
  * Issue #6091: Extract inline apiClient calls from InviteUserDialog into composable.
  *
- * Handles fetching users from the user-management API for the invite dialog.
+ * Handles fetching the caller's organisation members from the scoped user search API for the invite dialog.
  */
 
 import { ref } from 'vue'
@@ -23,18 +23,19 @@ export interface CollaborationUser {
   display_name?: string
 }
 
-interface UserListResponse {
+/** `GET /user-management/users/search` response: the caller's own organisation only. */
+interface UserSearchResponse {
   users: Array<{
     id: string
-    username: string
-    email: string
-    display_name?: string
-    avatar_url?: string
+    name: string
+    type: string
   }>
-  total: number
-  limit: number
-  offset: number
+  available: boolean
+  message?: string
 }
+
+/** Server-side cap on the search route's `limit`. */
+const SEARCH_LIMIT = 50
 
 export function useCollaborationInvite() {
   const users = ref<CollaborationUser[]>([])
@@ -46,17 +47,17 @@ export function useCollaborationInvite() {
     errorMessage.value = null
 
     try {
-      const response = await apiClient.get<UserListResponse>(
-        `${getApiBase()}/user-management/users?limit=100&offset=0&include_inactive=false`
+      const response = await apiClient.get<UserSearchResponse>(
+        `${getApiBase()}/user-management/users/search?q=&limit=${SEARCH_LIMIT}`
       )
 
-      if (response && response.users && Array.isArray(response.users)) {
+      if (response && response.available !== false && Array.isArray(response.users)) {
         users.value = response.users.map(user => ({
           id: user.id,
-          username: user.username,
-          email: user.email,
-          avatar: user.avatar_url || null,
-          display_name: user.display_name
+          username: user.name,
+          email: '',
+          avatar: null,
+          display_name: user.name
         }))
         logger.debug(`Loaded ${users.value.length} users from API`)
       } else {

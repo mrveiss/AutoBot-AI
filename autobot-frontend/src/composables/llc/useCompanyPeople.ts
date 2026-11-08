@@ -55,6 +55,8 @@ export function useCompanyPeople(companyId: string) {
   const humans = ref<HumanOption[]>([])
   const inactiveHumans = ref<InactiveMember[]>([])
   const isLoading = ref(false)
+  // #20542: the server's verdict on the owner/admin writes, read off the members response this load already makes.
+  const viewerCanManage = ref(false)
   // #15945: an empty list after a failed load is not an empty company; a picker must tell them apart.
   const loadFailed = ref(false)
 
@@ -67,7 +69,7 @@ export function useCompanyPeople(companyId: string) {
         api.get<{ nodes: OrgNode[] }>(`/api/llc/companies/${companyId}/org-chart`),
         api.get<
           // #14939: never null -- `list_members` resolves the whole ladder server-side.
-          { user_id: string; display_name: string; role: string; is_active?: boolean }[]
+          { user_id: string; display_name: string; role: string; is_active?: boolean; viewer_can_manage?: boolean }[]
         >(
           `/api/llc/companies/${companyId}/members`,
         ),
@@ -76,6 +78,7 @@ export function useCompanyPeople(companyId: string) {
       flattenAgents(org?.nodes ?? [], flat)
       agents.value = flat
       const rows = members ?? []
+      viewerCanManage.value = rows[0]?.viewer_can_manage === true
       // `is_active !== false` rather than a truthy test: a server that predates
       // this field omits it, and treating "absent" as inactive would empty
       // every picker during a rolling update.
@@ -94,11 +97,12 @@ export function useCompanyPeople(companyId: string) {
       agents.value = []
       humans.value = []
       inactiveHumans.value = []
+      viewerCanManage.value = false
       loadFailed.value = true
     } finally {
       isLoading.value = false
     }
   }
 
-  return { agents, humans, inactiveHumans, isLoading, loadFailed, load }
+  return { agents, humans, inactiveHumans, viewerCanManage, isLoading, loadFailed, load }
 }
