@@ -59,7 +59,6 @@ def env(name: str, default: Any = None) -> Any:
 
 
 # Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
-from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
 from autobot_shared import env_registry_knowledge  # noqa: E402,F401
@@ -67,6 +66,8 @@ from autobot_shared import env_registry_llc  # noqa: E402,F401
 from autobot_shared import env_registry_logging  # noqa: E402,F401
 from autobot_shared import env_registry_memory  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
+    env_registry_admin_files,
+    env_registry_agent_runtime,
     env_registry_agent_tools,
     env_registry_ai,
     env_registry_analytics,
@@ -437,7 +438,6 @@ register_env_var(
     )
 )
 
-# --- tls: env_registry_tls.py ------------------------------------------
 # --- network: env_registry_tls.py (#18765, to make room for a sibling import) ---
 
 # --- voice / speech-to-text -------------------------------------------------
