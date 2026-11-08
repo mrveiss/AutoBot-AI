@@ -15,7 +15,14 @@ const get = vi.fn()
 const post = vi.fn()
 
 vi.mock('@/plugins/api', () => ({
-  useApiClient: () => ({ get, post }),
+  // #21001: the viewer's role comes from the members list; answer it as an owner, off the test's `get` script.
+  useApiClient: () => ({
+    get: (url: string, ...rest: unknown[]) =>
+      String(url).endsWith('/members')
+        ? Promise.resolve([{ user_id: 'u1', display_name: 'Ada', role: 'owner', viewer_can_manage: true }])
+        : get(url, ...rest),
+    post,
+  }),
 }))
 
 vi.mock('@/utils/debugUtils', () => ({

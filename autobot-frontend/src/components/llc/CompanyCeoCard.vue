@@ -8,7 +8,8 @@
   Shown in Company settings (the mockup's CEO section). Three states the backend keeps apart are
   kept apart here: no designation, a designation whose holder is gone, and a live holder. A refusal
   shows the server's own reason. Whether the viewer may change it is the server's call (it answers
-  with a refusal); this does not guess a role locally. The holder is shown by name, the id second.
+  with a refusal), but only a viewer the server says may manage the company is offered the controls (#20542):
+  the members response carries that verdict, so nobody sees a control that would be refused. The holder is shown by name, the id second.
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
@@ -24,6 +25,9 @@ const api = useApiClient()
 
 const ceo = useCompanyCeo(api, () => props.companyId)
 const { state, designation, isSaving, actionError } = ceo
+// #20542: set/clear answer 403 to a non-owner/admin; the server says who may (`viewer_can_manage`), so
+// the controls stay hidden until that is known. It rides on the members response the people load makes.
+const canChange = ref(false)
 
 const agents = ref<{ id: string; name: string }[]>([])
 const people = ref<{ user_id: string; name: string }[]>([])
@@ -37,6 +41,7 @@ async function loadPeople(): Promise<void> {
   agents.value = source.agents.value
   people.value = source.humans.value
   peopleFailed.value = source.loadFailed.value
+  canChange.value = source.viewerCanManage.value
   peopleLoading.value = false
 }
 
@@ -156,7 +161,7 @@ watch(
 
       <BaseAlert v-if="peopleFailed" variant="warning" :message="t('llcSettings.ceo.peopleFailed')" data-testid="ceo-people-failed" />
 
-      <div class="flex flex-col gap-2">
+      <div v-if="canChange" class="flex flex-col gap-2" data-testid="ceo-change">
         <span class="font-semibold text-autobot-text-primary">{{ t('llcSettings.ceo.change') }}</span>
         <BaseSelectMenu
           v-model="picked"
@@ -174,7 +179,7 @@ watch(
       <BaseAlert v-if="errorText" variant="error" :message="errorText" data-testid="ceo-error" />
       <p v-if="notice" class="m-0 text-autobot-text-secondary" role="status" data-testid="ceo-notice">{{ notice }}</p>
 
-      <div class="flex flex-wrap gap-2">
+      <div v-if="canChange" class="flex flex-wrap gap-2">
         <BaseButton variant="primary" :loading="isSaving" :disabled="!picked || isSaving" data-testid="ceo-set" @click="save">
           {{ t('llcSettings.ceo.set') }}
         </BaseButton>

@@ -53,6 +53,8 @@ const props = defineProps<{
    * different row that has since been opened for editing.
    */
   contactSaveError?: { contactId: string; message: string } | null
+  /** Whether the viewer may delete a contact: the server refuses all but a company owner/admin (#21001). */
+  canDeleteContacts?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -450,7 +452,7 @@ function groupLabel(group: OrgPeopleGroup): string {
                  steps, because a contact deleted by mis-click cannot be undone
                  from this screen. -->
             <button
-              v-if="!isEditingContact(person) && person.kind === 'contact' && confirmingDeleteKey !== person.key"
+              v-if="canDeleteContacts && !isEditingContact(person) && person.kind === 'contact' && confirmingDeleteKey !== person.key"
               type="button"
               class="shrink-0 rounded border border-autobot-border px-2 py-1 text-xs text-autobot-text-muted hover:text-autobot-text-primary"
               :data-testid="`org-person-delete-${person.key}`"
