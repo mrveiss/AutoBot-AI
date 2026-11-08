@@ -53,6 +53,7 @@ async def audit_secret_op(
     result: AuditResult = "success",
     *,
     required: bool = False,
+    actor: str | None = None,
     **details: str | int,
 ) -> None:
     """Record one secret operation.
@@ -62,13 +63,15 @@ async def audit_secret_op(
     written BEFORE an irreversible credential delete or rotate (#20557): an
     unrecorded write raises a 503, so the credential is never destroyed or
     replaced without the durable paper trail #17038 requires. ``details`` must
-    be identifiers or counts (name, scope, reason, count) -- never a value.
+    be identifiers or counts (name, scope, reason, count) -- never a value. ``actor`` is the
+    caller's already-resolved user id: pass it when the route has one, so the record never
+    depends on a second session lookup that can come back empty (and be filed as ``system``).
     """
     try:
         recorded = await audit_log(
             SECRET_OPERATIONS[operation],
             result,
-            user_id=_actor(request),
+            user_id=actor or _actor(request),
             ip_address=get_client_ip(request) or "unknown",
             resource=secret_log_ref(secret_id) if secret_id else None,
             details=details,

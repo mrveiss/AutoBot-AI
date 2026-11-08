@@ -7936,6 +7936,7 @@
       "denied": "Denied",
       "failed": "Failed",
       "error": "Error",
+      "attempted": "Attempted",
       "userPlaceholder": "Filter by user...",
       "sessionPlaceholder": "Filter by session...",
       "vmPlaceholder": "Filter by VM...",
