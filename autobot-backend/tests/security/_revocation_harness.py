@@ -46,8 +46,8 @@ def get_current_user(real_auth_middleware, monkeypatch):
     return real_auth_middleware.get_current_user
 
 
-def token_request(age_seconds: int = 60, username: str = "alice") -> Request:
-    claims = {"username": username, "role": Role.USER.value, "token_type": LOGIN_TOKEN_TYPE}
+def token_request(age_seconds: int = 60, username: str = "alice", role: str = Role.USER.value) -> Request:
+    claims = {"username": username, "role": role, "token_type": LOGIN_TOKEN_TYPE}
     claims["iat"] = int(time.time()) - age_seconds
     token = encode_jwt(claims, secret=PLATFORM_SECRET, expiry_hours=24)
     headers = [(b"authorization", f"Bearer {token}".encode())]
