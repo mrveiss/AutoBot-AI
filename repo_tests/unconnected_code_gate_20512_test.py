@@ -70,6 +70,8 @@ from repo_tests._ratchet_base import base_text
 from repo_tests._reach import declare
 from repo_tests._unconnected_common import Tree
 
+from tools.lint._comment_syntax import code_lines
+
 
 @functools.lru_cache(maxsize=2)
 def _state(root: Path) -> tuple[Tree, routes.Audit]:
@@ -182,7 +184,7 @@ REMEASURE_REL = "repo_tests/unconnected_code_remeasure_20910.txt"
 def _remeasure_keys(text: str) -> set[str]:
     """The frozen one-time re-measure (#20910): comment lines dropped."""
     # rstrip: a key ending in a space (a route with an empty path) loses it to the whitespace hook in this file
-    return {ln.rstrip() for ln in text.split("\n") if ln and not ln.startswith("#")}
+    return {cl.text.rstrip() for cl in code_lines(text) if cl.text}
 
 
 def _additions_beyond_the_base(current: dict[str, str], base: str, frozen: set[str]) -> list[str]:
