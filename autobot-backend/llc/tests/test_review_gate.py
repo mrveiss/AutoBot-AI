@@ -76,7 +76,7 @@ def _make_work_item(
     wi.cancelled_at = None
     wi.started_at = None
     wi.version = 1
-    wi.title = "Bug: crash on startup"
+    wi.title, wi.identifier = "Bug: crash on startup", "WI-1"
     return wi
 
 
@@ -459,14 +459,14 @@ class TestHandoffService:
         wi = _make_work_item(status=WorkItemStatus.IN_PROGRESS)
         wi.assignee_agent_id = uuid.UUID(agent_id)  # the agent holds the checkout
         session = AsyncMock()
-        execute_result = MagicMock()
-        execute_result.scalar_one_or_none.return_value = wi
+        execute_result = MagicMock(**{"scalar_one_or_none.return_value": wi})
         session.execute = AsyncMock(return_value=execute_result)
-        session.flush = AsyncMock()
 
-        with patch("llc.services.handoff.get_async_redis_client", new_callable=AsyncMock, return_value=None):
-            svc = HandoffService()
-            result = await svc.agent_to_human(
+        with (
+            patch("llc.services.handoff.get_async_redis_client", new_callable=AsyncMock, return_value=None),
+            patch("llc.services.commit_publish.get_async_redis_client", new_callable=AsyncMock, return_value=None),
+        ):
+            result = await HandoffService().agent_to_human(
                 session,
                 str(wi.id),
                 agent_id,
