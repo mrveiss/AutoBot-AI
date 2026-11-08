@@ -42745,13 +42745,13 @@ export interface paths {
         };
         /**
          * List Budget Policies
-         * @description List budget policies, optionally filtered by scope.
+         * @description List budget policies, optionally filtered by scope (admin permission required).
          */
         get: operations["list_budget_policies_api_budget_policies_get"];
         put?: never;
         /**
          * Create Budget Policy
-         * @description Create a new budget policy.
+         * @description Create a new budget policy (admin permission required).
          */
         post: operations["create_budget_policy_api_budget_policies_post"];
         delete?: never;
@@ -42769,21 +42769,21 @@ export interface paths {
         };
         /**
          * Get Budget Policy
-         * @description Get a single budget policy by ID.
+         * @description Get a single budget policy by ID (admin permission required).
          */
         get: operations["get_budget_policy_api_budget_policies__policy_id__get"];
         put?: never;
         post?: never;
         /**
          * Delete Budget Policy
-         * @description Delete a budget policy.
+         * @description Delete a budget policy (admin permission required).
          */
         delete: operations["delete_budget_policy_api_budget_policies__policy_id__delete"];
         options?: never;
         head?: never;
         /**
          * Update Budget Policy
-         * @description Update a budget policy.
+         * @description Update a budget policy (admin permission required).
          */
         patch: operations["update_budget_policy_api_budget_policies__policy_id__patch"];
         trace?: never;
@@ -42817,7 +42817,7 @@ export interface paths {
         };
         /**
          * Get Agent Pause Status
-         * @description Get the pause status of an agent.
+         * @description Get the pause status of an agent (admin permission required).
          */
         get: operations["get_agent_pause_status_api_budget_policies__agent_id__status_get"];
         put?: never;
