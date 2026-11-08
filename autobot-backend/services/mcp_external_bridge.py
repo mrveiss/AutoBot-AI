@@ -96,11 +96,15 @@ async def _audit_log(*args, **kwargs):
     return await audit_log(*args, **kwargs)
 
 
-async def _audit_tool_call(result: str, user_id: str | None, resource: str, details: dict[str, Any]) -> None:
+async def _audit_tool_call(
+    result: str, user_id: str | None, resource: str, details: dict[str, Any], session_id: str | None = None
+) -> None:
     """Audit one external tool call, naming the actor explicitly (#20709).
 
     A call with no user (background job, scheduler) is recorded as ``SYSTEM_ACTOR`` with
     ``details["actor_type"] == "system"``, so it cannot be mistaken for a lost identity.
+    Written ``durable=True``: an action on a third-party system is security-relevant, like the
+    other awaited audits (backup, approval gates), so the row is committed before we return.
     """
     from services.audit_logger import SYSTEM_ACTOR  # noqa: PLC0415
 
@@ -109,7 +113,9 @@ async def _audit_tool_call(result: str, user_id: str | None, resource: str, deta
         result=result,
         user_id=user_id or SYSTEM_ACTOR,
         resource=resource,
-        details={**details, "actor_type": "user" if user_id else "system"},
+        session_id=session_id,
+        details={**details, "actor_type": "user" if user_id else "system", "session_id": session_id},
+        durable=True,
     )
 
 
@@ -203,6 +209,7 @@ class MCPExternalBridge:
         *,
         role: str = "user",
         user_id: str | None = None,
+        session_id: str | None = None,
     ) -> ExternalToolCallResult:
         """Route a chat tool call to its owning external server. Always audit-logged.
 
@@ -224,6 +231,7 @@ class MCPExternalBridge:
                 user_id,
                 name,
                 {"server_uri": entry.server_uri, "role": role, "allowed_roles": entry.allowed_roles},
+                session_id,
             )
             return ExternalToolCallResult(success=False, error=f"role '{role}' is not permitted to call '{name}'")
 
@@ -238,10 +246,12 @@ class MCPExternalBridge:
                 result = await client.call_tool(entry.original_name, arguments)
         except Exception as exc:  # noqa: BLE001
             logger.warning("mcp_external_bridge.call_tool error tool=%s: %s", name, exc)
-            await _audit_tool_call("error", user_id, name, {"server_uri": entry.server_uri, "error": str(exc)})
+            await _audit_tool_call(
+                "error", user_id, name, {"server_uri": entry.server_uri, "error": str(exc)}, session_id
+            )
             return ExternalToolCallResult(success=False, error=str(exc))
 
-        await _audit_tool_call("success", user_id, name, {"server_uri": entry.server_uri})
+        await _audit_tool_call("success", user_id, name, {"server_uri": entry.server_uri}, session_id)
         return ExternalToolCallResult(success=True, result=result)
 
 

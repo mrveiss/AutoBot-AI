@@ -39,7 +39,7 @@ def _client() -> AsyncMock:
     return client
 
 
-async def _dispatch_external(user_id, arguments=None) -> AsyncMock:
+async def _dispatch_external(user_id, arguments=None, session_id=None) -> AsyncMock:
     """Run MCPDispatcher.dispatch through the real bridge; return the audit_log double."""
     audit = AsyncMock()
     dispatcher = MCPDispatcher()
@@ -53,7 +53,9 @@ async def _dispatch_external(user_id, arguments=None) -> AsyncMock:
         patch("chat_workflow.cot_events.emit_tool_call"),
         patch("chat_workflow.cot_events.emit_tool_result"),
     ):
-        result = await dispatcher.dispatch("search", arguments or {}, role="user", user_id=user_id)
+        result = await dispatcher.dispatch(
+            "search", arguments or {}, role="user", user_id=user_id, session_id=session_id
+        )
     assert result["success"] is True
     return audit
 
@@ -101,3 +103,28 @@ async def test_chat_path_forwards_only_the_verified_context_user_and_session():
     kwargs = dispatcher.dispatch.await_args.kwargs
     assert kwargs["user_id"] == "alice"
     assert kwargs["session_id"] == "sess-1"
+
+
+@pytest.mark.asyncio
+async def test_audit_row_is_durable_and_carries_the_session_id():
+    audit = await _dispatch_external("alice", session_id="sess-9")
+    kwargs = audit.await_args.kwargs
+    assert kwargs["durable"] is True
+    assert kwargs["session_id"] == "sess-9"
+    assert kwargs["details"]["session_id"] == "sess-9"
+
+
+@pytest.mark.asyncio
+async def test_resumed_turn_audits_the_real_user_when_checkpoint_lacks_the_key():
+    from chat_workflow.attachment_context import resume_context
+
+    class _Graph:
+        async def aget_state(self, _config):
+            return SimpleNamespace(values={"context": {"language": "en"}})
+
+    with patch("chat_workflow.attachment_floor.stamp_attachment_floor", AsyncMock(side_effect=lambda c, _s: c)):
+        update = await resume_context(_Graph(), "sess-1", False, {"user_id": "alice", "org_id": "o1"})
+    ctx = SimpleNamespace(context=update["context"])
+    from chat_workflow.tool_permission_gate import caller_identity
+
+    assert caller_identity(ctx, "sess-1")["user_id"] == "alice"

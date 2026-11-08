@@ -62,6 +62,28 @@ AUTH_ROLE_CONTEXT_KEY = "auth_role"
 DEFAULT_AUTH_ROLE = "user"
 
 
+def _identity_pairs(scope: "dict | None") -> tuple:
+    """The verified-context keys paired with the authenticated principal's values (#18430)."""
+    return (
+        (VERIFIED_COMPANY_KEY, (scope or {}).get("org_id")),
+        (VERIFIED_USER_KEY, (scope or {}).get("user_id")),
+    )
+
+
+def stamp_resumer_identity(context: "dict | None", scope: "dict | None") -> dict:
+    """Overlay the AUTHENTICATED resumer's identity onto a checkpointed context (#20709).
+
+    A resumed turn does not pass through ``apply_auth_role``, so its tool calls would be audited as ``system``
+    whenever the checkpoint lacks the key. The same keys ``apply_auth_role`` writes are written here from the
+    resume request's own verified scope. A missing value keeps the checkpoint's (server-built, not client-supplied).
+    """
+    merged = {**(context or {})}
+    for key, value in _identity_pairs(scope):
+        if value:
+            merged[key] = str(value)
+    return merged
+
+
 def apply_auth_role(context: "dict | None", role: Optional[str], scope: "dict | None" = None) -> "dict | None":
     """Overlay the trusted authenticated *role* onto *context* (#13821).
 
@@ -78,10 +100,7 @@ def apply_auth_role(context: "dict | None", role: Optional[str], scope: "dict | 
     ``company_id`` and ``user_id`` are client claims and never scope a decision.
     """
     merged = {**(context or {})}
-    for key, value in (
-        (VERIFIED_COMPANY_KEY, (scope or {}).get("org_id")),
-        (VERIFIED_USER_KEY, (scope or {}).get("user_id")),
-    ):
+    for key, value in _identity_pairs(scope):
         if value:
             merged[key] = str(value)
         else:

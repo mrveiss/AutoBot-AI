@@ -148,7 +148,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1443,  # #19715; #21023
     "autobot-backend/chat_workflow/llm_handler.py": 1286,  # #20852: model reaches the refresh
-    "autobot-backend/chat_workflow/manager.py": 3750,  # #17273: turn_control; #19753: reasoning_kwargs
+    "autobot-backend/chat_workflow/manager.py": 3749,  # #17273: turn_control; #19753: reasoning_kwargs
     "autobot-backend/chat_workflow/tool_handler.py": 3617,  # #11542 dispatch merge + #14068 mirror + #19950
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
