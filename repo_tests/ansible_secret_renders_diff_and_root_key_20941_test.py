@@ -42,7 +42,7 @@ def _ansible_files(root: Path = ROOT) -> list[Path]:
 REACH = declare(
     "ansible-secret-renders-20941",
     discover=_ansible_files,
-    floor=250,
+    floor=361,  # mid-window: population 361, window (361, 361)
     what="tracked ansible yml/yaml files swept for env/secrets writes and root-key renders",
     roots=("autobot-slm-backend",),
 )
