@@ -41,6 +41,13 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event.pull_request.head.sha }}
 
+      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
+      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
       - name: Every member's content is present at its merge
         if: github.event.action != 'closed'
         env:
