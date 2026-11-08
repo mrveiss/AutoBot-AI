@@ -8,6 +8,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
+import { useCompanyMembers } from '@/composables/llc/useCompanyMembers'
 import { shareInFlight } from '@/composables/llc/shareInFlight'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
@@ -32,6 +33,8 @@ import type { ProcessNodeSource, ToolNodeSource } from '@/composables/llc/orgCan
 import { WORKFLOW_QUERY_KEY } from '@/composables/workflow/workflowDeepLink'
 import { canvasNodeIdFromQuery } from '@/composables/workflow/canvasNodeDeepLink'
 import OrgPeopleList from '@/components/llc/OrgPeopleList.vue'
+import OrgProcessAttachForm from '@/components/llc/OrgProcessAttachForm.vue'
+import OrgToolAttachForm from '@/components/llc/OrgToolAttachForm.vue'
 import WorkflowPlannerPanel from '@/components/llc/workflowPlanner/WorkflowPlannerPanel.vue'
 import CanvasNodeSidebar from '@/components/llc/CanvasNodeSidebar.vue'
 import {
@@ -57,7 +60,7 @@ import {
   toolFilterCounts,
 } from '@/composables/llc/orgCanvasFilters'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
-import { BaseButton, BaseDrawer } from '@autobot/ui'
+import { BaseDrawer } from '@autobot/ui'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
@@ -69,6 +72,9 @@ const router = useRouter()
 // below must tolerate that exactly the same way.
 const route = useRoute() as ReturnType<typeof useRoute> | undefined
 const { companyId, resolveCompanyId } = useLlcCompanyContext()
+// #20682/#21001: attach/detach, contact delete and agent pause/terminate 403 for anyone the server does not
+// let manage the company; the members response says who (`viewer_can_manage`), so they stay hidden until it loads.
+const { viewerCanManage: canManageCompany, errorMessage: standingError, load: loadViewerStanding } = useCompanyMembers(api, () => companyId.value ?? '')
 
 const tree = ref<OrgNode[]>([])
 const isLoading = ref(false)
@@ -978,6 +984,7 @@ watch(deepLinkSourcesReady, (ready) => {
 
 onMounted(() => {
   void fetchTree()
+  void loadViewerStanding()
   // #13942: company-wide, independent of tree/view-mode — loads once, like fetchTree.
   void loadExecutorRollup()
   // #14611: a deep link opens straight onto the canvas, triggering the same
@@ -1123,6 +1130,7 @@ onMounted(() => {
       />
     </div>
 
+    <p v-if="standingError" class="mb-2 text-xs text-autobot-text-muted" data-testid="org-standing-unavailable">{{ t('llc.orgChart.standingUnavailable') }}</p>
     <div v-if="error && viewMode !== 'planner'" class="rounded-lg bg-autobot-error-bg border border-autobot-error p-4 text-autobot-error text-sm mb-4">
       {{ error }}
       <button class="ml-4 underline" @click="fetchTree">{{ t('llc.orgChart.retry') }}</button>
@@ -1180,6 +1188,7 @@ onMounted(() => {
         :contacts-failed="contactsFailed"
         :saving-contact-id="savingContactId"
         :contact-save-error="contactSaveError"
+        :can-delete-contacts="canManageCompany"
         @select="onPersonSelected"
         @save-contact="onSaveContact"
         @create-contact="onCreateContact"
@@ -1198,59 +1207,15 @@ onMounted(() => {
            here, detach reaches from the node itself (below). Always shown in
            canvas mode, independent of the role lens: it is a mutation
            control, not a view filter. -->
-      <div
-        class="flex flex-wrap items-end gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
-        data-testid="process-attach-form"
-      >
-        <div class="flex flex-col gap-1">
-          <label for="process-attach-role" class="text-xs text-autobot-text-secondary">
-            {{ t('llc.orgChart.attachRoleLabel') }}
-          </label>
-          <select
-            id="process-attach-role"
-            v-model="attachRoleId"
-            :disabled="processMutationInFlight"
-            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
-            data-testid="process-attach-role-select"
-          >
-            <option value="">{{ t('llc.orgChart.attachRolePlaceholder') }}</option>
-            <option v-for="role in attachableRoles" :key="role.id" :value="role.id">
-              {{ role.name }}
-            </option>
-          </select>
-          <!-- Stated, not implied: an empty dropdown alone would read as "this
-               company has no roles" when the request simply did not answer. -->
-          <p
-            v-if="attachRolesFailed"
-            class="text-xs text-autobot-text-muted"
-            data-testid="process-attach-roles-unavailable"
-          >
-            {{ t('llc.orgChart.attachRolesUnavailable') }}
-          </p>
-        </div>
-        <div class="flex flex-col gap-1">
-          <label for="process-attach-workflow" class="text-xs text-autobot-text-secondary">
-            {{ t('llc.orgChart.attachWorkflowLabel') }}
-          </label>
-          <input
-            id="process-attach-workflow"
-            v-model="attachWorkflowId"
-            type="text"
-            :disabled="processMutationInFlight"
-            :placeholder="t('llc.orgChart.attachWorkflowPlaceholder')"
-            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
-            data-testid="process-attach-workflow-input"
-          />
-        </div>
-        <BaseButton
-          variant="primary"
-          data-testid="process-attach-submit"
-          :disabled="!attachRoleId || !attachWorkflowId.trim() || processMutationInFlight"
-          @click="onProcessAttach"
-        >
-          {{ t('llc.orgChart.attach') }}
-        </BaseButton>
-      </div>
+      <OrgProcessAttachForm
+        v-if="canManageCompany"
+        v-model:role-id="attachRoleId"
+        v-model:workflow-id="attachWorkflowId"
+        :roles="attachableRoles"
+        :roles-failed="attachRolesFailed"
+        :busy="processMutationInFlight"
+        @attach="onProcessAttach"
+      />
       <div
         v-if="processMutationError"
         class="border-b border-autobot-border bg-autobot-error-bg text-autobot-error px-3 py-2 text-sm"
@@ -1266,57 +1231,15 @@ onMounted(() => {
            node itself (WorkflowCanvas.vue). Always shown in canvas mode,
            independent of the role lens, for the same reason the process form
            is: it is a mutation control, not a view filter. -->
-      <div
-        class="flex flex-wrap items-end gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
-        data-testid="tool-attach-form"
-      >
-        <div class="flex flex-col gap-1">
-          <label for="tool-attach-role" class="text-xs text-autobot-text-secondary">
-            {{ t('llc.orgChart.attachRoleLabel') }}
-          </label>
-          <select
-            id="tool-attach-role"
-            v-model="attachToolRoleId"
-            :disabled="toolMutationInFlight"
-            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
-            data-testid="tool-attach-role-select"
-          >
-            <option value="">{{ t('llc.orgChart.attachRolePlaceholder') }}</option>
-            <option v-for="role in attachableRoles" :key="role.id" :value="role.id">
-              {{ role.name }}
-            </option>
-          </select>
-          <p
-            v-if="attachRolesFailed"
-            class="text-xs text-autobot-text-muted"
-            data-testid="tool-attach-roles-unavailable"
-          >
-            {{ t('llc.orgChart.attachRolesUnavailable') }}
-          </p>
-        </div>
-        <div class="flex flex-col gap-1">
-          <label for="tool-attach-name" class="text-xs text-autobot-text-secondary">
-            {{ t('llc.orgChart.attachToolNameLabel') }}
-          </label>
-          <input
-            id="tool-attach-name"
-            v-model="attachToolName"
-            type="text"
-            :disabled="toolMutationInFlight"
-            :placeholder="t('llc.orgChart.attachToolNamePlaceholder')"
-            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
-            data-testid="tool-attach-name-input"
-          />
-        </div>
-        <BaseButton
-          variant="primary"
-          data-testid="tool-attach-submit"
-          :disabled="!attachToolRoleId || !attachToolName.trim() || toolMutationInFlight"
-          @click="onToolAttach"
-        >
-          {{ t('llc.orgChart.attach') }}
-        </BaseButton>
-      </div>
+      <OrgToolAttachForm
+        v-if="canManageCompany"
+        v-model:role-id="attachToolRoleId"
+        v-model:tool-name="attachToolName"
+        :roles="attachableRoles"
+        :roles-failed="attachRolesFailed"
+        :busy="toolMutationInFlight"
+        @attach="onToolAttach"
+      />
       <div
         v-if="toolMutationError"
         class="border-b border-autobot-border bg-autobot-error-bg text-autobot-error px-3 py-2 text-sm"
@@ -1476,6 +1399,7 @@ onMounted(() => {
       <WorkflowCanvas
         v-else
         readonly
+        :detachable="canManageCompany"
         :nodes="lensedCanvasNodes"
         :selected-node-id="selectedNode?.id ?? null"
         :tabs="canvasTabs"
@@ -1508,6 +1432,7 @@ onMounted(() => {
         :node="selectedNode"
         :company-id="companyId ?? ''"
         :terminating="terminating"
+        :can-control="canManageCompany"
         @pause="toggleAgentPause"
         @terminate="terminateAgent"
         @heartbeat="(n: OrgNode, on: boolean) => { n.heartbeat_enabled = on }"
