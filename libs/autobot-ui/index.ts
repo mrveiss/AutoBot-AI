@@ -165,6 +165,8 @@ export {
   createRecencyFormatter,
   createDateFormatter,
   formatLocalTime,
+  isoDateStamp,
+  toDateTimeLocalValue,
   DEFAULT_DATE_TIME_INTL
 } from './src/utils/format'
 export type { DateInput, DateFormatterOptions, FormatRelativeTimeOptions, RecencyFormatterOptions } from './src/utils/format'

@@ -24,7 +24,7 @@ Baseline re-measured for #20004 on main at 5b0014f63a plus that PR's migrations.
 ``createDateFormatter`` for #19606; ``TerminalWindow.vue`` #20779 and ``NodeLifecyclePanel.vue``
 #20660 earlier). ``NAMED`` is 0, so any new declaration under a name below fails; ``formatTimeAgo``
 stays in the name list although the kit no longer exports one, so a re-introduced copy is still
-caught. ``BEHAVIOUR`` still holds the functions only the behavioural detector finds.
+caught. ``BEHAVIOUR`` is 0 as well; the behavioural detector keeps watching for a copy under any name.
 
 **One number, not a per-file table**, for the reason given in
 ``slm_raw_setinterval_ratchet_19482_test.py``. The pin is down-only against the base (#19283). The
@@ -73,6 +73,7 @@ _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 # Then 7 and 3 down to 3 and 2 when SecretsManager, ProgressBar, useCaptchaStatus and SettingsView moved,
 # and NAMED 3 down to 0 when SecretAuditLog, AlertsMonitor and LLMFallbacksView moved to the kit (#19606).
 # BEHAVIOUR 2 down to 1 when NodeLifecyclePanel's formatFullTime moved to createDateFormatter (#19905).
+# BEHAVIOUR 1 down to 0 when TerminalWindow's log download took formatISOString (#19905).
 NAMED = "local_date_formatter_declarations"
 BEHAVIOUR = "local_date_formatter_functions_by_behaviour"
 # Four shapes the declaration scan cannot see, because they format a date inline or hand-assemble it
@@ -82,6 +83,8 @@ BEHAVIOUR = "local_date_formatter_functions_by_behaviour"
 #   intl_date_time_format_outside_kit ``new Intl.DateTimeFormat(`` (``Intl.DateTimeFormat()`` for the zone is not)
 #   hardcoded_locale_formatters       a fixed locale literal given to a kit formatter or a ``toLocale*String``
 #   hand_assembled_date_fields        a date built from ``getMonth()``/``getDate()``/``getHours()``... pieces
+#   iso_day_stamp_by_hand             ``toISOString().split('T')[0]`` / ``.slice(0, 10)`` / ``.slice(0, 16)``: the kit's
+#                                     ``isoDateStamp`` and ``toDateTimeLocalValue`` are the one home (#19905)
 # ``hand_assembled_date_fields`` is 1 on purpose: GanttTimelineView's quarter tick ("Q3 2025") has no
 # ``Intl`` equivalent, so it is the one named exception and this pin allows exactly it.
 INLINE_LOCALE = "inline_date_locale_calls"
@@ -89,14 +92,16 @@ INLINE_TO_LOCALE_STRING = "inline_date_to_locale_string"
 INTL_OUTSIDE_KIT = "intl_date_time_format_outside_kit"
 HARDCODED_LOCALE = "hardcoded_locale_formatters"
 HAND_ASSEMBLED = "hand_assembled_date_fields"
+ISO_DAY_STAMP = "iso_day_stamp_by_hand"
 PINS = {
     NAMED: 0,
-    BEHAVIOUR: 1,
+    BEHAVIOUR: 0,
     INLINE_LOCALE: 0,
     INLINE_TO_LOCALE_STRING: 0,
     INTL_OUTSIDE_KIT: 0,
     HARDCODED_LOCALE: 0,
     HAND_ASSEMBLED: 1,
+    ISO_DAY_STAMP: 0,
 }
 _DECLARATION_KEYS = (NAMED, BEHAVIOUR)
 
@@ -111,6 +116,10 @@ _HARDCODED_CALL = re.compile(r"\.toLocale(?:Date|Time)?String\s*\(\s*['\"][a-z]{
 _HAND_ASSEMBLED = re.compile(
     r"\$\{[^}`]*\.get(?:Month|Date|Hours|Minutes|Seconds)\(\)"
     r"|\.get(?:Hours|Minutes|Seconds)\(\)\.toString\(\)\.padStart"
+)
+
+_ISO_DAY_STAMP = re.compile(
+    r"\.toISOString\(\)\s*\.(?:split\(\s*['\"]T['\"]\s*\)\s*\[\s*0\s*\]|(?:slice|substring|substr)\(\s*0\s*,\s*1[06]\s*\))"
 )
 
 
@@ -160,6 +169,7 @@ def _counts(text: str) -> dict[str, int]:
         INTL_OUTSIDE_KIT: len(_INTL_OUTSIDE_KIT.findall(text)),
         HARDCODED_LOCALE: _hardcoded_formatter_locales(text) + len(_HARDCODED_CALL.findall(text)),
         HAND_ASSEMBLED: len(_HAND_ASSEMBLED.findall(text)),
+        ISO_DAY_STAMP: len(_ISO_DAY_STAMP.findall(text)),
     }
 
 
@@ -349,6 +359,10 @@ def test_each_inline_shape_is_counted_under_its_own_key() -> None:
     assert _shapes("const a = new Date(a.getTime()).toLocaleString()")[INLINE_TO_LOCALE_STRING] == 1
     assert _shapes("const s = `${d.getMonth() + 1}/${d.getDate()}`")[HAND_ASSEMBLED] == 2
     assert _shapes("const s = h.getHours().toString().padStart(2,'0')")[HAND_ASSEMBLED] == 1
+    assert _shapes("const n = `x-${new Date().toISOString().split('T')[0]}.json`")[ISO_DAY_STAMP] == 1
+    assert _shapes("const k = d.toISOString().slice(0, 10)")[ISO_DAY_STAMP] == 1
+    assert _shapes("const v = new Date(x)\n  .toISOString().slice(0, 16)")[ISO_DAY_STAMP] == 1
+    assert _shapes("const d = new Date(x).toISOString()\n  .split('T')[0]")[ISO_DAY_STAMP] == 1
 
 
 def test_a_number_a_zone_probe_a_live_locale_and_date_arithmetic_are_not_inline_shapes() -> None:
@@ -361,12 +375,21 @@ def test_a_number_a_zone_probe_a_live_locale_and_date_arithmetic_are_not_inline_
         "const t = d.getTime()\n"
     )
     shapes = _shapes(clean)
-    for key in (INLINE_LOCALE, INLINE_TO_LOCALE_STRING, INTL_OUTSIDE_KIT, HARDCODED_LOCALE, HAND_ASSEMBLED):
+    for key in (
+        INLINE_LOCALE,
+        INLINE_TO_LOCALE_STRING,
+        INTL_OUTSIDE_KIT,
+        HARDCODED_LOCALE,
+        HAND_ASSEMBLED,
+        ISO_DAY_STAMP,
+    ):
         assert shapes[key] == 0, key
     assert _shapes("const a = createDateFormatter({ kind: 'date' })")[HARDCODED_LOCALE] == 0
     live = "createDateFormatter({ intl: { month: 'short' }, locale: () => locale.value })"
     assert _shapes(live)[HARDCODED_LOCALE] == 0
     assert _shapes("const a = d.toLocaleString()")[INLINE_TO_LOCALE_STRING] == 0
+    assert _shapes("const a = isoDateStamp(d)")[ISO_DAY_STAMP] == 0
+    assert _shapes("const a = d.toISOString().replace(/[:.]/g, '-').slice(0, 19)")[ISO_DAY_STAMP] == 0
     assert _shapes("// new Date(x).toLocaleString()")[INLINE_TO_LOCALE_STRING] == 0
 
 
@@ -412,3 +435,51 @@ def test_the_pin_was_not_raised_against_the_base() -> None:
     for key, pinned in PINS.items():
         if key in base:  # a measure the base did not have starts at its first measurement (#20004)
             assert pinned <= base[key], f"PINS[{key!r}] rose from {base[key]} to {pinned}; the pin only goes down."
+
+
+# The kit itself: ``format.ts`` is the one home of the date formatters, and ``schedule/zone.ts`` is
+# IANA-zone wall-clock arithmetic (``formatToParts`` into numbers, never display text). Every other kit
+# source gets its date text from ``format.ts`` (#19905).
+_KIT_SRC = "libs/autobot-ui/src"
+_KIT_HOMES = ("/utils/format.ts", "/schedule/zone.ts")
+_KIT_SHAPES = (
+    ("inline toLocale(Date|Time)String", _INLINE_LOCALE),
+    ("new Intl.DateTimeFormat", _INTL_OUTSIDE_KIT),
+    ("hand-built ISO day stamp", _ISO_DAY_STAMP),
+)
+
+
+def _kit_findings(src: Path) -> list[str]:
+    found = []
+    for path in sorted(src.rglob("*")):
+        rel = "/" + path.relative_to(src).as_posix()
+        if path.suffix not in (".ts", ".vue") or _EXCLUDED.search(rel) or rel.endswith(_KIT_HOMES):
+            continue
+        text = _COMMENT_LINE.sub("", path.read_text(encoding="utf-8"))
+        found += [f"{rel}: {label}" for label, pattern in _KIT_SHAPES if pattern.search(text)]
+        found += [f"{rel}: local date formatter {n}" for n in date_formatter_names(text)]
+    return found
+
+
+def test_the_kit_formats_dates_only_in_format_ts(tmp_path: Path) -> None:
+    """Planted control: a kit file that formats a date by hand is found; a kit call is not."""
+    (tmp_path / "schedule").mkdir()
+    (tmp_path / "schedule" / "bad.ts").write_text(
+        "export function fmt(d: Date) { return new Intl.DateTimeFormat('en').format(d) }\n", encoding="utf-8"
+    )
+    (tmp_path / "schedule" / "stamp.ts").write_text(
+        "export const s = new Date().toISOString().slice(0, 10)\n", encoding="utf-8"
+    )
+    (tmp_path / "schedule" / "ok.ts").write_text(
+        "export const f = createDateFormatter({ kind: 'date' })\n", encoding="utf-8"
+    )
+    planted = _kit_findings(tmp_path)
+    assert any("bad.ts: new Intl.DateTimeFormat" in f for f in planted), planted
+    assert any("bad.ts: local date formatter fmt" in f for f in planted), planted
+    assert any("stamp.ts: hand-built ISO day stamp" in f for f in planted), planted
+    assert not any("ok.ts" in f for f in planted), planted
+    kit = repo_root() / _KIT_SRC
+    assert (kit / "utils" / "format.ts").is_file(), f"{_KIT_SRC} has moved; this guard reads it by path"
+    assert (
+        _kit_findings(kit) == []
+    ), "a kit source formats dates itself; use format.ts (createDateFormatter, isoDateStamp)"

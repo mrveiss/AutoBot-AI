@@ -142,7 +142,7 @@
 </template>
 
 <script>
-import { saveTextFile } from '@autobot/ui'
+import { saveTextFile, formatISOString, isoDateStamp } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
@@ -901,12 +901,12 @@ export default {
     const downloadLog = () => {
       const logContent = outputLines.value
         .map(line => {
-          const timestamp = line.timestamp ? `[${line.timestamp.toLocaleString()}] ` : '';
+          const timestamp = line.timestamp ? `[${formatISOString(line.timestamp)}] ` : '';
           return `${timestamp}${line.content || line}`;
         })
         .join('\n');
 
-      saveTextFile(logContent, `terminal-${sessionId.value}-${new Date().toISOString().split('T')[0]}.log`);
+      saveTextFile(logContent, `terminal-${sessionId.value}-${isoDateStamp()}.log`);
     };
 
     const shareSession = async () => {

@@ -9,7 +9,9 @@ import {
   formatTime,
   formatRelativeTime,
   formatLocalTime,
-  createRecencyFormatter
+  createRecencyFormatter,
+  isoDateStamp,
+  toDateTimeLocalValue
 } from '../format'
 
 const ISO = '2025-10-30T14:30:15Z'
@@ -253,5 +255,26 @@ describe('createRecencyFormatter (#19606)', () => {
     const f = createRecencyFormatter({ locale: 'en', style: 'narrow', maxUnit: 'day', olderThanMs: cutoff, older: () => 'older', now })
     expect(f(at(cutoff - 60_000))).toBe(justUnder)
     expect(f(at(cutoff))).toBe('older')
+  })
+})
+
+describe('isoDateStamp and toDateTimeLocalValue (#19905)', () => {
+  it('isoDateStamp is the UTC day, now by default, and empty for a bad value', () => {
+    expect(isoDateStamp('2025-10-30T23:59:59Z')).toBe('2025-10-30')
+    expect(isoDateStamp(new Date(Date.UTC(2025, 0, 2)))).toBe('2025-01-02')
+    expect(isoDateStamp(Date.UTC(2025, 5, 7))).toBe('2025-06-07')
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-08T12:00:00Z'))
+    expect(isoDateStamp()).toBe('2026-11-08')
+    expect(isoDateStamp('nope')).toBe('')
+    expect(isoDateStamp(null)).toBe('')
+  })
+
+  it('toDateTimeLocalValue is the local wall time to the minute, and empty for a bad value', () => {
+    const at = new Date(2025, 9, 30, 14, 5, 59)
+    expect(toDateTimeLocalValue(at)).toBe('2025-10-30T14:05')
+    expect(toDateTimeLocalValue(at.toISOString())).toBe('2025-10-30T14:05')
+    expect(toDateTimeLocalValue('nope')).toBe('')
+    expect(toDateTimeLocalValue(undefined)).toBe('')
   })
 })
