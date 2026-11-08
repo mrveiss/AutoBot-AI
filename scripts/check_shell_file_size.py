@@ -16,13 +16,12 @@ The ratchet has the same three-way semantics as the Python one, and turns one
 way only:
 
 * above its ceiling      -> fail; a grandfathered file may not grow
-* below its ceiling      -> pass (#19673); the merge-base gate in the ratchet test bounds it,
-  and ``--repin-ceilings`` lowers the recorded int in-train
+* below its ceiling      -> pass (#19673); the merge-base gate in the ratchet test bounds it
 * at or below MAX_LINES  -> fail; delete the entry, the file is compliant
 
-"Below its ceiling -> fail" is the part that looks wrong and is not: an
-unlowered ceiling re-licenses the lines just cut, so a shrink that is not
-recorded is a shrink that can be spent again.
+"Below its ceiling -> pass" (#19673): a ceiling above the measured size is harmless, because the
+ratchet test also bounds the file by its length at the merge base, so the lines just cut cannot
+be spent again.
 
 A file that cannot be read is a violation, not a skip. `count_lines` returns
 None for missing, unreadable, not-a-file and not-UTF-8 alike, and None means

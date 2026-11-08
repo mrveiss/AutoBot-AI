@@ -155,7 +155,7 @@ def test_the_three_way_verdict(hook, measured, expect):
 
 def test_a_file_under_its_ceiling_passes(hook):
     """A shrink needs no table edit (#19673); the merge-base gate bounds it instead."""
-    assert hook.verdict("install.sh", _CEILING - 1) is None
+    assert hook.verdict("install.sh", max(_CEILING - 1, hook.MAX_LINES + 1)) is None  # above the limit: a real shrink
 
 
 def test_a_file_at_its_exact_ceiling_passes(hook):

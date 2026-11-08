@@ -83,6 +83,23 @@ def test_a_raised_ceiling_does_not_help(repo):
     assert F in growth_over_base(root, {F: 710}, base)
 
 
+def test_a_ceiling_below_the_base_still_binds(repo):
+    """The min() has two arms: HEAD under the base but over the recorded ceiling fails."""
+    root, base = repo
+    _write(root, F, 695)  # base is 700, ceiling 690
+    assert F in growth_over_base(root, {F: 690}, base)
+    _write(root, F, 690)
+    assert growth_over_base(root, {F: 690}, base) == {}
+
+
+def test_a_renamed_file_gets_the_move_the_entry_hint(repo):
+    """git mv of a grandfathered file: the path is absent at the base, and the message says what to do."""
+    root, base = repo
+    _git(root, "mv", F, "pkg/moved.py")
+    found = growth_over_base(root, {"pkg/moved.py": 700}, base)
+    assert "renamed? move its entry in the table" in found["pkg/moved.py"]
+
+
 def test_an_entry_added_for_a_file_new_at_the_base_is_blocked(repo):
     root, base = repo
     _write(root, "pkg/new.py", 800)

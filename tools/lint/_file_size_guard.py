@@ -16,7 +16,7 @@ The ratchet semantics: grandfathered files may not grow past their ceiling, a fi
 compliant must drop its entry, a file that cannot be read is a violation and never a skip.
 A file merely *under* its ceiling passes (#19673): the tight gate is the merge base, in the
 ratchet tests (``repo_tests/_ratchet_base.py``), so a shrinking PR never edits the shared
-table; ``--repin-ceilings`` lowers the recorded ints afterwards, in the merge train. They are
+table; ``--repin-ceilings`` is an optional manual tidy that nothing runs automatically. They are
 documented once in each script's module docstring.
 
 ``FileSizeGuard`` reads its configuration from the *live namespace of the
@@ -118,14 +118,18 @@ _ENTRY = re.compile(r'^(?P<head>\s*"(?P<rel>[^"]+)":\s*)(?P<n>\d+)(?P<tail>,?.*)
 def repin_table(text: str, counts: dict[str, int | None], max_lines: int) -> tuple[str, int, int, list[str]]:
     """*text* with each ``"path": N`` ceiling lowered to its file's count, or dropped at/under *max_lines*.
 
-    Returns (new text, lowered, dropped, unreadable paths). Never raises a ceiling.
+    Returns (new text, lowered, dropped, paths it could not repin: unreadable, or no ``"path": N``
+    line for them). Never raises a ceiling.
     """
     out: list[str] = []
     lowered = dropped = 0
     unread: list[str] = []
+    matched: set[str] = set()
     for line in text.splitlines(keepends=True):
         match = _ENTRY.match(line.rstrip("\r\n"))
         count = counts.get(match.group("rel")) if match else None
+        if match is not None:
+            matched.add(match.group("rel"))
         if match is None or match.group("rel") not in counts:
             out.append(line)
         elif count is None:
@@ -138,6 +142,7 @@ def repin_table(text: str, counts: dict[str, int | None], max_lines: int) -> tup
             out.append(line.replace(match.group("head") + match.group("n"), match.group("head") + str(count), 1))
         else:
             out.append(line)
+    unread += sorted(set(counts) - matched)  # e.g. single-quoted: reported, never silently skipped
     return "".join(out), lowered, dropped, unread
 
 
@@ -180,7 +185,7 @@ class FileSizeGuard:
             )
         # Under the ceiling is NOT a failure (#19673): a shrinking PR must not edit this shared table.
         # What stops the lines just cut from being spent again is the merge-base gate in the ratchet
-        # tests (head <= min(ceiling, the file at the base)); `--repin-ceilings` lowers the ints in-train.
+        # tests (head <= min(ceiling, the file at the base)); `--repin-ceilings` is an optional manual tidy.
         return None
 
     def verdict(self, rel: str, line_count: int) -> str | None:
@@ -256,18 +261,25 @@ class FileSizeGuard:
 
         Only the integer of an existing ``"path": N`` line changes, and only downward (never raises
         a ceiling); an entry whose file is at or under MAX_LINES is deleted. Comments, order and every
-        other line stay byte-identical. An entry whose file cannot be read is left alone and
-        reported -- the audit is what rules on it. Returns 0.
+        other line stay byte-identical (line endings included). An entry whose file cannot be read, or
+        that has no ``"path": N`` line, is left alone and reported -- the audit is what rules on it. Returns 0.
         """
         root, table = self._get("repo_root")(), self._get("KNOWN_LARGE_FILE")
         counts = {rel: self._get("count_lines")(root / rel) for rel in self._get("KNOWN_LARGE")}
-        text, lowered, dropped, unread = repin_table(table.read_text(encoding="utf-8"), counts, self._get("MAX_LINES"))
-        if text != table.read_text(encoding="utf-8"):
-            table.write_text(text, encoding="utf-8")
+        with table.open(encoding="utf-8", newline="") as handle:  # newline="": CRLF survives the rewrite
+            original = handle.read()
+        text, lowered, dropped, unread = repin_table(original, counts, self._get("MAX_LINES"))
+        if text != original:
+            with table.open("w", encoding="utf-8", newline="") as handle:
+                handle.write(text)
         logger = self._get("logger")
-        logger.info("repin-ceilings: %d lowered, %d dropped, %d unreadable in %s", lowered, dropped, len(unread), table)
+        logger.info(
+            "repin-ceilings: %d lowered, %d dropped, %d not repinned in %s", lowered, dropped, len(unread), table
+        )
         for rel in unread:
-            logger.warning("repin-ceilings: %s could not be read; its entry is untouched", rel)
+            logger.warning(
+                'repin-ceilings: %s was not repinned (unreadable file, or no `"path": N` line); untouched', rel
+            )
         return 0
 
     def reach_breach_problem(self, reached: int) -> str:

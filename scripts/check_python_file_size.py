@@ -21,15 +21,14 @@ lives only in a comment is not an assertion.
 The ratchet turns one way only:
 
 * above its ceiling      -> fail; a grandfathered file may not grow
-* below its ceiling      -> pass (#19673); the merge-base gate in the ratchet test bounds it,
-  and ``--repin-ceilings`` lowers the recorded int in-train
+* below its ceiling      -> pass (#19673); the merge-base gate in the ratchet test bounds it
 * at or below MAX_LINES  -> fail; delete the entry, the file is compliant
 
 A shrink is locked in by the merge base, not by editing this table (#19673): the ratchet test
 requires ``lines(F@HEAD) <= min(ceiling, lines(F@base))``, so the lines a PR cut cannot be spent
-back. Nothing else needs to change for a file to shrink; ``--repin-ceilings`` rewrites the
-recorded ints to the files' current lengths (and drops entries at or under the limit), and the
-merge train runs it. Locked in rather than left as headroom to regrow into (#14498).
+back. Nothing else needs to change for a file to shrink. ``--repin-ceilings`` is a manual tidy
+that rewrites the recorded ints to the files' current lengths (and drops entries at or under the
+limit); nothing runs it automatically. Locked in rather than left as headroom (#14498).
 
 A file the hook cannot open is a violation too, not a skip (#14975). ``None``
 from ``count_lines`` means "never measured", which is a different thing from

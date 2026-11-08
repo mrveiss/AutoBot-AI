@@ -543,18 +543,33 @@ is the tight gate, so a shrink needs **no** table edit and the lines it cut cann
 The frontend contract ratchet measures its five counts on the head and on the base tree and
 requires `now <= base`; it keeps no recorded number at all.
 
-- **The base** is the real merge base, by the resolver above (`base_commit`): `git merge-base HEAD
-  origin/main` locally, the merge ref's first parent in CI. Never the moving base tip.
+- **The base** is whatever `_ratchet_base.base_commit` returns, and it measures the PR's own delta
+  in both places:
+  - *Locally:* `git merge-base HEAD origin/main` (override the ref with `AUTOBOT_RATCHET_BASE_REF`).
+    Never the moving `origin/main` tip, so a file the branch did not touch reads equal to its base
+    even after main has moved on.
+  - *In CI* (`GITHUB_ACTIONS=true`): `AUTOBOT_RATCHET_BASE_SHA` when `ci.yml` sets it -- a merge
+    group's `base_sha`, `github.event.before` on a push to main, or on a PR into `release` the merge
+    base with main (#19466) -- else `HEAD^1`. For a pull request that is `HEAD^1` of the PR merge
+    ref (`refs/pull/N/merge`), i.e. the base branch tip; the checkout uses `fetch-depth: 2` so it is
+    readable.
+  - *Why those agree:* the merge ref's tree is the base tip plus the PR's changes. A file the PR
+    did not touch is identical at `HEAD` and at `HEAD^1` (main's newer content is in both), and a
+    file it did touch differs by exactly the PR's edit. Locally `HEAD` is the unmerged branch, so
+    the same file is identical at `HEAD` and at the fork point, and differs by the same edit. Both
+    compare "this PR's edit" with "the file before it".
 - **A file the base did not have is blocked:** a new file never earns an entry (an add still fails
   `test_no_entry_may_be_added`, a raised ceiling still fails `test_no_ceiling_may_exceed_its_baseline`).
+  The message says `renamed? move its entry in the table` for a `git mv`.
 - **Removed:** the "under its recorded ceiling, lower it" failure in `tools/lint/_file_size_guard.py`.
-  A file at or under 600 lines still fails until its entry is deleted.
-- **Repin:** `python scripts/check_python_file_size.py --repin-ceilings` (likewise
-  `check_shell_file_size.py`, `check_frontend_file_size.py`) rewrites only the integers of existing
-  entries, never upward, and deletes entries at or under 600. The merge train runs all three after
-  merging, so the recorded numbers follow the tree without any feature PR touching them. No workflow
-  and no bot PR does this. `pipeline-scripts/train_content_gate.py` therefore no longer treats the
-  `*_known_large.py` tables as recomputed: a member's entries must survive the train.
+- **What the repo enforces about the table:** ceilings are down-only upper bounds; a ceiling above
+  the measured size is harmless (the base gates the file); an entry is deleted when its file reaches
+  600 lines or fewer (the guard fails until it is). Nothing repins the ints automatically and the
+  merge train does not run a repin.
+- **Optional tidy:** `python scripts/check_python_file_size.py --repin-ceilings` (likewise the shell
+  and frontend checkers) rewrites the integers of existing entries downward and deletes entries at
+  or under 600; it reports an entry it cannot rewrite, and keeps line endings. It is a manual
+  convenience, not a step anything depends on.
 - **Fail closed:** an unreadable base raises `BaseUnavailable`; it never reads as "nothing grew".
 
 ## Local date and time formatters (#19905)

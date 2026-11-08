@@ -187,7 +187,8 @@ def test_a_size_table_is_no_longer_recomputed_so_it_is_measured(train):
     """#19673: a train only lowers the ceilings' ints, so a member's table entries must survive it."""
     head = member("one", {"size_known_large.py": LONG.format(1)})
     board(1, head, "-s", "ours")
-    assert gate.check_range("main..train").files == 1
+    report = gate.check_range("main..train")
+    assert report.files == 1 and report.findings, "the table was measured and its loss reported"
 
 
 def test_a_range_with_no_member_merge_is_a_failure_not_a_pass(train):

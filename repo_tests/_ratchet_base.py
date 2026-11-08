@@ -28,8 +28,8 @@ the old path after the new one (``base_table(root, ("new.py", "old.py"), NAME)``
 
 The size ratchets use it as a TIGHT gate, not only a tripwire (#19673): ``growth_over_base`` requires
 ``lines(F@HEAD) <= min(KNOWN_LARGE[F], lines(F@base))``, with the base being the real merge base
-above. A shrinking PR therefore never edits the shared ceiling table; the merge train rewrites the
-recorded ints with each checker's ``--repin-ceilings``.
+above. A shrinking PR therefore never edits the shared ceiling table; a ceiling above the measured
+size is harmless, and each checker's ``--repin-ceilings`` is an optional manual tidy.
 
 If the base cannot be read, :class:`BaseUnavailable` is raised. It is never treated as
 "nothing rose": a ratchet that cannot see its base has proved nothing.
@@ -248,7 +248,9 @@ def growth_over_base(root: Path, ceilings: dict[str, int], sha: str | None = Non
     for rel, ceiling in sorted(ceilings.items()):
         head, then = count_lines(root / rel), base[rel]
         if then is None:
-            found[rel] = "not at the base: a new file is never grandfathered -- split it"
+            found[rel] = (
+                "not at the base: a new file is never grandfathered -- split it (renamed? move its entry in the table)"
+            )
         elif head is None:
             found[rel] = "could not be read at HEAD, so it was never measured"
         elif head > min(ceiling, then):

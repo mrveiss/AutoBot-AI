@@ -275,7 +275,7 @@ def test_every_gate_words_every_branch_identically(branch: str) -> None:
 def test_every_gate_passes_a_file_under_its_ceiling() -> None:
     """#19673: the under-ceiling branch is gone from all gates alike (the merge base gates a shrink instead)."""
     verdicts = {
-        name: (lambda g: g.verdict(*(lambda r, c: (r, c - 1))(*_grandfathered(g))))(_load(rel))
+        name: (lambda g: g.verdict(*(lambda r, c: (r, max(c - 1, g.MAX_LINES + 1)))(*_grandfathered(g))))(_load(rel))
         for name, rel in sorted(_GATES.items())
     }
     assert verdicts == dict.fromkeys(_GATES), verdicts

@@ -200,3 +200,14 @@ def test_the_guard_reads_configuration_live_not_at_construction(tmp_path):
     assert guard.verdict("f.py", MAX + 1) is not None
     ns["MAX_LINES"] = MAX + 1
     assert guard.verdict("f.py", MAX + 1) is None
+
+
+def test_repin_reports_an_entry_it_cannot_rewrite_and_keeps_crlf(tmp_path):
+    table = tmp_path / "table.py"
+    table.write_bytes(b"KNOWN_LARGE = {\r\n    'q.py': 10,\r\n    \"a.py\": 10,\r\n}\r\n")
+    guard, ns = _guard(tmp_path, known_large={"q.py": 10, "a.py": 10}, table=table)
+    _write(tmp_path, "q.py", 5)
+    _write(tmp_path, "a.py", 6)
+    guard.repin_ceilings()
+    assert table.read_bytes() == b"KNOWN_LARGE = {\r\n    'q.py': 10,\r\n    \"a.py\": 6,\r\n}\r\n"
+    assert any("q.py" in w for w in ns["logger"].warnings)

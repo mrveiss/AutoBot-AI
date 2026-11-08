@@ -47,11 +47,12 @@ truth.
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_tree_texts
+from repo_tests._ratchet_base import base_text, base_tree_texts, literal_in
 
 _REPO_ROOT = repo_root()
 
@@ -171,9 +172,16 @@ def _raw_fetch_files(root: Path, base: Path = _REPO_ROOT) -> list[str]:
     ]
 
 
-def _unlisted_raw_fetch_files(root: Path, base: Path = _REPO_ROOT) -> list[str]:
-    """Raw-fetch files with no recorded reason: the only ones the ratchet counts."""
-    return [rel for rel in _raw_fetch_files(root, base) if rel not in _RAW_FETCH_EXCEPTIONS]
+def _unlisted_raw_fetch_files(
+    root: Path, base: Path = _REPO_ROOT, exceptions: Collection[str] | None = None
+) -> list[str]:
+    """Raw-fetch files with no recorded reason: the only ones the ratchet counts.
+
+    *exceptions* defaults to this checkout's `_RAW_FETCH_EXCEPTIONS`; the base tree is measured with
+    the exceptions the BASE recorded, so removing a stale one cannot raise the base's count.
+    """
+    listed = _RAW_FETCH_EXCEPTIONS if exceptions is None else exceptions
+    return [rel for rel in _raw_fetch_files(root, base) if rel not in listed]
 
 
 def _axios_importers(root: Path, base: Path = _REPO_ROOT) -> list[str]:
@@ -189,12 +197,12 @@ def _inline_generic_count(root: Path) -> int:
     return sum(len(_INLINE_GENERIC_RE.findall(_read(path))) for path in _source_files(root))
 
 
-def _measure(app: str, repo: Path = _REPO_ROOT) -> dict[str, int]:
+def _measure(app: str, repo: Path = _REPO_ROOT, exceptions: Collection[str] | None = None) -> dict[str, int]:
     """The five counts for *app* in the tree rooted at *repo* (the checkout, or an exported base)."""
     root = repo / app / "src"
     return {
         "clients": len(_client_class_names(root)),
-        "raw_fetch": len(_unlisted_raw_fetch_files(root, repo)),
+        "raw_fetch": len(_unlisted_raw_fetch_files(root, repo, exceptions)),
         "axios": len(_axios_importers(root, repo)),
         "responses": _hand_typed_response_count(root),
         "inline_generics": _inline_generic_count(root),
@@ -211,11 +219,22 @@ def _export_base(dest: Path, apps: tuple[str, ...] = _APPS, sha: str | None = No
     return dest
 
 
+def _base_exceptions() -> frozenset[str]:
+    """The raw-fetch exceptions this file recorded at the base (this checkout's, if the base had none)."""
+    text = base_text(_REPO_ROOT, "repo_tests/frontend_api_contract_ratchet_test.py")
+    return frozenset(literal_in(text, "_RAW_FETCH_EXCEPTIONS")) if text else frozenset(_RAW_FETCH_EXCEPTIONS)
+
+
+def _regressions(app: str, head: Path, base: Path, base_exceptions: Collection[str]) -> dict[str, tuple[int, int]]:
+    """``{dimension: (base, head)}`` for each count that grew -- the ratchet's whole decision (#19673)."""
+    now, then = _measure(app, head), _measure(app, base, base_exceptions)
+    return {dim: (then[dim], now[dim]) for dim in now if now[dim] > then[dim]}
+
+
 @pytest.fixture(scope="module")
-def base_counts(tmp_path_factory: pytest.TempPathFactory) -> dict[str, dict[str, int]]:
-    """Every app's counts at the merge base, measured by the same functions as the head."""
-    dest = _export_base(tmp_path_factory.mktemp("contract_base"))
-    return {app: _measure(app, dest) for app in _APPS}
+def base_tree(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, frozenset[str]]:
+    """The merge base's app trees exported to a directory, and the exceptions the base recorded."""
+    return _export_base(tmp_path_factory.mktemp("contract_base")), _base_exceptions()
 
 
 _DIMENSION_ADVICE = {
@@ -243,31 +262,43 @@ def test_the_tree_this_guard_reads_is_present(app: str) -> None:
 
 @pytest.mark.parametrize("app", _APPS)
 @pytest.mark.parametrize("dimension", sorted(_DIMENSION_ADVICE))
-def test_contract_sprawl_only_shrinks(app: str, dimension: str, base_counts: dict[str, dict[str, int]]) -> None:
+def test_contract_sprawl_only_shrinks(app: str, dimension: str, base_tree: tuple[Path, frozenset[str]]) -> None:
     """Growth against the merge base is a regression; a shrink needs no edit anywhere (#19673).
 
     `now <= base`, the base being the real merge base (`repo_tests/_ratchet_base.py`). A base
     that cannot be read fails closed rather than reading as "nothing grew".
     """
-    actual = _measure(app)[dimension]
-    base = base_counts[app][dimension]
-
-    assert actual <= base, (
-        f"{app}: {dimension} is {actual}, the merge base has {base} (#12363, #12420, #19673).\n"
-        f"{_DIMENSION_ADVICE[dimension]}"
+    grown = _regressions(app, _REPO_ROOT, *base_tree)
+    assert dimension not in grown, (
+        f"{app}: {dimension} is {grown[dimension][1]}, the merge base has {grown[dimension][0]} "
+        f"(#12363, #12420, #19673).\n{_DIMENSION_ADVICE[dimension]}"
     )
 
 
-def test_a_grown_count_is_caught_and_a_shrunk_one_passes(tmp_path: Path) -> None:
-    """Known-positive control: the comparison fails on growth and not on a shrink."""
-    old, new = tmp_path / "old", tmp_path / "new"
-    for tree, n in ((old, 2), (new, 3)):
-        (tree / "app" / "src").mkdir(parents=True)
-        (tree / "app" / "src" / "a.ts").write_text("interface XResponse {}\n" * n, encoding="utf-8")
-    counts = lambda tree: _hand_typed_response_count(tree / "app" / "src")  # noqa: E731
-    assert (counts(new), counts(old)) == (3, 2)
-    assert not counts(new) <= counts(old), "growth must fail"
-    assert counts(old) <= counts(new), "a shrink must pass"
+def _tree(root: Path, responses: int, raw_fetch_files: tuple[str, ...] = ()) -> Path:
+    src = root / "autobot-frontend" / "src"
+    src.mkdir(parents=True)
+    (src / "a.ts").write_text("interface XResponse {}\n" * responses, encoding="utf-8")
+    for name in raw_fetch_files:
+        (src / name).write_text("await fetch('/api/x')\n", encoding="utf-8")
+    return root
+
+
+def test_the_ratchet_decision_catches_growth_and_passes_a_shrink(tmp_path: Path) -> None:
+    """Contrast pair through the real decision (`_regressions`), head tree against base tree."""
+    old, new = _tree(tmp_path / "old", 2), _tree(tmp_path / "new", 3)
+    assert _regressions("autobot-frontend", new, old, frozenset()) == {"responses": (2, 3)}
+    assert _regressions("autobot-frontend", old, new, frozenset()) == {}
+
+
+def test_the_base_is_measured_with_the_base_s_own_exceptions(tmp_path: Path) -> None:
+    """Dropping a stale exception while adding a raw fetch elsewhere must still read as growth."""
+    old = _tree(tmp_path / "old", 0, ("stale.ts",))  # at the base `stale.ts` was an excused raw fetch
+    new = _tree(tmp_path / "new", 0, ("fresh.ts",))  # the PR removed that exception and added a new one
+    base_exceptions = frozenset({"autobot-frontend/src/stale.ts"})
+    assert _regressions("autobot-frontend", new, old, base_exceptions) == {"raw_fetch": (0, 1)}
+    # the defect the control exists for: measuring the base with the HEAD's (empty) list counts stale.ts
+    assert _measure("autobot-frontend", old, frozenset())["raw_fetch"] == 1
 
 
 def test_every_raw_fetch_exception_is_still_a_raw_fetch_with_a_reason() -> None:
