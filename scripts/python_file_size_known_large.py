@@ -89,7 +89,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/database_mcp.py": 1056,
     "autobot-backend/api/development_speedup.py": 611,
     "autobot-backend/api/enterprise_features.py": 698,
-    "autobot-backend/api/envelope_secrets.py": 612,
+    "autobot-backend/api/envelope_secrets.py": 608,
     "autobot-backend/api/files.py": 1241,
     "autobot-backend/api/filesystem_mcp.py": 1954,
     "autobot-backend/api/git_mcp.py": 1336,
@@ -326,7 +326,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/graph_rag_service_test.py": 890,
     "autobot-backend/services/knowledge/autonomous_loop.py": 798,
     "autobot-backend/services/knowledge/code_indexer.py": 1176,
-    "autobot-backend/services/knowledge/doc_indexer.py": 1247,
+    "autobot-backend/services/knowledge/doc_indexer.py": 1098,
     "autobot-backend/services/knowledge/service.py": 849,  # train 48: #18935 merged onto #18945
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1462,
@@ -461,7 +461,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 775,
     "autobot_shared/circuit_breaker.py": 689,
-    "autobot_shared/env_registry.py": 1061,  # #19320: postgres block -> env_registry_postgres (was 1125)
+    "autobot_shared/env_registry.py": 1049,  # #20910: transcriber block -> env_registry_transcriber (was 1061)
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/npu/integration.py": 929,
     "autobot_shared/plugin_sdk/loader.py": 690,
