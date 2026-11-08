@@ -11,27 +11,19 @@ known-positive control that does not depend on the repository's current contents
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
 from repo_tests._ratchet_base import BASE_REF_ENV, BaseUnavailable, base_commit, base_line_counts, growth_over_base
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 
 F = "pkg/big.py"
 G = "pkg/other.py"
 
 
 def _git(root: Path, *args: str) -> str:
-    done = subprocess.run(
-        ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    )
-    return done.stdout.strip()
+    return git(root, *args).stdout.strip()
 
 
 def _write(root: Path, rel: str, lines: int) -> None:
@@ -49,7 +41,7 @@ def _commit(root: Path, message: str) -> str:
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, str]:
     """A repo whose ``main`` holds F at 700 and G at 650; returns (root, base sha)."""
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
-    _git(tmp_path, "init", "-q", "-b", "main")
+    make_repo(tmp_path)
     _write(tmp_path, F, 700)
     _write(tmp_path, G, 650)
     return tmp_path, _commit(tmp_path, "base")
@@ -146,12 +138,7 @@ def test_adjacent_shrinks_merge_cleanly_and_pass(repo):
         _git(root, "switch", "-q", "-c", branch, base)
         _write(root, rel, n)  # a shrink edits the file only, never the table
         _commit(root, f"shrink {rel}")
-    merged = subprocess.run(
-        ["git", "-C", str(root), "merge-tree", base, "a", "b"],  # the form every git version has
-        capture_output=True,
-        text=True,
-        env=scrubbed_git_env(),
-    )
+    merged = git(root, "merge-tree", base, "a", "b", check=False)  # the form every git version has
     assert merged.returncode == 0 and "<<<<<<<" not in merged.stdout, merged.stdout + merged.stderr
     _git(root, "switch", "-q", "a")
     _git(root, "merge", "-q", "--no-edit", "b")
@@ -168,7 +155,5 @@ def test_contrast_adjacent_table_edits_do_conflict(repo):
         _git(root, "switch", "-q", "-c", branch, base)
         table.write_text(table.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
         _commit(root, f"lower {new}")
-    merged = subprocess.run(
-        ["git", "-C", str(root), "merge-tree", base, "a", "b"], capture_output=True, text=True, env=scrubbed_git_env()
-    )
+    merged = git(root, "merge-tree", base, "a", "b", check=False)
     assert "<<<<<<<" in merged.stdout, "the known-bad shape stopped conflicting; the control proves nothing"
