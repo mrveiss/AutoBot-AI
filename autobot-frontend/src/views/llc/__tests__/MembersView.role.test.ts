@@ -229,7 +229,26 @@ describe('MembersView add form (#20073)', () => {
     await flushPromises()
     expect(roleOptions()).toEqual([])
     expect(addButton().disabled).toBe(true)
-    expect(document.body.textContent).toContain(en.llcMembers.addNotAllowed)
+    expect(document.body.textContent).toContain(en.llcMembers.accessUnconfirmed)
+    expect(document.body.textContent).not.toContain(en.llcMembers.addNotAllowed)
+  })
+
+  it('recovers after a failed load: Retry re-runs it and the standing becomes known (#21096)', async () => {
+    get.mockRejectedValueOnce(new Error('HTTP 503'))
+    const wrapper = mount(MembersView, { global: { plugins: [i18n] }, attachTo: document.body })
+    await flushPromises()
+    await wrapper.find('[data-testid="members-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="members-retry"]').exists()).toBe(true)
+    get.mockResolvedValue(membersFor('admin', NO_OWNER))
+    await wrapper.find('[data-testid="members-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="members-retry"]').exists()).toBe(false)
+    await wrapper.find('header button').trigger('click')
+    await flushPromises()
+    expect(roleOptions()).toEqual(NO_OWNER)
+    expect(document.body.textContent).not.toContain(en.llcMembers.accessUnconfirmed)
+    expect(document.body.textContent).not.toContain(en.llcMembers.addNotAllowed)
   })
 
   it('maps a 403 on add to the refusal message', async () => {

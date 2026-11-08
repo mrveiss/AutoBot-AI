@@ -8454,6 +8454,7 @@
     "roleChangeError": "Failed to change the role.",
     "roleNotGrantable": "Your role in this company does not allow changing this role.",
     "addNotAllowed": "Your role in this company does not allow adding members.",
+    "accessUnconfirmed": "Couldn't confirm your access. Retry to load your role.",
     "usersLoadError": "Failed to load users.",
     "role": {
       "owner": "Owner",

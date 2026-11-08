@@ -34,7 +34,11 @@
     <p v-if="!companyId" class="members-state">{{ t('llcMembers.noCompany') }}</p>
 
     <template v-else>
-      <BaseAlert variant="error" v-if="errorMessage" :message="errorMessage" class="members-error" dismissible :dismiss-label="t('common.dismiss')" />
+      <BaseAlert variant="error" v-if="errorMessage" :message="errorMessage" class="members-error" dismissible :dismiss-label="t('common.dismiss')">
+        <template v-if="!standingKnown" #actions>
+          <BaseButton variant="secondary" size="sm" data-testid="members-retry" @click="fetchMembers()">{{ t('common.retry') }}</BaseButton>
+        </template>
+      </BaseAlert>
 
       <p v-if="isLoading" class="members-state">{{ t('llcMembers.loading') }}</p>
 
@@ -94,7 +98,11 @@
       :title="t('llcMembers.addModalTitle')"
       size="md"
     >
-      <BaseAlert variant="error" v-if="addError" :message="addError" class="members-error" dismissible :dismiss-label="t('common.dismiss')" />
+      <BaseAlert variant="error" v-if="addError" :message="addError" class="members-error" dismissible :dismiss-label="t('common.dismiss')">
+        <template v-if="!standingKnown" #actions>
+          <BaseButton variant="secondary" size="sm" data-testid="members-retry" @click="fetchMembers()">{{ t('common.retry') }}</BaseButton>
+        </template>
+      </BaseAlert>
 
       <div class="members-form">
         <div class="members-field">
@@ -127,7 +135,10 @@
               {{ roleLabel(role) }}
             </option>
           </select>
-          <p v-if="!canAdd" class="members-hint">{{ t('llcMembers.addNotAllowed') }}</p>
+          <p v-if="!canAdd" class="members-hint">
+            {{ standingKnown ? t('llcMembers.addNotAllowed') : t('llcMembers.accessUnconfirmed') }}
+            <BaseButton v-if="!standingKnown" variant="secondary" size="sm" data-testid="members-add-retry" @click="fetchMembers()">{{ t('common.retry') }}</BaseButton>
+          </p>
         </div>
       </div>
 
