@@ -16,13 +16,17 @@ rather than passing as "nothing grew"). Removals pass; additions fail.
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
+import pytest
 from repo_tests._glob_declared_uncovered import GLOB_DECLARED_UNCOVERED
 from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_table, literal_in
 from repo_tests._reach import declare
+
+from autobot_shared.paths import scrubbed_git_env
 
 _RECORD = "repo_tests/_glob_declared_uncovered.py"
 _NAME = "GLOB_DECLARED_UNCOVERED"
@@ -39,7 +43,9 @@ def _glob_keys(root: Path) -> list[str]:
 REACH = declare(
     "glob-declared-uncovered-entries",
     discover=_glob_keys,
-    floor=10,  # 29 keys when written; the record shrinks as debt is paid, so skips=19 lets it fall to the floor
+    # 29 keys when written. skips=19 is a SHRINK allowance on a set meant to reach zero as the debt is
+    # paid, so the floor may trail the population; it is not a count of items the guard cannot complete.
+    floor=10,
     skips=19,
     what="glob keys in the uncovered-debt record",
 )
@@ -65,11 +71,46 @@ def _complaint(grown: dict[str, list[str]]) -> str:
     return f"{_NAME} grew against the base (glob: added guards): {grown}. It only shrinks. {_ROUTES}"
 
 
+def grown_against_base(root: Path, now: dict[str, Any]) -> dict[str, list[str]]:
+    """What *now* added to the record relative to the base commit of *root* (BaseUnavailable if unreadable)."""
+    base = base_table(root, (_RECORD,), _NAME)
+    return grown_entries(now, base)
+
+
 def test_the_record_did_not_grow_against_the_base() -> None:
     base = base_table(repo_root(), (_RECORD,), _NAME)
+    assert isinstance(base, dict) and base, "the base read returned no record; the guard would pass vacuously"
     grown = grown_entries(GLOB_DECLARED_UNCOVERED, base)
     assert not grown, _complaint(grown)
     REACH.completed(REACH.examined(repo_root()))
+
+
+def _git(repo: Path, *args: str) -> str:
+    """Run git in the throwaway *repo* with a scrubbed environment (#15246) and return stdout."""
+    out = subprocess.run(
+        ["git", "-C", str(repo), *args], check=True, capture_output=True, text=True, env=scrubbed_git_env()
+    )
+    return out.stdout.strip()
+
+
+def _commit_record(repo: Path, body: str) -> str:
+    (repo / _RECORD).parent.mkdir(parents=True, exist_ok=True)
+    (repo / _RECORD).write_text(body, encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "c")
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def test_the_base_read_flags_a_key_added_in_a_real_git_history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fails if the guard stopped reading the base (e.g. compared the record with itself)."""
+    for args in (("init", "-q"), ("config", "user.email", "t@example.invalid"), ("config", "user.name", "t")):
+        _git(tmp_path, *args)
+    first = _commit_record(tmp_path, f'{_NAME} = {{"*.md": ({{"a_test.py"}}, "why")}}\n')
+    now_src = f'{_NAME} = {{"*.md": ({{"a_test.py"}}, "why"), "*.service": ({{"b_test.py"}}, "why")}}\n'
+    _commit_record(tmp_path, now_src)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("AUTOBOT_RATCHET_BASE_SHA", first)
+    assert grown_against_base(tmp_path, literal_in(now_src, _NAME)) == {"*.service": ["b_test.py"]}  # type: ignore[arg-type]
 
 
 def test_a_planted_added_glob_key_is_caught() -> None:
