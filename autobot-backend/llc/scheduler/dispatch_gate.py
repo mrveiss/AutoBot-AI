@@ -39,7 +39,7 @@ logger = get_logger(__name__)
 
 #: The reason text a caller may need to tell apart: replay answers it with a 402.
 BUDGET_EXHAUSTED = "budget is exhausted"
-BUDGET_REFUSAL_DEDUP_TTL_SECONDS = max(1, env_int("LLC_BUDGET_REFUSAL_DEDUP_TTL_SECONDS", 86400))
+BUDGET_REFUSAL_DEDUP_TTL_SECONDS = max(1, env_int("AUTOBOT_LLC_BUDGET_REFUSAL_DEDUP_TTL_SECONDS", 86400))
 _activity_log = LLCActivityLogService()
 
 #: What the board did on purpose. ``inactive`` is left out: the budget watchdog
@@ -209,24 +209,30 @@ async def require_dispatchable(session: AsyncSession, agent: dict) -> None:
 # Which refusals are recorded, and the de-duplication, are documented on :func:`note_refused_wake`.
 
 
-def budget_refusal_key(company_id: Any, node_id: Any) -> str:
-    """The Redis key holding the budget state at the last recorded refusal of one agent."""
-    return f"llc:budget_refusal:{company_id}:{node_id}"
+def budget_refusal_key(company_id: Any, node_id: Any, remaining: Any) -> str:
+    """The Redis key marking one exhaustion episode of one agent.
+
+    The budget's remaining amount is part of the key, so a changed amount (the limit was raised and spent
+    again) is a new episode and a new key, while one atomic ``SET NX`` decides the single winner of each.
+    """
+    return f"llc:budget_refusal:{company_id}:{node_id}:{remaining}"
 
 
-async def _already_recorded(company_id: Any, node_id: Any, fingerprint: str) -> bool:
-    """True when this episode's refusal is on record; otherwise mark it recorded (best effort, one winner)."""
-    redis = await get_async_redis_client()
-    if redis is None:
-        raise RuntimeError("Redis unavailable: cannot de-duplicate the budget refusal record")
-    key = budget_refusal_key(company_id, node_id)
-    previous = await redis.get(key)
-    if isinstance(previous, bytes):
-        previous = previous.decode("utf-8")
-    if previous == fingerprint:
-        return True
-    await redis.set(key, fingerprint, ex=BUDGET_REFUSAL_DEDUP_TTL_SECONDS)
-    return False
+async def _already_recorded(key: str) -> bool:
+    """True when this episode's refusal is on record; otherwise mark it recorded, atomically (one winner).
+
+    Fails OPEN: a dedup store that is down or errors means "not recorded yet", so the record is still
+    written, only without de-duplication. Losing the record is worse than a duplicate.
+    """
+    try:
+        redis = await get_async_redis_client()
+        if redis is None:
+            logger.warning("Redis unavailable: budget refusal written without de-duplication")
+            return False
+        return not await redis.set(key, "1", nx=True, ex=BUDGET_REFUSAL_DEDUP_TTL_SECONDS)
+    except Exception:
+        logger.exception("Budget refusal de-duplication failed: writing the record without it")
+        return False
 
 
 async def _resolve_node(session: Any, company_id: Any, agent_ref: Any) -> Any:
@@ -264,36 +270,42 @@ async def record_budget_refusal(session: Any, company_id: Any, agent_ref: Any, r
     """Write the company-scoped ``budget.dispatch_refused`` row once per episode; True when written.
 
     Never raises: a failed record must not stop the wake being rescheduled. The failure is logged
-    with its traceback and the dedup mark is dropped, so the next wake tries again.
+    with its traceback, the session is rolled back and the dedup mark dropped, so the next wake tries again.
     """
     if reason != BUDGET_EXHAUSTED or not agent_ref or as_uuid(company_id) is None:
         return False
-    node_id = None
+    key = None
     try:
         node = await _resolve_node(session, company_id, agent_ref)
         if node is None:
             return False
         node_id, slug = node[0], str(node[1])
         remaining, _, _ = await get_budget_service().check_budget(session, slug, str(company_id))
-        if await _already_recorded(company_id, node_id, str(remaining)):
+        key = budget_refusal_key(company_id, node_id, remaining)
+        if await _already_recorded(key):
             return False
         await _write_refusal(session, company_id, node_id, slug, remaining)
         return True
     except Exception:
         logger.exception("Could not record the budget refusal of agent %s", agent_ref)
-        if node_id is not None:
-            await _forget(company_id, node_id)
+        await _abandon(session, key)
         return False
 
 
-async def _forget(company_id: Any, node_id: Any) -> None:
-    """Drop the dedup mark after a failed write so the next wake records it."""
+async def _abandon(session: Any, key: Optional[str]) -> None:
+    """After a failed record: roll the session back and drop the dedup mark so the next wake records it."""
+    try:
+        await session.rollback()
+    except Exception:
+        logger.exception("Could not roll back the session after a failed budget refusal record")
+    if key is None:
+        return
     try:
         redis = await get_async_redis_client()
         if redis is not None:
-            await redis.delete(budget_refusal_key(company_id, node_id))
+            await redis.delete(key)
     except Exception:
-        logger.exception("Could not clear the budget refusal mark of agent %s", node_id)
+        logger.exception("Could not clear the budget refusal mark %s", key)
 
 
 async def note_refused_wake(session: AsyncSession, company_id: Any, agent_ref: Any, reason: str) -> None:
@@ -310,11 +322,11 @@ async def note_refused_wake(session: AsyncSession, company_id: Any, agent_ref: A
     * ``agent has no company ...``: there is no company to scope a record to.
     * ``assigned agent was not found ...``: a routine's own configuration fault, not the refusal of a known agent.
 
-    De-duplication is one record per exhaustion episode, not per wake. A short Redis key per agent holds the
-    budget's remaining amount at the last recorded refusal; a later refusal is written only when that amount
-    differs (the limit was raised and spent again) or the key expired (``LLC_BUDGET_REFUSAL_DEDUP_TTL_SECONDS``,
-    default one day, so a long episode is restated daily). No schema change, and a budget that stays
-    exhausted writes nothing further.
+    De-duplication is one record per exhaustion episode, not per wake. A short Redis key per agent and
+    remaining amount, set with one atomic ``SET NX EX``, marks the episode. A later refusal is written
+    only when the amount differs (the limit was raised and spent again, so a new key) or the key
+    expired (``AUTOBOT_LLC_BUDGET_REFUSAL_DEDUP_TTL_SECONDS``, default one day, so a long episode is
+    restated daily). No schema change, and a budget that stays exhausted writes nothing further.
     """
     logger.info("Heartbeat skipped for agent %s: %s", agent_ref, reason)
     await record_budget_refusal(session, company_id, agent_ref, reason)

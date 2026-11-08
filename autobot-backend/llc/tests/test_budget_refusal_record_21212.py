@@ -28,8 +28,11 @@ class _Redis:
     async def get(self, key):
         return self.data.get(key)
 
-    async def set(self, key, value, ex=None):
+    async def set(self, key, value, ex=None, nx=False):
+        if nx and key in self.data:
+            return None
         self.data[key] = value
+        return True
 
     async def delete(self, key):
         self.data.pop(key, None)
@@ -42,6 +45,7 @@ class _Env:
         self.audit = AsyncMock()
         self.session = MagicMock()
         self.session.commit = AsyncMock()
+        self.session.rollback = AsyncMock()
         result = MagicMock()
         result.all.return_value = [(_NODE, _SLUG)]
         self.session.execute = AsyncMock(return_value=result)
@@ -127,8 +131,22 @@ async def test_a_failed_write_is_logged_and_retried_on_the_next_wake():
     with _Env() as env:
         env.audit.side_effect = [RuntimeError("db down"), None]
         assert await env.refuse() is False
+        assert env.redis.data == {}  # the mark is cleared, so the retry is not deduplicated away
+        env.session.rollback.assert_awaited_once()
         assert await env.refuse() is True
     assert env.audit.await_count == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("down", ["none", "raises"])
+async def test_a_dedup_store_outage_still_writes_the_record(down):
+    with _Env() as env:
+        if down == "none":
+            env.patches[0] = patch(f"{_GATE}.get_async_redis_client", AsyncMock(return_value=None))
+        else:
+            env.redis.set = AsyncMock(side_effect=ConnectionError("redis down"))
+        assert await env.refuse() is True
+    env.audit.assert_awaited_once()
 
 
 @pytest.mark.asyncio
