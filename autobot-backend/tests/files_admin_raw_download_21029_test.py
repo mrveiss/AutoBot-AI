@@ -73,7 +73,7 @@ def test_binary_file_is_returned_byte_exact(admin, root):
     assert response.status_code == 200
     assert response.content == PAYLOAD
     assert response.headers["content-type"] == "application/octet-stream"
-    assert "blob.bin" in response.headers["content-disposition"]
+    assert response.headers["content-disposition"] == "attachment; filename=\"blob.bin\"; filename*=utf-8''blob.bin"
 
 
 @pytest.mark.parametrize(
