@@ -17,7 +17,7 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from llc.services import commit_publish
+from llc.services import after_commit
 from llc.services.handoff import HandoffService
 from llc.tests import _e2e_harness as harness
 from testkit.fake_async_session import FakeAsyncSession
@@ -49,8 +49,8 @@ def redis():  # noqa: ANN201
 
 async def _drain() -> None:
     await asyncio.sleep(0)
-    if commit_publish._publish_tasks:
-        await asyncio.gather(*commit_publish._publish_tasks)
+    if after_commit.after_commit_tasks:
+        await asyncio.gather(*after_commit.after_commit_tasks)
 
 
 async def _both(session) -> None:  # noqa: ANN001
