@@ -25,6 +25,7 @@ from .redis_usability import usable_redis
 from .session_state import (
     apply_record,
     claim_decision,
+    pending_decision_id,
     persist_if_current,
     read_record,
     release_decision,
@@ -309,10 +310,10 @@ class SessionManager:
         return session
 
     async def get_session(self, session_id: str) -> AgentTerminalSession | None:
-        """Get a session. Redis holds the record; the in-memory copy is a cache refreshed from it (#20674).
+        """Get a session for DISPLAY: Redis holds the record, the cache is refreshed from it (#20674).
 
-        A worker's copy can be older than another worker's save, so it is brought up to date with
-        Redis before it is returned. When Redis cannot answer, the cached copy is the fallback.
+        When Redis cannot answer, the cached copy is the fallback. A decision must not use this: it goes
+        through ``decision_session.session_for_decision``, which never falls back.
         """
         async with self._sessions_lock:
             cached = self.sessions.get(session_id)
@@ -514,10 +515,8 @@ class SessionManager:
 
     async def claim_decision(self, session: AgentTerminalSession) -> bool:
         """Win the one decision on the session's pending approval, across workers (#20674)."""
-        if not usable_redis(self.redis_client):
-            return True
         session.decision_token = await claim_decision(
-            self.redis_client, session.session_id, session.get_pending_command_id()
+            self.redis_client, session.session_id, pending_decision_id(session.pending_approval)
         )
         return session.decision_token is not None
 
@@ -526,7 +525,9 @@ class SessionManager:
         logger.error("Approved command execution error", exc_info=True)
         token, session.decision_token = session.decision_token, None
         if token and usable_redis(self.redis_client):
-            await release_decision(self.redis_client, session.session_id, session.get_pending_command_id(), token)
+            await release_decision(
+                self.redis_client, session.session_id, pending_decision_id(session.pending_approval), token
+            )
 
     async def _conversation_for_expired_session(self, session_id: str) -> str | None:
         """The conversation a vanished session was serving, if it had an approval."""

@@ -23,6 +23,7 @@ from type_defs.common import Metadata
 from .ai_line_gate import claim_pending, decide_command, permission_refusal, settle_pending, write_reservation
 from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
+from .decision_session import claim_for_decision
 from .errors import PostExecutionError, execution_failed_response, post_execution_failed_response, post_execution_guard
 from .models import AgentSessionState, AgentTerminalSession
 from .session_manager import SessionManager
@@ -831,12 +832,9 @@ class AgentTerminalService:
 
         Issue #281: Refactored from 182 lines to use extracted helper methods.
         """
-        session = await self.get_session(session_id)
-        if not session:
-            return {"status": "error", "error": "Session not found"}
-
-        if not session.has_pending_approval() or not await self.session_manager.claim_decision(session):
-            return {"status": "error", "error": "No pending approval"}
+        session, refusal = await claim_for_decision(self.session_manager, session_id)
+        if refusal:
+            return refusal
 
         command = session.get_pending_command()
         risk_level = session.get_pending_risk_level()

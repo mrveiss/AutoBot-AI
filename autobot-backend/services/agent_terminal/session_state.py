@@ -11,11 +11,16 @@ save, from a worker's older copy must be checked against it first:
 * ``persist_if_current`` writes only while the stored record is still the version the copy was read at,
   so an older copy cannot replace a newer approval (or make a held claim from #20059 look abandoned).
 * ``claim_decision`` lets exactly one decision per approval through, whichever worker it is routed to.
+
+Reads for display may fall back to the worker's cached copy (``SessionManager.get_session``). A decision
+never does: ``read_authoritative_record`` and ``claim_decision`` raise ``ApprovalStateUnavailableError``
+when Redis cannot confirm the approval, so a stale cached copy cannot authorise anything.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import uuid
 
@@ -25,6 +30,7 @@ from autobot_shared.redis_utils import delete_if_value
 from services.command_approval_manager import AgentRole
 
 from .models import AgentSessionState, AgentTerminalSession
+from .redis_usability import usable_redis
 
 logger = get_logger(__name__)
 
@@ -48,18 +54,49 @@ return 1
 """
 
 
+APPROVAL_STATE_UNAVAILABLE = "Approval state unavailable, retry"
+
+
+class ApprovalStateUnavailableError(RuntimeError):
+    """Redis cannot confirm the approval's state, so no decision may be made on it."""
+
+
 def session_key(session_id: str) -> str:
     return f"agent_terminal:session:{session_id}"
 
 
-def decision_key(session_id: str, command_id: str | None) -> str:
-    return f"agent_terminal:decision:{session_id}:{command_id or 'restored'}"
+def pending_decision_id(pending: dict | None) -> str | None:
+    """What identifies one approval for its decision claim: its command id, else a digest of the request.
+
+    An approval restored from chat history has no command id; its request timestamp and command tell it
+    apart from the next restored approval of the same session.
+    """
+    if not pending:
+        return None
+    if pending.get("command_id"):
+        return pending["command_id"]
+    seed = f"{pending.get('timestamp')}|{pending.get('command')}"
+    return "restored-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
+
+
+def decision_key(session_id: str, decision_id: str | None) -> str:
+    return f"agent_terminal:decision:{session_id}:{decision_id or 'unidentified'}"
 
 
 async def read_record(redis, session_id: str) -> dict | None:
     """The session's record in Redis; ``None`` if absent. Raises on a timeout or a Redis error."""
     raw = await asyncio.wait_for(redis.get(session_key(session_id)), timeout=READ_TIMEOUT_SECONDS)
     return json.loads(raw) if raw else None
+
+
+async def read_authoritative_record(redis, session_id: str) -> dict | None:
+    """The record a decision acts on: ``None`` if Redis says it is absent, an error if Redis cannot say."""
+    if not usable_redis(redis):
+        raise ApprovalStateUnavailableError("no usable Redis client")
+    try:
+        return await read_record(redis, session_id)
+    except Exception as exc:  # noqa: BLE001 - any failure to read means the approval is unconfirmed
+        raise ApprovalStateUnavailableError(f"could not read session {session_id}: {exc}") from exc
 
 
 def apply_record(session: AgentTerminalSession, data: dict) -> None:
@@ -101,19 +138,28 @@ async def persist_if_current(redis, session: AgentTerminalSession, ttl: int) -> 
     return bool(saved)
 
 
-async def claim_decision(redis, session_id: str, command_id: str | None) -> str | None:
-    """Win the one decision on this approval; return the claim's token, or ``None`` if it was already taken."""
+async def claim_decision(redis, session_id: str, decision_id: str | None) -> str | None:
+    """Win the one decision on this approval; return the claim's token, or ``None`` if it was already taken.
+
+    Fails closed: without a usable Redis the claim cannot be made, so ``ApprovalStateUnavailableError``.
+    """
+    if not usable_redis(redis):
+        raise ApprovalStateUnavailableError("no usable Redis client")
     token = uuid.uuid4().hex
-    if await redis.set(decision_key(session_id, command_id), token, nx=True, ex=DECISION_TTL_SECONDS):
+    try:
+        won = await redis.set(decision_key(session_id, decision_id), token, nx=True, ex=DECISION_TTL_SECONDS)
+    except Exception as exc:  # noqa: BLE001 - an unconfirmed claim is a refused decision
+        raise ApprovalStateUnavailableError(f"could not claim approval {decision_id}: {exc}") from exc
+    if won:
         return token
-    logger.warning("Approval %s of session %s was already decided", command_id, session_id)
+    logger.warning("Approval %s of session %s was already decided", decision_id, session_id)
     return None
 
 
-async def release_decision(redis, session_id: str, command_id: str | None, token: str) -> bool:
+async def release_decision(redis, session_id: str, decision_id: str | None, token: str) -> bool:
     """Give the decision back after a run that failed, so the approval can be answered again.
 
     Releases only the claim that carries *token*. A successful or still-running command never calls this,
     so its claim stays and refuses a second run.
     """
-    return await delete_if_value(redis, decision_key(session_id, command_id), token)
+    return await delete_if_value(redis, decision_key(session_id, decision_id), token)
