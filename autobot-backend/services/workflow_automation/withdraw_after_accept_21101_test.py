@@ -65,8 +65,28 @@ def test_an_accepted_decision_withdraws_the_approval_once(parked, action):
     assert parked.recorder.withdrawn == [("wf-1", "s1")]
 
 
+@pytest.mark.parametrize("action", ["approve_step", "skip_step"])
+def test_a_second_decision_on_the_same_step_is_refused_and_withdraws_once(parked, action):
+    assert _post(parked, action).status_code == 200
+    assert _post(parked, action).status_code == 409
+    assert parked.recorder.withdrawn == [("wf-1", "s1")]
+
+
 @pytest.mark.parametrize("handler,name", [("_approve_step", "approve_and_execute_step"), ("_skip_step", "skip_step")])
-def test_a_failure_after_acceptance_does_not_lose_the_approval(parked, handler, name):
+def test_a_failure_after_acceptance_still_withdraws_the_approval(parked, handler, name):
+    async def _boom(workflow, step_id, _workflows):
+        workflow.steps[0].status = WorkflowStepStatus.SKIPPED  # the decision was accepted before the failure
+        raise RuntimeError("apply failed")
+
+    setattr(parked.manager.executor, name, _boom)
+    controller = parked.manager.controller
+    with pytest.raises(RuntimeError):
+        asyncio.run(getattr(controller, handler)(parked.workflow, "s1", parked.manager.active_workflows))
+    assert parked.recorder.withdrawn == [("wf-1", "s1")]
+
+
+@pytest.mark.parametrize("handler,name", [("_approve_step", "approve_and_execute_step"), ("_skip_step", "skip_step")])
+def test_a_failure_before_acceptance_keeps_the_approval_pending(parked, handler, name):
     async def _boom(*_args):
         raise RuntimeError("apply failed")
 

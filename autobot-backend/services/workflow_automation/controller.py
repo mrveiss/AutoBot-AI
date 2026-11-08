@@ -9,16 +9,19 @@ Handles workflow control actions (pause, resume, cancel, approve, skip).
 """
 
 from datetime import datetime, timezone
-from typing import Dict
+from typing import Awaitable, Callable, Dict
 
 from autobot_shared.logging_manager import get_logger
 from monitoring.prometheus_metrics import get_metrics_manager
 
 from .executor import WorkflowExecutor
 from .messaging import WorkflowMessenger
-from .models import ActiveWorkflow, WorkflowControlRequest
+from .models import ActiveWorkflow, WorkflowControlRequest, WorkflowStepStatus
 
 logger = get_logger(__name__)
+
+
+StepDecision = Callable[[ActiveWorkflow, str, Dict[str, ActiveWorkflow]], Awaitable[None]]
 
 
 class WorkflowController:
@@ -98,20 +101,38 @@ class WorkflowController:
         await self.executor.cancel_workflow(workflow, workflows)
         return True
 
+    @staticmethod
+    def _still_awaiting(workflow: ActiveWorkflow, step_id: str) -> bool:
+        """True while *step_id* exists and is parked in WAITING_APPROVAL (the decision was not accepted)."""
+        return any(s.step_id == step_id and s.status == WorkflowStepStatus.WAITING_APPROVAL for s in workflow.steps)
+
     async def _decide_step(
-        self, workflow: ActiveWorkflow, step_id: str, workflows: Dict[str, ActiveWorkflow], decision: str, apply
+        self,
+        workflow: ActiveWorkflow,
+        step_id: str,
+        workflows: Dict[str, ActiveWorkflow],
+        decision: str,
+        apply: StepDecision,
     ) -> bool:
         """Apply a step decision, then withdraw its pending approval record (#21101).
 
         The executor refuses a decision for an unknown, non-current or not-awaiting step by
-        raising StepNotAwaitingApproval (route: 409), so a refusal leaves the record listed and
-        the approver can still act. The record is withdrawn only once *apply* has returned. If
-        *apply* raises after accepting, the exception propagates before the withdraw and the
-        record stays pending rather than being lost.
+        raising StepNotAwaitingApproval (route: 409); nothing was accepted, so the record stays
+        listed and the approver can still act. Once the decision is accepted (apply returned, or
+        the step left WAITING_APPROVAL before apply failed), the record is withdrawn in a finally,
+        so a failure in the continuation *apply* runs (the following steps) cannot leave an
+        orphan approval behind. The metric is recorded once per accepted decision, with that
+        decision as its outcome.
         """
-        await apply(workflow, step_id, workflows)
-        await self.executor.step_approvals.withdraw(workflow.workflow_id, step_id)
-        self.prometheus_metrics.record_workflow_approval(workflow_type="automated_workflow", decision=decision)
+        was_awaiting = self._still_awaiting(workflow, step_id)
+        applied = False
+        try:
+            await apply(workflow, step_id, workflows)
+            applied = True
+        finally:
+            if applied or (was_awaiting and not self._still_awaiting(workflow, step_id)):
+                await self.executor.step_approvals.withdraw(workflow.workflow_id, step_id)
+                self.prometheus_metrics.record_workflow_approval(workflow_type="automated_workflow", decision=decision)
         return True
 
     async def _approve_step(
