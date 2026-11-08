@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The SLM's first admin, for the main app to link to at install (#10200, ADR-012).
+"""The SLM's side of the person link: its first admin, and the copy the main app keeps current (#10200, ADR-012).
 
 The SLM is the record for people until the main app is installed, and its first admin must carry
 over. The response includes the password hash so that person keeps their password, which is why
@@ -22,6 +22,14 @@ from user_management.database import get_slm_session
 from user_management.models.user import User
 
 router = APIRouter(prefix="/internal", tags=["internal"])
+
+
+class PersonCopyRequest(BaseModel):
+    """The main app's record of a linked person (#10200). It is the record after the link."""
+
+    slm_user_id: uuid.UUID
+    password_hash: str | None
+    is_active: bool
 
 
 class FirstAdminResponse(BaseModel):
@@ -52,3 +60,23 @@ async def get_first_admin(
     if admin is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "the SLM has no admin yet")
     return admin
+
+
+@router.post("/person-copy", status_code=status.HTTP_204_NO_CONTENT)
+async def update_person_copy(
+    body: PersonCopyRequest,
+    session: Annotated[AsyncSession, Depends(get_slm_session)],
+    x_internal_api_key: Annotated[str | None, Header()] = None,
+) -> None:
+    """Write only what differs, so the periodic pass changes nothing when the two agree."""
+    if not verify_internal_api_key(x_internal_api_key):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "internal service key required")
+    user = await session.get(User, body.slm_user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such SLM user")
+    # No hash means the main app holds none. That must not wipe the password this person logs in with.
+    if body.password_hash and user.password_hash != body.password_hash:
+        user.password_hash = body.password_hash
+    if user.is_active != body.is_active:
+        user.is_active = body.is_active
+    await session.commit()
