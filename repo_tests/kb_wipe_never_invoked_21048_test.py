@@ -4,8 +4,9 @@
 
 import subprocess
 
-from autobot_shared.paths import scrubbed_git_env
 from repo_tests._paths import repo_root
+
+from autobot_shared.paths import scrubbed_git_env
 
 _SCRIPT = "fresh_kb_setup"
 _OWN_DIR = "autobot-infrastructure/shared/scripts/setup/knowledge/"
