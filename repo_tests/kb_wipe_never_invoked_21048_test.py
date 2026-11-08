@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """The KB setup script is manual-only: nothing in the tree invokes it (#21048, #17038)."""
 
-import subprocess
-
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
+#: Non-vacuity: the sweep must have read a real tree (13k+ tracked files when set), not an empty listing.
+MIN_TRACKED_FILES = 5000
 _SCRIPT = "fresh_kb_setup"
 _OWN_DIR = "autobot-infrastructure/shared/scripts/setup/knowledge/"
 #: Where an automatic caller would live. Tests, docs and the guards that name the script as data are not callers.
@@ -15,16 +15,7 @@ _NOT_CALLERS = ("repo_tests/", "docs/", ".test_durations", "CHANGELOG.md", "chan
 
 
 def _tracked_files() -> list[str]:
-    out = subprocess.run(
-        ["git", "ls-files"],
-        cwd=repo_root(),
-        capture_output=True,
-        text=True,
-        check=True,
-        encoding="utf-8",
-        env=scrubbed_git_env(),
-    )
-    return out.stdout.splitlines()
+    return tracked_paths(repo_root(), ".")
 
 
 def _referencing(files: list[str], root) -> list[str]:
@@ -42,7 +33,9 @@ def _referencing(files: list[str], root) -> list[str]:
 
 
 def test_the_script_exists_so_the_scan_is_not_vacuous():
-    assert f"{_OWN_DIR}{_SCRIPT}.py" in _tracked_files()
+    files = _tracked_files()
+    assert len(files) >= MIN_TRACKED_FILES
+    assert f"{_OWN_DIR}{_SCRIPT}.py" in files
 
 
 def test_no_installer_role_updater_workflow_or_script_references_it():
