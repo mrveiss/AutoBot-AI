@@ -94,6 +94,31 @@ describe('SystemVaultSecrets (#17099)', () => {
     expect(deleteSecret).toHaveBeenCalledOnce()
   })
 
+  it('remove() itself ignores a re-entrant call while busy, bypassing the disabled button (#20756)', async () => {
+    confirm.mockReturnValue(new Promise<boolean>(() => {}))
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    const button = wrapper.getComponent('[data-testid="delete"]')
+    await button.trigger('click')
+    expect(button.attributes('disabled')).toBeDefined()
+    // trigger() is a no-op on a disabled element; emit the click straight to the bound handler.
+    await button.vm.$emit('click')
+    await button.vm.$emit('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(deleteSecret).not.toHaveBeenCalled()
+  })
+
+  it('cancelling the confirm re-enables Delete and deletes nothing (#20756)', async () => {
+    confirm.mockResolvedValue(false)
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    const button = wrapper.get('[data-testid="delete"]')
+    await button.trigger('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(deleteSecret).not.toHaveBeenCalled()
+    expect(button.attributes('disabled')).toBeUndefined()
+  })
+
   it('delete confirms, then calls DELETE /secrets/{id}', async () => {
     confirm.mockResolvedValue(true)
     const wrapper = mountList({ available: true, secrets: [entry] })
