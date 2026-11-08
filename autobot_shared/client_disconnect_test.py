@@ -34,7 +34,12 @@ def test_reset_counts_only_on_a_send():
 def test_anyio_stream_errors_are_disconnects_only_at_the_asgi_boundary(exc):
     assert not is_client_disconnect(exc)
     assert not isinstance(exc, PEER_CLOSED_ERRORS)
+    assert not is_client_disconnect(exc, at_boundary=True)  # untagged: an internal stream, a real error
+    setattr(exc, "__autobot_client_channel__", True)
     assert is_client_disconnect(exc, at_boundary=True)
+    wrapper = RuntimeError("wrapped")
+    wrapper.__cause__ = exc
+    assert is_client_disconnect(exc, at_boundary=True) and not is_client_disconnect(wrapper, at_boundary=True)
 
 
 def test_group_qualifies_only_when_every_member_does():
@@ -126,7 +131,7 @@ def _drive_asgi(app: FastAPI, path: str) -> list:
     return _drive_full(app, path)[0]
 
 
-def _drive_full(app, path: str, scope_type: str = "http") -> tuple[list, list]:
+def _drive_full(app, path: str, scope_type: str = "http", server_receive=None) -> tuple[list, list]:
     """Like ``_drive_asgi`` but also return every message the app sent to the server."""
     import asyncio
 
@@ -135,6 +140,8 @@ def _drive_full(app, path: str, scope_type: str = "http") -> tuple[list, list]:
     delivered = []
 
     async def receive():
+        if server_receive is not None:
+            return await server_receive()
         if delivered:  # a live client sends nothing more; block so listeners do not spin
             await asyncio.Event().wait()
         delivered.append(1)
@@ -408,3 +415,71 @@ def test_websocket_handler_end_of_stream_is_an_error_and_error_boundary_retries_
     ws = WebSocket({"type": "websocket", "headers": [], "query_string": b""}, None, None)
     with pytest.raises(HTTPException):
         asyncio.run(endpoint(ws))
+
+
+def _body_app() -> FastAPI:
+    """Real wiring (handlers + guard) with a route that reads the request body and one that fails internally."""
+    from fastapi import Request
+
+    from autobot_shared.client_disconnect import install_client_disconnect_guard
+
+    app = _app(RuntimeError("unused"))
+    install_client_disconnect_guard(app)
+
+    @app.get("/read")
+    async def read(request: Request):
+        return len(await request.body())
+
+    @app.get("/internal")
+    async def internal():
+        send, receive = anyio.create_memory_object_stream(1)
+        send.close()
+        await receive.receive()  # EndOfStream from a channel that has nothing to do with the client
+
+    return app
+
+
+async def _receive_raises_end_of_stream():
+    raise anyio.EndOfStream()
+
+
+def test_end_of_stream_from_the_wrapped_receive_is_a_quiet_499(caplog):
+    with caplog.at_level(logging.DEBUG):
+        escaped, sent = _drive_full(_body_app(), "/read", server_receive=_receive_raises_end_of_stream)
+    assert escaped == []
+    assert sent[0]["status"] == 499
+    assert not _error_records(caplog)
+
+
+def test_an_internal_end_of_stream_in_an_http_body_escapes_logs_error_and_is_a_500(caplog):
+    with caplog.at_level(logging.DEBUG):
+        escaped, sent = _drive_full(_body_app(), "/internal")
+    assert [type(e) for e in escaped] == [anyio.EndOfStream]
+    assert sent[0]["status"] == 500
+    assert any(r.exc_info for r in _error_records(caplog))
+
+
+def test_end_of_stream_from_the_wrapped_websocket_receive_closes_quietly(caplog):
+    from autobot_shared.client_disconnect import ClientDisconnectGuard
+
+    async def inner(scope, receive, send):
+        await receive()
+
+    with caplog.at_level(logging.DEBUG):
+        escaped, sent = _drive_full(
+            ClientDisconnectGuard(inner), "/ws", scope_type="websocket", server_receive=_receive_raises_end_of_stream
+        )
+    assert escaped == [] and [m["type"] for m in sent] == ["websocket.close"]
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def test_an_internal_end_of_stream_in_a_websocket_body_escapes(caplog):
+    from autobot_shared.client_disconnect import ClientDisconnectGuard
+
+    async def inner(scope, receive, send):
+        stream_send, stream_receive = anyio.create_memory_object_stream(1)
+        stream_send.close()
+        await stream_receive.receive()
+
+    escaped, sent = _drive_full(ClientDisconnectGuard(inner), "/ws", scope_type="websocket")
+    assert [type(e) for e in escaped] == [anyio.EndOfStream] and sent == []

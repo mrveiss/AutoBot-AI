@@ -25,10 +25,12 @@ CLIENT_CLOSED_REQUEST = 499
 # Exceptions Starlette raises only from the client socket itself. Usable directly as an
 # ``except`` clause so a handler keeps its own follow-up action.
 PEER_CLOSED_ERRORS = (ClientDisconnect, WebSocketDisconnect)
-# anyio's stream errors are raised by every internal task group, memory channel and
-# client session too, so inside an endpoint body they are real failures. They mean a
-# disconnect only at the ASGI receive/send boundary (the guard and the per-type handlers).
-_BOUNDARY_ONLY_ERRORS = (anyio.EndOfStream, anyio.BrokenResourceError)
+# anyio's stream errors and OS errors are raised by every internal task group, memory
+# channel, client session and socket too, so on their own they are real failures. They mean
+# a disconnect only when they came out of the client channel: the guard tags an error
+# raised by the ``receive`` / ``send`` it hands inward, and only a tagged one counts.
+_CHANNEL_ERRORS = (anyio.EndOfStream, anyio.BrokenResourceError, OSError)
+_CHANNEL_TAG = "__autobot_client_channel__"
 # A reset on a *send* is the peer; the same class from an upstream call (Redis,
 # a model server) is a real failure, so it only counts when the caller says so.
 _RESET_ON_SEND = (ConnectionResetError, BrokenPipeError)
@@ -43,6 +45,22 @@ def _socket_is_gone(websocket) -> bool:
     )
 
 
+def _tag_channel_error(exc: BaseException) -> None:
+    setattr(exc, _CHANNEL_TAG, True)
+
+
+def _is_channel_error(exc: BaseException) -> bool:
+    """True when ``exc`` or something on its cause/context chain was tagged by the guard."""
+    link: BaseException | None = exc
+    for _ in range(_CHAIN_DEPTH):
+        if link is None:
+            return False
+        if getattr(link, _CHANNEL_TAG, False):
+            return True
+        link = link.__cause__ or link.__context__
+    return False
+
+
 def is_client_disconnect(
     exc: BaseException, *, on_send: bool = False, websocket=None, at_boundary: bool = False
 ) -> bool:
@@ -50,8 +68,9 @@ def is_client_disconnect(
 
     ``on_send`` marks an exception raised while writing to the client socket,
     where ``ConnectionResetError`` / ``BrokenPipeError`` also mean a disconnect.
-    ``at_boundary`` marks the ASGI receive/send boundary, where anyio's
-    ``EndOfStream`` / ``BrokenResourceError`` also mean one. A (nested)
+    ``at_boundary`` marks the ASGI boundary, where an anyio stream error or an
+    ``OSError`` also means one, but only if the guard tagged it as raised by the
+    client channel (an internal memory channel's ``EndOfStream`` is not). A (nested)
     ``ExceptionGroup`` qualifies only if every member does, so a disconnect
     never hides a real error raised beside it.
 
@@ -67,7 +86,9 @@ def is_client_disconnect(
             is_client_disconnect(e, on_send=on_send, websocket=websocket, at_boundary=at_boundary)
             for e in exc.exceptions
         )
-    if isinstance(exc, PEER_CLOSED_ERRORS) or (at_boundary and isinstance(exc, _BOUNDARY_ONLY_ERRORS)):
+    if isinstance(exc, PEER_CLOSED_ERRORS):
+        return True
+    if at_boundary and isinstance(exc, _CHANNEL_ERRORS) and _is_channel_error(exc):
         return True
     return on_send and isinstance(exc, _RESET_ON_SEND)
 
@@ -124,9 +145,12 @@ async def client_disconnect_handler(request: Request, exc: Exception) -> Respons
 
 
 def register_client_disconnect_handlers(app) -> None:
-    """Install :func:`client_disconnect_handler` for every HTTP peer-closed type."""
-    for exc_type in (ClientDisconnect, *_BOUNDARY_ONLY_ERRORS):
-        app.add_exception_handler(exc_type, client_disconnect_handler)
+    """Install :func:`client_disconnect_handler` for ``ClientDisconnect``.
+
+    Channel errors (anyio / OS) are not registered by type: only the guard's tag says
+    whether one came from the client, so the catch-all and the guard classify those.
+    """
+    app.add_exception_handler(ClientDisconnect, client_disconnect_handler)
 
 
 class ClientDisconnectGuard:
@@ -134,7 +158,8 @@ class ClientDisconnectGuard:
 
     ``ServerErrorMiddleware`` re-raises after its handler, and an outer
     middleware's disconnect never reaches an inner handler, so the server would
-    log either as an error. If nothing was sent yet the guard answers an empty
+    log either as an error. It wraps the ``receive`` / ``send`` it passes inward and tags a
+    stream or OS error raised there as a client-channel error. If nothing was sent yet the guard answers an empty
     499 (HTTP) or closes the socket (WebSocket), so the server does not report
     "returned without starting response". Anything that is not a disconnect
     propagates unchanged.
@@ -149,19 +174,30 @@ class ClientDisconnectGuard:
             return
         started = False
 
+        async def tracked_receive():
+            try:
+                return await receive()
+            except _CHANNEL_ERRORS as exc:
+                _tag_channel_error(exc)
+                raise
+
         async def tracked_send(message) -> None:
             nonlocal started
             started = started or message["type"] in ("http.response.start", "websocket.accept")
-            await send(message)
+            try:
+                await send(message)
+            except _CHANNEL_ERRORS as exc:
+                _tag_channel_error(exc)
+                raise
 
         try:
-            await self.app(scope, receive, tracked_send)
+            await self.app(scope, tracked_receive, tracked_send)
         except Exception as exc:
             if not is_boundary_disconnect(exc):
                 raise
             log_client_disconnect(logging.getLogger(__name__), exc, str(scope.get("path", scope["type"])))
             if not started:
-                await self._answer_unstarted(scope, send)
+                await self._answer_unstarted(scope, tracked_send)
 
     @staticmethod
     async def _answer_unstarted(scope, send) -> None:
