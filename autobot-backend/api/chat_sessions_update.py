@@ -5,6 +5,7 @@
 """Write side of PUT /chat/sessions/{id} (#20928)."""
 
 from api.schemas_chat import SessionUpdate
+from chat_history.owner_keys import SERVER_CONTROLLED_METADATA_KEYS
 from exceptions import get_exceptions_lazy
 
 
@@ -18,14 +19,24 @@ async def apply_session_update(manager, session_id: str, session_data: SessionUp
     """Write the PUT body through the manager's real API and return the stored session (#20928).
 
     ``title`` is stored as the session ``name``; ``metadata`` is merged so the owner and
-    other server-written keys survive. A missing session is a 404, a refused write a 5xx.
+    other server-written keys survive; client metadata cannot change the server-controlled
+    ownership keys (``SERVER_CONTROLLED_METADATA_KEYS``), which are dropped before the merge.
+    A missing session is a 404, a refused write a 5xx.
+
+    The manager has no single locked write that sets the name and merges metadata, so these are
+    two writes. Order: metadata FIRST, title SECOND. If the first write fails the session is
+    untouched; if the second fails only the (lower-stakes) title is stale. A failure can therefore
+    never leave a renamed session carrying stale metadata.
     """
     _, _, ResourceNotFoundError, _, _ = get_exceptions_lazy()
     if await manager.get_session(session_id) is None:
         raise ResourceNotFoundError(f"Session {session_id} not found")
-    if session_data.title is not None and not await manager.update_session(session_id, {"name": session_data.title}):
+    client_metadata = {
+        k: v for k, v in (session_data.metadata or {}).items() if k not in SERVER_CONTROLLED_METADATA_KEYS
+    }
+    if client_metadata and not await manager.update_session_metadata(session_id, client_metadata):
         raise _update_failed(session_id)
-    if session_data.metadata and not await manager.update_session_metadata(session_id, dict(session_data.metadata)):
+    if session_data.title is not None and not await manager.update_session(session_id, {"name": session_data.title}):
         raise _update_failed(session_id)
     stored = await manager.get_session(session_id)
     if stored is None:
