@@ -49,11 +49,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "root-relative `*.conf` sweep; the matching files live outside the python filter's trees",
     ),
     "*.json": (
-        {
-            "repo_tests/hosted_model_literal_guard_15501_test.py",
-            "repo_tests/i18n_untranslated_ratchet_test.py",
-            "repo_tests/user_mode_values_19437_test.py",
-        },
+        {"repo_tests/i18n_untranslated_ratchet_test.py", "repo_tests/user_mode_values_19437_test.py"},
         "root-relative `*.json` sweep; the matching files live outside the python filter's trees",
     ),
     "*.md": (
@@ -88,7 +84,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.sh": (
         {
-            "repo_tests/hosted_model_literal_guard_15501_test.py",
             "repo_tests/ansible_inventory_path_exists_test.py",
             "repo_tests/browser_port_single_home_19324_test.py",
             "repo_tests/chromadb_bind_not_hardcoded_15317_test.py",
@@ -113,7 +108,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.ts": (
         {
-            "repo_tests/hosted_model_literal_guard_15501_test.py",
             "repo_tests/browser_port_single_home_19324_test.py",
             "repo_tests/duplicate_names_ratchet_14908_test.py",
             "repo_tests/kit_export_shadow_ratchet_14908_test.py",
@@ -128,7 +122,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.vue": (
         {
-            "repo_tests/hosted_model_literal_guard_15501_test.py",
             "repo_tests/primary_fill_label_reads_text_on_primary_20425_test.py",
             "repo_tests/_hardcoded_colour_detect.py",
             "repo_tests/_hardcoded_ui_literal_detect.py",
@@ -144,7 +137,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.yaml": (
         {
-            "repo_tests/hosted_model_literal_guard_15501_test.py",
             "repo_tests/browser_port_single_home_19324_test.py",
             "repo_tests/generate_service_keys_export_dir_16348_test.py",
             "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
@@ -161,7 +153,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.yml": (
         {
-            "repo_tests/hosted_model_literal_guard_15501_test.py",
             "repo_tests/workflow_jobs_use_python_floor_20903_test.py",
             "repo_tests/access_control_enforcement_provisioning_test.py",
             "repo_tests/ansible_code_source_delegation_17243_test.py",

@@ -210,6 +210,10 @@ ALLOWED_ADDITIONS = {
             "**/*.env.example",
             "**/*.toml",
             "**/*.j2",
+            # #20884: the config / template / knowledge trees the guard's _SCAN_TREES reads.
+            "autobot-backend/config/**",
+            "autobot-backend/llc/**/*.json",
+            "autobot-backend/resources/**/*.yaml",
             "docs/*.md",
             # #20884: nested docs held to a per-file version-first Claude id count (concrete files, not docs/**).
             "docs/api/COMPREHENSIVE_API_DOCUMENTATION.md",

@@ -524,6 +524,11 @@ python:
   - '**/*.env.example'
   - '**/*.toml'
   - '**/*.j2'
+  # #20884: the config / template / knowledge trees the guard's `_SCAN_TREES` reads for a pinned id (concrete
+  # trees, not every `*.json` / `*.yaml` in the repo).
+  - 'autobot-backend/config/**'
+  - 'autobot-backend/llc/**/*.json'
+  - 'autobot-backend/resources/**/*.yaml'
   - 'docs/*.md'
   # #20884: nested docs the same guard holds to a per-file count of version-first Claude ids (its baseline).
   # Concrete files, not `docs/**` (the #17930 owner decision above).

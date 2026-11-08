@@ -150,7 +150,8 @@ def test_the_default_position_check_has_contrast():
 # had spread through code, config, templates, the frontend and the docs, all a generation stale.
 # This extends the guards above from "provider modules" to every tracked file of the types below.
 #
-# SCOPE (declared, #15897): tracked *.py *.ts *.vue *.json *.yml *.yaml *.j2 *.toml *.sh *.env.example under _SCAN_ROOTS, and docs/**/*.md. Tests,
+# SCOPE (declared, #15897): tracked *.py *.j2 *.toml *.env.example under _SCAN_ROOTS, the config/data/frontend-source trees
+# in _SCAN_TREES, and docs/*.md. Tests,
 # node_modules and the historical areas in _HISTORICAL are not read. A ratchet: each file below holds
 # at most the count recorded, and a count that fell must be lowered here (the number only falls).
 # ---------------------------------------------------------------------------
@@ -167,14 +168,31 @@ _SCAN_ROOTS = (
     "autobot-slm-frontend",
     "autobot-infrastructure",
     "autobot-npu-worker",
-    "autobot-plugins",
     "autobot_shared",
     "plugins",
     "libs",
     "docs",
 )
-_SCAN_EXTS = ("*.py", "*.ts", "*.vue", "*.json", "*.yml", "*.yaml", "*.j2", "*.toml", "*.sh", "*.env.example")
-_SCAN_PATTERNS = (*(f"{r}/{e}" for r in _SCAN_ROOTS if r != "docs" for e in _SCAN_EXTS), "docs/*.md")
+#: Extensions read under EVERY root. The python filter already fires on each (``.py``, and the globs it gained for
+#: ``.j2`` / ``.toml`` / ``.env.example``), so a change to one runs this guard.
+#: A root dropped from ``_SCAN_ROOTS`` because no file of a covered type remains in it. The control below still
+#: reads it, so a pinned id appearing there fails that test instead of passing unseen.
+_UNSCANNED_ROOTS = ("autobot-plugins",)
+_SCAN_EXTS = ("py", "j2", "toml", "env.example")
+#: The remaining types are read only under the trees that hold them. ``*.ts`` / ``*.vue`` under the frontend source
+#: tree are on the filter already; the three backend trees were added to it for this guard (#20884). A bare ``*.json`` or
+#: ``*.yaml`` under every root is NOT declared: that would be a sweep into trees the filter misses, which the shrink-only
+#: record of glob-declared debt forbids growing (#15900). A new tree is added here AND to ``python-paths.yml``.
+_SCAN_TREES = (
+    "autobot-backend/config/*.yaml",
+    "autobot-backend/config/*.yml",
+    "autobot-backend/config/*.json",
+    "autobot-backend/llc/*.json",
+    "autobot-backend/resources/*.yaml",
+    "autobot-frontend/src/*.ts",
+    "autobot-frontend/src/*.vue",
+)
+_SCAN_PATTERNS = (*(f"{r}/*.{e}" for r in _SCAN_ROOTS if r != "docs" for e in _SCAN_EXTS), *_SCAN_TREES, "docs/*.md")
 _TEST_PART = re.compile(
     r"(^|/)(tests?|test_[^/]*|[^/]*_test\.py|[^/]*\.(test|spec)\.ts|conftest\.py|node_modules|__tests__)(/|$)"
 )
@@ -245,9 +263,9 @@ def _claude_scan_files(root) -> list[str]:
 REACH_CLAUDE_IDS = declare(
     "claude-model-id-literal-sites",
     discover=_claude_scan_files,
-    what="tracked py/ts/vue/json/yml/yaml/j2/toml/sh/env.example and docs md files, scanned for a pinned Claude model id",
+    what="files scanned for a pinned Claude model id",
     roots=_SCAN_ROOTS,
-    floor=6834,  # mid-window: population 7034, window [6634, 7034]
+    floor=5851,  # mid-window: population 6051, window [5651, 6051]
     growth=400,
 )
 
@@ -312,3 +330,35 @@ def test_the_claude_matcher_catches_a_planted_second_definition_and_ignores_alia
     assert claude_id_counts(clean) == {}
     # the sweep sees real files: the SSOT itself must register, or the matcher/enumeration is broken
     assert "autobot_shared/ssot_claude_models.py" in _claude_tree_counts()
+
+
+#: Every type the guard ever read, for the control below: the narrowed sweep must find what a sweep of all of them finds.
+_ALL_EXTS = (".py", ".ts", ".vue", ".json", ".yml", ".yaml", ".j2", ".toml", ".sh", ".env.example")
+
+
+def _unfiltered_counts() -> dict[str, int]:
+    """path -> pinned-id count over every tracked file of ``_ALL_EXTS`` under the roots and ``docs/*.md``, unfiltered."""
+    root = repo_root()
+    wanted = [
+        p
+        for p in tracked_paths(root, "*")
+        if (
+            p.split("/", 1)[0] in (*_SCAN_ROOTS, *_UNSCANNED_ROOTS)
+            and p.endswith(_ALL_EXTS)
+            and p.split("/", 1)[0] != "docs"
+        )
+        or (p.startswith("docs/") and p.endswith(".md"))
+    ]
+    wanted = [p for p in wanted if not _TEST_PART.search(p) and not p.startswith(_HISTORICAL)]
+    return claude_id_counts({p: (root / p).read_text(encoding="utf-8", errors="replace") for p in wanted})
+
+
+def test_the_narrowed_sweep_finds_the_same_files_as_the_unfiltered_sweep():
+    """Narrowing the trees must not hide a pinned id: same files, same counts as a sweep with no tree filter (#20884)."""
+    narrowed, full = _claude_tree_counts(), _unfiltered_counts()
+    missed = {p: n for p, n in full.items() if narrowed.get(p) != n}
+    assert not missed, (
+        "a pinned Claude id sits outside the trees _SCAN_TREES reads; add its tree there AND to python-paths.yml:\n  "
+        + "\n  ".join(f"{p}: {n}" for p, n in sorted(missed.items()))
+    )
+    assert len(narrowed) == len(full) > 20
