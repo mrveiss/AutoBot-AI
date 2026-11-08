@@ -211,8 +211,8 @@ export interface OrphanRepairResponse {
   after: Record<string, unknown>
 }
 
-/** `services/audit_logger.py::AuditResult` (`Literal["success", "denied", "failed", "error"]`). */
-export type AuditResultValue = 'success' | 'denied' | 'failed' | 'error'
+/** `services/audit_logger.py::AuditResult` (`Literal["success", "denied", "failed", "error", "attempted"]`). */
+export type AuditResultValue = 'success' | 'denied' | 'failed' | 'error' | 'attempted'
 
 /**
  * One row of GET /audit/logs (`AuditLogEntry.to_response_dict()` in
