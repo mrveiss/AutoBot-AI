@@ -301,7 +301,7 @@ def test_each_resolved_field_equals_the_pre_conversion_value(name, field):
 def test_a_filter_keeps_its_snapshot_and_declares_every_addition_in_place(name):
     """Rules 1 and 2: the snapshot entries survive in order; each new entry cites its issue where it is written."""
     post = _post(name)
-    found = uncited(post["filters_text"], _snapshot(_load_pre()[name]["filters"]))
+    found = uncited(post["filters_text"], _snapshot(_load_pre()[name]["filters"]), _head_and_base_texts(name)[1])
     assert not found, f"{name}: " + "; ".join(found)
 
 

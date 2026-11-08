@@ -14,8 +14,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from repo_tests._filter_entries import agreed_entries, removed_without_tombstone, split_against_snapshot, uncited
-from repo_tests._ratchet_base import BASE_REF_ENV, BaseUnavailable, base_text
+from repo_tests._filter_entries import (
+    agreed_entries,
+    parse_entries,
+    removed_without_tombstone,
+    split_against_snapshot,
+    uncited,
+    yaml_entries,
+)
+from repo_tests._ratchet_base import BASE_REF_ENV, BASE_SHA_ENV, BaseUnavailable, base_commit, base_text
 
 from autobot_shared.isolated_git import git, make_repo
 
@@ -104,11 +111,50 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, str]:
     return tmp_path, git(tmp_path, "rev-parse", "HEAD").stdout.strip()
 
 
-def test_a_removal_is_judged_against_the_base_read_through_ratchet_base(repo, monkeypatch):
+def test_a_removal_is_judged_against_the_base_the_real_resolver_names(repo, monkeypatch):
+    """`AUTOBOT_RATCHET_BASE_SHA` (as ci.yml sets it) names the planted base; `base_commit` resolves it."""
     root, base = repo
+    (root / FILTER).write_text("other:\n  - 'q/**'\n", encoding="utf-8")
+    git(root, "commit", "-q", "-am", "main moves on")
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv(BASE_SHA_ENV, base)
+    assert base_commit(root) == base
     head = BASE.replace("  - 'z/**'\n", "")
-    monkeypatch.setattr("repo_tests._ratchet_base.base_text", lambda r, rel, sha=None: base_text(r, rel, base))
-    assert removed_without_tombstone(base_text(root, FILTER, base), head)
+    found = removed_without_tombstone(base_text(root, FILTER), head)  # no sha: the resolver picks it
+    assert len(found) == 1 and "'z/**'" in found[0]
+    assert removed_without_tombstone(base_text(root, FILTER), "# retired #3333: 'z/**'\n" + head) == []
+
+
+def test_an_uncited_entry_appended_to_a_cited_run_fails():
+    """The run's block cites `c/one.txt`; it must not vouch for an entry appended to it."""
+    head = _with(BASE, "  - 'c/one.txt'\n", "  - 'c/two.txt'\n")
+    found = uncited(head, SNAPSHOT, BASE)
+    assert len(found) == 2 and all("'c/two.txt'" in f for f in found)  # under demo and through the alias
+    own = _with(BASE, "  - 'c/one.txt'\n", "  - 'c/two.txt'  # #2222\n")
+    assert uncited(own, SNAPSHOT, BASE) == []
+
+
+def test_a_landed_run_still_passes_when_judged_with_its_base():
+    """Entries that landed under one block stay valid; only a NEW entry cannot inherit it."""
+    landed = _with(BASE, "  - 'z/**'\n", "  # #2222: landed\n  - 'y/one.txt'\n  - 'y/two.txt'\n")
+    assert uncited(landed, SNAPSHOT, landed) == []
+    assert len(uncited(_with(landed, "  - 'y/two.txt'\n", "  - 'y/three.txt'\n"), SNAPSHOT, landed)) == 1
+
+
+def test_the_line_reader_agrees_with_yaml_on_every_filter_file():
+    root = Path(__file__).resolve().parent.parent
+    files = sorted(f for f in (root / ".github" / "filters").iterdir() if f.suffix == ".yml")
+    assert len(files) >= 5 and "docs-only-paths.yml" in {f.name for f in files}
+    for f in files:
+        text = f.read_text(encoding="utf-8")
+        assert [(e.key, e.value) for e in parse_entries(text)] == yaml_entries(text), f.name
+
+
+def test_a_planted_disagreement_trips_the_agreement_check():
+    """A flow-style list is valid YAML the line reader cannot see; the check must say so."""
+    with pytest.raises(AssertionError, match="disagree"):
+        agreed_entries("demo: ['a/**', 'b/**']\n")
+    assert parse_entries("demo: ['a/**']\n") == [] and yaml_entries("demo: ['a/**']\n") == [("demo", "a/**")]
 
 
 def test_base_unavailable_propagates_and_is_never_a_pass(repo, monkeypatch):

@@ -89,8 +89,20 @@ def agreed_entries(text: str) -> list[Entry]:
     return entries
 
 
-def is_cited(text: str, entry: Entry) -> bool:
-    """True if the entry's own line, or the comment block directly above its run, cites ``#NNNN``."""
+def is_cited(
+    text: str, entry: Entry, old: frozenset[tuple[str, str]] = frozenset(), grandfathered: bool = False
+) -> bool:
+    """True if the entry's own line, or the comment block directly above its run, cites ``#NNNN``.
+
+    The run's block covers an entry only if no entry above it in the same run is in ``old`` (the
+    snapshot and the base): a block that cites the entries already there must not vouch for one
+    appended to them. ``grandfathered`` entries (already at the base, judged when they landed) may
+    still inherit their run's block.
+
+    LIMIT: the check is FORMAT-ONLY. ``#\\d{4,}`` proves a number is written there, not that the
+    issue exists or concerns this entry; an offline index of issues would need the network, which a
+    guard must not use. A reviewer reads the citation.
+    """
     lines = text.split("\n")
     own = _ENTRY.match(lines[entry.line])
     if own is not None and own.group(5) and CITATION.search(own.group(5)):
@@ -98,6 +110,10 @@ def is_cited(text: str, entry: Entry) -> bool:
     top = entry.line
     while top > 0 and _ENTRY.match(lines[top - 1]):
         top -= 1
+        before = _ENTRY.match(lines[top])
+        value = _value(before) if before is not None else None
+        if not grandfathered and (value is None or (entry.key, value) in old):
+            return False
     block = []
     while top > 0 and _COMMENT.match(lines[top - 1]):
         top -= 1
@@ -123,12 +139,18 @@ def split_against_snapshot(
     return missing, new
 
 
-def uncited(text: str, snapshot: list[tuple[str, str]]) -> list[str]:
-    """Rule 1 and 2 findings for one filter text, as readable lines."""
+def uncited(text: str, snapshot: list[tuple[str, str]], base: str | None = None) -> list[str]:
+    """Rule 1 and 2 findings for one filter text, as readable lines. ``base`` is the same file at the merge base."""
     head = agreed_entries(text)
     missing, new = split_against_snapshot(snapshot, head)
+    at_base = {(e.key, e.value) for e in parse_entries(base)} if base else set()
+    old = frozenset(snapshot) | frozenset(at_base)
     found = [f"{k}: snapshot entry {v!r} is gone or out of order" for k, v in missing]
-    found += [f"{e.key}: {e.value!r} (line {e.line + 1}) cites no #NNNN" for e in new if not is_cited(text, e)]
+    found += [
+        f"{e.key}: {e.value!r} (line {e.line + 1}) cites no #NNNN of its own"
+        for e in new
+        if not is_cited(text, e, old, (e.key, e.value) in at_base)
+    ]
     return found
 
 
