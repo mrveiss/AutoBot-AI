@@ -73,6 +73,8 @@ from _scan_helpers import (  # noqa: E402
     staged_paths,
 )
 
+from autobot_shared.testfile_names import is_test_filename  # noqa: E402
+
 HOOK_ID = "no-local-schemas"
 
 # Files in autobot-backend/api/ that are exempt from the check.
@@ -121,7 +123,7 @@ def _is_target_file(path: Path, repo_root: Path) -> bool:
     name = path.name
     if name.startswith("schemas_"):
         return False
-    if name.endswith("_test.py") or name.startswith("test_"):
+    if is_test_filename(name, include_js=False):
         return False
     if name in ALLOWLISTED_FILENAMES:
         return False

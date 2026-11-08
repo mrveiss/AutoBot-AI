@@ -16,6 +16,7 @@ from typing import Any, Dict, List
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_1_HOUR
+from autobot_shared.testfile_names import is_test_filename
 
 logger = get_logger(__name__)
 
@@ -99,9 +100,6 @@ class TestingCoverageAnalyzer:
         # Caching keys
         self.COVERAGE_KEY = "testing_analysis:coverage"
         self.GAPS_KEY = "testing_analysis:gaps"
-
-        # Test file patterns
-        self.test_patterns = [r"test_.*\.py$", r".*_test\.py$", r"tests/.*\.py$"]
 
         # Test function patterns
         self.test_function_patterns = [r"^test_", r"_test$", r"^should_"]
@@ -222,7 +220,9 @@ class TestingCoverageAnalyzer:
     def _is_test_file(self, file_path: Path) -> bool:
         """Check if file is a test file"""
         path_str = str(file_path)
-        return any(re.search(pattern, path_str) for pattern in self.test_patterns)
+        return is_test_filename(Path(path_str).name, include_js=False) or (
+            "tests/" in path_str and path_str.endswith(".py")
+        )
 
     async def _extract_functions_from_file(self, file_path: str) -> List[CoverageFunction]:
         """Extract functions from a file"""

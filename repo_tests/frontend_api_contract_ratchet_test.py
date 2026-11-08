@@ -53,6 +53,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
+
 _REPO_ROOT = repo_root()
 
 _MAIN_SRC = _REPO_ROOT / "autobot-frontend" / "src"
@@ -179,7 +181,7 @@ def _is_test(path: Path) -> bool:
     bypassing the client — counting it would make the ratchet grow whenever
     someone adds coverage, which is the opposite of the incentive intended.
     """
-    return "__tests__" in path.parts or ".test." in path.name or ".spec." in path.name
+    return "__tests__" in path.parts or is_test_filename(path.name)
 
 
 def _source_files(root: Path, suffixes: tuple[str, ...] = _SOURCE_SUFFIXES) -> list[Path]:

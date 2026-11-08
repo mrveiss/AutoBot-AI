@@ -61,6 +61,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root as _repo_root
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 
 _SYMBOL = "is_accessible_by"
@@ -75,8 +76,7 @@ _ROOTS = ("autobot-backend", "autobot_shared", "autobot-slm-backend")
 
 
 def _is_test_path(rel: str) -> bool:
-    name = rel.rsplit("/", 1)[-1]
-    return name.endswith("_test.py") or name.startswith("test_") or "/tests/" in f"/{rel}"
+    return is_test_filename(rel, include_js=False) or "/tests/" in f"/{rel}"
 
 
 def _production_modules() -> list[Path]:

@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from autobot_shared.testfile_names import is_test_filename
 from utils.file_categorization import SKIP_DIRS
 
 logger = get_logger(__name__)
@@ -336,9 +337,8 @@ class ConfigDuplicationDetector(_BaseClass):
         under any directory with "test" in its name (or a file called
         ``latest.py``) was skipped wholesale, with no error and no count.
         """
-        name = relative.name
         parts = set(relative.parts[:-1])
-        return bool(parts & {"test", "tests", "archive"}) or name.startswith("test_") or name.endswith("_test.py")
+        return bool(parts & {"test", "tests", "archive"}) or is_test_filename(relative.name, include_js=False)
 
     def scan_directory(self, directory: str = None) -> None:
         """

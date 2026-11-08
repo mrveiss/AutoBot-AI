@@ -25,15 +25,15 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from repo_tests._reach import declare  # noqa: E402
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths  # noqa: E402
 
 LITERAL = "Simulated output"
 
 
 def _is_test_path(path: str) -> bool:
-    name = Path(path).name
     parts = Path(path).parts
-    return name.endswith("_test.py") or name.startswith("test_") or "tests" in parts or "repo_tests" in parts
+    return is_test_filename(path, include_js=False) or "tests" in parts or "repo_tests" in parts
 
 
 def contains_literal(source: str) -> bool:

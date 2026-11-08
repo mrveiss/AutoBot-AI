@@ -153,6 +153,8 @@ from _scan_helpers import (  # noqa: E402
     scan_python_files,
 )
 
+from autobot_shared.testfile_names import is_test_filename  # noqa: E402
+
 #: Name this guard reports under, in messages and in its floor failures.
 HOOK_ID = "getenv-ssot-drift"
 
@@ -313,7 +315,7 @@ def _in_scope(path: Path, repo_root: Path) -> bool:
         return False
     if "tests" in parts:
         return False
-    if path.name in SSOT_FIELD_SOURCES or path.name.endswith("_test.py"):
+    if path.name in SSOT_FIELD_SOURCES or is_test_filename(path.name, include_js=False):
         return False
     return True
 

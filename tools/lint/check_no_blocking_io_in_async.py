@@ -91,6 +91,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _scan_helpers import PY_FLOOR, enforce_reach, scan_python_files  # noqa: E402
 
+from autobot_shared.testfile_names import is_test_filename  # noqa: E402
+
 HOOK_ID = "no-blocking-io-in-async"
 
 # `requests` library functions that perform sync HTTP. ``request`` is the
@@ -188,8 +190,7 @@ def _is_test_path(rel_posix: str) -> bool:
     ``*_test.py`` would let ``tests/test_x.py`` through, and this guard has
     already been bitten once by a detector narrower than the class it named.
     """
-    name = rel_posix.rsplit("/", 1)[-1]
-    return name.endswith("_test.py") or name.startswith("test_") or "/tests/" in f"/{rel_posix}"
+    return is_test_filename(rel_posix, include_js=False) or "/tests/" in f"/{rel_posix}"
 
 
 def in_scope(violations: List[_Violation], rel_posix: str) -> tuple[List[_Violation], int]:

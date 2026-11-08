@@ -23,6 +23,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple, Type
 
+from autobot_shared.testfile_names import is_test_filename
+
 from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
 from .credential_binding import bound_resolver
 from .hooks import validate_hook_names
@@ -123,13 +125,11 @@ def is_non_production_module(name: str) -> bool:
     """True for package modules that must never be imported at plugin-load time.
 
     Importing the package's own tests drags pytest into the production process
-    (~100ms), and where pytest is absent the import fails, is swallowed, and —
-    because failed imports are not cached — retries for every plugin on every
-    startup. A `conftest.py` would do the same; it has no trigger in this
-    package today, which is exactly why the rule is stated here where it can be
-    tested rather than inlined where it cannot (#13677 review).
+    (~100ms), and where pytest is absent the import fails, is swallowed, and — because
+    failed imports are not cached — retries for every plugin on every startup. A
+    `conftest.py` would do the same; the canonical test-file name rule (#21078) decides, stated here to be testable.
     """
-    return name.endswith("_test") or name.startswith("test_") or name == "conftest"
+    return is_test_filename(f"{name}.py", include_js=False)
 
 
 def canonicalise_plugin_sdk() -> List[str]:

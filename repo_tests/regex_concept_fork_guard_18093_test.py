@@ -38,6 +38,7 @@ import re
 import pytest
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
@@ -207,7 +208,7 @@ def _tracked_python_files() -> tuple[str, ...]:
 
 
 def _is_test(rel: str) -> bool:
-    return rel.endswith("_test.py") or "/tests/" in rel or rel.rsplit("/", 1)[-1].startswith("test_")
+    return is_test_filename(rel, include_js=False) or "/tests/" in rel
 
 
 @functools.lru_cache(maxsize=1)

@@ -41,6 +41,7 @@ from repo_tests._reach import declare
 
 from autobot_shared import env_registry_tls, ssot_tls
 from autobot_shared.env_registry import REGISTRY
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint._comment_syntax import strip_trailing_comment
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -116,8 +117,7 @@ def default_sites(text: str) -> list[tuple[str, str]]:
 
 
 def _is_test_file(rel: str) -> bool:
-    name = Path(rel).name
-    return rel.startswith("repo_tests/") or "/tests/" in rel or name.endswith("_test.py") or name.startswith("test_")
+    return rel.startswith("repo_tests/") or "/tests/" in rel or is_test_filename(rel, include_js=False)
 
 
 def bare_literals(text: str) -> list[str]:

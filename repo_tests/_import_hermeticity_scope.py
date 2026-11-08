@@ -42,6 +42,7 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 
 #: ``(sys.path entry relative to the repo root, package directory)``. Each backend
@@ -116,7 +117,7 @@ def entries(root: Path) -> list[Entry]:
         if not package_dir.is_dir():
             continue
         for path in sorted(package_dir.rglob("*.py")):
-            if "__pycache__" in path.parts or path.name.endswith("_test.py") or path.name.startswith("test_"):
+            if "__pycache__" in path.parts or is_test_filename(path.name, include_js=False):
                 continue
             found.append(Entry(tree, module_name(package, path, package_dir), path.relative_to(root).as_posix()))
     return found

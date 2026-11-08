@@ -19,13 +19,14 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
+
 _ROOT = repo_root()
 _PATTERNS = ("test_", "_test.py")
 
 
 def _is_test(rel: str) -> bool:
-    name = rel.rsplit("/", 1)[-1]
-    return name.startswith(_PATTERNS[0]) or name.endswith(_PATTERNS[1])
+    return is_test_filename(rel, include_js=False)
 
 
 def _importers(module: str) -> list[str]:

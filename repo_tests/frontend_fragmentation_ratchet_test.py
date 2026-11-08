@@ -62,6 +62,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_tree_texts
 
+from autobot_shared.testfile_names import is_test_filename
+
 _REPO_ROOT = repo_root()
 _FRONTEND_SRC = _REPO_ROOT / "autobot-frontend" / "src"
 
@@ -207,7 +209,7 @@ def _is_test(path: Path) -> bool:
     implementation of the concept; counting it would make the ratchet grow
     whenever someone adds coverage.
     """
-    return "__tests__" in path.parts or ".test." in path.name or ".spec." in path.name
+    return "__tests__" in path.parts or is_test_filename(path.name)
 
 
 def _source_files() -> list[Path]:

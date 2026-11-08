@@ -24,6 +24,7 @@ import ast
 import re
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint.canonical.context import Context
 from tools.lint.canonical.diagnostic import Diagnostic
 
@@ -127,7 +128,7 @@ def is_task_module(tree: ast.AST) -> bool:
 
 
 def in_scope(rel: str, tree: ast.AST) -> bool:
-    if rel.endswith("_test.py") or "/tests/" in rel or Path(rel).name.startswith("test_"):
+    if is_test_filename(rel, include_js=False) or "/tests/" in rel:
         return False
     return rel.startswith(SCOPE_DIRS) or is_task_module(tree)
 

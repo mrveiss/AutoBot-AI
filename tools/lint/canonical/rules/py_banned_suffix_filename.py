@@ -14,6 +14,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint.canonical.context import Context
 from tools.lint.canonical.diagnostic import Diagnostic
 
@@ -33,7 +34,7 @@ def _banned_suffix(stem: str) -> str | None:
     for suffix in _ALWAYS_BANNED:
         if stem.endswith(suffix):
             return suffix
-    is_test = stem.startswith("test_") or stem.endswith("_test")
+    is_test = is_test_filename(f"{stem}.py", include_js=False)
     if not is_test:
         for suffix in _TEST_ONLY_BANNED:
             if stem.endswith(suffix):
