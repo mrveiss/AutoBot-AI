@@ -12,9 +12,11 @@ branch, so a reorder that lets a draft pass, or lets a skipped suite read as ver
 (#18106), reddens by name.
 """
 
+import re
 import subprocess
 
 import pytest
+import yaml
 from repo_tests._paths import repo_root
 
 SCRIPT = repo_root() / ".github" / "actions" / "gate-verdict" / "verdict.sh"
@@ -107,11 +109,8 @@ def test_a_missing_input_is_an_error_not_a_pass(missing):
 
 
 # --- ci.yml wiring of the gates (review of #19621) ---------------------------------------------
-import re  # noqa: E402
-
-import yaml  # noqa: E402
-
 _WORKFLOWS = repo_root() / ".github" / "workflows"
+_WORKFLOW_SUFFIXES = {".yml", ".yaml"}
 
 
 def _ci_job(name):
@@ -145,13 +144,17 @@ def test_types_gate_applies_and_fails_on_either_types_job():
     assert slm["steps"][-1]["id"] == "done"  # last step, so it is reached only when every step passed
 
 
+def _workflow_files(directory):
+    return [p for p in sorted(directory.iterdir()) if p.suffix in _WORKFLOW_SUFFIXES]
+
+
 def _inherits(text):
-    return [m.start() for m in re.finditer(r"^\s*secrets:\s*inherit\b", text, re.M)]
+    return [m.start() for m in re.finditer(r"""^\s*secrets:\s*(?:inherit|"inherit"|'inherit')(?![\w-])""", text, re.M)]
 
 
 def test_no_workflow_passes_every_secret_with_inherit():
     """Each reusable body names the secrets it reads; the caller passes those names and nothing else."""
-    workflows = [p for p in sorted(_WORKFLOWS.iterdir()) if p.suffix == ".yml"]
+    workflows = _workflow_files(_WORKFLOWS)
     # A listing that found nothing would report the same clean result as a compliant tree.
     assert len(workflows) >= 40, f"only {len(workflows)} workflows listed: the sweep did not look"
     offenders = [p.name for p in workflows if _inherits(p.read_text(encoding="utf-8"))]
@@ -161,6 +164,17 @@ def test_no_workflow_passes_every_secret_with_inherit():
 def test_the_inherit_detector_catches_a_planted_one():
     assert _inherits("jobs:\n  x:\n    uses: ./a.yml\n    secrets: inherit  # note\n")
     assert not _inherits("jobs:\n  x:\n    secrets:\n      A: ${{ secrets.A }}\n")
+
+
+@pytest.mark.parametrize("value", ['"inherit"', "'inherit'", "inherit"])
+def test_the_inherit_detector_catches_each_quoted_form(value):
+    assert _inherits(f"jobs:\n  x:\n    secrets: {value}\n")
+
+
+def test_the_sweep_reads_both_yaml_suffixes(tmp_path):
+    for name in ("a.yml", "b.yaml", "c.txt"):
+        (tmp_path / name).write_text("x", encoding="utf-8")
+    assert [p.name for p in _workflow_files(tmp_path)] == ["a.yml", "b.yaml"]
 
 
 @pytest.mark.parametrize(

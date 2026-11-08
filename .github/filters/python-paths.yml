@@ -5,7 +5,7 @@
 # Read once, by the `changes` job of .github/workflows/ci.yml, and published as
 # `run_python_suite`. The `python-suite` gate job in that file reports the
 # context green ("not affected") when this set does not match and requires all
-# twelve shards when it does (#14353, #18208). There is one job and one output,
+# eight shards when it does (#14353, #18208). There is one job and one output,
 # so no second condition has to stay the exact complement of this one.
 python:
   - '**/*.py'
