@@ -142,7 +142,7 @@
 </template>
 
 <script>
-import { saveTextFile, formatISOString, isoDateStamp } from '@autobot/ui'
+import { saveTextFile, createDateFormatter, isoDateStamp } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
@@ -901,7 +901,7 @@ export default {
     const downloadLog = () => {
       const logContent = outputLines.value
         .map(line => {
-          const timestamp = line.timestamp ? `[${formatISOString(line.timestamp)}] ` : '';
+          const timestamp = line.timestamp ? `[${createDateFormatter()(line.timestamp)}] ` : '';
           return `${timestamp}${line.content || line}`;
         })
         .join('\n');

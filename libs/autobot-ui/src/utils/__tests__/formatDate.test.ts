@@ -280,10 +280,23 @@ describe('isoDateStamp and toDateTimeLocalValue (#19905)', () => {
     expect(isoTimestampStamp('nope')).toBe('')
   })
 
-  it('toDateTimeLocalValue is the local wall time to the minute, and empty for a bad value', () => {
-    const at = new Date(2025, 9, 30, 14, 5, 59)
-    expect(toDateTimeLocalValue(at)).toBe('2025-10-30T14:05')
-    expect(toDateTimeLocalValue(at.toISOString())).toBe('2025-10-30T14:05')
+  it('toDateTimeLocalValue shifts by the zone offset in force at that instant, and is empty for a bad value', () => {
+    const offset = vi.spyOn(Date.prototype, 'getTimezoneOffset')
+    const noon = '2025-10-30T12:00:00Z'
+    offset.mockReturnValue(-120) // UTC+2
+    expect(toDateTimeLocalValue(noon)).toBe('2025-10-30T14:00')
+    offset.mockReturnValue(300) // UTC-5
+    expect(toDateTimeLocalValue(noon)).toBe('2025-10-30T07:00')
+    offset.mockReturnValue(0)
+    expect(toDateTimeLocalValue(noon)).toBe('2025-10-30T12:00')
+    // A DST transition: the offset the instant carries is the one used (spring forward at 01:00Z).
+    const jump = Date.UTC(2025, 2, 30, 1, 0, 0)
+    offset.mockImplementation(function (this: Date) {
+      return this.getTime() < jump ? -60 : -120
+    })
+    expect(toDateTimeLocalValue(jump - 1000)).toBe('2025-03-30T01:59')
+    expect(toDateTimeLocalValue(jump)).toBe('2025-03-30T03:00')
+    offset.mockRestore()
     expect(toDateTimeLocalValue('nope')).toBe('')
     expect(toDateTimeLocalValue(undefined)).toBe('')
   })

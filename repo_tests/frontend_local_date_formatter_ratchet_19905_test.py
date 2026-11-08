@@ -121,6 +121,9 @@ _HAND_ASSEMBLED = re.compile(
     r"|\.get(?:Hours|Minutes|Seconds)\(\)\.toString\(\)\.padStart"
 )
 
+# Only the CHAINED form is matched: ``x.toISOString().split('T')[0]`` and ``.slice/.substring/.substr(0, 10|16)``
+# directly after ``toISOString()`` (whitespace and line breaks allowed). ``const s = d.toISOString(); s.slice(0, 10)``
+# is not seen, because telling it from other string slicing needs types.
 _ISO_DAY_STAMP = re.compile(
     r"\.toISOString\(\)\s*\.(?:split\(\s*['\"]T['\"]\s*\)\s*\[\s*0\s*\]|(?:slice|substring|substr)\(\s*0\s*,\s*1[06]\s*\))"
 )
@@ -454,7 +457,9 @@ def test_the_pin_was_not_raised_against_the_base() -> None:
 # IANA-zone wall-clock arithmetic (``formatToParts`` into numbers, never display text). Every other kit
 # source gets its date text from ``format.ts`` (#19905).
 _KIT_SRC = "libs/autobot-ui/src"
-_KIT_HOMES = ("/utils/format.ts", "/schedule/zone.ts")
+_KIT_HOMES = ("/utils/format.ts",)
+# ``zone.ts`` is exempt from the Intl shape ONLY (``formatToParts`` wall-clock arithmetic); every other shape still counts there.
+_KIT_INTL_EXEMPT = ("/schedule/zone.ts",)
 _KIT_SHAPES = (
     ("inline toLocale(Date|Time)String", _INLINE_LOCALE),
     ("new Intl.DateTimeFormat", _INTL_OUTSIDE_KIT),
@@ -470,7 +475,14 @@ def _kit_findings(src: Path) -> list[str]:
         if path.suffix not in (".ts", ".vue") or _EXCLUDED.search(rel) or rel.endswith(_KIT_HOMES):
             continue
         text = _COMMENT_LINE.sub("", path.read_text(encoding="utf-8"))
-        found += [f"{rel}: {label}" for label, pattern in _KIT_SHAPES if pattern.search(text)]
+        for label, pattern in _KIT_SHAPES:
+            if pattern is _INTL_OUTSIDE_KIT and rel.endswith(_KIT_INTL_EXEMPT):
+                continue
+            if pattern.search(text):
+                found.append(f"{rel}: {label}")
+        if rel.endswith(_KIT_INTL_EXEMPT):
+            text = _INTL_OUTSIDE_KIT.sub("ZoneParts(", text)
+            text = re.sub(r"\bIntl\s*\.\s*DateTimeFormat\b", "ZoneParts", text)
         found += [f"{rel}: local date formatter {n}" for n in date_formatter_names(text)]
     return found
 
@@ -497,3 +509,23 @@ def test_the_kit_formats_dates_only_in_format_ts(tmp_path: Path) -> None:
     assert (
         _kit_findings(kit) == []
     ), "a kit source formats dates itself; use format.ts (createDateFormatter, isoDateStamp)"
+
+
+def test_zone_ts_is_exempt_from_the_intl_shape_only(tmp_path: Path) -> None:
+    """Planted control: zone arithmetic may use Intl; any other shape in the same file is still found."""
+    (tmp_path / "schedule").mkdir()
+    zone = tmp_path / "schedule" / "zone.ts"
+    zone.write_text(
+        "const f = (z: string) => new Intl.DateTimeFormat('en-US', { timeZone: z })\n"
+        "export function parts(z: string) { return new Intl.DateTimeFormat('en-US', { timeZone: z }).formatToParts() }\n",
+        encoding="utf-8",
+    )
+    assert _kit_findings(tmp_path) == []
+    zone.write_text(
+        zone.read_text(encoding="utf-8") + "export const s = new Date().toISOString().slice(0, 10)\n", encoding="utf-8"
+    )
+    assert any("zone.ts: hand-built ISO day stamp" in f for f in _kit_findings(tmp_path))
+    zone.write_text("export function show(d: Date) { return d.toLocaleDateString() }\n", encoding="utf-8")
+    found = _kit_findings(tmp_path)
+    assert any("zone.ts: inline toLocale" in f for f in found), found
+    assert any("zone.ts: local date formatter show" in f for f in found), found

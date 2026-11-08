@@ -3,8 +3,8 @@
 //
 // IANA-zone wall-clock arithmetic on top of Intl only (no dependency). The
 // zone database ships with the runtime, so DST rules are the platform's.
-import { isoDateStamp } from '../utils/format'
 
+import { isoDateStamp } from '../utils/format'
 
 const cache = new Map<string, Intl.DateTimeFormat>()
 const DAY_MS = 86_400_000
