@@ -29,7 +29,7 @@ from knowledge.connectors.models import (
 )
 from knowledge.connectors.registry import ConnectorRegistry
 from utils.file_categorization import SKIP_DIRS
-from utils.file_types import TEXT_FILE_EXTENSIONS
+from utils.file_types import NON_CODE_ARCHIVE_DIRS, TEXT_FILE_EXTENSIONS
 from utils.text_chunking import chunk_text
 
 logger = get_logger(__name__)
@@ -84,8 +84,9 @@ class FileServerConnector(AbstractConnector):
         # Default excludes: the canonical skip dirs (as whole path components, so a
         # root-level `node_modules/` is caught too) and minified bundles. An explicit
         # `exclude_patterns` replaces both: the operator then owns the list (#19339).
+        # Archive/backup folders stay readable: they can hold user documents (#21004).
         self._exclude_patterns: List[str] = cfg.get("exclude_patterns", ["*.min.*"])
-        self._skip_dirs = frozenset() if "exclude_patterns" in cfg else SKIP_DIRS
+        self._skip_dirs = frozenset() if "exclude_patterns" in cfg else SKIP_DIRS - NON_CODE_ARCHIVE_DIRS
         self._max_size_bytes: int = int(cfg.get("max_file_size_mb", 10)) * 1024 * 1024
 
     # ------------------------------------------------------------------

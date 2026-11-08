@@ -4,9 +4,9 @@
 # Author: mrveiss
 """File-type extension sets and skip-dir sets have ONE home (#19339).
 
-``utils/file_categorization.py`` owns ``HTML_EXTENSIONS``, ``ALL_CODE_EXTENSIONS`` and ``SKIP_DIRS``;
-``utils/file_types.py`` owns ``TEXT_FILE_EXTENSIONS`` and ``DOCX_EXTENSIONS`` (the first file is over the
-size ceiling and may not grow). Before this guard the same concept was spelled out as a literal in three
+``utils/file_categorization.py`` owns ``HTML_EXTENSIONS`` and ``ALL_CODE_EXTENSIONS``;
+``utils/file_types.py`` owns ``TEXT_FILE_EXTENSIONS``, ``DOCX_EXTENSIONS`` and ``SKIP_DIRS`` (re-exported by
+the first file, which is over the size ceiling and may not grow; moved #21004). Before this guard the same concept was spelled out as a literal in three
 text-extension copies, three HTML copies, two DOCX copies and ten skip-dir lists that had drifted apart --
 ``.doc`` passed one DOCX gate and then failed inside python-docx; ``.worktrees`` was skipped by only some
 scanners. A scanner that needs more than the canonical set writes ``SKIP_DIRS | {"its", "own"}``.
@@ -145,8 +145,8 @@ def test_an_allowlisted_file_that_dropped_its_literal_is_stale(tmp_path: Path) -
 def test_the_homes_exist_and_export_the_canonical_names() -> None:
     root = repo_root()
     names = {
-        "autobot-backend/utils/file_categorization.py": {"HTML_EXTENSIONS", "ALL_CODE_EXTENSIONS", "SKIP_DIRS"},
-        "autobot-backend/utils/file_types.py": {"TEXT_FILE_EXTENSIONS", "DOCX_EXTENSIONS"},
+        "autobot-backend/utils/file_categorization.py": {"HTML_EXTENSIONS", "ALL_CODE_EXTENSIONS"},
+        "autobot-backend/utils/file_types.py": {"TEXT_FILE_EXTENSIONS", "DOCX_EXTENSIONS", "SKIP_DIRS"},
     }
     for rel, expected in names.items():
         tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))

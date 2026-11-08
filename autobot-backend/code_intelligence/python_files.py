@@ -12,19 +12,62 @@ uncached (sync) discovery paths cannot disagree (#20493).
 
 import fnmatch
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Iterable, Iterator, List, Set
 
+from autobot_shared.testfile_names import is_test_filename
 from utils.file_categorization import SKIP_DIRS
 
 # The one directory-name exclusion set for every code-intelligence analyzer
-# (#21004). Derived from the repo-wide ``SKIP_DIRS``; the extras are the
-# analysis-only names the per-analyzer copies used to add individually
-# (archived/backup trees, tool caches, third-party code). Analyzers import this
-# instead of declaring their own ``EXCLUDE_DIRS`` / ignore list.
-ANALYSIS_EXCLUDE_DIRS: frozenset = frozenset(
-    SKIP_DIRS | {"archive", "archives", "backup", "backups", ".mypy_cache", "third_party"}
-)
+# (#21004). It IS the repo-wide ``SKIP_DIRS`` (which now carries the archive,
+# backup, tool-cache and third-party names the per-analyzer copies used to add
+# individually). Analyzers import this instead of declaring their own
+# ``EXCLUDE_DIRS`` / ignore list.
+ANALYSIS_EXCLUDE_DIRS: frozenset = frozenset(SKIP_DIRS)
+
+# A pattern token (not a glob) meaning "the file name follows a test-file
+# convention"; answered by the shared ``is_test_filename`` rule (#20493).
+TEST_FILE_PATTERN = "<test-files>"
+
+_GLOB_CHARS = "*?["
+
+
+def _pattern_matches(pattern: str, text: str) -> bool:
+    """One pattern against a ``/``-prefixed path text (the single pattern grammar).
+
+    ``TEST_FILE_PATTERN`` -> shared test-file name rule. A glob with a slash
+    (a leading ``**/`` is implied: matching is right-anchored) -> ``PurePath.match``.
+    A slash-free glob -> the file name. Anything else is a path substring, so a
+    plain ``venv`` or ``/migrations/`` matches a directory component.
+    """
+    if pattern == TEST_FILE_PATTERN:
+        return is_test_filename(text)
+    if any(char in pattern for char in _GLOB_CHARS):
+        while pattern.startswith("**/"):
+            pattern = pattern[3:]
+        if "/" not in pattern:
+            return fnmatch.fnmatchcase(text.rsplit("/", 1)[-1], pattern)
+        anchored = pattern if pattern.startswith("*") else "*/" + pattern
+        return PurePosixPath(text).match(pattern) or fnmatch.fnmatchcase(text, anchored)
+    return pattern in text
+
+
+def matches_exclusion(path: str | Path, patterns: Iterable[str], root: Path | None = None) -> bool:
+    """The one file-exclusion predicate for the code-intelligence analyzers (#21004).
+
+    True if any of *patterns* matches *path* (made relative to *root* when given,
+    so a checkout under a skipped name does not exclude everything). Directory
+    names are excluded by ``discover_files`` / ``is_excluded``; this answers the
+    file-name and glob questions with one grammar (see ``_pattern_matches``).
+    """
+    text = Path(path).as_posix()
+    if root is not None:
+        try:
+            text = Path(path).relative_to(root).as_posix()
+        except ValueError:
+            pass
+    text = "/" + text.lstrip("/")
+    return any(_pattern_matches(pattern, text) for pattern in patterns)
 
 
 def is_excluded(path: Path, root: Path, excluded: Iterable[str]) -> bool:

@@ -6,6 +6,7 @@
 
 import ast
 import importlib.util
+import re
 from pathlib import Path
 from typing import List, Set
 
@@ -15,6 +16,22 @@ _PKG = Path(__file__).resolve().parent
 _CANONICAL = "python_files.py"
 _WALKS = {"rglob", "walk"}
 _COPY_NAMES = {"EXCLUDE_DIRS", "DEFAULT_EXCLUDE_DIRS", "_SKIP_DIRS", "_COCHANGE_SKIP_DIRS"}
+# A name that reads as an exclusion/ignore list. Bound to a literal collection of
+# strings it is a local copy of the exclusion rule (#21004 AC1/AC2).
+_IGNORE_LIST_NAME = re.compile(r"^_?(default_)?(exclude|excludes|ignore|skip)[a-z_]*$", re.IGNORECASE)
+_PATH_RECEIVER = re.compile(r"^(path|filepath|file_path|rel_path|rel|\w+_path)$")
+_PATH_CTORS = {"Path", "PurePath", "PurePosixPath"}
+# Pattern lists that are policy globs consumed by ``matches_exclusion`` (no directory
+# names, no predicate of their own). Each entry needs a reason; a stale entry fails.
+_ALLOWED_POLICY_LISTS = {
+    ("shared/analysis_base.py", "DEFAULT_EXCLUDE_PATTERNS"): "BaseCodeAnalyzer family's own file-glob policy",
+    ("multi_language_scanner.py", "default_excludes"): "project log tree; dir names come from SKIP_DIRS",
+    ("llm_pattern_analyzer.py", "exclude_patterns"): "caller default, applied through matches_exclusion",
+    ("base_analyzer.py", "default_excludes"): "minified-bundle globs, applied through matches_exclusion",
+    ("anti_pattern_detection/types.py", "DEFAULT_IGNORE_PATTERNS"): "ANALYSIS_EXCLUDE_DIRS plus bytecode globs",
+    # An INCLUDE match (which pre-commit checks apply to a file), not an exclusion.
+    ("precommit_analyzer.py", "fnmatch"): "check applicability, not file exclusion",
+}
 
 
 def _load_real_module():
@@ -84,6 +101,45 @@ def _import_violation(node: ast.AST) -> str:
     return ""
 
 
+def _is_string_collection(value: ast.expr | None) -> bool:
+    """A list/tuple/set literal holding at least one string constant."""
+    if not isinstance(value, (ast.List, ast.Tuple, ast.Set)):
+        return False
+    return any(isinstance(e, ast.Constant) and isinstance(e.value, str) for e in value.elts)
+
+
+def _ignore_list_copies(node: ast.AST) -> List[str]:
+    """Names bound to a literal exclusion list (a local copy of the rule)."""
+    value = getattr(node, "value", None)
+    if not _is_string_collection(value):
+        return []
+    return [name for name in _assigned_names(node) if _IGNORE_LIST_NAME.match(name)]
+
+
+def _is_filename_predicate(node: ast.AST) -> str:
+    """The rule broken by a local file-name match (``fnmatch``, ``<path>.match(``)."""
+    if isinstance(node, ast.ImportFrom) and node.module == "fnmatch":
+        return "local fnmatch"
+    if isinstance(node, ast.Import) and any(a.name == "fnmatch" for a in node.names):
+        return "local fnmatch"
+    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "match"):
+        return ""
+    owner = node.func.value
+    is_ctor = isinstance(owner, ast.Call) and getattr(owner.func, "id", "") in _PATH_CTORS
+    if is_ctor or (isinstance(owner, ast.Name) and _PATH_RECEIVER.match(owner.id)):
+        return "local path.match() predicate"
+    return ""
+
+
+def _predicate_violations(node: ast.AST, rel: str) -> List[str]:
+    rule = _is_filename_predicate(node)
+    found = [f"{rel}:{node.lineno} {rule}"] if rule and (rel, rule.split()[-1]) not in _ALLOWED_POLICY_LISTS else []
+    for name in _ignore_list_copies(node):
+        if (rel, name) not in _ALLOWED_POLICY_LISTS:
+            found.append(f"{rel}:{node.lineno} local ignore list {name}")
+    return found
+
+
 def find_violations(root: Path) -> List[str]:
     """``file:line what`` for each bare walk call or analyzer-local exclusion-set copy."""
     found: List[str] = []
@@ -97,6 +153,8 @@ def find_violations(root: Path) -> List[str]:
             for name in _assigned_names(node):
                 if name in _COPY_NAMES:
                     found.append(f"{path.relative_to(root)}:{node.lineno} local {name}")
+            if hasattr(node, "lineno"):
+                found.extend(_predicate_violations(node, path.relative_to(root).as_posix()))
     return found
 
 
@@ -121,6 +179,9 @@ _PLANTED = {
     "recursive glob(**)": "def f(p):\n    return p.glob('**/*.py')\n",
     "glob.glob(recursive=)": "import glob\n\ndef f(p):\n    return glob.glob(p, recursive=True)\n",
     "local EXCLUDE_DIRS": "EXCLUDE_DIRS = {'x'}\n",
+    "local ignore list": "IGNORE_PATTERNS = ['*.min.js']\n",
+    "local fnmatch": "import fnmatch\n",
+    "local path.match() predicate": "def f(file_path, pats):\n    return any(file_path.match(p) for p in pats)\n",
 }
 
 
@@ -142,6 +203,53 @@ def test_guard_flags_each_planted_violation(tmp_path: Path, rule: str):
 def test_guard_does_not_flag_look_alikes(tmp_path: Path, source: str):
     (tmp_path / "ok.py").write_text(source, encoding="utf-8")
     assert find_violations(tmp_path) == []
+
+
+def test_guard_flags_a_path_constructor_match(tmp_path: Path):
+    (tmp_path / "bad.py").write_text(
+        "from pathlib import Path\n\ndef f(x, g):\n    return Path(x).match(g)\n", encoding="utf-8"
+    )
+    assert any("path.match()" in f for f in find_violations(tmp_path))
+
+
+@pytest.mark.parametrize(
+    "source", ["import re\n\ndef f(line, rx):\n    return rx.match(line)\n", "SKIP_REASONS = []\n"]
+)
+def test_guard_does_not_flag_regex_match_or_an_empty_list(tmp_path: Path, source: str):
+    (tmp_path / "ok.py").write_text(source, encoding="utf-8")
+    assert find_violations(tmp_path) == []
+
+
+def test_allowed_policy_lists_are_all_still_present():
+    """A stale allowlist entry would silently exempt a future copy of the same name."""
+    for rel, name in _ALLOWED_POLICY_LISTS:
+        source = (_PKG / rel).read_text(encoding="utf-8")
+        if name == "fnmatch":
+            assert "fnmatch" in source, rel
+            continue
+        tree = ast.parse(source)
+        assert any(
+            name in _assigned_names(n) and _is_string_collection(getattr(n, "value", None)) for n in ast.walk(tree)
+        ), (
+            rel,
+            name,
+        )
+
+
+def test_matches_exclusion_one_grammar(tmp_path: Path):
+    module = _load_real_module()
+    root = tmp_path / "venv" / "proj"
+    cases = {
+        ("a/test_x.py", (module.TEST_FILE_PATTERN,)): True,
+        ("a/testing_utils.py", (module.TEST_FILE_PATTERN,)): False,
+        ("a/x.pyc", ("*.pyc",)): True,
+        ("a/tests/x.py", ("**/tests/**",)): True,
+        ("a/x.min.js", ("**/*.min.js",)): True,
+        ("a/migrations/x.py", ("/migrations/",)): True,
+        ("a/x.py", ("/migrations/", "*.pyc")): False,
+    }
+    for (rel, patterns), expected in cases.items():
+        assert module.matches_exclusion(root / rel, patterns, root) is expected, (rel, patterns)
 
 
 def test_discover_files_rejects_a_path_pattern(tmp_path: Path):
@@ -171,7 +279,7 @@ def test_root_under_a_skipped_name_still_yields_files(tmp_path: Path, skipped_an
 def test_analysis_exclude_dirs_derives_from_skip_dirs():
     from utils.file_categorization import SKIP_DIRS
 
-    assert SKIP_DIRS <= _load_real_module().ANALYSIS_EXCLUDE_DIRS
+    assert SKIP_DIRS == _load_real_module().ANALYSIS_EXCLUDE_DIRS
 
 
 def test_symlinked_leaf_escaping_the_root_or_into_a_skipped_dir_is_dropped(tmp_path: Path):

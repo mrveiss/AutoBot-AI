@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Dict, Set
 
 from autobot_shared.testfile_names import is_test_filename
+from utils.file_types import SKIP_DIRS
 
 # =============================================================================
 # File Categories
@@ -350,46 +351,6 @@ ASSET_EXTENSIONS: Set[str] = {
 # =============================================================================
 # Directory Categories
 # =============================================================================
-
-# Directories to completely skip (no analysis value)
-SKIP_DIRS: Set[str] = {
-    "node_modules",
-    ".git",
-    "__pycache__",
-    ".pytest_cache",
-    "dist",
-    "build",
-    ".venv",
-    "venv",
-    ".DS_Store",
-    "temp",
-    ".next",
-    ".nuxt",
-    ".svelte-kit",
-    ".cache",
-    ".parcel-cache",
-    "coverage",
-    ".nyc_output",
-    "htmlcov",
-    ".tox",
-    ".idea",
-    ".vscode",
-    ".vs",
-    "vendor",
-    "bower_components",
-    "target",  # Rust/Java build output
-    "bin",
-    "obj",  # .NET build output
-    ".gradle",
-    ".m2",  # Java build caches
-    # #13602: git worktrees are near-complete copies of the repo. Measured on a
-    # working checkout, 160,105 of 167,072 code files (96%) lived under these two
-    # directories — every analytics walk was scanning the repo ~26 times over.
-    # `duplicate_detector._get_files_to_scan` already documented `.worktrees/` as
-    # pruned; it never was, because the name was missing from this set.
-    ".worktrees",
-    "worktrees",  # .claude/worktrees — same content, different parent
-}
 
 
 def is_skipped_path(path: Path, root: Path) -> bool:
