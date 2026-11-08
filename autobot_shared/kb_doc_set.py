@@ -27,6 +27,7 @@ EXCLUDE_PATTERNS = [
     "**/playwright-report/**",
     "**/.pytest_cache/**",
     "**/system-state.md",  # generated run state, not documentation
+    "**/.*",  # any hidden path segment: the docs sync's `.~tmp~` staging dir, dotfiles (#20968)
 ]
 
 
