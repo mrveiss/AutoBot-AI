@@ -6,7 +6,10 @@
 """Recording upload, list, delete, audio playback and waveform routes."""
 
 import array
+import asyncio
+import json
 import mimetypes
+import os
 import uuid
 import wave
 from pathlib import Path
@@ -32,7 +35,7 @@ from autobot_shared.ssot_constants import SecurityConstants
 from security.upload_filename_policy import require_safe_upload
 from transcriber.database import Database
 from transcriber.deps import authenticate, caller_can_access, caller_id_of, get_transcriber_db_from_request
-from transcriber.models import RecordingOut
+from transcriber.models import RecordingOut, RecordingStatus
 from transcriber.upload_security import MAX_FILE_SIZE
 
 logger = get_logger(__name__)
@@ -43,6 +46,9 @@ router = APIRouter(tags=["transcriber-recordings"], dependencies=[Depends(authen
 # route guard admitting a format the validator rejects would be a gap.
 _ALLOWED_EXTENSIONS = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
 _CHUNK_SIZE = 65536
+# Progress stream pacing (env-backed, never hard-coded).
+_PROGRESS_POLL_S = float(os.getenv("AUTOBOT_TRANSCRIBER_PROGRESS_POLL_S", "1.0"))
+_PROGRESS_MAX_S = float(os.getenv("AUTOBOT_TRANSCRIBER_PROGRESS_MAX_S", "3600"))
 
 
 def _upload_dir(request: Request) -> Path:
@@ -142,6 +148,49 @@ async def get_recording(recording_id: int, request: Request, db: Database = Depe
     if not rec or not caller_can_access(rec, request):
         raise HTTPException(404, "Recording not found")
     return RecordingOut(**rec)
+
+
+def _progress_event(status: str) -> dict:
+    """Map a recording lifecycle state to the SSE payload the UI consumes."""
+    if status == RecordingStatus.COMPLETE.value:
+        return {"percent": 100, "step": status}
+    if status == RecordingStatus.ERROR.value:
+        return {"error": True, "step": status}
+    return {"percent": 0, "step": status}
+
+
+async def _progress_stream(recording_id: int, db: Database) -> AsyncIterator[str]:
+    """Poll the recording status, emitting an SSE event on each change until terminal."""
+    last = None
+    waited = 0.0
+    while waited <= _PROGRESS_MAX_S:
+        rec = await db.get_recording(recording_id)
+        if not rec:
+            yield f"data: {json.dumps({'error': True, 'step': 'missing'})}\n\n"
+            return
+        status = rec["status"]
+        if status != last:
+            last = status
+            yield f"data: {json.dumps(_progress_event(status))}\n\n"
+        if status in (RecordingStatus.COMPLETE.value, RecordingStatus.ERROR.value):
+            return
+        await asyncio.sleep(_PROGRESS_POLL_S)
+        waited += _PROGRESS_POLL_S
+
+
+@router.get("/recordings/{recording_id}/progress")
+async def stream_recording_progress(
+    recording_id: int, request: Request, db: Database = Depends(get_transcriber_db_from_request)
+):
+    """SSE stream of processing progress for a recording (consumed by useSseProgress)."""
+    rec = await db.get_recording(recording_id)
+    if not rec or not caller_can_access(rec, request):
+        raise HTTPException(404, "Recording not found")
+    return StreamingResponse(
+        _progress_stream(recording_id, db),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @router.delete("/recordings/{recording_id}", status_code=204)
