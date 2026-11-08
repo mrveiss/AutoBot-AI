@@ -166,21 +166,28 @@ async def rotate_system_vault_secret(
     return None  # pragma: no cover -- defensive, generator always yields
 
 
-async def _refuse_unconfirmed_dependents(coordinator, session, user_id, permissions, vault_id: uuid.UUID) -> None:
+def refuse_dependents(deps) -> None:
     """409 with the dependents listed when anything still consumes the secret (#20557).
 
-    The listing comes from `describe_dependencies` (manage-authority gated). The
-    caller repeats the delete with `confirm_dependents` once a human has seen it.
+    The ONE shape of that refusal: the main delete, the envelope user delete and the
+    envelope service delete all raise it from here (#20640).
     """
-    deps = await coordinator.describe_dependencies(
-        session, user_id=user_id, permissions=permissions, secret_id=vault_id
-    )
     if deps:
         dependents = [{"dependent_kind": d.dependent_kind, "dependent_id": d.dependent_id} for d in deps]
         raise HTTPException(
             status_code=409,
             detail={"code": "secret_has_dependents", "message": "Dependents use this secret", "dependents": dependents},
         )
+
+
+async def _refuse_unconfirmed_dependents(coordinator, session, user_id, permissions, vault_id: uuid.UUID) -> None:
+    """Refuse (409) while dependents exist; the listing is manage-authority gated (`describe_dependencies`).
+
+    The caller repeats the delete with `confirm_dependents` once a human has seen it.
+    """
+    refuse_dependents(
+        await coordinator.describe_dependencies(session, user_id=user_id, permissions=permissions, secret_id=vault_id)
+    )
 
 
 async def delete_system_vault_secret(
