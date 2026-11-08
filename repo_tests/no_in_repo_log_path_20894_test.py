@@ -16,6 +16,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.no_in_repo_log_path_20894_baseline import BASELINE
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
@@ -88,7 +89,7 @@ def _env_like(func: ast.Attribute) -> bool:
 
 def count_violations(text: str) -> int:
     """In-tree log-path spellings in one module's source."""
-    return sum(1 for n in ast.walk(ast.parse(text)) if _is_in_tree_join(n) or _is_logs_default(n))
+    return sum(1 for n in ast.walk(parse_cache.parse(text)) if _is_in_tree_join(n) or _is_logs_default(n))
 
 
 def _live() -> dict[str, int]:
