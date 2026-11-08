@@ -19,9 +19,19 @@ import { extractApiErrorMessage } from '@/utils/errorExtract'
 import { describeApiRefusal } from '@/utils/conversationFileUpload'
 import i18n from '@/i18n'
 import { getApiBase } from '@/config/ssot-config'
-import type { ConversationFilePreview } from '@/utils/conversationFilePreview'
 import { mapFileList, type BackendFileList } from '@/utils/conversationFileList'
 import { useLoadingState } from '@/composables/useLoadingState'
+import { useLatestRequest } from './useLatestRequest'
+import {
+  useConversationFilePreview,
+  previewBlobType,
+  isPreviewable,
+  PREVIEW_BLOB_REVOKE_MS,
+  type PreviewPane
+} from './useConversationFilePreview'
+
+export { previewBlobType, PREVIEW_BLOB_REVOKE_MS }
+export type { PreviewPane }
 
 // Create scoped logger for useConversationFiles
 const logger = createLogger('useConversationFiles')
@@ -40,14 +50,6 @@ function failureText(err: unknown, fallback: string): string {
   return describeApiRefusal(err, t) ?? extractApiErrorMessage(err, fallback)
 }
 
-/** The preview pane's content; `truncated` when the server sent only the head of a larger file (#20906). */
-export interface PreviewPane {
-  fileId: string
-  filename: string
-  data: ConversationFilePreview
-  truncated: boolean
-}
-
 /**
  * File metadata interface matching backend ConversationFile model
  */
@@ -59,21 +61,6 @@ export interface ConversationFile {
   size_bytes: number
   upload_timestamp: string
   download_url: string
-}
-
-/** How long a preview tab's blob URL stays valid before it is revoked (#20195). */
-export const PREVIEW_BLOB_REVOKE_MS = 60_000
-
-/**
- * The type a preview blob is opened as, or null when it must not be opened in this origin (#20195).
- * A blob URL inherits the app's origin, so text-like uploads (HTML, XML, scripts) are shown as plain text and
- * SVG, which can carry script, is downloaded instead.
- */
-export function previewBlobType(mimeType: string): string | null {
-  const type = (mimeType || '').toLowerCase()
-  if (type.startsWith('image/svg')) return null
-  if (type.startsWith('text/') || type === 'application/json') return 'text/plain'
-  return type || null
 }
 
 /** Issue #70: Sort options for file list */
@@ -113,14 +100,13 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
     uploads_count: 0,
     generated_count: 0
   })
-  const { isLoading: loading, wrap } = useLoadingState()
+  const { isLoading: opLoading, wrap } = useLoadingState()
+  /** True while the latest list request is in flight; a superseded request never clears it (#21159). */
+  const listLoading = ref(false)
+  const loading = computed(() => opLoading.value || listLoading.value)
   const error = ref<string | null>(null)
-  /** The preview pane's content, from `GET .../preview/{file_id}` (#20906); null while no pane is open. */
-  const preview = ref<PreviewPane | null>(null)
-  /** True while the preview request is in flight, so the pane can show progress (#20906). */
-  const previewLoading = ref(false)
-  /** Bumped per request and on close; a response whose token is no longer current is dropped (latest wins). */
-  let previewToken = 0
+  const listRequest = useLatestRequest()
+  const uploadRequest = useLatestRequest()
   const uploadProgress = ref<number>(0)
   const searchQuery = ref('')
   const sortField = ref<SortField>('date')
@@ -164,28 +150,64 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
 
   const loadFiles = async (): Promise<void> => {
     if (!currentSessionId()) {
+      listRequest.invalidate()
+      listLoading.value = false
       error.value = tr('noSession')
       return
     }
 
     error.value = null
+    const token = listRequest.begin()
     const requestedSession = currentSessionId()
     const base = conversationApi()
-    await wrap(async () => {
-      try {
-        const data = await api.get<BackendFileList>(`${base}/list`)
-
-        // A reply for a conversation the user already left must not overwrite the new one.
-        if (data && requestedSession === currentSessionId()) {
-          const mapped = mapFileList(data, base)
-          files.value = mapped.files
-          stats.value = mapped.stats
-        }
-      } catch (err: unknown) {
-        error.value = failureText(err, tr('loadFailed'))
-        logger.error('Load error:', err)
+    listLoading.value = true
+    try {
+      const data = await api.get<BackendFileList>(`${base}/list`)
+      // Only the latest request may write: a reply for a conversation the user left, or an older one, is dropped.
+      if (data && listRequest.isCurrent(token) && requestedSession === currentSessionId()) {
+        const mapped = mapFileList(data, base)
+        files.value = mapped.files
+        stats.value = mapped.stats
       }
-    })
+    } catch (err: unknown) {
+      if (listRequest.isCurrent(token) && requestedSession === currentSessionId()) {
+        error.value = failureText(err, tr('loadFailed'))
+      }
+      logger.error('Load error:', err)
+    } finally {
+      if (listRequest.isCurrent(token)) listLoading.value = false
+    }
+  }
+
+  /** Run one upload; progress, errors and the reload belong to the session that started it (#21159). */
+  const sendUpload = async (fileList: FileList | File[], session: string, token: number): Promise<boolean> => {
+    const owns = (): boolean => uploadRequest.isCurrent(token) && currentSessionId() === session
+    try {
+      const formData = new FormData()
+      Array.from(fileList).forEach((file) => formData.append('files', file))
+      const data = await api.post<{ success: boolean }>(`${conversationApi()}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent: UploadProgressEvent) => {
+          if (progressEvent.total && owns()) {
+            uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+          }
+        }
+      })
+      if (data?.success) {
+        if (owns()) await loadFiles()
+        if (owns()) uploadProgress.value = 100
+        return true
+      }
+      if (owns()) error.value = i18n.global.t('chat.input.uploadError.unknown')
+      return false
+    } catch (err: unknown) {
+      if (owns()) error.value = failureText(err, i18n.global.t('chat.input.uploadError.unknown'))
+      logger.error('Upload error:', err)
+      return false
+    } finally {
+      // Reset progress after a short delay, unless a newer upload or a conversation switch took it over.
+      setTimeout(() => { if (owns()) uploadProgress.value = 0 }, 2000)
+    }
   }
 
   const uploadFiles = async (fileList: FileList | File[]): Promise<boolean> => {
@@ -193,60 +215,15 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
       error.value = tr('noSession')
       return false
     }
-
     if (!fileList || fileList.length === 0) {
       error.value = tr('noFilesSelected')
       return false
     }
-
     error.value = null
     uploadProgress.value = 0
-
-    return wrap(async () => {
-      try {
-        const formData = new FormData()
-
-        // Add all files to FormData
-        Array.from(fileList).forEach((file) => {
-          formData.append('files', file)
-        })
-
-        const data = await api.post<{ success: boolean }>(
-          `${conversationApi()}/upload`,
-          formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data'
-            },
-            onUploadProgress: (progressEvent: UploadProgressEvent) => {
-              if (progressEvent.total) {
-                uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-              }
-            }
-          }
-        )
-
-        if (data?.success) {
-          // Reload files to get updated list
-          await loadFiles()
-          uploadProgress.value = 100
-          return true
-        }
-
-        error.value = i18n.global.t('chat.input.uploadError.unknown')
-        return false
-
-      } catch (err: unknown) {
-        error.value = failureText(err, i18n.global.t('chat.input.uploadError.unknown'))
-        logger.error('Upload error:', err)
-        return false
-      } finally {
-        // Reset progress after a short delay
-        setTimeout(() => {
-          uploadProgress.value = 0
-        }, 2000)
-      }
-    })
+    const session = currentSessionId()
+    const token = uploadRequest.begin()
+    return wrap(() => sendUpload(fileList, session, token))
   }
 
   const deleteFile = async (fileId: string): Promise<boolean> => {
@@ -301,107 +278,23 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
     }
   }
 
-  const previewFile = async (fileId: string): Promise<void> => {
-    if (!currentSessionId() || !fileId) {
-      error.value = tr('missingParameters')
-      return
-    }
-    const file = files.value.find(f => f.file_id === fileId)
-    if (!file) {
-      error.value = tr('fileNotFound')
-      return
-    }
-    const token = ++previewToken
-    try {
-      if (await openPreviewPane(file, token)) return
-      await openBytesPreview(file)
-    } catch (err: unknown) {
-      error.value = failureText(err, tr('previewFailed'))
-      logger.error('Preview error:', err)
-    }
-  }
+  const { preview, previewLoading, previewFile, closePreview, dropPreviewOf } = useConversationFilePreview({
+    api, conversationApi, currentSessionId, files, error, tr, failureText, downloadFile
+  })
 
   /**
-   * Open the bytes: previewable types as a blob URL (the routes are bearer-authenticated, which a plain
-   * window.open() never sends, #20195); anything else is downloaded.
+   * Conversation switch (#21159): drop everything that belongs to the previous conversation at once, and revoke
+   * the in-flight list/upload/preview requests so none of their replies can land in the new one.
    */
-  const openBytesPreview = async (file: ConversationFile): Promise<void> => {
-    const shownType = previewBlobType(file.mime_type)
-    if (shownType && isPreviewable(file.mime_type)) {
-      await openAuthenticatedPreview(file.file_id, shownType)
-    } else {
-      await downloadFile(file.file_id, file.filename)
-    }
-  }
-
-  /** Fetch the preview body; typed from the generated contract, a failure is logged and means "no pane" (#20906). */
-  const fetchPreview = async (fileId: string): Promise<ConversationFilePreview | null> => {
-    try {
-      const data: ConversationFilePreview | null = await api.get(`${conversationApi()}/preview/${fileId}`)
-      return data
-    } catch (err: unknown) {
-      logger.warn('Preview route failed, falling back to the bytes:', err)
-      return null
-    }
-  }
-
-  /**
-   * Show the server-built preview of a text file in the pane (#20906). Returns false when there is no inline
-   * text for this file or the route failed, so the caller falls back to the bytes. A superseded request
-   * returns true: the newer call owns the outcome.
-   */
-  const openPreviewPane = async (file: ConversationFile, token: number): Promise<boolean> => {
-    if (!file.mime_type.startsWith('text/')) return false
-    previewLoading.value = true
-    const data = await fetchPreview(file.file_id)
-    if (token !== previewToken) return true
-    previewLoading.value = false
-    if (!data?.preview_available || typeof data.preview_content !== 'string') return false
-    const shown = new TextEncoder().encode(data.preview_content).length
-    preview.value = { fileId: file.file_id, filename: file.filename, data, truncated: file.size_bytes > shown }
-    return true
-  }
-
-  const closePreview = (): void => {
-    previewToken++
-    previewLoading.value = false
-    preview.value = null
-  }
-
-  /** Close the pane when it shows one of these files (deleted or renamed). */
-  const dropPreviewOf = (fileIds: string[]): void => {
-    if (preview.value && fileIds.includes(preview.value.fileId)) closePreview()
-  }
-
-  /**
-   * Open a file in a new tab through the authenticated client, then revoke the blob URL (#20195).
-   * The tab is opened synchronously (a popup after an await is blocked), then pointed at the blob.
-   */
-  const openAuthenticatedPreview = async (fileId: string, shownType: string): Promise<void> => {
-    const tab = window.open('', '_blank')
-    try {
-      const response = await api.rawRequest(`${conversationApi()}/download/${fileId}`, { method: 'GET' })
-      const blob = new Blob([await response.blob()], { type: shownType })
-      const url = window.URL.createObjectURL(blob)
-      if (tab) tab.location.href = url
-      setTimeout(() => window.URL.revokeObjectURL(url), PREVIEW_BLOB_REVOKE_MS)
-    } catch (err) {
-      tab?.close()
-      throw err
-    }
-  }
-
-  const isPreviewable = (mimeType: string): boolean => {
-    const previewableTypes = [
-      'image/',
-      'text/',
-      'application/pdf',
-      'application/json',
-      'video/',
-      'audio/'
-    ]
-
-    return previewableTypes.some(type => mimeType.startsWith(type))
+  const resetForSession = (): void => {
+    listRequest.invalidate()
+    uploadRequest.invalidate()
+    listLoading.value = false
+    uploadProgress.value = 0
+    files.value = []
+    stats.value = { total_files: 0, total_size_bytes: 0, uploads_count: 0, generated_count: 0 }
+    fileSelection.clear()
+    closePreview()
   }
 
   // #9724: consumed by <Icon :name="..."> (ChatFilePanel) — must return an
@@ -566,6 +459,7 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
     downloadFile,
     previewFile,
     closePreview,
+    resetForSession,
 
     // Issue #70: New operations
     createFile,

@@ -341,6 +341,7 @@ const {
   preview,
   previewLoading,
   closePreview,
+  resetForSession,
   uploadProgress,
   hasFiles,
   totalSizeFormatted,
@@ -515,7 +516,7 @@ onUnmounted(() => {
 })
 
 watch(() => props.sessionId, (newSessionId) => {
-  closePreview()
+  resetForSession()
   if (newSessionId) loadFiles()
 })
 </script>

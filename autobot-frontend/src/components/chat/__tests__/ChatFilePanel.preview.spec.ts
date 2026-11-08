@@ -145,4 +145,18 @@ describe('ChatFilePanel preview (#20906)', () => {
     expect(pane()).toBeNull()
     wrapper.unmount()
   })
+
+  it('clears the old list immediately on a switch, also to an empty id (#21159)', async () => {
+    const wrapper = await open()
+    expect(wrapper.text()).toContain('notes.txt')
+    let release: (v: typeof listing) => void = () => {}
+    get.mockImplementation(() => new Promise((res) => { release = res as typeof release }))
+    await wrapper.setProps({ sessionId: 's2' })
+    expect(wrapper.text()).not.toContain('notes.txt')
+    release(listing)
+    await flushPromises()
+    await wrapper.setProps({ sessionId: '' })
+    expect(wrapper.text()).not.toContain('notes.txt')
+    wrapper.unmount()
+  })
 })
