@@ -103,6 +103,12 @@ _ALLOWED: dict[str, tuple[int, str]] = {
         "#10200 -- one push per linked person at a time, across workers: a short mutual-exclusion lock "
         "around a single SLM push, not a work claim with subtree overlap",
     ),
+    "autobot-backend/chat_history/rolling_summary.py": (
+        2,
+        "#20852 -- a single-flight guard for one session's summary refresh (SET NX + a token-checked renew "
+        "script): it keeps two workers from folding the same turns twice. Not a work claim -- no subtree, "
+        "no holder to name, and a lost lock only skips a refresh the next turn repeats.",
+    ),
     "autobot-backend/security/session_owner_claim.py": (
         1,
         "#20030 -- first writer on the session's own ownership key: SET NX gives an unowned session to ONE "
