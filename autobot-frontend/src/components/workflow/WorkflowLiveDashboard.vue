@@ -94,10 +94,7 @@
             </div>
             <div class="progress-meta">
               <span class="step-counter">
-                {{ $t('workflow.liveDashboard.stepOf', {
-                  current: wf.current_step + 1,
-                  total: wf.total_steps
-                }) }}
+                {{ $t('workflow.liveDashboard.stepOf', getWorkflowStepDisplay(wf)) }}
               </span>
               <span class="progress-pct">{{ Math.round(getProgressPercent(wf)) }}%</span>
             </div>
@@ -158,6 +155,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed, ref, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { getWorkflowStepDisplay } from '@/utils/workflowStepProgress';
 import { createLogger } from '@/utils/debugUtils';
 import { useEventBus } from '@/composables/useEventBus'
 import type { LiveEvent } from '@/services/LiveEventService'
