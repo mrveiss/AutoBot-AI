@@ -27,8 +27,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files
 from code_intelligence.similarity_thresholds import SIMILARITY_MEDIUM  # noqa: F401 -- re-exported (#18094)
-from utils.file_categorization import SKIP_DIRS
 
 # Issue #554: Import analytics infrastructure for semantic analysis. Guarded
 # once here (was duplicated verbatim in both security/analyzer.py and
@@ -60,7 +60,7 @@ logger = get_logger(__name__)
 # come from ``SKIP_DIRS``. The globs and extras below are this family's own:
 # bytecode, test files, archives and migrations are not analysed.
 DEFAULT_EXCLUDE_PATTERNS: List[str] = [
-    *(f"/{name}/" for name in sorted(SKIP_DIRS)),
+    *(f"/{name}/" for name in sorted(ANALYSIS_EXCLUDE_DIRS)),
     "*.pyc",
     "test_*",
     "*_test.py",
@@ -181,7 +181,7 @@ class BaseCodeAnalyzer(SemanticAnalysisMixin):
         self.results = []
         self.total_files_scanned = 0
 
-        for py_file in target.rglob("*.py"):
+        for py_file in discover_files(target, ("*.py",)):
             if self._should_exclude(py_file, target):
                 continue
 

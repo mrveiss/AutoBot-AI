@@ -234,6 +234,24 @@ class ActiveWorkflow:
     phase: str | None = None
     active_service: str | None = None
 
+    def step_awaiting_decision(self, step_id: str) -> WorkflowStep:
+        """Return the current step if *step_id* names it and it is parked, else refuse (#20918).
+
+        A decision for any other step, or for a step that is not in WAITING_APPROVAL (already
+        executing, completed or skipped), is a failure, not a silent no-op: the control route
+        maps StepNotAwaitingApproval to 409 rather than reporting success.
+        """
+        if self.current_step_index >= len(self.steps):
+            raise StepNotAwaitingApproval(f"Step {step_id} is not waiting for a decision: no step is pending")
+        current = self.steps[self.current_step_index]
+        if current.step_id != step_id:
+            raise StepNotAwaitingApproval(
+                f"Step {step_id} is not the step waiting for a decision (current: {current.step_id})"
+            )
+        if current.status != WorkflowStepStatus.WAITING_APPROVAL:
+            raise StepNotAwaitingApproval(f"Step {step_id} is {current.status.value}, not waiting for approval")
+        return current
+
     def _serialize_notification_config(self) -> Metadata | None:
         """Serialize notification_config to a plain dict for API responses."""
         if self.notification_config is None:
