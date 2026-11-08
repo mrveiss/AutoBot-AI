@@ -15,10 +15,13 @@ import time
 from typing import Any, Callable, Optional, cast
 
 from fastapi import HTTPException
+from starlette.requests import ClientDisconnect
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import RetryConfig, exponential_backoff_delay
+
+from autobot_shared.client_disconnect import is_client_disconnect, log_client_disconnect
 
 from .boundary_manager import get_error_boundary_manager
 from .hooks import get_cancel_scope_provider
@@ -274,6 +277,18 @@ def _create_api_error_response(
     )
 
 
+def _on_client_disconnect(e: Exception, operation: str):
+    """Expected peer disconnect: debug-log it instead of building a 500 (#20939).
+
+    An HTTP ``ClientDisconnect`` is re-raised for the app-level handler, which
+    answers it; a WebSocket peer drop ends the endpoint quietly.
+    """
+    log_client_disconnect(logger, e, operation)
+    if isinstance(e, ClientDisconnect):
+        raise e
+    return None
+
+
 def _raise_or_return_error(error_response: APIErrorResponse):
     """
     Raise HTTPException or return error dict.
@@ -462,6 +477,8 @@ def with_error_handling(
                 except (HTTPException, PassThroughError):
                     raise  # Preserve intentional HTTP status codes / app-level handlers (#17982)
                 except Exception as e:
+                    if is_client_disconnect(e):
+                        return _on_client_disconnect(e, func_operation)
                     error_response = _create_api_error_response(e, category, func_operation, error_code_prefix)
                     return _raise_or_return_error(error_response)
 
@@ -476,6 +493,8 @@ def with_error_handling(
                 except (HTTPException, PassThroughError):
                     raise  # Preserve intentional HTTP status codes / app-level handlers (#17982)
                 except Exception as e:
+                    if is_client_disconnect(e):
+                        return _on_client_disconnect(e, func_operation)
                     error_response = _create_api_error_response(e, category, func_operation, error_code_prefix)
                     return _raise_or_return_error(error_response)
 

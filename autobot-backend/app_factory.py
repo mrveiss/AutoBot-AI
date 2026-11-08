@@ -20,10 +20,11 @@ from autobot_shared.logging_manager import get_logger
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 # Import initialization modules
+from autobot_shared.client_disconnect import CLIENT_CLOSED_REQUEST, is_client_disconnect, log_client_disconnect
 from autobot_shared.fastapi_validation_handlers import register_validation_error_handlers
 
 # Issue #697: OpenTelemetry distributed tracing
@@ -76,7 +77,11 @@ def _register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(UploadRejection, upload_rejection_handler)
 
     @app.exception_handler(Exception)
-    async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    async def _unhandled_exception_handler(request: Request, exc: Exception) -> Response | JSONResponse:
+        if is_client_disconnect(exc):
+            # Nobody is reading: no traceback, no 500 body (#20939).
+            log_client_disconnect(logger, exc, f"{request.method} {request.url.path}")
+            return Response(status_code=CLIENT_CLOSED_REQUEST)
         logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
         return JSONResponse(
             status_code=500,
