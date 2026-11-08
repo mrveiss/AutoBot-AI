@@ -177,10 +177,17 @@ def test_only_the_title_s_member_list_counts(train):
 
 
 def test_a_recomputed_file_is_skipped(train):
-    head = member("one", {"size_known_large.py": LONG.format(1)})
+    head = member("one", {"size_baseline.py": LONG.format(1)})
     board(1, head, "-s", "ours")
     report = gate.check_range("main..train")
     assert report.findings == [] and report.files == 0
+
+
+def test_a_size_table_is_no_longer_recomputed_so_it_is_measured(train):
+    """#19673: a train only lowers the ceilings' ints, so a member's table entries must survive it."""
+    head = member("one", {"size_known_large.py": LONG.format(1)})
+    board(1, head, "-s", "ours")
+    assert gate.check_range("main..train").files == 1
 
 
 def test_a_range_with_no_member_merge_is_a_failure_not_a_pass(train):

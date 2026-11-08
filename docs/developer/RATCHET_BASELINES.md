@@ -513,7 +513,7 @@ and a control string matched. A number with any other unit (`24h`, `3d`) is stil
 
 ## Down-only tables are compared with the base, not with a hand total (#19283)
 
-A per-entry table (file-size `KNOWN_LARGE`, the colour and palette baselines) used to carry a
+A per-entry table (file-size `KNOWN_LARGE` until #19673, the colour and palette baselines) used to carry a
 hand-summed total or a mirrored copy, so that a raise showed up somewhere. Every PR that lowered
 *any* entry then edited the same total line, and two such PRs always conflicted.
 `repo_tests/_ratchet_base.py` now holds each entry to the same table at the base commit instead:
@@ -530,6 +530,32 @@ an entry above the base, or a key the base lacks, is a raise.
   "nothing rose".
 - **Moving a table:** pass the old path after the new one,
   `base_table(root, ("new.py", "old.py"), NAME)`. Without it every entry reads as an addition.
+
+## Size ratchets are gated against the merge base, not against their own table (#19673)
+
+The three file-size gates (Python, shell, frontend) and the frontend API-contract ratchet used to
+demand that a recorded number equal the file's current length, so every PR that shrank a
+grandfathered file edited a shared sorted table, and PRs shrinking neighbouring entries conflicted.
+
+**Rule:** for each grandfathered file F, `lines(F@HEAD) <= min(KNOWN_LARGE[F], lines(F@base))`
+(`_ratchet_base.growth_over_base`). The recorded ceiling is a down-only upper bound; the base blob
+is the tight gate, so a shrink needs **no** table edit and the lines it cut cannot be spent back.
+The frontend contract ratchet measures its five counts on the head and on the base tree and
+requires `now <= base`; it keeps no recorded number at all.
+
+- **The base** is the real merge base, by the resolver above (`base_commit`): `git merge-base HEAD
+  origin/main` locally, the merge ref's first parent in CI. Never the moving base tip.
+- **A file the base did not have is blocked:** a new file never earns an entry (an add still fails
+  `test_no_entry_may_be_added`, a raised ceiling still fails `test_no_ceiling_may_exceed_its_baseline`).
+- **Removed:** the "under its recorded ceiling, lower it" failure in `tools/lint/_file_size_guard.py`.
+  A file at or under 600 lines still fails until its entry is deleted.
+- **Repin:** `python scripts/check_python_file_size.py --repin-ceilings` (likewise
+  `check_shell_file_size.py`, `check_frontend_file_size.py`) rewrites only the integers of existing
+  entries, never upward, and deletes entries at or under 600. The merge train runs all three after
+  merging, so the recorded numbers follow the tree without any feature PR touching them. No workflow
+  and no bot PR does this. `pipeline-scripts/train_content_gate.py` therefore no longer treats the
+  `*_known_large.py` tables as recomputed: a member's entries must survive the train.
+- **Fail closed:** an unreadable base raises `BaseUnavailable`; it never reads as "nothing grew".
 
 ## Local date and time formatters (#19905)
 

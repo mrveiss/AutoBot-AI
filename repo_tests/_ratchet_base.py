@@ -26,6 +26,11 @@ orphaned by a rebase -- which is why ci.yml passes it only for pushes.
 A table that moved path is read from its first path present at each base, so a rename PR lists
 the old path after the new one (``base_table(root, ("new.py", "old.py"), NAME)``).
 
+The size ratchets use it as a TIGHT gate, not only a tripwire (#19673): ``growth_over_base`` requires
+``lines(F@HEAD) <= min(KNOWN_LARGE[F], lines(F@base))``, with the base being the real merge base
+above. A shrinking PR therefore never edits the shared ceiling table; the merge train rewrites the
+recorded ints with each checker's ``--repin-ceilings``.
+
 If the base cannot be read, :class:`BaseUnavailable` is raised. It is never treated as
 "nothing rose": a ratchet that cannot see its base has proved nothing.
 """
@@ -33,6 +38,7 @@ If the base cannot be read, :class:`BaseUnavailable` is raised. It is never trea
 from __future__ import annotations
 
 import ast
+import io
 import os
 import subprocess
 from pathlib import Path
@@ -182,3 +188,69 @@ def base_tree_texts(root: Path, prefix: str, sha: str | None = None) -> dict[str
         texts[path] = data[header_end + 1 : header_end + 1 + size].decode("utf-8", errors="replace")
         pos = header_end + 1 + size + 1
     return texts
+
+
+def _lines(data: bytes) -> int:
+    """Line count with exactly ``tools.lint._file_size_guard.count_lines``' semantics (universal newlines)."""
+    return sum(1 for _ in io.TextIOWrapper(io.BytesIO(data), encoding="utf-8"))
+
+
+def base_line_counts(root: Path, rels: list[str], sha: str | None = None) -> dict[str, int | None]:
+    """``{path: line count at the base}``, ``None`` for a path the base did not have (#19673).
+
+    One ``git cat-file --batch`` call. Fails closed: an unreadable base, an object that is not a
+    blob, or content that does not decode raises :class:`BaseUnavailable`; none reads as "absent".
+    """
+    sha = _commit(root, sha, "base sha") if sha else base_commit(root)
+    if not rels:
+        return {}
+    batch = subprocess.run(
+        ["git", "-C", str(root), "cat-file", "--batch"],
+        input="".join(f"{sha}:{p}\n" for p in rels).encode("utf-8"),
+        capture_output=True,
+        timeout=120,
+        env=scrubbed_git_env(),
+    )
+    if batch.returncode != 0:
+        raise BaseUnavailable(f"cannot read the base {sha[:10]}: {batch.stderr.decode(errors='replace').strip()}")
+    counts: dict[str, int | None] = {}
+    data, pos = batch.stdout, 0
+    for path in rels:
+        header_end = data.index(b"\n", pos)
+        header = data[pos:header_end].split()
+        if header[-1:] == [b"missing"]:
+            counts[path] = None
+            pos = header_end + 1
+            continue
+        if len(header) < 3 or header[1] != b"blob":
+            raise BaseUnavailable(f"unexpected object for {path} at the base: {data[pos:header_end]!r}")
+        size = int(header[2])
+        try:
+            counts[path] = _lines(data[header_end + 1 : header_end + 1 + size])
+        except UnicodeDecodeError as exc:
+            raise BaseUnavailable(f"{path} at the base {sha[:10]} does not decode as UTF-8: {exc}") from exc
+        pos = header_end + 1 + size + 1
+    return counts
+
+
+def growth_over_base(root: Path, ceilings: dict[str, int], sha: str | None = None) -> dict[str, str]:
+    """Files breaking ``lines(F@HEAD) <= min(ceiling[F], lines(F@base))``, ``{path: reason}`` (#19673).
+
+    The committed ceiling is a down-only upper bound; the base blob is the tight gate, so a PR that
+    shrinks a grandfathered file needs no edit to the shared table. A file the base did not have is
+    blocked outright (a new file never earns an exemption), and an unreadable head file is a finding,
+    not a skip. *root* is the checkout whose working tree is HEAD.
+    """
+    from tools.lint._file_size_guard import count_lines  # noqa: PLC0415 - keeps this module import-light
+
+    base = base_line_counts(root, sorted(ceilings), sha)
+    found: dict[str, str] = {}
+    for rel, ceiling in sorted(ceilings.items()):
+        head, then = count_lines(root / rel), base[rel]
+        if then is None:
+            found[rel] = "not at the base: a new file is never grandfathered -- split it"
+        elif head is None:
+            found[rel] = "could not be read at HEAD, so it was never measured"
+        elif head > min(ceiling, then):
+            found[rel] = f"{head} lines at HEAD, over min(ceiling {ceiling}, base {then})"
+    return found

@@ -23,7 +23,8 @@ The ratchet has the same three-way semantics as the other two gates, and turns
 one way only:
 
 * above its ceiling      -> fail; a grandfathered file may not grow
-* below its ceiling      -> fail; lower the ceiling to the count just achieved
+* below its ceiling      -> pass (#19673); the merge-base gate in the ratchet test bounds it,
+  and ``--repin-ceilings`` lowers the recorded int in-train
 * at or below MAX_LINES  -> fail; delete the entry, the file is compliant
 
 "Below its ceiling -> fail" is the part that looks wrong and is not: an
@@ -117,6 +118,8 @@ MIN_TRACKED_FRONTEND_FILES = 1500
 #: to make a new file pass — split the file. The only copy
 #: (#19544): the ratchet test checks it against the base commit's.
 KNOWN_LARGE: dict[str, int] = load_known_large(__file__, "frontend_file_size_known_large.py")
+#: The file ``--repin-ceilings`` rewrites (#19673).
+KNOWN_LARGE_FILE = pathlib.Path(__file__).resolve().with_name("frontend_file_size_known_large.py")
 
 
 #: In-scope, git-tracked ``*.ts``/``*.vue`` paths under *root*, relative to it.
@@ -147,8 +150,15 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging(logger)
     parser = argparse.ArgumentParser(description="Reject oversized .ts/.vue files (#17885).")
     parser.add_argument("--audit-ceilings", action="store_true", help="walk every tracked .ts/.vue file")
+    parser.add_argument(
+        "--repin-ceilings",
+        action="store_true",
+        help="lower each recorded ceiling to its file's length and drop entries at or under the limit (#19673)",
+    )
     parser.add_argument("paths", nargs="*", help="staged files, as pre-commit passes them")
     args = parser.parse_args(argv)
+    if args.repin_ceilings:
+        return GUARD.repin_ceilings()
     if args.audit_ceilings:
         return run_audit()
     return GUARD.check_paths(args.paths)

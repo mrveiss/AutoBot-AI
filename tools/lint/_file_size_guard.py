@@ -12,9 +12,11 @@ the single implementation; each script keeps only its *configuration* (the
 ``MAX_LINES`` / ``KNOWN_LARGE`` / ``EXCLUDED_PREFIXES`` / floor constants, the
 git globs, the wording of the clean-run summary) and its CLI.
 
-The ratchet semantics (grandfathered files may not grow, a file under its
-ceiling must lower it, a file now compliant must drop its entry, a file that
-cannot be read is a violation and never a skip) are unchanged; they are
+The ratchet semantics: grandfathered files may not grow past their ceiling, a file now
+compliant must drop its entry, a file that cannot be read is a violation and never a skip.
+A file merely *under* its ceiling passes (#19673): the tight gate is the merge base, in the
+ratchet tests (``repo_tests/_ratchet_base.py``), so a shrinking PR never edits the shared
+table; ``--repin-ceilings`` lowers the recorded ints afterwards, in the merge train. They are
 documented once in each script's module docstring.
 
 ``FileSizeGuard`` reads its configuration from the *live namespace of the
@@ -32,6 +34,7 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
+import re
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from collections.abc import MutableMapping
 from typing import Any
@@ -109,6 +112,35 @@ def git_tracked(root: pathlib.Path, globs: tuple[str, ...], excluded: tuple[str,
     return [line for line in out.stdout.splitlines() if line.strip() and not line.startswith(excluded)]
 
 
+_ENTRY = re.compile(r'^(?P<head>\s*"(?P<rel>[^"]+)":\s*)(?P<n>\d+)(?P<tail>,?.*)$')
+
+
+def repin_table(text: str, counts: dict[str, int | None], max_lines: int) -> tuple[str, int, int, list[str]]:
+    """*text* with each ``"path": N`` ceiling lowered to its file's count, or dropped at/under *max_lines*.
+
+    Returns (new text, lowered, dropped, unreadable paths). Never raises a ceiling.
+    """
+    out: list[str] = []
+    lowered = dropped = 0
+    unread: list[str] = []
+    for line in text.splitlines(keepends=True):
+        match = _ENTRY.match(line.rstrip("\r\n"))
+        count = counts.get(match.group("rel")) if match else None
+        if match is None or match.group("rel") not in counts:
+            out.append(line)
+        elif count is None:
+            unread.append(match.group("rel"))
+            out.append(line)
+        elif count <= max_lines:
+            dropped += 1
+        elif count < int(match.group("n")):
+            lowered += 1
+            out.append(line.replace(match.group("head") + match.group("n"), match.group("head") + str(count), 1))
+        else:
+            out.append(line)
+    return "".join(out), lowered, dropped, unread
+
+
 class FileSizeGuard:
     """The shared ratchet logic, configured by the owning script's namespace.
 
@@ -132,7 +164,7 @@ class FileSizeGuard:
         return self._ns[name]
 
     def grandfathered_verdict(self, rel: str, line_count: int, ceiling: int) -> str | None:
-        """Violation message for a KNOWN_LARGE file, or None when it is at ceiling."""
+        """Violation message for a KNOWN_LARGE file, or None when it is at or under its ceiling."""
         max_lines, self_rel = self._get("MAX_LINES"), self._get("SELF_REL")
         if line_count <= max_lines:
             return (
@@ -146,12 +178,9 @@ class FileSizeGuard:
                 "A grandfathered file may not grow — the exemption freezes the size "
                 "it was granted for, it does not license more."
             )
-        if line_count < ceiling:
-            return (
-                f"{rel}: {line_count} lines, under its recorded ceiling of {ceiling}. "
-                f"Lower the ceiling to {line_count} in {self_rel} — the ratchet only "
-                "turns down, and an unlowered ceiling re-licenses the lines just cut."
-            )
+        # Under the ceiling is NOT a failure (#19673): a shrinking PR must not edit this shared table.
+        # What stops the lines just cut from being spent again is the merge-base gate in the ratchet
+        # tests (head <= min(ceiling, the file at the base)); `--repin-ceilings` lowers the ints in-train.
         return None
 
     def verdict(self, rel: str, line_count: int) -> str | None:
@@ -221,6 +250,25 @@ class FileSizeGuard:
         for rel in sorted(set(self._get("KNOWN_LARGE")) - seen):
             problems.append(self._get("_vanished_entry_problem")(rel, root))
         return reached, problems
+
+    def repin_ceilings(self) -> int:
+        """``--repin-ceilings``: rewrite the table's ints to the files' current lengths (#19673).
+
+        Only the integer of an existing ``"path": N`` line changes, and only downward (never raises
+        a ceiling); an entry whose file is at or under MAX_LINES is deleted. Comments, order and every
+        other line stay byte-identical. An entry whose file cannot be read is left alone and
+        reported -- the audit is what rules on it. Returns 0.
+        """
+        root, table = self._get("repo_root")(), self._get("KNOWN_LARGE_FILE")
+        counts = {rel: self._get("count_lines")(root / rel) for rel in self._get("KNOWN_LARGE")}
+        text, lowered, dropped, unread = repin_table(table.read_text(encoding="utf-8"), counts, self._get("MAX_LINES"))
+        if text != table.read_text(encoding="utf-8"):
+            table.write_text(text, encoding="utf-8")
+        logger = self._get("logger")
+        logger.info("repin-ceilings: %d lowered, %d dropped, %d unreadable in %s", lowered, dropped, len(unread), table)
+        for rel in unread:
+            logger.warning("repin-ceilings: %s could not be read; its entry is untouched", rel)
+        return 0
 
     def reach_breach_problem(self, reached: int) -> str:
         """The reach-breach finding, worded identically in all three gates (#17377)."""
