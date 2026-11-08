@@ -16,7 +16,6 @@ rather than passing as "nothing grew"). Removals pass; additions fail.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +25,7 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_table, literal_in
 from repo_tests._reach import declare
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 
 _RECORD = "repo_tests/_glob_declared_uncovered.py"
 _NAME = "GLOB_DECLARED_UNCOVERED"
@@ -85,26 +84,17 @@ def test_the_record_did_not_grow_against_the_base() -> None:
     REACH.completed(REACH.examined(repo_root()))
 
 
-def _git(repo: Path, *args: str) -> str:
-    """Run git in the throwaway *repo* with a scrubbed environment (#15246) and return stdout."""
-    out = subprocess.run(
-        ["git", "-C", str(repo), *args], check=True, capture_output=True, text=True, env=scrubbed_git_env()
-    )
-    return out.stdout.strip()
-
-
 def _commit_record(repo: Path, body: str) -> str:
     (repo / _RECORD).parent.mkdir(parents=True, exist_ok=True)
     (repo / _RECORD).write_text(body, encoding="utf-8")
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "-m", "c")
-    return _git(repo, "rev-parse", "HEAD")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "c")
+    return git(repo, "rev-parse", "HEAD").stdout.strip()
 
 
 def test_the_base_read_flags_a_key_added_in_a_real_git_history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Fails if the guard stopped reading the base (e.g. compared the record with itself)."""
-    for args in (("init", "-q"), ("config", "user.email", "t@example.invalid"), ("config", "user.name", "t")):
-        _git(tmp_path, *args)
+    make_repo(tmp_path)
     first = _commit_record(tmp_path, f'{_NAME} = {{"*.md": ({{"a_test.py"}}, "why")}}\n')
     now_src = f'{_NAME} = {{"*.md": ({{"a_test.py"}}, "why"), "*.service": ({{"b_test.py"}}, "why")}}\n'
     _commit_record(tmp_path, now_src)
@@ -118,6 +108,7 @@ def test_a_planted_added_glob_key_is_caught() -> None:
     now = {**base, "*.service": ({"b_test.py"}, "why")}
     assert grown_entries(now, base) == {"*.service": ["b_test.py"]}
     assert "dedicated workflow" in _complaint(grown_entries(now, base))
+    assert grown_entries({**base, "*.service": (set(), "why")}, base) == {"*.service": []}, "an empty new key is a key"
 
 
 def test_a_planted_added_guard_under_an_existing_key_is_caught() -> None:
@@ -134,3 +125,16 @@ def test_a_planted_removal_passes() -> None:
 
 def test_a_missing_base_record_reads_every_entry_as_added() -> None:
     assert set(grown_entries(GLOB_DECLARED_UNCOVERED, {})) == set(GLOB_DECLARED_UNCOVERED)
+
+
+def test_a_record_absent_from_the_base_commit_fails_the_guard(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The guard's own read, not just ``grown_entries({})``: no record at the base means every key is added."""
+    make_repo(tmp_path)
+    (tmp_path / "other.txt").write_text("x\n", encoding="utf-8")
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-q", "-m", "base without the record")
+    first = git(tmp_path, "rev-parse", "HEAD").stdout.strip()
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("AUTOBOT_RATCHET_BASE_SHA", first)
+    grown = grown_against_base(tmp_path, GLOB_DECLARED_UNCOVERED)
+    assert set(grown) == set(GLOB_DECLARED_UNCOVERED), "a missing base record must read every key as added"
