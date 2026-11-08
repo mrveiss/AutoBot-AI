@@ -86,6 +86,19 @@ def estimate_context_usage(messages: list[dict[str, Any]], model_name: str) -> f
     return min(estimated_tokens / context_size, 1.0)
 
 
+async def _summarize_earlier(older: list[dict[str, Any]], model_name: str, session_id: str) -> str:
+    """Summarise the turns the snapshot window cuts off, with the shared summariser (#20852)."""
+    if not older:
+        return ""
+    from chat_history.context_overflow import ConversationSummarizer
+
+    try:
+        return await ConversationSummarizer().summarize_messages(older, model_name)
+    except Exception as exc:  # noqa: BLE001 -- the hook must never raise; the truncated tail still saves
+        logger.warning("compact_hook: summarising earlier turns failed (session=%s): %s", session_id, exc)
+        return ""
+
+
 async def on_pre_compact(
     session_id: str,
     messages: list[dict[str, Any]],
@@ -131,6 +144,9 @@ async def on_pre_compact(
         content = str(msg.get("content", ""))[:_MAX_CHARS_PER_MSG]
         snapshot_lines.append(f"{role}: {content}")
     snapshot = "\n".join(snapshot_lines)
+    earlier = await _summarize_earlier(messages[:-_SNAPSHOT_TURNS], model_name, session_id)
+    if earlier:
+        snapshot = f"summary of earlier turns: {earlier}\n{snapshot}"
 
     try:
         # Late import keeps this module free of circular deps at load time.
