@@ -18,6 +18,7 @@ from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.client_disconnect import propagate_client_disconnect
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
@@ -199,6 +200,9 @@ class ErrorBoundaryManager:
         Raises:
             ErrorBoundaryException if recovery not possible
         """
+        # A peer that left is neither reported nor recovered from (#20939).
+        propagate_client_disconnect(logger, error, f"{context.component}.{context.function}")
+
         # Generate error report
         error_report = self.create_error_report(error, context)
 
