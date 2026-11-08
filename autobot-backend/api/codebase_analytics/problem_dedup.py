@@ -23,28 +23,33 @@ def _rank(problem: Dict) -> int:
     return Severity.rank_of(str(problem.get("severity", "")), default=0)
 
 
-def _family_of(problem_type: str) -> tuple | None:
+def _family_of(problem_type: str) -> tuple:
+    """The family a type belongs to; a type in no family is its own family."""
     for family in SAME_DEFECT_FAMILIES:
         if problem_type in family:
             return family
-    return None
+    return (problem_type,)
 
 
 def _location(problem: Dict, family: tuple) -> tuple | None:
     """None when the finding carries no line: two line-less findings are not provably one defect."""
     line = problem.get("line") or problem.get("line_number")
-    return (family, line) if line else None
+    return (problem.get("file_path", ""), family, line) if line else None
 
 
 def dedupe_same_location_problems(problems: List[Dict]) -> List[Dict]:
-    """Collapse same-defect-family problems at one line of one file's list."""
+    """Collapse one defect reported more than once at one line of one file.
+
+    Applies to every type, not one named pair: the same type twice at one line
+    (two passes over the same construct) and the members of a
+    ``SAME_DEFECT_FAMILIES`` entry both collapse to a single finding that keeps
+    the highest severity. Works on one file's list (write path) and on a
+    multi-file list (read path), because the file path is part of the key.
+    """
     kept: List[Dict] = []
     by_location: Dict[tuple, Dict] = {}
     for problem in problems:
         family = _family_of(problem.get("type", ""))
-        if family is None:
-            kept.append(problem)
-            continue
         location = _location(problem, family)
         first = by_location.get(location) if location else None
         if first is None:

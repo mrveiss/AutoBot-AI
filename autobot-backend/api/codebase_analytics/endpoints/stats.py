@@ -22,6 +22,7 @@ from autobot_shared.time_utils import parse_utc_iso
 from utils.chromadb_client import get_all_paginated
 
 from ..analyzers import normalize_hardcode_record
+from ..problem_dedup import dedupe_same_location_problems
 from ..scanner import _tasks_sync_lock, indexing_tasks
 from ..storage import get_code_collection, get_redis_connection
 from .shared import (
@@ -410,33 +411,23 @@ def _fetch_problems_from_chromadb(
     problem_type: str | None,
     source_id: str | None = None,
     source_root: Path | None = None,
+    file_category: str | None = None,
 ) -> list:
     """Fetch problems from ChromaDB. (Issue #315, #1710: per-source filter)
+
+    #20493: one defect at one location is returned once, and ``file_category``
+    (``code``, ``test``, ...) keeps only findings in files of that category.
 
     Issue #2724: File paths are validated against source_root before returning.
     Findings that reference non-existent paths are dropped to prevent
     hallucinated results from reaching the issue tracker.
     """
+    clauses = [{"type": "problem"}]
     if source_id:
-        if problem_type:
-            where_filter = {
-                "$and": [
-                    {"type": "problem"},
-                    {"source_id": source_id},
-                    {"problem_type": problem_type},
-                ]
-            }
-        else:
-            where_filter = {
-                "$and": [
-                    {"type": "problem"},
-                    {"source_id": source_id},
-                ]
-            }
-    else:
-        where_filter = {"type": "problem"}
-        if problem_type:
-            where_filter["problem_type"] = problem_type
+        clauses.append({"source_id": source_id})
+    if problem_type:
+        clauses.append({"problem_type": problem_type})
+    where_filter = {"$and": clauses} if len(clauses) > 1 else clauses[0]
 
     results = get_all_paginated(code_collection, where=where_filter, include=["metadatas"])
     problems = [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
@@ -447,7 +438,10 @@ def _fetch_problems_from_chromadb(
     # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
     # standalone rsync layout).
     root = source_root if source_root else Path(resolve_git_repo_root())
-    return filter_problems_by_file_existence(problems, root)
+    problems = dedupe_same_location_problems(filter_problems_by_file_existence(problems, root))
+    if file_category:
+        problems = [p for p in problems if p.get("file_category") == file_category]
+    return problems
 
 
 async def _fetch_problems_from_redis(problem_type: str | None, source_id: str | None = None) -> tuple:
@@ -604,8 +598,12 @@ async def reset_embedding_stats_endpoint() -> JSONResponse:
 async def get_codebase_problems(
     problem_type: str | None = None,
     source_id: str | None = None,
+    file_category: str | None = None,
 ):
-    """Get real code problems detected during analysis (#1710: per-source)."""
+    """Get real code problems detected during analysis (#1710: per-source).
+
+    ``file_category`` (#20493) narrows to one category, e.g. ``code`` or ``test``.
+    """
     # Default to most recent source to prevent cross-project data mixing (#2653)
     if not source_id:
         from api.codebase_analytics.endpoints.shared import default_source_id
@@ -632,6 +630,7 @@ async def get_codebase_problems(
             problem_type,
             source_id=source_id,
             source_root=source_root,
+            file_category=file_category,
         )
         state = await asyncio.to_thread(index_state, code_collection, source_id, bool(all_problems))
     except Exception as store_error:

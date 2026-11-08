@@ -56,6 +56,37 @@ class TestDedupe:
         assert a["severity"] == MEDIUM and b["type"] == "code_smell_long_method"
 
 
+class TestEveryTypeCountsOncePerLocation:
+    def test_the_same_type_twice_at_one_line_counts_once_with_the_higher_severity(self):
+        out = dedupe_same_location_problems([_p("code_smell_deep_nesting", 4), _p("code_smell_deep_nesting", 4, HIGH)])
+        assert [(p["type"], p["severity"]) for p in out] == [("code_smell_deep_nesting", HIGH)]
+
+    def test_the_same_line_of_two_files_is_two_defects(self):
+        a, b = dict(_p("debug_code", 3), file_path="a.py"), dict(_p("debug_code", 3), file_path="b.py")
+        assert len(dedupe_same_location_problems([a, b])) == 2
+
+    def test_a_multi_file_list_collapses_per_file(self):
+        mk = lambda t, f: dict(_p(t, 8), file_path=f)  # noqa: E731
+        probs = [mk("long_function", "a.py"), mk("code_smell_long_method", "a.py"), mk("long_function", "b.py")]
+        assert [p["file_path"] for p in dedupe_same_location_problems(probs)] == ["a.py", "b.py"]
+
+
+class TestReadPathAppliesTheDedupe:
+    """Findings stored before the write-path dedupe must not double on read."""
+
+    def test_stored_duplicates_are_collapsed_when_read(self, monkeypatch):
+        from api.codebase_analytics.endpoints import stats
+
+        meta = [
+            {"problem_type": "long_function", "severity": "medium", "file_path": "a.py", "line_number": 5},
+            {"problem_type": "code_smell_long_method", "severity": "high", "file_path": "a.py", "line_number": 5},
+        ]
+        monkeypatch.setattr(stats, "get_all_paginated", lambda *a, **k: {"metadatas": meta})
+        monkeypatch.setattr(stats, "filter_problems_by_file_existence", lambda problems, root: problems)
+        out = stats._fetch_problems_from_chromadb(object(), None, source_root=Path("."))
+        assert [(p["type"], p["severity"]) for p in out] == [("long_function", "high")]
+
+
 class TestAnalysisPhasesApplyTheDedupe:
     """Deleting the call in ``_run_analysis_phases`` must fail this test."""
 

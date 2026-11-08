@@ -8,6 +8,18 @@
       <span v-if="smells.length > 0" class="total-count">
         ({{ smells.length.toLocaleString() }} {{ $t('analytics.codeSmells.found') }})
       </span>
+      <label class="category-filter">
+        <span class="category-label">{{ $t('analytics.codeSmells.category.label') }}</span>
+        <select
+          :value="category"
+          :aria-label="$t('analytics.codeSmells.category.label')"
+          @change="emit('update:category', ($event.target as HTMLSelectElement).value as SmellCategory)"
+        >
+          <option v-for="c in SMELL_CATEGORIES" :key="c" :value="c">
+            {{ $t(`analytics.codeSmells.category.${c}`) }}
+          </option>
+        </select>
+      </label>
       <div v-if="smells.length > 0" class="section-export-buttons">
         <button @click="emit('export', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
           <Icon name="file-alt" /> MD
@@ -26,23 +38,23 @@
       <!-- Summary Cards by Severity -->
       <div class="summary-cards">
         <div class="summary-card total">
-          <div class="summary-value">{{ smells.length.toLocaleString() }}</div>
+          <div class="summary-value">{{ summary.total.toLocaleString() }}</div>
           <div class="summary-label">{{ $t('analytics.codeSmells.total') }}</div>
         </div>
         <div class="summary-card critical">
-          <div class="summary-value">{{ severitySummary.critical }}</div>
+          <div class="summary-value">{{ summary.bySeverity.critical }}</div>
           <div class="summary-label">{{ $t('analytics.codeSmells.critical') }}</div>
         </div>
         <div class="summary-card high">
-          <div class="summary-value">{{ severitySummary.high }}</div>
+          <div class="summary-value">{{ summary.bySeverity.high }}</div>
           <div class="summary-label">{{ $t('analytics.codeSmells.high') }}</div>
         </div>
         <div class="summary-card medium">
-          <div class="summary-value">{{ severitySummary.medium }}</div>
+          <div class="summary-value">{{ summary.bySeverity.medium }}</div>
           <div class="summary-label">{{ $t('analytics.codeSmells.medium') }}</div>
         </div>
         <div class="summary-card low">
-          <div class="summary-value">{{ severitySummary.low }}</div>
+          <div class="summary-value">{{ summary.bySeverity.low }}</div>
           <div class="summary-label">{{ $t('analytics.codeSmells.low') }}</div>
         </div>
       </div>
@@ -131,6 +143,8 @@ import Icon from '@/components/ui/Icon.vue'
 import { useShowMore } from '@autobot/ui'
 import TruncationNotice from './TruncationNotice.vue'
 import { computed } from 'vue'
+import { summarizeSmells } from '@/composables/analytics/codeSmellSummary'
+import { SMELL_CATEGORIES, type SmellCategory } from '@/composables/analytics/useCodeSmellProblems'
 import { useGroupingMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -154,6 +168,8 @@ interface Props {
   codeHealthScore: CodeHealthScore | null
   /** The smells are derived from the problems load; its failure is not "no smells". */
   error?: string
+  /** Which file category the list holds: production code, test files, or all. */
+  category?: SmellCategory
 }
 
 const props = defineProps<Props>()
@@ -163,21 +179,14 @@ const PAGE_SIZE = 20
 const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => props.smells)
 const emit = defineEmits<{
   export: [format: 'md' | 'json']
+  'update:category': [category: SmellCategory]
 }>()
 
 const smellTypeExpansion = useExpansion<string>()
 const isSmellTypeExpanded = smellTypeExpansion.isExpanded
 
-const severitySummary = computed(() => {
-  const counts = { critical: 0, high: 0, medium: 0, low: 0 }
-  props.smells.forEach(s => {
-    const sev = (s.severity || 'low').toLowerCase()
-    if (counts[sev as keyof typeof counts] !== undefined) {
-      counts[sev as keyof typeof counts]++
-    }
-  })
-  return counts
-})
+// #20493: the cards and the export count with this one function.
+const summary = computed(() => summarizeSmells(props.smells))
 
 // Issue #4036: Memoized type grouping with severity counts
 const smellsByType = useGroupingMemo(
@@ -185,14 +194,8 @@ const smellsByType = useGroupingMemo(
     const groups: Record<string, { smells: CodeSmell[], severityCounts: Record<string, number> }> = {}
     props.smells.forEach(s => {
       const type = s.smell_type || 'unknown'
-      if (!groups[type]) {
-        groups[type] = { smells: [], severityCounts: { critical: 0, high: 0, medium: 0, low: 0 } }
-      }
+      groups[type] ??= { smells: [], severityCounts: summary.value.byType[type] }
       groups[type].smells.push(s)
-      const sev = (s.severity || 'low').toLowerCase()
-      if (groups[type].severityCounts[sev] !== undefined) {
-        groups[type].severityCounts[sev]++
-      }
     })
     return groups
   },
@@ -415,6 +418,15 @@ const getItemSeverityClass = (severity: string): string => {
 .accordion-leave-to {
   opacity: 0;
   max-height: 0;
+}
+
+.category-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  margin-left: var(--spacing-4);
+  font-size: var(--text-sm);
+  font-weight: normal;
 }
 
 .section-export-buttons {

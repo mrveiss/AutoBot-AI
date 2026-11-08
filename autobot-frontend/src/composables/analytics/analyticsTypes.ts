@@ -18,6 +18,8 @@ export interface Problem {
   line?: number
   line_number?: number
   category?: string
+  /** Server-assigned file category (`code`, `test`, ...), #20493. */
+  file_category?: string
   suggestion?: string
 }
 
