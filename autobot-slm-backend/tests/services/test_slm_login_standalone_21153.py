@@ -36,6 +36,7 @@ with real_modules_swapped():
     # stand-ins are lifted for the import only. The real modules stay in ``sys.modules`` (SQLAlchemy's class registry
     # holds weak references, so dropping them lets ``Organization`` be collected and ``Role`` stop resolving it).
     _OWN = ("user_management", "autobot_shared.user_management")
+    _before = set(sys.modules)
     with pytest.MonkeyPatch.context() as _mp:
         for _k in [k for k in sys.modules if k.startswith(_OWN)]:
             _mp.delitem(sys.modules, _k)
@@ -43,8 +44,13 @@ with real_modules_swapped():
             importlib.import_module(f"user_management.models.{_mod}")
         User = sys.modules["user_management.models.user"].User
         UserService = importlib.import_module("autobot_shared.user_management.user_service").UserService
-        for _k in [k for k in sys.modules if k.startswith(_OWN) and ".models" not in k]:
-            del sys.modules[_k]  # the services keep the stand-ins other tests bind to; only the models stay
+        _created = [k for k in sys.modules if k.startswith(_OWN) and ".models" not in k and k not in _before]
+    # ``_mp`` has put every stand-in back; the services imported above did not exist before, so a restore would keep
+    # them (bound to a second ``password_epoch``) for the next module. They are dropped through a MonkeyPatch whose
+    # record is deliberately never undone, which leaves ``sys.modules`` as it was found; only the models stay.
+    _drop = pytest.MonkeyPatch()
+    for _k in _created:
+        _drop.delitem(sys.modules, _k, raising=False)
 
 
 @compiles(JSONB, "sqlite")
