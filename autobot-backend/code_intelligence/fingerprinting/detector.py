@@ -33,7 +33,7 @@ from code_intelligence.fingerprinting.types import (
     Fingerprint,
     FingerprintType,
 )
-from code_intelligence.python_files import collect_python_files
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, collect_python_files
 
 # Issue #607: Import shared caches for performance optimization
 try:
@@ -82,16 +82,7 @@ class CloneDetector:
             use_shared_cache: Whether to use shared ASTCache (Issue #607)
         """
         self.min_fragment_lines = min_fragment_lines
-        self.exclude_dirs = exclude_dirs or [
-            ".venv",
-            "venv",
-            "node_modules",
-            "__pycache__",
-            ".git",
-            "archives",
-            "archive",
-            ".mypy_cache",
-        ]
+        self.exclude_dirs = exclude_dirs or sorted(ANALYSIS_EXCLUDE_DIRS)
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
         self.ast_hasher = ASTHasher()
