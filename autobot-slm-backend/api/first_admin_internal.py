@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
+from autobot_shared.security.constant_time import secure_compare
 from user_management.database import get_slm_session
 from user_management.models.user import User
 
@@ -75,7 +76,7 @@ async def update_person_copy(
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such SLM user")
     # No hash means the main app holds none. That must not wipe the password this person logs in with.
-    if body.password_hash and user.password_hash != body.password_hash:
+    if body.password_hash and not secure_compare(body.password_hash, user.password_hash):
         user.password_hash = body.password_hash
     if user.is_active != body.is_active:
         user.is_active = body.is_active

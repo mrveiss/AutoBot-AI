@@ -13,9 +13,12 @@ import ast
 import re
 from pathlib import Path
 
+from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
-_ROOT = Path(__file__).resolve().parent.parent
+from tools.lint import _parse_cache as parse_cache
+
+_ROOT = repo_root()
 _TREES = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 _HELPER = Path("autobot_shared/security/constant_time.py")
 # Files another open PR owns; each entry is removed when that PR lands and the
@@ -173,7 +176,7 @@ def _is_secret_eq(node: ast.AST) -> bool:
 def _offenders(text: str) -> list[int]:
     """Lines with a raw/aliased ``compare_digest`` call or a ``==``/``!=`` on a secret-named operand."""
     try:
-        tree = ast.parse(text)
+        tree = parse_cache.parse(text)
     except SyntaxError:
         return []
     funcs, modules = _compare_digest_aliases(tree)
@@ -204,7 +207,7 @@ def _allowed_keys(rel: Path, text: str) -> set[str]:
 
 def _digest_offenders(text: str) -> list[int]:
     """Lines with a raw/aliased ``compare_digest`` call only (the stale-entry check for _DEFERRED)."""
-    tree = ast.parse(text)
+    tree = parse_cache.parse(text)
     funcs, modules = _compare_digest_aliases(tree)
     return sorted({n.lineno for n in ast.walk(tree) if _is_digest_call(n, funcs, modules)})
 
