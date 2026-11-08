@@ -34,10 +34,14 @@ const people = ref<{ user_id: string; name: string }[]>([])
 const peopleLoading = ref(false)
 const peopleFailed = ref(false)
 
+let peopleLoadSeq = 0
 async function loadPeople(): Promise<void> {
+  const mine = ++peopleLoadSeq
   const source = useCompanyPeople(props.companyId)
+  canChange.value = false // the verdict belongs to one company: unknown until this one answers
   peopleLoading.value = true
   await source.load()
+  if (mine !== peopleLoadSeq) return // a later company switch owns the state now
   agents.value = source.agents.value
   people.value = source.humans.value
   peopleFailed.value = source.loadFailed.value
