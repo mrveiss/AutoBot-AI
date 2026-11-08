@@ -44,6 +44,15 @@ into ``autobot_shared`` so all callers share one implementation.
      would deadlock, so only then does it fall back to a thread with its
      own loop.
 
+  **Fresh-loop fallback (#21082, #20919).** Case 2 uses a thread with a brand-new
+  loop in exactly two situations: (a) the target loop is unavailable (no main loop
+  registered, or it is not running / is closed; no worker loop in a worker), or
+  (b) the target loop IS the caller's own running loop. A fresh loop does not own the
+  process-wide loop-bound singletons (async DB engine, Redis pools, aiosqlite
+  connections), so touching them there can fail with ``Event loop is closed`` or
+  attach them to a loop that dies on return. The first fallback per call site is
+  logged as a warning; callers on the loop thread should ``await`` instead.
+
 Use it only at the sync/async boundary — never as a substitute for
 ``await`` inside async code.
 
@@ -154,6 +163,13 @@ def run_or_schedule(coro: Coroutine[Any, Any, T]) -> T:
     loop running in this thread it uses ``asyncio.run``; with a loop running it
     is submitted to the API process's main loop (never a fresh loop in a
     thread, which would touch loop-bound singletons from the wrong loop).
+
+    Fresh-loop fallback (#21082, #20919): under a running loop the coroutine runs in a
+    thread with its OWN new loop when (a) the target loop (worker loop, or registered
+    main loop) is unavailable, or (b) the target is the caller's own loop, since blocking
+    on it would deadlock. Loop-bound singletons (async DB engine, Redis pools) used there
+    are bound to a loop that closes on return and may fail on later reuse; the first
+    fallback per call site logs a warning.
 
     Raises whatever ``coro`` raises.
     """

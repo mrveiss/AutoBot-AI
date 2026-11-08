@@ -234,3 +234,31 @@ def test_no_task_module_imports_a_helper_that_creates_a_private_loop():
         if names:
             offenders[rel] = names
     assert offenders == {}, offenders
+
+
+def _calls(src: str) -> set[str]:
+    return {n for _, n in rule.private_loop_calls(parse_cache.parse(src))}
+
+
+def test_import_alias_in_one_function_does_not_leak_into_another():
+    src = "def a():\n    import asyncio as aio\n    aio.run(x)\n\n" "def b():\n    aio.run(y)\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(3, "asyncio.run")]
+
+
+def test_function_alias_shadows_module_alias_only_inside_that_function():
+    src = "import asyncio as aio\n" "def a():\n    import json as aio\n    aio.run(x)\n\n" "def b():\n    aio.run(y)\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(7, "asyncio.run")]
+
+
+def test_decorator_alias_from_import_is_resolved_as_a_task():
+    src = "from celery import shared_task as task\n\n@task\ndef f():\n    pass\n"
+    assert rule.is_task_module(parse_cache.parse(src))
+    src = "import celery as c\n\n@c.shared_task(bind=True)\ndef f(self):\n    pass\n"
+    assert rule.is_task_module(parse_cache.parse(src))
+
+
+def test_unrelated_decorator_alias_is_not_a_task():
+    src = "from functools import cache as task\n\n@task\ndef f():\n    pass\n"
+    assert not rule.is_task_module(parse_cache.parse(src))

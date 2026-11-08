@@ -42,7 +42,7 @@ import os
 import threading
 from typing import Any, Awaitable, Callable, Coroutine, TypeVar
 
-from autobot_shared.env_utils import env_float
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
 
 __all__ = [
@@ -59,15 +59,21 @@ logger = get_logger(__name__)
 T = TypeVar("T")
 
 # Seconds to wait for the loop thread to report that it is running.
-WORKER_LOOP_START_TIMEOUT = env_float("AUTOBOT_WORKER_LOOP_START_TIMEOUT", 10.0)
+WORKER_LOOP_START_TIMEOUT = env_float_clamped(
+    "AUTOBOT_WORKER_LOOP_START_TIMEOUT", 10.0, 0.1, 120.0, positive_finite=True
+)
 # Seconds the shutdown hook gives engine/Redis disposal before stopping anyway.
-WORKER_LOOP_SHUTDOWN_TIMEOUT = env_float("AUTOBOT_WORKER_LOOP_SHUTDOWN_TIMEOUT", 15.0)
+WORKER_LOOP_SHUTDOWN_TIMEOUT = env_float_clamped(
+    "AUTOBOT_WORKER_LOOP_SHUTDOWN_TIMEOUT", 15.0, 0.1, 300.0, positive_finite=True
+)
 
 # Upper bound on how long run_on_loop() blocks for one coroutine. No Celery task time limit
 # is configured (celery_app.py sets none), so the longest sweep is unbounded by Celery; one
 # hour is far above any current sweep yet still turns a hung coroutine into an error
 # instead of a permanently blocked thread. Override per deployment with the env var.
-WORKER_LOOP_RUN_TIMEOUT = env_float("AUTOBOT_WORKER_LOOP_RUN_TIMEOUT", 3600.0)
+WORKER_LOOP_RUN_TIMEOUT = env_float_clamped(
+    "AUTOBOT_WORKER_LOOP_RUN_TIMEOUT", 3600.0, 0.1, 86400.0, positive_finite=True
+)
 
 _STATE_LOCK = threading.Lock()
 _loop: asyncio.AbstractEventLoop | None = None
@@ -104,12 +110,27 @@ def _loop_main(loop: asyncio.AbstractEventLoop, ready: threading.Event) -> None:
             loop.close()
 
 
+# Threads whose loop missed the startup timeout. The stop request is queued on the loop, so
+# if the thread does start late it runs one iteration, exits and closes the loop instead of
+# serving forever unseen; the thread stays tracked here until it is gone.
+_ABANDONED_THREADS: list[threading.Thread] = []
+
+
+def _abandon_slow_loop(loop: asyncio.AbstractEventLoop, thread: threading.Thread) -> None:
+    """Stop a loop that did not report running in time and keep its thread tracked (#21082)."""
+    _ABANDONED_THREADS[:] = [t for t in _ABANDONED_THREADS if t.is_alive()]
+    _ABANDONED_THREADS.append(thread)
+    loop.call_soon_threadsafe(loop.stop)
+    logger.warning("worker loop thread missed the %ss startup timeout; stop requested", WORKER_LOOP_START_TIMEOUT)
+
+
 def _spawn_loop() -> asyncio.AbstractEventLoop:
     loop = asyncio.new_event_loop()
     ready = threading.Event()
     thread = threading.Thread(target=_loop_main, args=(loop, ready), name="autobot-worker-loop", daemon=True)
     thread.start()
     if not ready.wait(WORKER_LOOP_START_TIMEOUT):
+        _abandon_slow_loop(loop, thread)
         raise RuntimeError("worker event loop did not start in time")
     global _thread
     _thread = thread
@@ -205,20 +226,28 @@ _DISPOSERS: tuple[tuple[str, str, str], ...] = (
 )
 
 
-async def _dispose_shared_resources() -> None:
-    """Dispose the engine, transcriber DB and Redis pools; one failure never stops the rest."""
+async def _run_disposer(name: str, step: Callable[[], Awaitable[None]], share: float) -> None:
+    """Run one disposer within its own ``share`` seconds; a stall or failure is logged, not fatal."""
+    try:
+        await asyncio.wait_for(step(), share)
+    except asyncio.TimeoutError:
+        logger.warning("worker loop shutdown: %s disposal exceeded its %.1fs share", name, share)
+    except Exception:  # noqa: BLE001 - shutdown must continue past one failed disposal
+        logger.warning("worker loop shutdown: %s disposal failed", name, exc_info=True)
+
+
+async def _dispose_shared_resources(budget: float | None = None) -> None:
+    """Dispose the engine, transcriber DB and Redis pools, each with an equal share of ``budget``."""
     import importlib
 
+    share = (WORKER_LOOP_SHUTDOWN_TIMEOUT if budget is None else budget) / len(_DISPOSERS)
     for name, module, attr in _DISPOSERS:
         try:
             step: Callable[[], Awaitable[None]] = getattr(importlib.import_module(module), attr)
         except ImportError:
             logger.debug("worker loop shutdown: %s not importable here", module)
             continue
-        try:
-            await step()
-        except Exception:  # noqa: BLE001 - shutdown must continue past one failed disposal
-            logger.warning("worker loop shutdown: %s disposal failed", name, exc_info=True)
+        await _run_disposer(name, step, share)
 
 
 def stop_worker_loop() -> None:
@@ -231,7 +260,7 @@ def stop_worker_loop() -> None:
         return
     try:
         future = asyncio.run_coroutine_threadsafe(_dispose_shared_resources(), loop)
-        future.result(WORKER_LOOP_SHUTDOWN_TIMEOUT)
+        future.result(WORKER_LOOP_SHUTDOWN_TIMEOUT + 1.0)
     except Exception:  # noqa: BLE001 - stop the loop even if disposal timed out
         logger.warning("worker loop shutdown: resource disposal did not finish", exc_info=True)
     loop.call_soon_threadsafe(loop.stop)

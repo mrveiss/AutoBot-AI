@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import ast
 import re
+from collections.abc import Iterator
 from pathlib import Path
 
 from tools.lint.canonical.context import Context
@@ -84,17 +85,53 @@ def _dotted(node: ast.AST) -> str | None:
     return None
 
 
-def alias_table(tree: ast.AST) -> dict[str, str]:
-    """Map each locally bound import name to the dotted path it stands for."""
+_FUNCS = (ast.FunctionDef, ast.AsyncFunctionDef)
+_NEW_SCOPES = (*_FUNCS, ast.ClassDef, ast.Lambda)
+
+
+def _bind(node: ast.AST, table: dict[str, str]) -> None:
+    if isinstance(node, ast.Import):
+        for a in node.names:
+            table[a.asname or a.name.split(".")[0]] = a.name if a.asname else a.name.split(".")[0]
+    elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+        for a in node.names:
+            table[a.asname or a.name] = f"{node.module}.{a.name}"
+
+
+def _own_imports(body: list[ast.stmt]) -> dict[str, str]:
+    """Import bindings made directly in one scope's body (nested scopes excluded)."""
     table: dict[str, str] = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for a in node.names:
-                table[a.asname or a.name.split(".")[0]] = a.name if a.asname else a.name.split(".")[0]
-        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-            for a in node.names:
-                table[a.asname or a.name] = f"{node.module}.{a.name}"
+    stack: list[ast.AST] = list(reversed(body))
+    while stack:
+        node = stack.pop()
+        _bind(node, table)
+        if not isinstance(node, _NEW_SCOPES):
+            stack.extend(reversed(list(ast.iter_child_nodes(node))))
     return table
+
+
+def alias_table(tree: ast.AST) -> dict[str, str]:
+    """Map each name bound by an import in the module's own scope to the dotted path it stands for."""
+    return _own_imports(getattr(tree, "body", []))
+
+
+def scoped_nodes(node: ast.AST, table: dict[str, str]) -> Iterator[tuple[ast.AST, dict[str, str]]]:
+    """Yield every node under ``node`` with the import table visible in its lexical scope (#21082).
+
+    A function body sees the enclosing tables plus its own imports; a sibling function's
+    imports never leak. Decorators and defaults are evaluated in the enclosing scope.
+    """
+    yield node, table
+    if isinstance(node, _FUNCS):
+        outer = [*node.decorator_list, node.args, node.returns]
+        for part in (p for p in outer if p is not None):
+            yield from scoped_nodes(part, table)
+        inner = {**table, **_own_imports(node.body)}
+        for stmt in node.body:
+            yield from scoped_nodes(stmt, inner)
+        return
+    for child in ast.iter_child_nodes(node):
+        yield from scoped_nodes(child, table)
 
 
 def resolve(node: ast.AST, table: dict[str, str]) -> str | None:
@@ -108,13 +145,13 @@ def resolve(node: ast.AST, table: dict[str, str]) -> str | None:
 
 
 def task_functions(tree: ast.AST) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
-    """Every function decorated as a Celery task."""
+    """Every function decorated as a Celery task, decorator aliases resolved per scope."""
     found: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    for node, table in scoped_nodes(tree, alias_table(tree)):
+        if not isinstance(node, _FUNCS):
             continue
         for dec in node.decorator_list:
-            name = _dotted(dec.func if isinstance(dec, ast.Call) else dec) or ""
+            name = resolve(dec.func if isinstance(dec, ast.Call) else dec, table) or ""
             if name.endswith(_TASK_DECORATORS):
                 found.append(node)
                 break
@@ -134,9 +171,8 @@ def in_scope(rel: str, tree: ast.AST) -> bool:
 
 def private_loop_calls(tree: ast.AST) -> list[tuple[ast.Call, str]]:
     """Every call that creates or drives a private loop, with its canonical name."""
-    table = alias_table(tree)
     found: list[tuple[ast.Call, str]] = []
-    for node in ast.walk(tree):
+    for node, table in scoped_nodes(tree, alias_table(tree)):
         if not isinstance(node, ast.Call):
             continue
         name = resolve(node.func, table)

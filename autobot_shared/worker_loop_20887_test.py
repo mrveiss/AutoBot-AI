@@ -341,3 +341,58 @@ def test_run_in_worker_loop_defaults_to_the_bounded_run_timeout(monkeypatch):
     with pytest.raises(Exception):
         worker_loop.run_in_worker_loop(never_finishes())
     assert cancelled.wait(5)
+
+
+@pytest.mark.parametrize(
+    "bad,expected",
+    [("-1", 3600.0), ("0", 3600.0), ("nan", 3600.0), ("inf", 3600.0), ("0.01", 0.1), ("999999", 86400.0)],
+)
+def test_run_timeout_env_rejects_values_that_would_expire_tasks(monkeypatch, bad, expected):
+    import importlib
+
+    monkeypatch.setenv("AUTOBOT_WORKER_LOOP_RUN_TIMEOUT", bad)
+    try:
+        reloaded = importlib.reload(worker_loop)
+        assert 0.1 <= reloaded.WORKER_LOOP_RUN_TIMEOUT <= 86400.0
+        assert reloaded.WORKER_LOOP_RUN_TIMEOUT == expected
+    finally:
+        monkeypatch.delenv("AUTOBOT_WORKER_LOOP_RUN_TIMEOUT")
+        importlib.reload(worker_loop)
+
+
+def test_late_starting_loop_thread_is_stopped_and_tracked(monkeypatch):
+    """A thread that starts only after the startup timeout must exit, not serve forever."""
+    gate = threading.Event()
+    real_main = worker_loop._loop_main
+    monkeypatch.setattr(worker_loop, "WORKER_LOOP_START_TIMEOUT", 0.05)
+    monkeypatch.setattr(worker_loop, "_loop_main", lambda loop, ready: (gate.wait(10), real_main(loop, ready)))
+    with pytest.raises(RuntimeError, match="did not start in time"):
+        worker_loop._spawn_loop()
+    tracked = list(worker_loop._ABANDONED_THREADS)
+    assert len(tracked) == 1
+    gate.set()
+    tracked[0].join(10)
+    assert not tracked[0].is_alive()
+
+
+def test_stalled_first_disposer_does_not_skip_the_others(monkeypatch):
+    ran: list[str] = []
+
+    async def hang():
+        await asyncio.sleep(60)
+
+    async def ok_t():
+        ran.append("transcriber")
+
+    async def ok_r():
+        ran.append("redis")
+
+    import importlib
+
+    monkeypatch.setattr(
+        worker_loop, "_DISPOSERS", (("database", "m", "a"), ("transcriber", "m", "b"), ("redis", "m", "c"))
+    )
+    attrs = {"a": hang, "b": ok_t, "c": ok_r}
+    monkeypatch.setattr(importlib, "import_module", lambda m: type("M", (), attrs))
+    asyncio.run(asyncio.wait_for(worker_loop._dispose_shared_resources(0.6), 10))
+    assert ran == ["transcriber", "redis"]
