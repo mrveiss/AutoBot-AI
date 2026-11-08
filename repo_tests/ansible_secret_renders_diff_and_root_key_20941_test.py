@@ -17,8 +17,9 @@ from pathlib import Path
 import jinja2
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 ROOT = repo_root()
 _SECRET_FILE = re.compile(r"\.env\b|env\.j2|secrets|credentials", re.IGNORECASE)
@@ -29,8 +30,22 @@ _SOURCE_TEMPLATE = "slm-secrets.env.j2"
 _PLAY_KEYS = ("pre_tasks", "tasks", "post_tasks", "handlers", "block", "rescue", "always")
 
 
-def _ansible_files() -> list[Path]:
-    return [ROOT / f for f in tracked_paths(ROOT, "*.yml", "*.yaml") if "/ansible/" in f and "node_modules" not in f]
+def _ansible_files(root: Path = ROOT) -> list[Path]:
+    try:
+        found = tracked_paths(root, "*.yml", "*.yaml")
+    except EmptyEnumeration:
+        return []  # declare() contract: an empty tree is reported by the floor, not raised here
+    return [root / f for f in found if "/ansible/" in f and "node_modules" not in f]
+
+
+#: Measured 2026-11-08: 361 tracked ansible yml/yaml files; 250 leaves room for pruning before the sweep narrows.
+REACH = declare(
+    "ansible-secret-renders-20941",
+    discover=_ansible_files,
+    floor=250,
+    what="tracked ansible yml/yaml files swept for env/secrets writes and root-key renders",
+    roots=("autobot-slm-backend",),
+)
 
 
 def _walk(node):
@@ -69,13 +84,14 @@ def _secret_writes_without_diff_false(tasks) -> list[str]:
 
 
 def test_every_env_or_secrets_write_in_every_ansible_file_hides_its_diff() -> None:
-    files, checked, bad = _ansible_files(), 0, []
+    files, checked, bad = REACH.examined(ROOT), 0, []
     for path in files:
         tasks = _load(path)
         checked += sum(
             1 for t in tasks if (m := _module(t)) and _SECRET_FILE.search(f"{m.get('dest', '')} {m.get('src', '')}")
         )
         bad += [f"{path.relative_to(ROOT)}: {b}" for b in _secret_writes_without_diff_false(tasks)]
+    REACH.completed(len(files), ROOT)
     assert checked >= 25, f"only {checked} env/secrets writes seen over {len(files)} files: the sweep lost its reach"
     assert bad == [], "env/secrets written without `diff: false`:\n" + "\n".join(bad)
 
@@ -113,12 +129,14 @@ def _renders_before_reading(tasks, key_templates: set[str]) -> list[str]:
 def test_every_render_of_a_root_key_template_is_preceded_by_the_reader() -> None:
     templates, renders, bad = _key_templates(), 0, []
     assert {"backend.env.j2", "ai-stack.env.j2"} <= templates, f"key templates moved: {sorted(templates)}"
-    for path in _ansible_files():
+    files = REACH.examined(ROOT)
+    for path in files:
         tasks = _load(path)
         renders += sum(
             1 for t in tasks if (m := _module(t, ("template",))) and Path(str(m.get("src"))).name in templates
         )
         bad += [f"{path.relative_to(ROOT)}: {b}" for b in _renders_before_reading(tasks, templates)]
+    REACH.completed(len(files), ROOT)
     assert renders >= 7, f"only {renders} key-template renders seen: the sweep lost its reach"
     assert bad == [], "root-key templates rendered with no reader before them:\n" + "\n".join(bad)
 
