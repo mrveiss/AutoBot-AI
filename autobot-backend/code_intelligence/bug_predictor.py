@@ -38,6 +38,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
+from code_intelligence.python_files import discover_files
 from constants.threshold_constants import TimingConstants
 
 logger = get_logger(__name__)
@@ -523,7 +524,7 @@ class BugPredictor(_BaseClass):
         root = Path(directory) if directory else self.project_root
 
         # Find files to analyze (limit=0 means no limit)
-        all_files = list(root.rglob(pattern))
+        all_files = discover_files(root, (pattern,))
         total_files = len(all_files)
         files = all_files[:limit] if limit > 0 else all_files
 
@@ -1310,10 +1311,9 @@ class BugPredictor(_BaseClass):
 
         await self._learn_bug_patterns_async()
 
-        # #12406: offload the recursive tree walk too — with an unlimited file
-        # limit rglob() traverses the whole source tree, and this runs in an
-        # async request handler, so keep it off the event loop.
-        all_files = await asyncio.to_thread(lambda: list(root.rglob(pattern)))
+        # #12406: offload the recursive tree walk too (an unlimited limit traverses
+        # the whole tree in an async handler); #21004: via the canonical discovery.
+        all_files = await asyncio.to_thread(discover_files, root, (pattern,))
         total_files = len(all_files)
         files = all_files[:limit] if limit > 0 else all_files
 
