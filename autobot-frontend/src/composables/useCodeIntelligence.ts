@@ -275,6 +275,8 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   // The read is owned by useCachedSecurityScore (#18907); this wraps it for callers here.
   const cachedScore = useCachedSecurityScore({ withSourceId })
 
+  let cachedScoreCallSeq = 0
+
   async function getSecurityScoreCached(): Promise<SecurityScoreCached | null> {
     // The route requires source_id (#20491); without a scoper the call could only answer 422.
     if (!withSourceId) {
@@ -284,9 +286,10 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     startLoading()
     try {
       const before = cachedScore.raw.value
+      const callId = ++cachedScoreCallSeq
       await cachedScore.load()
-      // A newer call aborted this one: its answer is the newer call's, not ours.
-      if (cachedScore.loading.value) return null
+      // A newer call aborted this one: its answer, or its error, is the newer call's.
+      if (callId !== cachedScoreCallSeq) return null
       if (cachedScore.error.value) {
         errors.value = [...errors.value, cachedScore.error.value]
         return null

@@ -13,7 +13,7 @@
  * literals and `'/security/score' + '/cached'` are caught), but a path assembled from pieces
  * that never spell `security/score` on one line (e.g. `['security', 'score'].join('/')`) is
  * invisible to it. The live, non-cached route `.../security/score` (path ends right after
- * `score`, a different endpoint) is the one exempt shape.
+ * `score`, a different endpoint, and no next line starts with `+`) is the one exempt shape.
  */
 import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
@@ -38,13 +38,15 @@ function isCode(line: string): boolean {
   return !/^\s*(\*|\/\/|\/\*)/.test(line)
 }
 
-function namesRoute(line: string): boolean {
-  return (ROUTE.test(line) && !LIVE_ROUTE.test(line)) || PATH_CONST.test(line)
+function namesRoute(line: string, next = ''): boolean {
+  const exempt = LIVE_ROUTE.test(line) && !/^\s*\+/.test(next) // a following `+` concatenates
+  return (ROUTE.test(line) && !exempt) || PATH_CONST.test(line)
 }
 
 /** Code lines only: doc comments may mention the route. */
 function names(text: string): boolean {
-  return text.split('\n').some((l) => isCode(l) && namesRoute(l))
+  const lines = text.split('\n')
+  return lines.some((l, i) => isCode(l) && namesRoute(l, lines[i + 1]))
 }
 
 function readers(files: Record<string, string>): string[] {
@@ -78,6 +80,14 @@ describe('cached security score read has one home', () => {
       'composables/cat.ts': "get(base + '/security/score' + '/cached')",
     }
     expect(readers(planted).sort()).toEqual(['composables/cat.ts', 'composables/tpl.ts'])
+  })
+
+  it('planted control: multi-line concatenation after the live-route shape is detected', () => {
+    const planted = {
+      [HOME]: 'export const CACHED_SECURITY_SCORE_PATH = 1',
+      'composables/multi.ts': "get(base + '/security/score'\n  + '/cached')",
+    }
+    expect(readers(planted)).toEqual(['composables/multi.ts'])
   })
 
   it('planted control: importing the path constant elsewhere is detected', () => {

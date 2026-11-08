@@ -97,4 +97,24 @@ describe('useCodeIntelligence cached security score (#18907)', () => {
     expect(ci.errors.value).toEqual([])
     expect(ci.isLoading.value).toBe(false)
   })
+
+  it('an aborted call does not duplicate the newer call error', async () => {
+    mockedFetch.mockImplementationOnce(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          )
+        }),
+    )
+    mockedFetch.mockResolvedValueOnce(new Response('{}', { status: 500 }))
+    const ci = useCodeIntelligence({ withSourceId })
+    const first = ci.getSecurityScoreCached()
+    await vi.waitFor(() => expect(mockedFetch).toHaveBeenCalledTimes(1))
+    const second = ci.getSecurityScoreCached()
+
+    expect(await first).toBeNull()
+    expect(await second).toBeNull()
+    expect(ci.errors.value.length).toBe(1)
+  })
 })
