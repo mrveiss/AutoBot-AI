@@ -462,3 +462,47 @@ describe('BaseModal focus trap (#5016)', () => {
     })
   })
 })
+
+describe('BaseModal focus restore (#14777)', () => {
+  beforeEach(() => {
+    document.body.replaceChildren()
+  })
+
+  function addOpener(): HTMLButtonElement {
+    const opener = document.createElement('button')
+    opener.textContent = 'Open'
+    document.body.appendChild(opener)
+    opener.focus()
+    return opener
+  }
+
+  it('returns focus to the element that opened it when modelValue goes false', async () => {
+    // fails if useFocusRestore is unwired from BaseModal or saves after focus has moved inside
+    const opener = addOpener()
+    const wrapper = mountModal({ modelValue: false })
+    await wrapper.setProps({ modelValue: true })
+    await flushPromises()
+    const inner = wrapper.find('.body-btn').element as HTMLElement
+    inner.focus()
+    expect(document.activeElement).toBe(inner)
+
+    await wrapper.setProps({ modelValue: false })
+    await flushPromises()
+    expect(document.activeElement).toBe(opener)
+    wrapper.unmount()
+  })
+
+  it('returns focus to the opener after Escape closes it through v-model', async () => {
+    const opener = addOpener()
+    const wrapper = mountModal({ modelValue: false, 'onUpdate:modelValue': (v: boolean) => wrapper.setProps({ modelValue: v }) })
+    await wrapper.setProps({ modelValue: true })
+    await flushPromises()
+    const inner = wrapper.find('.body-btn')
+    ;(inner.element as HTMLElement).focus()
+    await inner.trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(opener)
+    wrapper.unmount()
+  })
+})
