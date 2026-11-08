@@ -15,6 +15,7 @@
  * admin routes are added; index.ts only spreads `adminRoutes` and calls
  * `resolveAdminPermissionRedirect` from its guard.
  */
+import i18n from '@/i18n'
 import type { RouteLocationNormalized, RouteLocationRaw, RouteRecordRaw } from 'vue-router'
 
 /**
@@ -33,9 +34,15 @@ export interface AdminAccessState {
   isAdmin: boolean
 }
 
-/** Admin-only child meta: the fields every child repeats. */
-const adminMeta = (title: string, extra: Record<string, unknown> = {}) => ({
-  title,
+/**
+ * Admin-only child meta: the fields every child repeats. `titleKey` is an i18n key; `title` resolves it
+ * when read (document title, breadcrumbs), so a locale change is picked up without rebuilding the routes.
+ */
+const adminMeta = (titleKey: string, extra: Record<string, unknown> = {}) => ({
+  titleKey,
+  get title(): string {
+    return i18n.global.t(titleKey)
+  },
   hideInNav: true,
   requiresAuth: true,
   admin: true,
@@ -48,7 +55,7 @@ export const adminChildren: RouteRecordRaw[] = [
     path: 'users', // Issue #1801: Admin User Management
     name: 'admin-users',
     component: () => import('@/views/AdminUsersView.vue'),
-    meta: adminMeta('User Management', {
+    meta: adminMeta('admin.routes.users', {
       icon: 'fas fa-users',
       description: 'Manage users, roles, and account status',
       hideInNav: false,
@@ -58,13 +65,13 @@ export const adminChildren: RouteRecordRaw[] = [
     path: 'sandbox', // Issue #7773: Sandbox file inspector
     name: 'admin-sandbox',
     component: () => import('@/views/AdminSandboxView.vue'),
-    meta: adminMeta('Sandbox Inspector', { description: 'Browse code-execution sandbox files' }),
+    meta: adminMeta('admin.routes.sandbox', { description: 'Browse code-execution sandbox files' }),
   },
   {
     path: 'advanced-control', // Issue #12162: takeover approval queue
     name: 'admin-advanced-control',
     component: () => import('@/views/AdvancedControlView.vue'),
-    meta: adminMeta('Advanced Control', {
+    meta: adminMeta('admin.routes.advancedControl', {
       description: 'Takeover approval queue, streaming, and monitoring',
     }),
   },
@@ -72,7 +79,7 @@ export const adminChildren: RouteRecordRaw[] = [
     path: 'budget-policies', // GH#6470: Budget policy management
     name: 'budget-policies',
     component: () => import('@/views/BudgetPolicies.vue'),
-    meta: adminMeta('Budget Policies', {
+    meta: adminMeta('admin.routes.budgetPolicies', {
       description: 'Manage agent spend thresholds and auto-pause rules',
     }),
   },
@@ -80,31 +87,31 @@ export const adminChildren: RouteRecordRaw[] = [
     path: 'system-health', // Issue #10932: CONTENT_REACH probe
     name: 'admin-system-health',
     component: () => import('@/views/SystemHealthView.vue'),
-    meta: adminMeta('System Health'),
+    meta: adminMeta('admin.routes.systemHealth'),
   },
   {
     path: 'provider-fallback', // Issue #11996: provider-fallback observability
     name: 'admin-provider-fallback',
     component: () => import('@/views/ProviderFallbackView.vue'),
-    meta: adminMeta('Provider Fallback'),
+    meta: adminMeta('admin.routes.providerFallback'),
   },
   {
     path: 'pricing', // Issue #16825: live model-pricing status + override
     name: 'admin-pricing',
     component: () => import('@/views/AdminPricingView.vue'),
-    meta: adminMeta('Model Pricing'),
+    meta: adminMeta('admin.routes.pricing'),
   },
   {
     path: 'mcp-servers', // Issue #16825: external MCP server admin CRUD
     name: 'admin-mcp-servers',
     component: () => import('@/views/AdminMcpServersView.vue'),
-    meta: adminMeta('MCP Servers'),
+    meta: adminMeta('admin.routes.mcpServers'),
   },
   {
     path: 'conversations', // Issue #17832: org-scoped conversation review (server-gated, audited)
     name: 'admin-conversations',
     component: () => import('@/views/AdminConversationsView.vue'),
-    meta: adminMeta('Conversation Review', {
+    meta: adminMeta('admin.routes.conversations', {
       description: 'Review conversations in your organization',
     }),
   },
@@ -112,13 +119,13 @@ export const adminChildren: RouteRecordRaw[] = [
     path: 'permission-scopes', // Issue #16825: "coming later" panel
     name: 'admin-permission-scopes',
     component: () => import('@/views/AdminPermissionScopesView.vue'),
-    meta: adminMeta('Permission Scopes'),
+    meta: adminMeta('admin.routes.permissionScopes'),
   },
   {
     path: 'cleanup-proposals', // Issue #20567: propose the decided install cleanups
     name: 'admin-cleanup-proposals',
     component: () => import('@/views/AdminCleanupProposalsView.vue'),
-    meta: adminMeta('Cleanup proposals'),
+    meta: adminMeta('admin.routes.cleanupProposals'),
   },
 ]
 
@@ -128,7 +135,9 @@ export const adminRoutes: RouteRecordRaw[] = [
     name: 'admin',
     component: () => import('@/components/layout/AdminLayout.vue'),
     meta: {
-      title: 'Administration',
+      get title() {
+        return i18n.global.t('admin.routes.section')
+      },
       hideInNav: true,
       requiresAuth: true,
       admin: true,
