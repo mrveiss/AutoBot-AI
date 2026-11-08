@@ -29,6 +29,7 @@ from api.envelope_secrets_delete_20640_test import _client, _Coordinator, _trail
 from api.secrets_defects_20557_test import _VAULT_KEY, _outcome
 from api.secrets_defects_20557_test import _trail as _main_trail
 from api.secrets_defects_20557_test import _with_dependents
+from api.secrets_guarded_delete import dependents_digest as guarded_digest
 from api.secrets_system_vault_17731_test import _SECRET_ID, client_and_vault  # noqa: F401 -- fixture
 from testkit.fake_async_session import FakeAsyncSession, FakeResult
 
@@ -94,6 +95,7 @@ def test_envelope_routes_refuse_a_dependent_registered_in_the_window(
         "code": "secret_has_dependents",
         "message": "Dependents use this secret",
         "dependents": _LISTED,
+        "dependents_digest": guarded_digest([_LATE]),
     }
     assert coordinator.vault == {env._SECRET}, "the secret must still be stored"
     assert client.session.commits == 0
@@ -120,7 +122,7 @@ def test_a_confirmed_user_delete_still_takes_the_lock(store, monkeypatch) -> Non
     coordinator, events = _Coordinator([env._DEPENDENTS[0]]), []
     _register_when_locked(monkeypatch, events, lambda: None)
 
-    response, _ = env._run(coordinator, "/api/v2/secrets/" + env._SECRET, store, "?confirm_dependents=true")
+    response, _ = env._run(coordinator, "/api/v2/secrets/" + env._SECRET, store, f"?dependents_digest={env._DIGEST}")
 
     assert response.status_code == 204
     assert events == ["lock"]
@@ -135,9 +137,10 @@ def env_route(request):
 
 
 @pytest.mark.asyncio
-async def test_the_lock_precedes_the_listing_which_precedes_the_delete() -> None:
+async def test_authorize_then_lock_then_list_then_delete(monkeypatch) -> None:
     events: list = []
     session = FakeAsyncSession()
+    _register_when_locked(monkeypatch, events, lambda: None)
 
     async def dependents() -> list:
         events.append("list")
@@ -148,8 +151,7 @@ async def test_the_lock_precedes_the_listing_which_precedes_the_delete() -> None
 
     await secrets_guarded_delete.guarded_delete(session, uuid.uuid4(), dependents=dependents, delete=delete)
 
-    assert events == ["list", "delete"]
-    assert len(session.statements) == 1, "the lock statement is issued before either callback"
+    assert events == ["list", "lock", "list", "delete"], "authorize (unlocked), lock, list under the lock, delete"
 
 
 @pytest.mark.asyncio
@@ -158,9 +160,10 @@ async def test_the_lock_is_a_for_update_on_the_secret_row() -> None:
 
     await secrets_guarded_delete.lock_secret_row(session, secret_id)
 
-    sql = str(session.statements[0].compile(dialect=postgresql.dialect()))
-    assert sql.rstrip().endswith("FOR UPDATE")
-    assert "secrets.id" in sql
+    timeout, lock = (str(st.compile(dialect=postgresql.dialect())) for st in session.statements)
+    assert "set_config('lock_timeout'" in timeout, "the wait is bounded before the lock is requested"
+    assert lock.rstrip().endswith("FOR UPDATE")
+    assert "secrets.id" in lock
 
 
 @pytest.mark.asyncio
@@ -215,12 +218,13 @@ def _register_attempt(monkeypatch, session, secret_id: uuid.UUID, attempts: list
     return attempt
 
 
-def test_bulk_chat_delete_cannot_race_a_registration(tmp_path, monkeypatch) -> None:
-    """A dependent registered while the bulk delete runs has no vault row to attach to.
+def test_a_registration_against_a_legacy_chat_secret_id_finds_no_vault_row(tmp_path, monkeypatch) -> None:
+    """A registration against a legacy chat-secret id finds no vault row (against a FAKE session).
 
-    ``DELETE /api/secrets/chat/{chat_id}`` removes only the legacy file store's rows. Their ids are
-    never in the vault, so ``register_dependency`` raises not-found at the seam and nothing is
-    recorded; the delete needs no lock because there is nothing it could cascade.
+    This shows only what the fake session returns -- no row for any id -- so it does not prove the
+    id spaces are disjoint (``test_the_bulk_route_never_reaches_the_vault_or_the_guarded_delete`` and
+    the importer's fresh id carry that argument). It pins that the bulk route, run with a registration
+    in flight, deletes the legacy rows and records no dependent.
     """
     from api.schemas_system import ChatSecretScope, SecretCreateRequest
     from api.secrets_defects_20557_test import _manager
@@ -244,3 +248,22 @@ def test_bulk_chat_delete_cannot_race_a_registration(tmp_path, monkeypatch) -> N
     assert response.json()["result"]["total_deleted"] == 1
     assert attempts == ["not_found"], "the registration found no vault row"
     assert session.added == [] and session.commits == 0, "no dependent was recorded"
+
+
+def test_the_bulk_route_never_reaches_the_vault_or_the_guarded_delete() -> None:
+    """Structural: the bulk handler has no path to the vault ``secrets`` table, so it needs no row lock."""
+    import ast
+    import inspect
+    import textwrap
+
+    handler = next(
+        r.endpoint for r in secrets_module.router.routes if r.path == "/chat/{chat_id}" and "DELETE" in r.methods
+    )
+    tree = ast.parse(textwrap.dedent(inspect.getsource(handler)))
+    names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)} | {
+        n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)
+    }
+
+    forbidden = {"guarded_delete", "delete_system_vault_secret", "lock_secret_row", "get_coordinator", "get_session"}
+    assert not names & forbidden, sorted(names & forbidden)
+    assert "delete_chat_secrets" in names, "the handler deletes through the legacy file store"

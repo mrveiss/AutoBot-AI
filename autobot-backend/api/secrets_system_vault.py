@@ -167,10 +167,12 @@ async def rotate_system_vault_secret(
     return None  # pragma: no cover -- defensive, generator always yields
 
 
-async def _guarded_vault_delete(coordinator, session, vault_id: uuid.UUID, owner_id: str, confirm: bool) -> None:
+async def _guarded_vault_delete(
+    coordinator, session, vault_id: uuid.UUID, owner_id: str, confirmed_digest: str | None
+) -> None:
     """The main route's delete: the ONE guarded delete, with the manage-authority listing (`describe_dependencies`).
 
-    The caller repeats the delete with `confirm_dependents` once a human has seen the 409 listing.
+    The caller repeats the delete with the 409's `dependents_digest` once a human has seen the listing.
     """
     user_id, permissions = await _principal(owner_id)
 
@@ -182,19 +184,20 @@ async def _guarded_vault_delete(coordinator, session, vault_id: uuid.UUID, owner
             session, user_id=user_id, permissions=permissions, secret_id=vault_id
         )
 
-    await guarded_delete(session, vault_id, dependents=None if confirm else dependents, delete=delete)
+    await guarded_delete(session, vault_id, dependents=dependents, delete=delete, confirmed_digest=confirmed_digest)
 
 
 async def delete_system_vault_secret(
     secret_id: str,
     owner_id: str,
     headers: Mapping[str, str] | None = None,
-    confirm_dependents: bool = False,
+    confirmed_digest: str | None = None,
 ) -> bool:
     """Delete a SYSTEM-vault secret; False when `secret_id` is not one.
 
-    Refused (409) while dependents exist unless `confirm_dependents` is set. The
-    internal API key is refused before any of this, so it cannot confirm.
+    Refused (409) while dependents exist unless `confirmed_digest` is the digest of the
+    listed set (see `secrets_guarded_delete`). The internal API key is refused before any
+    of this, so it cannot confirm.
     """
     from llc.deps import get_session
 
@@ -208,7 +211,7 @@ async def delete_system_vault_secret(
         if not await _is_system_secret(session, vault_id):
             return False
         _refuse_internal_key(headers, "delete")
-        await _guarded_vault_delete(coordinator, session, vault_id, owner_id, confirm_dependents)
+        await _guarded_vault_delete(coordinator, session, vault_id, owner_id, confirmed_digest)
         await session.commit()
         return True
     return False  # pragma: no cover -- defensive, generator always yields

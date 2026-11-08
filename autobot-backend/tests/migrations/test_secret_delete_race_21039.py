@@ -8,8 +8,9 @@
 dependent takes ``FOR KEY SHARE`` on that row through the foreign key, which conflicts, so the two
 serialize in either order:
 
-* registration first, uncommitted: the delete waits, then its listing sees the committed dependent
-  and refuses (409), leaving the secret and the dependent;
+* registration first, uncommitted: the delete waits (proved by a waiting lock in ``pg_locks``, not by
+  a sleep), then its listing sees the committed dependent and refuses (409), leaving the secret and
+  the dependent; a wait past ``lock_timeout`` is a 503 instead of a hang;
 * delete first, uncommitted: the registration waits, then fails the foreign key because the secret
   is gone, so no dependent is ever lost without a confirmation.
 
@@ -20,10 +21,11 @@ import asyncio
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from api import secrets_guarded_delete
 from api.secrets_guarded_delete import guarded_delete
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
@@ -38,8 +40,9 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.migration_gate, requires_postgres
 _SYSTEM = VaultRef(VaultKind.SYSTEM)
 _ROOT = bytes(range(32))
 _VALUE = b"v"  # pragma: allowlist secret
-#: Long enough that a statement which is NOT waiting on the lock has finished.
-_BLOCKED_PROBE_SECONDS = 1.0
+#: Upper bound on polling ``pg_locks`` for the waiting backend (a safety net, not the proof).
+_POLL_ATTEMPTS = 200
+_POLL_INTERVAL_SECONDS = 0.05
 
 
 @pytest.fixture()
@@ -79,6 +82,18 @@ def _delete_guarded(session, coordinator, secret_id):  # noqa: ANN001
     return guarded_delete(session, secret_id, dependents=dependents, delete=delete)
 
 
+async def _wait_until_blocked(maker, task):  # noqa: ANN001
+    """Return once a backend is waiting for a lock (``pg_locks.granted`` false); fail if the task ends first."""
+    for _ in range(_POLL_ATTEMPTS):
+        async with maker() as probe:
+            waiting = (await probe.execute(text("SELECT count(*) FROM pg_locks WHERE NOT granted"))).scalar_one()
+        if waiting:
+            return
+        assert not task.done(), "the statement finished without ever waiting for the row lock"
+        await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+    pytest.fail("no backend ever waited for the row lock")
+
+
 async def _state(maker, secret_id):  # noqa: ANN001
     async with maker() as session:
         secrets = (await session.execute(select(Secret.id).where(Secret.id == secret_id))).scalars().all()
@@ -94,8 +109,7 @@ async def test_a_registration_in_flight_makes_the_delete_wait_then_refuse(maker,
             registering, secret_id=secret_id, dependent_kind="service", dependent_id="late"
         )
         delete = asyncio.create_task(_delete_guarded(deleting, coordinator, secret_id))
-        done, _ = await asyncio.wait({delete}, timeout=_BLOCKED_PROBE_SECONDS)
-        assert not done, "the delete did not wait for the in-flight registration"
+        await _wait_until_blocked(maker, delete)
         await registering.commit()
         with pytest.raises(HTTPException) as refused:
             await delete
@@ -116,8 +130,7 @@ async def test_a_delete_in_flight_makes_the_registration_wait_then_fail(maker, c
                 registering, secret_id=secret_id, dependent_kind="service", dependent_id="late"
             )
         )
-        done, _ = await asyncio.wait({register}, timeout=_BLOCKED_PROBE_SECONDS)
-        assert not done, "the registration did not wait for the delete's row lock"
+        await _wait_until_blocked(maker, register)
         await deleting.commit()
         with pytest.raises(IntegrityError):
             await register
@@ -134,3 +147,20 @@ async def test_a_delete_with_no_dependents_commits(maker, coordinator):  # noqa:
         await session.commit()
 
     assert await _state(maker, secret_id) == (0, [])
+
+
+async def test_a_stuck_registration_is_a_503_not_a_hang(maker, coordinator, monkeypatch):  # noqa: ANN001
+    monkeypatch.setattr(secrets_guarded_delete, "SECRET_DELETE_LOCK_TIMEOUT_MS", 200)
+    secret_id = await _seed(maker, coordinator)
+
+    async with maker() as registering, maker() as deleting:
+        await SecretDependencyService().register(
+            registering, secret_id=secret_id, dependent_kind="service", dependent_id="late"
+        )
+        with pytest.raises(HTTPException) as refused:
+            await asyncio.wait_for(_delete_guarded(deleting, coordinator, secret_id), timeout=10)
+        await registering.rollback()
+
+    assert refused.value.status_code == 503
+    assert refused.value.detail["code"] == "secret_lock_timeout"
+    assert await _state(maker, secret_id) == (1, [])

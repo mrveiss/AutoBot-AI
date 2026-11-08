@@ -65,7 +65,7 @@ def client_and_vault(monkeypatch):
         vault = _FakeVault(admin)
 
         async def _one_session():
-            yield MagicMock(commit=AsyncMock(), execute=AsyncMock())
+            yield MagicMock(commit=AsyncMock(), execute=AsyncMock(), rollback=AsyncMock())
 
         legacy = MagicMock()
         legacy.update_secret.return_value = None

@@ -36,14 +36,15 @@ async def audited_delete(
     session: AsyncSession,
     secret_id: uuid.UUID,
     *,
-    dependents: Callable[[], Awaitable[list]] | None,
+    dependents: Callable[[], Awaitable[list]],
     delete: Callable[[], Awaitable[None]],
+    confirmed_digest: str | None = None,
     actor: str | None = None,
     **who: str,
 ) -> None:
     """Record the intent, guarded-delete (:func:`guarded_delete`), record the outcome.
 
-    ``dependents=None`` skips the check (a human has seen the list and confirmed). The
+    ``confirmed_digest`` is the digest of the dependents a human was shown and confirmed. The
     first record says ``attempted`` and, when it cannot be written, nothing is deleted
     (503): the credential is never destroyed without its paper trail (#17038). A refusal
     or failure is recorded as ``denied`` / ``failed`` and re-raised for the route to map.
@@ -57,7 +58,9 @@ async def audited_delete(
     ref = str(secret_id)
     await audit_secret_op("DELETE", ref, request, "attempted", required=True, actor=actor, phase="before_write", **who)
     try:
-        await guarded_delete(session, secret_id, dependents=dependents, delete=delete)
+        await guarded_delete(
+            session, secret_id, dependents=dependents, delete=delete, confirmed_digest=confirmed_digest
+        )
     except HTTPException as exc:
         reason = "has_dependents" if exc.status_code == 409 else "http_%d" % exc.status_code
         await audit_secret_op("DELETE", ref, request, "denied", reason=reason, actor=actor, **who)
@@ -81,10 +84,10 @@ async def delete_as_user(
     secret_id: uuid.UUID,
     user_id: uuid.UUID,
     permissions: set[str],
-    confirm: bool,
+    confirmed_digest: str | None,
     mapped: Callable[[Exception], HTTPException],
 ) -> None:
-    """The user route: dependents are refused (409) unless a human ``confirm``-ed the listing.
+    """The user route: dependents are refused (409) unless ``confirmed_digest`` names the listing a human saw.
 
     ``mapped`` turns a coordinator exception into the route's HTTP error (``_mapped``).
     """
@@ -103,8 +106,9 @@ async def delete_as_user(
             request,
             session,
             secret_id,
-            dependents=None if confirm else dependents,
+            dependents=dependents,
             delete=delete,
+            confirmed_digest=confirmed_digest,
             actor=str(user_id),
         )
     except (SecretAccessError, SecretNotFoundError) as exc:

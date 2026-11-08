@@ -33518,7 +33518,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Secret
-         * @description Delete a secret; 409 with the dependents listed unless ``confirm_dependents`` (#20640).
+         * @description Delete a secret; 409 with the dependents listed unless ``dependents_digest`` confirms that set (#20640).
          */
         delete: operations["delete_secret_api_v2_secrets__secret_id__delete"];
         options?: never;
@@ -152479,7 +152479,7 @@ export interface operations {
         parameters: {
             query?: {
                 chat_id?: string | null;
-                confirm_dependents?: boolean;
+                dependents_digest?: string | null;
             };
             header?: never;
             path: {
@@ -152913,7 +152913,7 @@ export interface operations {
     delete_secret_api_v2_secrets__secret_id__delete: {
         parameters: {
             query?: {
-                confirm_dependents?: boolean;
+                dependents_digest?: string | null;
             };
             header?: never;
             path: {
