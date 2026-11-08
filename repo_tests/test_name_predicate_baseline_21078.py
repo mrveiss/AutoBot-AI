@@ -6,9 +6,10 @@
 
 Each entry is a repo-relative path and how many rule literals it holds (see the guard for what counts).
 The guard fails when a file is missing from here or holds more than listed, and when it holds fewer
-(lower the number -- never raise it). Two groups:
+(lower the number -- never raise it). Three groups:
 
 * NOT_A_FILE_NAME_PREDICATE -- the literal answers another question (each reason beside the entry);
+* DELIBERATELY_NOT_CANONICAL -- a different rule on purpose (reason beside the entry);
 * NOT_YET_MIGRATED -- a hand-written copy beyond the sites #21078 enumerated, left so the PR stays under the
   100-file ceiling. Each is to move to `is_test_filename` (keeping its directory rule); the follow-up is
   referenced from #21078.
@@ -26,6 +27,9 @@ BASELINE: dict[str, int] = {
     "repo_tests/sys_modules_leak_guard.py": 2,
     # classifies module NAMES during collection by `_test`/`_examples` suffix, not file names
     "autobot-backend/conftest.py": 1,
+    # Deliberately not canonical: the rule must still scan a `conftest.py` under tasks/, which the canonical rule
+    # would exempt (its own test, test_py_celery_private_event_loop, requires that file to be scanned).
+    "tools/lint/canonical/rules/py_celery_private_event_loop.py": 1,
     # --- NOT_YET_MIGRATED ---
     # Pre-commit hook runs under the system interpreter, which autobot_shared's import-time floor refuses (#20903);
     # migrate once the hook runs on the project interpreter.
