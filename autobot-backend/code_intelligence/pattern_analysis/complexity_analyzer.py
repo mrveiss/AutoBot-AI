@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
-from utils.file_categorization import SKIP_DIRS
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files
 
 from .types import CodeLocation, ComplexityHotspot, PatternSeverity
 
@@ -256,7 +256,6 @@ class ComplexityAnalyzer:
     LINE_THRESHOLD = 50  # Long functions need review
 
     # Canonical skip dirs plus extras: archived copies and the type checker's cache.
-    EXCLUDE_DIRS = frozenset(SKIP_DIRS | {"archives", ".mypy_cache"})
 
     def __init__(
         self,
@@ -278,7 +277,7 @@ class ComplexityAnalyzer:
         self.cc_threshold = cc_threshold
         self.mi_threshold = mi_threshold
         self.nesting_threshold = nesting_threshold
-        self.exclude_dirs = exclude_dirs or self.EXCLUDE_DIRS
+        self.exclude_dirs = exclude_dirs or ANALYSIS_EXCLUDE_DIRS
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
     def analyze_file(self, file_path: str) -> ModuleComplexity:
@@ -549,10 +548,7 @@ class ComplexityAnalyzer:
         results = []
         dir_path = Path(directory)
 
-        for py_file in dir_path.rglob("*.py"):
-            if any(exc in py_file.relative_to(dir_path).parts for exc in self.exclude_dirs):
-                continue
-
+        for py_file in discover_files(dir_path, ("*.py",), self.exclude_dirs):
             module = self.analyze_file(str(py_file))
             results.append(module)
 

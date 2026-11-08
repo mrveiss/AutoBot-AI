@@ -15,6 +15,15 @@ from typing import Iterable, List
 
 from utils.file_categorization import SKIP_DIRS
 
+# The one directory-name exclusion set for every code-intelligence analyzer
+# (#21004). Derived from the repo-wide ``SKIP_DIRS``; the extras are the
+# analysis-only names the per-analyzer copies used to add individually
+# (archived/backup trees, tool caches, third-party code). Analyzers import this
+# instead of declaring their own ``EXCLUDE_DIRS`` / ignore list.
+ANALYSIS_EXCLUDE_DIRS: frozenset = frozenset(
+    SKIP_DIRS | {"archive", "archives", "backup", "backups", ".mypy_cache", "third_party"}
+)
+
 
 def is_excluded(path: Path, root: Path, excluded: Iterable[str]) -> bool:
     """True if a component of *path* **below** *root* is in *excluded*.
@@ -33,11 +42,26 @@ def is_excluded(path: Path, root: Path, excluded: Iterable[str]) -> bool:
     return not set(excluded).isdisjoint(parts)
 
 
+def discover_files(
+    directory: str | Path,
+    patterns: Iterable[str] = ("*.py",),
+    exclude_dirs: Iterable[str] | None = None,
+) -> List[Path]:
+    """The one file-discovery walk for the code-intelligence analyzers (#21004).
+
+    Returns the sorted, de-duplicated files under *directory* matching any glob
+    in *patterns*, minus those with an excluded component **below** the root
+    (``exclude_dirs`` defaults to ``ANALYSIS_EXCLUDE_DIRS``).
+    """
+    root = Path(directory)
+    excluded = ANALYSIS_EXCLUDE_DIRS if exclude_dirs is None else set(exclude_dirs)
+    found = {path for pattern in patterns for path in root.rglob(pattern) if path.is_file()}
+    return sorted(path for path in found if not is_excluded(path, root, excluded))
+
+
 def collect_python_files(directory: str, exclude_dirs: Iterable[str]) -> List[str]:
     """Return sorted ``*.py`` paths under *directory* at any depth, minus excluded parts."""
-    root = Path(directory)
-    excluded = set(exclude_dirs)
-    return sorted(str(py_file) for py_file in root.rglob("*.py") if not is_excluded(py_file, root, excluded))
+    return [str(path) for path in discover_files(directory, ("*.py",), exclude_dirs)]
 
 
 def cache_covers_exclusions(exclude_dirs: Iterable[str]) -> bool:

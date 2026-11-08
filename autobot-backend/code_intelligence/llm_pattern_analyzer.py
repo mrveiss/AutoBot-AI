@@ -73,6 +73,7 @@ from code_intelligence.llm_pattern_analysis.types import (
     PromptIssueType,
     UsagePatternType,
 )
+from code_intelligence.python_files import discover_files
 
 logger = get_logger(__name__)
 
@@ -205,7 +206,7 @@ class LLMPatternAnalyzer:
         if directories is None:
             directories = [self.project_root / "src"]
         if exclude_patterns is None:
-            exclude_patterns = ["**/test*", "**/__pycache__", "**/venv"]
+            exclude_patterns = ["**/test*"]
         return directories, exclude_patterns
 
     def _generate_recommendations(
@@ -314,9 +315,9 @@ class LLMPatternAnalyzer:
             if not directory.exists():
                 continue
 
-            for file_path in directory.rglob("*.py"):
+            for file_path in discover_files(directory, ("*.py",)):
                 # Issue #616: Use any() for O(1) early termination
-                if not any(file_path.match(pattern) for pattern in exclude_patterns):
+                if not any(file_path.relative_to(directory).match(pattern) for pattern in exclude_patterns):
                     files.append(file_path)
 
         return files

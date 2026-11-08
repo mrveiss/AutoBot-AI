@@ -27,7 +27,7 @@ from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import strict_git_env
 from code_intelligence.anti_pattern_detector import AntiPatternDetector
-from utils.file_categorization import SKIP_DIRS
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS
 
 logger = get_logger(__name__)
 
@@ -43,7 +43,6 @@ _GIT_TIMEOUT_SECONDS: int = env_int("AUTOBOT_COCHANGE_GIT_TIMEOUT_SECONDS", defa
 # Paths that co-change because a tool wrote them, not because they depend on each
 # other. Lockfiles are the clearest case: every dependency bump touches all of them.
 # Canonical skip dirs plus extras: vendored third-party code is not first-party co-change.
-_COCHANGE_SKIP_DIRS: frozenset = frozenset(SKIP_DIRS | {"third_party"})
 
 
 class PatternOccurrence:
@@ -237,7 +236,7 @@ def _parse_numstat(numstat: str) -> Dict[str, int]:
 
 def _is_vendored_path(path: str) -> bool:
     """True for paths whose co-changes come from tooling rather than from design."""
-    return any(part in _COCHANGE_SKIP_DIRS for part in PurePosixPath(path).parts)
+    return any(part in ANALYSIS_EXCLUDE_DIRS for part in PurePosixPath(path).parts)
 
 
 class GitHistoryCrawler:
