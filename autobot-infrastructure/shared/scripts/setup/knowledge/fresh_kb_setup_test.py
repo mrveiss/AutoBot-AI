@@ -81,3 +81,49 @@ async def test_test_knowledge_base_reads_a_decoded_ft_info_reply(caplog):
 
     assert result is True
     assert "Vector dimension: 768" in caplog.text
+
+
+class _Plan:
+    """A plan shaped like ``plan_kb_wipe``'s, for the script's two entry modes."""
+
+    value = {"databases": [{"database": "knowledge", "keys": 3, "indexes": []}], "total_keys": 3}
+
+
+@pytest.mark.asyncio
+async def test_dry_run_lists_the_plan_and_neither_proposes_nor_deletes(monkeypatch, caplog):
+    """#21048: ``--dry-run`` only reads; no approval is raised and no delete command is issued."""
+    from services import kb_wipe_action
+
+    monkeypatch.setattr(kb_wipe_action, "plan_kb_wipe", lambda: _Plan.value)
+    proposed = []
+
+    async def fake_propose(plan):
+        proposed.append(plan)
+        return "id"
+
+    monkeypatch.setattr(fresh_kb_setup, "_propose_wipe", fake_propose)
+    with caplog.at_level("INFO", logger=fresh_kb_setup.logger.name):
+        assert await fresh_kb_setup.fresh_setup(dry_run=True) is True
+    assert proposed == [] and "Database knowledge: 3 keys" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_bare_run_only_requests_approval(monkeypatch):
+    """#21048: running the script proposes the wipe through the approval gate and deletes nothing itself."""
+    from services import kb_wipe_action
+
+    monkeypatch.setattr(kb_wipe_action, "plan_kb_wipe", lambda: _Plan.value)
+    proposed = []
+
+    async def fake_propose(plan):
+        proposed.append(plan)
+        return "approval-1"
+
+    monkeypatch.setattr(fresh_kb_setup, "_propose_wipe", fake_propose)
+    assert await fresh_kb_setup.fresh_setup() is True
+    assert proposed == [_Plan.value]
+
+
+def test_the_script_has_no_delete_calls_left():
+    source = _MODULE_PATH.read_text(encoding="utf-8")
+    assert "flushdb" not in source and "DROPINDEX" not in source and "flushall" not in source.lower()

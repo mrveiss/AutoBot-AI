@@ -239,7 +239,10 @@ def test_every_absolute_import_target_in_the_script_resolves(request, script, lo
 
     # #18122 slice 5: the scripts reach the KB through the canonical accessor (knowledge_factory).
     assert targets & {"knowledge", "knowledge_factory"}, "the knowledge-base import must still be exercised"
-    unresolvable = sorted(name for name in targets if importlib.util.find_spec(name) is None)
+    # An already-imported module resolves; find_spec raises ValueError on one whose __spec__ a test stubbed to None.
+    unresolvable = sorted(
+        name for name in targets if name not in sys.modules and importlib.util.find_spec(name) is None
+    )
     assert unresolvable == []
 
 

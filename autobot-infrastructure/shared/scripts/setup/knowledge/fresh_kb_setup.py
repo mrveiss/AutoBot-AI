@@ -7,6 +7,7 @@
 Fresh knowledge base setup - let llama_index create everything from scratch.
 """
 
+import argparse
 import asyncio
 import sys
 from pathlib import Path
@@ -30,47 +31,25 @@ from autobot_shared.redis_client import get_redis_client  # noqa: E402
 from autobot_shared.redis_utils import decode_redis_list, decode_redis_value  # noqa: E402
 
 
-def _clean_redis_indexes(r) -> None:
-    """Clean Redis indexes.
-
-    Helper for fresh_setup (Issue #825).
-    """
-    try:
-        indexes = r.execute_command("FT._LIST")
-        for idx in indexes:
-            idx_name = idx.decode() if isinstance(idx, bytes) else idx
-            r.execute_command("FT.DROPINDEX", idx_name, "DD")
-            logger.info(f"   Dropped index: {idx_name}")
-    except Exception as e:
-        logger.info(f"   No indexes to drop: {e}")
+def _log_plan(plan: dict) -> None:
+    """Log what a wipe would delete, store by store."""
+    for store in plan["databases"]:
+        logger.info(f"   Database {store['database']}: {store['keys']} keys")
+        for index in store["indexes"]:
+            logger.info(f"   Index {index['name']}: {index['documents']} documents")
+    logger.info(f"   Total keys: {plan['total_keys']}")
 
 
-def _clean_redis_databases() -> None:
-    """Clean Redis databases.
+async def _propose_wipe(plan: dict) -> str:
+    """Raise (or reuse) the human-approval proposal for the wipe; return its approval id. Deletes nothing."""
+    import getpass
 
-    Helper for fresh_setup (Issue #825).
-    """
-    database_names = [
-        "main",
-        "knowledge",
-        "prompts",
-        "agents",
-        "metrics",
-        "logs",
-        "sessions",
-        "workflows",
-        "vectors",
-        "models",
-    ]
+    from services.kb_wipe_action import propose_kb_wipe
+    from user_management.database import get_async_session_factory
 
-    for db_name in database_names:
-        try:
-            r_db = get_redis_client(database=db_name)
-            if r_db is not None:
-                r_db.flushdb()
-                logger.info(f"   Flushed {db_name} database")
-        except Exception as e:
-            logger.info(f"   Could not flush {db_name}: {e}")
+    async with get_async_session_factory()() as db:
+        approval = await propose_kb_wipe(db, getpass.getuser(), plan)
+    return str(approval.id)
 
 
 def _create_test_document() -> str:
@@ -150,18 +129,34 @@ async def _test_knowledge_base(kb, r) -> bool:
         return False
 
 
-async def fresh_setup():
-    """Complete fresh setup of knowledge base."""
+async def _request_wipe(dry_run: bool) -> bool:
+    """Dry run lists the KB stores; otherwise request approval. Neither deletes anything (#21048)."""
+    from services.kb_wipe_action import plan_kb_wipe
+
+    plan = plan_kb_wipe()
+    _log_plan(plan)
+    if dry_run:
+        logger.info("   Dry run: nothing was deleted.")
+        return True
+    approval_id = await _propose_wipe(plan)
+    logger.info(f"   Wipe requested (approval {approval_id}). Nothing is deleted until an admin approves it.")
+    return True
+
+
+async def fresh_setup(dry_run: bool = False, initialize: bool = False):
+    """Request (or preview) a knowledge-base wipe; with ``initialize``, set up a fresh knowledge base.
+
+    The wipe itself runs in the backend only after a human approves the request (#21048, #17038). This
+    script never deletes data and offers no full wipe.
+    """
 
     logger.info("=== Fresh Knowledge Base Setup ===")
 
-    logger.info("\n1. Cleaning Redis...")
+    if not initialize:
+        logger.info("\n1. Knowledge base wipe (knowledge database and its search indexes only)...")
+        return await _request_wipe(dry_run)
+
     r = get_redis_client(database="main")
-
-    _clean_redis_indexes(r)
-    _clean_redis_databases()
-
-    logger.info("   Redis cleaned!")
 
     logger.info("\n2. Initializing fresh knowledge base...")
 
@@ -183,10 +178,19 @@ async def fresh_setup():
     return await _test_knowledge_base(kb, r)
 
 
+def _parse_args(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Request a knowledge-base wipe, or initialise a fresh KB.")
+    parser.add_argument("--dry-run", action="store_true", help="list what the wipe would delete; delete nothing")
+    parser.add_argument(
+        "--initialize", action="store_true", help="after an approved wipe: create the KB and run the smoke test"
+    )
+    return parser.parse_args(argv)
+
+
 if __name__ == "__main__":
-    success = asyncio.run(fresh_setup())
+    args = _parse_args()
+    success = asyncio.run(fresh_setup(dry_run=args.dry_run, initialize=args.initialize))
     if success:
-        logger.info("\n✓ Knowledge base setup successful!")
-        logger.info("You can now run populate_knowledge_base.py")
+        logger.info("\nDone.")
     else:
         logger.error("\n✗ Knowledge base setup failed!")
