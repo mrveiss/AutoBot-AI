@@ -77,6 +77,23 @@ describe('SystemVaultSecrets (#17099)', () => {
     expect(wrapper.get('[data-testid="rotate-start"]').attributes('disabled')).toBeDefined()
   })
 
+  it('a second delete click while the confirm is open or the write is in flight does nothing (#20756)', async () => {
+    let answer: (ok: boolean) => void = () => {}
+    confirm.mockReturnValue(new Promise<boolean>((resolve) => (answer = resolve)))
+    deleteSecret.mockReturnValue(new Promise(() => {}))
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    const button = wrapper.get('[data-testid="delete"]')
+    await button.trigger('click')
+    expect(button.attributes('disabled')).toBeDefined()
+    await button.trigger('click')
+    answer(true)
+    await flushPromises()
+    await button.trigger('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(deleteSecret).toHaveBeenCalledOnce()
+  })
+
   it('delete confirms, then calls DELETE /secrets/{id}', async () => {
     confirm.mockResolvedValue(true)
     const wrapper = mountList({ available: true, secrets: [entry] })
