@@ -151,7 +151,10 @@ def _inherits(text):
 
 def test_no_workflow_passes_every_secret_with_inherit():
     """Each reusable body names the secrets it reads; the caller passes those names and nothing else."""
-    offenders = [p.name for p in sorted(_WORKFLOWS.iterdir()) if p.suffix == ".yml" and _inherits(p.read_text(encoding="utf-8"))]
+    workflows = [p for p in sorted(_WORKFLOWS.iterdir()) if p.suffix == ".yml"]
+    # A listing that found nothing would report the same clean result as a compliant tree.
+    assert len(workflows) >= 40, f"only {len(workflows)} workflows listed: the sweep did not look"
+    offenders = [p.name for p in workflows if _inherits(p.read_text(encoding="utf-8"))]
     assert not offenders, f"`secrets: inherit` in {offenders}: pass the named secrets instead"
 
 
@@ -169,6 +172,9 @@ def test_a_reusable_body_declares_exactly_the_secrets_it_reads(body, secret):
     declared = set(yaml.safe_load(text)[True]["workflow_call"].get("secrets", {}))
     read = set(re.findall(r"secrets\.([A-Z0-9_]+)", text)) - {"GITHUB_TOKEN"}
     assert declared == read == {secret}
-    caller = {j: v for j, v in yaml.safe_load((_WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))["jobs"].items()
-              if v.get("uses", "").endswith(body)}
+    caller = {
+        j: v
+        for j, v in yaml.safe_load((_WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))["jobs"].items()
+        if v.get("uses", "").endswith(body)
+    }
     assert [set(v["secrets"]) for v in caller.values()] == [{secret}]
