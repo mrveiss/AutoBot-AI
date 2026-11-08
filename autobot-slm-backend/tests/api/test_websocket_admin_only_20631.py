@@ -13,6 +13,7 @@ path (``_real_auth_import``) and patched in. The fake WebSocket mirrors
 
 from __future__ import annotations
 
+import importlib
 import secrets
 import sys
 from pathlib import Path
@@ -20,8 +21,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _real_auth_import import load_real_auth  # noqa: E402
+_HELPER_DIR = str(Path(__file__).resolve().parent)
+sys.path.insert(0, _HELPER_DIR)
+try:
+    load_real_auth = importlib.import_module("_real_auth_import").load_real_auth
+finally:
+    sys.path.remove(_HELPER_DIR)  # the helper dir is only needed for this one import
 
 from api.websocket import _authenticate_websocket_token  # noqa: E402
 
