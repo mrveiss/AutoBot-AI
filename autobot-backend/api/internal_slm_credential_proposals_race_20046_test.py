@@ -11,22 +11,23 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from api import internal_slm_credential_proposals as route
-from api.schemas_slm_credential_proposals import SshPasswordDeletionProposal
+from api.schemas_slm_credential_proposals import CredentialProposal
+from autobot_shared.slm_credential_actions import SSH_PASSWORD_DELETE
+from testkit.fake_async_session import FakeAsyncSession
 
 
-def _body() -> SshPasswordDeletionProposal:
-    return SshPasswordDeletionProposal(node_id="node-1")
+def _body() -> CredentialProposal:
+    return CredentialProposal(action=SSH_PASSWORD_DELETE.name, node_id="node-1")
 
 
 async def _propose(list_approvals, create):
     gate = MagicMock()
     gate.return_value.list_approvals = list_approvals
     gate.return_value.create_approval = create
-    db = MagicMock()
-    db.rollback = AsyncMock()
+    db = FakeAsyncSession()
     with patch.object(route, "ApprovalGateService", gate):
         # service_opt_in wraps the handler; the undecorated coroutine is what the route runs.
-        handler = getattr(route.propose_ssh_password_deletion, "__wrapped__", route.propose_ssh_password_deletion)
+        handler = getattr(route.propose_credential_change, "__wrapped__", route.propose_credential_change)
         return await handler(_body(), db), db
 
 
@@ -35,7 +36,7 @@ async def test_a_lost_insert_race_returns_the_winning_proposal() -> None:
     lost = AsyncMock(side_effect=IntegrityError("insert", {}, Exception("unique")))
     reply, db = await _propose(AsyncMock(side_effect=[[], [winner]]), lost)
     assert (reply.approval_id, reply.created) == ("w1", False)
-    db.rollback.assert_awaited_once()
+    assert db.rollbacks == 1
 
 
 async def test_a_conflict_with_no_winner_is_not_swallowed() -> None:
