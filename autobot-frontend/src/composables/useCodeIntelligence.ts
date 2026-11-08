@@ -154,12 +154,14 @@ export interface SecurityScoreCached {
 
 export interface UseCodeIntelligenceOptions {
   autoFetch?: boolean
+  /** Scopes `/code-intelligence/security/score/cached`, which requires `source_id` (#20491). */
+  withSourceId?: (url: string) => string
 }
 
 // ===== Composable Implementation =====
 
 export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
-  const { autoFetch = false } = options
+  const { autoFetch = false, withSourceId } = options
 
   // State
   const currentAnalysis = ref<CodeAnalysisResult | null>(null)
@@ -282,9 +284,16 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   }
 
   async function getSecurityScoreCached(): Promise<SecurityScoreCached | null> {
+    // The route requires source_id (#20491); without a scoper the call could only answer 422.
+    if (!withSourceId) {
+      logger.debug('Cached security score skipped: no withSourceId supplied')
+      return null
+    }
     startLoading()
     try {
-      const data = await ApiClient.get<SecurityScoreCached>(`${getApiBase()}/code-intelligence/security/score/cached`)
+      const data = await ApiClient.get<SecurityScoreCached>(
+        withSourceId(`${getApiBase()}/code-intelligence/security/score/cached`),
+      )
       securityScoreCached.value = data
       logger.debug('Cached security score:', data)
       return data
