@@ -543,3 +543,14 @@ register_env_var(
         range=(100, 1000000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOC_INDEX_PROGRESS_INTERVAL_S",
+        type=float,
+        default=30.0,
+        description="Seconds between batch progress lines while the doc indexer embeds chunks (#20886).",
+        component="knowledge",
+        range=(1.0, 3600.0),
+    )
+)
