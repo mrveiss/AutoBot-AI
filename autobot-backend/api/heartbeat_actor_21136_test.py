@@ -85,27 +85,34 @@ def test_actor_falls_back_to_username_without_principal_claim():
 
 
 @pytest.mark.asyncio
-async def test_event_is_written_after_the_commit(harness):
+async def test_event_is_written_before_the_commit(harness):
     audits, session, scheduler, install = harness
     install(_state(HeartbeatStatus.ACTIVE))
     session.commit.side_effect = lambda: audits.append("commit")
     await heartbeat.pause_agent("a1", AgentPauseRequest(reason="r"), session, scheduler, CALLER)
-    assert audits[0] == "commit"
-    assert audits[1]["action"] == action_name(AuditAction.AGENT_PAUSE)
+    assert audits[0]["action"] == action_name(AuditAction.AGENT_PAUSE)
+    assert audits[1] == "commit"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("route", ["pause", "resume", "terminate"])
-async def test_failed_commit_emits_no_event(harness, route):
+async def test_failed_audit_write_is_503_and_changes_nothing(harness, monkeypatch, route):
     audits, session, scheduler, install = harness
+    monkeypatch.setattr(heartbeat, "record_committed", AsyncMock(return_value=False))
     paused = HeartbeatStatus.PAUSED if route == "resume" else HeartbeatStatus.ACTIVE
-    install(_state(paused, paused_by="principal-1"))
-    session.commit.side_effect = RuntimeError("db down")
+    state = _state(paused, paused_by="principal-1")
+    before = dict(vars(state))
+    install(state)
     bodies = {"pause": AgentPauseRequest(), "resume": AgentResumeRequest(), "terminate": AgentTerminateRequest()}
     handler = getattr(heartbeat, f"{route}_agent")
-    with pytest.raises(HTTPException):
+    with pytest.raises(HTTPException) as exc:
         await handler("a1", bodies[route], session, scheduler, CALLER)
-    assert audits == []
+    assert exc.value.status_code == 503
+    assert exc.value.detail == "Audit trail unavailable; nothing was changed"
+    assert vars(state) == before
+    session.commit.assert_not_called()
+    scheduler.disable_agent.assert_not_called()
+    scheduler.enable_agent.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -117,8 +124,9 @@ async def test_paused_by_name_is_none_without_a_user_id(actor):
 
 
 @pytest.mark.asyncio
-async def test_paused_by_name_resolves_from_the_user_record():
-    row = SimpleNamespace(display_name="Alice A", username="alice")
-    session = MagicMock(execute=AsyncMock(return_value=MagicMock(one_or_none=lambda: row)))
+async def test_paused_by_name_resolves_through_the_shared_helper(monkeypatch):
+    helper = AsyncMock(return_value="Alice A")
+    monkeypatch.setattr(heartbeat, "display_name_of", helper)
     uid = "11111111-1111-1111-1111-111111111111"
-    assert await heartbeat._paused_by_name(session, uid) == "Alice A"
+    assert await heartbeat._paused_by_name(MagicMock(), uid) == "Alice A"
+    helper.assert_awaited_once()

@@ -46,7 +46,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.principal import resolve_principal_id
 from autobot_shared.time_utils import now_utc
-from autobot_shared.user_management.models.user import resolve_display_name
+from llc.services.member_standing import display_name_of
 from models.heartbeat import (
     AgentRuntimeState,
     AgentWakeupRequest,
@@ -57,7 +57,6 @@ from models.heartbeat import (
 from services.audit.audit import record_committed
 from services.audit.taxonomy import AuditAction, AuditCategory, AuditEvent, action_name
 from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
-from user_management.models.user import User
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -278,14 +277,14 @@ def _actor_id(user: Any) -> str:
     return resolve_principal_id(claims) or str(claims.get("username") or "unknown")
 
 
-async def _audit_control(actor: str, action: AuditAction, agent_id: str, reason: str | None = None) -> bool:
-    """Durably record who paused, resumed or terminated an agent; call only AFTER the commit (#21136).
+async def _audit_control(actor: str, action: AuditAction, agent_id: str, reason: str | None = None) -> None:
+    """Durably record who paused, resumed or terminated an agent BEFORE the change (#21136, #20557).
 
     Resume clears the row, so this event is the only record of the resumer: it is the awaited,
-    bounded ``record_committed`` write, not the fire-and-forget bus. The state change is already
-    committed, so a failed write is logged and counted by the audit module and returned, not raised.
+    bounded ``record_committed`` write, not the fire-and-forget bus. As on the secrets routes
+    (``api/secrets_audit.py``), a write that fails (returns False) raises 503 and nothing is changed.
     """
-    return await record_committed(
+    recorded = await record_committed(
         AuditEvent(
             category=AuditCategory.SECURITY,
             action=action_name(action),
@@ -295,6 +294,8 @@ async def _audit_control(actor: str, action: AuditAction, agent_id: str, reason:
             metadata={"reason": reason} if reason else None,
         )
     )
+    if not recorded:
+        raise HTTPException(status_code=503, detail="Audit trail unavailable; nothing was changed")
 
 
 @router.post("/{agent_id}/pause", response_model=HeartbeatConfigResponse)
@@ -320,13 +321,14 @@ async def pause_agent(
         raise HTTPException(status_code=409, detail="Agent is terminated; cannot pause")
     if state.status == HeartbeatStatus.PAUSED.value:
         return await _state_response(session, state)
+    # The verified caller is the only actor; body.paused_by is never trusted (#21136).
+    actor = _actor_id(_user)
+    await _audit_control(actor, AuditAction.AGENT_PAUSE, agent_id, body.reason)
     state.status = HeartbeatStatus.PAUSED.value
     state.paused_reason = body.reason
     state.paused_at = now_utc()
-    # The verified caller is the only actor; body.paused_by is never trusted (#21136).
-    state.paused_by = _actor_id(_user)
+    state.paused_by = actor
     await session.commit()
-    await _audit_control(state.paused_by, AuditAction.AGENT_PAUSE, agent_id, body.reason)
     await session.refresh(state)
     await scheduler.disable_agent(agent_id)
     logger.info("Agent %s paused by %s: %s", agent_id, state.paused_by, state.paused_reason)
@@ -410,14 +412,14 @@ async def resume_agent(
     queued = await _queue_system_pause_resume(agent_id, state.paused_by or "", _user)
     if queued is not None:
         return queued
+    # No resumer column on the row (would need a migration); this event names the caller.
+    resumer = _actor_id(_user)
+    await _audit_control(resumer, AuditAction.AGENT_RESUME, agent_id)
     state.status = HeartbeatStatus.ACTIVE.value
     state.paused_reason = None
     state.paused_at = None
     state.paused_by = None
     await session.commit()
-    # No resumer column on the row (would need a migration); this event names the caller.
-    resumer = _actor_id(_user)
-    await _audit_control(resumer, AuditAction.AGENT_RESUME, agent_id)
     await session.refresh(state)
     await scheduler.enable_agent(agent_id, state.heartbeat_interval_seconds)
     logger.info("Agent %s resumed by %s", agent_id, resumer)
@@ -445,12 +447,13 @@ async def terminate_agent(
     state = await _get_or_create_state(session, agent_id)
     if state.status == HeartbeatStatus.TERMINATED.value:
         return await _state_response(session, state)
+    actor = _actor_id(_user)
+    await _audit_control(actor, AuditAction.AGENT_TERMINATE, agent_id, body.reason)
     state.status = HeartbeatStatus.TERMINATED.value
     state.paused_reason = body.reason
     state.paused_at = now_utc()
-    state.paused_by = _actor_id(_user)
+    state.paused_by = actor
     await session.commit()
-    await _audit_control(state.paused_by, AuditAction.AGENT_TERMINATE, agent_id, body.reason)
     await session.refresh(state)
     await scheduler.disable_agent(agent_id)
     logger.info("Agent %s terminated: %s", agent_id, body.reason)
@@ -534,8 +537,7 @@ async def _paused_by_name(session: AsyncSession, paused_by: str | None) -> str |
         user_id = uuid.UUID(paused_by or "")
     except ValueError:
         return None
-    row = (await session.execute(select(User.display_name, User.username).where(User.id == user_id))).one_or_none()
-    return resolve_display_name(row.display_name, row.username) if row else None
+    return await display_name_of(session, user_id)
 
 
 async def _state_response(session: AsyncSession, state: AgentRuntimeState) -> HeartbeatConfigResponse:
