@@ -108,6 +108,21 @@ describe('SystemVaultSecrets (#17099)', () => {
     expect(deleteSecret).not.toHaveBeenCalled()
   })
 
+  it('remove() ignores a click emitted while the DELETE is pending, past the first confirmation (#20756)', async () => {
+    confirm.mockResolvedValue(true)
+    deleteSecret.mockReturnValue(new Promise(() => {}))
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    const button = wrapper.getComponent('[data-testid="delete"]')
+    await button.trigger('click')
+    await flushPromises()
+    expect(deleteSecret).toHaveBeenCalledOnce()
+    // trigger() is a no-op on a disabled element; emit the click straight to the bound handler.
+    await button.vm.$emit('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(deleteSecret).toHaveBeenCalledOnce()
+  })
+
   it('cancelling the confirm re-enables Delete and deletes nothing (#20756)', async () => {
     confirm.mockResolvedValue(false)
     const wrapper = mountList({ available: true, secrets: [entry] })
