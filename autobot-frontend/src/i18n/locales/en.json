@@ -115,6 +115,11 @@
     "logsLoadFailed": "Failed to load logs: {error}"
   },
   "chat": {
+    "conversationFiles": {
+      "createFailed": "Failed to create file",
+      "saveFailed": "Save failed",
+      "copyFailed": "Copy failed"
+    },
     "contextWindow": {
       "ariaLabel": "{used} of {max} tokens used",
       "tooltip": "{used} / {max} tokens used ({percent}% of context window)",
