@@ -316,6 +316,8 @@
     },
     "input": {
       "retryUpload": "Retry upload",
+      "cancelUpload": "Cancel upload of {name}",
+      "uploadCancelled": "Upload of {name} cancelled",
       "uploadError": {
         "http": "Upload failed (status {status})",
         "invalidResponse": "The server sent an unreadable response",

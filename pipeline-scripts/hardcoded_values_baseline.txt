@@ -612,12 +612,10 @@
 1|other|autobot-frontend/src/composables/analytics/useCodeIntelScores.ts|'/opt/autobot
 1|other|autobot-frontend/src/composables/analytics/useSourceRegistry.ts|'/opt/autobot
 2|other|autobot-frontend/src/composables/chat/useContextOverflowProtection.ts|'system'
-1|other|autobot-frontend/src/composables/collaboration/useCollaborationInvite.ts|offset=0
 1|other|autobot-frontend/src/composables/knowledge/useKnowledgeBrowser.ts|offset=0
 2|other|autobot-frontend/src/composables/knowledge/useKnowledgeCategories.ts|100
 1|other|autobot-frontend/src/composables/useAIDocument.ts|50
 1|other|autobot-frontend/src/composables/useCodeIntelligence.ts|50
-1|other|autobot-frontend/src/composables/useCollaborationInvites.ts|offset=0
 3|other|autobot-frontend/src/composables/useKnowledgeCollaboration.ts|100
 3|other|autobot-frontend/src/composables/usePatternAnalysis.ts|50
 1|other|autobot-frontend/src/composables/usePlugins.ts|50
