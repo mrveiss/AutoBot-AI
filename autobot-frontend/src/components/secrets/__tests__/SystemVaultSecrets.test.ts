@@ -77,6 +77,63 @@ describe('SystemVaultSecrets (#17099)', () => {
     expect(wrapper.get('[data-testid="rotate-start"]').attributes('disabled')).toBeDefined()
   })
 
+  it('a second delete click while the confirm is open or the write is in flight does nothing (#20756)', async () => {
+    let answer: (ok: boolean) => void = () => {}
+    confirm.mockReturnValue(new Promise<boolean>((resolve) => (answer = resolve)))
+    deleteSecret.mockReturnValue(new Promise(() => {}))
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    const button = wrapper.get('[data-testid="delete"]')
+    await button.trigger('click')
+    expect(button.attributes('disabled')).toBeDefined()
+    await button.trigger('click')
+    answer(true)
+    await flushPromises()
+    await button.trigger('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(deleteSecret).toHaveBeenCalledOnce()
+  })
+
+  it('remove() itself ignores a re-entrant call while busy, bypassing the disabled button (#20756)', async () => {
+    confirm.mockReturnValue(new Promise<boolean>(() => {}))
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    const button = wrapper.getComponent('[data-testid="delete"]')
+    await button.trigger('click')
+    expect(button.attributes('disabled')).toBeDefined()
+    // trigger() is a no-op on a disabled element; emit the click straight to the bound handler.
+    await button.vm.$emit('click')
+    await button.vm.$emit('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(deleteSecret).not.toHaveBeenCalled()
+  })
+
+  it('remove() ignores a click emitted while the DELETE is pending, past the first confirmation (#20756)', async () => {
+    confirm.mockResolvedValue(true)
+    deleteSecret.mockReturnValue(new Promise(() => {}))
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    const button = wrapper.getComponent('[data-testid="delete"]')
+    await button.trigger('click')
+    await flushPromises()
+    expect(deleteSecret).toHaveBeenCalledOnce()
+    // trigger() is a no-op on a disabled element; emit the click straight to the bound handler.
+    await button.vm.$emit('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(deleteSecret).toHaveBeenCalledOnce()
+  })
+
+  it('cancelling the confirm re-enables Delete and deletes nothing (#20756)', async () => {
+    confirm.mockResolvedValue(false)
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    const button = wrapper.get('[data-testid="delete"]')
+    await button.trigger('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(deleteSecret).not.toHaveBeenCalled()
+    expect(button.attributes('disabled')).toBeUndefined()
+  })
+
   it('delete confirms, then calls DELETE /secrets/{id}', async () => {
     confirm.mockResolvedValue(true)
     const wrapper = mountList({ available: true, secrets: [entry] })
