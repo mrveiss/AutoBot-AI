@@ -18,9 +18,49 @@ from autobot_shared.redis_utils import decode_redis_list, decode_redis_value
 
 #: Redis databases the wipe may touch. Knowledge only; sessions, settings and queues are never listed.
 KB_WIPE_DATABASES: tuple[str, ...] = ("knowledge",)
-#: Key prefixes the KB writes in its database (``knowledge/facts.py``, ``tags.py``, ``categories.py``,
-#: ``collections.py``, ``document_ingest.py``, ``acl_epoch.py``). A key outside these is not KB data.
-KB_KEY_PREFIXES: tuple[str, ...] = ("fact:", "kb:", "tag:", "tag_style:", "category:", "collection:")
+#: Key families in the ``knowledge`` database that are DERIVED from KB content, so they go with it. Entries are
+#: SCAN patterns (a ``*`` inside is a glob). Each family's database was verified as ``knowledge``:
+#:   fact:, session:facts:, content_hash:, unique_key:  ``knowledge/facts.py`` (``redis_client``, ``base.py:336``)
+#:   user:kb:, group:kb:, org:kb:, user:facts:          ``knowledge/ownership.py`` (fact-id membership sets)
+#:   kb:                  stats, ingest records, ACL epoch, relations, system/category indexes (``knowledge/*.py``)
+#:   tag:, category:facts:, collection:facts:           membership sets of fact ids (``tags.py``, ``categories.py``,
+#:                                                      ``collections.py``)
+#:   connector:*:ts:, connector:*:checkpoint, connector:*:external_state, connector:notion:hash:
+#:       connector sync state (``connectors/base.py:271,283``, ``notion.py:45,218``): left behind, the connectors
+#:       would see "unchanged" and never re-ingest into the emptied KB
+#:   bm25:corpus_stats    ``search_components/keyword_search.py:26`` via the KB's ``_aioredis_client`` (``base.py:352``)
+#:   context:summary:     ``pipeline/cognifiers/context_generator.py:42,76`` (summaries keyed by dropped doc ids)
+#:   entity:, timeline:global   the pipeline's graph of KB documents (``pipeline/loaders/redis_graph_loader.py``)
+#: KEPT on purpose (settings, credentials, locks, definitions, user activity): ``category:{id}``,
+#: ``category:path:``, ``category:children:``, ``category:root`` and ``collection:{id}``, ``collection:all``
+#: (user-made taxonomy), ``tag_style:`` (display preference), ``metadata:template:`` (templates),
+#: ``connector:{id}`` / ``:auth`` / ``oauth:`` / ``schedule:`` / ``scheduler:leader`` / ``sync:`` (config, credentials,
+#: locks), ``rag:feedback:`` (user activity) and the embedding-model override.
+#: Not atomic: keys written by a concurrent writer during the wipe survive, so the KB should be idle.
+KB_KEY_PREFIXES: tuple[str, ...] = (
+    "fact:",
+    "session:facts:",
+    "content_hash:",
+    "unique_key:",
+    "user:kb:",
+    "group:kb:",
+    "org:kb:",
+    "user:facts:",
+    "kb:",
+    "tag:",
+    "category:facts:",
+    "collection:facts:",
+    "connector:*:ts:",
+    "connector:*:checkpoint",
+    "connector:*:external_state",
+    "connector:notion:hash:",
+    "bm25:corpus_stats",
+    "context:summary:",
+    "entity:",
+    "timeline:global",
+)
+#: Stated in the plan output: the wipe does not quiesce the KB.
+NOT_ATOMIC_NOTE = "Not atomic: keys written by a concurrent writer during the wipe survive. Run it with the KB idle."
 #: Keys scanned and unlinked per call.
 SCAN_BATCH = env_int_clamped("AUTOBOT_KB_WIPE_SCAN_BATCH", 500, 1, 10000)
 
@@ -47,6 +87,7 @@ def _database_plan(client, database: str) -> dict:
     names = [decode_redis_value(name) for name in client.execute_command("FT._LIST") or []]
     prefixes = [{"prefix": p, "keys": _count_prefix(client, p)} for p in KB_KEY_PREFIXES]
     return {
+        "note": NOT_ATOMIC_NOTE,
         "database": database,
         "indexes": [{"name": n, "documents": _index_documents(client, n)} for n in names],
         "prefixes": prefixes,
@@ -66,26 +107,32 @@ def plan_redis(client_factory: ClientFactory = default_client) -> list[dict]:
     return [_database_plan(_client_or_raise(client_factory, db), db) for db in KB_WIPE_DATABASES]
 
 
-def _unlink_prefix(client, prefix: str) -> int:
-    removed, batch = 0, []
+def _unlink_prefix(client, prefix: str, entry: dict) -> None:
+    """Unlink the keys under *prefix*, updating ``entry["count"]`` per batch so a failure keeps the count so far."""
+    batch: list = []
     for key in client.scan_iter(match=f"{prefix}*", count=SCAN_BATCH):
         batch.append(key)
         if len(batch) >= SCAN_BATCH:
-            removed += int(client.unlink(*batch))
+            entry["count"] += int(client.unlink(*batch))
             batch = []
     if batch:
-        removed += int(client.unlink(*batch))
-    return removed
+        entry["count"] += int(client.unlink(*batch))
 
 
 def execute_redis(record: list[dict], client_factory: ClientFactory = default_client) -> None:
-    """Drop the KB indexes (with their documents), then unlink the KB prefixes; append to *record* per step."""
+    """Drop the KB indexes (with their documents), then unlink the KB prefixes; append to *record* per step.
+
+    A prefix's entry is appended BEFORE its keys are scanned and ``complete`` flips when it finishes. Index
+    names come from ``FT._LIST``; the prefix scan is not repeated here.
+    """
     for database in KB_WIPE_DATABASES:
         client = _client_or_raise(client_factory, database)
-        for index in _database_plan(client, database)["indexes"]:
-            client.execute_command("FT.DROPINDEX", index["name"], "DD")
-            record.append({"database": database, "kind": "index", "name": index["name"], "count": index["documents"]})
+        for name in (decode_redis_value(n) for n in client.execute_command("FT._LIST") or []):
+            documents = _index_documents(client, name)
+            client.execute_command("FT.DROPINDEX", name, "DD")
+            record.append({"database": database, "kind": "index", "name": name, "count": documents})
         for prefix in KB_KEY_PREFIXES:
-            record.append(
-                {"database": database, "kind": "prefix", "name": prefix, "count": _unlink_prefix(client, prefix)}
-            )
+            entry = {"database": database, "kind": "prefix", "name": prefix, "count": 0, "complete": False}
+            record.append(entry)
+            _unlink_prefix(client, prefix, entry)
+            entry["complete"] = True

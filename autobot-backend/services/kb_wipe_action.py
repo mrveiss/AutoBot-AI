@@ -46,6 +46,9 @@ ACTION = "kb_wipe"
 PROPOSED_BY = "services.kb_wipe_action"
 PROPOSAL_TITLE = "Wipe the knowledge base (indexes and documents)"
 _WHAT = "the knowledge wipe"
+#: Where a proposal came from. Only the operator script may name a requester that is not a user id.
+CHANNEL_API = "api"
+CHANNEL_OPERATOR = "operator"
 
 
 async def plan_kb_wipe(
@@ -62,7 +65,9 @@ async def plan_kb_wipe(
     }
 
 
-async def propose_kb_wipe(session: "AsyncSession", requested_by: str, plan: dict) -> "Approval":
+async def propose_kb_wipe(
+    session: "AsyncSession", requested_by: str, plan: dict, *, channel: str = CHANNEL_API
+) -> "Approval":
     """Raise (or reuse, with its counts refreshed) the one pending #17038 proposal. Deletes nothing.
 
     An advisory lock held until the transaction commits serialises concurrent proposers, so two
@@ -74,7 +79,13 @@ async def propose_kb_wipe(session: "AsyncSession", requested_by: str, plan: dict
     query = select(Approval).where(
         Approval.status == ApprovalStatus.PENDING.value, Approval.context["action"].astext == ACTION
     )
-    context = {"action": ACTION, "requested_by": requested_by, "databases": list(KB_WIPE_DATABASES), "plan": plan}
+    context = {
+        "action": ACTION,
+        "requested_by": requested_by,
+        "channel": channel,
+        "databases": list(KB_WIPE_DATABASES),
+        "plan": plan,
+    }
     if (pending := (await session.execute(query)).scalars().first()) is not None:
         pending.context = {**(pending.context or {}), "plan": plan}
         await session.commit()
@@ -94,10 +105,13 @@ async def propose_kb_wipe(session: "AsyncSession", requested_by: str, plan: dict
 async def _review_kb_wipe(approval: "Approval", session: "AsyncSession") -> bool:
     """Four eyes, before the decision commits: True for the only admin approving their own request.
 
-    A requester that names no person (the operator script) is not the decider, so it passes unflagged.
+    A requester that names no person passes unflagged only on the operator-script channel, which cannot
+    authenticate. On the API channel it fails closed: the decision is refused, never waved through.
     """
     if requester_id(approval.requested_by_agent) is None:
-        return False
+        if (approval.context or {}).get("channel") == CHANNEL_OPERATOR:
+            return False
+        raise ValueError(f"{_WHAT} was proposed by a requester that names no user; it cannot be approved")
     return await is_self_approval(approval, session, what=_WHAT)
 
 
@@ -170,6 +184,8 @@ def register_kb_wipe_action() -> None:
 
 __all__ = [
     "ACTION",
+    "CHANNEL_API",
+    "CHANNEL_OPERATOR",
     "KB_WIPE_DATABASES",
     "PROPOSED_BY",
     "execute_kb_wipe_action",

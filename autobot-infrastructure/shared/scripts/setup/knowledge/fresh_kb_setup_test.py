@@ -90,7 +90,7 @@ class _Plan:
     """A plan shaped like ``plan_kb_wipe``'s, for the script's two entry modes."""
 
     value = {
-        "databases": [{"database": "knowledge", "keys": 3, "indexes": []}],
+        "databases": [{"database": "knowledge", "keys": 3, "indexes": [], "note": "Not atomic"}],
         "chroma_collections": [{"name": "autobot_memory", "vectors": 8}],
         "total_keys": 3,
         "total_vectors": 8,

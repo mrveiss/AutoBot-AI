@@ -37,7 +37,7 @@ from autobot_shared.redis_utils import decode_redis_list, decode_redis_value  # 
 def _log_plan(plan: dict) -> None:
     """Log what a wipe would delete, store by store."""
     for store in plan["databases"]:
-        logger.info(f"   Database {store['database']}: {store['keys']} keys")
+        logger.info(f"   Database {store['database']}: {store['keys']} keys ({store['note']})")
         for index in store["indexes"]:
             logger.info(f"   Index {index['name']}: {index['documents']} documents")
     for collection in plan["chroma_collections"]:
@@ -49,11 +49,11 @@ async def _propose_wipe(plan: dict) -> str:
     """Raise (or reuse) the human-approval proposal for the wipe; return its approval id. Deletes nothing."""
     import getpass
 
-    from services.kb_wipe_action import propose_kb_wipe
+    from services.kb_wipe_action import CHANNEL_OPERATOR, propose_kb_wipe
     from user_management.database import get_async_session_factory
 
     async with get_async_session_factory()() as db:
-        approval = await propose_kb_wipe(db, getpass.getuser(), plan)
+        approval = await propose_kb_wipe(db, getpass.getuser(), plan, channel=CHANNEL_OPERATOR)
     return str(approval.id)
 
 
