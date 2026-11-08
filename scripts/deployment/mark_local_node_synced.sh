@@ -4,23 +4,30 @@
 #
 # #18663: stamp the freshly registered local SLM node as synced by running the playbook's own
 # mark-synced tasks -- the one implementation the fleet run uses, no second call to the endpoint.
-# install.sh runs this AFTER register_local_node: the endpoint 404s on a node with no row, and
-# the playbook tolerates that 404. Exit 1 when the node was not stamped, so the caller can warn
-# loudly without undoing a finished install.
+# install.sh runs this AFTER register_local_node: the endpoint 404s on a node with no row.
+# The install inventory's one host is `localhost`; the node id travels as slm_node_id, which
+# Phase 6.5 uses for the URL. mark_synced_strict=true makes the play fail on anything but a 200.
+# Exit 1 when the node was not stamped, so the caller can warn without undoing a finished install.
 #
 #   mark_local_node_synced.sh <code source dir> <node id> <ansible vars file> <log file>
 set -euo pipefail
 
+readonly INVENTORY="inventory/localhost.yml" INVENTORY_HOST="localhost"
 code_source="${1:?code source dir}" node_id="${2:?node id}" vars_file="${3:?vars file}" log_file="${4:?log file}"
 out="$(mktemp)"; trap 'rm -f "${out}"' EXIT
+args=(-i "${INVENTORY}" playbooks/provision-fleet-roles.yml --tags mark-synced --skip-tags always
+    --limit "${INVENTORY_HOST}" -e "slm_node_id=${node_id}" -e mark_synced_strict=true)
 rc=0
-(cd "${code_source}/autobot-slm-backend/ansible" && ansible-playbook \
-    -i inventory/localhost.yml playbooks/provision-fleet-roles.yml \
-    --tags mark-synced --skip-tags always --limit "${node_id}" \
-    -e "@${vars_file}" -e "target_host=localhost") >"${out}" 2>&1 || rc=$?
+(cd "${code_source}/autobot-slm-backend/ansible" && ansible-playbook "${args[@]}" \
+    -e "@${vars_file}" -e "target_host=${INVENTORY_HOST}") >"${out}" 2>&1 || rc=$?
 cat "${out}" >> "${log_file}"
-if [[ ${rc} -ne 0 ]] || grep -qE "WARNING: (mark-synced|SLM login)" "${out}"; then
-    echo "mark synced failed for ${node_id} (ansible exit ${rc}); rerun: cd ${code_source}/autobot-slm-backend/ansible && ansible-playbook -i inventory/localhost.yml playbooks/provision-fleet-roles.yml --tags mark-synced --skip-tags always --limit ${node_id}" >&2
+# The POST task's first result line: ok/changed means it ran; skipping or nothing means it did not.
+post="$(awk '/^TASK \[Mark-synced \| POST/{f=1; next} /^TASK \[/{f=0} f && /^(ok|changed|skipping|fatal|failed):/{print $1; exit}' "${out}")"
+if [[ ${rc} -ne 0 ]] || grep -qE "WARNING: (mark-synced|SLM login)" "${out}" \
+    || ! grep -qE "^${INVENTORY_HOST} +: ok=[1-9]" "${out}" || [[ ${post} != ok: && ${post} != changed: ]]; then
+    cause="$(grep -E "WARNING|fatal:|FAILED!|ERROR" "${out}" | tail -n 1 || true)"
+    echo "mark synced failed for ${node_id} (ansible exit ${rc}, POST task: ${post:-not run}): ${cause:-no cause printed}" >&2
+    echo "rerun: cd ${code_source}/autobot-slm-backend/ansible && ansible-playbook ${args[*]} -e @${vars_file}" >&2
     exit 1
 fi
 echo "Local node ${node_id} marked synced"
