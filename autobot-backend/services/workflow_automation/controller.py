@@ -105,11 +105,11 @@ class WorkflowController:
         workflows: Dict[str, ActiveWorkflow],
     ) -> bool:
         """Approve and execute a workflow step"""
-        # Record Prometheus workflow approval metric
+        # Record Prometheus workflow approval metric, only once the executor accepted the step (#20918)
         workflow_type = "automated_workflow"
-        self.prometheus_metrics.record_workflow_approval(workflow_type=workflow_type, decision="approved")
         await self.executor.step_approvals.withdraw(workflow.workflow_id, step_id)
         await self.executor.approve_and_execute_step(workflow, step_id, workflows)
+        self.prometheus_metrics.record_workflow_approval(workflow_type=workflow_type, decision="approved")
         return True
 
     async def _skip_step(
@@ -121,7 +121,7 @@ class WorkflowController:
         """Skip a workflow step"""
         # Record Prometheus workflow approval metric (rejected/skipped)
         workflow_type = "automated_workflow"
-        self.prometheus_metrics.record_workflow_approval(workflow_type=workflow_type, decision="skipped")
         await self.executor.step_approvals.withdraw(workflow.workflow_id, step_id)
         await self.executor.skip_step(workflow, step_id, workflows)
+        self.prometheus_metrics.record_workflow_approval(workflow_type=workflow_type, decision="skipped")
         return True
