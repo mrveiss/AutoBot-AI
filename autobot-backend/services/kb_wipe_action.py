@@ -11,7 +11,8 @@ approves it. Approval runs :func:`execute_kb_wipe_action` through the ``services
 registry, which records a comment on the approval and a durable audit entry naming who approved, when,
 and every store deleted with its counts.
 
-Scope is the knowledge database and the search indexes living in it (``KB_WIPE_DATABASES``). The
+Scope is the knowledge database and the search indexes living in it (``KB_WIPE_DATABASES``), plus the
+KB's own ChromaDB collections, where its embeddings live (``services.kb_wipe_chroma``). The
 handler never reads its scope from the approval, so a proposal cannot widen it. ``vectors`` is
 deliberately absent: it is an alias of the logs database, not a store of its own.
 """
@@ -26,6 +27,7 @@ from autobot_shared.redis_utils import decode_redis_list, decode_redis_value
 from models.approval import ApprovalComment, ApprovalStatus, ApprovalType
 from services.approval_execution import register_post_approval_action, verified_decider
 from services.audit_logger import audit_log
+from services.kb_wipe_chroma import ChromaFactory, clear_chroma, plan_chroma
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,15 +69,28 @@ def _database_plan(client, database: str) -> dict:
     }
 
 
-def plan_kb_wipe(client_factory: ClientFactory = _default_client) -> dict:
-    """Read only: what a wipe would delete, with counts. Issues no delete command (the dry run)."""
+def _plan_redis(client_factory: ClientFactory) -> list[dict]:
     stores = []
     for database in KB_WIPE_DATABASES:
         client = client_factory(database)
         if client is None:
             raise RuntimeError(f"Redis database {database!r} is unavailable; the wipe plan cannot be built")
         stores.append(_database_plan(client, database))
-    return {"databases": stores, "total_keys": sum(s["keys"] for s in stores)}
+    return stores
+
+
+async def plan_kb_wipe(
+    client_factory: ClientFactory = _default_client, chroma_factory: ChromaFactory | None = None
+) -> dict:
+    """Read only: what a wipe would delete (Redis KB database and Chroma KB collections), with counts."""
+    stores = await asyncio.to_thread(_plan_redis, client_factory)
+    collections = await plan_chroma(chroma_factory)
+    return {
+        "databases": stores,
+        "chroma_collections": collections,
+        "total_keys": sum(s["keys"] for s in stores),
+        "total_vectors": sum(c["vectors"] for c in collections),
+    }
 
 
 def execute_wipe(client_factory: ClientFactory = _default_client) -> list[dict]:
@@ -108,13 +123,16 @@ async def propose_kb_wipe(session: "AsyncSession", requested_by: str, plan: dict
     return await ApprovalGateService(session).create_approval(
         title=PROPOSAL_TITLE,
         approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
-        description="Drops the knowledge search indexes and flushes the knowledge database. Nothing else is touched.",
+        description=(
+            "Drops the knowledge search indexes, flushes the knowledge database and empties the knowledge "
+            "ChromaDB collections. Nothing else is touched."
+        ),
         requested_by_agent=f"kb-wipe:{requested_by}",
         context={"action": ACTION, "requested_by": requested_by, "databases": list(KB_WIPE_DATABASES), "plan": plan},
     )
 
 
-async def _audit(approval: "Approval", result: str, stores: list[dict], error: str | None = None) -> None:
+async def _audit(approval: "Approval", result: str, stores: list[dict], chroma: list[dict], error: str | None = None):
     await audit_log(
         "knowledge.wipe",
         result=result,  # type: ignore[arg-type]
@@ -125,26 +143,37 @@ async def _audit(approval: "Approval", result: str, stores: list[dict], error: s
             "approved_by": approval.decided_by_user,
             "approved_at": approval.decided_at.isoformat() if approval.decided_at else None,
             "stores": stores,
+            "chroma_collections": chroma,
             "error": error,
         },
     )
+
+
+async def _wipe(approval: "Approval") -> tuple[list[dict], list[dict]]:
+    """Redis first, then Chroma; a failure audits what was already deleted before it re-raises."""
+    stores: list[dict] = []
+    chroma: list[dict] = []
+    try:
+        stores.extend(await asyncio.to_thread(execute_wipe))
+        chroma.extend(await clear_chroma())
+    except Exception as exc:
+        await _audit(approval, "failed", stores, chroma, error=type(exc).__name__)
+        raise
+    return stores, chroma
 
 
 async def execute_kb_wipe_action(approval: "Approval", session: "AsyncSession") -> None:
     """Wipe the KB for an approved gate, and record exactly what went."""
     if verified_decider(approval) is None:
         raise ValueError(f"approval {approval.id} has no verified decider; the wipe is refused")
-    try:
-        stores = await asyncio.to_thread(execute_wipe)
-    except Exception as exc:
-        await _audit(approval, "failed", [], error=type(exc).__name__)
-        raise
+    stores, chroma = await _wipe(approval)
     body = "Knowledge wipe done: " + ", ".join(
-        f"{s['database']} ({s['keys']} keys, {len(s['indexes'])} indexes)" for s in stores
+        [f"{s['database']} ({s['keys']} keys, {len(s['indexes'])} indexes)" for s in stores]
+        + [f"chroma {c['name']} ({c['vectors']} vectors)" for c in chroma]
     )
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))
     await session.commit()
-    await _audit(approval, "success", stores)
+    await _audit(approval, "success", stores, chroma)
 
 
 def register_kb_wipe_action() -> None:

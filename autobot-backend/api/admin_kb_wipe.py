@@ -12,8 +12,6 @@ Neither route deletes anything. Nothing runs until an admin approves it in the A
 never auto-approved. The executor lives in ``services.kb_wipe_action``.
 """
 
-import asyncio
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,7 +28,7 @@ register_kb_wipe_action()
 @router.get("/knowledge-wipe")
 async def knowledge_wipe_plan() -> dict:
     """Read only: the databases and indexes a wipe would delete."""
-    return await asyncio.to_thread(plan_kb_wipe)
+    return await plan_kb_wipe()
 
 
 @router.post("/knowledge-wipe/requests", status_code=status.HTTP_201_CREATED)
@@ -42,5 +40,5 @@ async def propose_knowledge_wipe(
     requester = current_user.get("id") or current_user.get("user_id")
     if not requester:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "The proposal cannot be attributed to a verified user")
-    approval = await propose_kb_wipe(session, str(requester), await asyncio.to_thread(plan_kb_wipe))
+    approval = await propose_kb_wipe(session, str(requester), await plan_kb_wipe())
     return {"approval_id": str(approval.id), "status": approval.status, "action": ACTION}

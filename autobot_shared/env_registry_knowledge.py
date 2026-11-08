@@ -543,3 +543,17 @@ register_env_var(
         range=(100, 1000000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_WIPE_CHROMA_BATCH",
+        type=int,
+        default=500,
+        description=(
+            "Vector ids deleted per call while an approved knowledge wipe empties a knowledge "
+            "collection (services/kb_wipe_chroma.py, #21048)."
+        ),
+        component="knowledge",
+        range=(1, 10000),
+    )
+)

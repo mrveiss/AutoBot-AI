@@ -26,6 +26,9 @@ from autobot_shared.logging_manager import get_logger  # noqa: E402
 
 logger = get_logger(__name__)
 
+#: The Redis database the knowledge base keeps its search index in (``KnowledgeBase.redis_db``).
+_KB_DATABASE = "knowledge"
+
 # Import centralized Redis client
 from autobot_shared.redis_client import get_redis_client  # noqa: E402
 from autobot_shared.redis_utils import decode_redis_list, decode_redis_value  # noqa: E402
@@ -37,7 +40,9 @@ def _log_plan(plan: dict) -> None:
         logger.info(f"   Database {store['database']}: {store['keys']} keys")
         for index in store["indexes"]:
             logger.info(f"   Index {index['name']}: {index['documents']} documents")
-    logger.info(f"   Total keys: {plan['total_keys']}")
+    for collection in plan["chroma_collections"]:
+        logger.info(f"   Chroma collection {collection['name']}: {collection['vectors']} vectors")
+    logger.info(f"   Total keys: {plan['total_keys']}, total vectors: {plan['total_vectors']}")
 
 
 async def _propose_wipe(plan: dict) -> str:
@@ -133,7 +138,7 @@ async def _request_wipe(dry_run: bool) -> bool:
     """Dry run lists the KB stores; otherwise request approval. Neither deletes anything (#21048)."""
     from services.kb_wipe_action import plan_kb_wipe
 
-    plan = plan_kb_wipe()
+    plan = await plan_kb_wipe()
     _log_plan(plan)
     if dry_run:
         logger.info("   Dry run: nothing was deleted.")
@@ -153,10 +158,13 @@ async def fresh_setup(dry_run: bool = False, initialize: bool = False):
     logger.info("=== Fresh Knowledge Base Setup ===")
 
     if not initialize:
-        logger.info("\n1. Knowledge base wipe (knowledge database and its search indexes only)...")
+        logger.info(
+            "\n1. Knowledge base wipe (knowledge database, its search indexes and its Chroma collections only)..."
+        )
         return await _request_wipe(dry_run)
 
-    r = get_redis_client(database="main")
+    # #21121: the KB creates its search index in the knowledge database, so the smoke test reads that one.
+    r = get_redis_client(database=_KB_DATABASE)
 
     logger.info("\n2. Initializing fresh knowledge base...")
 
