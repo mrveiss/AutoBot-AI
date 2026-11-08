@@ -18,10 +18,10 @@ test: rename it rather than special-casing it here. ``attestation.py``,
 Directory-based rules (``tests/``, ``archive/``...) differ per caller and stay with
 the caller; they combine with this function, they do not copy it.
 
-Callers that stay separate (an open PR touches them; tracked as a follow-up in
-#20493): ``api_endpoint_scanner._is_test_file``,
-``config_duplication_detector._is_test_or_archive`` and
-``TestingPatternAnalyzer.is_test_file`` (its patterns are caller-configurable).
+Callers that stay separate on purpose: the entries in
+``repo_tests/test_name_predicate_baseline_21078.py`` (each with its reason, e.g. the
+system-interpreter hook and ``audit_unwired_trackers``); the rest of the hand-written copies are
+tracked in #21161.
 """
 
 import re
