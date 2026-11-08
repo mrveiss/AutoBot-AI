@@ -23,7 +23,7 @@
     >
       <div class="flex items-center justify-between mb-3">
         <h4 class="text-sm font-semibold text-autobot-text-primary truncate">{{ preview?.filename }}</h4>
-        <button class="action-btn" :aria-label="$t('chat.filePanel.closePreview')" data-testid="file-preview-close" @click="emit('close')">
+        <button class="w-6 h-6 flex items-center justify-center rounded transition-colors text-autobot-text-muted hover:text-autobot-text-secondary hover:bg-autobot-bg-secondary" :aria-label="$t('chat.filePanel.closePreview')" data-testid="file-preview-close" @click="emit('close')">
           <Icon name="times" class="text-xs" />
         </button>
       </div>
@@ -60,10 +60,3 @@ useFocusRestore()
 const { focusFirst } = useInitialFocus(dialogRef)
 onMounted(focusFirst)
 </script>
-
-<style scoped>
-@reference "../../assets/tailwind.css";
-.action-btn {
-  @apply w-6 h-6 flex items-center justify-center rounded transition-colors text-autobot-text-muted hover:text-autobot-text-secondary hover:bg-autobot-bg-secondary;
-}
-</style>
