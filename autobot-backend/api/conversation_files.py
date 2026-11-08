@@ -48,7 +48,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from conversation_file_quota_owner import mcp_quota_owner, resolve_agent_quota_owner
 from security.session_ownership import validate_session_ownership
-from security.session_posture import NotSessionOwner, SessionPosture
+from security.session_posture import SessionPosture, validate_strict_hidden
 from security.upload_filename_policy import ALLOWED_EXTENSIONS, is_safe_file  # noqa: F401 -- re-exported for tests
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
@@ -83,12 +83,10 @@ async def _authorize_file_operation(
     if not has_permission and not (existing_only and _owner_may_upload(user_data)):
         raise HTTPException(status_code=403, detail=f"Insufficient permissions for file {operation}")
     request.state.user = user_data
-    try:
-        ownership = await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
-    except NotSessionOwner as denied:  # #20195: an owner route answers 404 as for an unknown id (no existence leak)
-        raise (HTTPException(status_code=404, detail="Chat session not found") if existing_only else denied) from None
-    if existing_only and ownership.get("reason") == "legacy_unowned":
-        raise HTTPException(status_code=404, detail="Chat session not found")
+    if existing_only:  # #20195/#20413: the one decision point; another user's, unknown and unowned ids all 404
+        await validate_strict_hidden(session_id, request, must_exist=True)
+    else:
+        await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
     return user_data
 
 

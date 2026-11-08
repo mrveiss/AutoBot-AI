@@ -2157,7 +2157,13 @@
       "time": "Time:",
       "time1": "Time",
       "value0TracePlural": "{value0} trace{plural}",
-      "paginationAria": "Trace list pages"
+      "paginationAria": "Trace list pages",
+      "range": {
+        "1h": "1h",
+        "6h": "6h",
+        "24h": "24h",
+        "7d": "7d"
+      }
     }
   },
   "performanceView": {
@@ -3132,6 +3138,7 @@
         "value": "Wartość"
       },
       "userManagementSettings": {
+        "personPushFailed": "The SLM could not be updated for: {names}. If one of them was deactivated or changed their password, the SLM still has the old state. It retries by itself.",
         "23PermissionsAcross8": "23 permissions across 8 resources",
         "actions": "Actions",
         "active": "Active",
