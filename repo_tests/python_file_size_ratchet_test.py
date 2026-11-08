@@ -15,6 +15,8 @@ These tests pin the ratchet in **both** directions, because only one of them is
 obvious:
 
 * the list may not gain an entry, and no ceiling may be raised (the obvious one),
+* a file may not grow past ``min(ceiling, its length at the merge base)`` (#19673), so a shrink
+  needs no edit to the shared table and the lines it cut cannot be spent back,
 * an entry whose file has dropped to the limit must be *removed* — a list still
   naming a compliant file exempts nothing while looking authoritative.
 
@@ -51,7 +53,7 @@ from pathlib import Path
 import pytest
 import yaml
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table, raised_entries
+from repo_tests._ratchet_base import base_table, growth_over_base, raised_entries
 
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import TRACKED_PY_FLOOR, tracked_paths
@@ -267,6 +269,12 @@ def test_no_ceiling_may_exceed_its_baseline(hook):
     )
 
 
+def test_no_grandfathered_file_grows_past_the_base(hook):
+    """lines(F@HEAD) <= min(ceiling, lines(F@base)) for every entry; a file new at the base is blocked (#19673)."""
+    found = growth_over_base(REPO_ROOT, dict(hook.KNOWN_LARGE))
+    assert found == {}, f"grandfathered files grew, or are new, against the merge base: {found}"
+
+
 def test_growing_past_the_ceiling_fails(hook):
     for rel, ceiling in hook.KNOWN_LARGE.items():
         message = hook.verdict(rel, ceiling + 1)
@@ -293,22 +301,19 @@ def test_an_entry_whose_file_is_now_compliant_fails(hook):
         assert "Delete its KNOWN_LARGE entry" in message
 
 
-def test_a_shrunk_file_must_lower_its_ceiling(hook):
-    """Otherwise the ceiling re-licenses every line that was just removed.
+def test_a_shrunk_file_passes_without_a_table_edit(hook):
+    """#19673: a shrink needs no edit to the shared table.
 
-    A ceiling of MAX_LINES + 1 shrinking by one lands exactly on MAX_LINES —
-    compliant, not merely lower — so that boundary gets the "delete the
-    entry" message instead of "lower the ceiling"; every other entry keeps
-    the original expectation.
+    The lines just cut cannot be spent back because ``test_no_grandfathered_file_grows_past_the_base``
+    bounds each file by its length at the merge base, not by the recorded ceiling.
     """
     for rel, ceiling in hook.KNOWN_LARGE.items():
         shrunk = ceiling - 1
         message = hook.verdict(rel, shrunk)
-        assert message is not None, f"{rel} keeps ceiling {ceiling} after shrinking"
         if shrunk <= hook.MAX_LINES:
-            assert "Delete its KNOWN_LARGE entry" in message
+            assert "Delete its KNOWN_LARGE entry" in message  # compliant: the entry must go
         else:
-            assert f"Lower the ceiling to {shrunk}" in message
+            assert message is None, f"{rel}: {message}"
 
 
 def test_a_vanished_file_tells_the_developer_to_drop_the_entry(hook, tmp_path):
