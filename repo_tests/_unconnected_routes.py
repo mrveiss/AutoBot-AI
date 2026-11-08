@@ -110,13 +110,27 @@ class Audit:
         finally:
             self.mod.FRONTEND_SRC, self.mod.REPO_ROOT = saved
 
-    def registry_prefixes(self, backend: str) -> dict[str, str]:
-        """``{repo-relative served file: mount prefix}``; empty when the backend has no registry."""
+    def registry_prefixes(self, backend: str) -> dict[str, list[str]]:
+        """``{repo-relative served file: every mount prefix}``; empty when the backend has no registry.
+
+        A router is served at its registry mount AND at every place another registry-mounted module
+        ``include_router``s it (nested mounts, #17325), so one file can have several prefixes.
+        """
         base = self.root / backend
-        if not (base / "initialization" / "router_registry").is_dir():
+        registry_dir = base / "initialization" / "router_registry"
+        if not registry_dir.is_dir():
             return {}
-        by_abs = self.mod._registry_module_prefixes(base)
-        return {Path(p).relative_to(self.root).as_posix(): prefix for p, prefix in by_abs.items()}
+        routing = self.mod._routing
+        entries = routing.registry_entries(registry_dir)
+        by_abs = {str(p): list(ps) for p, ps in routing.resolve_registry_target_prefixes(base, entries).items()}
+        for module_path, prefix in entries:  # the resolver lets a registry mount hide a nested one: add them back
+            module_file = base.joinpath(*module_path.split(".")).with_suffix(".py")
+            if not module_file.is_file():
+                continue
+            for child, prefixes in routing.module_included_router_files(base, module_file, prefix).items():
+                known = by_abs.setdefault(str(child), [])
+                known.extend(p for p in prefixes if p not in known)
+        return {Path(p).relative_to(self.root).as_posix(): ps for p, ps in by_abs.items()}
 
 
 def route_sites(tree: Tree, audit: Audit) -> list[tuple[str, str, str, tuple[str, ...]]]:
@@ -133,18 +147,22 @@ def route_sites(tree: Tree, audit: Audit) -> list[tuple[str, str, str, tuple[str
                 continue
             own = mod.apirouter_prefix(text)
             own = own.rstrip("/") if own is not None else ""
-            reg = registry.get(rel)
+            regs = registry.get(rel)
             for method, raw in found:
-                out.append((rel, method.upper(), raw, _candidates(mod, raw, own, reg)))
+                out.append((rel, method.upper(), raw, _candidates(mod, raw, own, regs)))
     return out
 
 
-def _candidates(mod: ModuleType, raw: str, own: str, reg: str | None) -> tuple[str, ...]:
+def _candidates(mod: ModuleType, raw: str, own: str, regs: list[str] | None) -> tuple[str, ...]:
+    """Every full path a route is served at: one per mount prefix (a router can be mounted more than once)."""
     glue = "" if (raw.startswith("/") or not raw) else "/"
-    forms = {raw, own + glue + raw}
-    if reg is not None:
-        forms.update({reg + glue + raw, reg + own + glue + raw})
-    return tuple(sorted({mod.norm_path(f) if f else mod.norm_path(own or reg or "/") for f in forms}))
+    if regs is None:
+        forms = {raw, own + glue + raw}  # no registry mount known: the router may be mounted anywhere
+    else:
+        forms = {reg + own + glue + raw for reg in regs}
+        if not own:
+            forms.update(reg + glue + raw for reg in regs)
+    return tuple(sorted({mod.norm_path(f) if f else mod.norm_path(own or (regs or ["/"])[0] or "/") for f in forms}))
 
 
 def other_callers(tree: Tree, audit: Audit) -> dict[str, set[str]]:
@@ -159,7 +177,9 @@ def other_callers(tree: Tree, audit: Audit) -> dict[str, set[str]]:
         text = tree.text(rel)
         if rel.startswith(skip) or "/api/" not in text:
             continue
-        for hit in mod.FE_API_RE.findall(mod.ROUTE_DECORATOR_RE.sub("", text) if "@" in text else text):
+        body = mod.ROUTE_DECORATOR_RE.sub("", text) if "@" in text else text
+        # a quoted `/api/..` or one behind a URL base (`$BASE/api/..`, `f"{base}/api/.."`, `host:8001/api/..`)
+        for hit in (*mod.FE_API_RE.findall(body), *mod.URL_BASE_API_RE.findall(body)):
             path = mod.norm_path(hit)
             if path.count("{") == path.count("}"):
                 calls.setdefault(path, set()).add(rel)
