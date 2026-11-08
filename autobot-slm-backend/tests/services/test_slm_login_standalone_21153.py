@@ -32,23 +32,19 @@ with real_modules_swapped():
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
     from sqlalchemy.ext.compiler import compiles
 
-    # Modules another test already bound to its own copy of sqlalchemy would mix two copies here: load fresh ones.
+    # The conftest stands in for the SLM's ``user_management`` package; the real one is the system under test, so the
+    # stand-ins are lifted for the import only. The real modules stay in ``sys.modules`` (SQLAlchemy's class registry
+    # holds weak references, so dropping them lets ``Organization`` be collected and ``Role`` stop resolving it).
     _OWN = ("user_management", "autobot_shared.user_management")
-    _stubs = {k: sys.modules.pop(k) for k in [k for k in sys.modules if k.startswith(_OWN)]}
-    try:  # the conftest stands in for the SLM's ORM models; the real ones are the system under test
-        # Held strongly: SQLAlchemy's class registry keeps only weak references, and the finally below drops the modules
-        # from sys.modules, so a model nothing else references (Organization) is collected and ``Role`` can no longer
-        # resolve it by name when mappers configure (#21153).
-        _MODELS = [
+    with pytest.MonkeyPatch.context() as _mp:
+        for _k in [k for k in sys.modules if k.startswith(_OWN)]:
+            _mp.delitem(sys.modules, _k)
+        for _mod in ("user", "organization", "role", "team", "api_key", "mfa", "sso", "audit"):
             importlib.import_module(f"user_management.models.{_mod}")
-            for _mod in ("user", "organization", "role", "team", "api_key", "mfa", "sso", "audit")
-        ]
         User = sys.modules["user_management.models.user"].User
         UserService = importlib.import_module("autobot_shared.user_management.user_service").UserService
-    finally:
-        for _k in [k for k in sys.modules if k.startswith(_OWN)]:
-            del sys.modules[_k]
-        sys.modules.update(_stubs)
+        for _k in [k for k in sys.modules if k.startswith(_OWN) and ".models" not in k]:
+            del sys.modules[_k]  # the services keep the stand-ins other tests bind to; only the models stay
 
 
 @compiles(JSONB, "sqlite")
