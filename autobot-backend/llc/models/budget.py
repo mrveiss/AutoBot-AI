@@ -13,9 +13,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from llc.models.enums import BudgetMode
 from user_management.models.base import Base
 
-#: The most and the least ``LLCAgentBudget.token_limit`` (a signed BigInteger) can store.
+#: The most ``LLCAgentBudget.token_limit`` (a signed BigInteger) can store.
 TOKEN_LIMIT_MAX = 2**63 - 1
-TOKEN_LIMIT_MIN = -(2**63)
+#: The least a token limit may be (#20930). 0 is refused, not "no tokens": the check path reads it as a hard stop at
+#: the first spend (services/budget.py), while the watchdog's ``token_limit > 0`` filter ignores it and enforces
+#: dollars, so a stored 0 means two things. NULL is how a row has no token limit.
+TOKEN_LIMIT_MIN = 1
 
 
 class LLCAgentBudget(Base):
