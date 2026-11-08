@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
+from autobot_shared.user_management.password_epoch import DEACTIVATION_EPOCH_LEAD_SECONDS, record_password_epoch
 from user_management.database import get_slm_session
 from user_management.models.user import User
 
@@ -68,7 +69,12 @@ async def update_person_copy(
     session: Annotated[AsyncSession, Depends(get_slm_session)],
     x_internal_api_key: Annotated[str | None, Header()] = None,
 ) -> None:
-    """Write only what differs, so the periodic pass changes nothing when the two agree."""
+    """Write only what differs, so the periodic pass changes nothing when the two agree.
+
+    A deactivated person's issued SLM sessions are revoked too (#21154): the SLM's request gate reads
+    the epoch store, never ``is_active``. The epoch is recorded on every push of an inactive person, not
+    only on the flip, so a push whose epoch write failed is completed by the next periodic pass.
+    """
     if not verify_internal_api_key(x_internal_api_key):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "internal service key required")
     user = await session.get(User, body.slm_user_id)
@@ -80,3 +86,7 @@ async def update_person_copy(
     if user.is_active != body.is_active:
         user.is_active = body.is_active
     await session.commit()
+    if not body.is_active:
+        # After the commit, as the shared lifecycle does; a store that never records raises, the push
+        # fails, and the main app records and retries it.
+        await record_password_epoch(user.username, lead_seconds=DEACTIVATION_EPOCH_LEAD_SECONDS)
