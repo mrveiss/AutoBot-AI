@@ -15,8 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
-from code_intelligence.python_files import collect_python_files
-from utils.file_categorization import SKIP_DIRS
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, collect_python_files, discover_files
 from utils.io_executor import get_analytics_executor
 
 from .complexity_analyzer import ComplexityAnalyzer
@@ -88,9 +87,6 @@ class CodePatternAnalyzer:
         7. Produce comprehensive report
     """
 
-    # Canonical skip dirs plus extras: archived copies and the type checker's cache.
-    DEFAULT_EXCLUDE_DIRS = frozenset(SKIP_DIRS | {"archives", ".mypy_cache"})
-
     def _init_feature_flags(
         self,
         enable_clone_detection: bool,
@@ -108,7 +104,7 @@ class CodePatternAnalyzer:
         self.enable_complexity_analysis = enable_complexity_analysis
         self.enable_embedding_storage = enable_embedding_storage
         self.similarity_threshold = similarity_threshold
-        self.exclude_dirs = exclude_dirs or self.DEFAULT_EXCLUDE_DIRS
+        self.exclude_dirs = exclude_dirs or ANALYSIS_EXCLUDE_DIRS
 
     def _init_sub_analyzers(self, cc_threshold: int, mi_threshold: float) -> None:
         """Initialize sub-analyzer instances based on feature flags. Issue #620."""
@@ -529,10 +525,7 @@ class CodePatternAnalyzer:
         line_count = 0
         dir_path = Path(directory)
 
-        for py_file in dir_path.rglob("*.py"):
-            if any(exc in py_file.relative_to(dir_path).parts for exc in self.exclude_dirs):
-                continue
-
+        for py_file in discover_files(dir_path, ("*.py",), self.exclude_dirs):
             try:
                 with open(py_file, "r", encoding="utf-8") as f:
                     lines = f.readlines()

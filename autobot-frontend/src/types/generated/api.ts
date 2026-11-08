@@ -3466,12 +3466,12 @@ export interface paths {
         put?: never;
         /**
          * Assign role
-         * @description Assign a role to a user.
+         * @description Assign a role to a user. Changes permissions only, never platform admin status (PUT /{user_id}/admin).
          */
         post: operations["assign_role_api_user_management_users__user_id__roles__role_id__post"];
         /**
          * Revoke role
-         * @description Revoke a role from a user.
+         * @description Revoke a role from a user. Changes permissions only, never platform admin status (PUT /{user_id}/admin).
          */
         delete: operations["revoke_role_api_user_management_users__user_id__roles__role_id__delete"];
         options?: never;
@@ -3489,9 +3489,29 @@ export interface paths {
         get?: never;
         /**
          * Set user role by name
-         * @description Replace all system roles for a user with the named role (admin, user, readonly). Requires admin privilege. Issue #1801.
+         * @description Replace all system roles for a user with the named role (admin, user, readonly). Changes permissions only, never platform admin status (PUT /{user_id}/admin). Requires admin privilege. Issue #1801.
          */
         put: operations["set_user_role_api_user_management_users__user_id__role_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/user-management/users/{user_id}/admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set platform admin status
+         * @description Make a user a platform admin, or remove that. This is the only route that changes admin status; the role routes change permissions only. The user's earlier tokens stop working on their next request, so they sign in again. Admin only. Issue #20670.
+         */
+        put: operations["set_admin_status_api_user_management_users__user_id__admin_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -19539,7 +19559,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/internal/slm/ssh-password-deletion-proposals": {
+    "/api/internal/slm/credential-proposals": {
         parameters: {
             query?: never;
             header?: never;
@@ -19549,19 +19569,19 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Propose Ssh Password Deletion
-         * @description Propose the deletion -- a request, not an execution; one pending proposal per node.
+         * Propose Credential Change
+         * @description Propose the change -- a request, not an execution; one open proposal per node and action.
          *
-         *     Refused (409, clear message) on a split deployment without SLM TLS (#20899, option A).
+         *     A stored-password deletion is refused (409, clear message) on a split deployment without SLM TLS (#20899).
          */
-        post: operations["propose_ssh_password_deletion_api_internal_slm_ssh_password_deletion_proposals_post"];
+        post: operations["propose_credential_change_api_internal_slm_credential_proposals_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/internal/slm/ssh-password-deletion-approvals/{approval_id}/claim": {
+    "/api/internal/slm/credential-approvals/{approval_id}/claim": {
         parameters: {
             query?: never;
             header?: never;
@@ -19571,10 +19591,33 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Claim Ssh Password Deletion Approval
-         * @description The SLM's last check before it deletes: this approval is a human's, for this node, and unused -- now spent.
+         * Claim Credential Approval
+         * @description The applying side's last check: this approval is a human's, for this action and node, and unused -- now spent.
          */
-        post: operations["claim_ssh_password_deletion_approval_api_internal_slm_ssh_password_deletion_approvals__approval_id__claim_post"];
+        post: operations["claim_credential_approval_api_internal_slm_credential_approvals__approval_id__claim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/slm/credential-approvals/{approval_id}/outcome": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report Credential Outcome
+         * @description Record how applying a CLAIMED approval went, ONCE: an audit entry and a comment on the approval.
+         *
+         *     The first terminal report wins and a second is refused (409), so an "applied" record can't be
+         *     forged or overwritten after the fact. The reported detail is cleaned and capped before it is kept.
+         */
+        post: operations["report_credential_outcome_api_internal_slm_credential_approvals__approval_id__outcome_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -42842,7 +42885,7 @@ export interface paths {
         put?: never;
         /**
          * Resume Paused Agent
-         * @description Resume a budget-paused agent (admin only).
+         * @description Resume a budget-paused agent (admin only); the verified caller is the recorded approver.
          */
         post: operations["resume_paused_agent_api_budget_policies__agent_id__resume_post"];
         delete?: never;
@@ -56837,6 +56880,35 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * AdminStatusRequest
+         * @description The admin status to set.
+         */
+        AdminStatusRequest: {
+            /** Is Platform Admin */
+            is_platform_admin: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AdminStatusResponse
+         * @description The admin status now in force, and whether this request changed it.
+         */
+        AdminStatusResponse: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Is Platform Admin */
+            is_platform_admin: boolean;
+            /** Changed */
+            changed: boolean;
+            /** Sessions Revoked */
+            sessions_revoked: boolean;
+        } & {
+            [key: string]: unknown;
+        };
         /** AdvancePhaseRequest */
         AdvancePhaseRequest: {
             /**
@@ -69350,6 +69422,87 @@ export interface components {
              * Format: uuid
              */
             secret_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CredentialClaim
+         * @description The applying side names the action and node it is about to change; the approval must name the same.
+         */
+        CredentialClaim: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "slm_node_ssh_password_delete" | "slm_backend_internal_key_realign";
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CredentialClaimResponse
+         * @description The approval was valid and is now spent.
+         */
+        CredentialClaimResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CredentialOutcome
+         * @description How applying a claimed approval went, for its audit trail and its comment thread.
+         */
+        CredentialOutcome: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "slm_node_ssh_password_delete" | "slm_backend_internal_key_realign";
+            /** Node Id */
+            node_id: string;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "applied" | "apply_failed";
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CredentialProposal
+         * @description What is proposed: an action and a node, never a credential value.
+         */
+        CredentialProposal: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "slm_node_ssh_password_delete" | "slm_backend_internal_key_realign";
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CredentialProposalResponse
+         * @description The node's open approval for the action, and whether this call created it.
+         */
+        CredentialProposalResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Created */
+            created: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -100610,58 +100763,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * SshPasswordDeletionClaim
-         * @description The SLM names the node it is about to delete a password for; the approval must name the same one.
-         */
-        SshPasswordDeletionClaim: {
-            /** Node Id */
-            node_id: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * SshPasswordDeletionClaimResponse
-         * @description The approval was valid and is now spent.
-         */
-        SshPasswordDeletionClaimResponse: {
-            /** Approval Id */
-            approval_id: string;
-            /** Node Id */
-            node_id: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * SshPasswordDeletionProposal
-         * @description What the SLM proposes: a node and a credential kind, never a value.
-         */
-        SshPasswordDeletionProposal: {
-            /** Node Id */
-            node_id: string;
-            /**
-             * Credential Kind
-             * @default ssh_password
-             * @constant
-             */
-            credential_kind: "ssh_password";
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * SshPasswordDeletionProposalResponse
-         * @description The pending approval, and whether this call created it or found it already pending.
-         */
-        SshPasswordDeletionProposalResponse: {
-            /** Approval Id */
-            approval_id: string;
-            /** Status */
-            status: string;
-            /** Created */
-            created: boolean;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * StartLintResponse
          * @description Shape of ``POST /lint``.
          */
@@ -113565,6 +113666,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoleUpdateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_admin_status_api_user_management_users__user_id__admin_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -134437,7 +134573,7 @@ export interface operations {
             };
         };
     };
-    propose_ssh_password_deletion_api_internal_slm_ssh_password_deletion_proposals_post: {
+    propose_credential_change_api_internal_slm_credential_proposals_post: {
         parameters: {
             query?: never;
             header?: {
@@ -134448,7 +134584,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SshPasswordDeletionProposal"];
+                "application/json": components["schemas"]["CredentialProposal"];
             };
         };
         responses: {
@@ -134458,7 +134594,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SshPasswordDeletionProposalResponse"];
+                    "application/json": components["schemas"]["CredentialProposalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -134472,7 +134608,7 @@ export interface operations {
             };
         };
     };
-    claim_ssh_password_deletion_approval_api_internal_slm_ssh_password_deletion_approvals__approval_id__claim_post: {
+    claim_credential_approval_api_internal_slm_credential_approvals__approval_id__claim_post: {
         parameters: {
             query?: never;
             header?: {
@@ -134485,7 +134621,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SshPasswordDeletionClaim"];
+                "application/json": components["schemas"]["CredentialClaim"];
             };
         };
         responses: {
@@ -134495,8 +134631,43 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SshPasswordDeletionClaimResponse"];
+                    "application/json": components["schemas"]["CredentialClaimResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_credential_outcome_api_internal_slm_credential_approvals__approval_id__outcome_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialOutcome"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
