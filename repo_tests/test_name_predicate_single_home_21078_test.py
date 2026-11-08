@@ -37,22 +37,37 @@ _CANONICAL = "autobot_shared/testfile_names.py"
 _SUFFIX_LITERALS = frozenset({"_test.py", "_test"})
 _CONFTEST_LITERALS = frozenset({"conftest.py", "conftest"})
 _JS_INFIXES = frozenset({".test.", ".spec."})
-_FIXTURE_FLOOR = 7000
+#: The source trees swept. ``.claude/``, ``docs/``, ``debug/``, the worker stubs and the ``.github``/``site``/``data``
+#: leftovers hold a few dozen tracked .py files and are NOT read (RATCHET_BASELINES rule 1: the boundary is declared here).
+_ROOTS = (
+    "autobot-backend/",
+    "autobot-slm-backend/",
+    "autobot_shared/",
+    "autobot-infrastructure/",
+    "autobot-npu-worker/",
+    "repo_tests/",
+    "tools/",
+    "scripts/",
+    "pipeline-scripts/",
+    "plugins/",
+    "libs/",
+)
 
 
 def _discover(root: Path) -> list[str]:
     try:
-        return tracked_paths(root, "*.py")
+        return tracked_paths(root, *(f"{prefix}*.py" for prefix in _ROOTS))
     except EmptyEnumeration:
         return []
 
 
+#: About 8,200 of the tracked tree's ~13,700 files; 0.5 fires once a fifth of the sweep goes unread.
 REACH = declare(
     "test-name-predicate-single-home-21078",
     discover=_discover,
-    floor=_FIXTURE_FLOOR,
-    growth=500,
+    min_fraction=0.5,
     what="tracked .py files",
+    roots=_ROOTS,
 )
 
 

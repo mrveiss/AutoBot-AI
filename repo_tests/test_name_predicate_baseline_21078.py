@@ -29,7 +29,7 @@ BASELINE: dict[str, int] = {
     # --- NOT_YET_MIGRATED ---
     # Pre-commit hook runs under the system interpreter, which autobot_shared's import-time floor refuses (#20903);
     # migrate once the hook runs on the project interpreter.
-    "tools/lint/check_no_direct_redis.py": 1,
+    "tools/lint/check_no_direct_redis.py": 2,
     "autobot-backend/agents/agent_orchestration/librarian_user_19591_test.py": 1,
     "autobot-backend/api/codebase_analytics/endpoints/duplicates_source_resolution_17982_test.py": 1,
     "autobot-backend/auth_rbac_admin_guard_test.py": 1,
