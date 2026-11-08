@@ -144,11 +144,12 @@ export function uploadEtaSeconds(loaded: number, total: number, elapsedMs: numbe
   return remaining > MIN_SHOWN_ETA_SECONDS ? remaining : undefined
 }
 
-/** Wires `signal` to the request: an abort (or one already raised) cancels the XHR, which rejects as `cancelled`. */
-function abortWith(xhr: XMLHttpRequest, signal?: AbortSignal): void {
-  if (!signal) return
-  if (signal.aborted) return xhr.abort()
-  signal.addEventListener('abort', () => xhr.abort(), { once: true })
+/** Wires `signal` to the request so an abort cancels the XHR; returns the disposer that removes the listener. */
+function abortWith(xhr: XMLHttpRequest, signal?: AbortSignal): () => void {
+  if (!signal) return () => {}
+  const onAbort = () => xhr.abort()
+  signal.addEventListener('abort', onAbort, { once: true })
+  return () => signal.removeEventListener('abort', onAbort)
 }
 
 /** POST `file` to the conversation's upload route; rejects on a non-200, a bad body, a network error or an abort of `signal`. */
@@ -161,11 +162,14 @@ export function postConversationUpload(
   const formData = new FormData()
   formData.append('file', file)
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new ConversationUploadError('cancelled'))
     const xhr = new XMLHttpRequest()
+    let detach = () => {}
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) onProgress(event.loaded, event.total)
     })
     xhr.addEventListener('load', () => {
+      detach()
       if (xhr.status !== 200) return reject(rejectionFor(xhr.status, xhr.responseText))
       try {
         resolve(JSON.parse(xhr.responseText) as ConversationUploadResponse)
@@ -173,13 +177,13 @@ export function postConversationUpload(
         reject(new ConversationUploadError('invalid_response'))
       }
     })
-    xhr.addEventListener('error', () => reject(new ConversationUploadError('network')))
-    xhr.addEventListener('abort', () => reject(new ConversationUploadError('cancelled')))
+    xhr.addEventListener('error', () => (detach(), reject(new ConversationUploadError('network'))))
+    xhr.addEventListener('abort', () => (detach(), reject(new ConversationUploadError('cancelled'))))
     xhr.open('POST', `${getApiBase()}/conversation-files/conversation/${sessionId}/upload`)
     const token = readStoredAuthToken()
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    detach = abortWith(xhr, signal)
     xhr.send(formData)
-    abortWith(xhr, signal)
   })
 }
 

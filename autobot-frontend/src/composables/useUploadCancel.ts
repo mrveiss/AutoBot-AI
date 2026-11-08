@@ -10,7 +10,7 @@
  * `ConversationUploadError`. A cancelled upload is dropped from the progress list and announced with
  * a notice, never shown as a failed row.
  */
-import { reactive } from 'vue'
+import { getCurrentScope, onScopeDispose, reactive } from 'vue'
 import { ConversationUploadError } from '@/utils/conversationFileUpload'
 
 export const isUploadCancelled = (error: unknown): boolean =>
@@ -18,6 +18,7 @@ export const isUploadCancelled = (error: unknown): boolean =>
 
 export function useUploadCancel<T extends { id: string; error?: string }>(onCancelled: (upload: T) => void) {
   const aborts = reactive(new Map<string, AbortController>())
+  let disposed = false
 
   /** Registers an upload and returns the signal to hand the transport. */
   const begin = (upload: T): AbortSignal => {
@@ -30,12 +31,22 @@ export function useUploadCancel<T extends { id: string; error?: string }>(onCanc
   const settle = (upload: T, error?: unknown): boolean => {
     aborts.delete(upload.id)
     const cancelled = isUploadCancelled(error)
-    if (cancelled) onCancelled(upload)
+    if (cancelled && !disposed) onCancelled(upload)
     return cancelled
   }
 
   const isCancellable = (upload: T): boolean => !upload.error && aborts.has(upload.id)
   const cancel = (uploadId: string): void => aborts.get(uploadId)?.abort()
+
+  // Unmount aborts every in-flight upload; the resulting rejections are silent (no toast, no row change).
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      disposed = true
+      const pending = [...aborts.values()]
+      aborts.clear()
+      pending.forEach((controller) => controller.abort())
+    })
+  }
 
   return { begin, settle, isCancellable, cancel }
 }

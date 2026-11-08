@@ -283,12 +283,27 @@ describe('user cancel of an upload (#20133)', () => {
     await expect(pending).rejects.toMatchObject({ code: 'cancelled' })
   })
 
-  it('a signal that is already aborted cancels the request at once', async () => {
+  it('a signal that is already aborted rejects as cancelled and never sends', async () => {
     const controller = new AbortController()
     controller.abort()
+    const sent = vi.spyOn(FakeXhr.prototype, 'send')
     await expect(postConversationUpload('s1', file(), () => {}, controller.signal)).rejects.toMatchObject({
       code: 'cancelled',
     })
+    expect(sent).not.toHaveBeenCalled()
+    sent.mockRestore()
+  })
+
+  it('removes the abort listener once the request settles', async () => {
+    const controller = new AbortController()
+    const remove = vi.spyOn(controller.signal, 'removeEventListener')
+    const pending = postConversationUpload('s1', file(), () => {}, controller.signal)
+    expect(remove).not.toHaveBeenCalled()
+    FakeXhr.last.listeners.load()
+    await pending
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function))
+    controller.abort()
+    expect(FakeXhr.last.aborted).toBe(false)
   })
 
   it('control: without a signal nothing aborts', () => {

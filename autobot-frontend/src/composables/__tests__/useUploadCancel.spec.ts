@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // #20133: a user cancel aborts the in-flight upload, is announced once, and is never an error row.
 import { describe, it, expect, vi } from 'vitest'
+import { effectScope } from 'vue'
 import { ConversationUploadError } from '@/utils/conversationFileUpload'
 import { isUploadCancelled, useUploadCancel } from '@/composables/useUploadCancel'
 
@@ -46,5 +47,20 @@ describe('useUploadCancel (#20133)', () => {
     expect(isUploadCancelled(new ConversationUploadError('cancelled'))).toBe(true)
     expect(isUploadCancelled(new ConversationUploadError('http', 500))).toBe(false)
     expect(isUploadCancelled(new Error('cancelled'))).toBe(false)
+  })
+
+  it('unmount aborts every in-flight upload without announcing a cancel', () => {
+    const onCancelled = vi.fn()
+    const scope = effectScope()
+    const api = scope.run(() => useUploadCancel(onCancelled))!
+    const a = item('a')
+    const sigA = api.begin(a)
+    const sigB = api.begin(item('b'))
+    scope.stop()
+    expect(sigA.aborted).toBe(true)
+    expect(sigB.aborted).toBe(true)
+    expect(api.isCancellable(a)).toBe(false)
+    expect(api.settle(a, new ConversationUploadError('cancelled'))).toBe(true)
+    expect(onCancelled).not.toHaveBeenCalled()
   })
 })

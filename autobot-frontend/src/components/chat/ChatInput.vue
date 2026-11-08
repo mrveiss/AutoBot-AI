@@ -472,7 +472,7 @@ import McpPromptPicker from './McpPromptPicker.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconNameByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
-import { postConversationUpload, describeUploadError, ensureUploadSession, usesCanonicalRoute, uploadEtaSeconds } from '@/utils/conversationFileUpload'
+import { postConversationUpload, type ConversationUploadResponse, describeUploadError, ensureUploadSession, usesCanonicalRoute, uploadEtaSeconds } from '@/utils/conversationFileUpload'
 import { useUploadCancel, isUploadCancelled } from '@/composables/useUploadCancel'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
@@ -1054,36 +1054,35 @@ const generateId = (): string => {
 }
 
 // Real file upload implementation (transport and bearer: utils/conversationFileUpload.ts, #20133)
+const reportProgress = (upload: UploadItem, startTime: number) => (loaded: number, total: number): void => {
+  upload.current = loaded
+  upload.total = total
+  upload.progress = (loaded / total) * 100
+  upload.eta = uploadEtaSeconds(loaded, total, Date.now() - startTime)
+  upload.status = `Uploading... ${Math.round(upload.progress)}%`
+}
+
+const markUploadComplete = (upload: UploadItem, file: File, response: ConversationUploadResponse): void => {
+  settleUpload(upload)
+  Object.assign(upload, { status: 'Complete', progress: 100 })
+  upload.fileId = response.file_info?.file_id
+  if (upload.fileId) uploadedIds.set(file, upload.fileId)
+  upload.uploadId = response.upload_id
+  setTimeout(() => {
+    const index = uploadProgress.value.findIndex(u => u.id === upload.id)
+    if (index !== -1) uploadProgress.value.splice(index, 1)
+  }, 2000)
+}
+
 const uploadFile = async (upload: UploadItem, file: File): Promise<void> => {
-  const startTime = Date.now()
   upload.status = 'Uploading...'
   const signal = beginUpload(upload)
-
   try {
-    const response = await postConversationUpload(await ensureUploadSession(store, controller), file, (loaded, total) => {
-      upload.current = loaded
-      upload.total = total
-      upload.progress = (loaded / total) * 100
-
-      upload.eta = uploadEtaSeconds(loaded, total, Date.now() - startTime)
-      upload.status = `Uploading... ${Math.round(upload.progress)}%`
-    }, signal)
-    settleUpload(upload)
-    upload.status = 'Complete'
-    upload.progress = 100
-    upload.fileId = response.file_info?.file_id
-    if (upload.fileId) uploadedIds.set(file, upload.fileId)
-    upload.uploadId = response.upload_id
-    // Remove from progress after delay
-    setTimeout(() => {
-      const index = uploadProgress.value.findIndex(u => u.id === upload.id)
-      if (index !== -1) uploadProgress.value.splice(index, 1)
-    }, 2000)
+    const sessionId = await ensureUploadSession(store, controller)
+    markUploadComplete(upload, file, await postConversationUpload(sessionId, file, reportProgress(upload, Date.now()), signal))
   } catch (error) {
     if (!settleUpload(upload, error)) {
-      upload.error = describeUploadError(error, t)
-      upload.status = 'Failed'
-      upload.progress = 0
+      Object.assign(upload, { error: describeUploadError(error, t), status: 'Failed', progress: 0 })
     }
     throw error
   }
