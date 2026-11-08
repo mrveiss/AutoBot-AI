@@ -11,7 +11,6 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -19,12 +18,18 @@ from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
 from api import internal_slm_credential_proposals as proposals
-from autobot_shared.slm_credential_deletion import ACTION, claim_path
+from autobot_shared.slm_credential_actions import SSH_PASSWORD_DELETE, claim_path
 from models.approval import ApprovalStatus
-from services import slm_ssh_password_claim as claim
+from services import slm_credential_claim as claim
+from testkit.fake_async_session import FakeAsyncSession, FakeResult
+
+ACTION = SSH_PASSWORD_DELETE.name
 
 _KEY = "k" * 40  # pragma: allowlist secret
-_ID = uuid.uuid4()
+_ID = uuid.UUID(
+    "00000000-0000-4000-8000-000000000004"
+)  # fixed: a random id gives each xdist worker a different test id
+_OTHER_COMPANY = uuid.UUID("00000000-0000-4000-8000-000000000005")
 
 
 def _approval(**overrides) -> SimpleNamespace:
@@ -40,15 +45,19 @@ def _approval(**overrides) -> SimpleNamespace:
     return SimpleNamespace(**fields)
 
 
-def _session(approval, rowcount: int = 1) -> MagicMock:
-    session = MagicMock()
-    session.get = AsyncMock(return_value=approval)
-    session.execute = AsyncMock(return_value=SimpleNamespace(rowcount=rowcount))
-    session.commit = AsyncMock()
+def _session(approval, rowcount: int = 1) -> FakeAsyncSession:
+    gets: list = []
+
+    def on_get(entity, ident):
+        gets.append((entity, ident))
+        return approval
+
+    session = FakeAsyncSession(default_result=FakeResult(rowcount=rowcount), on_get=on_get)
+    session.get_calls = gets
     return session
 
 
-def _client(session: MagicMock) -> TestClient:
+def _client(session: FakeAsyncSession) -> TestClient:
     app = FastAPI()
     app.include_router(proposals.router, prefix="/api")
     app.dependency_overrides[proposals.get_db_session] = lambda: session
@@ -57,7 +66,7 @@ def _client(session: MagicMock) -> TestClient:
 
 def _claim(client: TestClient, node_id: str = "node-a", headers: dict | None = None):
     headers = {"X-Internal-API-Key": _KEY} if headers is None else headers
-    return client.post(claim_path(str(_ID)), json={"node_id": node_id}, headers=headers)
+    return client.post(claim_path(str(_ID)), json={"action": ACTION, "node_id": node_id}, headers=headers)
 
 
 @pytest.fixture(autouse=True)
@@ -69,8 +78,8 @@ def test_a_valid_approval_is_accepted_and_spent() -> None:
     session = _session(_approval())
     response = _claim(_client(session))
     assert response.status_code == 200 and response.json() == {"approval_id": str(_ID), "node_id": "node-a"}
-    session.execute.assert_awaited_once()
-    session.commit.assert_awaited_once()
+    assert len(session.statements) == 1
+    assert session.commits == 1
 
 
 @pytest.mark.parametrize(
@@ -89,7 +98,7 @@ def test_a_valid_approval_is_accepted_and_spent() -> None:
         (_approval(decided_by_user="service:slm"), "node-a"),
         (_approval(decided_by_user="unknown"), "node-a"),
         (_approval(decided_at=None), "node-a"),
-        (_approval(company_id=uuid.uuid4()), "node-a"),
+        (_approval(company_id=_OTHER_COMPANY), "node-a"),
         (
             _approval(
                 context={
@@ -121,15 +130,15 @@ def test_every_other_approval_is_refused_and_spends_nothing(approval, node_id) -
     session = _session(approval)
     response = _claim(_client(session), node_id)
     assert response.status_code == 403
-    session.execute.assert_not_awaited()
-    session.commit.assert_not_awaited()
+    assert not session.statements
+    assert session.commits == 0
 
 
 def test_a_lost_race_is_refused_and_not_committed() -> None:
     """Two claims read an unspent approval; the atomic update spends it once, so the second changes no row."""
     session = _session(_approval(), rowcount=0)
     assert _claim(_client(session)).status_code == 403
-    session.commit.assert_not_awaited()
+    assert session.commits == 0
 
 
 def test_the_claim_needs_the_key() -> None:
@@ -137,12 +146,12 @@ def test_the_claim_needs_the_key() -> None:
     client = _client(session)
     assert _claim(client, headers={}).status_code == 403
     assert _claim(client, headers={"X-Internal-API-Key": "wrong"}).status_code == 403
-    session.get.assert_not_awaited()
+    assert not session.get_calls
 
 
 async def test_the_spending_update_names_the_unspent_state() -> None:
     session = _session(_approval())
-    await claim.claim_deletion_approval(session, _ID, "node-a")
-    sql = str(session.execute.await_args.args[0].compile(dialect=postgresql.dialect()))
+    await claim.claim_approval(session, _ID, SSH_PASSWORD_DELETE, "node-a")
+    sql = str(session.statements[-1].compile(dialect=postgresql.dialect()))
     assert "approvals.id =" in sql and "UPDATE approvals" in sql and "->> " in sql and "IS NULL" in sql and "||" in sql
-    assert "consumed_at" in str(session.execute.await_args.args[0].compile(dialect=postgresql.dialect()).params)
+    assert "consumed_at" in str(session.statements[-1].compile(dialect=postgresql.dialect()).params)

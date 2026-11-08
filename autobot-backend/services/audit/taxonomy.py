@@ -150,6 +150,13 @@ class AuditAction(str, Enum):
     LLC_PROJECT_BACKFILL = "llc.project_backfill"  # #18978: an approved project backfill assigned projects
     # #16333: the internal service key was admitted on a route that names its caller (service_opt_in).
     SERVICE_KEY_ADMITTED = "auth.service_key_admitted"  # pragma: allowlist secret -- an action name, not a key
+    # #20750: re-aligning the backend's AUTOBOT_INTERNAL_API_KEY to the SLM's, one record per step.
+    INTERNAL_KEY_REALIGN_PROPOSED = "credential.internal_key.realign_proposed"  # pragma: allowlist secret
+    INTERNAL_KEY_REALIGN_CLAIMED = "credential.internal_key.realign_claimed"  # pragma: allowlist secret
+    INTERNAL_KEY_REALIGN_APPLIED = "credential.internal_key.realign_applied"  # pragma: allowlist secret
+    INTERNAL_KEY_REALIGN_APPLY_FAILED = "credential.internal_key.realign_apply_failed"  # pragma: allowlist secret
+    # #20750: compensates a "proposed" row whose approval could not be created, same approval_id.
+    INTERNAL_KEY_REALIGN_PROPOSAL_FAILED = "credential.internal_key.realign_proposal_failed"  # pragma: allowlist secret
 
 
 class ComplianceEventType(str, Enum):
