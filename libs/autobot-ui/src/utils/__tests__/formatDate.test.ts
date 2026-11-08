@@ -11,6 +11,7 @@ import {
   formatLocalTime,
   createRecencyFormatter,
   isoDateStamp,
+  isoTimestampStamp,
   toDateTimeLocalValue
 } from '../format'
 
@@ -268,6 +269,15 @@ describe('isoDateStamp and toDateTimeLocalValue (#19905)', () => {
     expect(isoDateStamp()).toBe('2026-11-08')
     expect(isoDateStamp('nope')).toBe('')
     expect(isoDateStamp(null)).toBe('')
+  })
+
+  it('isoTimestampStamp is the filename-safe UTC second, now by default, empty for a bad value', () => {
+    expect(isoTimestampStamp('2025-10-30T14:05:59.123Z')).toBe('2025-10-30T14-05-59')
+    expect(isoTimestampStamp(new Date(Date.UTC(2025, 0, 2, 3, 4, 5)))).toBe('2025-01-02T03-04-05')
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-08T12:30:45Z'))
+    expect(isoTimestampStamp()).toBe('2026-11-08T12-30-45')
+    expect(isoTimestampStamp('nope')).toBe('')
   })
 
   it('toDateTimeLocalValue is the local wall time to the minute, and empty for a bad value', () => {

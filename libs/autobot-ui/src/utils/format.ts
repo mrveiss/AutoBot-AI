@@ -324,6 +324,14 @@ export function isoDateStamp(input: DateInput = new Date()): string {
 }
 
 /**
+ * The UTC second of a moment as the filename-safe `YYYY-MM-DDTHH-MM-SS` (default: now), for export
+ * file names (#19905). A missing or unparseable value is `''`.
+ */
+export function isoTimestampStamp(input: DateInput = new Date()): string {
+  return toValidDate(input)?.toISOString().replace(/[:.]/g, '-').slice(0, 19) ?? ''
+}
+
+/**
  * A moment as the `YYYY-MM-DDTHH:mm` value of an `<input type="datetime-local">`, in the browser's
  * own timezone (the input reads and writes local time, #19905). A missing or unparseable value is `''`.
  */

@@ -83,6 +83,7 @@ BEHAVIOUR = "local_date_formatter_functions_by_behaviour"
 #   intl_date_time_format_outside_kit ``new Intl.DateTimeFormat(`` (``Intl.DateTimeFormat()`` for the zone is not)
 #   hardcoded_locale_formatters       a fixed locale literal given to a kit formatter or a ``toLocale*String``
 #   hand_assembled_date_fields        a date built from ``getMonth()``/``getDate()``/``getHours()``... pieces
+#   iso_timestamp_stamp_by_hand       ``toISOString().replace(...)``: the kit's ``isoTimestampStamp`` is the one home (#19905)
 #   iso_day_stamp_by_hand             ``toISOString().split('T')[0]`` / ``.slice(0, 10)`` / ``.slice(0, 16)``: the kit's
 #                                     ``isoDateStamp`` and ``toDateTimeLocalValue`` are the one home (#19905)
 # ``hand_assembled_date_fields`` is 1 on purpose: GanttTimelineView's quarter tick ("Q3 2025") has no
@@ -93,6 +94,7 @@ INTL_OUTSIDE_KIT = "intl_date_time_format_outside_kit"
 HARDCODED_LOCALE = "hardcoded_locale_formatters"
 HAND_ASSEMBLED = "hand_assembled_date_fields"
 ISO_DAY_STAMP = "iso_day_stamp_by_hand"
+ISO_TIMESTAMP_STAMP = "iso_timestamp_stamp_by_hand"
 PINS = {
     NAMED: 0,
     BEHAVIOUR: 0,
@@ -102,6 +104,7 @@ PINS = {
     HARDCODED_LOCALE: 0,
     HAND_ASSEMBLED: 1,
     ISO_DAY_STAMP: 0,
+    ISO_TIMESTAMP_STAMP: 0,
 }
 _DECLARATION_KEYS = (NAMED, BEHAVIOUR)
 
@@ -121,6 +124,8 @@ _HAND_ASSEMBLED = re.compile(
 _ISO_DAY_STAMP = re.compile(
     r"\.toISOString\(\)\s*\.(?:split\(\s*['\"]T['\"]\s*\)\s*\[\s*0\s*\]|(?:slice|substring|substr)\(\s*0\s*,\s*1[06]\s*\))"
 )
+
+_ISO_TIMESTAMP_STAMP = re.compile(r"\.toISOString\(\)\s*\.replace\(")
 
 
 def _sources(src: Path) -> list[Path]:
@@ -170,6 +175,7 @@ def _counts(text: str) -> dict[str, int]:
         HARDCODED_LOCALE: _hardcoded_formatter_locales(text) + len(_HARDCODED_CALL.findall(text)),
         HAND_ASSEMBLED: len(_HAND_ASSEMBLED.findall(text)),
         ISO_DAY_STAMP: len(_ISO_DAY_STAMP.findall(text)),
+        ISO_TIMESTAMP_STAMP: len(_ISO_TIMESTAMP_STAMP.findall(text)),
     }
 
 
@@ -361,6 +367,9 @@ def test_each_inline_shape_is_counted_under_its_own_key() -> None:
     assert _shapes("const s = h.getHours().toString().padStart(2,'0')")[HAND_ASSEMBLED] == 1
     assert _shapes("const n = `x-${new Date().toISOString().split('T')[0]}.json`")[ISO_DAY_STAMP] == 1
     assert _shapes("const k = d.toISOString().slice(0, 10)")[ISO_DAY_STAMP] == 1
+    stamp = "const t = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)"
+    assert _shapes(stamp)[ISO_TIMESTAMP_STAMP] == 1
+    assert _shapes("const t = d\n  .toISOString()\n  .replace(':', '-')")[ISO_TIMESTAMP_STAMP] == 1
     assert _shapes("const v = new Date(x)\n  .toISOString().slice(0, 16)")[ISO_DAY_STAMP] == 1
     assert _shapes("const d = new Date(x).toISOString()\n  .split('T')[0]")[ISO_DAY_STAMP] == 1
 
@@ -382,6 +391,7 @@ def test_a_number_a_zone_probe_a_live_locale_and_date_arithmetic_are_not_inline_
         HARDCODED_LOCALE,
         HAND_ASSEMBLED,
         ISO_DAY_STAMP,
+        ISO_TIMESTAMP_STAMP,
     ):
         assert shapes[key] == 0, key
     assert _shapes("const a = createDateFormatter({ kind: 'date' })")[HARDCODED_LOCALE] == 0
@@ -389,6 +399,9 @@ def test_a_number_a_zone_probe_a_live_locale_and_date_arithmetic_are_not_inline_
     assert _shapes(live)[HARDCODED_LOCALE] == 0
     assert _shapes("const a = d.toLocaleString()")[INLINE_TO_LOCALE_STRING] == 0
     assert _shapes("const a = isoDateStamp(d)")[ISO_DAY_STAMP] == 0
+    assert _shapes("const a = isoTimestampStamp()")[ISO_TIMESTAMP_STAMP] == 0
+    assert _shapes("const a = d.toISOString()")[ISO_TIMESTAMP_STAMP] == 0
+    assert _shapes("const a = s.replace(/x/g, '-')")[ISO_TIMESTAMP_STAMP] == 0
     assert _shapes("const a = d.toISOString().replace(/[:.]/g, '-').slice(0, 19)")[ISO_DAY_STAMP] == 0
     assert _shapes("// new Date(x).toLocaleString()")[INLINE_TO_LOCALE_STRING] == 0
 
@@ -446,6 +459,7 @@ _KIT_SHAPES = (
     ("inline toLocale(Date|Time)String", _INLINE_LOCALE),
     ("new Intl.DateTimeFormat", _INTL_OUTSIDE_KIT),
     ("hand-built ISO day stamp", _ISO_DAY_STAMP),
+    ("hand-built ISO timestamp stamp", _ISO_TIMESTAMP_STAMP),
 )
 
 
