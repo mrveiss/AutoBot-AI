@@ -303,6 +303,18 @@
         </div>
       </div>
     </Teleport>
+    <!-- Preview Pane: the server-built preview of a listed text attachment (#20906) -->
+    <Teleport to="body">
+      <div v-if="preview" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" data-testid="file-preview-pane" @click.self="closePreview">
+        <div class="bg-autobot-bg-card rounded-lg shadow-xl w-[480px] max-h-[80vh] flex flex-col p-4" role="dialog" :aria-label="preview.filename">
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="text-sm font-semibold text-autobot-text-primary truncate">{{ preview.filename }}</h4>
+            <button @click="closePreview" class="action-btn" :aria-label="$t('chat.filePanel.closePreview')"><Icon name="times" class="text-xs" /></button>
+          </div>
+          <pre class="flex-1 overflow-auto text-xs font-mono whitespace-pre-wrap break-words" data-testid="file-preview-content">{{ preview.data.preview_content || $t('chat.filePanel.previewEmpty') }}</pre>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -333,6 +345,8 @@ const {
   stats,
   loading,
   error,
+  preview,
+  closePreview,
   uploadProgress,
   hasFiles,
   totalSizeFormatted,

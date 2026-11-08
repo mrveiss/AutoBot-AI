@@ -19,11 +19,22 @@ import { extractApiErrorMessage } from '@/utils/errorExtract'
 import { describeApiRefusal } from '@/utils/conversationFileUpload'
 import i18n from '@/i18n'
 import { getApiBase } from '@/config/ssot-config'
+import type { ConversationFilePreview } from '@/utils/conversationFilePreview'
 import { mapFileList, type BackendFileList } from '@/utils/conversationFileList'
 import { useLoadingState } from '@/composables/useLoadingState'
 
 // Create scoped logger for useConversationFiles
 const logger = createLogger('useConversationFiles')
+
+/** The translated text for a `chat.conversationFiles.*` key (#21159). */
+function tr(key: string): string {
+  return i18n.global.t(`chat.conversationFiles.${key}`)
+}
+
+/** A failure's user-facing text: the server's own detail when it sent one, else the translated fallback (#21159). */
+function failureText(err: unknown, key: string): string {
+  return extractApiErrorMessage(err, tr(key))
+}
 
 /** The user-facing text for a failed write: a recognised 413 refusal translated, else the server's message (#20723). */
 function describeFailure(err: unknown, fallbackKey: string): string {
@@ -42,7 +53,6 @@ export interface ConversationFile {
   size_bytes: number
   upload_timestamp: string
   download_url: string
-  preview_url: string
 }
 
 /** How long a preview tab's blob URL stays valid before it is revoked (#20195). */
@@ -97,6 +107,8 @@ export function useConversationFiles(sessionId: string) {
   })
   const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
+  /** The preview pane's content, from `GET .../preview/{file_id}` (#20906); null while no pane is open. */
+  const preview = ref<{ filename: string; data: ConversationFilePreview } | null>(null)
   const uploadProgress = ref<number>(0)
   const searchQuery = ref('')
   const sortField = ref<SortField>('date')
@@ -139,7 +151,7 @@ export function useConversationFiles(sessionId: string) {
 
   const loadFiles = async (): Promise<void> => {
     if (!sessionId) {
-      error.value = 'No session ID provided'
+      error.value = tr('noSession')
       return
     }
 
@@ -154,7 +166,7 @@ export function useConversationFiles(sessionId: string) {
           stats.value = mapped.stats
         }
       } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Failed to load files')
+        error.value = failureText(err, 'loadFailed')
         logger.error('Load error:', err)
       }
     })
@@ -162,12 +174,12 @@ export function useConversationFiles(sessionId: string) {
 
   const uploadFiles = async (fileList: FileList | File[]): Promise<boolean> => {
     if (!sessionId) {
-      error.value = 'No session ID provided'
+      error.value = tr('noSession')
       return false
     }
 
     if (!fileList || fileList.length === 0) {
-      error.value = 'No files selected'
+      error.value = tr('noFilesSelected')
       return false
     }
 
@@ -223,7 +235,7 @@ export function useConversationFiles(sessionId: string) {
 
   const deleteFile = async (fileId: string): Promise<boolean> => {
     if (!sessionId || !fileId) {
-      error.value = 'Missing session ID or file ID'
+      error.value = tr('missingParameters')
       return false
     }
 
@@ -242,7 +254,7 @@ export function useConversationFiles(sessionId: string) {
         return true
 
       } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Failed to delete file')
+        error.value = failureText(err, 'deleteFailed')
         logger.error('Delete error:', err)
         return false
       }
@@ -251,7 +263,7 @@ export function useConversationFiles(sessionId: string) {
 
   const downloadFile = async (fileId: string, filename?: string): Promise<void> => {
     if (!sessionId || !fileId) {
-      error.value = 'Missing session ID or file ID'
+      error.value = tr('missingParameters')
       return
     }
 
@@ -267,14 +279,14 @@ export function useConversationFiles(sessionId: string) {
       saveBlob(blob, name)
 
     } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Download failed')
+      error.value = failureText(err, 'downloadFailed')
       logger.error('Download error:', err)
     }
   }
 
   const previewFile = async (fileId: string): Promise<void> => {
     if (!sessionId || !fileId) {
-      error.value = 'Missing session ID or file ID'
+      error.value = tr('missingParameters')
       return
     }
 
@@ -282,12 +294,13 @@ export function useConversationFiles(sessionId: string) {
       const file = files.value.find(f => f.file_id === fileId)
 
       if (!file) {
-        error.value = 'File not found'
+        error.value = tr('fileNotFound')
         return
       }
 
       // For previewable types, open the bytes as a blob URL: the routes are bearer-authenticated
       // (Authorization header only), which a plain window.open() never sends (#20195).
+      if (await openPreviewPane(file)) return
       const shownType = previewBlobType(file.mime_type)
       if (shownType && isPreviewable(file.mime_type)) {
         await openAuthenticatedPreview(fileId, shownType)
@@ -297,10 +310,24 @@ export function useConversationFiles(sessionId: string) {
       }
 
     } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Preview failed')
+      error.value = failureText(err, 'previewFailed')
       logger.error('Preview error:', err)
     }
   }
+
+  /**
+   * Fetch the server-built preview of a text file through the typed contract and show it in the pane (#20906).
+   * Returns false when the route has no inline text for this file, so the caller falls back to the bytes.
+   */
+  const openPreviewPane = async (file: ConversationFile): Promise<boolean> => {
+    if (!file.mime_type.startsWith('text/')) return false
+    const data = await api.get<ConversationFilePreview>(`${API}/preview/${file.file_id}`)
+    if (!data?.preview_available || typeof data.preview_content !== 'string') return false
+    preview.value = { filename: file.filename, data }
+    return true
+  }
+
+  const closePreview = (): void => { preview.value = null }
 
   /**
    * Open a file in a new tab through the authenticated client, then revoke the blob URL (#20195).
@@ -342,13 +369,13 @@ export function useConversationFiles(sessionId: string) {
   // Issue #70: New file manager operations
 
   const createFile = async (filename: string, content: string = '', mimeType: string = 'text/plain'): Promise<boolean> => {
-    if (!sessionId) { error.value = 'No session ID'; return false }
+    if (!sessionId) { error.value = tr('noSession'); return false }
     error.value = null
     return wrap(async () => {
       try {
         const data = await api.post<{ success: boolean }>(`${API}/files/create`, { filename, content, mime_type: mimeType })
         if (data?.success) { await loadFiles(); return true }
-        error.value = i18n.global.t('chat.conversationFiles.createFailed')
+        error.value = tr('createFailed')
         return false
       } catch (err: unknown) {
         error.value = describeFailure(err, 'chat.conversationFiles.createFailed')
@@ -359,7 +386,7 @@ export function useConversationFiles(sessionId: string) {
   }
 
   const renameFile = async (fileId: string, newFilename: string): Promise<boolean> => {
-    if (!sessionId || !fileId) { error.value = 'Missing parameters'; return false }
+    if (!sessionId || !fileId) { error.value = tr('missingParameters'); return false }
     error.value = null
     try {
       const data = await api.put<{ success: boolean }>(`${API}/files/${fileId}/rename`, { new_filename: newFilename })
@@ -368,34 +395,34 @@ export function useConversationFiles(sessionId: string) {
         if (file) file.filename = newFilename
         return true
       }
-      error.value = 'Rename failed'
+      error.value = tr('renameFailed')
       return false
     } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Rename failed')
+      error.value = failureText(err, 'renameFailed')
       logger.error('Rename error:', err)
       return false
     }
   }
 
   const getFileContent = async (fileId: string): Promise<string | null> => {
-    if (!sessionId || !fileId) { error.value = 'Missing parameters'; return null }
+    if (!sessionId || !fileId) { error.value = tr('missingParameters'); return null }
     try {
       const data = await api.get<{ content: string }>(`${API}/files/${fileId}/content`)
       return data?.content ?? null
     } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Failed to read file')
+      error.value = failureText(err, 'readFailed')
       logger.error('Get content error:', err)
       return null
     }
   }
 
   const updateFileContent = async (fileId: string, content: string): Promise<boolean> => {
-    if (!sessionId || !fileId) { error.value = 'Missing parameters'; return false }
+    if (!sessionId || !fileId) { error.value = tr('missingParameters'); return false }
     error.value = null
     try {
       const data = await api.put<{ success: boolean }>(`${API}/files/${fileId}/content`, { content })
       if (data?.success) { await loadFiles(); return true }
-      error.value = i18n.global.t('chat.conversationFiles.saveFailed')
+      error.value = tr('saveFailed')
       return false
     } catch (err: unknown) {
       error.value = describeFailure(err, 'chat.conversationFiles.saveFailed')
@@ -405,13 +432,13 @@ export function useConversationFiles(sessionId: string) {
   }
 
   const copyFile = async (fileId: string, newFilename?: string): Promise<boolean> => {
-    if (!sessionId || !fileId) { error.value = 'Missing parameters'; return false }
+    if (!sessionId || !fileId) { error.value = tr('missingParameters'); return false }
     error.value = null
     return wrap(async () => {
       try {
         const data = await api.post<{ success: boolean }>(`${API}/files/${fileId}/copy`, { new_filename: newFilename || null })
         if (data?.success) { await loadFiles(); return true }
-        error.value = i18n.global.t('chat.conversationFiles.copyFailed')
+        error.value = tr('copyFailed')
         return false
       } catch (err: unknown) {
         error.value = describeFailure(err, 'chat.conversationFiles.copyFailed')
@@ -471,6 +498,7 @@ export function useConversationFiles(sessionId: string) {
     stats,
     loading,
     error,
+    preview,
     uploadProgress,
     searchQuery,
     sortField,
@@ -490,6 +518,7 @@ export function useConversationFiles(sessionId: string) {
     deleteFile,
     downloadFile,
     previewFile,
+    closePreview,
 
     // Issue #70: New operations
     createFile,
