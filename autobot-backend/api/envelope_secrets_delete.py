@@ -8,9 +8,9 @@
 and records the intent before the write and the outcome after it (#20557). The two
 envelope deletes (``DELETE /api/v2/secrets/{id}`` and the service-identity
 ``DELETE /api/v2/secrets/system/{id}``) reached the same store with neither. Both now
-go through :func:`audited_delete`, which reuses the main route's 409
-(``secrets_system_vault.refuse_dependents``) and audit adapter (``secrets_audit``),
-so one operation behaves the same on every route.
+go through :func:`audited_delete`, which calls the one guarded delete
+(``secrets_guarded_delete.guarded_delete``: lock, check, delete, #21039) and reuses the main
+route's audit adapter (``secrets_audit``), so one operation behaves the same on every route.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.secrets_audit import audit_secret_op
-from api.secrets_system_vault import refuse_dependents
+from api.secrets_guarded_delete import guarded_delete
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secrets_vault import VaultRef
 from services.envelope_secrets_service import SecretAccessError, SecretNotFoundError
@@ -33,6 +33,7 @@ logger = get_logger(__name__)
 
 async def audited_delete(
     request: Request,
+    session: AsyncSession,
     secret_id: uuid.UUID,
     *,
     dependents: Callable[[], Awaitable[list]] | None,
@@ -40,7 +41,7 @@ async def audited_delete(
     actor: str | None = None,
     **who: str,
 ) -> None:
-    """Record the intent, refuse while ``dependents()`` lists any, delete, record the outcome.
+    """Record the intent, guarded-delete (:func:`guarded_delete`), record the outcome.
 
     ``dependents=None`` skips the check (a human has seen the list and confirmed). The
     first record says ``attempted`` and, when it cannot be written, nothing is deleted
@@ -49,18 +50,14 @@ async def audited_delete(
     ``actor`` is the caller's resolved user id (recorded as is, never looked up again);
     ``who`` are identifiers only (e.g. ``service``), never a value.
 
-    The dependents listing and the delete are separate statements, exactly as on
-    ``DELETE /api/secrets/{id}``: a dependent registered between them is deleted with the
-    secret (``ON DELETE CASCADE``), the same outcome as one registered a moment after the
-    delete. The check guards against a consumer a human or service already depends on, not
-    against a registration racing the delete, so no lock is taken (the store has none).
+    The dependents listing and the delete run under one row lock on the secret (#21039), so a
+    dependent registered while the delete is in flight is either listed (409) or refused by the
+    foreign key once the secret is gone; it is never deleted by the cascade unconfirmed.
     """
     ref = str(secret_id)
     await audit_secret_op("DELETE", ref, request, "attempted", required=True, actor=actor, phase="before_write", **who)
     try:
-        if dependents is not None:
-            refuse_dependents(await dependents())
-        await delete()
+        await guarded_delete(session, secret_id, dependents=dependents, delete=delete)
     except HTTPException as exc:
         reason = "has_dependents" if exc.status_code == 409 else "http_%d" % exc.status_code
         await audit_secret_op("DELETE", ref, request, "denied", reason=reason, actor=actor, **who)
@@ -103,7 +100,12 @@ async def delete_as_user(
 
     try:
         await audited_delete(
-            request, secret_id, dependents=None if confirm else dependents, delete=delete, actor=str(user_id)
+            request,
+            session,
+            secret_id,
+            dependents=None if confirm else dependents,
+            delete=delete,
+            actor=str(user_id),
         )
     except (SecretAccessError, SecretNotFoundError) as exc:
         raise mapped(exc)
@@ -129,6 +131,6 @@ async def delete_as_service(
         return await coordinator.service_describe_dependencies(session, secret_id=secret_id, vault=vault)
 
     try:
-        await audited_delete(request, secret_id, dependents=dependents, delete=delete, service=service_id)
+        await audited_delete(request, session, secret_id, dependents=dependents, delete=delete, service=service_id)
     except (SecretAccessError, SecretNotFoundError) as exc:
         raise mapped(exc)

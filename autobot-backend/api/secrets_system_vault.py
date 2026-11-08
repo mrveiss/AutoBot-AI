@@ -23,6 +23,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from api.schemas_system import SecretCreateRequest, SecretUpdateRequest
+from api.secrets_guarded_delete import guarded_delete
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secrets_vault import VaultKind, VaultRef
@@ -166,28 +167,22 @@ async def rotate_system_vault_secret(
     return None  # pragma: no cover -- defensive, generator always yields
 
 
-def refuse_dependents(deps) -> None:
-    """409 with the dependents listed when anything still consumes the secret (#20557).
+async def _guarded_vault_delete(coordinator, session, vault_id: uuid.UUID, owner_id: str, confirm: bool) -> None:
+    """The main route's delete: the ONE guarded delete, with the manage-authority listing (`describe_dependencies`).
 
-    The ONE shape of that refusal: the main delete, the envelope user delete and the
-    envelope service delete all raise it from here (#20640).
+    The caller repeats the delete with `confirm_dependents` once a human has seen the 409 listing.
     """
-    if deps:
-        dependents = [{"dependent_kind": d.dependent_kind, "dependent_id": d.dependent_id} for d in deps]
-        raise HTTPException(
-            status_code=409,
-            detail={"code": "secret_has_dependents", "message": "Dependents use this secret", "dependents": dependents},
+    user_id, permissions = await _principal(owner_id)
+
+    async def delete() -> None:
+        await coordinator.delete(session, user_id=user_id, permissions=permissions, secret_id=vault_id)
+
+    async def dependents() -> list:
+        return await coordinator.describe_dependencies(
+            session, user_id=user_id, permissions=permissions, secret_id=vault_id
         )
 
-
-async def _refuse_unconfirmed_dependents(coordinator, session, user_id, permissions, vault_id: uuid.UUID) -> None:
-    """Refuse (409) while dependents exist; the listing is manage-authority gated (`describe_dependencies`).
-
-    The caller repeats the delete with `confirm_dependents` once a human has seen it.
-    """
-    refuse_dependents(
-        await coordinator.describe_dependencies(session, user_id=user_id, permissions=permissions, secret_id=vault_id)
-    )
+    await guarded_delete(session, vault_id, dependents=None if confirm else dependents, delete=delete)
 
 
 async def delete_system_vault_secret(
@@ -213,10 +208,7 @@ async def delete_system_vault_secret(
         if not await _is_system_secret(session, vault_id):
             return False
         _refuse_internal_key(headers, "delete")
-        user_id, permissions = await _principal(owner_id)
-        if not confirm_dependents:
-            await _refuse_unconfirmed_dependents(coordinator, session, user_id, permissions, vault_id)
-        await coordinator.delete(session, user_id=user_id, permissions=permissions, secret_id=vault_id)
+        await _guarded_vault_delete(coordinator, session, vault_id, owner_id, confirm_dependents)
         await session.commit()
         return True
     return False  # pragma: no cover -- defensive, generator always yields
