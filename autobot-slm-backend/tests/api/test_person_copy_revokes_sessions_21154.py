@@ -34,6 +34,8 @@ _SPEC.loader.exec_module(route)
 
 _REAL_AUTH = load_real_auth("s" * 40, expire_minutes=60 * 24)
 auth_service = _REAL_AUTH.auth_service
+_OLD_HASH = "hash-before"  # pragma: allowlist secret
+_NEW_HASH = "hash-after"  # pragma: allowlist secret
 _USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000154")
 
 
@@ -64,9 +66,9 @@ def _token() -> str:
     return auth_service.create_access_token({"sub": "alice", "iat": int(time.time()) - 60})
 
 
-async def _push(epochs, *, is_active: bool, user=None) -> SimpleNamespace:
+async def _push(epochs, *, is_active: bool, user=None, password_hash: str = "h") -> SimpleNamespace:
     user = user or SimpleNamespace(username="alice", password_hash="h", is_active=True)
-    body = route.PersonCopyRequest(slm_user_id=_USER_ID, password_hash="h", is_active=is_active)
+    body = route.PersonCopyRequest(slm_user_id=_USER_ID, password_hash=password_hash, is_active=is_active)
     with patch.object(route, "verify_internal_api_key", return_value=True):
         epochs.session.on_get = lambda _model, _pk: user
         await route.update_person_copy(body, epochs.session, "key")
@@ -124,5 +126,33 @@ async def test_a_token_minted_after_a_reactivation_works(epochs):
     await _push(epochs, is_active=False)
     await _push(epochs, is_active=True)
     fresh = auth_service.create_access_token({"sub": "alice", "iat": int(time.time()) + 5})
+
+    assert (await auth_service.decode_token_async(fresh))["sub"] == "alice"
+
+
+@pytest.mark.asyncio
+async def test_a_pushed_password_change_refuses_the_sessions_already_issued(epochs):
+    token = _token()
+    user = SimpleNamespace(username="alice", password_hash=_OLD_HASH, is_active=True)
+    await _push(epochs, is_active=True, user=user, password_hash=_NEW_HASH)
+
+    assert user.password_hash == _NEW_HASH
+    assert await auth_service.decode_token_async(token) is None
+
+
+@pytest.mark.asyncio
+async def test_a_push_that_changes_nothing_revokes_nothing(epochs):
+    token = _token()
+    await _push(epochs, is_active=True)
+
+    assert epochs.store == {}
+    assert (await auth_service.decode_token_async(token))["sub"] == "alice"
+
+
+@pytest.mark.asyncio
+async def test_a_token_minted_after_a_pushed_password_change_works(epochs):
+    user = SimpleNamespace(username="alice", password_hash=_OLD_HASH, is_active=True)
+    await _push(epochs, is_active=True, user=user, password_hash=_NEW_HASH)
+    fresh = auth_service.create_access_token({"sub": "alice", "iat": int(time.time()) + 1})
 
     assert (await auth_service.decode_token_async(fresh))["sub"] == "alice"
