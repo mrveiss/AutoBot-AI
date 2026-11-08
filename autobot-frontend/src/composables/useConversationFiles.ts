@@ -321,7 +321,7 @@ export function useConversationFiles(sessionId: string) {
    */
   const openPreviewPane = async (file: ConversationFile): Promise<boolean> => {
     if (!file.mime_type.startsWith('text/')) return false
-    const data = await api.get<ConversationFilePreview>(`${API}/preview/${file.file_id}`)
+    const data = (await api.get(`${API}/preview/${file.file_id}`)) as ConversationFilePreview | null
     if (!data?.preview_available || typeof data.preview_content !== 'string') return false
     preview.value = { filename: file.filename, data }
     return true
