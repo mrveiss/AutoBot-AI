@@ -22,12 +22,12 @@ from utils.file_categorization import SKIP_DIRS
 
 # The one directory-name exclusion rule for every code-intelligence analyzer
 # (#21004): the repo-wide ``SKIP_DIRS`` plus ONE non-code rule, defined here once.
-# ``PACKAGE_AWARE_SKIP_DIRS`` names archive/backup/vendored trees, but they are
+# ``PACKAGE_AWARE_NON_CODE_NAMES`` names archive/backup/vendored trees, but they are
 # also legitimate package names (``autobot-backend/backup/`` is imported by the
 # lifespan), so such a directory is skipped only when it is NOT a Python package
 # (no ``__init__.py``). ``.mypy_cache`` is never code and is skipped always.
-PACKAGE_AWARE_SKIP_DIRS: frozenset = frozenset({"archive", "archives", "backup", "backups", "third_party"})
-ANALYSIS_EXCLUDE_DIRS: frozenset = frozenset(SKIP_DIRS | PACKAGE_AWARE_SKIP_DIRS | {".mypy_cache"})
+PACKAGE_AWARE_NON_CODE_NAMES: frozenset = frozenset({"archive", "archives", "backup", "backups", "third_party"})
+ANALYSIS_EXCLUDE_DIRS: frozenset = frozenset(SKIP_DIRS | PACKAGE_AWARE_NON_CODE_NAMES | {".mypy_cache"})
 
 # A pattern token (not a glob) meaning "the file name follows a test-file
 # convention"; answered by the shared ``is_test_filename`` rule (#20493).
@@ -115,7 +115,7 @@ def _is_skipped_dir(parent: Path, name: str, excluded: Iterable[str]) -> bool:
     """True if directory *name* under *parent* is excluded (package-aware for archive/backup names)."""
     if name not in excluded:
         return False
-    return not (name in PACKAGE_AWARE_SKIP_DIRS and (parent / name / "__init__.py").is_file())
+    return not (name in PACKAGE_AWARE_NON_CODE_NAMES and (parent / name / "__init__.py").is_file())
 
 
 def is_excluded(path: Path, root: Path, excluded: Iterable[str]) -> bool:

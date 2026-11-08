@@ -348,7 +348,7 @@ def test_analysis_exclude_dirs_derives_from_skip_dirs():
     from utils.file_categorization import SKIP_DIRS
 
     module = _load_real_module()
-    assert SKIP_DIRS | module.PACKAGE_AWARE_SKIP_DIRS | {".mypy_cache"} == module.ANALYSIS_EXCLUDE_DIRS
+    assert SKIP_DIRS | module.PACKAGE_AWARE_NON_CODE_NAMES | {".mypy_cache"} == module.ANALYSIS_EXCLUDE_DIRS
 
 
 def test_symlinked_leaf_escaping_the_root_or_into_a_skipped_dir_is_dropped(tmp_path: Path):
