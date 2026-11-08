@@ -114,7 +114,7 @@ BASELINE = {
     # thin shims or removed.
     "notification_entry_points": 4,
     # Distinct date-formatting approaches in use.
-    "date_format_approaches": 4,
+    "date_format_approaches": 3,  # #19905: 4 -> 3, the inline and hand-assembled date approaches moved to the kit formatters
     # Hardcoded `z-index: <number>` declarations, i.e. stacking order decided
     # per file rather than by a scale.
     "hardcoded_zindex_declarations": 8,  # #19907 batch 1: 16 -> 8, the free waived sites moved to --z-* tokens (the 8 left: ChatInput, KnowledgeGraph and the non-style z-index sites); earlier: 47 -> 16, 31 literals moved to --z-* tokens, the other 15 (+1 plugin) wait on open PRs; earlier: #14780 drawer adoption: 48 -> 47 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14778: BaseTable and DataTable forks left for the kit (-1);  #14776: the retired BasePanel's z-index went with it (50 -> 49); #18240: App.vue #mobile-nav z-index: 50 became a utility class (lowered from 51)
