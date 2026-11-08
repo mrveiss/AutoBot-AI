@@ -446,7 +446,7 @@ class MultiLanguageAnalyzer:
                 continue
 
             # Check exclusions
-            if matches_exclusion(file_path, all_excludes):
+            if matches_exclusion(file_path, all_excludes, directory):
                 continue
 
             # Check if we have an analyzer for this file

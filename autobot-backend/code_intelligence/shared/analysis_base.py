@@ -27,10 +27,8 @@ from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.python_files import (
-    ANALYSIS_EXCLUDE_DIRS,
     TEST_FILE_PATTERN,
     discover_files,
-    is_excluded,
     matches_exclusion,
 )
 from code_intelligence.similarity_thresholds import SIMILARITY_MEDIUM  # noqa: F401 -- re-exported (#18094)
@@ -188,8 +186,6 @@ class BaseCodeAnalyzer(SemanticAnalysisMixin):
         does not depend on where the tree lives: a checkout inside a skipped
         directory name (a worktree) would otherwise exclude every file.
         """
-        if root is not None and is_excluded(path, root, ANALYSIS_EXCLUDE_DIRS):
-            return True
         return matches_exclusion(path, self.exclude_patterns, root)
 
     async def _find_semantic_duplicates(self, items: List[Any]) -> List[Dict[str, Any]]:

@@ -16,11 +16,11 @@ _PKG = Path(__file__).resolve().parent
 _CANONICAL = "python_files.py"
 _WALKS = {"rglob", "walk"}
 _COPY_NAMES = {"EXCLUDE_DIRS", "DEFAULT_EXCLUDE_DIRS", "_SKIP_DIRS", "_COCHANGE_SKIP_DIRS"}
+_PATH_CTORS = {"Path", "PurePath", "PurePosixPath"}
+_PATH_ARG = re.compile(r"(?i)(path|file|rel)")
 # A name that reads as an exclusion/ignore list. Bound to a literal collection of
 # strings it is a local copy of the exclusion rule (#21004 AC1/AC2).
 _IGNORE_LIST_NAME = re.compile(r"^_?(default_)?(exclude|excludes|ignore|skip)[a-z_]*$", re.IGNORECASE)
-_PATH_RECEIVER = re.compile(r"^(path|filepath|file_path|rel_path|rel|\w+_path)$")
-_PATH_CTORS = {"Path", "PurePath", "PurePosixPath"}
 # Pattern lists that are policy globs consumed by ``matches_exclusion`` (no directory
 # names, no predicate of their own). Each entry needs a reason; a stale entry fails.
 _ALLOWED_POLICY_LISTS = {
@@ -30,7 +30,11 @@ _ALLOWED_POLICY_LISTS = {
     ("base_analyzer.py", "default_excludes"): "minified-bundle globs, applied through matches_exclusion",
     ("anti_pattern_detection/types.py", "DEFAULT_IGNORE_PATTERNS"): "ANALYSIS_EXCLUDE_DIRS plus bytecode globs",
     # An INCLUDE match (which pre-commit checks apply to a file), not an exclusion.
-    ("precommit_analyzer.py", "fnmatch"): "check applicability, not file exclusion",
+    ("precommit_analyzer.py", "<module>"): "fnmatch import: check applicability, not file exclusion",
+    # Deferred to the open PR that owns this file (#21162): regex exclude list, still to be converted.
+    ("testing_pattern_analyzer.py", "exclude_patterns"): "regex list; converts with #21162",
+    ("testing_pattern_analyzer.py", "_should_exclude"): "regex exclusion; converts with #21162",
+    ("testing_pattern_analyzer.py", "is_test_file"): "test_file_patterns classification; converts with #21162",
 }
 
 
@@ -102,50 +106,94 @@ def _import_violation(node: ast.AST) -> str:
 
 
 def _is_string_collection(value: ast.expr | None) -> bool:
-    """A list/tuple/set literal holding at least one string constant."""
+    """A list/tuple/set literal holding a string constant, also behind ``x or [...]``."""
+    if isinstance(value, ast.BoolOp):
+        return any(_is_string_collection(v) for v in value.values)
     if not isinstance(value, (ast.List, ast.Tuple, ast.Set)):
         return False
     return any(isinstance(e, ast.Constant) and isinstance(e.value, str) for e in value.elts)
 
 
 def _ignore_list_copies(node: ast.AST) -> List[str]:
-    """Names bound to a literal exclusion list (a local copy of the rule)."""
-    value = getattr(node, "value", None)
-    if not _is_string_collection(value):
+    """Names (plain or attribute) bound to a literal exclusion list: a local copy of the rule."""
+    if not _is_string_collection(getattr(node, "value", None)):
         return []
     return [name for name in _assigned_names(node) if _IGNORE_LIST_NAME.match(name)]
 
 
-def _is_filename_predicate(node: ast.AST) -> str:
-    """The rule broken by a local file-name match (``fnmatch``, ``<path>.match(``)."""
+def _compiled_regex_names(tree: ast.AST) -> Set[str]:
+    """Names bound to ``re.compile(...)``: their ``.match`` is a regex, not a file-name predicate."""
+    names: Set[str] = set()
+    for node in ast.walk(tree):
+        value = getattr(node, "value", None)
+        if isinstance(value, ast.Call) and getattr(value.func, "attr", "") == "compile":
+            names.update(_assigned_names(node))
+    return names
+
+
+def _match_receiver(node: ast.Call) -> str | None:
+    """The receiver name of ``<recv>.match(<path-like>)`` (``""`` when anonymous), else ``None``.
+
+    Keyed on the argument OR the receiver being path-like (``p.match(file_path)``,
+    ``file_path.match(p)``, ``Path(x).match(g)``) whatever the other side is called;
+    ``rx.match(line)`` is not.
+    """
+    func = node.func
+    if not (isinstance(func, ast.Attribute) and func.attr == "match" and node.args):
+        return None
+    arg, owner = node.args[0], func.value
+    names = [
+        (n.id if isinstance(n, ast.Name) else n.attr if isinstance(n, ast.Attribute) else "") for n in (arg, owner)
+    ]
+    is_ctor = isinstance(owner, ast.Call) and getattr(owner.func, "id", "") in _PATH_CTORS
+    if not (is_ctor or any(_PATH_ARG.search(n) for n in names)):
+        return None
+    return names[1]
+
+
+def _is_filename_predicate(node: ast.AST, regexes: Set[str]) -> str:
+    """The rule broken by a local file-name match (``fnmatch``, ``<anything>.match(x)``)."""
     if isinstance(node, ast.ImportFrom) and node.module == "fnmatch":
         return "local fnmatch"
     if isinstance(node, ast.Import) and any(a.name == "fnmatch" for a in node.names):
         return "local fnmatch"
-    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "match"):
+    receiver = _match_receiver(node) if isinstance(node, ast.Call) else None
+    if receiver is None or receiver == "re" or receiver in regexes:
         return ""
-    owner = node.func.value
-    is_ctor = isinstance(owner, ast.Call) and getattr(owner.func, "id", "") in _PATH_CTORS
-    if is_ctor or (isinstance(owner, ast.Name) and _PATH_RECEIVER.match(owner.id)):
-        return "local path.match() predicate"
-    return ""
+    return "local .match() predicate"
 
 
-def _predicate_violations(node: ast.AST, rel: str) -> List[str]:
-    rule = _is_filename_predicate(node)
-    found = [f"{rel}:{node.lineno} {rule}"] if rule and (rel, rule.split()[-1]) not in _ALLOWED_POLICY_LISTS else []
+def _enclosing_symbols(tree: ast.AST) -> dict:
+    """``id(node) -> name`` of the function that contains it (``<module>`` at top level)."""
+    owners: dict = {}
+
+    def visit(node: ast.AST, owner: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            inner = child.name if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) else owner
+            owners[id(child)] = inner
+            visit(child, inner)
+
+    visit(tree, "<module>")
+    return owners
+
+
+def _predicate_violations(node: ast.AST, rel: str, symbol: str, regexes: Set[str], allowed: dict) -> List[str]:
+    rule = _is_filename_predicate(node, regexes)
+    found = [f"{rel}:{node.lineno} {rule} [{symbol}]"] if rule and (rel, symbol) not in allowed else []
     for name in _ignore_list_copies(node):
-        if (rel, name) not in _ALLOWED_POLICY_LISTS:
-            found.append(f"{rel}:{node.lineno} local ignore list {name}")
+        if (rel, name) not in allowed:
+            found.append(f"{rel}:{node.lineno} local ignore list {name} [{name}]")
     return found
 
 
-def find_violations(root: Path) -> List[str]:
+def find_violations(root: Path, allowed: dict | None = None) -> List[str]:
     """``file:line what`` for each bare walk call or analyzer-local exclusion-set copy."""
+    allowed = _ALLOWED_POLICY_LISTS if allowed is None else allowed
     found: List[str] = []
     for path in _production_files(root):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         os_names = _os_walker_names(tree)
+        owners, regexes = _enclosing_symbols(tree), _compiled_regex_names(tree)
         for node in ast.walk(tree):
             rule = _call_violation(node, os_names) if isinstance(node, ast.Call) else _import_violation(node)
             if rule:
@@ -154,15 +202,24 @@ def find_violations(root: Path) -> List[str]:
                 if name in _COPY_NAMES:
                     found.append(f"{path.relative_to(root)}:{node.lineno} local {name}")
             if hasattr(node, "lineno"):
-                found.extend(_predicate_violations(node, path.relative_to(root).as_posix()))
+                found.extend(
+                    _predicate_violations(
+                        node, path.relative_to(root).as_posix(), owners.get(id(node), "<module>"), regexes, allowed
+                    )
+                )
     return found
 
 
+def _target_name(target: ast.expr) -> str:
+    return target.id if isinstance(target, ast.Name) else target.attr if isinstance(target, ast.Attribute) else ""
+
+
 def _assigned_names(node: ast.AST) -> List[str]:
+    """Names bound by an assignment, including ``self.<attr>`` targets."""
     if isinstance(node, ast.Assign):
-        return [t.id for t in node.targets if isinstance(t, ast.Name)]
-    if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-        return [node.target.id]
+        return [n for n in (_target_name(t) for t in node.targets) if n]
+    if isinstance(node, ast.AnnAssign):
+        return [n for n in [_target_name(node.target)] if n]
     return []
 
 
@@ -181,7 +238,8 @@ _PLANTED = {
     "local EXCLUDE_DIRS": "EXCLUDE_DIRS = {'x'}\n",
     "local ignore list": "IGNORE_PATTERNS = ['*.min.js']\n",
     "local fnmatch": "import fnmatch\n",
-    "local path.match() predicate": "def f(file_path, pats):\n    return any(file_path.match(p) for p in pats)\n",
+    "local ignore list exclude_patterns": "class A:\n    def __init__(self, exclude_patterns=None):\n        self.exclude_patterns = exclude_patterns or ['*.pyc']\n",
+    "local .match() predicate": "def f(file_path, pats):\n    return any(file_path.match(p) for p in pats)\n",
 }
 
 
@@ -205,11 +263,30 @@ def test_guard_does_not_flag_look_alikes(tmp_path: Path, source: str):
     assert find_violations(tmp_path) == []
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "def f(path, pats):\n    return any(p.match(path) for p in pats)\n",
+        "def f(x, pats):\n    return any(path.match(x) for path in pats)\n",
+        "import re\n\nclass A:\n    def f(self, file_path):\n        return self._exclude.match(file_path)\n",
+    ],
+)
+def test_guard_flags_short_and_attribute_receivers(tmp_path: Path, source: str):
+    (tmp_path / "bad.py").write_text(source, encoding="utf-8")
+    assert any(".match() predicate" in f for f in find_violations(tmp_path))
+
+
+def test_guard_does_not_flag_a_compiled_regex_match(tmp_path: Path):
+    source = "import re\n_RX = re.compile('x')\n\ndef f(file_path):\n    return _RX.match(file_path)\n"
+    (tmp_path / "ok.py").write_text(source, encoding="utf-8")
+    assert find_violations(tmp_path) == []
+
+
 def test_guard_flags_a_path_constructor_match(tmp_path: Path):
     (tmp_path / "bad.py").write_text(
         "from pathlib import Path\n\ndef f(x, g):\n    return Path(x).match(g)\n", encoding="utf-8"
     )
-    assert any("path.match()" in f for f in find_violations(tmp_path))
+    assert any(".match() predicate" in f for f in find_violations(tmp_path))
 
 
 @pytest.mark.parametrize(
@@ -221,19 +298,10 @@ def test_guard_does_not_flag_regex_match_or_an_empty_list(tmp_path: Path, source
 
 
 def test_allowed_policy_lists_are_all_still_present():
-    """A stale allowlist entry would silently exempt a future copy of the same name."""
-    for rel, name in _ALLOWED_POLICY_LISTS:
-        source = (_PKG / rel).read_text(encoding="utf-8")
-        if name == "fnmatch":
-            assert "fnmatch" in source, rel
-            continue
-        tree = ast.parse(source)
-        assert any(
-            name in _assigned_names(n) and _is_string_collection(getattr(n, "value", None)) for n in ast.walk(tree)
-        ), (
-            rel,
-            name,
-        )
+    """A stale entry would silently exempt a future copy of the same symbol: each must still be a real hit."""
+    hits = find_violations(_PKG, allowed={})
+    for rel, symbol in _ALLOWED_POLICY_LISTS:
+        assert any(h.startswith(f"{rel}:") and h.endswith(f"[{symbol}]") for h in hits), (rel, symbol)
 
 
 def test_matches_exclusion_one_grammar(tmp_path: Path):
@@ -279,7 +347,8 @@ def test_root_under_a_skipped_name_still_yields_files(tmp_path: Path, skipped_an
 def test_analysis_exclude_dirs_derives_from_skip_dirs():
     from utils.file_categorization import SKIP_DIRS
 
-    assert SKIP_DIRS == _load_real_module().ANALYSIS_EXCLUDE_DIRS
+    module = _load_real_module()
+    assert SKIP_DIRS | module.PACKAGE_AWARE_SKIP_DIRS | {".mypy_cache"} == module.ANALYSIS_EXCLUDE_DIRS
 
 
 def test_symlinked_leaf_escaping_the_root_or_into_a_skipped_dir_is_dropped(tmp_path: Path):
@@ -316,3 +385,77 @@ def test_llm_pattern_exclude_still_drops_a_top_level_test_file(tmp_path: Path):
     analyzer = LLMPatternAnalyzer(project_root=tmp_path)
     kept = analyzer._collect_files([tmp_path], ["**/test*"])
     assert [p.name for p in kept] == ["keep.py"]
+
+
+def _touch(root: Path, *rels: str) -> None:
+    for rel in rels:
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text("", encoding="utf-8")
+
+
+def test_the_real_backup_package_is_discovered():
+    """autobot-backend/backup/ is a real package (imported by the lifespan): never skipped by name."""
+    found = {p.relative_to(_PKG.parent).as_posix() for p in _load_real_module().discover_files(_PKG.parent / "backup")}
+    assert "backup/scheduler.py" in found
+
+
+@pytest.mark.parametrize("name", ["backup", "backups", "archive", "archives", "third_party"])
+def test_a_package_named_like_an_archive_dir_is_kept_and_a_plain_dir_is_skipped(tmp_path: Path, name: str):
+    module = _load_real_module()
+    _touch(tmp_path, f"{name}/__init__.py", f"{name}/real.py", f"plain/{name}/dead.py", "plain/live.py")
+    found = {p.relative_to(tmp_path).as_posix() for p in module.discover_files(tmp_path)}
+    assert f"{name}/real.py" in found
+    assert f"plain/{name}/dead.py" not in found  # control: a non-package dir of that name is still skipped
+    assert "plain/live.py" in found
+
+
+def test_mypy_cache_is_skipped_even_with_an_init_file(tmp_path: Path):
+    _touch(tmp_path, ".mypy_cache/__init__.py", ".mypy_cache/x.py", "a.py")
+    assert [p.name for p in _load_real_module().discover_files(tmp_path)] == ["a.py"]
+
+
+def test_is_excluded_and_matches_exclusion_are_package_aware(tmp_path: Path):
+    module = _load_real_module()
+    _touch(tmp_path, "backup/__init__.py", "backup/s.py", "old/backup/x.py")
+    assert not module.is_excluded(tmp_path / "backup" / "s.py", tmp_path, module.ANALYSIS_EXCLUDE_DIRS)
+    assert module.is_excluded(tmp_path / "old" / "backup" / "x.py", tmp_path, module.ANALYSIS_EXCLUDE_DIRS)
+    assert not module.matches_exclusion(tmp_path / "backup" / "s.py", (), tmp_path)
+    assert module.matches_exclusion(tmp_path / "old" / "backup" / "x.py", (), tmp_path)
+
+
+@pytest.mark.parametrize("ancestor", ["build", "venv", "lib", "test"])
+def test_a_root_under_a_pattern_named_dir_is_not_excluded(tmp_path: Path, ancestor: str):
+    module = _load_real_module()
+    root = tmp_path / ancestor / "proj"
+    _touch(root, "pkg/a.py")
+    assert not module.matches_exclusion(root / "pkg" / "a.py", [ancestor], root)
+
+
+def test_a_plain_word_matches_whole_components_only(tmp_path: Path):
+    module = _load_real_module()
+    for rel, word, expected in [
+        ("rebuild.py", "build", False),
+        ("build/x.py", "build", True),
+        ("library/x.py", "lib", False),
+        ("lib/x.py", "lib", True),
+        ("latest.py", "test", False),
+        ("test/x.py", "test", True),
+        ("a/gen/x.py", "gen/x.py", True),
+        ("a/gen2/x.py", "gen/x.py", False),
+    ]:
+        assert module.matches_exclusion(tmp_path / rel, [word], tmp_path) is expected, (rel, word)
+
+
+def test_star_stays_inside_one_component_and_double_star_spans(tmp_path: Path):
+    module = _load_real_module()
+    for rel, pattern, expected in [
+        ("a/tests/x.py", "**/tests/**", True),
+        ("tests/a/b/x.py", "**/tests/**", True),
+        ("a/b/tests", "tests/*", False),
+        ("tests/a/x.py", "tests/*", False),  # one-level star: does not cross a second "/"
+        ("tests/x.py", "tests/*", True),
+        ("a/x.min.js", "**/*.min.js", True),
+        ("src/pkg/gen/x.py", "src/*/x.py", False),
+        ("src/gen/x.py", "src/*/x.py", True),
+    ]:
+        assert module.matches_exclusion(tmp_path / rel, [pattern], tmp_path) is expected, (rel, pattern)

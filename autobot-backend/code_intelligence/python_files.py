@@ -12,18 +12,22 @@ uncached (sync) discovery paths cannot disagree (#20493).
 
 import fnmatch
 import os
-from pathlib import Path, PurePosixPath
+import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Iterable, Iterator, List, Set
 
 from autobot_shared.testfile_names import is_test_filename
 from utils.file_categorization import SKIP_DIRS
 
-# The one directory-name exclusion set for every code-intelligence analyzer
-# (#21004). It IS the repo-wide ``SKIP_DIRS`` (which now carries the archive,
-# backup, tool-cache and third-party names the per-analyzer copies used to add
-# individually). Analyzers import this instead of declaring their own
-# ``EXCLUDE_DIRS`` / ignore list.
-ANALYSIS_EXCLUDE_DIRS: frozenset = frozenset(SKIP_DIRS)
+# The one directory-name exclusion rule for every code-intelligence analyzer
+# (#21004): the repo-wide ``SKIP_DIRS`` plus ONE non-code rule, defined here once.
+# ``PACKAGE_AWARE_SKIP_DIRS`` names archive/backup/vendored trees, but they are
+# also legitimate package names (``autobot-backend/backup/`` is imported by the
+# lifespan), so such a directory is skipped only when it is NOT a Python package
+# (no ``__init__.py``). ``.mypy_cache`` is never code and is skipped always.
+PACKAGE_AWARE_SKIP_DIRS: frozenset = frozenset({"archive", "archives", "backup", "backups", "third_party"})
+ANALYSIS_EXCLUDE_DIRS: frozenset = frozenset(SKIP_DIRS | PACKAGE_AWARE_SKIP_DIRS | {".mypy_cache"})
 
 # A pattern token (not a glob) meaning "the file name follows a test-file
 # convention"; answered by the shared ``is_test_filename`` rule (#20493).
@@ -32,34 +36,71 @@ TEST_FILE_PATTERN = "<test-files>"
 _GLOB_CHARS = "*?["
 
 
+@lru_cache(maxsize=256)
+def _glob_regex(pattern: str) -> "re.Pattern[str]":
+    """A glob with a slash as a right-anchored regex: ``*`` stays in one component, ``**`` spans several."""
+    parts = pattern.lstrip("/").split("/")
+    body = ""
+    for index, part in enumerate(parts):
+        last = index == len(parts) - 1
+        if part == "**":
+            body += ".+" if last else "(?:[^/]+/)*"
+            continue
+        body += _component_regex(part) + ("" if last else "/")
+    return re.compile("(?:^|/)" + body + "$")
+
+
+def _component_regex(part: str) -> str:
+    """One path component's glob (``*``, ``?``, ``[set]``) as regex that cannot cross ``/``."""
+    out, i = "", 0
+    while i < len(part):
+        char = part[i]
+        close = part.find("]", i + 2) if char == "[" else -1
+        if char == "[" and close != -1:
+            out += part[i : close + 1].replace("[!", "[^")
+            i = close + 1
+            continue
+        out += "[^/]*" if char == "*" else "[^/]" if char == "?" else re.escape(char)
+        i += 1
+    return out
+
+
+def _contains_components(text: str, word: str) -> bool:
+    """True if the ``/``-separated components of *word* appear consecutively in *text*."""
+    want = [c for c in word.split("/") if c]
+    have = [c for c in text.split("/") if c]
+    return bool(want) and any(have[i : i + len(want)] == want for i in range(len(have) - len(want) + 1))
+
+
 def _pattern_matches(pattern: str, text: str) -> bool:
     """One pattern against a ``/``-prefixed path text (the single pattern grammar).
 
-    ``TEST_FILE_PATTERN`` -> shared test-file name rule. A glob with a slash
-    (a leading ``**/`` is implied: matching is right-anchored) -> ``PurePath.match``.
-    A slash-free glob -> the file name. Anything else is a path substring, so a
-    plain ``venv`` or ``/migrations/`` matches a directory component.
+    ``TEST_FILE_PATTERN`` -> shared test-file name rule. A slash-free glob -> the
+    file name. A glob with a slash is right-anchored (a leading ``**/`` is implied):
+    ``*`` stays inside one component, ``**`` spans components. Anything else is a
+    plain word or ``a/b`` run that must equal whole path components, so ``build``
+    never matches ``rebuild.py`` and ``lib`` never matches ``library/``.
     """
     if pattern == TEST_FILE_PATTERN:
         return is_test_filename(text)
     if any(char in pattern for char in _GLOB_CHARS):
-        while pattern.startswith("**/"):
-            pattern = pattern[3:]
         if "/" not in pattern:
             return fnmatch.fnmatchcase(text.rsplit("/", 1)[-1], pattern)
-        anchored = pattern if pattern.startswith("*") else "*/" + pattern
-        return PurePosixPath(text).match(pattern) or fnmatch.fnmatchcase(text, anchored)
-    return pattern in text
+        return _glob_regex(pattern).search(text) is not None
+    return _contains_components(text, pattern)
 
 
 def matches_exclusion(path: str | Path, patterns: Iterable[str], root: Path | None = None) -> bool:
     """The one file-exclusion predicate for the code-intelligence analyzers (#21004).
 
-    True if any of *patterns* matches *path* (made relative to *root* when given,
-    so a checkout under a skipped name does not exclude everything). Directory
-    names are excluded by ``discover_files`` / ``is_excluded``; this answers the
-    file-name and glob questions with one grammar (see ``_pattern_matches``).
+    True if *path* is in an excluded directory (when *root* is given: below *root*
+    only, with the package-aware rule of ``is_excluded``) or any of *patterns*
+    matches it. Patterns are matched against the path made relative to *root*, so a
+    checkout under ``build/`` does not exclude everything; callers that hold an
+    absolute path should always pass *root*.
     """
+    if root is not None and is_excluded(Path(path), root, ANALYSIS_EXCLUDE_DIRS):
+        return True
     text = Path(path).as_posix()
     if root is not None:
         try:
@@ -70,12 +111,20 @@ def matches_exclusion(path: str | Path, patterns: Iterable[str], root: Path | No
     return any(_pattern_matches(pattern, text) for pattern in patterns)
 
 
+def _is_skipped_dir(parent: Path, name: str, excluded: Iterable[str]) -> bool:
+    """True if directory *name* under *parent* is excluded (package-aware for archive/backup names)."""
+    if name not in excluded:
+        return False
+    return not (name in PACKAGE_AWARE_SKIP_DIRS and (parent / name / "__init__.py").is_file())
+
+
 def is_excluded(path: Path, root: Path, excluded: Iterable[str]) -> bool:
-    """True if a component of *path* **below** *root* is in *excluded*.
+    """True if a directory component of *path* **below** *root* is excluded.
 
     Matching the absolute path asked whether an excluded name appears anywhere
     in it, including in the root itself, so a tree checked out below e.g. a
-    ``venv`` directory scanned as empty (#13602, #20493).
+    ``venv`` directory scanned as empty (#13602, #20493). An archive/backup-style
+    name is excluded only when that directory is not a Python package.
     """
     try:
         parts = path.relative_to(root).parts
@@ -84,7 +133,8 @@ def is_excluded(path: Path, root: Path, excluded: Iterable[str]) -> bool:
         # as excluded, as is_skipped_path does: scanning something we cannot
         # place under the root is worse than skipping it (#20493).
         return True
-    return not set(excluded).isdisjoint(parts)
+    excluded = set(excluded)
+    return any(_is_skipped_dir(root.joinpath(*parts[:i]), name, excluded) for i, name in enumerate(parts))
 
 
 def _escapes(path: Path, real_root: Path, excluded: Iterable[str]) -> bool:
@@ -99,7 +149,7 @@ def _walk_matches(root: Path, patterns: List[str], excluded: Set[str]) -> Iterat
     """Yield files under *root* matching a pattern, pruning excluded dirs while walking."""
     real_root = root.resolve()
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        dirnames[:] = [d for d in dirnames if d not in excluded]
+        dirnames[:] = [d for d in dirnames if not _is_skipped_dir(Path(dirpath), d, excluded)]
         for name in filenames:
             if not any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns):
                 continue
