@@ -4391,6 +4391,19 @@
       "documentCount": "{count} documents",
       "includeEmpty": "Include empty collections ({count})",
       "subtitle": "Browse and search vector collections"
+    },
+    "manSection": {
+      "format": "{name}, section {section}: {sectionName}",
+      "formatUnnamed": "{name}, section {section}",
+      "1": "user commands",
+      "2": "system calls",
+      "3": "library calls",
+      "4": "special files",
+      "5": "file formats",
+      "6": "games",
+      "7": "miscellaneous",
+      "8": "system administration",
+      "9": "kernel routines"
     }
   },
   "workflow": {
@@ -8374,6 +8387,7 @@
     "emptyHint": "Create the first team to group the people of this company.",
     "namesError": "Could not read the company's members, so team members are shown without names.",
     "unknownMember": "Unknown member",
+    "loadingNames": "Loading member details",
     "inactive": "Inactive",
     "colTeam": "Team",
     "colMembers": "Members",
