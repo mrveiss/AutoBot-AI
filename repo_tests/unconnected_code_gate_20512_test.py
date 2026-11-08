@@ -176,12 +176,67 @@ def test_declared_entries_describe_the_live_references() -> None:
     )
 
 
+REMEASURE_REL = "repo_tests/unconnected_code_remeasure_20910.txt"
+
+
+def _remeasure_keys(text: str) -> set[str]:
+    """The frozen one-time re-measure (#20910): comment lines dropped."""
+    # rstrip: a key ending in a space (a route with an empty path) loses it to the whitespace hook in this file
+    return {ln.rstrip() for ln in text.split("\n") if ln and not ln.startswith("#")}
+
+
+def _additions_beyond_the_base(current: dict[str, str], base: str, frozen: set[str]) -> list[str]:
+    """Baseline keys absent from *base* that the frozen re-measure does not name. The issue an entry links never matters."""
+    old_keys = uc.parse_baseline(base)
+    return sorted(k for k in current if k not in old_keys and k.rstrip() not in frozen)
+
+
 def test_the_baseline_only_shrinks_against_the_base() -> None:
     base = base_text(repo_root(), uc.BASELINE_REL)
     if base is None:
         return  # this file is new at the base: the baseline is being introduced, not raised
-    added = sorted(set(_baseline()) - set(uc.parse_baseline(base)))
+    frozen = _remeasure_keys((repo_root() / REMEASURE_REL).read_text(encoding="utf-8"))
+    added = _additions_beyond_the_base(_baseline(), base, frozen)
     assert not added, f"#20512: baseline entries were added against the base: {added}. Wire the code in instead."
+
+
+def test_the_frozen_remeasure_never_grows_against_the_base() -> None:
+    base = base_text(repo_root(), REMEASURE_REL)
+    if base is None:
+        return  # introduced by the change that makes the re-measure
+    now = _remeasure_keys((repo_root() / REMEASURE_REL).read_text(encoding="utf-8"))
+    grown = sorted(now - _remeasure_keys(base))
+    assert not grown, f"#20910: the frozen one-time re-measure gained entries: {grown}"
+
+
+def _stale_frozen_keys(frozen: set[str], baseline_keys) -> list[str]:
+    """Frozen keys no baseline entry carries any more (the route was wired and its baseline line removed)."""
+    present = {k.rstrip() for k in baseline_keys}
+    return sorted(k for k in frozen if k not in present)
+
+
+def test_every_frozen_remeasure_key_is_still_in_the_baseline() -> None:
+    """The frozen list shrinks with the baseline: a stale key would let a later re-addition of it pass."""
+    frozen = _remeasure_keys((repo_root() / REMEASURE_REL).read_text(encoding="utf-8"))
+    stale = _stale_frozen_keys(frozen, _baseline())
+    assert (
+        not stale
+    ), f"#20910: frozen re-measure keys no longer in the baseline; delete them from {REMEASURE_REL}: {stale}"
+
+
+def test_a_wired_route_cannot_be_re_added_through_a_stale_frozen_key() -> None:
+    frozen = {"route:a.py:GET /x", "route:b.py:GET /y"}
+    assert _stale_frozen_keys(frozen, {"route:a.py:GET /x": "#20970", "route:b.py:GET /y": "#20970"}) == []
+    after_wiring = {"route:a.py:GET /x": "#20970"}  # /y was wired and its baseline line removed
+    assert _stale_frozen_keys(frozen, after_wiring) == ["route:b.py:GET /y"]
+
+
+def test_a_new_entry_linked_to_a_remeasure_issue_is_refused() -> None:
+    """Linking a grouped wiring issue (#20970..#20977) does not exempt a new entry: only the frozen list does."""
+    base = "route:a.py:GET /x\t#10603\n"
+    planted = {"route:a.py:GET /x": "#10603", "route:new.py:GET /y": "#20970"}
+    assert _additions_beyond_the_base(planted, base, frozen=set()) == ["route:new.py:GET /y"]
+    assert _additions_beyond_the_base(planted, base, frozen={"route:new.py:GET /y"}) == []
 
 
 def test_the_baseline_states_what_it_cannot_see() -> None:
@@ -323,3 +378,66 @@ def test_the_module_detector_finds_a_real_module_once_its_importers_are_removed(
     assert "autobot_shared/paths.py" not in modules.unconnected(Tree.of_files(real))
     alone = {"autobot_shared/paths.py": real["autobot_shared/paths.py"]}
     assert modules.unconnected(Tree.of_files(alone)) == ["autobot_shared/paths.py"]
+
+
+def test_a_parenthesised_import_with_comments_keeps_every_name_20907() -> None:
+    """A comment on the opening line, or on a name line, must not drop the names that follow it."""
+    text = (
+        "from autobot_shared import (  # noqa: F401\n"
+        "    alpha,  # first\n"
+        "    beta,\n"
+        ")\n"
+        "from autobot_shared.gamma import delta  # trailing\n"
+    )
+    refs = modules.import_refs("autobot-backend/x.py", text)
+    assert {"autobot_shared.alpha", "autobot_shared.beta", "autobot_shared.gamma"} <= refs, refs
+
+
+class _NormMod:
+    @staticmethod
+    def norm_path(path: str) -> str:
+        return path
+
+
+def test_route_candidates_have_no_phantom_forms_20910() -> None:
+    """With a registration prefix and an own prefix only reg+own+raw is real; reg+raw only without an own prefix."""
+    cand = routes._candidates
+    assert cand(_NormMod, "/x", "/own", ["/api"]) == ("/api/own/x",)
+    assert cand(_NormMod, "/x", "", ["/api"]) == ("/api/x",)
+    assert cand(_NormMod, "/x", "/own", None) == ("/own/x", "/x")
+
+
+@pytest.mark.parametrize(
+    ("label", "path", "body"),
+    [
+        ("shell $VAR", "scripts/probe.sh", 'curl -s "$BACKEND_URL/api/planted/orphan"\n'),
+        ("shell quoted base", "scripts/probe.sh", 'curl -s "$BASE"/api/planted/orphan\n'),
+        ("shell ${VAR}", "scripts/probe.sh", "curl -s ${BASE}/api/planted/orphan\n"),
+        ("python f-string", "scripts/probe.py", 'URL = f"{base}/api/planted/orphan"\n'),
+        ("literal host and port", "scripts/probe.yml", "url: http://localhost:8001/api/planted/orphan\n"),
+        ("jinja variable", "scripts/probe.yml", 'url: "{{ backend_url }}/api/planted/orphan"\n'),
+    ],
+)
+def test_a_non_frontend_caller_behind_a_url_base_connects_the_route_20910(
+    tmp_path: Path, label: str, path: str, body: str
+) -> None:
+    """`$BASE/api/x`, `f"{base}/api/x"`, `host:8001/api/x` and `{{ var }}/api/x` are calls, not prose."""
+    assert _fired(tmp_path, {**_ROUTE, **_WIRED, path: body}) == set(), label
+
+
+def test_a_file_path_ending_in_api_is_not_a_caller_20910(tmp_path: Path) -> None:
+    """`autobot-backend/api/x.py` names a file; it must not read as a call to `/api/x.py`."""
+    decoy = {"scripts/note.sh": "# edit autobot-backend/api/planted/orphan\n"}
+    assert _fired(tmp_path, {**_ROUTE, **_WIRED, **decoy}) == {"route:autobot-backend/api/planted_route.py:GET /orphan"}
+
+
+def test_a_router_mounted_twice_is_judged_at_every_mount_20910() -> None:
+    """A router served at its registry mount and at a nested include has a candidate path per mount."""
+    assert routes._candidates(_NormMod, "/x", "", ["/a", "/a/sub"]) == ("/a/sub/x", "/a/x")
+    assert routes._candidates(_NormMod, "/x", "/own", ["/a", "/a/sub"]) == ("/a/own/x", "/a/sub/own/x")
+
+
+def test_the_real_nested_mount_of_a_registry_router_is_seen_20910() -> None:
+    """knowledge_debug.py is mounted by the registry AND `include_router`ed under /debug by knowledge.py."""
+    prefixes = _state(repo_root())[1].registry_prefixes("autobot-backend")["autobot-backend/api/knowledge_debug.py"]
+    assert {"/knowledge_base", "/knowledge_base/debug"} <= set(prefixes), prefixes
