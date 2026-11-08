@@ -90,6 +90,15 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#ffffff": 3,
 }
 
+#: ``lowercased hex literal -> times written instead of resolved`` in `autobot-slm-frontend/src`
+#: (#17567). Its own table, because the two apps move independently and one combined number hides
+#: that. Measured at ZERO with the same detector: the control plane's script/template colours are
+#: all resolved or absent, and what #17567's table counted there (19 in 4 files) is `<style>` hex,
+#: which `color-no-hex` owns. An empty table is not "unscanned": the reach floor and a control
+#: fixture in the ratchet prove the tree is read. Shrink-only is trivially strict here: any entry
+#: is growth.
+SLM_HARDCODED_COLOUR_LITERALS: dict[str, int] = {}
+
 # No hand-maintained totals here (#19283): each entry is compared with this table at the base
 # commit (repo_tests/_ratchet_base.py), so a raised entry still fails and PRs lowering different
 # entries never edit a shared line.
