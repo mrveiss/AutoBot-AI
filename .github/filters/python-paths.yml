@@ -168,6 +168,12 @@ python:
   - 'autobot-slm-backend/ansible/roles/slm_manager/templates/autobot-slm-backend.service.j2'
   - 'autobot-slm-backend/ansible/roles/slm_agent/templates/slm-agent.service.j2'
   - 'autobot-slm-backend/ansible/roles/ai-stack/templates/ai-stack.env.j2'
+  # #20894: service_units_set_logs_dir_20894_test.py sweeps every systemd unit and env template in the
+  # role/infra template dirs (and scripts/systemd) for AUTOBOT_LOGS_DIR.
+  - 'autobot-slm-backend/ansible/roles/*/templates/**'
+  - 'autobot-slm-backend/ansible/templates/**'
+  - 'autobot-infrastructure/*/templates/**'
+  - 'scripts/systemd/**'
   # #14909/#14891: the same shape again, for the hook guards. Three repo_tests
   # assert on inputs that contain no Python at all — git hook INDEX MODES
   # (git_hooks_executable_test.py), the copy-based installer

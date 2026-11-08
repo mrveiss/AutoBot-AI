@@ -180,6 +180,11 @@ ALLOWED_ADDITIONS = {
             # #17856: frontend_api_timeout_ssot_17856_test reads both .env.example files.
             ".env.example",
             "autobot-frontend/.env.example",
+            # #20894: service_units_set_logs_dir_20894_test sweeps the unit and env templates in these dirs.
+            "autobot-slm-backend/ansible/roles/*/templates/**",
+            "autobot-slm-backend/ansible/templates/**",
+            "autobot-infrastructure/*/templates/**",
+            "scripts/systemd/**",
             # #18592: install_preflight_and_source_18581_test.py reads INSTALL.md; compose_slm_gui_profile_18585_test.py reads the root compose file and the frontend Dockerfile.
             "INSTALL.md",
             "docker-compose.yml",

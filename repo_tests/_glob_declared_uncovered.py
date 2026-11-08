@@ -52,10 +52,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         {"repo_tests/slm_frontend_atomic_publish_15610_test.py"},
         "root-relative `*.conf.j2` sweep; the matching files live outside the python filter's trees",
     ),
-    "*.env.j2": (
-        {"repo_tests/service_units_set_logs_dir_20894_test.py"},
-        "root-relative `*.env.j2` sweep; the matching files live outside the python filter's trees",
-    ),
     "*.j2": (
         {
             "repo_tests/operational_docs_name_real_playbooks_19611_test.py",
@@ -98,15 +94,11 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         {
             "repo_tests/browser_port_single_home_19324_test.py",
             "repo_tests/chromadb_bind_not_hardcoded_15317_test.py",
-            "repo_tests/service_units_set_logs_dir_20894_test.py",
         },
         "root-relative `*.service` sweep; the matching files live outside the python filter's trees",
     ),
     "*.service.j2": (
-        {
-            "repo_tests/chromadb_bind_not_hardcoded_15317_test.py",
-            "repo_tests/service_units_set_logs_dir_20894_test.py",
-        },
+        {"repo_tests/chromadb_bind_not_hardcoded_15317_test.py"},
         "root-relative `*.service.j2` sweep; the matching files live outside the python filter's trees",
     ),
     "*.sh": (
