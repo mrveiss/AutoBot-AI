@@ -89,7 +89,11 @@ def _package_parts(rel: str) -> list[str]:
 
 
 def _statements(text: str):
-    """Import statements of *text*, one string each; a parenthesised list is joined across its lines."""
+    """Import statements of *text*, one string each; a parenthesised list is joined across its lines.
+
+    A trailing comment on any line of the list (``from a import (  # noqa``) is cut before joining, so
+    it never swallows the names after it when ``import_refs`` cuts the joined string at ``#``.
+    """
     lines = iter(text.split("\n"))
     for line in lines:
         stripped = line.lstrip()
