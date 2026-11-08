@@ -36,8 +36,13 @@ with real_modules_swapped():
     _OWN = ("user_management", "autobot_shared.user_management")
     _stubs = {k: sys.modules.pop(k) for k in [k for k in sys.modules if k.startswith(_OWN)]}
     try:  # the conftest stands in for the SLM's ORM models; the real ones are the system under test
-        for _mod in ("user", "organization", "role", "team", "api_key", "mfa", "sso", "audit"):
+        # Held strongly: SQLAlchemy's class registry keeps only weak references, and the finally below drops the modules
+        # from sys.modules, so a model nothing else references (Organization) is collected and ``Role`` can no longer
+        # resolve it by name when mappers configure (#21153).
+        _MODELS = [
             importlib.import_module(f"user_management.models.{_mod}")
+            for _mod in ("user", "organization", "role", "team", "api_key", "mfa", "sso", "audit")
+        ]
         User = sys.modules["user_management.models.user"].User
         UserService = importlib.import_module("autobot_shared.user_management.user_service").UserService
     finally:
