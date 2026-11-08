@@ -80,6 +80,9 @@ on:
       ok:
         description: "'true' only when every step of the autobot-frontend freshness job passed"
         value: ${{ jobs.verify-types-run.outputs.ok }}
+      slm_ok:
+        description: "'true' only when every step of the SLM freshness job passed"
+        value: ${{ jobs.verify-generated-types-slm.outputs.ok }}
 
 permissions:
   contents: read
@@ -199,6 +202,8 @@ jobs:
         run: echo "ok=true" >> "$GITHUB_OUTPUT"
 
   verify-generated-types-slm:
+    outputs:
+      ok: ${{ steps.done.outputs.ok }}
     # `!= 'false'`, matching verify-types-run above and for the same reason
     # (#14885). With `== 'true'` a paths-filter that succeeded but emitted
     # nothing skips this job silently — the fail-safe has to point at running
@@ -275,3 +280,10 @@ jobs:
             exit 1
           fi
           echo "SLM generated types are fresh."
+
+      # Positive evidence for the `verify-generated-types` gate in ci.yml: reached only when every
+      # step above succeeded, so 'true' on a full pass and empty on a failure, cancel or timeout.
+      - name: Record that every step passed
+        id: done
+        shell: bash
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"

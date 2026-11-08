@@ -796,7 +796,7 @@ jobs:
   # The number in 'All 12' must equal the python-shard matrix length (repo_tests/ci_shard_count_message_test.py).
   python-suite:
     name: python-suite
-    needs: [changes, python-shard]
+    needs: [changes, provision-packages, python-shard]
     if: always()
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
@@ -812,7 +812,7 @@ jobs:
       # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
       - uses: ./.github/actions/cancel-run-on-cancelled-upstream
         with:
-          results: ${{ needs.changes.result }} ${{ needs.python-shard.result }}
+          results: ${{ needs.changes.result }} ${{ needs.provision-packages.result }} ${{ needs.python-shard.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: python-suite
@@ -889,12 +889,13 @@ jobs:
       run: |
         rm -rf autobot-frontend/node_modules autobot-frontend/dist || true
 
-  # Work behind the `code-quality` gate. The body's secret (CONVENTIONS_DENYLIST) is inherited.
+  # Work behind the `code-quality` gate. Only the body's one secret is passed, by name (never `secrets: inherit`).
   run-code-quality:
     needs: changes
     if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_code_quality == 'true' }}
     uses: ./.github/workflows/_gate-code-quality.yml
-    secrets: inherit  # pragma: allowlist secret
+    secrets:
+      CONVENTIONS_DENYLIST: ${{ secrets.CONVENTIONS_DENYLIST }}
     permissions:
       contents: read
       security-events: read
@@ -1127,8 +1128,9 @@ jobs:
       run_types: ${{ needs.changes.outputs.run_types }}
       run_slm_types: ${{ needs.changes.outputs.run_slm_types }}
 
-  # Gate: publishes the REQUIRED `verify-generated-types` context. The SLM sibling job in the body is
-  # deliberately NOT in this verdict (#13862): it is not a required context.
+  # Gate: publishes the REQUIRED `verify-generated-types` context. It applies when either the main or the
+  # SLM freshness job applies, and fails if either one that applies did not pass (the SLM job used to run
+  # with no gating effect).
   verify-generated-types:
     name: verify-generated-types
     needs: [changes, run-generated-types]
@@ -1152,8 +1154,8 @@ jobs:
         with:
           context: verify-generated-types
           changes-result: ${{ needs.changes.result }}
-          applies: ${{ needs.changes.outputs.run_types }}
-          work-ok: ${{ needs.run-generated-types.outputs.ok == 'true' }}
+          applies: ${{ needs.changes.outputs.run_types == 'true' || needs.changes.outputs.run_slm_types == 'true' }}
+          work-ok: ${{ (needs.changes.outputs.run_types != 'true' || needs.run-generated-types.outputs.ok == 'true') && (needs.changes.outputs.run_slm_types != 'true' || needs.run-generated-types.outputs.slm_ok == 'true') }}
           work-detail: run-generated-types=${{ needs.run-generated-types.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
@@ -1227,7 +1229,8 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.run_ai_review == 'true' }}
     uses: ./.github/workflows/_gate-ai-security-review.yml
-    secrets: inherit  # pragma: allowlist secret
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     permissions:
       contents: read
       pull-requests: write

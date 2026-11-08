@@ -13,6 +13,10 @@ name: Code Quality (reusable body)
 
 on:
   workflow_call:
+    secrets:
+      CONVENTIONS_DENYLIST:
+        description: "Org-internal convention denylist, read by the conventions step"
+        required: false
     outputs:
       ok:
         description: "'true' only when every step of the audit passed"

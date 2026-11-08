@@ -142,7 +142,7 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: uninstall guard (a fake /opt/autobot tree), a new bypass and not a real read.
 #: LOWERED 40 -> 39 by the train-81 CodeRabbit round: the filter now covers
 #: `docker/generate-secrets.sh`, which two guards really read (#17500, #18729).
-#: LOWERED 39 -> 36 by #18208: the filter now names `.github/workflows/_gate-*.yml`, the reusable gate
+#: LOWERED 34 -> 31 by #18208: the filter now names `.github/workflows/_gate-*.yml`, the reusable gate
 #: bodies the guards read (the pre-merge `code-quality.yml`, `security.yml` and friends were uncovered reads).
 #: LOWERED 39 -> 38 by #19523: the filter now covers `.github/dependabot.yml`, which the
 #: dependabot coverage guards read; deleting a block's directory touches no .py file.
