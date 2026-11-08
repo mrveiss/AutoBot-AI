@@ -14,6 +14,7 @@
  * aria-hidden on decorative icons, accessible button labels.
  */
 
+import { formatFleetDate } from '@/composables/useTimezone'
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
@@ -841,9 +842,7 @@ const scoreColor = computed(() => {
             <tr v-for="cert in fleetCerts" :key="cert.cert_id">
               <td class="px-4 py-2 font-mono text-xs">{{ cert.node_id }}</td>
               <td class="px-4 py-2 text-gray-700 truncate max-w-xs">{{ cert.subject || '—' }}</td>
-              <td class="px-4 py-2 text-gray-600">
-                {{ cert.not_after ? new Date(cert.not_after).toLocaleDateString() : '—' }}
-              </td>
+              <td class="px-4 py-2 text-gray-600">{{ cert.not_after ? formatFleetDate(cert.not_after) : '—' }}</td>
               <td class="px-4 py-2">
                 <span
                   :class="['px-2 py-0.5 rounded-sm text-xs font-medium', certExpiryBadge(cert.days_until_expiry).cls]"

@@ -10,6 +10,7 @@
  * Backend fully implemented; composable at src/composables/useSsoApi.ts.
  */
 
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { autobotApiErrorMessage } from '@/composables/useAutobotApi'
@@ -25,7 +26,6 @@ import { BaseAlert, BaseModal } from '@autobot/ui'
 
 const { t } = useI18n()
 const api = useSsoApi()
-
 const loading = ref(false)
 const saving = ref(false)
 const testing = ref(false)
@@ -458,9 +458,9 @@ onMounted(fetchProviders)
               <p>{{ $t('settings.admin.sSOSettings.allowUserCreation') }}<span class="font-medium">{{ provider.allow_user_creation ? $t('settings.admin.sSOSettings.yes') : $t('settings.admin.sSOSettings.no') }}</span></p>
               <template v-if="providerHealth(provider.id)">
                 <p class="text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.recentLoginsValue0SuccessValue1Failed', { value0: providerHealth(provider.id)!.success_count, value1: providerHealth(provider.id)!.failure_count }) }}</p>
-                <p v-if="providerHealth(provider.id)!.last_success_at" class="text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.lastSuccessValue0', { value0: new Date(providerHealth(provider.id)!.last_success_at!).toLocaleString() }) }}</p>
+                <p v-if="providerHealth(provider.id)!.last_success_at" class="text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.lastSuccessValue0', { value0: formatFleetDateTime(providerHealth(provider.id)!.last_success_at) }) }}</p>
               </template>
-              <p v-if="provider.last_sync_at" class="text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.lastSyncValue0', { value0: new Date(provider.last_sync_at).toLocaleString() }) }}</p>
+              <p v-if="provider.last_sync_at" class="text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.lastSyncValue0', { value0: formatFleetDateTime(provider.last_sync_at) }) }}</p>
             </div>
           </div>
 

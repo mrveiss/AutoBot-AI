@@ -15,6 +15,7 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { BaseAlert, BaseModal, createLogger, createDateFormatter } from '@autobot/ui'
 import { getSlmApiBase } from '@/config/ssot-config'
+import i18n from '@/i18n'
 
 const logger = createLogger('DeploymentLogViewer')
 
@@ -188,7 +189,7 @@ function scrollToBottom(): void {
   })
 }
 
-const formatTime = createDateFormatter({ kind: 'time', locale: 'en-US', intl: { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' } })
+const formatTime = createDateFormatter({ kind: 'time', locale: () => String(i18n.global.locale), intl: { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' } })
 
 watch(
   () => props.visible,
