@@ -24,6 +24,7 @@ from api.admin_org_tier_column import router as admin_org_tier_column_router  # 
 from api.admin_orphan_repair import router as admin_orphan_repair_router  # #15779, #16927
 from api.admin_orphan_storage import router as admin_orphan_storage_router  # #17038, #17039
 from api.admin_ownerless_chat_sessions import router as admin_ownerless_chat_sessions_router  # #20030
+from api.admin_person_links import router as admin_person_links_router  # #10200
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
 from api.admin_retention_policies import router as admin_retention_policies_router  # MVA-3145, GH#8995
 from api.agent import router as agent_router
@@ -142,6 +143,7 @@ def _get_system_routers() -> list:
     return [
         (admin_event_logs_router, "", ["admin", "compliance"], "admin_event_logs"),  # Issue #4461
         (admin_pricing_router, "", ["admin", "pricing"], "admin_pricing"),  # GH#6480
+        (admin_person_links_router, "", ["admin", "person-links"], "admin_person_links"),  # #10200
         (admin_orphan_repair_router, "", ["admin", "orphan-repair"], "admin_orphan_repair"),  # #15779
         (admin_orphan_storage_router, "", ["admin", "orphan-storage"], "admin_orphan_storage"),  # #17038, #17039
         (
