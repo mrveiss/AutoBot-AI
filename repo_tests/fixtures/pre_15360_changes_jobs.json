@@ -835,7 +835,7 @@
   },
   "other_jobs_sha256": {
    "build-test": "121c88ff-f58194dd-d2f8e6f8-f8efaeff-80088c76-a212f1da-709a6929-fe1ef166",
-   "security-scan": "0788fcd0-646691ed-044f7c9f-344c3c1b-91165b4e-3fd290fc-7dd6fb78-e87e0b0b",
+   "security-scan": "00297e76-9d0257c6-d8ae5bbd-f1877a48-507203a2-f8683809-f32f5268-82662227",
    "test-summary": "21a0a14e-3456bf36-0f235718-4be0366f-847644c5-f152cd13-cade046a-6f015388",
    "unit-tests": "0dc4b915-b5a1c086-e9c815c6-40133b73-e80f40a3-383f3845-5fb2f89d-d2cd1256"
   },
@@ -1365,7 +1365,7 @@
    ]
   },
   "other_jobs_sha256": {
-   "slm-frontend-check": "84abad4f-1c28d11c-cbd50266-792e4a03-2d705a86-bb4d4c72-2233d88d-03e3951c"
+   "slm-frontend-check": "6c32b585-1b668655-f66d936a-750d1b19-55df76dd-deae913e-7aa3b8bf-6e453f1a"
   },
   "outputs": [
    "slm_frontend"

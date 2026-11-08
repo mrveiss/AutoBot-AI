@@ -133,6 +133,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
+      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
         with:
