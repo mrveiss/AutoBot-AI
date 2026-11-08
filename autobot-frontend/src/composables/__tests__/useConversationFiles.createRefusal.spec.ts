@@ -43,6 +43,8 @@ describe('createFile refusal', () => {
 })
 
 describe('write refusals beyond create (#20723)', () => {
+  // The mocked `t` echoes `key|params`; limit and live are both 1 MB, so nothing is left.
+  const quotaText = 'chat.input.uploadError.quotaExceeded|{"limitMb":1,"liveMb":1,"pendingMb":0,"remainingMb":0,"maxMb":0}'
   const quota = { code: 'conversation_file_quota_exceeded', message: 'raw server text', limit_bytes: 1048576, live_bytes: 1048576 }
   const refused = () => Object.assign(new Error('HTTP 413'), { status: 413, details: { detail: quota } })
 
@@ -50,7 +52,7 @@ describe('write refusals beyond create (#20723)', () => {
     put.mockRejectedValueOnce(refused())
     const files = useConversationFiles('s1')
     expect(await files.updateFileContent('f1', 'x')).toBe(false)
-    expect(files.error.value).toContain('chat.input.uploadError.quotaExceeded')
+    expect(files.error.value).toBe(quotaText)
     expect(files.error.value).not.toBe('raw server text')
   })
 
@@ -58,14 +60,14 @@ describe('write refusals beyond create (#20723)', () => {
     post.mockRejectedValueOnce(refused())
     const files = useConversationFiles('s1')
     expect(await files.copyFile('f1')).toBe(false)
-    expect(files.error.value).toContain('chat.input.uploadError.quotaExceeded')
+    expect(files.error.value).toBe(quotaText)
   })
 
   it('uploadFiles translates a 413 quota refusal', async () => {
     post.mockRejectedValueOnce(refused())
     const files = useConversationFiles('s1')
-    await files.uploadFiles([new File(['x'], 'a.txt')] as unknown as FileList)
-    expect(files.error.value).toContain('chat.input.uploadError.quotaExceeded')
+    expect(await files.uploadFiles([new File(['x'], 'a.txt')] as unknown as FileList)).toBe(false)
+    expect(files.error.value).toBe(quotaText)
   })
 
   it('still shows the server message for a non-refusal failure', async () => {
@@ -73,6 +75,32 @@ describe('write refusals beyond create (#20723)', () => {
     const files = useConversationFiles('s1')
     await files.updateFileContent('f1', 'x')
     expect(files.error.value).toBe('boom')
+  })
+
+  it('copyFile keeps the server detail for a non-refusal failure', async () => {
+    post.mockRejectedValueOnce({ response: { status: 500, data: { detail: 'boom' } } })
+    const files = useConversationFiles('s1')
+    expect(await files.copyFile('f1')).toBe(false)
+    expect(files.error.value).toBe('boom')
+  })
+
+  it('uploadFiles keeps the server detail for a non-refusal failure', async () => {
+    post.mockRejectedValueOnce({ response: { status: 500, data: { detail: 'boom' } } })
+    const files = useConversationFiles('s1')
+    expect(await files.uploadFiles([new File(['x'], 'a.txt')] as unknown as FileList)).toBe(false)
+    expect(files.error.value).toBe('boom')
+  })
+
+  it.each([
+    ['createFile', 'chat.conversationFiles.createFailed', post, (f: ReturnType<typeof useConversationFiles>) => f.createFile('a.txt', 'x')],
+    ['updateFileContent', 'chat.conversationFiles.saveFailed', put, (f: ReturnType<typeof useConversationFiles>) => f.updateFileContent('f1', 'x')],
+    ['copyFile', 'chat.conversationFiles.copyFailed', post, (f: ReturnType<typeof useConversationFiles>) => f.copyFile('f1')],
+    ['uploadFiles', 'chat.input.uploadError.unknown', post, (f: ReturnType<typeof useConversationFiles>) => f.uploadFiles([new File(['x'], 'a.txt')] as unknown as FileList)],
+  ])('%s falls back to the translated %s when the server sends no message', async (_name, key, mock, run) => {
+    mock.mockRejectedValueOnce(new Error('network down'))
+    const files = useConversationFiles('s1')
+    expect(await run(files)).toBe(false)
+    expect(files.error.value).toBe(`${key}|{}`)
   })
 })
 
