@@ -53,7 +53,6 @@ growing while that happens.
 
 from __future__ import annotations
 
-import argparse
 import logging
 import pathlib
 import sys
@@ -145,22 +144,9 @@ check_paths = GUARD.check_paths
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point for both the hook path and ``--audit-ceilings``."""
+    """Entry point for the hook path, ``--audit-ceilings`` and ``--repin-ceilings``."""
     configure_logging(logger)
-    parser = argparse.ArgumentParser(description="Reject oversized .ts/.vue files (#17885).")
-    parser.add_argument("--audit-ceilings", action="store_true", help="walk every tracked .ts/.vue file")
-    parser.add_argument(
-        "--repin-ceilings",
-        action="store_true",
-        help="lower each recorded ceiling to its file's length and drop entries at or under the limit (#19673)",
-    )
-    parser.add_argument("paths", nargs="*", help="staged files, as pre-commit passes them")
-    args = parser.parse_args(argv)
-    if args.repin_ceilings:
-        return GUARD.repin_ceilings()
-    if args.audit_ceilings:
-        return run_audit()
-    return GUARD.check_paths(args.paths)
+    return GUARD.cli(argv, "Reject oversized .ts/.vue files (#17885).", "walk every tracked .ts/.vue file")
 
 
 if __name__ == "__main__":

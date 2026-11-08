@@ -32,6 +32,7 @@ every commit.
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import pathlib
 import re
@@ -281,6 +282,23 @@ class FileSizeGuard:
                 'repin-ceilings: %s was not repinned (unreadable file, or no `"path": N` line); untouched', rel
             )
         return 0
+
+    def cli(self, argv: list[str] | None, description: str, audit_help: str) -> int:
+        """The shared command line: ``--audit-ceilings``, ``--repin-ceilings``, else staged paths."""
+        parser = argparse.ArgumentParser(description=description)
+        parser.add_argument("--audit-ceilings", action="store_true", help=audit_help)
+        parser.add_argument(
+            "--repin-ceilings",
+            action="store_true",
+            help="lower each recorded ceiling to its file's length and drop entries at or under the limit (#19673)",
+        )
+        parser.add_argument("paths", nargs="*", help="staged files, as pre-commit passes them")
+        args = parser.parse_args(argv)
+        if args.repin_ceilings:
+            return self.repin_ceilings()
+        if args.audit_ceilings:
+            return self._get("run_audit")()
+        return self.check_paths(args.paths)
 
     def reach_breach_problem(self, reached: int) -> str:
         """The reach-breach finding, worded identically in all three gates (#17377)."""
