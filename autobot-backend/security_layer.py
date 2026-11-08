@@ -412,7 +412,6 @@ class SecurityLayer:
             # SECURITY: Admin has elevated permissions but NOT unrestricted access
             # Dangerous commands ALWAYS require approval, even for admin
             "admin": [
-                "files.*",
                 "allow_goal_submission",
                 "allow_kb_read",
                 "allow_kb_write",
@@ -422,7 +421,6 @@ class SecurityLayer:
                 "allow_voice_listen",
             ],
             "operator": [
-                "files.*",
                 "allow_goal_submission",
                 "allow_kb_read",
                 "allow_kb_write",
@@ -430,7 +428,6 @@ class SecurityLayer:
                 "allow_shell_moderate",
             ],
             "developer": [
-                "files.*",
                 "allow_goal_submission",
                 "allow_kb_read",
                 "allow_kb_write",
@@ -460,7 +457,9 @@ class SecurityLayer:
             # Unauthenticated requests must be rejected, not assigned permissions.
         }
 
-        return default_role_permissions.get(user_role, [])
+        # #15738: file grants come from the canonical role map, not a restated list.
+        canonical = [p for p in canonical_role_permissions(user_role) if p.startswith("files.")]
+        return [*canonical, *default_role_permissions.get(user_role, [])]
 
     # =========================================================================
     # Command Execution
