@@ -89,6 +89,12 @@ describe('handleStartWorkflow', () => {
     expect(showToast.mock.calls).toEqual([['workflow.builder.startUnconfirmed', 'warning']])
   })
 
+  it('reports a rejected start as unconfirmed, never as silence', async () => {
+    startWorkflow.mockRejectedValue(new Error('status payload had a null step'))
+    await setup().handleStartWorkflow('a')
+    expect(showToast.mock.calls).toEqual([['workflow.builder.startUnconfirmed', 'warning']])
+  })
+
   it('ignores a second start while one is in flight', async () => {
     executingWorkflow.value = true
     await setup().handleStartWorkflow('a')

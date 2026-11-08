@@ -43,7 +43,15 @@ class FakeStore:
 @pytest.fixture
 def store():
     fake = FakeStore()
-    with patch("services.audit_logger.canonical.emit", fake.emit):
+
+    async def record_committed(event):  # a required record is awaited until committed (#20557)
+        fake.emit(event)
+        return True
+
+    with (
+        patch("services.audit_logger.canonical.emit", fake.emit),
+        patch("services.audit_logger.canonical.record_committed", record_committed),
+    ):
         yield fake
 
 

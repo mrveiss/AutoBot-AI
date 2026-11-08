@@ -60,7 +60,7 @@ async def rec_id(db, tmp_path):
 
 
 def _script_sleep(monkeypatch, db, rid, statuses):
-    """Replace asyncio.sleep: each tick advances the recording to the next status."""
+    """Replace the route's pause: each tick advances the recording to the next status."""
     steps = list(statuses)
     ticks = []
 
@@ -69,7 +69,7 @@ def _script_sleep(monkeypatch, db, rid, statuses):
         if steps:
             await db.update_recording_status(rid, steps.pop(0))
 
-    monkeypatch.setattr(rec_routes.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(rec_routes, "_sleep", fake_sleep)
     return ticks
 
 
@@ -133,7 +133,7 @@ async def test_recording_deleted_mid_stream_reports_missing(client, db, rec_id, 
         await db._db().execute("DELETE FROM recordings WHERE id=?", (rec_id,))
         await db._db().commit()
 
-    monkeypatch.setattr(rec_routes.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(rec_routes, "_sleep", fake_sleep)
     events = _events((await _stream(client, rec_id)).text)
     assert events[-1] == {"error": True, "step": "missing"}
 

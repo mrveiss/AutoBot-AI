@@ -81,7 +81,14 @@ export function useRunnerSelection(deps: RunnerSelectionDeps) {
 
   async function handleStartWorkflow(workflowId: string): Promise<void> {
     if (deps.executingWorkflow.value) return;
-    const started = await deps.startWorkflow(workflowId);
+    let started: boolean;
+    try {
+      started = await deps.startWorkflow(workflowId);
+    } catch {
+      // A rejection after the server accepted the start (e.g. an unreadable status) is not a failed start.
+      deps.showToast(deps.t('workflow.builder.startUnconfirmed'), 'warning');
+      return;
+    }
     if (!started) deps.showToast(deps.t('workflow.builder.startFailed'), 'error');
     else if (!startConfirmed(workflowId)) deps.showToast(deps.t('workflow.builder.startUnconfirmed'), 'warning');
     else deps.showToast(deps.t('workflow.builder.started'), 'success');
