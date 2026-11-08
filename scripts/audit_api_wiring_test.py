@@ -305,3 +305,88 @@ def test_dump_slm_openapi_omits_websocket_paths_on_request(tmp_path, monkeypatch
         "/ws"
     ]  # control: the key is emitted by default
     assert "x-websocket-paths" not in json.loads(dropped.read_text(encoding="utf-8"))
+
+
+# ------------------------------------------- trailing template placeholder ----
+
+
+def test_trailing_query_placeholder_is_not_part_of_the_path_20910():
+    """`${getApiBase()}/evolution/summary${qs ? ...}` reaches /api/evolution/summary (useEvolution.ts form)."""
+    line = "const url = `${getApiBase()}/evolution/summary${qs ? `?${qs}` : ''}`"
+    found = ["/api" + s for s in audit.GETAPIBASE_CALL_RE.findall(line)]
+    assert [audit.norm_path(m) for m in found] == ["/api/evolution/summary"]
+    assert audit.norm_path("/api/x/y${query}") == "/api/x/y"
+    assert audit.norm_path("/api/x/${id}") == "/api/x/{p}"
+    assert audit.norm_path("/api/x/${id}/y") == "/api/x/{p}/y"
+
+
+# ---------------------------------------------- request-URL forms (#20910) ----
+
+
+def _calls_in(tmp_path, source: str) -> set[str]:
+    """What ``frontend_calls`` extracts from one frontend source file (through the real walk)."""
+    src = tmp_path / "autobot-frontend" / "src"
+    src.mkdir(parents=True)
+    (src / "use.ts").write_text(source, encoding="utf-8")
+    saved = audit.FRONTEND_SRC, audit.REPO_ROOT
+    audit.FRONTEND_SRC, audit.REPO_ROOT = src, tmp_path
+    try:
+        return set(audit.frontend_calls())
+    finally:
+        audit.FRONTEND_SRC, audit.REPO_ROOT = saved
+
+
+def test_trailing_query_placeholder_call_is_extracted_without_it_20910(tmp_path):
+    line = "const url = `${getApiBase()}/evolution/summary${qs ? `?${qs}` : ''}`\n"
+    assert "/api/evolution/summary" in _calls_in(tmp_path, line)
+
+
+def test_get_backend_url_api_call_is_extracted_20910(tmp_path):
+    line = "const r = await fetchWithAuth(`${getBackendUrl()}/api/onboarding/status`, {})\n"
+    assert "/api/onboarding/status" in _calls_in(tmp_path, line)
+
+
+def test_get_backend_url_root_call_is_extracted_20910(tmp_path):
+    assert "/ws/terminal" in _calls_in(tmp_path, "const u = `${getBackendUrl()}/ws/terminal`\n")
+
+
+def test_other_host_placeholder_before_api_is_extracted_20910(tmp_path):
+    src = "const a = `${backendUrl}/api/things/${id}`\nconst b = `${NetworkConstants.getBackendUrl()}/api/other`\n"
+    assert {"/api/things/{p}", "/api/other"} <= _calls_in(tmp_path, src)
+
+
+def test_file_local_base_constant_calls_are_extended_20910(tmp_path):
+    src = (
+        "const API_BASE = `${getApiBase()}/knowledge-graph`\n"
+        "const a = `${API_BASE}/entities/${id}`\n"
+        "const b = API_BASE + '/events'\n"
+    )
+    assert {"/api/knowledge-graph/entities/{p}", "/api/knowledge-graph/events"} <= _calls_in(tmp_path, src)
+
+
+def test_parameterised_base_constant_calls_are_extended_20910(tmp_path):
+    """RolesView form: ``const base = `/api/llc/roles/${companyId.value}/${roleId}` `` then ``${base}/holders``."""
+    src = (
+        "const base = `/api/llc/roles/${companyId.value}/${roleId}`\n"
+        "const a = await api.get(`${base}/holders?include_past=${past}`)\n"
+        "const b = await api.get(`${base}/permissions`)\n"
+    )
+    assert {"/api/llc/roles/{p}/{p}/holders", "/api/llc/roles/{p}/{p}/permissions"} <= _calls_in(tmp_path, src)
+
+
+def test_get_api_base_is_not_a_host_placeholder_for_api_paths_20910(tmp_path):
+    """`${getApiBase()}/api/x` is `/api/api/x` at runtime; it must not also read as a call to `/api/x`."""
+    found = _calls_in(tmp_path, "const u = `${getApiBase()}/api/x`\n")
+    assert "/api/api/x" in found and "/api/x" not in found
+
+
+def test_chained_base_constants_resolve_in_declaration_order_20910(tmp_path):
+    """``const CHILD = `${BASE}/sub` `` then ``${CHILD}/leaf``: the leaf is a call, not an unwired route."""
+    src = (
+        "const BASE = `${getApiBase()}/knowledge-graph`\n"
+        "const CHILD = `${BASE}/entities`\n"
+        "const a = await api.get(`${CHILD}/${id}/leaf`)\n"
+    )
+    assert "/api/knowledge-graph/entities/{p}/leaf" in _calls_in(tmp_path, src)
+    # a value led by a name that is not a base is no base: nothing is invented
+    assert not any("leaf" in c for c in _calls_in(tmp_path / "x", "const C = `${unknown}/entities`\nf(`${C}/leaf`)\n"))

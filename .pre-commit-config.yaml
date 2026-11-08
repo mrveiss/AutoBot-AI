@@ -1081,8 +1081,11 @@ repos:
         description: "Runs at the commit-msg stage against the real message file. At pre-commit time COMMIT_EDITMSG still holds the PREVIOUS subject, and in a linked worktree .git is a file so the path does not resolve at all (#13876)"
 
 # Configuration for specific file types
+# Every `language: python` hook imports autobot_shared, which refuses an
+# interpreter below the .python-version floor (#20903); bare python3 is
+# whatever the machine ships (3.10 on Ubuntu 22.04).
 default_language_version:
-  python: python3
+  python: python3.14
 
 exclude: |
   (?x)^(

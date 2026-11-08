@@ -22,3 +22,10 @@ def doc_index_hashes(override: Path | None = None) -> Path:
 def code_index_hashes() -> Path:
     """The code indexer's hash cache."""
     return shared_cache_path("autobot-code-index", ".code_index_hashes.json")
+
+
+def doc_index_store(hash_override: Path | None = None) -> Path:
+    """Which vector store the hash cache's entries were embedded into (#20886); sits beside the hash cache."""
+    if hash_override:
+        return hash_override.with_name(".doc_index_store.json")
+    return shared_cache_path("autobot-doc-index", ".doc_index_store.json")

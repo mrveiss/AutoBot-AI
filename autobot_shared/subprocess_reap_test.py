@@ -5,6 +5,7 @@
 """kill_and_reap stops a timed-out child and reaps it (#18056)."""
 
 import asyncio
+import os
 import sys
 
 import pytest
@@ -28,3 +29,21 @@ async def test_an_exited_child_is_a_no_op():
     await process.wait()
     await kill_and_reap(process)
     assert process.returncode == 0
+
+
+@pytest.mark.asyncio
+async def test_process_group_kills_the_grandchild_too():
+    code = "import subprocess,sys,time; p=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']); print(p.pid,flush=True); time.sleep(60)"
+    process = await asyncio.create_subprocess_exec(
+        sys.executable, "-c", code, stdout=asyncio.subprocess.PIPE, start_new_session=True
+    )
+    grandchild = int((await process.stdout.readline()).decode())
+    await kill_and_reap(process, process_group=True)
+    assert process.returncode is not None
+    for _ in range(50):
+        try:
+            os.kill(grandchild, 0)
+        except ProcessLookupError:
+            return
+        await asyncio.sleep(0.1)
+    pytest.fail("the grandchild survived the group kill")

@@ -59,7 +59,7 @@
             </span>
             <span class="event-time">
               {{ event.timestamp
-                ? new Date(event.timestamp).toLocaleDateString()
+                ? formatEventDate(event.timestamp)
                 : event.temporal_expression ?? ''
               }}
             </span>
@@ -101,9 +101,12 @@
 // Author: mrveiss
 
 import { ref, onMounted, watch } from 'vue'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import type { TemporalEvent } from '@/composables/useKnowledgeGraph'
 import { useKnowledgeGraph } from '@/composables/useKnowledgeGraph'
 import Icon from '@/components/ui/Icon.vue'
+
+const formatEventDate = createDateFormatter({ kind: 'date' })
 const props = defineProps<{
   eventId: string
   initialEvents?: TemporalEvent[]

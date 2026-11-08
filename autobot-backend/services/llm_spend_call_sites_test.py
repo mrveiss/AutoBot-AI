@@ -59,6 +59,10 @@ _RECORDED = {
         1,
         "only the compat gateways' non-stream paths call it; both record_response_usage the result (#16845)",
     ),
+    "autobot-backend/chat_workflow/planner_client.py::PlannerLLMClient.generate": (
+        1,
+        "record_response_usage on the response, session-attributed (#21023)",
+    ),
 }
 
 # Known unrecorded, tracked rather than fixed here: path::function -> (count, issue).

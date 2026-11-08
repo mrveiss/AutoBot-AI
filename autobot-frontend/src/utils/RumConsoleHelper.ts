@@ -18,6 +18,7 @@ interface EndpointStats {
 }
 // Import the module to ensure Window.rum declaration is loaded
 import './RumAgent'
+import { formatLocalTime } from './formatHelpers'
 
 // Add global RUM console commands
 declare global {
@@ -103,7 +104,7 @@ window.rumIssues = () => {
   }
 
   issues.forEach((issue: CriticalIssue, index: number) => {
-    console.group(`${index + 1}. ${issue.type} (${new Date(issue.timestamp).toLocaleTimeString()})`)
+    console.group(`${index + 1}. ${issue.type} (${formatLocalTime(issue.timestamp)})`)
     console.groupEnd()
   })
 }

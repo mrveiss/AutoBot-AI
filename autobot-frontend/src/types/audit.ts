@@ -13,7 +13,7 @@
  */
 import type { IconName } from '@/components/ui/Icon.vue'
 
-export type AuditResult = 'success' | 'denied' | 'failed' | 'error'
+export type AuditResult = 'success' | 'denied' | 'failed' | 'error' | 'attempted'
 
 /**
  * One row as `GET /audit/logs` sends it (`AuditEntry.to_response_dict` in
@@ -183,6 +183,13 @@ export const AUDIT_RESULT_CONFIG: Record<AuditResult, AuditResultConfig> = {
     icon: 'exclamation-triangle',
     bgClass: 'bg-yellow-100',
     textClass: 'text-yellow-700'
+  },
+  attempted: {
+    label: 'Attempted',
+    color: 'blue',
+    icon: 'clock',
+    bgClass: 'bg-blue-100',
+    textClass: 'text-blue-700'
   }
 }
 

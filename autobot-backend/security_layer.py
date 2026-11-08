@@ -27,6 +27,7 @@ from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
 from security_layer_roles import DEPRECATED_PRIVILEGED_ROLES, _normalise_role, canonical_role_permissions
 from services.audit.audit import emit_security, query_filtered
 from services.audit.taxonomy import AuditCategory, AuditFilter
+from utils.command_utils import execute_shell_command
 
 logger = get_logger(__name__)
 
@@ -527,17 +528,9 @@ class SecurityLayer:
         """Execute command without security controls (fallback mode). Issue #620."""
         if policy is not None:  # no risk check here: an unattended caller is refused, not run unchecked (#19807)
             return self.command_executor.build_refused_result("Command refused: command security is disabled")
-        process = await asyncio.create_subprocess_shell(
-            command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await process.communicate()
-        return {
-            "stdout": stdout.decode().strip(),
-            "stderr": stderr.decode().strip(),
-            "return_code": process.returncode,
-            "status": "success" if process.returncode == 0 else "error",
-            "security": {"enabled": False},
-        }
+        # #20740: the same runner and deadline as the security-checked branch, so turning
+        # command security off never removes the time limit.
+        return {**await execute_shell_command(command), "security": {"enabled": False}}
 
     def _log_command_complete(self, command: str, user: str, result: Dict[str, Any]) -> None:
         """Log command execution completion to audit log. Issue #620."""
