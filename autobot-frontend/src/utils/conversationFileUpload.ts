@@ -134,20 +134,42 @@ export function describeApiRefusal(err: unknown, t: Translate): string | null {
   return refusal ? describeUploadError(refusal, t) : null
 }
 
-/** POST `file` to the conversation's upload route; rejects on a non-200, a bad body, a network error or an abort. */
+const MS_PER_SECOND = 1000
+const MIN_SHOWN_ETA_SECONDS = 1
+
+/** Seconds left at the average rate so far; undefined before any time or bytes have passed, or when under a second remains. */
+export function uploadEtaSeconds(loaded: number, total: number, elapsedMs: number): number | undefined {
+  if (elapsedMs <= 0 || loaded <= 0) return undefined
+  const remaining = (total - loaded) / (loaded / elapsedMs) / MS_PER_SECOND
+  return remaining > MIN_SHOWN_ETA_SECONDS ? remaining : undefined
+}
+
+/** Wires `signal` to the request so an abort cancels the XHR; returns the disposer that removes the listener. */
+function abortWith(xhr: XMLHttpRequest, signal?: AbortSignal): () => void {
+  if (!signal) return () => {}
+  const onAbort = () => xhr.abort()
+  signal.addEventListener('abort', onAbort, { once: true })
+  return () => signal.removeEventListener('abort', onAbort)
+}
+
+/** POST `file` to the conversation's upload route; rejects on a non-200, a bad body, a network error or an abort of `signal`. */
 export function postConversationUpload(
   sessionId: string,
   file: File,
-  onProgress: (loaded: number, total: number) => void
+  onProgress: (loaded: number, total: number) => void,
+  signal?: AbortSignal
 ): Promise<ConversationUploadResponse> {
   const formData = new FormData()
   formData.append('file', file)
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new ConversationUploadError('cancelled'))
     const xhr = new XMLHttpRequest()
+    let detach = () => {}
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) onProgress(event.loaded, event.total)
     })
     xhr.addEventListener('load', () => {
+      detach()
       if (xhr.status !== 200) return reject(rejectionFor(xhr.status, xhr.responseText))
       try {
         resolve(JSON.parse(xhr.responseText) as ConversationUploadResponse)
@@ -155,11 +177,12 @@ export function postConversationUpload(
         reject(new ConversationUploadError('invalid_response'))
       }
     })
-    xhr.addEventListener('error', () => reject(new ConversationUploadError('network')))
-    xhr.addEventListener('abort', () => reject(new ConversationUploadError('cancelled')))
+    xhr.addEventListener('error', () => (detach(), reject(new ConversationUploadError('network'))))
+    xhr.addEventListener('abort', () => (detach(), reject(new ConversationUploadError('cancelled'))))
     xhr.open('POST', `${getApiBase()}/conversation-files/conversation/${sessionId}/upload`)
     const token = readStoredAuthToken()
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    detach = abortWith(xhr, signal)
     xhr.send(formData)
   })
 }
@@ -182,4 +205,14 @@ export function ensureUploadSession(
     sessionBeingCreated = null
   })
   return sessionBeingCreated
+}
+
+/**
+ * Whether a turn must take the canonical `POST /chats/{id}/message` route (#20195).
+ *
+ * A turn carrying server file ids needs that route: it is the only entry with the strict ownership
+ * verdict and the attachment resolver. The overseer transport has neither, so it never receives ids.
+ */
+export function usesCanonicalRoute(overseerEnabled: boolean, attachmentIds: readonly string[]): boolean {
+  return !overseerEnabled || attachmentIds.length > 0
 }

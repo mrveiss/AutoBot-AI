@@ -146,6 +146,7 @@
 </template>
 
 <script setup lang="ts">
+import { createDateFormatter } from '@/utils/formatHelpers'
 import { saveUrl } from '@autobot/ui'
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -166,6 +167,9 @@ const HEADER_H = 32
 const ROW_H = 34
 const BAR_H = 20
 const DAY_MS = 86_400_000
+
+const formatMonthTick = createDateFormatter({ kind: 'date', intl: { month: 'short', year: '2-digit' } })
+const formatDayTick = createDateFormatter({ kind: 'date', intl: { month: 'short', day: 'numeric' } })
 
 const ZOOM_PX_PER_DAY: Record<string, number> = { day: 40, week: 14, month: 5, quarter: 2 }
 
@@ -412,12 +416,8 @@ const axisTicks = computed(() => {
 
   for (let ms = from; ms <= to; ms += step * DAY_MS) {
     const d = new Date(ms)
-    const label =
-      zoom.value === 'quarter'
-        ? `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`
-        : zoom.value === 'month'
-          ? d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
-          : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    const label = zoom.value === 'quarter' ? `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`
+      : (zoom.value === 'month' ? formatMonthTick : formatDayTick)(d)
     ticks.push({ ms, x: xForMs(ms), label })
   }
   return ticks

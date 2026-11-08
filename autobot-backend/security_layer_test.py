@@ -301,24 +301,19 @@ class TestSecurityLayer:
                 await self.security.execute_command("rm file.txt", "dev_user", "developer")
 
                 # Should force approval for non-safe command
-                mock_run.assert_called_once_with("rm file.txt", force_approval=True)
+                mock_run.assert_called_once_with("rm file.txt", force_approval=True, policy=None)
 
     @pytest.mark.asyncio
     async def test_execute_command_security_disabled(self):
         """Test command execution with security disabled"""
         self.security.enable_command_security = False
 
-        with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"output\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+        # A real `echo`: the security-off branch runs through the same bounded runner (#20740).
+        result = await self.security.execute_command("echo output", "test_user", "user")
 
-            result = await self.security.execute_command("echo hello", "test_user", "user")
-
-            assert result["status"] == "success"
-            assert result["stdout"] == "output"
-            assert result["security"]["enabled"] is False
+        assert result["status"] == "success"
+        assert result["stdout"] == "output"
+        assert result["security"]["enabled"] is False
 
     def test_audit_log(self):
         """An action is recorded as a SECURITY event at the canonical service, tagged as this layer's."""
@@ -439,17 +434,12 @@ class TestSecurityLayerIntegration:
     @pytest.mark.asyncio
     async def test_end_to_end_safe_command(self):
         """Test end-to-end execution of safe command"""
-        with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"hello world\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+        # End to end means a real `echo`, run through the bounded runner (#20740).
+        result = await self.security.execute_command("echo 'hello world'", "test_user", "admin")
 
-            result = await self.security.execute_command("echo 'hello world'", "test_user", "admin")
-
-            assert result["status"] == "success"
-            assert result["stdout"] == "hello world"
-            assert result["security"]["risk"] == "safe"
+        assert result["status"] == "success"
+        assert result["stdout"] == "hello world"
+        assert result["security"]["risk"] == "safe"
 
     @pytest.mark.asyncio
     async def test_end_to_end_forbidden_command(self):

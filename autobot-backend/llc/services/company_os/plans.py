@@ -35,9 +35,7 @@ class CompanyOsPlanService(LLCServiceBase):
     async def _writable(
         self, session: AsyncSession, company_id: uuid.UUID, plan_key: str, actor: Optional[uuid.UUID]
     ) -> Tuple[PlanRow, CompanyWorkflowPlan]:
-        await require_company_admin(session, company_id, actor)
-        row = await plan_store.load_writable(session, company_id, plan_key)
-        return row, plan_store.read_plan(row)
+        return await plan_store.locked_plan(session, company_id, plan_key, actor)
 
     async def create(
         self,

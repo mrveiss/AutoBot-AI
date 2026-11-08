@@ -129,15 +129,15 @@ async def _seed_item(
     take them -- a new item is `backlog` at position 0 by design, and this test
     needs `ready` items in a chosen order.
     """
-    from autobot_shared.singleton_factory import lazy_singleton
-    from llc.services.work_item_service import WorkItemService
+    from ..services.accessors import get_work_item_service
 
-    item = await lazy_singleton(WorkItemService)().create(
+    item = await get_work_item_service().create(
         session,
         company_id=company_id,
         type=WorkItemType.TASK,
         title=title,
         priority=priority,
+        project_id=await harness.seed_project(session, company_id),
     )
     item.status = status
     if position is not None:

@@ -91,6 +91,7 @@ class _NeverFinishes:
         self.mock = create_autospec(asyncio.subprocess.Process, instance=True, spec_set=True)
         self.mock.communicate = AsyncMock(side_effect=self._hang)
         self.mock.wait = AsyncMock(return_value=-9)
+        self.mock.returncode = None  # a running asyncio Process, as kill_and_reap expects
 
     @staticmethod
     async def _hang():

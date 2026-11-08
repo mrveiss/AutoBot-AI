@@ -181,6 +181,11 @@ def test_observability_coverage():
         # so the adoption re-run is a no-op (a duplicate refusal only repeats the first run's message)
         "20261105_111",  # approvals pending chat-session-owner partial unique index (#20030): index-only,
         # the same category as 20261101_110; upgrade() returns early when the index exists
+        "20261106_113",  # approvals pending SSH-password-deletion and .env copies-cleanup partial unique
+        # indexes (#20046, #20567): index-only, the same category as 20261105_111; upgrade() skips an index
+        # that already exists, so the adoption re-run is a no-op
+        "20261107_114",  # approvals pending internal-key-realign partial unique index (#20750): index-only,
+        # the same category as 20261106_113; upgrade() returns early when the index exists
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "

@@ -106,6 +106,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatISOString } from '@/utils/formatHelpers'
 import { ref, computed, watch, nextTick } from 'vue'
 import { BaseButton } from '@autobot/ui'
 import { useAIDocument, type AIDocument } from '@/composables/useAIDocument'
@@ -250,11 +251,7 @@ async function submitRefine() {
 
 const formattedUpdatedAt = computed(() => {
   if (!localDoc.value) return ''
-  try {
-    return new Date(localDoc.value.updated_at).toLocaleString()
-  } catch {
-    return localDoc.value.updated_at
-  }
+  return formatISOString(localDoc.value.updated_at)
 })
 </script>
 

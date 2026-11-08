@@ -4516,6 +4516,8 @@ from api._resume_plan import (  # noqa: E402,F401 - re-exported; module-level im
     plan_version_is_supported,
     restart_cut_the_wait,
     restored_stage,
+    resume_ref,
+    resumed_scope,
 )
 from api._resume_wait import resolve_completion_time, wait_for_detached_self_update  # noqa: E402
 
@@ -5475,7 +5477,7 @@ async def _resume_verify_slm_stage(job: UpdateAllJob, target_commit: Optional[st
     if deployed_commit == target_commit:
         return True
     err_msg = (
-        f"SLM deployed commit {_short_sha(deployed_commit)} " f"!= target {_short_sha(target_commit)} — stage 3 failed"
+        f"SLM deployed commit {_short_sha(deployed_commit)} != target {_short_sha(target_commit)} — stage 3 failed"
     )
     logger.error("update-all resume: %s", err_msg)
     stage_slm = _get_stage(job, "slm_self_update")
@@ -5489,17 +5491,14 @@ async def _resume_verify_slm_stage(job: UpdateAllJob, target_commit: Optional[st
     return False
 
 
-async def _execute_resume(
-    job: UpdateAllJob,
-    target_commit: Optional[str],
-    remaining: List[str],
-) -> None:
+async def _execute_resume(job: UpdateAllJob, target_commit: Optional[str], remaining: List[str], plan: dict) -> None:
     """C2-c: Inner resume execution — always clears plan on any exception.
 
-    C1: verifies deployed commit; C2-c: try/except wraps everything.
-    """
+    C1: verifies deployed commit. #20214: a rollback's ref is read once from the plan; one without a valid ref
+    fails the job here rather than deploying main."""
     global _resume_task
     try:
+        deploy_ref = resume_ref(plan)
         if not await wait_for_detached_self_update(
             job, _mark_progress, _SELF_UPDATE_WATCH_TIMEOUT_SECONDS, _SELF_UPDATE_WATCH_POLL_SECONDS
         ):
@@ -5523,7 +5522,8 @@ async def _execute_resume(
             await _clear_resume_plan()
             return
 
-        await _run_fleet_stage(job, remaining)
+        with resumed_scope(deploy_ref):
+            await _run_fleet_stage(job, remaining)
     except Exception as exc:
         logger.error("update-all resume: unhandled error: %s", exc, exc_info=True)
         job.status = "failed"
@@ -5582,7 +5582,7 @@ async def resume_update_all_orchestration() -> None:
         ],
     )
     _set_update_all_job(job)
-    _resume_task = asyncio.create_task(_execute_resume(job, target_commit, remaining))
+    _resume_task = asyncio.create_task(_execute_resume(job, target_commit, remaining, plan))
 
 
 async def _check_persisted_plan_exists() -> bool:
@@ -5636,8 +5636,8 @@ def _retire_stale_job(existing: UpdateAllJob) -> None:
     existing.completed_at = utc_timestamp()
 
 
-async def _start_update_all_locked() -> UpdateAllJob:
-    """Decide, retire, and start — serialised by `_update_all_start_lock`."""
+async def _start_update_all_locked(orchestrate=None) -> UpdateAllJob:
+    """Decide, retire, and start (serialised by the start lock); `orchestrate` replaces the forward run (#20214)."""
     global _update_all_task
 
     existing = _get_update_all_job()
@@ -5691,7 +5691,7 @@ async def _start_update_all_locked() -> UpdateAllJob:
     async def _run() -> None:
         global _update_all_task
         try:
-            await _run_update_all_orchestration(job, _db_svc)
+            await (orchestrate or _run_update_all_orchestration)(job, _db_svc)
         except Exception as exc:
             logger.error("update-all orchestration unhandled error: %s", exc, exc_info=True)
             job.status = "failed"

@@ -27,7 +27,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 902,  # #18849: 903 -> 902
     "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 767,
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
-    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1789,
+    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1786,
     "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1216,
     "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1260,
     "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 756,
@@ -38,7 +38,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/PerformanceAnalysisDashboard.vue": 1075,
     "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": 1094,
     "autobot-frontend/src/components/analytics/SourceManager.vue": 830,
-    "autobot-frontend/src/components/analytics/TechnicalDebtDashboard.vue": 1706,
+    "autobot-frontend/src/components/analytics/TechnicalDebtDashboard.vue": 1704,
     "autobot-frontend/src/components/analytics/panels/CodebaseBugPredictionPanel.vue": 779,
     "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": 640,
     "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 1325,
@@ -48,7 +48,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2153,  # #19906: 2165 -> 2153
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1353,  # #19906: 1365 -> 1353
-    "autobot-frontend/src/components/chat/ChatInput.vue": 1628,  # #20133: 1672 -> 1631; #20195: -> 1628
+    "autobot-frontend/src/components/chat/ChatInput.vue": 1619,  # #20133: 1672 -> 1631; #20195: 1628; 1620; 1619
     "autobot-frontend/src/components/chat/ChatInterface.vue": 1516,
     "autobot-frontend/src/components/chat/ChatMessages.vue": 2097,  # #20195: 2118 -> 2097 (approval routing moved out)
     "autobot-frontend/src/components/chat/ChatSidebar.vue": 807,  # #18849: 808 -> 807
@@ -100,7 +100,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue": 1874,
     "autobot-frontend/src/components/visualizations/WorkflowVisualization.vue": 1017,  # #16744: 1020 -> 1019
     "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 618,
-    "autobot-frontend/src/components/workflow/WorkflowCanvas.vue": 2887,
+    "autobot-frontend/src/components/workflow/WorkflowCanvas.vue": 2849,  # #20682: -38 (CanvasDetachButton)
     "autobot-frontend/src/components/workflow/WorkflowLiveDashboard.vue": 782,
     "autobot-frontend/src/composables/__tests__/useClipboard.test.ts": 696,
     "autobot-frontend/src/composables/__tests__/useConnectionTester.test.ts": 944,
@@ -119,7 +119,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/composables/useTimeout.ts": 749,
     "autobot-frontend/src/composables/useVoiceConversation.ts": 986,
     "autobot-frontend/src/composables/useVoiceOutput.ts": 1089,
-    "autobot-frontend/src/composables/useWorkflowBuilder.ts": 1292,  # #17677: 1293 -> 1292
+    "autobot-frontend/src/composables/useWorkflowBuilder.ts": 1282,  # #17677: 1293 -> 1292 -> 1284
     "autobot-frontend/src/config/__tests__/ssot-config.spec.ts": 626,
     "autobot-frontend/src/config/ssot-config.ts": 804,  # #19821 -15
     "autobot-frontend/src/models/controllers/ChatController.ts": 1156,
@@ -147,20 +147,20 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/PluginsView.vue": 1058,
     "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 848,
-    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2169,  # #13421: 2201 -> 2169; #13422: 2300 -> 2267
-    "autobot-frontend/src/views/llc/BacklogView.vue": 823,
+    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2142,  # #21043: 2166 -> 2151 -> 2142; #17677; #13421
+    "autobot-frontend/src/views/llc/BacklogView.vue": 611,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 761,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1012,  # #20123: 1015 -> 1012 (mixed bucket lists each currency)
     "autobot-frontend/src/views/llc/GanttTimelineView.vue": 815,
     "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 800,
-    "autobot-frontend/src/views/llc/OrgChart.vue": 1517,  # #14780: 1527 -> 1522 (kit BaseDrawer)
+    "autobot-frontend/src/views/llc/OrgChart.vue": 1442,  # #14780: 1527 -> 1522 (kit BaseDrawer); #20682: -75
     "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1370,  # #18819 1379->1374; #18849 -1; #14778 BaseInput -1
     "autobot-frontend/src/views/llc/RolesView.vue": 1026,  # #18819 1029->1027; #18849 one kit import on the merge (-1)
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
     "autobot-frontend/src/views/llc/SprintBoardView.vue": 664,
     # #14780: 1046 -> 1013 (kit BaseDrawer); #18750: 994 (comments tab returns)
-    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 948,  # #20068: 994 -> 949
+    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 947,  # #20068: 994 -> 949
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot/src/extension.ts": 741,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/background-monitor.ts": 713,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
@@ -179,7 +179,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/views/MaintenanceView.vue": 789,  # #14777 batch 2: 817 -> 794; #20003: -> 790
     "autobot-slm-frontend/src/views/OrchestrationView.vue": 2183,
     "autobot-slm-frontend/src/views/ReplicationView.vue": 698,  # #18819 + #14777: 731 -> 706
-    "autobot-slm-frontend/src/views/SecurityView.vue": 1367,  # #14780 BasePagination: 1386 -> 1374
+    "autobot-slm-frontend/src/views/SecurityView.vue": 1366,  # #14780 BasePagination: 1386 -> 1374
     "autobot-slm-frontend/src/views/SetupWizardView.vue": 1789,
     "autobot-slm-frontend/src/views/SkillsView.vue": 631,  # #18819 + #14777: 645 -> 633; #19482: -> 631
     "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 621,  # #18819: 638 -> 635; #19482: -> 632; #18863: -> 626

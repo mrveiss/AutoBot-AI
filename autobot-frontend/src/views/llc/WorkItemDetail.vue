@@ -238,7 +238,6 @@
     :work-item-id="props.item.id"
     :company-id="props.companyId"
     :direction="handoffDirection"
-    :agent-assignee-id="localItem.assignee_agent_id"
     @close="handoffDirection = null"
     @done="onHandoffDone"
   />
@@ -683,7 +682,7 @@ onMounted(() => {
 
 .action-done, .action-ready {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: var(--color-primary);
 }
 
@@ -927,7 +926,7 @@ onMounted(() => {
 .btn-primary {
   padding: 0.5rem 1rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: 0.375rem;
   font-size: var(--text-sm);

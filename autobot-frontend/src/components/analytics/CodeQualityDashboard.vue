@@ -759,7 +759,7 @@ const trendStats = computed(() => {
 
 // Removed lastUpdated computed - always recalculating is inefficient
 // Use reactive lastUpdated ref instead, updated only on data refresh
-const lastUpdated = ref(new Date().toLocaleTimeString());
+const lastUpdated = ref(formatLocalTime(new Date()));
 
 // Methods
 async function refreshData(): Promise<void> {
@@ -984,10 +984,7 @@ function truncatePath(path: string): string {
 
 const formatDate = createDateFormatter({ kind: 'date', intl: { month: 'short', day: 'numeric' } });
 
-function formatShortDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
+const formatShortDate = createDateFormatter({ kind: 'date', intl: { month: 'numeric', day: 'numeric' } });
 
 // Directive for click outside
 const vClickOutside = {
