@@ -94,7 +94,7 @@ describe('PhaseProgressionIndicator unscored phases', () => {
     } as never)
     i18n.global.locale.value = 'yy' as never
     await w.vm.$nextTick()
-    expect(w.findAll('.phase-status').map((n) => n.text())).toEqual(['Mostly Complete', 'translated incomplete'])
+    expect(w.findAll('.phase-status').map((n) => n.text())).toEqual(['Mostly complete', 'translated incomplete'])
     i18n.global.locale.value = 'en' as never
   })
 

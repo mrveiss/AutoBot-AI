@@ -44,7 +44,7 @@ describe('createFile refusal', () => {
 
 describe('write refusals beyond create (#20723)', () => {
   // The mocked `t` echoes `key|params`; limit and live are both 1 MB, so nothing is left.
-  const quotaText = 'chat.input.uploadError.quotaExceeded|{"limitMb":1,"liveMb":1,"pendingMb":0,"remainingMb":0,"maxMb":0}'
+  const quotaText = 'chat.input.uploadError.quotaExceeded|{"maxMb":0,"limitMb":1,"liveMb":1,"pendingMb":0,"remainingMb":0}'
   const quota = { code: 'conversation_file_quota_exceeded', message: 'raw server text', limit_bytes: 1048576, live_bytes: 1048576 }
   const refused = () => Object.assign(new Error('HTTP 413'), { status: 413, details: { detail: quota } })
 
@@ -97,7 +97,7 @@ describe('write refusals beyond create (#20723)', () => {
     ['copyFile', 'chat.conversationFiles.copyFailed', post, (f: ReturnType<typeof useConversationFiles>) => f.copyFile('f1')],
     ['uploadFiles', 'chat.input.uploadError.unknown', post, (f: ReturnType<typeof useConversationFiles>) => f.uploadFiles([new File(['x'], 'a.txt')] as unknown as FileList)],
   ])('%s falls back to the translated %s when the server sends no message', async (_name, key, mock, run) => {
-    mock.mockRejectedValueOnce(new Error('network down'))
+    mock.mockRejectedValueOnce({ response: { status: 500, data: {} } })
     const files = useConversationFiles('s1')
     expect(await run(files)).toBe(false)
     expect(files.error.value).toBe(`${key}|{}`)
