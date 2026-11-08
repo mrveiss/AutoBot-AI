@@ -20,11 +20,10 @@ import aiohttp
 from autobot_shared import node_proxy
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.slm_credential_deletion import (
-    ACTION,
+from autobot_shared.slm_credential_actions import (
     APPROVAL_QUERY,
-    CREDENTIAL_KIND,
     NODE_NOT_FOUND_DETAIL,
+    SSH_PASSWORD_DELETE,
     delete_path,
     slm_direct_url,
 )
@@ -84,7 +83,7 @@ async def _audit(approval: "Approval", result: str, **details: object) -> bool:
         durable=True,
         user_id=approval.decided_by_user,
         resource=f"node:{(approval.context or {}).get('node_id')}",
-        details={"approval_id": str(approval.id), "credential_kind": CREDENTIAL_KIND, **details},
+        details={"approval_id": str(approval.id), "credential_kind": SSH_PASSWORD_DELETE.credential_kind, **details},
     )
 
 
@@ -116,8 +115,12 @@ async def execute_ssh_password_delete(approval: "Approval", session: "AsyncSessi
 def register_ssh_password_action() -> None:
     """Idempotent: re-registering just replaces the same key with an equal handler."""
     register_post_approval_action(
-        ACTION, execute_ssh_password_delete, proposed_by=PROPOSED_BY, server_only=True, admin_only=True
+        SSH_PASSWORD_DELETE.name,
+        execute_ssh_password_delete,
+        proposed_by=PROPOSED_BY,
+        server_only=True,
+        admin_only=True,
     )
 
 
-__all__ = ["ACTION", "PROPOSED_BY", "execute_ssh_password_delete", "register_ssh_password_action"]
+__all__ = ["PROPOSED_BY", "execute_ssh_password_delete", "register_ssh_password_action"]
