@@ -320,7 +320,7 @@
 </template>
 
 <script setup lang="ts">
-import { BaseButton, BaseCard } from '@autobot/ui'
+import { BaseButton, BaseCard, saveBlob } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import { formatDuration } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
@@ -584,15 +584,9 @@ const downloadExport = async (path: string) => {
   try {
     // Issue #701: Fixed api.get call - use responseType option properly
     const response = await api.get<Blob>(path, { responseType: 'blob' })
-    const url = window.URL.createObjectURL(new Blob([response as unknown as BlobPart]))
-    const link = document.createElement('a')
-    link.href = url
     // Extract filename from path
     const filename = path.split('/').pop() + (path.includes('csv') ? '.csv' : '.json')
-    link.setAttribute('download', filename)
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
+    saveBlob(new Blob([response as unknown as BlobPart]), filename)
   } catch (error) {
     logger.error('Failed to download export:', error)
   }
