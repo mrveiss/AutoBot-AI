@@ -8,6 +8,9 @@ Each provider carried one; two went stale for years (#18210). The table in
 autobot_shared/ssot_hosted_models.py is the one place a hosted default is written. This
 reads every string literal in the provider modules and fails on one that equals a model name
 from the table or from autobot_shared/ssot_constants.py.
+
+Scope note: the non-Python extensions (.json/.sh/.ts/.vue/.yaml/.yml) are scanned only in the concrete
+trees listed in ``_SCAN_TREES``, so a pinned id added elsewhere in those file types is not scanned.
 """
 
 from __future__ import annotations
