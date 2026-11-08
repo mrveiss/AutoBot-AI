@@ -58,6 +58,19 @@ class SlmPerson:
     password_hash: str | None
 
 
+def require_internal_key(consequence: str) -> str:
+    """The internal API key, or raise ``FirstAdminLinkError`` (``internal_key_missing``) having sent nothing.
+
+    Never send an empty header: the SLM answers 403 and the failure is skipped unseen.
+    """
+    key = internal_api_key()
+    if not key:
+        message = f"Person link: no internal API key is configured, so {consequence}"
+        logger.error(message)
+        raise FirstAdminLinkError(message, LINK_KEY_MISSING)
+    return key
+
+
 async def fetch_first_slm_admin() -> SlmPerson | None:
     """The SLM's first admin. None if the SLM has none yet; raises if it cannot be read."""
     from services.slm_client import get_slm_client
@@ -68,11 +81,7 @@ async def fetch_first_slm_admin() -> SlmPerson | None:
     session = await client._get_session()
     url = client._rest_url(_FIRST_ADMIN_PATH)
     await assert_egress_policy(url)
-    key = internal_api_key()
-    if not key:  # never send an empty header: the SLM answers 403 and the link is skipped unseen
-        message = "Person link: no internal API key is configured, so the SLM's first admin cannot be read"
-        logger.error(message)
-        raise FirstAdminLinkError(message, LINK_KEY_MISSING)
+    key = require_internal_key("the SLM's first admin cannot be read")
     async with session.get(url, headers={"X-Internal-API-Key": key}, allow_redirects=False) as response:
         if response.status == 403:
             message = "Person link: the SLM refused the internal API key (403); backend and SLM keys differ"
@@ -178,7 +187,10 @@ async def link_first_slm_admin_at_startup() -> str:
     An unreachable SLM must not stop the main app starting; seeding still runs. The outcome is
     returned and kept in ``last_link_status``; every failure is logged at error level.
     """
+    from user_management.services.person_copy_sync import start_person_copy_sync
+
     global last_link_status
+    start_person_copy_sync()
     status = LINK_OK
     try:
         status = await _link_in_own_transaction(await fetch_first_slm_admin())
