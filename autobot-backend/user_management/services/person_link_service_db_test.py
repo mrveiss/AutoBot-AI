@@ -215,17 +215,47 @@ async def test_linking_leaves_existing_ids_in_both_stores_unchanged(factory) -> 
     assert bystander_id in ids and link.user_id in ids and len(ids) == 2
 
 
+async def _demote_the_linked_user(factory) -> None:
+    """Leave the main store with no one `_main_store_may_hold_them` would match, so only the link row can stop a re-run."""
+    async with factory() as session, session.begin():
+        user = (await session.execute(select(User))).scalar_one()
+        user.is_platform_admin, user.username, user.email = False, "renamed", "renamed@example.test"
+
+
+async def _link_directly(factory) -> str:
+    async with factory() as session, session.begin():
+        return await service.link_first_slm_admin(session, _PERSON)
+
+
 @pytest.mark.asyncio
-async def test_re_running_the_first_admin_link_keeps_one_user_one_link_and_no_new_membership(factory) -> None:
-    """#21151: a fresh install has no company, so linking adds no membership; a second run adds nothing either."""
+async def test_re_running_the_first_admin_link_returns_the_existing_link_and_adds_nothing(factory) -> None:
+    """#21151: with nobody left to match, only the existing link row stops a second user, link and membership."""
     await _at_startup(factory)
     async with factory() as session:
-        first_link = (await session.execute(select(PersonLink))).scalar_one()
-        first = (first_link.id, first_link.user_id)
-    memberships = await _rows(factory, LLCCompanyMembership)
-    await _at_startup(factory)
+        link = (await session.execute(select(PersonLink))).scalar_one()
+        first = (link.id, link.user_id)
+    await _demote_the_linked_user(factory)
+    assert await _link_directly(factory) == service.LINK_OK
     async with factory() as session:
-        second_link = (await session.execute(select(PersonLink))).scalar_one()
-    assert (second_link.id, second_link.user_id) == first
-    assert (await _rows(factory, User), await _rows(factory, PersonLink)) == (1, 1)
-    assert await _rows(factory, LLCCompanyMembership) == memberships == 0
+        link = (await session.execute(select(PersonLink))).scalar_one()
+    assert (link.id, link.user_id) == first
+    assert (
+        await _rows(factory, User),
+        await _rows(factory, PersonLink),
+        await _rows(factory, LLCCompanyMembership),
+    ) == (
+        1,
+        1,
+        0,
+    )
+
+
+@pytest.mark.asyncio
+async def test_control_without_the_link_row_the_same_state_creates_a_second_user(factory) -> None:
+    """Control for the test above: the state is one where the link row is the only guard, so dropping it links again."""
+    await _at_startup(factory)
+    await _demote_the_linked_user(factory)
+    async with factory() as session, session.begin():
+        await session.execute(delete(PersonLink))
+    assert await _link_directly(factory) == service.LINK_OK
+    assert (await _rows(factory, User), await _rows(factory, PersonLink)) == (2, 1)
