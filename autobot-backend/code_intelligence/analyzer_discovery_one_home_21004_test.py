@@ -7,7 +7,7 @@
 import ast
 import importlib.util
 from pathlib import Path
-from typing import List
+from typing import List, Set
 
 import pytest
 
@@ -42,11 +42,26 @@ def _str_arg_has_recursive_glob(call: ast.Call) -> bool:
     return isinstance(first, ast.Constant) and isinstance(first.value, str) and "**" in first.value
 
 
-def _call_violation(node: ast.Call) -> str:
+def _is_false(value: ast.expr) -> bool:
+    return isinstance(value, ast.Constant) and not value.value
+
+
+def _os_walker_names(tree: ast.AST) -> Set[str]:
+    """Local names bound by ``from os import walk/fwalk/scandir [as x]``."""
+    return {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "os"
+        for alias in node.names
+        if alias.name in _OS_WALKERS
+    }
+
+
+def _call_violation(node: ast.Call, os_names: Set[str]) -> str:
     """Name of the discovery rule *node* breaks, or ``""``."""
     func = node.func
     if isinstance(func, ast.Name):
-        return "bare walk()" if func.id in _OS_WALKERS else ""
+        return "bare walk()" if func.id in os_names else ""
     if not isinstance(func, ast.Attribute):
         return ""
     owner = func.value.id if isinstance(func.value, ast.Name) else ""
@@ -57,7 +72,7 @@ def _call_violation(node: ast.Call) -> str:
     if func.attr == "glob" and _str_arg_has_recursive_glob(node):
         return "recursive glob(**)"
     if owner == "glob" and func.attr in {"glob", "iglob"}:
-        recursive = any(k.arg == "recursive" for k in node.keywords)
+        recursive = any(k.arg == "recursive" and not _is_false(k.value) for k in node.keywords)
         return "glob.glob(recursive=)" if recursive else ""
     return ""
 
@@ -74,8 +89,9 @@ def find_violations(root: Path) -> List[str]:
     found: List[str] = []
     for path in _production_files(root):
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        os_names = _os_walker_names(tree)
         for node in ast.walk(tree):
-            rule = _call_violation(node) if isinstance(node, ast.Call) else _import_violation(node)
+            rule = _call_violation(node, os_names) if isinstance(node, ast.Call) else _import_violation(node)
             if rule:
                 found.append(f"{path.relative_to(root)}:{node.lineno} {rule}")
             for name in _assigned_names(node):
@@ -113,6 +129,26 @@ def test_guard_flags_each_planted_violation(tmp_path: Path, rule: str):
     """Control: a clean run proves nothing unless the guard sees every planted violation."""
     (tmp_path / "planted.py").write_text(_PLANTED[rule], encoding="utf-8")
     assert any(rule in f for f in find_violations(tmp_path))
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from ast import walk\n\ndef f(t):\n    return walk(t)\n",
+        "import glob\n\ndef f(p):\n    return glob.glob(p, recursive=False)\n",
+        "import glob\n\ndef f(p):\n    return glob.iglob(p)\n",
+    ],
+)
+def test_guard_does_not_flag_look_alikes(tmp_path: Path, source: str):
+    (tmp_path / "ok.py").write_text(source, encoding="utf-8")
+    assert find_violations(tmp_path) == []
+
+
+def test_discover_files_rejects_a_path_pattern(tmp_path: Path):
+    module = _load_real_module()
+    for bad in ("src/*.py", "**/*.py", "a\\b.py"):
+        with pytest.raises(ValueError, match="file-name glob"):
+            module.discover_files(tmp_path, (bad,))
 
 
 def test_guard_ignores_a_non_recursive_glob(tmp_path: Path):

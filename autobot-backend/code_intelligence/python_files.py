@@ -75,13 +75,18 @@ def discover_files(
     """The one file-discovery walk for the code-intelligence analyzers (#21004).
 
     A single pruned ``os.walk`` returns the sorted files under *directory* whose
-    name matches any glob in *patterns*. Excluded directory names (default
+    name matches any glob in *patterns* (file-name globs only: a pattern with a
+    path separator raises ``ValueError``). Excluded directory names (default
     ``ANALYSIS_EXCLUDE_DIRS``) are matched **below** the root only, and are never
     descended into. A symlinked leaf that resolves outside the root, or into an
     excluded directory, is dropped (#13602 tier 2/3).
     """
+    names = list(patterns)
+    bad = [p for p in names if "/" in p or "\\" in p]
+    if bad:
+        raise ValueError(f"discover_files takes file-name globs only (no path separators): {bad}")
     excluded = set(ANALYSIS_EXCLUDE_DIRS if exclude_dirs is None else exclude_dirs)
-    return sorted(_walk_matches(Path(directory), list(patterns), excluded))
+    return sorted(_walk_matches(Path(directory), names, excluded))
 
 
 def collect_python_files(directory: str, exclude_dirs: Iterable[str]) -> List[str]:
