@@ -31,15 +31,21 @@ function tr(key: string): string {
   return i18n.global.t(`chat.conversationFiles.${key}`)
 }
 
-/** A failure's user-facing text: the server's own detail when it sent one, else the translated fallback (#21159). */
-function failureText(err: unknown, key: string): string {
-  return extractApiErrorMessage(err, tr(key))
+/**
+ * A failure's user-facing text, from the already-translated fallback: a recognised 413 refusal translated (#20723),
+ * else the server's own detail when it sent one, else the fallback (#21159).
+ */
+function failureText(err: unknown, fallback: string): string {
+  const t = (key: string, params?: Record<string, unknown>) => i18n.global.t(key, params ?? {})
+  return describeApiRefusal(err, t) ?? extractApiErrorMessage(err, fallback)
 }
 
-/** The user-facing text for a failed write: a recognised 413 refusal translated, else the server's message (#20723). */
-function describeFailure(err: unknown, fallbackKey: string): string {
-  const t = (key: string, params?: Record<string, unknown>) => i18n.global.t(key, params ?? {})
-  return describeApiRefusal(err, t) ?? extractApiErrorMessage(err, t(fallbackKey))
+/** The preview pane's content; `truncated` when the server sent only the head of a larger file (#20906). */
+export interface PreviewPane {
+  fileId: string
+  filename: string
+  data: ConversationFilePreview
+  truncated: boolean
 }
 
 /**
@@ -108,7 +114,11 @@ export function useConversationFiles(sessionId: string) {
   const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
   /** The preview pane's content, from `GET .../preview/{file_id}` (#20906); null while no pane is open. */
-  const preview = ref<{ filename: string; data: ConversationFilePreview } | null>(null)
+  const preview = ref<PreviewPane | null>(null)
+  /** True while the preview request is in flight, so the pane can show progress (#20906). */
+  const previewLoading = ref(false)
+  /** Bumped per request and on close; a response whose token is no longer current is dropped (latest wins). */
+  let previewToken = 0
   const uploadProgress = ref<number>(0)
   const searchQuery = ref('')
   const sortField = ref<SortField>('date')
@@ -166,7 +176,7 @@ export function useConversationFiles(sessionId: string) {
           stats.value = mapped.stats
         }
       } catch (err: unknown) {
-        error.value = failureText(err, 'loadFailed')
+        error.value = failureText(err, tr('loadFailed'))
         logger.error('Load error:', err)
       }
     })
@@ -221,7 +231,7 @@ export function useConversationFiles(sessionId: string) {
         return false
 
       } catch (err: unknown) {
-        error.value = describeFailure(err, 'chat.input.uploadError.unknown')
+        error.value = failureText(err, i18n.global.t('chat.input.uploadError.unknown'))
         logger.error('Upload error:', err)
         return false
       } finally {
@@ -247,6 +257,7 @@ export function useConversationFiles(sessionId: string) {
 
         // Remove file from local state
         files.value = files.value.filter(f => f.file_id !== fileId)
+        dropPreviewOf([fileId])
 
         // Update stats
         await loadFiles()
@@ -254,7 +265,7 @@ export function useConversationFiles(sessionId: string) {
         return true
 
       } catch (err: unknown) {
-        error.value = failureText(err, 'deleteFailed')
+        error.value = failureText(err, tr('deleteFailed'))
         logger.error('Delete error:', err)
         return false
       }
@@ -279,7 +290,7 @@ export function useConversationFiles(sessionId: string) {
       saveBlob(blob, name)
 
     } catch (err: unknown) {
-      error.value = failureText(err, 'downloadFailed')
+      error.value = failureText(err, tr('downloadFailed'))
       logger.error('Download error:', err)
     }
   }
@@ -289,45 +300,72 @@ export function useConversationFiles(sessionId: string) {
       error.value = tr('missingParameters')
       return
     }
-
+    const file = files.value.find(f => f.file_id === fileId)
+    if (!file) {
+      error.value = tr('fileNotFound')
+      return
+    }
+    const token = ++previewToken
     try {
-      const file = files.value.find(f => f.file_id === fileId)
-
-      if (!file) {
-        error.value = tr('fileNotFound')
-        return
-      }
-
-      // For previewable types, open the bytes as a blob URL: the routes are bearer-authenticated
-      // (Authorization header only), which a plain window.open() never sends (#20195).
-      if (await openPreviewPane(file)) return
-      const shownType = previewBlobType(file.mime_type)
-      if (shownType && isPreviewable(file.mime_type)) {
-        await openAuthenticatedPreview(fileId, shownType)
-      } else {
-        // For non-previewable types, download instead
-        await downloadFile(fileId, file.filename)
-      }
-
+      if (await openPreviewPane(file, token)) return
+      await openBytesPreview(file)
     } catch (err: unknown) {
-      error.value = failureText(err, 'previewFailed')
+      error.value = failureText(err, tr('previewFailed'))
       logger.error('Preview error:', err)
     }
   }
 
   /**
-   * Fetch the server-built preview of a text file through the typed contract and show it in the pane (#20906).
-   * Returns false when the route has no inline text for this file, so the caller falls back to the bytes.
+   * Open the bytes: previewable types as a blob URL (the routes are bearer-authenticated, which a plain
+   * window.open() never sends, #20195); anything else is downloaded.
    */
-  const openPreviewPane = async (file: ConversationFile): Promise<boolean> => {
+  const openBytesPreview = async (file: ConversationFile): Promise<void> => {
+    const shownType = previewBlobType(file.mime_type)
+    if (shownType && isPreviewable(file.mime_type)) {
+      await openAuthenticatedPreview(file.file_id, shownType)
+    } else {
+      await downloadFile(file.file_id, file.filename)
+    }
+  }
+
+  /** Fetch the preview body; typed from the generated contract, a failure is logged and means "no pane" (#20906). */
+  const fetchPreview = async (fileId: string): Promise<ConversationFilePreview | null> => {
+    try {
+      const data: ConversationFilePreview | null = await api.get(`${API}/preview/${fileId}`)
+      return data
+    } catch (err: unknown) {
+      logger.warn('Preview route failed, falling back to the bytes:', err)
+      return null
+    }
+  }
+
+  /**
+   * Show the server-built preview of a text file in the pane (#20906). Returns false when there is no inline
+   * text for this file or the route failed, so the caller falls back to the bytes. A superseded request
+   * returns true: the newer call owns the outcome.
+   */
+  const openPreviewPane = async (file: ConversationFile, token: number): Promise<boolean> => {
     if (!file.mime_type.startsWith('text/')) return false
-    const data = (await api.get(`${API}/preview/${file.file_id}`)) as ConversationFilePreview | null
+    previewLoading.value = true
+    const data = await fetchPreview(file.file_id)
+    if (token !== previewToken) return true
+    previewLoading.value = false
     if (!data?.preview_available || typeof data.preview_content !== 'string') return false
-    preview.value = { filename: file.filename, data }
+    const shown = new TextEncoder().encode(data.preview_content).length
+    preview.value = { fileId: file.file_id, filename: file.filename, data, truncated: file.size_bytes > shown }
     return true
   }
 
-  const closePreview = (): void => { preview.value = null }
+  const closePreview = (): void => {
+    previewToken++
+    previewLoading.value = false
+    preview.value = null
+  }
+
+  /** Close the pane when it shows one of these files (deleted or renamed). */
+  const dropPreviewOf = (fileIds: string[]): void => {
+    if (preview.value && fileIds.includes(preview.value.fileId)) closePreview()
+  }
 
   /**
    * Open a file in a new tab through the authenticated client, then revoke the blob URL (#20195).
@@ -378,7 +416,7 @@ export function useConversationFiles(sessionId: string) {
         error.value = tr('createFailed')
         return false
       } catch (err: unknown) {
-        error.value = describeFailure(err, 'chat.conversationFiles.createFailed')
+        error.value = failureText(err, tr('createFailed'))
         logger.error('Create file error:', err)
         return false
       }
@@ -393,12 +431,13 @@ export function useConversationFiles(sessionId: string) {
       if (data?.success) {
         const file = files.value.find(f => f.file_id === fileId)
         if (file) file.filename = newFilename
+        dropPreviewOf([fileId])
         return true
       }
       error.value = tr('renameFailed')
       return false
     } catch (err: unknown) {
-      error.value = failureText(err, 'renameFailed')
+      error.value = failureText(err, tr('renameFailed'))
       logger.error('Rename error:', err)
       return false
     }
@@ -410,7 +449,7 @@ export function useConversationFiles(sessionId: string) {
       const data = await api.get<{ content: string }>(`${API}/files/${fileId}/content`)
       return data?.content ?? null
     } catch (err: unknown) {
-      error.value = failureText(err, 'readFailed')
+      error.value = failureText(err, tr('readFailed'))
       logger.error('Get content error:', err)
       return null
     }
@@ -425,7 +464,7 @@ export function useConversationFiles(sessionId: string) {
       error.value = tr('saveFailed')
       return false
     } catch (err: unknown) {
-      error.value = describeFailure(err, 'chat.conversationFiles.saveFailed')
+      error.value = failureText(err, tr('saveFailed'))
       logger.error('Update content error:', err)
       return false
     }
@@ -441,7 +480,7 @@ export function useConversationFiles(sessionId: string) {
         error.value = tr('copyFailed')
         return false
       } catch (err: unknown) {
-        error.value = describeFailure(err, 'chat.conversationFiles.copyFailed')
+        error.value = failureText(err, tr('copyFailed'))
         logger.error('Copy error:', err)
         return false
       }
@@ -475,6 +514,7 @@ export function useConversationFiles(sessionId: string) {
       for (const fid of ids) {
         try { await api.delete<unknown>(`${API}/files/${fid}`) } catch { /* continue */ }
       }
+      dropPreviewOf(ids)
       fileSelection.clear()
       await loadFiles()
       return true
@@ -499,6 +539,7 @@ export function useConversationFiles(sessionId: string) {
     loading,
     error,
     preview,
+    previewLoading,
     uploadProgress,
     searchQuery,
     sortField,
