@@ -19519,7 +19519,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/internal/slm/ssh-password-deletion-proposals": {
+    "/api/internal/slm/credential-proposals": {
         parameters: {
             query?: never;
             header?: never;
@@ -19529,19 +19529,19 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Propose Ssh Password Deletion
-         * @description Propose the deletion -- a request, not an execution; one pending proposal per node.
+         * Propose Credential Change
+         * @description Propose the change -- a request, not an execution; one open proposal per node and action.
          *
-         *     Refused (409, clear message) on a split deployment without SLM TLS (#20899, option A).
+         *     A stored-password deletion is refused (409, clear message) on a split deployment without SLM TLS (#20899).
          */
-        post: operations["propose_ssh_password_deletion_api_internal_slm_ssh_password_deletion_proposals_post"];
+        post: operations["propose_credential_change_api_internal_slm_credential_proposals_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/internal/slm/ssh-password-deletion-approvals/{approval_id}/claim": {
+    "/api/internal/slm/credential-approvals/{approval_id}/claim": {
         parameters: {
             query?: never;
             header?: never;
@@ -19551,10 +19551,33 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Claim Ssh Password Deletion Approval
-         * @description The SLM's last check before it deletes: this approval is a human's, for this node, and unused -- now spent.
+         * Claim Credential Approval
+         * @description The applying side's last check: this approval is a human's, for this action and node, and unused -- now spent.
          */
-        post: operations["claim_ssh_password_deletion_approval_api_internal_slm_ssh_password_deletion_approvals__approval_id__claim_post"];
+        post: operations["claim_credential_approval_api_internal_slm_credential_approvals__approval_id__claim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/slm/credential-approvals/{approval_id}/outcome": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report Credential Outcome
+         * @description Record how applying a CLAIMED approval went, ONCE: an audit entry and a comment on the approval.
+         *
+         *     The first terminal report wins and a second is refused (409), so an "applied" record can't be
+         *     forged or overwritten after the fact. The reported detail is cleaned and capped before it is kept.
+         */
+        post: operations["report_credential_outcome_api_internal_slm_credential_approvals__approval_id__outcome_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -69330,6 +69353,87 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * CredentialClaim
+         * @description The applying side names the action and node it is about to change; the approval must name the same.
+         */
+        CredentialClaim: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "slm_node_ssh_password_delete" | "slm_backend_internal_key_realign";
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CredentialClaimResponse
+         * @description The approval was valid and is now spent.
+         */
+        CredentialClaimResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CredentialOutcome
+         * @description How applying a claimed approval went, for its audit trail and its comment thread.
+         */
+        CredentialOutcome: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "slm_node_ssh_password_delete" | "slm_backend_internal_key_realign";
+            /** Node Id */
+            node_id: string;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "applied" | "apply_failed";
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CredentialProposal
+         * @description What is proposed: an action and a node, never a credential value.
+         */
+        CredentialProposal: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "slm_node_ssh_password_delete" | "slm_backend_internal_key_realign";
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CredentialProposalResponse
+         * @description The node's open approval for the action, and whether this call created it.
+         */
+        CredentialProposalResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Created */
+            created: boolean;
+        } & {
+            [key: string]: unknown;
+        };
         /** CrossModalSearchRequest */
         CrossModalSearchRequest: {
             /** Query */
@@ -100583,58 +100687,6 @@ export interface components {
             velocity_actual?: number | null;
             /** Capacity Points */
             capacity_points?: number | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * SshPasswordDeletionClaim
-         * @description The SLM names the node it is about to delete a password for; the approval must name the same one.
-         */
-        SshPasswordDeletionClaim: {
-            /** Node Id */
-            node_id: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * SshPasswordDeletionClaimResponse
-         * @description The approval was valid and is now spent.
-         */
-        SshPasswordDeletionClaimResponse: {
-            /** Approval Id */
-            approval_id: string;
-            /** Node Id */
-            node_id: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * SshPasswordDeletionProposal
-         * @description What the SLM proposes: a node and a credential kind, never a value.
-         */
-        SshPasswordDeletionProposal: {
-            /** Node Id */
-            node_id: string;
-            /**
-             * Credential Kind
-             * @default ssh_password
-             * @constant
-             */
-            credential_kind: "ssh_password";
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * SshPasswordDeletionProposalResponse
-         * @description The pending approval, and whether this call created it or found it already pending.
-         */
-        SshPasswordDeletionProposalResponse: {
-            /** Approval Id */
-            approval_id: string;
-            /** Status */
-            status: string;
-            /** Created */
-            created: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -134383,7 +134435,7 @@ export interface operations {
             };
         };
     };
-    propose_ssh_password_deletion_api_internal_slm_ssh_password_deletion_proposals_post: {
+    propose_credential_change_api_internal_slm_credential_proposals_post: {
         parameters: {
             query?: never;
             header?: {
@@ -134394,7 +134446,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SshPasswordDeletionProposal"];
+                "application/json": components["schemas"]["CredentialProposal"];
             };
         };
         responses: {
@@ -134404,7 +134456,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SshPasswordDeletionProposalResponse"];
+                    "application/json": components["schemas"]["CredentialProposalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -134418,7 +134470,7 @@ export interface operations {
             };
         };
     };
-    claim_ssh_password_deletion_approval_api_internal_slm_ssh_password_deletion_approvals__approval_id__claim_post: {
+    claim_credential_approval_api_internal_slm_credential_approvals__approval_id__claim_post: {
         parameters: {
             query?: never;
             header?: {
@@ -134431,7 +134483,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SshPasswordDeletionClaim"];
+                "application/json": components["schemas"]["CredentialClaim"];
             };
         };
         responses: {
@@ -134441,8 +134493,43 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SshPasswordDeletionClaimResponse"];
+                    "application/json": components["schemas"]["CredentialClaimResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_credential_outcome_api_internal_slm_credential_approvals__approval_id__outcome_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialOutcome"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
