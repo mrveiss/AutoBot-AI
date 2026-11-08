@@ -2703,6 +2703,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/internal/person-copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Update Person Copy
+         * @description Write only what differs, so the periodic pass changes nothing when the two agree.
+         */
+        post: operations["update_person_copy_api_internal_person_copy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/live": {
         parameters: {
             query?: never;
@@ -11893,6 +11913,23 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * PersonCopyRequest
+         * @description The main app's record of a linked person (#10200). It is the record after the link.
+         */
+        PersonCopyRequest: {
+            /** Is Active */
+            is_active: boolean;
+            /** Password Hash */
+            password_hash: string | null;
+            /**
+             * Slm User Id
+             * Format: uuid
+             */
+            slm_user_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * PlaybookCategory
          * @description Categories of infrastructure playbooks.
          * @enum {string}
@@ -20035,6 +20072,39 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["NodeSshPasswordDeleteResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_person_copy_api_internal_person_copy_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-internal-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonCopyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

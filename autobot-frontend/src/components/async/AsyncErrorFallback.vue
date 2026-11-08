@@ -17,7 +17,7 @@
               <div class="error-info">
                 <strong>Component:</strong> {{ componentName }}<br>
                 <strong>Retry Attempts:</strong> {{ retryCount }}/{{ maxRetries }}<br>
-                <strong>Time:</strong> {{ new Date().toLocaleString() }}
+                <strong>Time:</strong> {{ formatISOString(new Date()) }}
               </div>
             </div>
           </details>
@@ -62,6 +62,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatISOString } from '@/utils/formatHelpers'
 import { RETRY_BACKOFF, backoffDelay, BaseButton } from '@autobot/ui'
 import { ref, computed, inject } from 'vue'
 import { useRouter } from 'vue-router'

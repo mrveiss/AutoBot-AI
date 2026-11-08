@@ -9091,6 +9091,38 @@
         "title": "PerformanceTraceModel",
         "type": "object"
       },
+      "PersonCopyRequest": {
+        "description": "The main app's record of a linked person (#10200). It is the record after the link.",
+        "properties": {
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "password_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password Hash"
+          },
+          "slm_user_id": {
+            "format": "uuid",
+            "title": "Slm User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slm_user_id",
+          "password_hash",
+          "is_active"
+        ],
+        "title": "PersonCopyRequest",
+        "type": "object"
+      },
       "PlaybookCategory": {
         "description": "Categories of infrastructure playbooks.",
         "enum": [
@@ -24284,6 +24316,60 @@
         ],
         "summary": "Delete Node Ssh Password",
         "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/api/internal/person-copy": {
+      "post": {
+        "description": "Write only what differs, so the periodic pass changes nothing when the two agree.",
+        "operationId": "update_person_copy_api_internal_person_copy_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-internal-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonCopyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Person Copy",
+        "tags": [
+          "health",
           "internal"
         ]
       }

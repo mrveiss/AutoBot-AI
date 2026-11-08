@@ -98,6 +98,17 @@ _THE_REGISTRY = "autobot_shared/coordination/work_claims_lua.py"
 #: old stale-entry check only fired when a file lost its LAST primitive, so
 #: going from two to one was invisible in both directions at once.
 _ALLOWED: dict[str, tuple[int, str]] = {
+    "autobot-backend/user_management/services/person_copy_sync.py": (
+        1,
+        "#10200 -- one push per linked person at a time, across workers: a short mutual-exclusion lock "
+        "around a single SLM push, not a work claim with subtree overlap",
+    ),
+    "autobot-backend/chat_history/rolling_summary.py": (
+        2,
+        "#20852 -- a single-flight guard for one session's summary refresh (SET NX + a token-checked renew "
+        "script): it keeps two workers from folding the same turns twice. Not a work claim -- no subtree, "
+        "no holder to name, and a lost lock only skips a refresh the next turn repeats.",
+    ),
     "autobot-backend/security/session_owner_claim.py": (
         1,
         "#20030 -- first writer on the session's own ownership key: SET NX gives an unowned session to ONE "

@@ -146,6 +146,10 @@ def checkout_fence_value(agent_id: str, run_id: Optional[str]) -> str:
     The tag lets a release deferred from an earlier transition compare-and-delete only its own generation, so it
     cannot drop the fence the same agent took by checking out again.
     """
+    if _FENCE_GENERATION_SEP in agent_id:
+        raise ValueError(
+            f"agent id {agent_id!r} must not contain {_FENCE_GENERATION_SEP!r}: it separates the fence generation"
+        )
     return f"{agent_id}{_FENCE_GENERATION_SEP}{run_id}" if run_id else agent_id
 
 
