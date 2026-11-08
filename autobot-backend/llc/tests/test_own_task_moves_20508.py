@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llc.models.enums import WorkItemStatus
-from llc.services import work_item_own_task
+from llc.services import after_commit
 from llc.services.work_item_service import InvalidTransition, WorkItemService
 from testkit.fake_async_session import FakeAsyncSession
 
@@ -36,7 +36,7 @@ def _item(status: WorkItemStatus, *, created_by=None, assignee=None, reviewer=No
 
 async def _settle() -> None:
     """Let the fence release run: it is sent after the commit, as a task (a session with no commit sends it at once)."""
-    await asyncio.gather(*work_item_own_task._release_tasks)
+    await asyncio.gather(*after_commit.after_commit_tasks)
 
 
 async def _move(item: MagicMock, new_status: WorkItemStatus, acting_user) -> MagicMock:

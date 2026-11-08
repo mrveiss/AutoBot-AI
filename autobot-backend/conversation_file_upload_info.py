@@ -28,9 +28,15 @@ class UploadInfo:
     file_hash: str
     mime_type: str | None = None
     uploaded_by: str | None = None
+    quota_owner: str | None = None
     message_id: str | None = None
     metadata: Dict[str, Any] | None = None
     deduplicated: bool = False
+
+    @property
+    def charged_to(self) -> str | None:
+        """Who the file's bytes count against: ``quota_owner``, else the writer (``uploaded_by``) as before #20678."""
+        return self.quota_owner or self.uploaded_by
 
     def to_response_dict(self) -> Dict[str, Any]:
         """Convert to API response dictionary."""
@@ -60,4 +66,5 @@ class UploadInfo:
             self.file_hash,
             self.mime_type,
             self.uploaded_by,
+            self.charged_to,
         )
