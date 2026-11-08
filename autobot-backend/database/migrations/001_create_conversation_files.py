@@ -16,7 +16,7 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
-from conversation_file_quota_owner import ensure_quota_owner_schema
+from conversation_file_quota_owner_schema import ensure_quota_owner_schema
 
 logger = get_logger(__name__)
 

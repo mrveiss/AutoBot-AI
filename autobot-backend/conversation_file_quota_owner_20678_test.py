@@ -14,14 +14,15 @@ import sqlite3
 import pytest
 
 import conversation_file_quota as quota
-from api.conversation_files_owner_upload_20133_test import world  # noqa: F401 -- fixture
+from api.conversation_files_owner_upload_20133_test import _BOB, world  # noqa: F401 -- fixture
 from api.conversation_files_real_manager_20225_test import (  # noqa: F401
     _as_admin,
     _rows,
     _upload,
     real,
 )
-from conversation_file_quota_owner import OWNERLESS_AGENT_WRITE_RULE, ensure_quota_owner_schema
+from conversation_file_quota_owner import OWNERLESS_AGENT_WRITE_RULE
+from conversation_file_quota_owner_schema import ensure_quota_owner_schema
 
 _COLUMNS = "SELECT session_id, uploaded_by, quota_owner, file_size FROM conversation_files ORDER BY session_id"
 
@@ -87,6 +88,33 @@ def test_a_row_stored_before_the_column_is_still_charged_to_its_uploaded_by(smal
     conn.commit()
     conn.close()
     assert _upload(small, "b.txt", b"v").status_code == 413
+
+
+def test_a_non_owner_is_refused_before_any_charge_on_both_agent_write_routes(small):
+    small.owner = "alice"
+    small.user = dict(_BOB)
+    body = {"filename": "x.txt", "content": "x" * 5, "agent_name": "scribe"}
+    mcp = {"tool_name": "session_write_file", "arguments": {"filename": "x.txt", "content": "x" * 5}}
+    assert small.client.post("/api/conversation/s-a/generate", json=body).status_code in (403, 404)
+    assert small.client.post("/api/conversation/s-a/mcp/call", json=mcp).status_code in (403, 404)
+    assert _rows(small, _COLUMNS) == []  # no row, so nothing was charged to anybody
+
+
+def test_an_owner_lookup_that_raises_denies_the_write_and_charges_nobody(small):
+    small.owner_error = RuntimeError("owner store down")
+    assert _generate(small, "s-a", "alice", "x" * 5).status_code >= 400
+    assert _mcp_write(small, "s-a2", "alice", "x" * 5).status_code >= 400
+    assert _rows(small, _COLUMNS) == []  # it was not charged to the caller instead
+
+
+def test_editing_an_agent_written_file_is_charged_to_the_quota_owner_not_the_agent(small):
+    assert _upload(small, "a.txt", b"u" * 15).status_code == 200  # alice holds 15 of 20
+    assert _generate(small, "s-a", "alice", "x" * 3).status_code == 200  # her agent's file: 3 more, charged to alice
+    (file_id,) = _rows(small, "SELECT file_id FROM conversation_files WHERE uploaded_by = 'scribe'")[0]
+    url = f"/api/conversation/s-a/files/{file_id}/content"
+    assert _as_admin(small).client.put(url, json={"content": "y" * 8}).status_code == 413  # 15 + 8 > 20 for alice
+    assert _as_admin(small).client.put(url, json={"content": "y" * 5}).status_code == 200  # 15 + 5 == 20
+    assert _rows(small, "SELECT file_size FROM conversation_files WHERE uploaded_by = 'scribe'") == [(5,)]
 
 
 def test_the_column_is_added_to_an_older_database_and_no_row_changes(tmp_path):

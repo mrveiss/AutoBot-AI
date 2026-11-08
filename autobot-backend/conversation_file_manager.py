@@ -38,8 +38,9 @@ from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_1_HOUR
 from conversation_file_cleanup import deleted_file_stats, pending_cleanup_stats
 from conversation_file_quota import UploadRefused, abandon, file_too_large, insert_within_quota, resize_within_quota
-from conversation_file_quota_owner import ensure_quota_owner_schema
+from conversation_file_quota_owner_schema import ensure_quota_owner_schema
 from conversation_file_route_api import FILE_INFO_COLUMNS, ConversationFileRouteApi
+from conversation_file_schema_version import query_schema_version
 from conversation_file_upload_info import UploadInfo
 from utils.chat_utils import validate_chat_session_id
 
@@ -412,9 +413,14 @@ class ConversationFileManager(ConversationFileRouteApi):
             await connection.close()
 
     def _initialize_schema(self) -> None:
-        """Apply the schema file idempotently, then add ``quota_owner`` to an older table (#20678).
+        """
+        Initialize database schema from SQL file.
 
-        Raises RuntimeError if the database schema initialization fails.
+        This method is idempotent - safe to run multiple times.
+        Uses CREATE TABLE IF NOT EXISTS statements from schema file.
+
+        Raises:
+            RuntimeError: If database schema initialization fails
         """
         schema_path = _PROJECT_ROOT / "database/schemas/conversation_files_schema.sql"
 
@@ -435,7 +441,7 @@ class ConversationFileManager(ConversationFileRouteApi):
                 raise ValueError("Schema SQL file is empty")
 
             connection.executescript(schema_sql)
-            ensure_quota_owner_schema(connection)
+            ensure_quota_owner_schema(connection)  # a table made before #20678 gains the column
             logger.info("✅ Database schema initialized successfully")
 
         except Exception as e:
@@ -1105,18 +1111,21 @@ class ConversationFileManager(ConversationFileRouteApi):
             default_schema_dir = _PROJECT_ROOT / "database" / "schemas"
             schema_dir = Path(config.schema_dir or str(default_schema_dir))
 
-            # Same paths as this manager, incl. a custom db_path for tests (Bug Fix #6)
+            # Create migration instance with same paths (Bug Fix #6 - pass custom db_path for
+            # testing)
             migration = ConversationFilesMigration(
                 data_dir=self.db_path.parent,
                 schema_dir=schema_dir,
                 db_path=self.db_path,  # Use the exact database path specified in constructor
             )
 
+            # Execute migration (safe to run on existing database)
             success = await migration.up()
 
             if not success:
                 raise RuntimeError("Database migration failed")
 
+            # Verify schema version
             version = await self.get_schema_version()
             logger.info("Conversation files database initialized (schema version: %s)", version)
             from services.conversation_file_cleanup_proposals import propose_due_cleanups_logged
@@ -1129,22 +1138,7 @@ class ConversationFileManager(ConversationFileRouteApi):
 
     def _query_schema_version_sync(self) -> str:
         """Thread-safe database query for schema version (sync helper)."""
-        connection = sqlite3.connect(
-            str(self.db_path),
-            timeout=TimingConstants.SHORT_TIMEOUT,
-            check_same_thread=False,
-        )
-        cursor = connection.cursor()
-        try:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'")
-            if not cursor.fetchone():
-                return "unknown"
-            cursor.execute("SELECT version FROM schema_migrations ORDER BY migration_id DESC LIMIT 1")
-            result = cursor.fetchone()
-            return result[0] if result else "unknown"
-        finally:
-            cursor.close()
-            connection.close()
+        return query_schema_version(self.db_path)
 
     async def get_schema_version(self) -> str:
         """Get current database schema version for health checks."""

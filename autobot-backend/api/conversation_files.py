@@ -46,6 +46,7 @@ from api.schemas_knowledge import (
 from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from conversation_file_mcp_dispatch import dispatch_mcp_tool
 from conversation_file_quota_owner import mcp_quota_owner, resolve_agent_quota_owner
 from security.session_ownership import validate_session_ownership
 from security.session_posture import SessionPosture, validate_strict_hidden
@@ -762,7 +763,9 @@ async def agent_generate_file(request: Request, session_id: str, body: AgentGene
         if not is_safe_file(body.filename):
             raise_invalid_input("filename", f"invalid filename: {body.filename}")
 
-        agent_metadata = {"agent_name": body.agent_name or "unknown", **(body.metadata or {})}
+        agent_metadata = {"agent_name": body.agent_name or "unknown"}
+        if body.metadata:
+            agent_metadata.update(body.metadata)
 
         result = await file_manager.create_file(
             session_id=session_id,
@@ -874,53 +877,6 @@ async def get_session_mcp_tools(request: Request, session_id: str):
     return JSONResponse(content={"tools": SESSION_MCP_TOOLS, "session_id": session_id})
 
 
-async def _dispatch_mcp_tool(file_manager, session_id: str, tool_name: str, args: Dict, quota_owner=None) -> Dict:
-    """Dispatch an MCP tool call to the file manager.
-
-    Helper for session_mcp_call_tool (Issue #70).
-    """
-    if tool_name == "session_list_files":
-        result = await file_manager.list_files(session_id=session_id)
-        return {"files": result.get("files", []), "total": result.get("total_files", 0)}
-
-    if tool_name == "session_read_file":
-        file_id = args.get("file_id")
-        if not file_id:
-            raise_invalid_input("file_id", "required")
-        return await file_manager.get_file_content(session_id=session_id, file_id=file_id)
-
-    if tool_name == "session_write_file":
-        filename = args.get("filename")
-        if not filename:
-            raise_invalid_input("filename", "required")
-        if not is_safe_file(filename):
-            raise_invalid_input("filename", f"invalid filename: {filename}")
-        return await file_manager.create_file(
-            session_id=session_id,
-            filename=filename,
-            content=args.get("content", ""),
-            mime_type=args.get("mime_type", "text/plain"),
-            created_by="agent",
-            file_type="generated",
-            quota_owner=quota_owner,  # the conversation owner pays, not "agent" (#20678)
-        )
-
-    if tool_name == "session_search_files":
-        results = await file_manager.search_files(session_id=session_id, query=args.get("query", ""))
-        return {"files": results, "total": len(results)}
-
-    if tool_name == "session_delete_file":
-        file_id = args.get("file_id")
-        if not file_id:
-            raise_invalid_input("file_id", "required")
-        deleted = await file_manager.delete_file(session_id, file_id)
-        if not deleted:
-            raise_not_found("File", file_id)
-        return {"deleted": True, "file_id": file_id}
-
-    raise_invalid_input("tool_name", f"unknown tool: {tool_name}")
-
-
 @api_router.post("/conversation/{session_id}/mcp/call", response_model=DataResponse[SessionMcpCallData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -934,7 +890,7 @@ async def session_mcp_call_tool(request: Request, session_id: str, body: MCPTool
         file_manager = _get_required_file_manager(request)
 
         owner = await mcp_quota_owner(request, session_id, user_data, body.tool_name)
-        result = await _dispatch_mcp_tool(file_manager, session_id, body.tool_name, body.arguments, owner)
+        result = await dispatch_mcp_tool(file_manager, session_id, body.tool_name, body.arguments, owner)
 
         _audit_file_operation(
             request,

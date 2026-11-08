@@ -15,41 +15,15 @@ change an agent only proposes, through the #17038 approval queue.
 
 from __future__ import annotations
 
-import sqlite3
-
 from fastapi import Request
 
-from autobot_shared.logging_manager import get_logger
 from security.session_posture import read_owner
-
-logger = get_logger(__name__)
 
 #: The ownerless-write rule, stated once. An agent write has no human owner of its own (the writer is an
 #: agent name, or the MCP tool's generic "agent"), so it is charged to the CONVERSATION OWNER. When the
 #: conversation records no owner (a legacy session), it is charged to the authenticated human who made
 #: the call, so an agent write is never charged to an agent name or to the shared NULL bucket.
 OWNERLESS_AGENT_WRITE_RULE = "conversation_owner"
-
-_ADD_COLUMN_SQL = "ALTER TABLE conversation_files ADD COLUMN quota_owner TEXT"
-# Same expression the quota sums by, so the per-owner sum stays an index lookup (#20217).
-_INDEX_SQL = (
-    "CREATE INDEX IF NOT EXISTS idx_conversation_files_quota_owner "
-    "ON conversation_files(COALESCE(quota_owner, uploaded_by), is_deleted)"
-)
-
-
-def ensure_quota_owner_schema(connection: sqlite3.Connection) -> None:
-    """Add the ``quota_owner`` column and its index to a database made before #20678. Idempotent; no row changes.
-
-    ``CREATE TABLE IF NOT EXISTS`` in the schema file leaves an existing table as it was, so the column
-    is added here, once, when ``PRAGMA table_info`` shows it missing.
-    """
-    columns = {row[1] for row in connection.execute("PRAGMA table_info(conversation_files)")}
-    if "quota_owner" not in columns:
-        connection.execute(_ADD_COLUMN_SQL)
-        logger.info("Added conversation_files.quota_owner (#20678)")
-    connection.execute(_INDEX_SQL)
-    connection.commit()
 
 
 async def resolve_agent_quota_owner(request: Request, session_id: str, user_data: dict) -> str | None:
