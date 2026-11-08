@@ -122,8 +122,10 @@ ISSUE_17822_FIXTURE = Path(__file__).parent / "fixtures" / "issue_17822_migratio
 #: `llc/exceptions.py` are #20168's cost event foreign key test. `llc/services/company_os/**` and `goal.py` are
 #: #20115's two-session plan convert lock test, `services/ai_line_change_proposal.py` and `autobot_shared/ai_lines.py`
 #: are imported by the `plan_convert_lines.py` it runs (#20086), `autobot_shared/db_session.py` and
-#: `user_management/models/audit.py` are the secrets API test's canonical audit store (#20557).
-ISSUE_17822_COUNT = 30
+#: `user_management/models/audit.py` are the secrets API test's canonical audit store (#20557), and the seven
+#: `autobot_shared/user_management/` modules plus its package `__init__` are what the admin-status two-user test
+#: imports (#20670).
+ISSUE_17822_COUNT = 37
 
 
 def test_the_issue_17822_migration_entries_are_still_read():
