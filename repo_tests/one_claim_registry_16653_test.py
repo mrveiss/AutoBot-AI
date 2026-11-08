@@ -119,6 +119,11 @@ _ALLOWED: dict[str, tuple[int, str]] = {
         2,
         "one pending approval per terminal session (#20059): a slot on a record, not a work claim with subtree overlap",
     ),
+    "autobot-backend/services/agent_terminal/session_state.py": (
+        1,
+        "#20674 -- a one-use decision token per terminal approval (SET NX): the first decision wins, "
+        "every later one is refused. No holder, no renewal, not a work claim.",
+    ),
     "autobot_shared/membership_epoch.py": (
         1,
         "#19630 -- a token mint, not a lock: SETNX fills a missing epoch key so concurrent workers "

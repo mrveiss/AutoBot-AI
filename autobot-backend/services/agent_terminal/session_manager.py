@@ -9,7 +9,6 @@ Manages agent terminal session lifecycle: create, get, list, close, persist.
 """
 
 import asyncio
-import json
 import uuid
 from typing import Dict, List
 
@@ -23,6 +22,14 @@ from .conversation_owner import ConversationNotOwnedError, conversation_owner, v
 from .models import AgentSessionState, AgentTerminalSession
 from .pending_claim import drop_pending_slot, hold_pending_slot
 from .redis_usability import usable_redis
+from .session_state import (
+    apply_record,
+    claim_decision,
+    persist_if_current,
+    read_record,
+    session_from_record,
+    session_key,
+)
 
 logger = get_logger(__name__)
 
@@ -301,75 +308,45 @@ class SessionManager:
         return session
 
     async def get_session(self, session_id: str) -> AgentTerminalSession | None:
-        """
-        Get session by ID. Checks memory first, then loads from Redis if needed.
+        """Get a session. Redis holds the record; the in-memory copy is a cache refreshed from it (#20674).
 
-        Args:
-            session_id: Session identifier
-
-        Returns:
-            Session if found, None otherwise
+        A worker's copy can be older than another worker's save, so it is brought up to date with
+        Redis before it is returned. When Redis cannot answer, the cached copy is the fallback.
         """
-        # Fast path: check in-memory sessions first (protected by lock)
         async with self._sessions_lock:
-            session = self.sessions.get(session_id)
-            if session:
-                logger.debug(
-                    f"[GET_SESSION] Returning in-memory session {session_id}: "
-                    f"pending_approval={session.pending_approval is not None}"
-                )
-                return session
-
-        # Slow path: try loading from Redis if available
+            cached = self.sessions.get(session_id)
         if self.redis_client:
-            try:
-                key = f"agent_terminal:session:{session_id}"
-                session_json = await asyncio.wait_for(self.redis_client.get(key), timeout=2.0)
-
-                if session_json:
-                    session_data = json.loads(session_json)
-
-                    # Reconstruct session object from Redis data
-                    session = AgentTerminalSession(
-                        session_id=session_data["session_id"],
-                        agent_id=session_data["agent_id"],
-                        agent_role=AgentRole(session_data["agent_role"]),
-                        conversation_id=session_data.get("conversation_id"),
-                        tenant_id=session_data.get("tenant_id"),
-                        host=session_data.get("host"),
-                        metadata=session_data.get("metadata", {}),
-                        pty_session_id=session_data.get("pty_session_id"),
-                        owner=session_data.get("owner"),
-                    )
-
-                    # Restore session state
-                    session.state = AgentSessionState(session_data["state"])
-                    session.created_at = session_data["created_at"]
-                    session.last_activity = session_data["last_activity"]
-                    session.pending_approval = session_data.get(
-                        "pending_approval"
-                    )  # CRITICAL: Restore pending approvals
-
-                    # Add back to memory cache (protected by lock)
-                    async with self._sessions_lock:
-                        self.sessions[session_id] = session
-
-                    logger.info("Loaded session %s from Redis persistence", session_id)
-                    return session
-
-            except asyncio.TimeoutError:
-                logger.warning("Redis timeout loading session %s", session_id)
-            except Exception as e:
-                logger.error("Failed to load session from Redis: %s", e)
+            refreshed = await self._refresh_from_redis(session_id, cached)
+            if refreshed:
+                return refreshed
+        if cached:
+            return cached
 
         # #13478: last resort — the session record is gone, but it may have been
-        # holding a pending approval. `_restore_pending_approval` can rebuild
-        # that from chat history and is documented as surviving restarts, yet it
-        # only ran inside `create_session`, which mints a NEW session_id. The
-        # approve endpoint is addressed by the OLD id (it is what the persisted
-        # approval message and the GUI button carry), so the restore was
-        # unreachable from the one path that needed it.
+        # holding a pending approval. The approve endpoint is addressed by the OLD
+        # id (what the persisted approval message and the GUI button carry), so the
+        # chat-history restore has to be reachable from here.
         return await self._rebuild_session_from_pending_approval(session_id)
+
+    async def _refresh_from_redis(
+        self, session_id: str, cached: AgentTerminalSession | None
+    ) -> AgentTerminalSession | None:
+        """Bring *cached* up to date with the Redis record, or load the session from it (#20674)."""
+        try:
+            data = await read_record(self.redis_client, session_id)
+        except Exception as e:  # noqa: BLE001 - a Redis outage falls back to the cached copy
+            logger.warning("Could not read session %s from Redis: %s", session_id, e)
+            return cached
+        if data is None:
+            return cached
+        if cached:
+            apply_record(cached, data)
+            return cached
+        session = session_from_record(data)
+        async with self._sessions_lock:
+            session = self.sessions.setdefault(session_id, session)
+        logger.info("Loaded session %s from Redis persistence", session_id)
+        return session
 
     async def _owner_for(self, conversation_id: str | None, owner: str | None) -> str | None:
         """The session's owner: ``owner`` if it owns the conversation, else the conversation's (#17422).
@@ -502,13 +479,10 @@ class SessionManager:
         it (#13481: approval does not expire on a timer).
         """
         try:
-            key = f"agent_terminal:session:{session.session_id}"
-            # Issue #372: Use model method to reduce feature envy
-            session_data = session.to_persist_dict()
-
+            key = session_key(session.session_id)
             ttl = APPROVAL_PENDING_SESSION_TTL if session.has_pending_approval() else TTL_1_HOUR
-            json_data = json.dumps(session_data)
-            await self.redis_client.setex(key, ttl, json_data)
+            if not await persist_if_current(self.redis_client, session, ttl):
+                return await self._refuse_stale_persist(session)
 
             # #13478: a companion pointer so the approve path can still find the
             # conversation after the session itself is gone. `get_session` takes
@@ -530,6 +504,18 @@ class SessionManager:
         except Exception as e:
             logger.error("Failed to persist session to Redis: %s", e)
             return False
+
+    async def _refuse_stale_persist(self, session: AgentTerminalSession) -> bool:
+        """The record moved on since this copy was read (#20674): keep it, take it as the copy, report no save."""
+        logger.warning("Session %s changed in Redis since this copy was read; not overwriting it", session.session_id)
+        await self._refresh_from_redis(session.session_id, session)
+        return False
+
+    async def claim_decision(self, session: AgentTerminalSession) -> bool:
+        """Win the one decision on the session's pending approval, across workers (#20674)."""
+        if not usable_redis(self.redis_client):
+            return True
+        return await claim_decision(self.redis_client, session.session_id, session.get_pending_command_id())
 
     async def _conversation_for_expired_session(self, session_id: str) -> str | None:
         """The conversation a vanished session was serving, if it had an approval."""

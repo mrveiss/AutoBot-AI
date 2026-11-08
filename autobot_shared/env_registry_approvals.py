@@ -24,3 +24,16 @@ register_env_var(
         component="approvals",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_APPROVAL_DECISION_TTL_SECONDS",
+        type=int,
+        default=600,
+        description=(
+            "Seconds a decided terminal approval stays consumed, so a second decision routed to "
+            "another worker cannot run the command again (#20674)."
+        ),
+        component="approvals",
+    )
+)

@@ -28,6 +28,7 @@ from services.agent_terminal.models import AgentTerminalSession
 from services.agent_terminal.pending_claim import CLAIM_WRITE_TTL, _claim_key, claim_pending_slot, hold_pending_slot
 from services.agent_terminal.service import AgentTerminalService
 from services.agent_terminal.session_manager import APPROVAL_PENDING_SESSION_TTL, SessionManager
+from services.agent_terminal.session_state import PERSIST_IF_VERSION_LUA
 from services.command_approval_manager import AgentRole
 
 pytestmark = pytest.mark.asyncio
@@ -253,8 +254,8 @@ async def test_a_failed_save_at_the_decision_is_retried_until_other_workers_can_
     await _claim(first, redis, "cmd-1")
     _set_pending(first.session, "cmd-1")
     await first.manager._persist_session(first.session)
-    real_setex = redis.setex
-    redis.setex = _fail_twice_then(real_setex)
+    real_eval = redis.eval
+    redis.eval = _fail_twice_then(real_eval)
 
     await settle_pending(first.session, first.manager)
     assert (await _claim(second, redis, "cmd-2"))["error"] == PENDING_APPROVAL_REFUSAL  # still stale here
@@ -278,13 +279,13 @@ async def test_the_retry_stops_once_a_newer_approval_owns_the_record(redis, monk
 def _fail_twice_then(real):
     failures = iter([ConnectionError("blip"), ConnectionError("blip")])
 
-    async def _setex(*args, **kwargs):
-        failure = next(failures, None)
+    async def _eval(*args, **kwargs):
+        failure = next(failures, None) if args[0] == PERSIST_IF_VERSION_LUA else None
         if failure is not None:
             raise failure
         return await real(*args, **kwargs)
 
-    return _setex
+    return _eval
 
 
 def _retry_tasks_running() -> list:

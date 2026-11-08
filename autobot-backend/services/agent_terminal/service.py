@@ -835,7 +835,7 @@ class AgentTerminalService:
         if not session:
             return {"status": "error", "error": "Session not found"}
 
-        if not session.has_pending_approval():
+        if not session.has_pending_approval() or not await self.session_manager.claim_decision(session):
             return {"status": "error", "error": "No pending approval"}
 
         command = session.get_pending_command()

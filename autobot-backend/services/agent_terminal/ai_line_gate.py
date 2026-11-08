@@ -128,9 +128,23 @@ async def settle_pending(session: AgentTerminalSession, session_manager) -> None
     command_id = session.get_pending_command_id()
     session.clear_pending_and_resume()
     redis = session_manager.redis_client
-    if usable_redis(redis) and not await session_manager._persist_session(session):
+    if usable_redis(redis) and not await _persist_cleared(session, session_manager, command_id):
         fire_and_forget(_retry_clear(session, session_manager), name=f"retry-clear-{session.session_id}")
     await release_pending_slot(redis, session.session_id, command_id)
+
+
+async def _persist_cleared(session: AgentTerminalSession, session_manager, command_id: str | None) -> bool:
+    """Save the cleared approval. A save refused as stale refreshed the copy (#20674): clear it again while
+    it still shows this decided approval, and leave a newer approval alone."""
+    if await session_manager._persist_session(session):
+        return True
+    pending_id = session.get_pending_command_id()
+    if pending_id is None:
+        return False
+    if pending_id != command_id:
+        return True
+    session.clear_pending_and_resume()
+    return await session_manager._persist_session(session)
 
 
 async def _retry_clear(session: AgentTerminalSession, session_manager) -> None:

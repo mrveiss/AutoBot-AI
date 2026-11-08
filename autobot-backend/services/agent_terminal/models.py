@@ -47,6 +47,7 @@ class AgentTerminalSession:
     command_queue: List[Metadata] = field(default_factory=list)
     command_history: List[Metadata] = field(default_factory=list)
     pending_approval: Metadata | None = None
+    version: int = 0  # #20674: the Redis record version this copy was read at
     metadata: Metadata = field(default_factory=dict)
     pty_session_id: str | None = None  # PTY session for terminal display
     # #17053: the verified creator's username, stamped at creation. None means no
@@ -297,4 +298,5 @@ class AgentTerminalSession:
             "pty_session_id": self.pty_session_id,  # CRITICAL: Store PTY session ID
             "pending_approval": self.pending_approval,  # CRITICAL: Persist pending approvals
             "owner": self.owner,  # #17053: survives a reload, or the owner is locked out
+            "version": self.version,
         }
