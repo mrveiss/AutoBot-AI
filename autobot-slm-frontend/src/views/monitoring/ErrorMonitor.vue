@@ -22,6 +22,7 @@ import type {
 } from '@/types/api-responses'
 import { formatCompactRelativeTime } from '@/utils/dateUtils'
 import { getTimezoneOption } from '@/composables/useTimezone'
+import i18n from '@/i18n'
 
 const logger = createLogger('ErrorMonitor')
 const api = useSlmApi()
@@ -61,7 +62,6 @@ const {
   serverTotalItems: totalErrors,
   onPageChange: async () => { await fetchData() },
 })
-
 
 // Filtered errors (client-side search only, API handles severity/resolved)
 const filteredErrors = computed(() => {
@@ -120,7 +120,7 @@ function getTrendColor(trend: string): string {
 }
 
 const formatTimestamp = createDateFormatter({
-  locale: 'en-US',
+  locale: () => String(i18n.global.locale),
   intl: () => ({ month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', ...getTimezoneOption() }),
 })
 

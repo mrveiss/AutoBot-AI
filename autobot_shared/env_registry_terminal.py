@@ -110,3 +110,19 @@ register_env_var(
         component="execution",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SECURE_COMMAND_TIMEOUT_S",
+        type=int,
+        default=300,
+        description=(
+            "Seconds a command run without its own policy (the secure command path and the attended shell) "
+            "may take before its whole process group is killed and it fails with exit code 124 (#20740). "
+            "Raising it gives slow commands more time; lowering it kills stuck ones sooner "
+            "(utils/command_utils.py)."
+        ),
+        component="terminal",
+        range=(1, 3600),
+    )
+)

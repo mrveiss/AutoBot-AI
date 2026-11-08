@@ -124,6 +124,13 @@ jobs:
           # No credential is persisted; the PAT reaches each `git push` argv only.
           persist-credentials: false
 
+      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
+      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
       - name: Merge main into every branch that is behind
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
