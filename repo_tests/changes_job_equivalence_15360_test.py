@@ -214,6 +214,7 @@ ALLOWED_ADDITIONS = {
             "autobot-backend/config/**",
             "autobot-backend/llc/**/*.json",
             "autobot-backend/resources/**/*.yaml",
+            "autobot-plugins/**",
             "docs/*.md",
             # #20884: nested docs held to a per-file version-first Claude id count (concrete files, not docs/**).
             "docs/api/COMPREHENSIVE_API_DOCUMENTATION.md",

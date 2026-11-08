@@ -529,6 +529,7 @@ python:
   - 'autobot-backend/config/**'
   - 'autobot-backend/llc/**/*.json'
   - 'autobot-backend/resources/**/*.yaml'
+  - 'autobot-plugins/**'
   - 'docs/*.md'
   # #20884: nested docs the same guard holds to a per-file count of version-first Claude ids (its baseline).
   # Concrete files, not `docs/**` (the #17930 owner decision above).

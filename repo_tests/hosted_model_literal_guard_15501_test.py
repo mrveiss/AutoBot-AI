@@ -168,6 +168,7 @@ _SCAN_ROOTS = (
     "autobot-slm-frontend",
     "autobot-infrastructure",
     "autobot-npu-worker",
+    "autobot-plugins",
     "autobot_shared",
     "plugins",
     "libs",
@@ -175,9 +176,6 @@ _SCAN_ROOTS = (
 )
 #: Extensions read under EVERY root. The python filter already fires on each (``.py``, and the globs it gained for
 #: ``.j2`` / ``.toml`` / ``.env.example``), so a change to one runs this guard.
-#: A root dropped from ``_SCAN_ROOTS`` because no file of a covered type remains in it. The control below still
-#: reads it, so a pinned id appearing there fails that test instead of passing unseen.
-_UNSCANNED_ROOTS = ("autobot-plugins",)
 _SCAN_EXTS = ("py", "j2", "toml", "env.example")
 #: The remaining types are read only under the trees that hold them. ``*.ts`` / ``*.vue`` under the frontend source
 #: tree are on the filter already; the three backend trees were added to it for this guard (#20884). A bare ``*.json`` or
@@ -191,6 +189,9 @@ _SCAN_TREES = (
     "autobot-backend/resources/*.yaml",
     "autobot-frontend/src/*.ts",
     "autobot-frontend/src/*.vue",
+    "autobot-plugins/*.ts",
+    "autobot-plugins/*.vue",
+    "autobot-plugins/*.json",
 )
 _SCAN_PATTERNS = (*(f"{r}/*.{e}" for r in _SCAN_ROOTS if r != "docs" for e in _SCAN_EXTS), *_SCAN_TREES, "docs/*.md")
 _TEST_PART = re.compile(
@@ -342,11 +343,7 @@ def _unfiltered_counts() -> dict[str, int]:
     wanted = [
         p
         for p in tracked_paths(root, "*")
-        if (
-            p.split("/", 1)[0] in (*_SCAN_ROOTS, *_UNSCANNED_ROOTS)
-            and p.endswith(_ALL_EXTS)
-            and p.split("/", 1)[0] != "docs"
-        )
+        if (p.split("/", 1)[0] in _SCAN_ROOTS and p.endswith(_ALL_EXTS) and p.split("/", 1)[0] != "docs")
         or (p.startswith("docs/") and p.endswith(".md"))
     ]
     wanted = [p for p in wanted if not _TEST_PART.search(p) and not p.startswith(_HISTORICAL)]
