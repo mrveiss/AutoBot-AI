@@ -177,6 +177,158 @@ a message that names the token to use. Baselines move one way: when a count fall
 entry. The stylelint step is not yet whole-tree: that switch waits until the `<style>` hex
 population reaches zero (#17567).
 
+## Palette-step to token mapping for the SLM frontend (#17566)
+
+`autobot-slm-frontend` styles itself from the Tailwind palette; the main frontend uses the `autobot-*` colour
+utilities. Both apps declare the same `--color-autobot-*` names (`autobot-frontend/src/assets/tailwind.css`,
+`autobot-slm-frontend/src/assets/styles/slm-scheme.css`; `ds_theme_contract.mjs` fails when they drift), so the
+utility named below means the same thing in both and only the value differs per theme. Every utility in the
+table exists in both files; none is invented. Token meanings: [REFINED_TOKEN_MAPPING.md](../design/REFINED_TOKEN_MAPPING.md).
+
+**Measured** on `origin/main` @ `250ddc4554`, with the detector that enforces the ratchet
+(`repo_tests/_raw_palette_detect.py`, `<style>` blocks excluded, opacity suffix `/NN` folded into its step):
+
+```python
+from pathlib import Path
+from repo_tests._raw_palette_detect import scan_tree
+c = scan_tree(Path("autobot-slm-frontend/src"))   # run with ~/.venv-python-suite/bin/python -I
+sum(c.values())  # 5300 occurrences, 195 distinct classes, 103 of 113 .vue files, 105 family-step pairs
+```
+
+Control: `RAW_PALETTE_CLASS.search("bg-gray-800")` matches, and `raw_palette_class_ratchet_14580_test.py`
+plants a class in a temporary SLM tree and sees it under the `slm:` key. The ratchet in
+`_raw_palette_baseline.py` was measured when it landed (6214 occurrences); the sweep has drained it since, so
+re-measure rather than reuse this figure.
+
+How to read it: pick the row for the step, then the utility for the role (`bg`, `text`, `border`, `ring`, `divide`,
+`placeholder`). An opacity suffix stays (`bg-red-500/10` becomes `bg-autobot-error/10`). The count is how often
+each role occurs. Where the role cannot be read from the class, the row gives two answers: **informational**
+(status, a notice) or **interactive** (a button, a link, a selected state); choose by what the element does.
+Judgement calls, stated once:
+
+- Neutrals follow the tonal ladder: 900/800 text is primary, 700/600 secondary, 500 muted, 400/300 tertiary.
+  Backgrounds go 50 secondary, 100 tertiary, 200 hover, 300 active; 800 and up is `ink`. Borders go 100/200 subtle,
+  300 default, 400 and up strong.
+- Status hues fold onto the four semantic variants: `red` is error, `green` and `emerald` success, `amber`,
+  `yellow` and `orange` warning, `blue` and `cyan` info. `orange` has no variant of its own; folding it into
+  warning is a decision the sweep PR should confirm.
+- Contrast is not verified by this table. A step 700/800 text becomes the one `text-autobot-<status>` colour, so each
+  sweep batch carries the screenshot pair #17566 asks for.
+- **no token yet** means no existing `--color-autobot-*` fits the role. It is a gap to decide, never a licence to keep the
+  class; tokens are added deliberately in `slm-scheme.css` and `tailwind.css` together, or the use is redesigned.
+
+| Palette step | Uses | Role (count) -> utility | No token yet because |
+|---|---|---|---|
+| `amber-50` | 3 | bg (3) -> `bg-autobot-warning-bg` |  |
+| `amber-100` | 19 | bg (19) -> `bg-autobot-warning-bg` |  |
+| `amber-200` | 6 | bg (4) -> `bg-autobot-warning-bg`; border (1) -> `border-autobot-warning-light`; text (1) -> `text-autobot-warning-light` |  |
+| `amber-300` | 7 | text (4) -> `text-autobot-warning-light`; border (2) -> `border-autobot-warning-light`; bg (1) -> `bg-autobot-warning-light` |  |
+| `amber-400` | 3 | text (3) -> `text-autobot-warning-light` |  |
+| `amber-500` | 18 | bg (13) -> `bg-autobot-warning`; border (5) -> `border-autobot-warning` |  |
+| `amber-600` | 21 | text (18) -> `text-autobot-warning`; bg (3) -> `bg-autobot-warning-hover` |  |
+| `amber-700` | 20 | text (19) -> `text-autobot-warning`; bg (1) -> `bg-autobot-warning-hover` |  |
+| `amber-800` | 6 | text (6) -> `text-autobot-warning` |  |
+| `amber-900` | 1 | bg (1): **no token yet** | a dark status fill has no token (the -solid/-hover pair covers 500-700) |
+| `blue-50` | 17 | bg (17) -> `bg-autobot-info-bg` |  |
+| `blue-100` | 53 | bg (52) -> `bg-autobot-info-bg`; border (1) -> `border-autobot-info-light` |  |
+| `blue-200` | 11 | border (7) -> `border-autobot-info-light`; bg (4) -> `bg-autobot-info-bg` |  |
+| `blue-300` | 3 | border (2) -> `border-autobot-info-light`; text (1) -> `text-autobot-info-light` |  |
+| `blue-400` | 5 | text (4) -> `text-autobot-info-light`; border (1) -> `border-autobot-info` informational / `border-autobot-primary` interactive |  |
+| `blue-500` | 94 | ring (44) -> `ring-autobot-focus`; border (33) -> `border-autobot-info` informational / `border-autobot-primary` interactive; bg (11) -> `bg-autobot-info-solid` informational / `bg-autobot-primary` interactive; text (5) -> `text-autobot-info` informational / `text-autobot-text-link` interactive; border-l (1) -> `border-l-autobot-info` informational / `border-l-autobot-primary` interactive |  |
+| `blue-600` | 84 | text (44) -> `text-autobot-info` informational / `text-autobot-text-link` interactive; bg (36) -> `bg-autobot-info-hover` informational / `bg-autobot-primary` interactive; border (4) -> `border-autobot-info` informational / `border-autobot-primary` interactive |  |
+| `blue-700` | 62 | text (37) -> `text-autobot-info` informational / `text-autobot-text-link` interactive; bg (25) -> `bg-autobot-info-hover` informational / `bg-autobot-primary-hover` interactive |  |
+| `blue-800` | 23 | text (23) -> `text-autobot-info` informational / `text-autobot-text-link` interactive |  |
+| `blue-900` | 2 | text (1) -> `text-autobot-info` informational / `text-autobot-text-link` interactive; bg (1): **no token yet** | a dark status fill has no token (the -solid/-hover pair covers 500-700) |
+| `cyan-50` | 1 | bg (1) -> `bg-autobot-info-bg` |  |
+| `cyan-100` | 1 | bg (1) -> `bg-autobot-info-bg` |  |
+| `cyan-300` | 1 | text (1) -> `text-autobot-info-light` |  |
+| `cyan-400` | 4 | text (4) -> `text-autobot-info-light` |  |
+| `cyan-500` | 4 | bg (3) -> `bg-autobot-info-solid`; border (1) -> `border-autobot-info` |  |
+| `cyan-600` | 1 | text (1) -> `text-autobot-info` |  |
+| `cyan-800` | 2 | text (2) -> `text-autobot-info` |  |
+| `cyan-900` | 1 | text (1) -> `text-autobot-info` |  |
+| `emerald-300` | 2 | text (2) -> `text-autobot-success-light` |  |
+| `emerald-400` | 3 | text (2) -> `text-autobot-success-light`; bg (1) -> `bg-autobot-success-light` |  |
+| `emerald-500` | 4 | bg (2) -> `bg-autobot-success`; border (2) -> `border-autobot-success` |  |
+| `emerald-600` | 3 | bg (3) -> `bg-autobot-success-hover` |  |
+| `emerald-700` | 1 | bg (1) -> `bg-autobot-success-hover` |  |
+| `gray-50` | 239 | bg (235) -> `bg-autobot-bg-secondary`; border (4) -> `border-autobot-border-subtle` |  |
+| `gray-100` | 275 | bg (197) -> `bg-autobot-bg-tertiary`; border (54) -> `border-autobot-border-subtle`; text (12) -> `text-autobot-text-inverse`; divide (12) -> `divide-autobot-border-subtle` |  |
+| `gray-200` | 444 | border (305) -> `border-autobot-border-subtle`; bg (92) -> `bg-autobot-bg-hover`; divide (42) -> `divide-autobot-border-subtle`; text (5) -> `text-autobot-text-inverse` |  |
+| `gray-300` | 377 | border (322) -> `border-autobot-border`; text (46) -> `text-autobot-text-tertiary`; bg (9) -> `bg-autobot-bg-active` |  |
+| `gray-400` | 249 | text (208) -> `text-autobot-text-tertiary`; bg (41): **no token yet** | a solid mid-grey fill has no surface token (the bg-* tokens are page and panel surfaces) |
+| `gray-500` | 877 | text (866) -> `text-autobot-text-muted`; bg (6): **no token yet**; border (4) -> `border-autobot-border-strong`; placeholder (1) -> `placeholder-autobot-text-tertiary` | a solid mid-grey fill has no surface token (the bg-* tokens are page and panel surfaces) |
+| `gray-600` | 286 | text (264) -> `text-autobot-text-secondary`; border (14) -> `border-autobot-border-strong`; bg (8): **no token yet** | a solid mid-grey fill has no surface token (the bg-* tokens are page and panel surfaces) |
+| `gray-700` | 462 | text (428) -> `text-autobot-text-secondary`; border (24) -> `border-autobot-border-strong`; bg (10): **no token yet** | a solid mid-grey fill has no surface token (the bg-* tokens are page and panel surfaces) |
+| `gray-800` | 65 | text (40) -> `text-autobot-text-primary`; bg (22) -> `bg-autobot-ink`; border (3) -> `border-autobot-border-strong` |  |
+| `gray-900` | 467 | text (437) -> `text-autobot-text-primary`; bg (30) -> `bg-autobot-ink` |  |
+| `gray-950` | 1 | bg (1) -> `bg-autobot-ink` |  |
+| `green-50` | 17 | bg (17) -> `bg-autobot-success-bg` |  |
+| `green-100` | 62 | bg (62) -> `bg-autobot-success-bg` |  |
+| `green-200` | 7 | bg (4) -> `bg-autobot-success-bg`; border (3) -> `border-autobot-success-light` |  |
+| `green-300` | 10 | border (6) -> `border-autobot-success-light`; text (4) -> `text-autobot-success-light` |  |
+| `green-400` | 4 | text (4) -> `text-autobot-success-light` |  |
+| `green-500` | 60 | bg (55) -> `bg-autobot-success`; text (2) -> `text-autobot-success`; border (2) -> `border-autobot-success`; border-l (1) -> `border-l-autobot-success` |  |
+| `green-600` | 83 | text (66) -> `text-autobot-success`; bg (17) -> `bg-autobot-success-hover` |  |
+| `green-700` | 54 | text (47) -> `text-autobot-success`; bg (7) -> `bg-autobot-success-hover` |  |
+| `green-800` | 26 | text (26) -> `text-autobot-success` |  |
+| `green-900` | 1 | text (1) -> `text-autobot-success` |  |
+| `indigo-50` | 4 | bg (4) -> `bg-autobot-primary-bg` |  |
+| `indigo-100` | 4 | bg (4) -> `bg-autobot-primary-bg` |  |
+| `indigo-200` | 2 | border (1) -> `border-autobot-primary-light`; bg (1) -> `bg-autobot-primary-light` |  |
+| `indigo-300` | 1 | border (1) -> `border-autobot-primary-light` |  |
+| `indigo-400` | 9 | ring (8) -> `ring-autobot-focus`; border (1) -> `border-autobot-primary` |  |
+| `indigo-600` | 7 | bg (6) -> `bg-autobot-primary`; border (1) -> `border-autobot-primary` |  |
+| `indigo-700` | 12 | text (8) -> `text-autobot-primary`; bg (4) -> `bg-autobot-primary-hover` |  |
+| `orange-50` | 1 | bg (1) -> `bg-autobot-warning-bg` |  |
+| `orange-100` | 15 | bg (15) -> `bg-autobot-warning-bg` |  |
+| `orange-200` | 6 | border (4) -> `border-autobot-warning-light`; bg (2) -> `bg-autobot-warning-bg` |  |
+| `orange-500` | 3 | bg (3) -> `bg-autobot-warning` |  |
+| `orange-600` | 22 | text (17) -> `text-autobot-warning`; bg (5) -> `bg-autobot-warning-hover` |  |
+| `orange-700` | 12 | text (8) -> `text-autobot-warning`; bg (4) -> `bg-autobot-warning-hover` |  |
+| `orange-800` | 6 | text (6) -> `text-autobot-warning` |  |
+| `pink-100` | 1 | bg (1): **no token yet** | categorical hue; chart-N tokens are data-series only, a decorative hue needs a decision |
+| `pink-700` | 1 | text (1): **no token yet** | categorical hue; chart-N tokens are data-series only, a decorative hue needs a decision |
+| `purple-50` | 3 | bg (3): **no token yet** | categorical hue; chart-N tokens are data-series only, a decorative hue needs a decision |
+| `purple-100` | 11 | bg (11): **no token yet** | categorical hue; chart-N tokens are data-series only, a decorative hue needs a decision |
+| `purple-200` | 5 | bg (3): **no token yet**; border (2): **no token yet** | categorical hue; chart-N tokens are data-series only, a decorative hue needs a decision |
+| `purple-300` | 1 | text (1): **no token yet** | categorical hue; chart-N tokens are data-series only, a decorative hue needs a decision |
+| `purple-400` | 2 | text (2): **no token yet** | categorical hue; chart-N tokens are data-series only, a decorative hue needs a decision |
+| `purple-500` | 7 | bg (4): **no token yet**; border (1): **no token yet**; border-l (1): **no token yet**; text (1): **no token yet** | categorical hue; chart-N tokens are data-series only, a decorative hue needs a decision |
+| `purple-600` | 12 | text (7): **no token yet**; bg (5): **no token yet** | categorical hue; chart-N tokens are data-series only, a decorative hue needs a decision |
+| `purple-700` | 12 | text (8): **no token yet**; bg (4): **no token yet** | categorical hue; chart-N tokens are data-series only, a decorative hue needs a decision |
+| `purple-800` | 4 | text (4): **no token yet** | categorical hue; chart-N tokens are data-series only, a decorative hue needs a decision |
+| `purple-900` | 2 | text (1): **no token yet**; bg (1): **no token yet** | categorical hue; chart-N tokens are data-series only, a decorative hue needs a decision |
+| `red-50` | 29 | bg (29) -> `bg-autobot-error-bg` |  |
+| `red-100` | 69 | bg (69) -> `bg-autobot-error-bg` |  |
+| `red-200` | 17 | bg (10) -> `bg-autobot-error-bg`; border (6) -> `border-autobot-error-light`; ring (1) -> `ring-autobot-error` |  |
+| `red-300` | 14 | border (10) -> `border-autobot-error-light`; text (4) -> `text-autobot-error-light` |  |
+| `red-400` | 5 | text (4) -> `text-autobot-error-light`; bg (1) -> `bg-autobot-error-light` |  |
+| `red-500` | 65 | bg (48) -> `bg-autobot-error-solid`; text (12) -> `text-autobot-error`; border (5) -> `border-autobot-error` |  |
+| `red-600` | 103 | text (85) -> `text-autobot-error`; bg (18) -> `bg-autobot-error-hover` |  |
+| `red-700` | 83 | text (71) -> `text-autobot-error`; bg (12) -> `bg-autobot-error-hover` |  |
+| `red-800` | 32 | text (31) -> `text-autobot-error`; bg (1): **no token yet** | a dark status fill has no token (the -solid/-hover pair covers 500-700) |
+| `red-900` | 1 | bg (1): **no token yet** | a dark status fill has no token (the -solid/-hover pair covers 500-700) |
+| `slate-400` | 1 | text (1) -> `text-autobot-text-tertiary` |  |
+| `slate-900` | 2 | bg (2) -> `bg-autobot-ink` |  |
+| `teal-100` | 1 | bg (1) -> `bg-autobot-primary-bg` |  |
+| `teal-500` | 1 | bg (1) -> `bg-autobot-primary` |  |
+| `teal-600` | 1 | bg (1) -> `bg-autobot-primary` |  |
+| `teal-700` | 1 | text (1) -> `text-autobot-primary` |  |
+| `yellow-50` | 7 | bg (7) -> `bg-autobot-warning-bg` |  |
+| `yellow-100` | 38 | bg (38) -> `bg-autobot-warning-bg` |  |
+| `yellow-200` | 5 | border (4) -> `border-autobot-warning-light`; bg (1) -> `bg-autobot-warning-bg` |  |
+| `yellow-300` | 4 | border (3) -> `border-autobot-warning-light`; text (1) -> `text-autobot-warning-light` |  |
+| `yellow-400` | 3 | text (2) -> `text-autobot-warning-light`; bg (1) -> `bg-autobot-warning-light` |  |
+| `yellow-500` | 26 | bg (20) -> `bg-autobot-warning`; text (4) -> `text-autobot-warning`; border (2) -> `border-autobot-warning` |  |
+| `yellow-600` | 32 | text (32) -> `text-autobot-warning` |  |
+| `yellow-700` | 24 | text (24) -> `text-autobot-warning` |  |
+| `yellow-800` | 19 | text (19) -> `text-autobot-warning` |  |
+
+Totals: 105 rows; 14 rows have no token for any of their roles (every `pink` and `purple` step, plus the
+dark status fills `amber-900` and `red-900`); 6 more have no token for one role (the solid mid-grey fills
+`gray-400` to `gray-700`, and the dark fills of `blue-900` and `red-800`). Rebuild the table with the snippet above when the baseline moves.
+
 ## Canonical homes (#17571)
 
 Which module owns each design-system concept is declared in code, not here:
