@@ -27,6 +27,7 @@
  "autobot_shared/secrets_vault.py",
  "autobot_shared/legacy_secret_keys.py",
  "autobot_shared/db_errors.py",
+ "autobot_shared/db_session.py",
  "autobot_shared/user_management/password_epoch.py",
  "autobot_shared/user_management/base_service.py",
  "autobot_shared/user_management/models/audit.py",

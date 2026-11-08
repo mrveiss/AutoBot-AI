@@ -218,6 +218,22 @@ def test_a_non_admin_cannot_change_admin_status_and_no_session_is_reached():
     assert response.status_code == 403
 
 
+def _restore_epoch_store(store: dict) -> None:
+    """Put the in-memory store the ``epochs`` fixture installed back ("the store is back").
+
+    ``reset_epoch_store`` would fall through to the default Redis store, which a CI runner does not have.
+    """
+
+    async def get_epoch(subject):
+        return store.get(subject)
+
+    async def set_epoch(subject, *, now=None):
+        store[subject] = int(time.time()) if now is None else now
+        return store[subject]
+
+    password_epoch.use_epoch_store(get_epoch=get_epoch, set_epoch=set_epoch)
+
+
 @pytest.mark.asyncio
 async def test_repeating_a_demotion_after_a_503_finishes_the_revocation(get_current_user, epochs, monkeypatch):
     """The 503 contract: the flag committed, the marker did not; the repeat must revoke, not answer all-clear."""
@@ -229,7 +245,7 @@ async def test_repeating_a_demotion_after_a_503_finishes_the_revocation(get_curr
         with pytest.raises(HTTPException) as failed:
             await _change(_service(user, audits), False)
     finally:
-        password_epoch.reset_epoch_store()
+        _restore_epoch_store(epochs)
     assert failed.value.status_code == 503 and user.is_platform_admin is False
     assert epochs == {}
 

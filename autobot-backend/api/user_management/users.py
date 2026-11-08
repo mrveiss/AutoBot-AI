@@ -68,7 +68,10 @@ logger = get_logger(__name__)
     response_model=UserListResponse,
     summary="List users",
     description="List users with pagination and optional search filter.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def list_users(
     pagination: PaginationParams = Depends(),
@@ -327,7 +330,10 @@ async def delete_user(
     response_model=UserResponse,
     summary="Activate user",
     description="Activate a deactivated user account.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def activate_user(
     user_id: uuid.UUID,
@@ -351,7 +357,10 @@ async def activate_user(
     response_model=UserResponse,
     summary="Deactivate user",
     description="Deactivate a user account.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def deactivate_user(
     user_id: uuid.UUID,
