@@ -172,7 +172,9 @@ interface Props {
 
 const props = defineProps<Props>()
 const { t } = useI18n()
-const categoryOptions = SMELL_CATEGORIES.map((c) => ({ value: c, label: t(`analytics.codeSmells.category.${c}`) }))
+const categoryOptions = computed(() =>
+  SMELL_CATEGORIES.map((c) => ({ value: c, label: t(`analytics.codeSmells.category.${c}`) })),
+)
 
 // #12741: a capped list is expandable; the notice below it is the control.
 const PAGE_SIZE = 20

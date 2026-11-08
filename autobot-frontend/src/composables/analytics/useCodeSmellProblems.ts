@@ -8,8 +8,9 @@
  *
  * This is a second `/problems` request beside the Problems Report's because the
  * category filter is applied on the server (the report must keep showing every
- * finding), so the two lists are different slices of the store. The category (production code, test files, or all) is
- * sent to the backend as `file_category` so the server returns only that slice.
+ * finding), so the two lists are different slices of the store. The category
+ * (production code, test files, or all) is sent to the backend as
+ * `file_category` so the server returns only that slice.
  */
 
 import { computed, ref } from 'vue'
