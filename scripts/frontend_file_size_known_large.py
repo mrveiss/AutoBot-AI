@@ -24,10 +24,10 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 760,
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 721,
-    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 902,  # #18849: 903 -> 902
+    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 896,
     "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 767,
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
-    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1786,
+    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1780,
     "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1216,
     "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1260,
     "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 756,
@@ -48,7 +48,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2153,  # #19906: 2165 -> 2153
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1353,  # #19906: 1365 -> 1353
-    "autobot-frontend/src/components/chat/ChatInput.vue": 1628,  # #20133: 1672 -> 1631; #20195: -> 1628
+    "autobot-frontend/src/components/chat/ChatInput.vue": 1619,  # #20133: 1672 -> 1631; #20195: 1628; 1620; 1619
     "autobot-frontend/src/components/chat/ChatInterface.vue": 1516,
     "autobot-frontend/src/components/chat/ChatMessages.vue": 2097,  # #20195: 2118 -> 2097 (approval routing moved out)
     "autobot-frontend/src/components/chat/ChatSidebar.vue": 807,  # #18849: 808 -> 807
@@ -93,14 +93,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1605,
     "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 924,
     "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 708,
-    "autobot-frontend/src/components/vision/MediaGallery.vue": 717,
+    "autobot-frontend/src/components/vision/MediaGallery.vue": 711,
     "autobot-frontend/src/components/vision/ScreenCaptureViewer.vue": 835,
     "autobot-frontend/src/components/vision/VideoProcessor.vue": 891,
     "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 936,
     "autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue": 1874,
     "autobot-frontend/src/components/visualizations/WorkflowVisualization.vue": 1017,  # #16744: 1020 -> 1019
     "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 618,
-    "autobot-frontend/src/components/workflow/WorkflowCanvas.vue": 2887,
+    "autobot-frontend/src/components/workflow/WorkflowCanvas.vue": 2849,  # #20682: -38 (CanvasDetachButton)
     "autobot-frontend/src/components/workflow/WorkflowLiveDashboard.vue": 782,
     "autobot-frontend/src/composables/__tests__/useClipboard.test.ts": 696,
     "autobot-frontend/src/composables/__tests__/useConnectionTester.test.ts": 944,
@@ -125,7 +125,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/models/controllers/ChatController.ts": 1156,
     "autobot-frontend/src/models/controllers/KnowledgeController.ts": 645,
     "autobot-frontend/src/models/repositories/ChatRepository.ts": 674,
-    "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 897,
+    "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 890,
     "autobot-frontend/src/router/index.ts": 1305,  # #20605 + #20631: 1385 -> 1305
     "autobot-frontend/src/services/GlobalWebSocketService.ts": 905,
     "autobot-frontend/src/services/TerminalService.ts": 1137,
@@ -147,14 +147,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/PluginsView.vue": 1058,
     "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 848,
-    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2166,  # #17677: 2169 -> 2166; #13421: 2201 -> 2169; #13422
+    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2142,  # #21043: 2166 -> 2151 -> 2142; #17677; #13421
     "autobot-frontend/src/views/llc/BacklogView.vue": 611,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
-    "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 761,
+    "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 755,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1012,  # #20123: 1015 -> 1012 (mixed bucket lists each currency)
     "autobot-frontend/src/views/llc/GanttTimelineView.vue": 815,
     "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 800,
-    "autobot-frontend/src/views/llc/OrgChart.vue": 1517,  # #14780: 1527 -> 1522 (kit BaseDrawer)
+    "autobot-frontend/src/views/llc/OrgChart.vue": 1442,  # #14780: 1527 -> 1522 (kit BaseDrawer); #20682: -75
     "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1370,  # #18819 1379->1374; #18849 -1; #14778 BaseInput -1
     "autobot-frontend/src/views/llc/RolesView.vue": 1026,  # #18819 1029->1027; #18849 one kit import on the merge (-1)
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,

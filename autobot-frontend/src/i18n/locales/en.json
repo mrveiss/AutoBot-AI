@@ -115,6 +115,11 @@
     "logsLoadFailed": "Failed to load logs: {error}"
   },
   "chat": {
+    "conversationFiles": {
+      "createFailed": "Failed to create file",
+      "saveFailed": "Save failed",
+      "copyFailed": "Copy failed"
+    },
     "contextWindow": {
       "ariaLabel": "{used} of {max} tokens used",
       "tooltip": "{used} / {max} tokens used ({percent}% of context window)",
@@ -315,6 +320,8 @@
     },
     "input": {
       "retryUpload": "Retry upload",
+      "cancelUpload": "Cancel upload of {name}",
+      "uploadCancelled": "Upload of {name} cancelled",
       "uploadError": {
         "http": "Upload failed (status {status})",
         "invalidResponse": "The server sent an unreadable response",
@@ -4389,6 +4396,19 @@
       "documentCount": "{count} documents",
       "includeEmpty": "Include empty collections ({count})",
       "subtitle": "Browse and search vector collections"
+    },
+    "manSection": {
+      "format": "{name}, section {section}: {sectionName}",
+      "formatUnnamed": "{name}, section {section}",
+      "1": "user commands",
+      "2": "system calls",
+      "3": "library calls",
+      "4": "special files",
+      "5": "file formats",
+      "6": "games",
+      "7": "miscellaneous",
+      "8": "system administration",
+      "9": "kernel routines"
     }
   },
   "workflow": {
@@ -4540,6 +4560,7 @@
       "stepProgress": "Step {current} / {total}",
       "selectWorkflow": "Select a Workflow",
       "selectWorkflowDescription": "Choose an active workflow from the list to view details and control execution",
+      "start": "Start",
       "started": "Started",
       "resume": "Resume",
       "pause": "Pause",
@@ -4679,6 +4700,7 @@
       "planApproved": "Plan approved, workflow starting...",
       "planApproveFailed": "Failed to approve plan",
       "planRejected": "Plan rejected",
+      "planRejectFailed": "Failed to reject plan",
       "unsupportedNodes": "These node types are not supported yet and will be excluded: {types}",
       "addStepFirst": "Add at least one step before saving",
       "saved": "Workflow \"{name}\" saved",
@@ -4688,6 +4710,9 @@
       "templateStarted": "Workflow \"{name}\" started",
       "templateRunFailed": "Failed to run \"{name}\"",
       "started": "Workflow started",
+      "startFailed": "Could not start the workflow",
+      "selectFailed": "Could not open the workflow",
+      "startUnconfirmed": "The workflow was started but its status could not be confirmed. Refresh to check.",
       "paused": "Workflow paused",
       "resumed": "Workflow resumed",
       "cancelled": "Workflow cancelled",
@@ -4695,9 +4720,9 @@
       "stepAwaitingApproval": "Approval needed: {step}",
       "stepApprovalTitle": "Step waiting for your approval",
       "stepApprovalSkip": "Skip step",
-      "stepApproveFailed": "Could not approve the step; it is still waiting for you",
+      "stepApproveFailed": "Could not confirm the step was approved; check the workflow status before trying again",
       "stepStatusRefreshFailed": "Your answer was sent, but the step status could not be refreshed; it will update when the connection recovers",
-      "stepSkipFailed": "Could not skip the step; it is still waiting for you",
+      "stepSkipFailed": "Could not confirm the step was skipped; check the workflow status before trying again",
       "stepRejectedByJudge": "Step refused before it ran: {reason}",
       "controlRefused": "Refused: only an administrator or the workflow's owner may control it",
       "stepSkipped": "Step skipped",
@@ -7932,6 +7957,7 @@
       "denied": "Denied",
       "failed": "Failed",
       "error": "Error",
+      "attempted": "Attempted",
       "userPlaceholder": "Filter by user...",
       "sessionPlaceholder": "Filter by session...",
       "vmPlaceholder": "Filter by VM...",
@@ -8364,6 +8390,7 @@
     "emptyHint": "Create the first team to group the people of this company.",
     "namesError": "Could not read the company's members, so team members are shown without names.",
     "unknownMember": "Unknown member",
+    "loadingNames": "Loading member details",
     "inactive": "Inactive",
     "colTeam": "Team",
     "colMembers": "Members",
@@ -8974,7 +9001,8 @@
       "canvasToolsUnavailable": "Tool information is unavailable right now — this list may be incomplete.",
       "canvasNoToolsDefined": "No tools are attached to any role in this company.",
       "deepLinkNodeNotFound": "This link points to a node that could not be found here. It may have been removed, or you may not have access to it.",
-      "viewPlanner": "Workflow Planner"
+      "viewPlanner": "Workflow Planner",
+      "standingUnavailable": "Your role could not be loaded, so attach, detach and agent controls are hidden. Reload to try again."
     },
     "executorRollup": {
       "title": "Executor Rollup",

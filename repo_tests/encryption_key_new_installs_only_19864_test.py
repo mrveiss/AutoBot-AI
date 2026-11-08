@@ -26,6 +26,7 @@ def _run_generator(directory: Path) -> str:
     script = directory / "generate-secrets.sh"
     if not script.exists():
         shutil.copy(repo_root() / "docker/generate-secrets.sh", script)
+        shutil.copy(repo_root() / "docker/write-redis-acl.sh", directory)
     # A fake docker answering "no volumes": the script refuses a new DB password unless it can check.
     bin_dir = directory / "bin"
     bin_dir.mkdir(exist_ok=True)
