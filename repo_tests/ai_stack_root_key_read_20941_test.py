@@ -16,6 +16,8 @@ import jinja2
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 SHARED = ANSIBLE / "_shared" / "tasks" / "read_slm_secrets_root_key.yml"
 AI_ENV = ANSIBLE / "roles" / "ai-stack" / "tasks" / "env_files.yml"
@@ -24,7 +26,7 @@ GROUP_ALL = ANSIBLE / "inventory" / "group_vars" / "all.yml"
 _SHARED_NAME = "read_slm_secrets_root_key.yml"
 BACKEND_TASKS = ANSIBLE / "roles" / "backend" / "tasks"
 #: Every task file whose includes can feed an env render: the AI Stack's and all of the backend role's.
-_ENV_FEEDING = (AI_ENV, *sorted(BACKEND_TASKS.glob("*.yml")))
+_ENV_FEEDING = (AI_ENV, *sorted(p for p in BACKEND_TASKS.iterdir() if p.suffix == ".yml"))
 #: Roles whose env templates hold secrets; a template whose dest is an env file there must hide its diff.
 _ENV_TEMPLATES = ("ai-stack.env.j2", "backend.env.j2")
 
@@ -210,7 +212,7 @@ def test_control_a_render_without_diff_false_is_caught() -> None:
 
 
 def _literal_path_lines(text: str) -> list[str]:
-    return [ln for ln in text.splitlines() if "/etc/autobot" in ln and not ln.lstrip().startswith("#")]
+    return [line.text for line in code_lines(text, name="x.yml") if "/etc/autobot" in line.text]
 
 
 def test_the_reader_has_no_literal_path_and_asserts_the_var_is_defined() -> None:

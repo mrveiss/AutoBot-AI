@@ -22,6 +22,9 @@ from repo_tests._reach import declare
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 ROOT = repo_root()
+#: Every ansible file this guard reads sits under `autobot-slm-backend/ansible/`, which the python filter covers
+#: whole (`autobot-slm-backend/ansible/**`). Root-relative `*.yml`/`*.yaml`/`*.j2` would declare a read of trees
+#: it does not (#15900), so each glob below is spelled out under that tree.
 _SECRET_FILE = re.compile(r"\.env\b|env\.j2|secrets|credentials", re.IGNORECASE)
 _READERS = ("read_secrets_root_key.yml", "read_slm_secrets_root_key.yml")
 _KEY = "AUTOBOT_SECRETS_ROOT_KEY"
@@ -32,15 +35,15 @@ _PLAY_KEYS = ("pre_tasks", "tasks", "post_tasks", "handlers", "block", "rescue",
 
 def _ansible_files(root: Path = ROOT) -> list[Path]:
     try:
-        found = tracked_paths(root, "*.yml", "*.yaml")
+        found = tracked_paths(root, "autobot-slm-backend/ansible/*.yml", "autobot-slm-backend/ansible/*.yaml")
     except EmptyEnumeration:
         return []  # declare() contract: an empty tree is reported by the floor, not raised here
-    return [root / f for f in found if "/ansible/" in f and "node_modules" not in f]
+    return [root / f for f in found if "node_modules" not in f]
 
 
 def _all_tracked_yaml(root: Path = ROOT) -> int:
     try:
-        return len(tracked_paths(root, "*.yml", "*.yaml"))
+        return sum(1 for f in tracked_paths(root) if f.endswith((".yml", ".yaml")))  # the whole tree, by design
     except EmptyEnumeration:
         return 0
 
@@ -116,11 +119,26 @@ def test_control_a_secret_write_without_diff_false_is_caught() -> None:
 # --- the root-key reader precedes every render of a template that writes the key ----------------
 
 
+#: Every role's `templates/` and the shared `templates/` sit under the one covered tree.
+_ANSIBLE_TEMPLATES = "autobot-slm-backend/ansible/*.j2"
+
+
+def _ansible_templates(root: Path = ROOT) -> list[str]:
+    return tracked_paths(root, _ANSIBLE_TEMPLATES)
+
+
 def _key_templates() -> set[str]:
-    names = {
-        Path(f).name for f in tracked_paths(ROOT, "*.j2") if "/ansible/" in f and _KEY in (ROOT / f).read_text("utf-8")
-    }
+    names = {Path(f).name for f in _ansible_templates() if _KEY in (ROOT / f).read_text("utf-8")}
     return names - {_SOURCE_TEMPLATE}
+
+
+def test_control_the_narrowed_template_sweep_finds_what_the_whole_tree_sweep_finds() -> None:
+    """Every tracked ansible template, found two ways: the narrowed pathspec and the whole tree filtered here."""
+    whole = sorted(f for f in tracked_paths(ROOT) if f.endswith(".j2") and "/ansible/" in f)
+    narrowed = sorted(_ansible_templates())
+    assert narrowed == whole, f"the narrowed sweep misses {sorted(set(whole) - set(narrowed))}"
+    assert len(narrowed) >= 100, f"only {len(narrowed)} ansible templates: the sweep lost its reach"
+    assert {"backend.env.j2", "ai-stack.env.j2"} <= {Path(f).name for f in narrowed}
 
 
 def _renders_before_reading(tasks, key_templates: set[str]) -> list[str]:
