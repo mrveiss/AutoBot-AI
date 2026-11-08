@@ -8370,6 +8370,7 @@
     "emptyHint": "Create the first team to group the people of this company.",
     "namesError": "Could not read the company's members, so team members are shown without names.",
     "unknownMember": "Unknown member",
+    "loadingNames": "Loading member details",
     "inactive": "Inactive",
     "colTeam": "Team",
     "colMembers": "Members",
