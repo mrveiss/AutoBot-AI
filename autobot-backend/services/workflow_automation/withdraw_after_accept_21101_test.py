@@ -95,3 +95,57 @@ def test_a_failure_before_acceptance_keeps_the_approval_pending(parked, handler,
     with pytest.raises(RuntimeError):
         asyncio.run(getattr(controller, handler)(parked.workflow, "s1", parked.manager.active_workflows))
     assert parked.recorder.withdrawn == []
+
+
+class _Metrics:
+    def __init__(self):
+        self.decisions = []
+
+    def record_workflow_approval(self, workflow_type, decision):
+        self.decisions.append(decision)
+
+
+@pytest.mark.parametrize("handler", ["_approve_step", "_skip_step"])
+def test_concurrent_decisions_on_one_step_accept_one_and_refuse_one(parked, handler):
+    controller = parked.manager.controller
+    controller.prometheus_metrics = _Metrics()
+    decide = getattr(controller, handler)
+
+    async def _race():
+        args = (parked.workflow, "s1", parked.manager.active_workflows)
+        return await asyncio.gather(decide(*args), decide(*args), return_exceptions=True)
+
+    results = asyncio.run(_race())
+    assert sorted(type(r).__name__ for r in results) == ["StepNotAwaitingApproval", "bool"]
+    assert parked.recorder.withdrawn == [("wf-1", "s1")]
+    assert controller.prometheus_metrics.decisions == [{"_approve_step": "approved", "_skip_step": "skipped"}[handler]]
+
+
+def _failing_withdraw(parked):
+    async def _withdraw(*_args):
+        raise OSError("withdraw failed")
+
+    parked.recorder.withdraw = _withdraw
+
+
+def test_a_failing_withdraw_does_not_replace_the_apply_failure_and_still_records_the_metric(parked):
+    async def _boom(workflow, _step_id, _workflows):
+        workflow.steps[0].status = WorkflowStepStatus.SKIPPED
+        raise RuntimeError("apply failed")
+
+    parked.manager.executor.skip_step = _boom
+    controller = parked.manager.controller
+    controller.prometheus_metrics = _Metrics()
+    _failing_withdraw(parked)
+    with pytest.raises(RuntimeError, match="apply failed"):
+        asyncio.run(controller._skip_step(parked.workflow, "s1", parked.manager.active_workflows))
+    assert controller.prometheus_metrics.decisions == ["skipped"]
+
+
+def test_a_failing_withdraw_after_a_successful_apply_surfaces_and_still_records_the_metric(parked):
+    controller = parked.manager.controller
+    controller.prometheus_metrics = _Metrics()
+    _failing_withdraw(parked)
+    with pytest.raises(OSError, match="withdraw failed"):
+        asyncio.run(controller._skip_step(parked.workflow, "s1", parked.manager.active_workflows))
+    assert controller.prometheus_metrics.decisions == ["skipped"]

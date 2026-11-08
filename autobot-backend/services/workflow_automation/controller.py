@@ -16,7 +16,7 @@ from monitoring.prometheus_metrics import get_metrics_manager
 
 from .executor import WorkflowExecutor
 from .messaging import WorkflowMessenger
-from .models import ActiveWorkflow, WorkflowControlRequest, WorkflowStepStatus
+from .models import ActiveWorkflow, StepNotAwaitingApproval, WorkflowControlRequest, WorkflowStepStatus
 
 logger = get_logger(__name__)
 
@@ -125,15 +125,31 @@ class WorkflowController:
         decision as its outcome.
         """
         was_awaiting = self._still_awaiting(workflow, step_id)
-        applied = False
         try:
             await apply(workflow, step_id, workflows)
-            applied = True
-        finally:
-            if applied or (was_awaiting and not self._still_awaiting(workflow, step_id)):
-                await self.executor.step_approvals.withdraw(workflow.workflow_id, step_id)
-                self.prometheus_metrics.record_workflow_approval(workflow_type="automated_workflow", decision=decision)
+        except StepNotAwaitingApproval:
+            raise  # refused: this call accepted nothing, so it withdraws and records nothing
+        except BaseException:
+            if was_awaiting and not self._still_awaiting(workflow, step_id):
+                await self._finish_decision(workflow, step_id, decision, failing=True)
+            raise
+        await self._finish_decision(workflow, step_id, decision, failing=False)
         return True
+
+    async def _finish_decision(self, workflow: ActiveWorkflow, step_id: str, decision: str, failing: bool) -> None:
+        """Withdraw the accepted decision's record and record its metric once.
+
+        While the apply failure is in flight (*failing*) a withdraw error is logged so it cannot
+        replace that failure; on success it surfaces. The metric is recorded either way.
+        """
+        try:
+            await self.executor.step_approvals.withdraw(workflow.workflow_id, step_id)
+        except Exception:
+            if not failing:
+                raise
+            logger.exception("Failed to withdraw approval for step %s of %s", step_id, workflow.workflow_id)
+        finally:
+            self.prometheus_metrics.record_workflow_approval(workflow_type="automated_workflow", decision=decision)
 
     async def _approve_step(
         self,
