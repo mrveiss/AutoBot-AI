@@ -131,7 +131,7 @@ const getActionText = (mode: EnforcementMode) => {
   return texts[mode] || t('featureFlags.changeHistory.actionUpdated');
 };
 
-const formatTimestamp = createDateFormatter({ locale: 'en-US', intl: { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' } });
+const formatTimestamp = createDateFormatter({ locale: () => locale.value, intl: { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' } });
 
 const formatRelativeTime = createRecencyFormatter({
   justNow: () => t('featureFlags.changeHistory.justNow'),
