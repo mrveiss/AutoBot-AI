@@ -378,6 +378,12 @@ def probe_pid_identity(pid: int, expected_create_time: float | None) -> AdapterR
         _logger.warning("probe_pid_identity: could not verify PID %d, falling back to plain probe: %s", pid, exc)
         return probe_pid(pid)
     if actual != expected_create_time:
+        _logger.warning(
+            "probe_pid_identity: PID %d exists but its identity differs (expected=%r actual=%r); reporting COMPLETED",
+            pid,
+            expected_create_time,
+            actual,
+        )
         return AdapterRunStatus(status=LLCRunStatus.COMPLETED)
     return AdapterRunStatus(status=LLCRunStatus.RUNNING)
 
