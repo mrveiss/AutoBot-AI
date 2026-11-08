@@ -172,7 +172,8 @@ def test_failed_preload_is_unhealthy_until_a_model_loads(monkeypatch):
     assert client.get("/health").json()["status"] == "healthy"
 
 
-def test_failed_embedding_preload_aborts_startup(monkeypatch):
+@pytest.mark.parametrize("manager_available", [False, True])
+def test_failed_embedding_preload_aborts_startup(monkeypatch, manager_available):
     import worker_startup
 
     class Worker(WorkerStartupMixin):
@@ -184,10 +185,12 @@ def test_failed_embedding_preload_aborts_startup(monkeypatch):
             self.initialize_npu = AsyncMock()
             self._models_lock = asyncio.Lock()
             self.loaded_models = {}
-            self._use_real_inference = False
-            self._model_manager = None
+            self._use_real_inference = manager_available
+            self._model_manager = MagicMock(load_model=AsyncMock(return_value=False)) if manager_available else None
             self._allow_mock_inference = False
 
     monkeypatch.setattr(worker_startup, "config", {"models": {"embedding": {"preload": True, "name": "model"}}})
+    worker = Worker()
     with pytest.raises(RuntimeError, match="Real inference is unavailable for model"):
-        asyncio.run(Worker().initialize())
+        asyncio.run(worker.initialize())
+    assert worker.loaded_models == {}

@@ -38,8 +38,9 @@ async def test_embeddings_without_explicit_real_marker_are_rejected(monkeypatch,
         response.json = AsyncMock(return_value={"embeddings": [[1.0]], **marker})
         yield response
 
-    client = npu_client.NPUClient("http://worker")
+    client = npu_client.NPUClient("http://user:secret@worker:8080")
     client._get_session = AsyncMock(return_value=MagicMock(post=post))
     monkeypatch.setattr(npu_client, "assert_egress_policy", AsyncMock())
     assert await client.generate_embeddings(["text"], "model") is None
-    assert "http://worker" in caplog.text
+    assert "http://worker:8080" in caplog.text
+    assert "user" not in caplog.text and "secret" not in caplog.text

@@ -50,6 +50,8 @@ Complete step-by-step installation guide for the AutoBot NPU Worker on Windows s
 When upgrading an existing deployment, upgrade the NPU workers before the
 backend. Older workers do not identify mock embeddings, so the updated backend
 rejects their embedding responses and falls back to another provider when available.
+Keep `NPU_WORKER_ALLOW_MOCK_INFERENCE` disabled until all backends using those
+workers have been upgraded; older backends cannot identify mock vectors.
 
 ### Method 1: Installer Package (Recommended)
 
