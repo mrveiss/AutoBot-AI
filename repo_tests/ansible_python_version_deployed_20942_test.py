@@ -52,6 +52,41 @@ def _is_staging(task: dict, root: str) -> bool:
     )
 
 
+def _stages_from_deploy_ref(tasks: list[dict]) -> bool:
+    """A runnable ``git show <deploy_ref>:.python-version`` followed by a copy of its stdout.
+
+    Reading the checkout's working tree (a ``copy`` with a ``src`` under the checkout) is
+    wrong: a checkout that is not at deploy_ref would overwrite the archive's copy.
+    """
+    reads = [
+        i
+        for i, t in enumerate(tasks)
+        if isinstance((c := t.get("ansible.builtin.command") or t.get("command")), dict)
+        and "show" in (c.get("argv") or [])
+        and any("deploy_ref" in str(a) and str(a).endswith(":.python-version") for a in c["argv"])
+        and t.get("register")
+        and t.get("delegate_to") == "localhost"
+        and t.get("when", True) not in (False, "false", "False")
+    ]
+    for i in reads:
+        reg = tasks[i]["register"]
+        for t in tasks[i + 1 :]:
+            cp = t.get("ansible.builtin.copy") or t.get("copy")
+            if (
+                isinstance(cp, dict)
+                and "src" not in cp
+                and str(cp.get("dest", "")) == _DEST
+                and reg in str(cp.get("content", ""))
+                and t.get("when", True) not in (False, "false", "False")
+            ):
+                return True
+    return False
+
+
+def role_stages_from_deploy_ref(path: Path) -> bool:
+    return _stages_from_deploy_ref(_tasks(_load(path)))
+
+
 def _deploys_shared(task: dict) -> bool:
     un = task.get("unarchive") or task.get("ansible.builtin.unarchive")
     return isinstance(un, dict) and str(un.get("src", "")).endswith("/shared.tar.gz")
@@ -71,18 +106,19 @@ def archive_carries_floor(plays: list[dict]) -> bool:
     return False
 
 
-def _restart_index(tasks: list[dict]) -> int:
+def _restart_index(tasks: list[dict], name: str | None = "autobot-slm-backend") -> int:
+    """Index of the first systemd restart (of ``name``, or of any unit when None)."""
     for i, t in enumerate(tasks):
         sd = t.get("systemd") or t.get("ansible.builtin.systemd")
-        if isinstance(sd, dict) and sd.get("name") == "autobot-slm-backend" and sd.get("state") == "restarted":
+        if isinstance(sd, dict) and sd.get("state") == "restarted" and name in (None, sd.get("name")):
             return i
-    raise AssertionError("no SLM backend restart task found")
+    raise AssertionError("no restart task found")
 
 
-def unpacks_before_restart(play: dict) -> bool:
+def unpacks_before_restart(play: dict, name: str | None = "autobot-slm-backend") -> bool:
     tasks = _tasks(play.get("tasks"))
     deploys = [i for i, t in enumerate(tasks) if _deploys_shared(t)]
-    return bool(deploys) and min(deploys) < _restart_index(tasks)
+    return bool(deploys) and min(deploys) < _restart_index(tasks, name)
 
 
 def _slm_play(plays: list[dict]) -> dict:
@@ -93,8 +129,8 @@ def test_source_file_exists():
     assert (_ROOT / ".python-version").is_file()
 
 
-def test_role_stages_python_version_from_the_deployed_checkout():
-    assert deploys_python_version(_ROLE, _ROLE_ROOT), f"{_ROLE.name}: no #20942 staging from code_source_dir"
+def test_role_stages_python_version_from_deploy_ref():
+    assert role_stages_from_deploy_ref(_ROLE), f"{_ROLE.name}: no #20942 staging from deploy_ref"
 
 
 def test_agent_install_stages_python_version_from_the_shared_tree():
@@ -112,6 +148,21 @@ def test_shared_archive_carries_python_version_from_deploy_ref():
 
 def test_slm_play_unpacks_shared_before_the_backend_restart():
     assert unpacks_before_restart(_slm_play(_load(_PLAYBOOK)))
+
+
+def _infra_play(plays: list[dict]) -> dict:
+    return next(p for p in plays if p.get("hosts") == "infrastructure")
+
+
+def test_infrastructure_play_unpacks_shared_before_any_restart():
+    assert unpacks_before_restart(_infra_play(_load(_PLAYBOOK)), None)
+
+
+def test_control_infrastructure_restart_before_unpack_is_detected():
+    play = _copy.deepcopy(_infra_play(_load(_PLAYBOOK)))
+    tasks = play["tasks"]
+    tasks.insert(0, tasks.pop(_restart_index(tasks, None)))
+    assert not unpacks_before_restart(play, None)
 
 
 def test_control_archive_without_python_version_is_detected():
@@ -159,3 +210,25 @@ def test_control_detector_rejects_a_copy_from_another_checkout(tmp_path):
 
 def test_control_detector_rejects_a_task_that_can_never_run(tmp_path):
     assert not deploys_python_version(_write(tmp_path, _ROLE_ROOT, "  when: false\n"), _ROLE_ROOT)
+
+
+def test_control_working_tree_read_fails_the_guard():
+    """A staging copy whose src sits under the checkout (no ref) is the #20942 finding."""
+    tasks = _tasks(_load(_ROLE))
+    assert _stages_from_deploy_ref(tasks)
+    mutated = _copy.deepcopy(tasks)
+    for t in mutated:
+        cp = t.get("ansible.builtin.copy")
+        if isinstance(cp, dict) and cp.get("dest") == _DEST:
+            cp.pop("content")
+            cp["src"] = "{{ code_source_dir }}/.python-version"
+    assert not _stages_from_deploy_ref(mutated)
+
+
+def test_control_read_without_a_ref_fails_the_guard():
+    mutated = _copy.deepcopy(_tasks(_load(_ROLE)))
+    for t in mutated:
+        c = t.get("ansible.builtin.command")
+        if isinstance(c, dict):
+            c["argv"] = [a for a in c["argv"] if "deploy_ref" not in str(a)] + ["HEAD:.python-version"]
+    assert not _stages_from_deploy_ref(mutated)
