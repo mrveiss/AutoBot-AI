@@ -20,12 +20,14 @@ read-only as well.
 from __future__ import annotations
 
 import asyncio
+import math
 import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List
 
 from autobot_shared.env_registry import env
+from autobot_shared.env_utils import env_registered
 from autobot_shared.logging_manager import get_logger
 from eval.live_classify import (  # noqa: F401  (re-exported: the live API surface)
     CATEGORIES,
@@ -41,6 +43,8 @@ from eval.live_guard import (  # noqa: F401
     RemoteProviderRefused,
     assert_chains_local,
     assert_local_only,
+    classify_locality,
+    remote_allowed,
 )
 from eval.live_judge import Judge
 from eval.live_turn import (  # noqa: F401  (re-exported: the live API surface)
@@ -120,6 +124,36 @@ def _make_workspace(root: str) -> str:
     return tempfile.mkdtemp(prefix="autobot-eval-", dir=root or None)
 
 
+def _remove_workspace(workspace: str) -> None:
+    """Remove a throwaway workspace; a failure is reported by name (never the full path) and never raised."""
+    try:
+        shutil.rmtree(workspace)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        logger.warning("could not remove the eval workspace %s; remove it by hand", Path(workspace).name)
+
+
+async def _allocate_workspace(root: str) -> str:
+    """A new workspace; if the wait is cancelled, the worker's result is still removed."""
+    allocation = asyncio.ensure_future(asyncio.to_thread(_make_workspace, root))
+    try:
+        return await asyncio.shield(allocation)
+    except asyncio.CancelledError:
+        allocation.add_done_callback(
+            lambda done: _remove_workspace(done.result()) if not done.cancelled() and not done.exception() else None
+        )
+        raise
+
+
+def _checked_timeout(timeout_s: float | None) -> float:
+    """The per-turn bound: the explicit value, else the registered one; always finite and positive."""
+    value = env_registered("AUTOBOT_EVAL_LIVE_TIMEOUT_S", positive_finite=True) if timeout_s is None else timeout_s
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError(f"the live-eval timeout must be a positive finite number of seconds, got {value!r}")
+    return float(value)
+
+
 class LiveChatCandidate:
     """The thing under test for ``--live``: the chat graph, per model, behind the local-only guard."""
 
@@ -143,9 +177,20 @@ class LiveChatCandidate:
         self.resolve_endpoint = resolve_endpoint or chat_endpoint_for
         self.resolve_provider = resolve_provider or chat_resolved_provider
         self.probe_kb = probe_kb or probe_knowledge_base
-        self.timeout_s = timeout_s if timeout_s is not None else float(env("AUTOBOT_EVAL_LIVE_TIMEOUT_S"))
+        self.timeout_s = _checked_timeout(timeout_s)
         self.localities: Dict[str, Locality] = {}
+        #: The pinned judge's locality, set by the orchestrator when a judge model is named.
+        self.judge_locality: Locality | None = None
+        #: Operator fallback chains that can leave the local provider (non-empty only on an allowed remote run).
+        self.remote_chains: List[str] = []
         self.kb_status: str = ""
+
+    #: A candidate over one model is itself a ``CandidateRunner``; the replayer reads these three off it.
+    live = True
+
+    @property
+    def model(self) -> str | None:
+        return self.models[0] if len(self.models) == 1 else None
 
     async def prepare(self) -> Dict[str, Locality]:
         """Run the guards and probe the KB. Raises ``RemoteProviderRefused`` before any turn can run.
@@ -158,7 +203,7 @@ class LiveChatCandidate:
                 f"--provider {self.provider!r} is not the provider chat resolves for its turns ({resolved!r})"
             )
         self.provider = resolved
-        assert_chains_local(allow_remote=self.allow_remote)
+        self.remote_chains = assert_chains_local(allow_remote=self.allow_remote)
         self.localities = await assert_local_only(
             self.models, resolved, self.resolve_endpoint, allow_remote=self.allow_remote
         )
@@ -178,11 +223,25 @@ class LiveChatCandidate:
 
     async def run_turn(self, golden: GoldenTrajectory, model: str) -> LiveRunRecord:
         """One turn in a throwaway workspace, which is removed whatever happens."""
-        workspace = await asyncio.to_thread(_make_workspace, str(env("AUTOBOT_EVAL_WORKSPACE_ROOT")))
+        await self._recheck_locality(model)
+        workspace = await _allocate_workspace(str(env("AUTOBOT_EVAL_WORKSPACE_ROOT")))
         try:
             return await self.turn_runner(golden, model, Path(workspace))
         finally:
-            await asyncio.to_thread(shutil.rmtree, workspace, True)
+            await asyncio.shield(asyncio.to_thread(_remove_workspace, workspace))
+
+    async def _recheck_locality(self, model: str) -> None:
+        """Re-resolve the endpoint chat will use for this turn: discovery can move after ``prepare``.
+
+        A turn whose endpoint is no longer local is refused unless the operator allowed it; when allowed, the
+        report carries the locality observed, so it cannot keep claiming ``local_only`` for a turn that was not.
+        """
+        current = await classify_locality(model, self.provider, self.resolve_endpoint)
+        if current.local_only:
+            return
+        if not (self.allow_remote or remote_allowed()):
+            raise RemoteProviderRefused(f"{model} now resolves to a non-local endpoint ({current.endpoint_class})")
+        self.localities[model] = current
 
 
 class ModelRunner:
@@ -200,9 +259,14 @@ class ModelRunner:
         owner = self._owner
         if self.model not in owner.localities:
             raise RuntimeError("the local-only guard has not run; call LiveChatCandidate.prepare() first")
-        if golden.task_class in GROUNDED_TASK_CLASSES and owner.kb_status != KB_POPULATED:
+        criteria = golden.criteria()
+        grounded = golden.task_class in GROUNDED_TASK_CLASSES
+        if (grounded or any(_is_grounding(c) for c in criteria)) and owner.kb_status != KB_POPULATED:
             # An environment cause, not the model's: with no documents the answer cannot be grounded.
             raise RecordingUnusable(f"environment: the knowledge base is {owner.kb_status or 'unprobed'}")
+        if grounded and owner.judge is None and all(_is_grounding(c) for c in criteria):
+            # Nothing would check what the answer says, so any short reply after the expected tools would pass.
+            raise RecordingUnusable("the golden declares no content criteria and no judge is pinned")
 
     async def __call__(self, golden: GoldenTrajectory) -> CandidateResult:
         owner = self._owner
@@ -214,11 +278,23 @@ class ModelRunner:
         except Exception as exc:  # noqa: BLE001 - infrastructure failure: "not run", never a pass or a model failure
             logger.warning("live turn for %s failed", golden.trajectory_id, exc_info=True)
             raise RecordingUnusable(f"live turn for {golden.trajectory_id!r} failed: {type(exc).__name__}") from exc
+        if not record.final_text.strip() and not record.tool_sequence and record.final_status == "completed":
+            raise RecordingUnusable("the turn produced no answer and called no tool")
         detail = await _evaluate_criteria(record, golden)
         record.grounding_required = golden.task_class in GROUNDED_TASK_CLASSES
         if owner.judge is not None and record.grounding_required:
-            record.judge_unsupported = await owner.judge(record, golden)
+            record.judge_unsupported = await self._judged(golden, record)
         return self._result(golden, record, detail)
+
+    async def _judged(self, golden: GoldenTrajectory, record: LiveRunRecord) -> bool:
+        """The pinned judge's verdict; a judge that fails is infrastructure, so the run is ``not_run``."""
+        try:
+            return await self._owner.judge(record, golden)
+        except RecordingUnusable:
+            raise
+        except Exception as exc:  # noqa: BLE001 - an injected judge may raise anything: never end the replay
+            logger.warning("judge for %s failed", golden.trajectory_id, exc_info=True)
+            raise RecordingUnusable(f"the judge failed: {type(exc).__name__}") from exc
 
     def _result(self, golden: GoldenTrajectory, record: LiveRunRecord, detail: str) -> CandidateResult:
         categories = classify_failures(record)

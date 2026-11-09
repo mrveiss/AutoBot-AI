@@ -43,11 +43,50 @@ def _no_override(monkeypatch):
         ("http://[::1]:11434", LOOPBACK),
         ("http://10.1.2.3:11434", PRIVATE),
         ("http://192.168.0.5:11434", PRIVATE),
-        ("https://203.0.113.9:443", PUBLIC),
+        ("http://[fe80::1%25eth0]:11434", PRIVATE),
+        ("http://[::ffff:10.1.2.3]:11434", PRIVATE),
+        ("https://8.8.8.8:443", PUBLIC),
+        ("http://0.0.0.0:11434", PUBLIC),
     ],
 )
 async def test_endpoint_class_never_needs_the_host_string(url, expected):
     assert await endpoint_class(url) == expected
+
+
+def _answers(monkeypatch, *addresses):
+    import ipaddress
+
+    async def resolve(host, timeout):
+        return [ipaddress.ip_address(a) for a in addresses]
+
+    monkeypatch.setattr("autobot_shared.url_safety._resolve_addresses", resolve)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "answers,expected",
+    [
+        (["10.1.2.3"], PRIVATE),
+        (["127.0.0.1", "::1"], LOOPBACK),
+        (["10.1.2.3", "8.8.8.8"], PUBLIC),  # one public answer makes the name public
+        ([], PUBLIC),  # does not resolve: fail closed
+    ],
+)
+async def test_a_hostname_is_classified_by_every_address_it_resolves_to(monkeypatch, answers, expected):
+    _answers(monkeypatch, *answers)
+    assert await endpoint_class("http://some-name.example:11434") == expected
+
+
+@pytest.mark.asyncio
+async def test_an_allowlisted_name_that_resolves_public_is_not_private(monkeypatch):
+    """Membership in the internal-origin allowlist no longer decides locality: the addresses do."""
+    _answers(monkeypatch, "8.8.8.8")
+
+    async def listed(url):
+        return True
+
+    monkeypatch.setattr("autobot_shared.egress_allowlist.is_internal_origin", listed)
+    assert await endpoint_class("http://slm-node.example:11434") == PUBLIC
 
 
 @pytest.mark.asyncio
@@ -57,13 +96,11 @@ async def test_a_local_provider_on_loopback_is_allowed_and_stamped():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "provider,url", [("openai", "http://127.0.0.1:11434"), ("ollama", "https://203.0.113.9:11434")]
-)
+@pytest.mark.parametrize("provider,url", [("openai", "http://127.0.0.1:11434"), ("ollama", "https://8.8.8.8:11434")])
 async def test_a_hosted_provider_or_a_public_endpoint_is_refused_without_naming_the_host(provider, url):
     with pytest.raises(RemoteProviderRefused) as refused:
         await assert_local_only(["m1"], provider, _resolver(url))
-    assert "203.0.113.9" not in str(refused.value)
+    assert "8.8.8.8" not in str(refused.value)
 
 
 @pytest.mark.asyncio
@@ -91,13 +128,13 @@ async def test_a_refused_run_never_invokes_the_turn_runner():
 @pytest.mark.asyncio
 async def test_the_override_runs_it_and_stamps_local_only_false(monkeypatch):
     monkeypatch.setenv(_ENV, "true")
-    found = await assert_local_only(["m1"], "openai", _resolver("https://203.0.113.9"))
+    found = await assert_local_only(["m1"], "openai", _resolver("https://8.8.8.8"))
     assert found["m1"].local_only is False and found["m1"].endpoint_class == PUBLIC
 
 
 @pytest.mark.asyncio
 async def test_the_explicit_allow_flag_also_overrides():
-    found = await assert_local_only(["m1"], "openai", _resolver("https://203.0.113.9"), allow_remote=True)
+    found = await assert_local_only(["m1"], "openai", _resolver("https://8.8.8.8"), allow_remote=True)
     assert found["m1"].local_only is False
 
 
@@ -149,10 +186,46 @@ async def test_a_non_local_fallback_chain_refuses_the_run_and_a_local_one_does_n
             probe_kb=_kb,
         )
 
+    from llm_shared import fallback_chain
+
+    def active_manager():  # the process-wide manager reads the env once; a test needs it read again
+        monkeypatch.setattr(fallback_chain, "get_fallback_chain_manager", fallback_chain.FallbackChainManager)
+
     monkeypatch.setenv("AUTOBOT_FALLBACK_CHAIN_M1", "ollama:backup")
+    active_manager()
     await candidate().prepare()  # a local-to-local hop is fine
     monkeypatch.setenv("AUTOBOT_FALLBACK_CHAIN_M1", "ollama:backup,openai:gpt-x")
     with pytest.raises(RemoteProviderRefused, match="fail over"):
         await candidate().prepare()
     monkeypatch.setenv(_ENV, "true")
     await candidate().prepare()  # the explicit override still works
+
+
+@pytest.mark.asyncio
+async def test_the_active_fallback_manager_is_the_one_inspected(monkeypatch):
+    from llm_shared.fallback_chain import FallbackChain, get_fallback_chain_manager
+
+    monkeypatch.delenv(_ENV, raising=False)
+    manager = get_fallback_chain_manager()
+    chain = FallbackChain(
+        "held-by-active-manager",
+        ["hosted-model"],
+        fallback_providers=["openai"],
+        operator_configured=True,
+    )
+    manager.register_chain(chain)
+    try:
+        candidate = LiveChatCandidate(
+            ["m1"],
+            "ollama",
+            resolve_endpoint=_resolver("http://127.0.0.1:1"),
+            resolve_provider=lambda: "ollama",
+            probe_kb=_kb,
+        )
+        with pytest.raises(RemoteProviderRefused, match="held-by-active-manager"):
+            await candidate.prepare()
+        monkeypatch.setenv(_ENV, "true")
+        await candidate.prepare()
+        assert candidate.remote_chains == ["held-by-active-manager"]  # the run-level pin will say so
+    finally:
+        manager._chains.pop("held-by-active-manager", None)

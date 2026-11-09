@@ -42,6 +42,7 @@ class _Redis:
 def _manager(contexts: list) -> ChatWorkflowManager:
     m = ChatWorkflowManager.__new__(ChatWorkflowManager)
     m._active_streams = 0
+    m.sessions = {}
     m.redis_client = _Redis()
     m.rag_service = None
     m.initialize = AsyncMock(return_value=True)
@@ -254,3 +255,53 @@ async def test_a_paused_approval_is_denied_with_the_eval_reason_and_a_finished_t
     await live_turn._deny_pending_approval(Manager(), None, "eval-g-1", SimpleNamespace(next=("execute_tools",)))
     await live_turn._deny_pending_approval(Manager(), None, "eval-g-2", SimpleNamespace(next=()))
     assert resumed == [("eval-g-1", {"approved": False, "reason": "denied: eval run"})]
+
+
+async def test_a_trajectory_id_with_punctuation_gets_a_session_id_its_own_cleanup_accepts():
+    golden = GoldenTrajectory("fix.timeout/v2", "code_fix", {"prompt": "p"}, [], 0.9)
+    _History.deleted = []
+    session_id = live_turn.new_session_id(golden)
+    with patch("chat_history.ChatHistoryManager", _History):
+        await live_turn._delete_history(session_id)
+    assert _History.deleted == [session_id]
+
+
+async def test_cleanup_also_releases_the_in_memory_workflow_session():
+    manager = _manager([])
+    manager.sessions["eval-g-1"] = object()
+    _History.deleted = []
+    with (
+        patch("chat_workflow.get_chat_workflow_manager", lambda: manager),
+        patch("chat_workflow.graph.delete_thread_checkpoints", AsyncMock()),
+        patch("chat_history.ChatHistoryManager", _History),
+    ):
+        await live_turn._cleanup("eval-g-1-" + "0" * 12 + "4" + "0" * 3 + "8" + "0" * 15)
+        manager.sessions["eval-g-2"] = object()
+        assert await manager.remove_session("eval-g-2") is True and await manager.remove_session("eval-g-2") is False
+
+
+async def test_a_turn_whose_graph_node_failed_is_not_run():
+    class Manager:
+        async def initialize(self):
+            return None
+
+        async def process_message(self, *args, **kwargs):
+            return []
+
+        async def remove_session(self, session_id):
+            return True
+
+    class Graph:
+        async def aget_state(self, config):
+            return SimpleNamespace(values={"iteration_count": 2, "error": "node failed"}, next=())
+
+    with (
+        patch("chat_workflow.get_chat_workflow_manager", lambda: Manager()),
+        patch("chat_workflow.graph.get_compiled_graph", AsyncMock(return_value=Graph())),
+        patch("chat_workflow.graph.delete_thread_checkpoints", AsyncMock()),
+        patch("chat_history.ChatHistoryManager", _History),
+    ):
+        _History.deleted = []
+        with pytest.raises(live_turn.GraphFailed):
+            await live_turn.chat_turn_runner(_golden(), "m", None)
+    assert len(_History.deleted) == 1  # and it was still cleaned up

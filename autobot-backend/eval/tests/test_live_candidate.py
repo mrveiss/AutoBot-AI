@@ -11,7 +11,7 @@ import pytest
 
 from eval.candidates import live_replay_candidate
 from eval.live import LiveChatCandidate, LiveRunRecord, build_record
-from eval.runner import TrajectoryReplayer
+from eval.runner import RecordingUnusable, TrajectoryReplayer
 from eval.store import GoldenTrajectory
 
 _LOCAL = "http://127.0.0.1:11434"
@@ -179,3 +179,144 @@ def test_build_record_reads_the_graph_state_fields():
     assert (record.tool_loop_count, record.iteration_count, record.used_knowledge) == (1, 3, True)
     assert build_record([], {"pending_approval": {"x": 1}}).final_status == "awaiting_approval"
     assert build_record([], {"error": "boom"}).final_status == "error"
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_workspace_allocation_is_still_removed(monkeypatch):
+    from eval import live
+
+    made = []
+    real = live._make_workspace
+
+    def slow_make(root):
+        import time
+
+        time.sleep(0.2)
+        path = real(root)
+        made.append(path)
+        return path
+
+    monkeypatch.setattr(live, "_make_workspace", slow_make)
+    task = asyncio.ensure_future(live._allocate_workspace(""))
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    await asyncio.sleep(0.5)
+    assert made and not Path(made[0]).exists()
+
+
+@pytest.mark.asyncio
+async def test_a_workspace_that_cannot_be_removed_is_reported_by_name_not_path(monkeypatch, caplog):
+    from eval import live
+
+    def refuse(path):
+        raise PermissionError("busy")
+
+    monkeypatch.setattr(live.shutil, "rmtree", refuse)
+    workspace = live._make_workspace("")
+    try:
+        with caplog.at_level("WARNING"):
+            live._remove_workspace(workspace)
+        assert Path(workspace).name in caplog.text and workspace not in caplog.text
+    finally:
+        monkeypatch.undo()
+        live._remove_workspace(workspace)
+
+
+@pytest.mark.asyncio
+async def test_a_judge_that_raises_is_not_run_and_does_not_end_the_replay():
+    async def broken(record, golden):
+        raise ValueError("judge exploded")
+
+    def fresh(golden, model, workspace):
+        return LiveRunRecord(final_text="a long enough answer " * 5, used_knowledge=True)
+
+    candidate = _candidate(fresh, judge=broken)
+    await candidate.prepare()
+    goldens = [_golden("knowledge_qa", criteria=_MATCHES), _golden("code_fix", criteria=_MATCHES)]
+    report = await TrajectoryReplayer().run(goldens, candidate.runner_for("m1"))
+    assert [o.classify() for o in report.outcomes][0] == "unmeasured" and len(report.outcomes) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_grounded_golden_with_no_content_criteria_and_no_judge_is_not_run():
+    with pytest.raises(RecordingUnusable, match="no content criteria"):
+        await _run(_candidate(LiveRunRecord(final_text="ok")), _golden("knowledge_qa"))
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_grounding_criterion_needs_a_populated_knowledge_base_on_any_task_class():
+    async def empty():
+        return "empty"
+
+    grounding = [{"type": "resource_exists", "parameters": {"key": "grounded"}}]
+    candidate = _candidate(LiveRunRecord(final_text="DEFAULT"), probe_kb=empty)
+    with pytest.raises(RecordingUnusable, match="knowledge base is empty"):
+        await _run(candidate, _golden("code_fix", criteria=_MATCHES + grounding))
+
+
+@pytest.mark.asyncio
+async def test_a_turn_that_answered_nothing_and_called_nothing_is_not_run_not_a_pass():
+    with pytest.raises(RecordingUnusable, match="no answer"):
+        await _run(_candidate(LiveRunRecord()), _golden("code_fix"))
+
+
+@pytest.mark.asyncio
+async def test_a_direct_single_model_candidate_carries_its_timeout_model_and_loop_stall():
+    async def slow(golden, model, workspace):
+        await asyncio.sleep(5)
+
+    candidate = LiveChatCandidate(
+        ["m1"],
+        "ollama",
+        turn_runner=slow,
+        resolve_endpoint=_resolve,
+        timeout_s=0.05,
+        resolve_provider=lambda: "ollama",
+        probe_kb=_kb_populated,
+    )
+    await candidate.prepare()
+    report = await TrajectoryReplayer().run([_golden()], candidate)  # the candidate itself, not runner_for
+    (outcome,) = report.outcomes
+    assert (outcome.model, outcome.failure_categories) == ("m1", ["loop_stall"])
+
+
+@pytest.mark.parametrize("bad", [0, -1, float("nan"), float("inf")])
+def test_a_non_positive_or_non_finite_timeout_is_refused(bad):
+    with pytest.raises(ValueError, match="timeout"):
+        LiveChatCandidate(["m1"], "ollama", timeout_s=bad)
+
+
+def test_an_out_of_range_environment_timeout_is_clamped_to_the_registered_range(monkeypatch):
+    monkeypatch.setenv("AUTOBOT_EVAL_LIVE_TIMEOUT_S", "0")
+    assert LiveChatCandidate(["m1"], "ollama").timeout_s == 300.0  # non-positive: back to the default
+    monkeypatch.setenv("AUTOBOT_EVAL_LIVE_TIMEOUT_S", "999999")
+    assert LiveChatCandidate(["m1"], "ollama").timeout_s == 3600.0
+    monkeypatch.setenv("AUTOBOT_EVAL_LIVE_TIMEOUT_S", "nan")
+    assert LiveChatCandidate(["m1"], "ollama").timeout_s == 300.0
+
+
+@pytest.mark.asyncio
+async def test_an_endpoint_that_moves_to_a_public_one_after_prepare_is_refused_before_the_turn(monkeypatch):
+    monkeypatch.delenv("AUTOBOT_EVAL_ALLOW_REMOTE_PROVIDER", raising=False)
+    where = {"url": _LOCAL}
+    ran = []
+
+    async def resolve(model):
+        return where["url"]
+
+    def turn(golden, model, workspace):
+        ran.append(1)
+        return LiveRunRecord(final_text="DEFAULT")
+
+    candidate = _candidate(turn)
+    candidate.resolve_endpoint = resolve
+    await candidate.prepare()
+    where["url"] = "http://8.8.8.8:11434"
+    with pytest.raises(RecordingUnusable):
+        await candidate.runner_for("m1")(_golden(criteria=_MATCHES))
+    assert ran == []
+    monkeypatch.setenv("AUTOBOT_EVAL_ALLOW_REMOTE_PROVIDER", "true")
+    await candidate.runner_for("m1")(_golden(criteria=_MATCHES))
+    assert candidate.localities["m1"].local_only is False  # the report states the locality actually used

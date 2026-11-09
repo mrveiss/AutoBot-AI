@@ -6,7 +6,8 @@
 
 The turn leaves nothing behind: the graph checkpoints, the chat-history session that ``process_message`` persists
 under the eval's own ``eval-*`` id, and any approval the turn paused on (denied, "denied: eval run", so none stays
-queued). A turn whose graph never ran (``process_message_stream`` fell back to the legacy flow) is not run.
+queued), and the in-memory workflow session. A turn whose graph never ran (``process_message_stream`` fell back
+to the legacy flow) or whose graph failed is not run.
 """
 
 from __future__ import annotations
@@ -37,13 +38,21 @@ KB_POPULATED, KB_EMPTY, KB_UNREACHABLE = "populated", "empty", "unreachable"
 _OWN_SESSION = re.compile(r"^eval-[\w-]+-[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$")
 
 
+#: Anything outside the characters ``_OWN_SESSION`` allows in the trajectory part (``fix.timeout`` -> ``fix_timeout``).
+_SAFE_ID_CHARS = re.compile(r"[^\w-]")
+
+
 def new_session_id(golden: GoldenTrajectory) -> str:
     """A unique throwaway session id of the one shape ``_delete_history`` will agree to delete."""
-    return f"eval-{golden.trajectory_id}-{uuid.uuid4().hex}"
+    return f"eval-{_SAFE_ID_CHARS.sub('_', golden.trajectory_id)}-{uuid.uuid4().hex}"
 
 
 class GraphDidNotRun(RecordingUnusable):
     """No graph state exists for the turn: the chat flow fell back to its legacy path, so the loop was not measured."""
+
+
+class GraphFailed(RecordingUnusable):
+    """A graph node failed (``state["error"]``): the turn broke on its infrastructure, so it measured no model."""
 
 
 def run_context(model: str) -> Dict[str, Any]:
@@ -131,10 +140,12 @@ async def _delete_history(session_id: str) -> None:
 
 
 async def _cleanup(session_id: str) -> None:
+    from chat_workflow import get_chat_workflow_manager
     from chat_workflow.graph import delete_thread_checkpoints
 
     await delete_thread_checkpoints(session_id)
     await _delete_history(session_id)
+    await get_chat_workflow_manager().remove_session(session_id)
 
 
 async def chat_turn_runner(golden: GoldenTrajectory, model: str, workspace: Path) -> LiveRunRecord:
@@ -152,6 +163,8 @@ async def chat_turn_runner(golden: GoldenTrajectory, model: str, workspace: Path
         state = dict(snapshot.values or {})
         if not state.get("iteration_count"):
             raise GraphDidNotRun("no graph state for the turn; chat fell back to its legacy flow")
+        if state.get("error"):
+            raise GraphFailed("a graph node failed during the turn")
         record = build_record(messages, state)
         await _deny_pending_approval(manager, graph, session_id, snapshot)
         return record
