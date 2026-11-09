@@ -67,33 +67,48 @@ _ROWS = [
         "/autobot-infrastructure/shared/docker/ai-stack",
         "upper-bound",
     ),
-    ("requirements-ci/storage.txt", "/", "exact"),
+    # #18060: the CI plane no longer pins `==2.0.x`; it takes the same `<2.1` bound as the others.
+    ("requirements-ci/storage.txt", "/", "upper-bound"),
 ]
 _IDS = [row[0] for row in _ROWS]
 
 
-def _sqlalchemy_requirement(text: str):
-    """The single sqlalchemy Requirement in *text*, parsed by packaging."""
+_SHARED_INCLUDE = re.compile(r"^-c\s+\S*constraints/shared\.txt\b", re.MULTILINE)
+
+
+def _sqlalchemy_specifier(text: str) -> packaging_specifiers.SpecifierSet:
+    """The sqlalchemy specifier a manifest installs under: its own, plus constraints/shared.txt's.
+
+    The cap lives ONCE in constraints/shared.txt (#18060); a manifest that carries
+    `-c .../constraints/shared.txt` is bound by it, whatever it lists itself.
+    """
+    sources = [text]
+    if _SHARED_INCLUDE.search(text):
+        sources.append((repo_root() / "constraints" / "shared.txt").read_text(encoding="utf-8"))
     found = []
-    for raw in text.splitlines():
-        line = raw.split("#", 1)[0].strip()
-        if not line or line.startswith("-"):
-            continue
-        req = packaging_requirements.Requirement(line)
-        if req.name.lower() == "sqlalchemy":
-            found.append(req)
-    assert len(found) == 1, f"expected exactly one sqlalchemy requirement, found {len(found)}"
-    return found[0]
+    for source in sources:
+        for raw in source.splitlines():
+            line = raw.split("#", 1)[0].strip()
+            if not line or line.startswith("-"):
+                continue
+            req = packaging_requirements.Requirement(line)
+            if req.name.lower() == "sqlalchemy":
+                found.append(req)
+    assert found, "expected a sqlalchemy requirement in the manifest or its constraints, found none"
+    spec = packaging_specifiers.SpecifierSet()
+    for req in found:
+        spec &= req.specifier
+    return spec
 
 
 def _admitted_21x(text: str) -> list[str]:
     """The versions at or above the ceiling that the manifest's requirement admits."""
-    spec = _sqlalchemy_requirement(text).specifier
+    spec = _sqlalchemy_specifier(text)
     return [v for v in _EXCLUDED if spec.contains(v, prereleases=True)]
 
 
 def _shape_ok(text: str, shape: str) -> bool:
-    spec = _sqlalchemy_requirement(text).specifier
+    spec = _sqlalchemy_specifier(text)
     if shape == "exact":
         return any(s.operator == "==" and _EXACT_20X.fullmatch(s.version) for s in spec)
     # Upper bound: any spelling (`<2.1`, `<2.1.0`, `<=2.0.99`) that excludes 2.1

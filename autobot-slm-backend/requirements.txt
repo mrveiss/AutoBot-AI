@@ -16,16 +16,16 @@
 # to_vault_test.py and user_management/services/sso_e2e_test.py need the real
 # `sqlite+aiosqlite://` SQLAlchemy driver for in-memory async DB tests.
 numpy  # version from constraints/shared.txt
-jinja2>=3.1.6,<4.0.0
-aiosqlite>=0.22.1  # matches autobot-backend/requirements.txt's pin
+jinja2
+aiosqlite  # matches autobot-backend/requirements.txt's pin
 
 # Prometheus metrics (Issue #937: shared monitoring implementation)
-prometheus-client>=0.26.0
+prometheus-client
 
 # Web framework
 fastapi  # version from constraints/shared.txt (#18060)
 starlette  # floor from constraints/shared.txt; avoids the python_multipart __all__ ImportError on older releases
-uvicorn[standard]>=0.54.0
+uvicorn[standard]
 
 # Database - PostgreSQL (Issue #786)
 # Capped below 2.1 (#17445). A fresh venv from this file took SQLAlchemy 2.1.0
@@ -40,12 +40,12 @@ uvicorn[standard]>=0.54.0
 # into a recorded one. Migrating to 2.1.x is its own work and is NOT a
 # base-unblocking change; the tracking issue is on the cap for whoever lifts it.
 # Do not raise this bound without running the SLM suite against 2.1.x first.
-sqlalchemy>=2.0.55,<2.1
+sqlalchemy
 # Dependabot raised this to `>=2.1.0,<2.2` in #17706 and left the paragraph above
 # saying not to. Restored. The cap is not stale: #17445 is OPEN and records the
 # 27 failures 2.1.0 causes in this service. Lifting it needs the SLM suite run
 # against 2.1.x, which is that issue's work, not a dependency bump's.
-asyncpg>=0.32.0  # Async PostgreSQL driver for SQLAlchemy
+asyncpg  # Async PostgreSQL driver for SQLAlchemy
 # greenlet is declared explicitly, not left to SQLAlchemy (#17432). SQLAlchemy
 # ships it as an `[asyncio]` extra AND, in some releases, under a
 # `platform_machine == "x86_64" or ...` marker -- so whether it arrives depends
@@ -54,31 +54,31 @@ asyncpg>=0.32.0  # Async PostgreSQL driver for SQLAlchemy
 # `main` with `ModuleNotFoundError: No module named 'greenlet'` before the
 # container could start. The async engine is a direct requirement of this
 # service, so it is declared directly rather than inherited conditionally.
-greenlet>=3.5.6  # SQLAlchemy async engine dependency -- see the note above
-psycopg2-binary>=2.9.13  # Sync PostgreSQL driver for migrations
+greenlet  # SQLAlchemy async engine dependency -- see the note above
+psycopg2-binary  # Sync PostgreSQL driver for migrations
 
 # Data validation
-pydantic[email]>=2.14.1
+pydantic[email]
 pydantic-settings  # floor from constraints/shared.txt
-typing_extensions>=4.16.0  # For Python 3.8 compatibility
+typing_extensions  # For Python 3.8 compatibility
 
 # Authentication
-PyJWT[crypto]>=2.15.1
-bcrypt>=5.0.0  # Direct bcrypt API — passlib removed (#2669)
-python-multipart>=0.0.32          # SECURITY UPDATE - arbitrary file write fix
+PyJWT[crypto]
+bcrypt  # Direct bcrypt API — passlib removed (#2669)
+python-multipart  # SECURITY UPDATE - arbitrary file write fix
 
 # Cache (GH #6511: Redis-backed permission cache replaces in-process dict)
-redis[asyncio]>=8.1.0
+redis[asyncio]
 
 # Async utilities
-aiofiles>=25.1.0
+aiofiles
 websockets>=17.3,<18       # Issue #3098: SLM's own independent floor -- SLM's code never imports websockets directly (it arrives transitively through uvicorn[standard]>=0.52.4, which only requires >=13.0), but this is the version already running in SLM production, so it must not be lowered without cause. #16264 briefly lowered this to match autobot-backend/requirements.txt's <16 langgraph-sdk cap after ci.yml's python-shard job (#13300) installed SLM's tests into the SAME venv as the backend and surfaced a floor conflict there -- that was a CI-venv-sharing artifact, not a reason to downgrade SLM production, and #16391 reverted it in favor of a named exemption in pipeline-scripts/check_dependency_floors.py. #16394 gave the SLM suite its own venv, built from this file, so ci.yml's strict floor check is now scoped per venv and that exemption is gone -- do not re-add it; a floor conflict here again means a venv split broke, not that this line should move.
 
 # Ansible integration
 ansible-runner>=2.4.3
 
 # HTTP clients
-httpx>=0.28.1  # health checks, general async HTTP calls
+httpx  # health checks, general async HTTP calls
 # Async HTTP client — genuine runtime dependency, not an optional extra:
 # user_management/services/vault_client.py (SSO/system-secrets vault HTTP
 # calls), services/a2a_card_fetcher.py, services/reconciler.py's node health
@@ -86,26 +86,26 @@ httpx>=0.28.1  # health checks, general async HTTP calls
 # import it (lazily, at call time) — a fresh install was already broken the
 # first time any of those code paths ran; this was just never surfaced
 # until CI started building the app to verify generated types (#13118).
-aiohttp>=3.14.5  # SECURITY UPDATE — matches autobot-backend/requirements.txt pin
+aiohttp  # SECURITY UPDATE — matches autobot-backend/requirements.txt pin
 
 # System metrics
-psutil>=7.2.2
+psutil
 
 # SSH connectivity (for connection testing and node management)
-paramiko>=5.1.0
+paramiko
 
 # Cron expression parsing (Issue #741 - Scheduled updates)
 croniter  # version from constraints/shared.txt
 
 # SSO Integration (Issue #576 Phase 4)
 authlib>=1.9.1  # OAuth2/OIDC client
-ldap3>=2.9.1  # LDAP/Active Directory
+ldap3  # LDAP/Active Directory
 pysaml2>=7.5.5  # SAML 2.0 Service Provider
 
 # 2FA/MFA (Issue #576 Phase 5)
 pyotp>=2.10.0  # TOTP generation and verification
 
 # Security: explicit pins to override vulnerable transitive versions
-cryptography>=50.0.2  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
+cryptography  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
 # Note: pyopenssl version resolved by pysaml2's dependencies (constraints conflict with >=26.0.0)
 # cryptography>=50.0.2 provides primary security coverage

@@ -1,14 +1,15 @@
 # HTTP clients and async I/O
-requests==2.34.2
-aiohttp==3.14.5
-httpx==0.28.1
-aiofiles==25.1.0
-asyncssh>=2.24.0,<3.0.0   # production dep (requirements.txt); pki/distributor.py + pki/configurator.py import it unconditionally, so pki/test_renewal.py fails collection without it (#13086)
+-c ../constraints/shared.txt  # single source of truth for shared versions (#10524, #18060)
+requests
+aiohttp
+httpx
+aiofiles
+asyncssh  # production dep (requirements.txt); pki/distributor.py + pki/configurator.py import it unconditionally, so pki/test_renewal.py fails collection without it (#13086)
 # #14551: production dep (autobot-backend/requirements.txt, #10932 content-reach
 # keyless web search, lazy). tests/content_reach/sources/test_web_search.py
 # gates on pytest.importorskip/find_spec("ddgs") — silently skipping without this.
-ddgs>=9.16.0
+ddgs
 # #14551: production dep (autobot-backend/requirements.txt, #10932 content-reach
 # YouTube caption extraction, lazy). tests/content_reach/sources/test_youtube.py
 # gates on pytest.importorskip("yt_dlp") — silently skipping without this.
-yt-dlp>=2026.8.19
+yt-dlp

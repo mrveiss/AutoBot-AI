@@ -1,24 +1,24 @@
 -c ../../constraints/shared.txt  # single source of truth for shared versions (#10524)
 # Core AutoBot Local Dependencies (minimal for orchestrator)
 fastapi  # version from constraints/shared.txt (#18060)
-uvicorn[standard]>=0.54.0
-python-dotenv>=1.1.0
-redis>=8.1.0
-psutil>=5.9.0
-requests>=2.33.0  # GH#8326: CVE-2026-25645
-aiohttp>=3.14.3   # GH#8323 + #17304: 3.14.3 is the patched floor every sibling manifest already uses
-pyyaml>=6.0.0
-structlog>=26.1.0
+uvicorn[standard]
+python-dotenv
+redis
+psutil
+requests  # GH#8326: CVE-2026-25645
+aiohttp  # GH#8323 + #17304: 3.14.3 is the patched floor every sibling manifest already uses
+pyyaml
+structlog
 
 # For agent interface only (no heavy AI deps)
-pydantic>=2.11.0
-aiosqlite>=0.21.0
+pydantic
+aiosqlite
 
 # Basic utilities
-click>=8.2.0
-rich>=14.0.0
+click
+rich
 
 # Testing
-pytest>=8.3.0
-pytest-asyncio>=0.25.0
-pytest-xdist>=3.8.0
+pytest
+pytest-asyncio
+pytest-xdist

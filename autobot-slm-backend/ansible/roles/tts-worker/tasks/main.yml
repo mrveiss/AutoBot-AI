@@ -198,31 +198,6 @@
   timeout: 120  # Issue #2835: prevent indefinite hang on network issues
   tags: ['tts', 'venv']
 
-# #15598: every floor here is now the specifier text `autobot-tts-worker/
-# requirements.txt` declares. This role provisions the very worker whose
-# manifest annotates `fastapi>=0.141.1` as a SECURITY UPDATE requiring starlette
-# >=0.52.1, and it asked for `>=0.100.0` -- so a fresh provision satisfied the
-# task below the floor the security note exists to hold, and the role never
-# installs that manifest to correct it afterwards. `-r` is not used because the
-# worker's packages are split across three pip tasks by index (torch comes from
-# the CPU-only wheel index below); the parity guard (#15568) binds the literals
-# to the manifest instead.
-- name: "TTS Worker | Install FastAPI and server dependencies"
-  ansible.builtin.pip:
-    name:
-      - uvicorn[standard]>=0.54.0
-      - python-multipart>=0.0.32
-      - aiofiles>=25.1.0
-    virtualenv: "{{ tts_install_dir }}/venv"
-    # #16641: see "TTS Worker | Upgrade pip in venv" above.
-    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
-    state: present
-  become_user: "{{ tts_user }}"
-  environment:
-    PIP_DEFAULT_TIMEOUT: "120"
-  timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
-  tags: ['tts', 'packages']
-
 # #15598 raised this floor by hand to match `autobot-tts-worker/requirements.txt`,
 # and #18127 is what that hand-editing costs: a dependabot bump moved the manifest and
 # not this file, so `ansible_requirements_parity_test` failed #18105 on a shard. One
@@ -324,7 +299,12 @@
       # #18060: fastapi's floor lives in constraints/shared.txt, so it is installed here,
       # in the task that carries the `-c` for it, rather than bare in the task above.
       - fastapi
-      - scipy>=1.18.1
+      # #18060: the server dependencies moved here from their own task: their floors live in
+      # constraints/shared.txt, which only this task (after the staging above) can pass as `-c`.
+      - uvicorn[standard]
+      - python-multipart
+      - aiofiles
+      - scipy
     virtualenv: "{{ tts_install_dir }}/venv"
     # #16641: see "TTS Worker | Upgrade pip in venv" above.
     virtualenv_command: "{{ python_interpreter_binary }} -m venv"

@@ -128,7 +128,10 @@ _MIN_PIP_SITES = 15  # 17 carried at least one name: entry; 16 after #15684 (rol
 # and moved roles/browser's four-package list to `requirements:` (4 packages) --
 # both REDUCE the population a correct walk finds, the direction this floor
 # must never mistake for the walk having broken. 85 measured 2026-09-14.
-_MIN_ANSIBLE_DECLARATIONS = 80  # 107 before #15684, 85 after
+# 60: #18060 moved 14 more floors out of ansible (roles/dependency_patching's mirrored security
+# map and roles/tts-worker's server dependencies) into constraints/shared.txt -- a reduction, in
+# the direction this shrink-guard must never mistake for the walk having broken.
+_MIN_ANSIBLE_DECLARATIONS = 60  # 107 before #15684, 85 after, fewer after #18060
 _MIN_REQUIREMENT_FILES = 30  # 34
 _MIN_REQUIREMENT_PACKAGES = 140  # 162
 # The resolver's own reach (#15629). `_MIN_DERIVED_BINDINGS` counts the venvs the

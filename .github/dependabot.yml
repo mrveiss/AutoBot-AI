@@ -54,6 +54,10 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "tokenizers"
+        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=0.23.1"]
       - dependency-name: "openai"
         # #14431: cap <3.0 — every published llama-index-llms-openai release pins
         # openai<3, so a grouped bump to 3.x is unsatisfiable and dies with
@@ -137,6 +141,18 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "openai"
+        # #18060: openai now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=3.0.0"]
+      - dependency-name: "protobuf"
+        # #18060: protobuf now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=8.0.0"]
+      - dependency-name: "tokenizers"
+        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=0.23.1"]
       - dependency-name: "pydantic"
         update-types: ["version-update:semver-major"]
       - dependency-name: "sqlalchemy"
@@ -379,6 +395,23 @@ updates:
       all-dependencies:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "openai"
+        # #18060: openai now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=3.0.0"]
+      - dependency-name: "protobuf"
+        # #18060: protobuf now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=8.0.0"]
+      - dependency-name: "sqlalchemy"
+        # #18060: sqlalchemy now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=2.1"]
+      - dependency-name: "tokenizers"
+        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=0.23.1"]
 
   - package-ecosystem: "npm"
     directory: "/autobot-browser-worker"
@@ -410,6 +443,22 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "openai"
+        # #18060: openai now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=3.0.0"]
+      - dependency-name: "protobuf"
+        # #18060: protobuf now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=8.0.0"]
+      - dependency-name: "sqlalchemy"
+        # #18060: sqlalchemy now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=2.1"]
+      - dependency-name: "tokenizers"
+        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=0.23.1"]
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]
       - dependency-name: "numpy"
@@ -430,6 +479,22 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "openai"
+        # #18060: openai now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=3.0.0"]
+      - dependency-name: "protobuf"
+        # #18060: protobuf now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=8.0.0"]
+      - dependency-name: "sqlalchemy"
+        # #18060: sqlalchemy now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=2.1"]
+      - dependency-name: "tokenizers"
+        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=0.23.1"]
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]
       - dependency-name: "numpy"
@@ -452,6 +517,14 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "openai"
+        # #18060: openai now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=3.0.0"]
+      - dependency-name: "protobuf"
+        # #18060: protobuf now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=8.0.0"]
       - dependency-name: "huggingface-hub"
         # #17847: both manifests hold huggingface-hub <2.0. ai-stack pins
         # sentence-transformers 6.1.0, which declares huggingface-hub<2.0, so a 2.x
@@ -497,6 +570,18 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "openai"
+        # #18060: openai now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=3.0.0"]
+      - dependency-name: "protobuf"
+        # #18060: protobuf now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=8.0.0"]
+      - dependency-name: "sqlalchemy"
+        # #18060: sqlalchemy now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=2.1"]
       - dependency-name: "huggingface-hub"
         # #17847: both manifests hold huggingface-hub <2.0. ai-stack pins
         # sentence-transformers 6.1.0, which declares huggingface-hub<2.0, so a 2.x
@@ -553,6 +638,22 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "openai"
+        # #18060: openai now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=3.0.0"]
+      - dependency-name: "protobuf"
+        # #18060: protobuf now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=8.0.0"]
+      - dependency-name: "sqlalchemy"
+        # #18060: sqlalchemy now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=2.1"]
+      - dependency-name: "tokenizers"
+        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=0.23.1"]
       # Kept in step with /autobot-backend: this block reaches
       # constraints/shared.txt through the `-c` line in the code_analysis
       # manifest, and numpy/pandas majors break the same consumers there.
@@ -575,6 +676,23 @@ updates:
       all-dependencies:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "openai"
+        # #18060: openai now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=3.0.0"]
+      - dependency-name: "protobuf"
+        # #18060: protobuf now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=8.0.0"]
+      - dependency-name: "sqlalchemy"
+        # #18060: sqlalchemy now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=2.1"]
+      - dependency-name: "tokenizers"
+        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=0.23.1"]
 
   - package-ecosystem: "pip"
     directory: "/autobot-npu-worker/resources/windows-npu-worker"
@@ -587,6 +705,18 @@ updates:
       - "dependencies"
       - "backend"
     ignore:
+      - dependency-name: "openai"
+        # #18060: openai now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=3.0.0"]
+      - dependency-name: "protobuf"
+        # #18060: protobuf now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=8.0.0"]
+      - dependency-name: "sqlalchemy"
+        # #18060: sqlalchemy now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=2.1"]
       - dependency-name: "transformers"
         # #15298: exact-pinned to the version vetted on the NPU host; 5.22.1 (#20727)
         # is not. Guarded by repo_tests/windows_npu_worker_transformers_bound_test.py.
@@ -633,6 +763,10 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "tokenizers"
+        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
+        # hard-exclude the other blocks carry (#14727), so no block can lift it.
+        versions: [">=0.23.1"]
       - dependency-name: "ansible-core"
         # #15983: `constraints/ansible-core.txt` is NOT an upstream dependency. It
         # tracks a DEPLOYMENT FACT -- "the ansible-core the fleet's control node

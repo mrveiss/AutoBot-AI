@@ -11,10 +11,11 @@
 # CPU-only PyTorch index alongside requirements-ci.txt.
 
 # Test runner and the parallel/split plugins the sharded suite depends on.
+-c constraints/shared.txt  # single source of truth for shared versions (#10524, #18060)
 pytest
 pytest-asyncio
 pytest-cov
-pytest-xdist==3.8.0
+pytest-xdist
 pytest-split==0.11.0
 
 # Redis test double, used by the tests that do not need the real service.

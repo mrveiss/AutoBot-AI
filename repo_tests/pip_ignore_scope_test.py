@@ -332,7 +332,9 @@ def test_a_pyproject_contributes_its_real_dependencies() -> None:
 
     packages = _packages_pinned_in(shared)
     assert packages, "no dependency parsed out of pyproject.toml"
-    assert {"redis", "pydantic", "fastapi"} & packages, (
+    # redis/pydantic/fastapi are bare there since #18060 (their floors live in constraints/shared.txt),
+    # so the still-pinned opentelemetry-exporter-otlp stands as the proof of a real dependency.
+    assert {"redis", "pydantic", "fastapi", "opentelemetry-exporter-otlp"} & packages, (
         f"parsed {sorted(packages)[:8]} — those are TOML keys, not dependencies, "
         "so the file is being read line-wise instead of as TOML"
     )
