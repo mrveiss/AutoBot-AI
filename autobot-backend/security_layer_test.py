@@ -13,6 +13,7 @@ import pytest
 
 # Import the modules to test
 import security_layer
+from autobot_shared.auth.jwt_core import hash_password
 from autobot_shared.paths import project_root
 from autobot_shared.ssot_config import default_audit_log_file
 from autobot_shared.status_enums import CommandRisk
@@ -377,7 +378,7 @@ class TestSecurityLayer:
     def test_authenticate_user_auth_enabled(self):
         """Test user authentication when auth is enabled"""
         self.security.enable_auth = True
-        self.security.allowed_users = {"test_user": "test_password"}
+        self.security.allowed_users = {"test_user": hash_password("test_password")}
         self.security.security_config = {"user_roles": {"test_user": "developer"}}
 
         # Valid credentials

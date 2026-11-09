@@ -24,6 +24,7 @@ from autobot_shared.status_enums import CommandRisk
 from command_run_policy import CommandRunPolicy
 from config import get_config_manager
 from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
+from security_layer_credentials import load_hashed_users, verify_user_password
 from security_layer_roles import DEPRECATED_PRIVILEGED_ROLES, _normalise_role, canonical_role_permissions
 from services.audit.audit import emit_security, query_filtered
 from services.audit.taxonomy import AuditCategory, AuditFilter
@@ -78,7 +79,7 @@ class SecurityLayer:
         logger.info("Authentication enabled: %s", self.enable_auth)
 
         self.roles = self.security_config.get("roles", {})
-        self.allowed_users = self.security_config.get("allowed_users", {})
+        self.allowed_users = load_hashed_users(self.security_config.get("allowed_users", {}))
 
         # Command security settings (folded from enhanced layer per #10666 B6)
         self.enable_command_security = self.security_config.get("enable_command_security", True)
@@ -618,15 +619,11 @@ class SecurityLayer:
     # =========================================================================
 
     def authenticate_user(self, username: str, password: str) -> str | None:
-        """Authenticate user and return their role.
-
-        For demo purposes, uses a simple dictionary lookup.
-        In production, use proper password hashing (e.g., bcrypt).
-        """
+        """Authenticate user and return their role (hashes only, #21088)."""
         if not self.enable_auth:
             return "admin"
 
-        if username in self.allowed_users and self.allowed_users[username] == password:
+        if verify_user_password(self.allowed_users, username, password):
             user_roles = self.security_config.get("user_roles", {})
             role = user_roles.get(username)
             if role:

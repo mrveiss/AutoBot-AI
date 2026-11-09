@@ -295,6 +295,22 @@ In single-user mode:
 | `AUTOBOT_SINGLE_USER_MODE` | Enable single-user mode | `true` |
 | `AUTOBOT_AUDIT_LOG_FILE` | Audit log file path | `data/audit.log` |
 
+### Configured user credentials (`allowed_users`)
+
+`security_config.allowed_users` holds password hashes only (#21088). Plaintext
+entries are rejected at load: the username is logged as an error, the entry is
+ignored, and that user cannot authenticate. Stored values are never rewritten.
+An entry is either a bcrypt hash string or `{password_hash: <hash>}`.
+
+To produce a hash for an entry, run (the password is prompted, not echoed):
+
+```bash
+python autobot-backend/security_layer_credentials.py <username>
+```
+
+Paste the printed value into the entry for that user. Hashing and verification
+use `autobot_shared.auth.jwt_core.hash_password` / `verify_password`.
+
 ### Config File (`config/config.yaml`)
 
 ```yaml
