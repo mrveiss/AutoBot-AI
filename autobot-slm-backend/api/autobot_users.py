@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.user_management.last_platform_admin import LastPlatformAdminError, refuse_last_platform_admin
 from autobot_shared.user_management.revocation_outcome import RENAME_REVOCATION_INCOMPLETE_MESSAGE, commit_or_503
 from autobot_shared.user_management.user_service_errors import UserNotFoundError
 from services.auth import require_permission
@@ -164,6 +165,8 @@ async def delete_autobot_user(
 
     try:
         await user_service.delete_user(user_id)
+    except LastPlatformAdminError as exc:  # #21018: before the catch-all, which answers 404
+        raise await refuse_last_platform_admin(db, exc) from exc
     except Exception as e:
         logger.error("Failed to delete AutoBot user: %s", e)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e

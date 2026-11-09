@@ -29,6 +29,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.user_management.last_platform_admin import LastPlatformAdminError, refuse_last_platform_admin
 from autobot_shared.user_management.revocation_outcome import (
     REVOCATION_INCOMPLETE_MESSAGE,
     RevocationIncompleteError,
@@ -124,6 +125,17 @@ async def _commit_scim(db: AsyncSession) -> None:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=_scim_error(REVOCATION_INCOMPLETE_MESSAGE, None, 503),
         ) from exc
+
+
+async def _scim_last_admin_refusal(db: AsyncSession, exc: LastPlatformAdminError) -> HTTPException:
+    """SCIM 409 for a deprovisioning that would remove the last active platform admin (#21018).
+
+    The IdP's push is refused and the audit row of the refusal is committed; the stable ``code`` rides in the
+    SCIM ``detail`` so an operator can find it, the SCIM-defined ``scimType`` is ``mutability``.
+    """
+    refused = await refuse_last_platform_admin(db, exc)
+    body = _scim_error(f"{exc.code}: {exc}", "mutability", 409)
+    return HTTPException(status_code=refused.status_code, detail=body)
 
 
 async def _commit_new_user(db: AsyncSession) -> None:
@@ -341,7 +353,10 @@ async def _apply_patch_ops(ops: list[dict], user: User, user_svc: UserService) -
 async def _apply_active_flag(user: User, active: bool, user_svc: UserService) -> None:
     if not active:
         # Also for an inactive user: a repeat of a request whose marker write failed must queue it again (#20443).
-        await user_svc.deactivate_user(user.id)
+        try:
+            await user_svc.deactivate_user(user.id)
+        except LastPlatformAdminError as exc:  # #21018
+            raise await _scim_last_admin_refusal(user_svc.session, exc)
     elif active and not user.is_active:
         await user_svc.activate_user(user.id)
 
@@ -355,7 +370,10 @@ async def scim_delete_user(user_id: str, db: AsyncSession = Depends(_get_slm_db)
     user = await _get_user_or_404(user_id, db, include_deleted=True)
     context = TenantContext(is_platform_admin=True)
     user_svc = UserService(db, context)
-    await user_svc.delete_user(user.id, hard_delete=False)
+    try:
+        await user_svc.delete_user(user.id, hard_delete=False)
+    except LastPlatformAdminError as exc:  # #21018
+        raise await _scim_last_admin_refusal(db, exc)
     await _commit_scim(db)
 
 

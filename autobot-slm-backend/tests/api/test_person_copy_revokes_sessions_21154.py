@@ -32,6 +32,14 @@ _SPEC = importlib.util.spec_from_file_location(
 route = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(route)
 
+
+@pytest.fixture(autouse=True)
+def _not_the_last_admin():
+    """These tests are about the push, not the last-admin guard (tested below and in #21018's own file)."""
+    with patch.object(route, "ensure_not_last_platform_admin", AsyncMock()):
+        yield
+
+
 _REAL_AUTH = load_real_auth("s" * 40, expire_minutes=60 * 24)
 auth_service = _REAL_AUTH.auth_service
 _OLD_HASH = "hash-before"  # pragma: allowlist secret

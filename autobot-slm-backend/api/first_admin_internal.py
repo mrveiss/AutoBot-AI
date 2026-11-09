@@ -18,6 +18,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
+from autobot_shared.user_management.last_platform_admin import (
+    LastPlatformAdminError,
+    ensure_not_last_platform_admin,
+    refuse_last_platform_admin,
+)
 from autobot_shared.user_management.password_epoch import DEACTIVATION_EPOCH_LEAD_SECONDS, record_password_epoch
 from user_management.database import get_slm_session
 from user_management.models.user import User
@@ -80,6 +85,11 @@ async def update_person_copy(
     user = await session.get(User, body.slm_user_id)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such SLM user")
+    if user.is_active and not body.is_active:  # #21018: before the epoch write, so a refusal changes nothing
+        try:
+            await ensure_not_last_platform_admin(session, User, body.slm_user_id)
+        except LastPlatformAdminError as exc:
+            raise await refuse_last_platform_admin(session, exc) from exc
     # No hash means the main app holds none. That must not wipe the password this person logs in with.
     password_changed = bool(body.password_hash) and user.password_hash != body.password_hash
     # The epoch goes FIRST, as scripts/autobot-admin.py does: if the epoch cannot be recorded nothing has

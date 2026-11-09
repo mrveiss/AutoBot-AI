@@ -23,6 +23,7 @@ import pytest
 
 from autobot_shared.db_session import async_session_scope
 from autobot_shared.user_management import password_epoch
+from autobot_shared.user_management.last_platform_admin import LAST_PLATFORM_ADMIN_CODE, LastPlatformAdminError
 from autobot_shared.user_management.revocation_outcome import REVOCATION_INCOMPLETE_MESSAGE
 from testkit.fake_async_session import FakeAsyncSession
 
@@ -73,9 +74,13 @@ def store(monkeypatch):
     password_epoch.reset_epoch_store()
 
 
-def _client(user, monkeypatch):
+def _client(user, monkeypatch, last_admin=False):
     class Service(UserService):
         user_model = SimpleNamespace()
+
+        async def _guard_last_admin(self, *args, **kwargs):  # the guard has its own tests (#21018)
+            if last_admin:
+                raise LastPlatformAdminError()
 
         async def get_user(self, user_id, *, include_deleted=False):
             return None if user.deleted_at and not include_deleted else user
@@ -169,6 +174,21 @@ async def test_delete_answers_503_then_a_repeat_finds_the_soft_deleted_user(stor
 
     assert (await _call(transport, "DELETE", f"/scim/v2/Users/{user.id}")).status_code == 204
     assert "alice" in store.epochs
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["PATCH", "DELETE"])
+async def test_deprovisioning_the_last_platform_admin_is_a_scim_409(store, monkeypatch, method):
+    """#21018: the IdP's push is refused with the stable code, and no session is revoked."""
+    user = _user()
+    _session, transport = _client(user, monkeypatch, last_admin=True)
+    kwargs = {"json": _patch_inactive()} if method == "PATCH" else {}
+
+    response = await _call(transport, method, f"/scim/v2/Users/{user.id}", **kwargs)
+
+    assert response.status_code == 409
+    assert LAST_PLATFORM_ADMIN_CODE in response.json()["detail"]["detail"]
+    assert user.is_active is True and user.deleted_at is None and store.tries == []
 
 
 @pytest.mark.asyncio

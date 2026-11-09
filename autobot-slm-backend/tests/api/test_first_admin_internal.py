@@ -20,6 +20,13 @@ route = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(route)
 
 
+@pytest.fixture(autouse=True)
+def _not_the_last_admin():
+    """These tests are about the push, not the last-admin guard (tested below and in #21018's own file)."""
+    with patch.object(route, "ensure_not_last_platform_admin", AsyncMock()):
+        yield
+
+
 def _session(admin):
     found = MagicMock()
     found.scalars.return_value.first.return_value = admin
@@ -155,3 +162,23 @@ def test_over_http_the_valid_key_gets_the_admin(key_configured):
     response = _client(admin).get("/api/internal/first-admin", headers={"X-Internal-API-Key": _KEY})
     assert response.status_code == 200
     assert response.json()["password_hash"] == "h"
+
+
+@pytest.mark.asyncio
+async def test_a_person_copy_cannot_deactivate_the_only_active_admin():
+    """#21018: refused with the stable code, before the epoch write, so nothing changes."""
+    from autobot_shared.user_management.last_platform_admin import LAST_PLATFORM_ADMIN_CODE, LastPlatformAdminError
+
+    user = SimpleNamespace(id=uuid.uuid4(), username="alice", password_hash="old", is_active=True)
+    session = SimpleNamespace(get=AsyncMock(return_value=user), commit=AsyncMock())
+    with (
+        patch.object(route, "verify_internal_api_key", return_value=True),
+        patch.object(route, "ensure_not_last_platform_admin", AsyncMock(side_effect=LastPlatformAdminError())),
+        patch.object(route, "record_password_epoch", AsyncMock()) as revoke,
+        pytest.raises(HTTPException) as refused,
+    ):
+        await route.update_person_copy(_copy_body(is_active=False), session, "key")
+
+    assert refused.value.status_code == 409 and refused.value.detail["code"] == LAST_PLATFORM_ADMIN_CODE
+    revoke.assert_not_awaited()
+    assert user.is_active is True
