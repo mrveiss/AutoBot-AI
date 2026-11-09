@@ -23,12 +23,15 @@ const h = vi.hoisted(() => ({
   // Token getter passed to the SlmClient constructor — asserts the SLM token is
   // sourced live from the composable's authToken.
   capturedTokenGetter: undefined as (() => string | null) | undefined,
+  tokenlessClients: 0,
 }))
 
 vi.mock('@/utils/slmClient', () => ({
   // Constructable mock — SlmClient is instantiated with `new` in the composable.
   SlmClient: vi.fn(function (this: Record<string, unknown>, getToken: () => string | null) {
-    h.capturedTokenGetter = getToken
+    // The composable builds two: the token-bound one and a token-less one for the credential login.
+    if (getToken) h.capturedTokenGetter = getToken
+    else h.tokenlessClients += 1
     this.get = h.getMock
     this.post = h.postMock
     this.patch = h.patchMock
@@ -108,7 +111,7 @@ describe('useTLSCredentials', () => {
     expect(ok).toBe(true)
   })
 
-  it('authenticate POSTs JSON credentials to /api/auth/login with skipAuth and stores the token', async () => {
+  it('authenticate POSTs JSON credentials to /api/auth/login through the token-less client and stores the token', async () => {
     h.rawMock.mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue({ access_token: 'new-token' }),
@@ -121,9 +124,8 @@ describe('useTLSCredentials', () => {
     const [path, options] = h.rawMock.mock.calls[0]
     expect(path).toBe('/api/auth/login')
     expect(options.method).toBe('POST')
-    expect(options.skipAuth).toBe(true)
-    expect(options.headers['Content-Type']).toBe('application/json')
-    expect(JSON.parse(options.body)).toEqual({ username: 'admin', password: 'pw' })
+    expect(h.tokenlessClients).toBe(1)
+    expect(options.body).toEqual({ username: 'admin', password: 'pw' })
     expect(isAuthenticated()).toBe(true)
   })
 

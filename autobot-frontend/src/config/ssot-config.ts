@@ -763,8 +763,8 @@ export async function discoverService(
 
   // 2. Try SLM
   try {
-    const slmUrl = getConfig().slmUrl;
-    const response = await fetch(`${slmUrl}/api/discover/${serviceName}`, {
+    // eslint-disable-next-line no-restricted-syntax -- SLM discovery during bootstrap, before any client exists
+    const response = await fetch(`${getConfig().slmUrl}/api/discover/${serviceName}`, {
       headers: {
         Authorization: `Bearer ${authToken}`,
         'Content-Type': 'application/json',

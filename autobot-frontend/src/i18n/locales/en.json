@@ -7374,6 +7374,8 @@
       "toastProcessed": "Processed {count} frames successfully",
       "toastSavedToGallery": "Saved to gallery",
       "errorNoFrames": "No frames could be processed",
+      "errorProcessingFailed": "Video processing failed",
+      "toastFramesSkipped": "{count} frame could not be analyzed and was skipped | {count} frames could not be analyzed and were skipped",
       "errorInvalidFile": "Please drop a valid video file"
     },
     "visionAutomation": {
@@ -9855,6 +9857,20 @@
     }
   },
   "admin": {
+    "routes": {
+      "users": "User Management",
+      "sandbox": "Sandbox Inspector",
+      "advancedControl": "Advanced Control",
+      "budgetPolicies": "Budget Policies",
+      "systemHealth": "System Health",
+      "providerFallback": "Provider Fallback",
+      "pricing": "Model Pricing",
+      "mcpServers": "MCP Servers",
+      "conversations": "Conversation Review",
+      "permissionScopes": "Permission Scopes",
+      "cleanupProposals": "Cleanup proposals",
+      "section": "Administration"
+    },
     "systemHealth": {
       "title": "System Health",
       "subtitle": "Live backend reachability for content sources",
