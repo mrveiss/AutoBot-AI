@@ -154,12 +154,14 @@
 
         <!-- GH#9015: AI-generated image message -->
         <ImageCell
-          v-else-if="(message.type === 'image' || message.metadata?.display_type === 'image') && message.metadata?.image_payload" :rich-payload="(message.metadata.image_payload as Record<string, unknown>)"
+          v-else-if="(message.type === 'image' || message.metadata?.display_type === 'image') && message.metadata?.image_payload"
+          :rich-payload="(message.metadata.image_payload as Record<string, unknown>)"
         />
 
         <!-- GH#9016: AI-generated video message -->
         <VideoCell
-          v-else-if="(message.type === 'video' || message.metadata?.display_type === 'video') && message.metadata?.video_payload" :rich-payload="(message.metadata.video_payload as Record<string, unknown>)"
+          v-else-if="(message.type === 'video' || message.metadata?.display_type === 'video') && message.metadata?.video_payload"
+          :rich-payload="(message.metadata.video_payload as Record<string, unknown>)"
         />
 
         <!-- MVA-2006: Context summary message -->
@@ -561,18 +563,16 @@
 
 <script setup lang="ts">
 import { stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
-import type { IconName } from '@/components/ui/Icon.vue'
-import Icon from '@/components/ui/Icon.vue'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
-import { useChatStore } from '@/stores/useChatStore'
+import { useChatStore, type ChatMessage } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { usePermissionStore } from '@/stores/usePermissionStore'
 import { useVirtualChatScroll } from '@/composables/useVirtualChatScroll'
-import type { ChatMessage } from '@/stores/useChatStore'
 import type { FileAttachment } from '@/types/api'
 import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'

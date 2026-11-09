@@ -24,6 +24,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers
 from chat_workflow import limits
 from events.bus import PersistStrategy
 from events.bus import publish_event as _bus_publish_event
@@ -36,7 +37,17 @@ STALL_QUESTION = (
     "Leave the answer empty to stop here."
 )
 #: What the next generation pass is told once the person has answered.
-_GUIDANCE_FRAME = "[Human guidance] You were stuck repeating the same action. The user answered your question: {answer}"
+_GUIDANCE_INTRO = "[Human guidance] You were stuck repeating the same action. The user answered your question:\n"
+
+
+def _guidance(answer: str) -> str:
+    """The user-supplied *answer* as framed data: it cannot close its own frame or pass for a system rule."""
+    block = frame_untrusted_block(
+        "USER_ANSWER",
+        ["The user's own words, supplied in reply to your question. Use them as guidance for the task."],
+        neutralize_frame_markers(answer).splitlines() or [""],
+    )
+    return _GUIDANCE_INTRO + block
 
 
 def stall_mode(state: Dict[str, Any]) -> str:
@@ -115,5 +126,5 @@ async def ask_human(state: Dict[str, Any], config: RunnableConfig) -> dict:
         "should_continue": True,
         "tool_loop_count": 0,  # the human broke the loop: detection starts over
         "tool_call_fingerprints": [],
-        "tool_loop_warning": _GUIDANCE_FRAME.format(answer=answer),
+        "tool_loop_warning": _guidance(answer),
     }

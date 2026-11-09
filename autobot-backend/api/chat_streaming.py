@@ -55,7 +55,10 @@ def resume_decision(request_data: dict, chat_id: str) -> dict:
         "reason": scan_chat_message(request_data.get("reason", ""), chat_id),  # #16561
     }
     if request_data.get("answer"):
-        decision["answer"] = scan_chat_message(str(request_data["answer"]), chat_id)
+        from autobot_shared.ssot_config import config
+
+        capped = str(request_data["answer"])[: config.llm.chat_stall_answer_max_chars]
+        decision["answer"] = scan_chat_message(capped, chat_id)
     return decision
 
 

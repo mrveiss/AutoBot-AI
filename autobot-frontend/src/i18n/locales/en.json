@@ -433,7 +433,8 @@
       "send": "Send answer",
       "stop": "Stop here",
       "answered": "You answered: {answer}",
-      "stopped": "You chose to stop here."
+      "stopped": "You chose to stop here.",
+      "failed": "Your answer could not be sent. Please try again."
     },
     "approval": {
       "autoApproved": "Auto-Approved",

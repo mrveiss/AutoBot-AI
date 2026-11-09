@@ -45,7 +45,7 @@ function useResumePost() {
   const store = useChatStore()
   const controller = useChatController()
 
-  return async function postResume(message: ChatMessage, body: ResumeBody): Promise<void> {
+  return async function postResume(message: ChatMessage, body: ResumeBody, onAccepted?: () => void): Promise<void> {
     const chatId = String((message.metadata as Record<string, unknown>)?.session_id || store.currentSessionId || '')
     store.setTyping(true)
     try {
@@ -55,6 +55,7 @@ function useResumePost() {
         body: JSON.stringify(body),
       })
       if (!response.ok) throw new Error(`resume failed: ${response.status}`)
+      onAccepted?.()
       await controller.handleStreamingResponse(response)
     } catch (error) {
       logger.error('Resuming the chat failed:', error)
@@ -65,13 +66,13 @@ function useResumePost() {
   }
 }
 
-/** Answer the question a stalled turn asked; an empty answer stops the turn (#21022). */
+/** Answer the question a stalled turn asked; an empty answer stops the turn. The card is marked answered only once the server accepted it (#21022). */
 export function useStallAnswer() {
   const store = useChatStore()
   const postResume = useResumePost()
   return async function answerStallQuestion(message: ChatMessage, answer: string): Promise<void> {
-    store.updateMessageMetadata(message.id, { answered: true, answer_text: answer })
-    await postResume(message, { answer })
+    const accepted = () => store.updateMessageMetadata(message.id, { answered: true, answer_text: answer })
+    await postResume(message, { answer }, accepted)
   }
 }
 

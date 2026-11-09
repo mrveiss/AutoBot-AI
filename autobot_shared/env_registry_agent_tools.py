@@ -105,7 +105,21 @@ register_env_var(
         default="stop",
         description=(
             "What the chat graph does when a turn stalls: stop halts the turn, "
-            "ask escalates to the human (#21022, #20846); any other value fails config load."
+            "ask escalates to the human (#21022, #20846); any other value fails config load. "
+            "Known gap: a pending question is not re-shown after a page reload (restoring pending graph "
+            "interrupts is tracked in #21237), so enable ask only where users stay on the page."
+        ),
+        component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_STALL_ANSWER_MAX_CHARS",
+        type=int,
+        default=2000,
+        description=(
+            "Longest answer to a chat stall question that is passed to the model; longer text is truncated " "(#21022)."
         ),
         component="chat_workflow",
     )

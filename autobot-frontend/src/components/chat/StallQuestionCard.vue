@@ -9,12 +9,13 @@
       {{ answerText ? $t('chat.stallQuestion.answered', { answer: answerText }) : $t('chat.stallQuestion.stopped') }}
     </p>
     <form v-else @submit.prevent="send(draft.trim())">
+      <p v-if="failed" class="text-red-600" role="alert">{{ $t('chat.stallQuestion.failed') }}</p>
       <BaseInput v-model="draft" :label="$t('chat.stallQuestion.answerLabel')" :placeholder="$t('chat.stallQuestion.placeholder')" />
       <div class="mt-2 flex gap-2">
-        <BaseButton type="submit" variant="primary" size="sm" :disabled="busy || !draft.trim()">
+        <BaseButton type="submit" variant="primary" size="sm" :disabled="submitting || !draft.trim()">
           {{ $t('chat.stallQuestion.send') }}
         </BaseButton>
-        <BaseButton variant="outline" size="sm" :disabled="busy" @click="send('')">
+        <BaseButton variant="outline" size="sm" :disabled="submitting" @click="send('')">
           {{ $t('chat.stallQuestion.stop') }}
         </BaseButton>
       </div>
@@ -32,18 +33,26 @@ import { computed, ref } from 'vue'
 import { BaseButton, BaseInput } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { useStallAnswer } from '@/composables/useGraphApproval'
-import { useChatStore, type ChatMessage } from '@/stores/useChatStore'
+import type { ChatMessage } from '@/stores/useChatStore'
 
 const props = defineProps<{ message: ChatMessage }>()
 
-const store = useChatStore()
 const answerStallQuestion = useStallAnswer()
 const draft = ref('')
 const answered = computed(() => props.message.metadata?.answered === true)
 const answerText = computed(() => String(props.message.metadata?.answer_text ?? ''))
-const busy = computed(() => store.isTyping)
+const submitting = ref(false)
+const failed = ref(false)
 
 async function send(text: string): Promise<void> {
-  await answerStallQuestion(props.message, text)
+  submitting.value = true
+  failed.value = false
+  try {
+    await answerStallQuestion(props.message, text)
+  } catch {
+    failed.value = true // not accepted: the form stays so the person can try again
+  } finally {
+    submitting.value = false
+  }
 }
 </script>

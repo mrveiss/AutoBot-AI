@@ -5,7 +5,7 @@
 /** The stall question card (#21022): an answer is emitted; an empty answer means stop; an answered card has no form. */
 
 import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 import StallQuestionCard from '../StallQuestionCard.vue'
@@ -34,6 +34,20 @@ describe('StallQuestionCard', () => {
     const stop = wrapper.findAll('button').find((b) => b.text() === en.chat.stallQuestion.stop)
     await stop!.trigger('click')
     expect(answerStallQuestion).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'm1' }), '')
+  })
+
+  it('failure: a rejected answer keeps the form, shows the error and allows a retry', async () => {
+    answerStallQuestion.mockRejectedValueOnce(new Error('resume failed: 500'))
+    const wrapper = mountCard()
+    await wrapper.find('input').setValue('use host B')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[role="alert"]').text()).toBe(en.chat.stallQuestion.failed)
+    expect(wrapper.find('form').exists()).toBe(true)
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(answerStallQuestion).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 
   it('control: an answered card shows the answer and no form', () => {
