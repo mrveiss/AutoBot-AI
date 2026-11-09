@@ -79,7 +79,6 @@ _APPS = ("autobot-frontend", "autobot-slm-frontend")
 # fails when an entry no longer contains a raw fetch, so the list cannot rot.
 _RAW_FETCH_EXCEPTIONS: dict[str, str] = {
     "autobot-frontend/src/utils/fetchWithAuth.ts": "the canonical auth-injecting fetch helper",
-    "autobot-frontend/src/utils/slmClient.ts": "SLM-origin transport client with its own bearer token; the main-app JWT must not be sent",
     "autobot-frontend/src/config/AppConfig.js": "bootstrap config fetch; ApiClient derives its base URL from AppConfig, so it cannot depend on it",
     "autobot-frontend/src/config/ssot-config.ts": "SLM service discovery during config bootstrap, before any client exists; imported by the client",
     "autobot-frontend/src/config/ServiceDiscovery.js": "probes candidate hosts for reachability; not a call to the configured backend",
