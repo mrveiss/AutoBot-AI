@@ -441,8 +441,8 @@ export class KnowledgeController {
               wordCount: metadata.word_count as number | undefined,
               fileSize: metadata.file_size as number | undefined,
               language: metadata.language as string | undefined,
-              author: metadata.author as string | undefined
-            }
+              author: metadata.author as string | undefined,
+              factType: typeof metadata.type === 'string' ? metadata.type : undefined }
           }
         })
 

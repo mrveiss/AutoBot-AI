@@ -49,7 +49,6 @@ from user_management.database import get_async_session_factory
 from ..adapters import AdapterRunStatus, AutoBotAgentAdapter, get_adapter
 from ..config import AGENT_API_BASE_URL
 from ..exceptions import (
-    AdapterRunFailed,
     BudgetExhausted,
     HeartbeatDispatchSkipped,
     ProviderRateLimited,
@@ -61,6 +60,7 @@ from ..org_role_authority import apply_org_role_bound, role_bound_enforced
 from ..services.accessors import get_budget_service
 from ..services.controls_service import ControlsService
 from ..services.work_item_queue import has_pending_work
+from .auth_failure import adapter_run_failure, pause_after_auth_failure
 
 # Aliased to the name `_run_adapter` already calls (#17726). Renaming the call
 # site would put that unrelated 82-line function in scope for the function-length
@@ -563,6 +563,7 @@ class LLCHeartbeatScheduler:
         final_status = LLCRunStatus.COMPLETED.value
         rate_limited_exc: Optional[ProviderRateLimited] = None
         quota_exc: Optional[SubscriptionQuotaExhausted] = None
+        failure: Optional[Exception] = None  # #20202: an auth failure pauses the agent after the row is written
         external_run_id: Optional[str] = None
 
         try:
@@ -574,12 +575,10 @@ class LLCHeartbeatScheduler:
         except HeartbeatDispatchSkipped as exc:
             # GH#9951: not dispatched → record SKIPPED, do NOT bump last_heartbeat_at.
             logger.info("Heartbeat skipped for run %s: %s", run_id, exc.reason)
-            final_status = LLCRunStatus.SKIPPED.value
-            error_msg = exc.reason
+            final_status, error_msg = LLCRunStatus.SKIPPED.value, exc.reason
         except Exception as exc:
             logger.exception("Adapter error for run %s", run_id)
-            error_msg = str(exc)
-            final_status = LLCRunStatus.FAILED.value
+            failure, error_msg, final_status = exc, str(exc), LLCRunStatus.FAILED.value
 
         # #17725: both return without reaching `_finish_run` -- see the release helper.
         if rate_limited_exc is not None:
@@ -593,6 +592,7 @@ class LLCHeartbeatScheduler:
             return
 
         await self._finish_run(factory, agent, run_id, final_status, error_msg)
+        await pause_after_auth_failure(failure, agent, run_id)
 
         # GH#9034: fire-and-forget replay recording — must never affect run status.
         # Pass external_run_id so the recording locates the exact output file (H1).
@@ -928,7 +928,7 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     # GH#9622: surface non-success terminal states so _run_adapter records the
     # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
     if final_status != LLCRunStatus.COMPLETED:
-        raise AdapterRunFailed(agent.get("adapter_type") or "", str(external_run_id), final_status)
+        raise adapter_run_failure(agent, external_run_id, result)
 
     return external_run_id
 

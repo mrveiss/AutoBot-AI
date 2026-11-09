@@ -14,6 +14,7 @@
  */
 
 import { isHttpError, type InstalledTheme } from '@autobot/ui'
+import i18n from '@/i18n'
 import { createAutobotBackendClient } from '@/composables/useAutobotApi'
 
 /** The proxy refused the body before the main backend saw it: its own size cap (413). */
@@ -41,7 +42,7 @@ export function useThemesApi() {
 
   async function list(): Promise<InstalledTheme[]> {
     const response = await client.get<InstalledTheme[]>('/themes', { maxRetries: 1 })
-    if (!Array.isArray(response)) throw new Error('The theme list is not a list')
+    if (!Array.isArray(response)) throw new Error(i18n.global.t('settings.admin.themeManager.malformedList'))
     return response
   }
 

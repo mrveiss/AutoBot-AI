@@ -61,7 +61,11 @@ def test_resume_replaces_the_checkpointed_verdict_with_the_resumers_own():
     graph = _Graph(checkpointed)
     refused = asyncio.run(attachment_context.resume_context(graph, "chat-1", False))
     assert VERIFIED_ATTACHMENT_ACCESS_KEY not in refused["context"]
-    assert refused["context"]["attachments"] == ["f"] and refused["context"]["verified_user_id"] == "alice"
+    assert refused["context"]["attachments"] == ["f"]
+    assert "verified_user_id" not in refused["context"]  # no resumer identity: fail closed, never the old user (#20709)
+    stamped = asyncio.run(attachment_context.resume_context(graph, "chat-1", False, {"user_id": "bob"}))
+    assert stamped["context"]["verified_user_id"] == "bob"  # the resumer's identity replaces the checkpointed one
+    assert checkpointed["verified_user_id"] == "alice"
     assert checkpointed[VERIFIED_ATTACHMENT_ACCESS_KEY] is True  # the snapshot itself is not mutated
     granted = asyncio.run(attachment_context.resume_context(_Graph({"attachments": ["f"]}), "chat-1", True))
     assert granted["context"][VERIFIED_ATTACHMENT_ACCESS_KEY] is True
@@ -73,7 +77,7 @@ def test_a_resumer_who_fails_strict_gets_no_file_text_even_though_the_paused_tur
     world.chat.get_or_create_session = AsyncMock(return_value=SimpleNamespace(session_id=_ALICE, metadata={}))
     ctx = SimpleNamespace(session_id=_ALICE, context=paused, selected_model="m", initial_prompt=_BASE)
     assert _FACT in asyncio.run(attachment_context.attachment_prompt(world.chat, ctx))
-    update = asyncio.run(attachment_context.resume_context(_Graph(paused), "chat-1", False))
+    update = asyncio.run(attachment_context.resume_context(_Graph(paused), "chat-1", False, {"user_id": "alice"}))
     ctx.context = update["context"]  # what the resumed graph state now holds
     assert asyncio.run(attachment_context.attachment_prompt(world.chat, ctx)) == _BASE
 
