@@ -12,9 +12,9 @@
     {
       "type": "output_pattern",
       "parameters": {
-        "pattern": "(?is)(?:(?=.*(?:wizard|guided setup|setup (?:page|screen|ui|assistant)))(?=.*(?:playbook|ansible|(?:deployment|deploy) run))|(?=.*(?:wizard|guided setup|setup (?:page|screen|ui|assistant)))(?=.*(?:code[_ ]source|sync(?:s|ed|hronis(?:ed|es)|hroniz(?:ed|es))? (?:from|the|to)\\b))|(?=.*(?:playbook|ansible|(?:deployment|deploy) run))(?=.*(?:code[_ ]source|sync(?:s|ed|hronis(?:ed|es)|hroniz(?:ed|es))? (?:from|the|to)\\b)))"
+        "pattern": "(?is)(?:(?=.*(?:wizard|guided setup|setup (?:page|screen|ui|assistant)))(?=.*(?:playbook|ansible|(?:deployment|deploy) run))|(?=.*(?:wizard|guided setup|setup (?:page|screen|ui|assistant)))(?=.*(?:code[_ ]source|sync\\w*\\W+(?:\\w+\\W+){0,3}?(?:role|code)\\W+(?:\\w+\\W+){0,3}?(?:to|onto|on|into)\\W+(?:\\w+\\W+){0,2}?node))|(?=.*(?:playbook|ansible|(?:deployment|deploy) run))(?=.*(?:code[_ ]source|sync\\w*\\W+(?:\\w+\\W+){0,3}?(?:role|code)\\W+(?:\\w+\\W+){0,3}?(?:to|onto|on|into)\\W+(?:\\w+\\W+){0,2}?node)))"
       },
-      "description": "covers at least 2 of 3 concepts: the setup wizard/page, the playbook/Ansible run, the code_source sync"
+      "description": "covers at least 2 of 3 concepts: the setup wizard/page, the playbook/Ansible run, the code_source sync (code_source or syncing the role/code to the node; a bare 'sync the ...' does not count)"
     },
     {
       "type": "output_pattern",

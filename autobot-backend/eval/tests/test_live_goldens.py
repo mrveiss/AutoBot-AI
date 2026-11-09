@@ -157,3 +157,15 @@ async def test_an_answer_covering_only_one_of_the_three_concepts_still_fails():
         "the role from the dropdown and confirm the choice. Afterwards look at the node details to check things."
     )
     assert (await _run(_GOLDENS["qa_deploy_role"], final_text=one, used_knowledge=True)).passed is False
+
+
+@pytest.mark.asyncio
+async def test_one_concept_plus_a_generic_sync_sentence_still_fails():
+    generic = (
+        "Open the setup page and pick anything; the data will sync to your laptop later. Nothing else is needed, "
+        "and you can come back to the page whenever you like to look at what you picked earlier on, at any time."
+    )
+    assert len(generic) >= 200
+    result = await _run(_GOLDENS["qa_deploy_role"], final_text=generic, used_knowledge=True)
+    assert result.passed is False
+    assert "2 of 3 concepts" in result.criteria_detail
