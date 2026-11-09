@@ -62,6 +62,7 @@ _COMPARE_ALLOWLIST: dict[str, str] = {
     "autobot-backend/services/command_execution_queue.py::if state_filter is None or cmd.state == state_filter:": "command lifecycle state filter, not a credential",
     "autobot-backend/services/autoresearch/store.py::if old_state is not None and old_state != experiment.state:": "experiment lifecycle state transition, not a credential",
     "autobot-slm-backend/slm/agent/health_collector.py::if prev_state == new_state:": "service state-machine transition check (previous vs new unit state), not a credential",
+    "autobot-backend/services/agent_terminal/session_manager.py::if session.state == target:": "terminal session control-state transition, not a credential",
 }
 # Allowlist entries are exact: the number of offending lines with this text in the file must equal the count
 # (default 1), so a duplicated line cannot ride on an existing entry. Keys absent here count 1.
@@ -90,7 +91,8 @@ def _discover(root: Path) -> list[Path]:
 REACH = declare(
     "single-constant-time-compare",
     discover=_discover,
-    floor=3621,  # mid-window: population 3621, window (3621, 3621)
+    floor=3624,  # population 3626 less the 2 _DEFERRED files the guard cannot complete: window (3624, 3624)
+    skips=2,
     what="production python files",
     roots=_TREES,
 )
