@@ -12,9 +12,16 @@
     {
       "type": "output_pattern",
       "parameters": {
-        "pattern": "(?s)\\.get\\(\\s*['\"]timeout['\"]\\s*,\\s*DEFAULT_TIMEOUT\\s*\\)|if\\s[^\\n]*['\"]timeout['\"][^\\n]*:\\s*\\n[^\\n]*DEFAULT_TIMEOUT"
+        "pattern": "(?s)\\.(?:get|setdefault)\\(\\s*['\"]timeout['\"]\\s*,\\s*DEFAULT_TIMEOUT\\s*\\)|if\\s[^\\n]*['\"]timeout['\"][^\\n]*:\\s*\\n[^\\n]*DEFAULT_TIMEOUT|if\\s[^\\n]*['\"]timeout['\"][^\\n]*\\selse\\s+DEFAULT_TIMEOUT|DEFAULT_TIMEOUT\\s+if\\s[^\\n]*['\"]timeout['\"]|\\.get\\(\\s*['\"]timeout['\"]\\s*\\)\\s*or\\s+DEFAULT_TIMEOUT"
       },
-      "description": "applies the fallback: .get('timeout', DEFAULT_TIMEOUT) or an explicit branch that assigns DEFAULT_TIMEOUT"
+      "description": "applies the fallback: .get('timeout', DEFAULT_TIMEOUT), a conditional expression, `or DEFAULT_TIMEOUT`, or an explicit branch that assigns DEFAULT_TIMEOUT"
+    },
+    {
+      "type": "output_pattern",
+      "parameters": {
+        "pattern": "(?ms)\\A(?!.*^[ \\t]*\\w+\\.get\\(\\s*['\"]timeout['\"]\\s*,\\s*DEFAULT_TIMEOUT\\s*\\)[ \\t]*$)"
+      },
+      "description": "does not discard the fallback (a bare .get('timeout', DEFAULT_TIMEOUT) statement whose value is never used)"
     },
     {
       "type": "output_pattern",

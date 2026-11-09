@@ -169,3 +169,61 @@ async def test_one_concept_plus_a_generic_sync_sentence_still_fails():
     result = await _run(_GOLDENS["qa_deploy_role"], final_text=generic, used_knowledge=True)
     assert result.passed is False
     assert "2 of 3 concepts" in result.criteria_detail
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "body",
+    [
+        "    timeout = config['timeout'] if 'timeout' in config else DEFAULT_TIMEOUT\n",
+        "    timeout = DEFAULT_TIMEOUT if 'timeout' not in config else config['timeout']\n",
+        "    timeout = config.get('timeout') or DEFAULT_TIMEOUT\n",
+    ],
+    ids=["conditional-expression", "reversed-conditional", "or-fallback"],
+)
+async def test_the_null_guard_accepts_other_correct_spellings_of_the_fallback(body):
+    text = (
+        "```python\ndef connect(config):\n"
+        + body
+        + "    return open_connection(config['host'], timeout=timeout)\n```\n"
+        "A missing timeout now takes the module default."
+    )
+    assert (await _run(_GOLDENS["code_fix_null_guard"], final_text=text)).passed is True
+
+
+@pytest.mark.asyncio
+async def test_the_null_guard_rejects_a_fallback_whose_value_is_discarded():
+    text = (
+        "```python\ndef connect(config):\n    config.get('timeout', DEFAULT_TIMEOUT)\n"
+        "    return open_connection(config['host'], timeout=config['timeout'])\n```\nThat handles the missing key."
+    )
+    result = await _run(_GOLDENS["code_fix_null_guard"], final_text=text)
+    assert result.passed is False and "discard" in result.criteria_detail
+
+
+_SETUP_AND_SYNC = (
+    "Open the guided setup for the SLM, choose the target node and the service role, and confirm the choice. "
+    "Afterwards the role is synced to the node, and the node page shows the new service as soon as that "
+    "finishes, so check its status there."
+)
+_ANSIBLE_AND_SYNC = (
+    "Start the Ansible run for the node from the SLM and pick the service role you want. The playbook applies "
+    "it, and the role is synced to the node as part of that, so once it is done you should look at the node "
+    "status page to confirm it is healthy."
+)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", [_SETUP_AND_SYNC, _ANSIBLE_AND_SYNC], ids=["setup+sync", "ansible+sync"])
+async def test_each_sync_dependent_concept_pair_passes_without_the_third_concept(text):
+    assert len(text) >= 200
+    result = await _run(_GOLDENS["qa_deploy_role"], final_text=text, used_knowledge=True)
+    assert result.passed is True, result.criteria_detail
+
+
+@pytest.mark.asyncio
+async def test_passive_role_sync_wording_counts_and_a_generic_sync_still_does_not():
+    passive = _SETUP_AND_SYNC.replace("guided setup", "setup page")
+    assert (await _run(_GOLDENS["qa_deploy_role"], final_text=passive, used_knowledge=True)).passed is True
+    generic = _SETUP_AND_SYNC.replace("the role is synced to the node", "your data is synced to your laptop")
+    assert (await _run(_GOLDENS["qa_deploy_role"], final_text=generic, used_knowledge=True)).passed is False
