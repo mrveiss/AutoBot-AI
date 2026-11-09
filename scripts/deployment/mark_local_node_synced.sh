@@ -9,14 +9,18 @@
 # Phase 6.5 uses for the URL. mark_synced_strict=true makes the play fail on anything but a 200.
 # Exit 1 when the node was not stamped, so the caller can warn without undoing a finished install.
 #
-#   mark_local_node_synced.sh <code source dir> <node id> <ansible vars file> <log file>
+# <slm api url> is the base install.sh just logged in and registered the node on; it reaches the
+# playbook as slm_api_url, so mark-synced talks to the SLM on that exact URL.
+#
+#   mark_local_node_synced.sh <code source dir> <node id> <slm api url> <ansible vars file> <log file>
 set -euo pipefail
 
 readonly INVENTORY="inventory/localhost.yml" INVENTORY_HOST="localhost"
-code_source="${1:?code source dir}" node_id="${2:?node id}" vars_file="${3:?vars file}" log_file="${4:?log file}"
+code_source="${1:?code source dir}" node_id="${2:?node id}" api_url="${3:?slm api url}" \
+    vars_file="${4:?vars file}" log_file="${5:?log file}"
 out="$(mktemp)"; trap 'rm -f "${out}"' EXIT
 args=(-i "${INVENTORY}" playbooks/provision-fleet-roles.yml --tags mark-synced --skip-tags always
-    --limit "${INVENTORY_HOST}" -e "slm_node_id=${node_id}" -e mark_synced_strict=true -e "target_host=${INVENTORY_HOST}")
+    --limit "${INVENTORY_HOST}" -e "slm_node_id=${node_id}" -e "slm_api_url=${api_url}" -e mark_synced_strict=true -e "target_host=${INVENTORY_HOST}")
 rc=0
 (cd "${code_source}/autobot-slm-backend/ansible" && ansible-playbook "${args[@]}" \
     -e "@${vars_file}") >"${out}" 2>&1 || rc=$?
