@@ -292,3 +292,17 @@ env_registry.register_env_var(
         component="orchestrator",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_HIERARCHY_VIOLATIONS_LIMIT",
+        type=int,
+        default=500,
+        description=(
+            "Most work-item hierarchy violations one report returns (#20936). The limit is applied in the "
+            "database query; the response sets truncated when more rows break the rules than are returned."
+        ),
+        range=(1, 5000),
+        component="orchestrator",
+    )
+)
