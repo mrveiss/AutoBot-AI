@@ -73,7 +73,7 @@ from chat_workflow.tool_dispatch_guards import (
     llc_scope_error,
     unknown_tool_error,
 )
-from chat_workflow.tool_permission_gate import permission_denial
+from chat_workflow.tool_permission_gate import caller_identity, permission_denial
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from services.remote_approval_sender import mirror_approval_request
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
@@ -1058,7 +1058,7 @@ async def _try_mcp_dispatch(
         return cancellation_message
 
     try:
-        mcp_result = await dispatcher.dispatch(tool_name, arguments, role=role)
+        mcp_result = await dispatcher.dispatch(tool_name, arguments, role=role, **caller_identity(ctx, session_id))
         bridge = mcp_result.get("bridge", "unknown")
         success = mcp_result.get("success", False)
         raw_result = mcp_result.get("result", "")
@@ -1514,6 +1514,7 @@ class ToolHandlerMixin:
                 "requires_approval": True,
                 "terminal_session_id": terminal_session_id,
                 "conversation_id": session_id,
+                "command_id": result.get("command_id"),
             },
         )
 
@@ -1555,9 +1556,8 @@ class ToolHandlerMixin:
         elapsed_time = 0
         poll_count = 0
 
-        # #13480: claim interpretation for this turn. The approve path skips its
-        # own interpretation while this is set, so the same command is not
-        # interpreted twice — two LLM calls, two persisted interpretations.
+        # #13480: claim interpretation for this turn. The approve path skips its own interpretation
+        # while this is set, so the command is not interpreted twice (two LLM calls, two persisted).
         await self._claim_interpretation(terminal_session_id, True)
 
         try:
