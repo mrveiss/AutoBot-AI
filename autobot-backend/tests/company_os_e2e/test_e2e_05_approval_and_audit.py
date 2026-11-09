@@ -83,6 +83,7 @@ def _candidates(scn: Scenario, rows: list[dict], want: Expected) -> list[dict]:
         for r in rows
         if r["entity_id"] in ids
         and want.action in (None, r["action"])
+        and not (want.except_prefix and (r["action"] or "").startswith(want.except_prefix))
         and (since is None or datetime.fromisoformat(r["occurred_at"]) >= since)
     ]
 
