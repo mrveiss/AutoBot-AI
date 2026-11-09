@@ -132,7 +132,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/stores/useChatStore.ts": 1176,
     "autobot-frontend/src/stores/useKnowledgeStore.ts": 809,
     "autobot-frontend/src/utils/RumAgent.ts": 852,
-    "autobot-frontend/src/utils/VisionMultimodalApiClient.ts": 663,
     "autobot-frontend/src/utils/debugUtils.ts": 620,
     "autobot-frontend/src/views/AdminUsersView.vue": 796,
     "autobot-frontend/src/views/AdvancedControlView.vue": 1049,

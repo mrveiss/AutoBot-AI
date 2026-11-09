@@ -685,7 +685,7 @@ class RumAgent {
       const blob = new Blob([JSON.stringify(metrics)], { type: 'application/json' })
       navigator.sendBeacon(this.prometheusEndpoint, blob)
     } else {
-      // Use fetch with keepalive for better reliability
+      // eslint-disable-next-line no-restricted-syntax -- telemetry beacon keepalive, must never throw or log out
       fetch(this.prometheusEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -713,6 +713,7 @@ class RumAgent {
       userAgent: navigator.userAgent,
       data: errorData
     }
+    // eslint-disable-next-line no-restricted-syntax -- telemetry beacon keepalive, must never throw or log out
     fetch(this.rumEventEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -779,7 +780,6 @@ class RumAgent {
         ...this.metrics.errors.slice(-5)
       ]
     }
-
 
     const reports = JSON.parse(localStorage.getItem('rum_reports') || '[]')
     reports.push(report)
