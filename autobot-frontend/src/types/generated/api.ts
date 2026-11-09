@@ -108291,6 +108291,10 @@ export interface components {
             definition?: {
                 [key: string]: unknown;
             };
+            /** @default workflow */
+            kind: components["schemas"]["WorkflowKind"];
+            /** Owner Role Id */
+            owner_role_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -108507,6 +108511,10 @@ export interface components {
             definition: {
                 [key: string]: unknown;
             };
+            /** Kind */
+            kind: string;
+            /** Owner Role Id */
+            owner_role_id?: string | null;
             /**
              * Created At
              * Format: date-time
