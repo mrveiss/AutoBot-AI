@@ -5989,6 +5989,8 @@
       "securityNote": "Commands are executed in a sandboxed environment with limited permissions.",
       "missingSessionId": "Missing session ID for command execution",
       "executionFailed": "Command execution failed",
+      "approvalStateUnavailable": "Approval state unavailable, retry",
+      "denyFailed": "The denial may not have gone through ({error}). Check the command before trying again.",
       "postExecutionFailed": "The command ran, but a follow-up step failed. Its output is shown; some updates may be missing.",
       "enterComment": "Please enter a comment before submitting"
     },
