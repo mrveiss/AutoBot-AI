@@ -2,7 +2,7 @@
 <!-- Copyright (c) 2025 mrveiss -->
 <!-- Author: mrveiss -->
 <!--
-  AdminCleanupProposalsView — propose the three decided cleanups (#20567).
+  AdminCleanupProposalsView — propose the two decided cleanups (#20567).
   Each card shows what is there (a count, never a file's contents) and a Propose button.
   A proposal only creates a pending approval; nothing is removed until a human approves it.
 -->
@@ -119,7 +119,9 @@ async function propose(card: Card): Promise<void> {
   card.busy = true
   card.error = ''
   try {
-    const reply: Schemas['CleanupRequestResponse'] = await apiClient.post(card.requestUrl)
+    // The org-tier-column route answers with its own response model; both carry the approval id.
+    const reply: Schemas['CleanupRequestResponse'] | Schemas['OrgTierColumnRequestResponse'] =
+      await apiClient.post(card.requestUrl)
     card.proposed = !!reply.approval_id
   } catch (err) {
     card.error = t(proposeErrorKey(err))
