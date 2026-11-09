@@ -343,6 +343,9 @@ services:
       - AUTOBOT_LLAMAINDEX_LLM_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
+      # #20894: logs go to the writable backend_logs volume mounted at /app/logs -- the resolver's
+      # unset default is the user's state dir, and the container home (/app) is read-only when hardened.
+      - AUTOBOT_LOGS_DIR=/app/logs
       # single_user mode is retired (#10636): AutoBot always runs Postgres-backed user
       # management, and the entrypoint bootstraps the schema via `alembic upgrade head`
       # (#9759). single_company is the default the backend falls back to anyway; naming
@@ -487,6 +490,9 @@ services:
       # settings entirely when unset, matching an unauthenticated server.
       - AUTOBOT_CHROMADB_AUTH_TOKEN=${AUTOBOT_CHROMADB_AUTH_TOKEN:-}
       - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
+      # #20894: logs go to the writable backend_logs volume mounted at /app/logs -- the resolver's
+      # unset default is the user's state dir, and the container home (/app) is read-only when hardened.
+      - AUTOBOT_LOGS_DIR=/app/logs
       # User-mgmt/RBAC tasks need the same Postgres + mode wiring as the backend.
       # single_user is retired (#10636); single_company matches the backend's
       # default, and the backend entrypoint bootstraps the schema (#9759) (#18729).
@@ -591,6 +597,9 @@ services:
       # resolves to the same persistent backend_data volume, not the
       # container's ephemeral writable layer.
       - AUTOBOT_DATA_DIR=${AUTOBOT_DATA_DIR:-/app/data}
+      # #20894: logs go to the writable backend_logs volume mounted at /app/logs -- the resolver's
+      # unset default is the user's state dir, and the container home (/app) is read-only when hardened.
+      - AUTOBOT_LOGS_DIR=/app/logs
       # No AI Stack VM ships with compose — disable the poll to stop the per-boot
       # connection-error warning flood (#9782). Set to true if you run an AI Stack.
       - AUTOBOT_AI_STACK_ENABLED=${AUTOBOT_AI_STACK_ENABLED:-false}

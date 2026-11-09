@@ -7,6 +7,9 @@
 The SLM agent runs under ``ProtectSystem=strict``; its working directory is read-only, so the
 default ``./logs`` could not be created and ``get_logger(__name__)`` at import raised
 ``OSError: [Errno 30] Read-only file system``, crash-looping the unit after an update.
+
+Since #20894 nothing is created at ``get_logger``: the file handler creates its directory and file
+at the first record, so the degrade happens there -- and still never raises.
 """
 
 import errno
@@ -20,6 +23,7 @@ from pathlib import Path
 import pytest
 
 from autobot_shared import logging_manager
+from autobot_shared.log_dir import FirstWriteFileHandler
 from autobot_shared.logging_manager import LoggingManager
 
 _READ_ONLY = OSError(errno.EROFS, "Read-only file system")
@@ -58,42 +62,57 @@ def _close(logger: logging.Logger) -> None:
         logger.removeHandler(handler)
 
 
-def test_a_read_only_logs_dir_yields_a_console_only_logger(
+def _file_handlers(logger: logging.Logger) -> list[FirstWriteFileHandler]:
+    return [h for h in logger.handlers if isinstance(h, FirstWriteFileHandler)]
+
+
+def test_get_logger_creates_nothing_on_disk() -> None:
+    """Import-time loggers write nothing (#20894): no directory and no file until the first record."""
+    logs_dir = Path(os.environ["AUTOBOT_LOGS_DIR"])
+    logger = _fresh_logger()
+    try:
+        assert _file_handlers(logger), "the file handler is attached, deferred"
+        assert not logs_dir.exists()
+    finally:
+        _close(logger)
+
+
+def test_a_read_only_logs_dir_turns_file_logging_off_at_the_first_write(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(Path, "mkdir", _read_only_logs_mkdir)
     logger = _fresh_logger()
     try:
-        assert logger.handlers, "the console handlers are still attached"
-        assert not any(isinstance(h, logging.handlers.RotatingFileHandler) for h in logger.handlers)
+        logger.error("first record")  # must not raise
+        logger.error("second record")
         assert LoggingManager._file_logging_disabled
-        assert "logging to console only" in capsys.readouterr().err
+        err = capsys.readouterr().err
+        assert err.count("logging to console only") == 1
+        assert "first record" in err and "second record" in err, "the console handlers still write"
     finally:
         _close(logger)
 
 
-def test_an_unopenable_log_file_yields_a_console_only_logger(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    LoggingManager._initialized = True  # the directory step passed; only the file open fails
-
-    def _refuse(*args: object, **kwargs: object) -> None:
-        raise _READ_ONLY
-
-    monkeypatch.setattr(logging.handlers, "RotatingFileHandler", _refuse)
+def test_an_unopenable_log_file_turns_off_only_its_own_handler(capsys: pytest.CaptureFixture[str]) -> None:
+    logs_dir = Path(os.environ["AUTOBOT_LOGS_DIR"])
+    (logs_dir / "backend.log").mkdir(parents=True)  # a directory where the file goes: open() fails
     logger = _fresh_logger()
     try:
-        assert logger.handlers
+        logger.error("record")  # must not raise
         assert not LoggingManager._file_logging_disabled, "a per-file failure leaves other log types on"
         assert "logging to console only" in capsys.readouterr().err
     finally:
         _close(logger)
 
 
-def test_a_writable_logs_dir_still_gets_a_file_handler() -> None:
+def test_a_writable_logs_dir_gets_the_file_at_the_first_write() -> None:
     logger = _fresh_logger()
     try:
-        assert any(isinstance(h, logging.handlers.RotatingFileHandler) for h in logger.handlers)
+        logger.error("written at #20894's first write")
+        for handler in _file_handlers(logger):
+            handler.flush()
+        log_file = Path(os.environ["AUTOBOT_LOGS_DIR"]) / "backend.log"
+        assert "first write" in log_file.read_text(encoding="utf-8")
     finally:
         _close(logger)
 

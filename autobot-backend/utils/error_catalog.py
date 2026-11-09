@@ -770,6 +770,5 @@ def validate_error_code(error_code: str) -> bool:
     return catalog.validate_code(error_code)
 
 
-# Pre-load catalog on module import
-_catalog_instance = get_error_catalog_instance()
-_catalog_instance.load_catalog()
+# Loaded at first use, never at import (#20894): every accessor above calls load_catalog() when the
+# catalog is not initialised yet, so importing this module reads no file and writes no log record.

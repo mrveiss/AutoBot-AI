@@ -8,7 +8,6 @@ Standardizes logging configuration across all components
 """
 
 import logging
-import logging.handlers
 import os
 import sys
 import threading
@@ -18,7 +17,7 @@ from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, Dict
 
 from autobot_shared.env_utils import env_flag, env_float, env_int_clamped
-from autobot_shared.log_dir import resolve_logs_dir
+from autobot_shared.log_dir import FirstWriteFileHandler, resolve_logs_dir
 from autobot_shared.stream_logging import build_stderr_handler, build_stdout_handler
 
 if TYPE_CHECKING:
@@ -307,7 +306,7 @@ class LoggingManager:
     # One rotating handler per log file per process (#20139), keyed by absolute path. Handlers on one
     # file that do not share a lock each see the file over the cap after another has renamed it, and
     # rotate again: one rotation shifts the backups once per handler. Guarded by ``_lock``.
-    _file_handlers: Dict[str, logging.Handler] = {}
+    _file_handlers: Dict[str, FirstWriteFileHandler] = {}
     # Set by set_level(): wins over the configured level for every logger, existing and future.
     _level_override: int | None = None
     # Re-entrant: get_logger() holds this lock while the lazy config-manager
@@ -400,21 +399,20 @@ class LoggingManager:
     def _setup_logging_internal(cls) -> None:
         """Setup basic logging configuration (internal, called under lock).
 
-        A logs directory that cannot be created (a ``ProtectSystem=strict`` unit whose working
-        directory is read-only, #19628) turns file logging off with one stderr warning: every logger
-        still gets its console handlers, which journald captures, instead of the import that asked
-        for a logger raising.
+        Touches nothing on disk (#20894): the logs directory is created by the file handler at the
+        first record, so importing a module that asks for a logger writes nothing. A logs directory
+        that cannot be created then (a ``ProtectSystem=strict`` unit whose working directory is
+        read-only, #19628) turns file logging off with one stderr warning -- see ``_file_unwritable``.
         """
-        logs_dir = resolve_logs_dir()
-        backup_dir_name = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")  # ssot-config-exempt: pre-init logging
-        try:
-            logs_dir.mkdir(parents=True, exist_ok=True)
-            (logs_dir / backup_dir_name).mkdir(exist_ok=True)
-        except OSError as exc:
-            cls._file_logging_disabled = True
-            _warn_file_logging_off(logs_dir, exc)
-
         cls._initialized = True
+
+    @classmethod
+    def _file_unwritable(cls, path: Path, exc: OSError) -> None:
+        """A file handler's first write failed: warn once; a logs directory that cannot be created
+        turns file logging off for every log type, a single unopenable file only for its own."""
+        if path == resolve_logs_dir():
+            cls._file_logging_disabled = True
+        _warn_file_logging_off(path, exc)
 
     @classmethod
     def _setup_logging(cls) -> None:
@@ -432,7 +430,8 @@ class LoggingManager:
         stderr warning instead of raising here, at the import of whichever module asked for a logger.
         """
         # No _file_logging_disabled short-cut here: a log file configured outside the logs dir may
-        # still be writable, and a failing one is caught per file below (#19628 review).
+        # still be writable; a failing one turns off only its own handler, at its first write
+        # (#19628 review, #20894).
         log_file = _log_file_path(log_type)
 
         # Use rotating file handler to prevent large log files
@@ -440,14 +439,12 @@ class LoggingManager:
         backup_count = _config_non_negative_int("logging.rotation.backup_count", _DEFAULT_BACKUP_COUNT)
 
         key = os.path.abspath(log_file)
-        if key in cls._file_handlers:
-            return cls._file_handlers[key]
-        try:
-            Path(log_file).parent.mkdir(parents=True, exist_ok=True)
-            handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
-        except OSError as exc:
-            _warn_file_logging_off(Path(log_file), exc)
-            return None
+        cached = cls._file_handlers.get(key)
+        if cached is not None and not cached.unwritable:
+            return cached  # one whose first write failed is replaced, so a later logger retries
+        handler = FirstWriteFileHandler(
+            log_file, max_bytes=max_bytes, backup_count=backup_count, on_unwritable=cls._file_unwritable
+        )
         handler.setFormatter(cls._get_formatter())
         cls._file_handlers[key] = handler
         return handler
@@ -504,6 +501,7 @@ class LoggingManager:
                 backup_dir = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")
                 backup_path = f"{logs_dir}/{backup_dir}/{lt}_{int(__import__('time').time())}.log"
                 try:
+                    Path(logs_dir, backup_dir).mkdir(parents=True, exist_ok=True)  # created when first used
                     os.rename(log_file, backup_path)
                     _logger.info("Rotated %s to %s", log_file, backup_path)
                 except OSError as e:

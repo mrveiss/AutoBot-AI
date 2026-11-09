@@ -4,7 +4,9 @@ scope: backend
 issue: 20894
 pr: 20980
 ---
-Logs are never written inside the source tree: one resolver (`AUTOBOT_LOGS_DIR`, default the XDG state dir or a per-run temp dir under pytest) replaces the cwd-relative `logs` default.
+Logs are never written inside the source tree: one resolver (`AUTOBOT_LOGS_DIR`; its one declared default, `log_dir.LOGS_DIR_DEFAULT`, is unset in both env planes and resolves to the XDG state dir; a test run gets the root conftest's per-run temp dir) replaces the cwd-relative `logs` default. Log files and their directory are created at the first record (`FirstWriteFileHandler`), never at import, so importing a module writes nothing; an unwritable directory turns the file handler off with one stderr line instead of failing the import.
+
+Containers: `docker-compose.yml` sets `AUTOBOT_LOGS_DIR=/app/logs` (the `backend_logs` volume) for backend, worker and celery-beat, as it already did for the SLM; the hardened overlay's home `/app` is read-only.
 
 Deployment check: the backend unit loads `EnvironmentFile={{ backend_code_dir }}/.env` (`autobot-slm-backend/ansible/roles/backend/templates/autobot-backend.service.j2:62`), written from `backend.env.j2`; `distributed.env.j2:35` is loaded only by the coordinator unit (`autobot-coordinator.service.j2:14`), so the backend did NOT get `AUTOBOT_LOGS_DIR`. Now set at `backend.env.j2:68` from `backend_logs_dir` (`roles/backend/defaults/main.yml:185`, same `<base>/logs` as before). The plugin logger now reads the same resolver.
 

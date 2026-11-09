@@ -23,9 +23,10 @@ if _REPO_ROOT not in sys.path:
 # test module runs under; test modules read config.frontend_url at import.
 os.environ.setdefault("AUTOBOT_FRONTEND_SERVED_BY", "vite")
 
-# No test run writes logs into the source tree (#20894): one temp log directory for the whole run,
-# inherited by every subprocess a test starts (repo_tests/_reach_base.py base checkouts included).
-os.environ.setdefault("AUTOBOT_TESTING", "1")  # the explicit "this is a test run" flag (autobot_shared/log_dir.py)
+# No test run writes logs into the source tree or the user's state dir (#20894): the test route of
+# autobot_shared/log_dir.py is this one temp log directory for the whole run, inherited by every
+# subprocess a test starts (repo_tests/_reach_base.py base checkouts included). The directory is
+# created here, at session start; the app modules a test imports create nothing (first-write handler).
 # Created only when the run does not already inherit one, so an xdist worker or a nested pytest
 # never leaves an orphan temp directory behind.
 _RUN_LOGS_DIR = None if os.environ.get("AUTOBOT_LOGS_DIR") else tempfile.mkdtemp(prefix="autobot-logs-")
