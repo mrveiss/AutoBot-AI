@@ -328,7 +328,7 @@ export class ChatController {
 
   /** Consume an SSE reply; resolves true when it carried an `error` event (HTTP 200 is not success, #21022). */
   async handleStreamingResponse(response: Response): Promise<boolean> {
-    this.streamReportedError = false
+    const streamState = { reportedError: false } // per stream: overlapping streams must not share it
     const reader = response.body?.getReader()
     if (!reader) {
       throw new Error('No response stream available')
@@ -362,7 +362,7 @@ export class ChatController {
         for (const line of lines) {
           if (!line.trim()) continue
           if (line.startsWith('data: ')) {
-            fallbackMessageId = this._processStreamLine(line, messageIdMap, fallbackMessageId)
+            fallbackMessageId = this._processStreamLine(line, messageIdMap, fallbackMessageId, streamState)
           }
         }
       }
@@ -381,13 +381,14 @@ export class ChatController {
     } finally {
       reader.releaseLock()
     }
-    return this.streamReportedError
+    return streamState.reportedError
   }
 
   private _processStreamLine(
     line: string,
     messageIdMap: Map<string, string>,
-    fallbackMessageId: string | null
+    fallbackMessageId: string | null,
+    streamState: { reportedError: boolean } = { reportedError: false }
   ): string | null {
     try {
       const jsonStr = line.slice(6).trim()
@@ -416,7 +417,7 @@ export class ChatController {
 
       if (data.type === 'error') {
         logger.error('Stream error:', data.content)
-        this.streamReportedError = true
+        streamState.reportedError = true
         const errorMsgId = fallbackMessageId || this.chatStore.addMessage({
           content: '',
           sender: 'assistant'
@@ -718,7 +719,6 @@ export class ChatController {
     }
   }
 
-  private streamReportedError = false
   async loadChatMessages(sessionId: string): Promise<void> {
     try {
       // Issue #680: skip while streaming or pending approval (polling data may be stale)

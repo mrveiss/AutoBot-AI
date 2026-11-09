@@ -10,10 +10,18 @@ question it answers, and ``GET /chat/sessions/{id}`` restores the card for a per
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+import uuid
+from typing import Any, AsyncIterator, Dict, List
 
 from fastapi import HTTPException
 
+from autobot_shared.coordination.work_claims import (
+    ClaimConflict,
+    ClaimUnavailable,
+    ScopeError,
+    release_scope,
+    try_acquire,
+)
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 
@@ -38,6 +46,44 @@ async def pending_stall_question(manager: Any, session_id: str) -> Dict[str, Any
 
 def _is_stall_resume(request_data: dict) -> bool:
     return "answer" in request_data or "question_id" in request_data
+
+
+RESUME_CLAIM_AGENT = "chat-resume"
+
+
+async def acquire_answer_lock(chat_id: str) -> str:
+    """Hold the per-chat answer claim (the one work-claim registry); returns its task id.
+
+    Check + resume cannot interleave: a second concurrent answer finds it held and gets 409.
+    """
+    task_id = uuid.uuid4().hex
+    try:
+        outcome = await try_acquire(
+            f"queue:chat-resume-{chat_id}",
+            agent_id=RESUME_CLAIM_AGENT,
+            task_id=task_id,
+            intent="answer a stall question",
+        )
+    except ScopeError:
+        raise HTTPException(status_code=400, detail="Invalid chat id")
+    except ClaimUnavailable:
+        raise HTTPException(status_code=503, detail="The answer could not be recorded; try again")
+    if isinstance(outcome, ClaimConflict):
+        raise HTTPException(status_code=409, detail="This question is already being answered")
+    return task_id
+
+
+async def release_answer_lock(chat_id: str, task_id: str) -> None:
+    await release_scope(f"queue:chat-resume-{chat_id}", agent_id=RESUME_CLAIM_AGENT, task_id=task_id)
+
+
+async def release_after(stream: Any, chat_id: str, task_id: str) -> AsyncIterator[Any]:
+    """Yield *stream*, then free the answer claim however it ends (the TTL covers a stream never started)."""
+    try:
+        async for item in stream:
+            yield item
+    finally:
+        await release_answer_lock(chat_id, task_id)
 
 
 async def check_resume_binding(manager: Any, chat_id: str, request_data: dict) -> None:
@@ -98,3 +144,19 @@ async def with_pending_question(request: Any, session_id: str, messages: List[Di
         return messages
     found = [_reopen(m, question.get("question_id")) for m in messages]
     return messages if any(found) else [*messages, _question_message(question, session_id)]
+
+
+async def guarded_resume(chat_id: str, request_data: dict, manager: Any, open_stream: Any) -> Any:
+    """Check the resume binding and open its stream under the per-chat claim; None claim for an approval resume.
+
+    The claim is held until the returned stream ends (``release_after``) or the check / open fails.
+    """
+    task_id = await acquire_answer_lock(chat_id) if _is_stall_resume(request_data) else None
+    try:
+        await check_resume_binding(manager, chat_id, request_data)
+        stream = await open_stream()
+    except BaseException:
+        if task_id:
+            await release_answer_lock(chat_id, task_id)
+        raise
+    return release_after(stream, chat_id, task_id) if task_id else stream

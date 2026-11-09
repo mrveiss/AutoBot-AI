@@ -194,3 +194,27 @@ async def test_control_nothing_pending_or_no_manager_leaves_history_alone(monkey
     _pending(monkeypatch, None)
     assert await stall_pending.with_pending_question(_request(MagicMock()), "s1", history) == history
     assert await stall_pending.with_pending_question(_request(None), "s1", history) == history
+
+
+async def test_an_answer_without_a_question_id_is_refused_while_a_question_is_pending(monkeypatch):
+    _pending(monkeypatch, {"question_id": "q1"})
+    with pytest.raises(HTTPException) as err:
+        await stall_pending.check_resume_binding(MagicMock(), "s1", {"answer": "x"})
+    assert err.value.status_code == 409
+
+
+async def test_a_second_concurrent_answer_gets_409_from_the_real_claim_registry(monkeypatch):
+    fakeredis_async = pytest.importorskip("fakeredis.aioredis")
+    fakeredis = pytest.importorskip("fakeredis")
+    from autobot_shared.coordination import work_claims
+
+    client = fakeredis_async.FakeRedis(server=fakeredis.FakeServer(), decode_responses=True)
+    monkeypatch.setattr(work_claims, "get_async_redis_client", AsyncMock(return_value=client))
+    first = await stall_pending.acquire_answer_lock("s1")
+    with pytest.raises(HTTPException) as err:
+        await stall_pending.acquire_answer_lock("s1")
+    assert err.value.status_code == 409
+    await stall_pending.acquire_answer_lock("s2")  # another chat is unaffected
+    await stall_pending.release_answer_lock("s1", first)
+    await stall_pending.release_answer_lock("s1", await stall_pending.acquire_answer_lock("s1"))  # free again
+    await client.flushall()
