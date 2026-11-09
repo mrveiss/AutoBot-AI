@@ -192,6 +192,11 @@ def _walk_matches(root: Path, patterns: List[str], excluded: Set[str]) -> Iterat
             path = Path(dirpath) / name
             if path.is_symlink() and _escapes(path, real_root, excluded):
                 continue
+            # The directory prune above is only "may hold wanted files"; whether THIS file is
+            # excluded is ``is_excluded``'s per-file answer, the same one ``matches_exclusion``
+            # gives, so ``dead.py`` beside ``view.vue`` in ``backup/`` is dropped by both (#21004).
+            if is_excluded(path, root, excluded):
+                continue
             if path.is_file():
                 yield path
 

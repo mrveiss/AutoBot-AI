@@ -204,6 +204,10 @@ def test_each_restated_literal_shape_is_flagged(source: str) -> None:
         "DEFAULT_EXCLUDE_PATTERNS = [*sorted(SKIP_DIRS), '*.pyc', '*.pyo']\n",
         "_SKIP_DIRS = SKIP_DIRS | {'a', 'b'}\n",
         "EXCLUDE_PATTERNS = ['a', 'b']\n",
+        # negative controls for the widened ``\w*NON_CODE_\w*`` rule: no ``NON_CODE_`` token in the name
+        "NONCODE_NAMES = {'archive', 'backup'}\n",
+        "NON_CODEX = {'archive', 'backup'}\n",
+        "CODE_NAMES = {'archive', 'backup'}\n",
     ],
 )
 def test_an_import_a_derivation_or_an_unrelated_name_is_not_flagged(source: str) -> None:

@@ -492,6 +492,20 @@ def test_matches_exclusion_keeps_a_foreign_source_file_in_a_backup_dir(tmp_path:
     assert module.matches_exclusion(tmp_path / "src/backup/dead.py", (), tmp_path)
 
 
+def test_the_walk_and_the_predicate_agree_per_file_in_a_mixed_backup_dir(tmp_path: Path):
+    """``src/backup/`` holds ``view.vue`` and ``dead.py``: the walk yields exactly what ``matches_exclusion`` keeps."""
+    module = _load_real_module()
+    _touch(tmp_path, "src/backup/view.vue", "src/backup/dead.py", "src/ok.py")
+    for patterns in (("*.py",), ("*.vue", "*.py"), ("*",)):
+        walked = {p.relative_to(tmp_path).as_posix() for p in module.discover_files(tmp_path, patterns)}
+        candidates = [p for p in tmp_path.rglob("*") if p.is_file() and any(p.match(g) for g in patterns)]
+        kept = {p.relative_to(tmp_path).as_posix() for p in candidates if not module.matches_exclusion(p, (), tmp_path)}
+        assert walked == kept, patterns
+    vue_walk = {p.relative_to(tmp_path).as_posix() for p in module.discover_files(tmp_path, ("*.vue", "*.py"))}
+    assert "src/backup/dead.py" not in vue_walk  # excluded by the predicate, so absent from the walk
+    assert "src/backup/view.vue" in vue_walk  # foreign source the walk scans: kept
+
+
 def test_base_analyzer_and_multi_language_scanner_walks_reach_a_non_python_backup_dir(tmp_path: Path):
     from code_intelligence.base_analyzer import MultiLanguageAnalyzer
 
