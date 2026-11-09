@@ -10,7 +10,9 @@ mark-synced step placed there passes silently and stamps nothing. The step belon
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 
 import yaml
 from repo_tests._paths import repo_root
@@ -108,3 +110,51 @@ def test_mark_synced_only_runs_once_the_code_source_is_assigned() -> None:
     body = _register_body(_install())
     arm = body[body.index('200) success "Code source assigned') :].split(";;", 1)[0]
     assert _SCRIPT in arm, "mark-synced must run only in the code-source 200 arm"
+
+
+def _run_helper(tmp_path, stub_body: str) -> subprocess.CompletedProcess:
+    """Run the real helper with a stub ``ansible-playbook`` first on PATH; it records its argv."""
+    bin_dir, code_source = tmp_path / "bin", tmp_path / "src"
+    (code_source / _ANSIBLE_DIR).mkdir(parents=True)
+    bin_dir.mkdir()
+    stub = bin_dir / "ansible-playbook"
+    stub.write_text(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" > "{tmp_path}/argv"\n{stub_body}\n', encoding="utf-8")
+    stub.chmod(0o755)
+    (tmp_path / "vars.json").write_text("{}", encoding="utf-8")
+    return subprocess.run(
+        [
+            "bash",
+            str(repo_root() / _SCRIPT),
+            str(code_source),
+            "00-SLM-Manager",
+            str(tmp_path / "vars.json"),
+            str(tmp_path / "log"),
+        ],
+        env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+_OK_RUN = (
+    'echo "TASK [Mark-synced | POST to x]"; echo "ok: [localhost]"; '
+    'echo "localhost                  : ok=3    changed=0    failed=0"'
+)
+
+
+def test_helper_invokes_the_tagged_playbook_for_the_registered_node(tmp_path) -> None:
+    result = _run_helper(tmp_path, _OK_RUN)
+    argv = (tmp_path / "argv").read_text(encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    assert "playbooks/provision-fleet-roles.yml" in argv
+    assert "--tags mark-synced" in argv
+    assert "slm_node_id=00-SLM-Manager" in argv
+    assert "--limit localhost" in argv
+
+
+def test_helper_fails_and_prints_a_vars_file_free_rerun_when_the_post_did_not_run(tmp_path) -> None:
+    result = _run_helper(tmp_path, 'echo "localhost                  : ok=2    changed=0    failed=0"')
+    assert result.returncode == 1
+    assert "sudo ansible-playbook" in result.stderr
+    assert "@" not in result.stderr.split("rerun:", 1)[1]

@@ -886,7 +886,7 @@ register_local_node() {
 
     case "${cs_code:-000}" in
         200) success "Code source assigned: ${CODE_SOURCE} (branch: ${GIT_BRANCH})"
-             bash "${CODE_SOURCE}/scripts/deployment/mark_local_node_synced.sh" "${CODE_SOURCE}" "${SLM_NODE_ID}" "${INSTALL_TMP}/ansible-vars.json" "${LOG_FILE}" || warn "Step 'mark synced' did not complete: Code Sync shows this node as 'unknown'. See ${LOG_FILE}" ;;
+             bash "${CODE_SOURCE}/scripts/deployment/mark_local_node_synced.sh" "${CODE_SOURCE}" "${SLM_NODE_ID}" "${INSTALL_TMP}/ansible-vars.json" "${LOG_FILE}" || warn "Step 'mark synced' did not complete. Check the node's status in Code Sync. See ${LOG_FILE}" ;;
         *)   warn "Optional step 'code source' returned HTTP ${cs_code:-000}, so mark-synced was skipped (#18663) — assign it in SLM UI > Code Sync" ;;
     esac
 }

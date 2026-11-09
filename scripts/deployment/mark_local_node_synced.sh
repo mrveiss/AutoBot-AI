@@ -16,10 +16,10 @@ readonly INVENTORY="inventory/localhost.yml" INVENTORY_HOST="localhost"
 code_source="${1:?code source dir}" node_id="${2:?node id}" vars_file="${3:?vars file}" log_file="${4:?log file}"
 out="$(mktemp)"; trap 'rm -f "${out}"' EXIT
 args=(-i "${INVENTORY}" playbooks/provision-fleet-roles.yml --tags mark-synced --skip-tags always
-    --limit "${INVENTORY_HOST}" -e "slm_node_id=${node_id}" -e mark_synced_strict=true)
+    --limit "${INVENTORY_HOST}" -e "slm_node_id=${node_id}" -e mark_synced_strict=true -e "target_host=${INVENTORY_HOST}")
 rc=0
 (cd "${code_source}/autobot-slm-backend/ansible" && ansible-playbook "${args[@]}" \
-    -e "@${vars_file}" -e "target_host=${INVENTORY_HOST}") >"${out}" 2>&1 || rc=$?
+    -e "@${vars_file}") >"${out}" 2>&1 || rc=$?
 cat "${out}" >> "${log_file}"
 # The POST task's first result line: ok/changed means it ran; skipping or nothing means it did not.
 post="$(awk '/^TASK \[Mark-synced \| POST/{f=1; next} /^TASK \[/{f=0} f && /^(ok|changed|skipping|fatal|failed):/{print $1; exit}' "${out}")"
@@ -27,7 +27,9 @@ if [[ ${rc} -ne 0 ]] || grep -qE "WARNING: (mark-synced|SLM login)" "${out}" \
     || ! grep -qE "^${INVENTORY_HOST} +: ok=[1-9]" "${out}" || [[ ${post} != ok: && ${post} != changed: ]]; then
     cause="$(grep -E "WARNING|fatal:|FAILED!|ERROR" "${out}" | tail -n 1 || true)"
     echo "mark synced failed for ${node_id} (ansible exit ${rc}, POST task: ${post:-not run}): ${cause:-no cause printed}" >&2
-    echo "rerun: cd ${code_source}/autobot-slm-backend/ansible && ansible-playbook ${args[*]} -e @${vars_file}" >&2
+    # The vars file is removed when install.sh exits; the playbook then reads the admin password
+    # from the root-readable secrets file, so the recovery command runs under sudo and needs no file.
+    echo "rerun: cd ${code_source}/autobot-slm-backend/ansible && sudo ansible-playbook ${args[*]}" >&2
     exit 1
 fi
 echo "Local node ${node_id} marked synced"

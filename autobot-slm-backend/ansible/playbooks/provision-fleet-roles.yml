@@ -909,7 +909,9 @@
         headers:
           Authorization: "Bearer {{ _slm_login.json.access_token | default('') }}"
           Content-Type: "application/json"
-        body: "{}"
+        # Send the deployed commit: without it the endpoint stores the slm_agent_latest_commit
+        # setting, which may be empty or differ from this checkout.
+        body: "{{ {'version': _provision_commit.stdout | trim} if (_provision_commit.stdout | default('') | trim | length > 0) else {} }}"
         body_format: json
         validate_certs: false
         # 404 is tolerated for the fleet-wide run: a node the wizard has not registered yet
@@ -928,8 +930,8 @@
       ansible.builtin.debug:
         msg: >-
           WARNING: mark-synced did not stamp {{ slm_node_id | default(inventory_hostname) }} (HTTP
-          {{ _mark_synced.status | default('none') }}); 404 means the node is not registered yet.
-          Code Sync will show it as 'unknown' until it is registered and marked synced.
+          {{ _mark_synced.status | default('none') }}); 404 means no registered node has that ID
+          (look up the node_id the wizard registered). Check the node's status in Code Sync.
       when: _slm_login.status == 200 and (_mark_synced.status | default(-1)) != 200
       tags: ['mark-synced']
 
