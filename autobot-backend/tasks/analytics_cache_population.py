@@ -26,6 +26,7 @@ dispatched once per registered source that has a checkout, and each result is re
 source's own task-id prefix. The other three analyse AutoBot's own project root, as on demand.
 """
 
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -33,6 +34,7 @@ from api.source_scope import source_scoped_prefix
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from celery_app import celery_app
+from constants.ttl_constants import TTL_24_HOURS
 from tasks.analytics_tasks import _run_async, _wrap
 from utils.celery_task_status import store_latest_task_id
 
@@ -42,20 +44,32 @@ logger = get_logger(__name__)
 # to ~280s) don't all run at once and spike CPU/IO. Configurable via
 # AUTOBOT_ANALYTICS_CACHE_POPULATION_STAGGER_SECONDS (ssot_config), not hardcoded.
 _STAGGER_SECONDS = ssot_config.analytics_cache_population_stagger_seconds
+# The whole dispatch must fit in half of the shorter of the daily interval and the broker's
+# visibility timeout: a delayed task held longer than that is redelivered and runs twice (#20513).
+_WINDOW_SECONDS = (
+    min(TTL_24_HOURS, int(celery_app.conf.broker_transport_options.get("visibility_timeout") or TTL_24_HOURS)) // 2
+)
+
+
+@celery_app.task(name="analytics.record_latest_task")
+def record_latest_task(prefix: str, task_id: str) -> None:
+    """Point *prefix* at *task_id*; linked to run only after that task succeeded (#20513)."""
+    _run_async(store_latest_task_id(prefix, task_id))
 
 
 async def _dispatch(task, args: tuple, prefix: str | None, countdown: int) -> str:
-    """Enqueue *task* with *countdown* stagger; record it as latest for *prefix*.
+    """Enqueue *task* with *countdown* stagger; record it as latest for *prefix* once it succeeds.
 
     *prefix* is the Redis key prefix ``get_latest_task_result`` reads to
-    resolve the pointer to this dispatch's Celery result. Anti-pattern passes
-    ``prefix=None`` -- its detector writes its own cache directly inside
-    ``analyze()``, so no pointer is needed.
+    resolve the pointer to this dispatch's Celery result. The pointer moves when the
+    task has finished, so the previous completed result stays readable while the new
+    scan is queued or running. Anti-pattern passes ``prefix=None`` -- its detector
+    writes its own cache directly inside ``analyze()``, so no pointer is needed.
     """
-    result = task.apply_async(args=args, countdown=countdown)
-    if prefix is not None:
-        await store_latest_task_id(prefix, result.id)
-    return result.id
+    task_id = str(uuid.uuid4())
+    link = record_latest_task.si(prefix, task_id) if prefix is not None else None
+    task.apply_async(args=args, countdown=countdown, task_id=task_id, link=link)
+    return task_id
 
 
 def _build_modules(project_root: str, source_ids: tuple[str, ...] = ()) -> list[tuple]:
@@ -119,8 +133,9 @@ async def _populate_all(project_root: str, source_ids: tuple[str, ...] = ()) -> 
     modules = _build_modules(project_root, source_ids)
 
     results: dict = {}
+    spacing = min(_STAGGER_SECONDS, _WINDOW_SECONDS // max(len(modules), 1))
     for i, (name, task, args, prefix) in enumerate(modules):
-        countdown = i * _STAGGER_SECONDS
+        countdown = i * spacing
         try:
             task_id = await _dispatch(task, args, prefix, countdown)
             results[name] = {"status": "dispatched", "task_id": task_id, "countdown": countdown}

@@ -81,6 +81,12 @@ def _run_task(task, *args):
         return task.apply(args=args)
 
 
+def _refused(outcome) -> bool:
+    """The task returned the structured refusal (timestamps kept), not a failure."""
+    body = outcome.result
+    return not outcome.failed() and body["result"]["status"] == "error" and "completed_at" in body
+
+
 def _swap_for_link(root, outside):
     (root / "pkg").rmdir()
     (root / "pkg").symlink_to(outside, target_is_directory=True)
@@ -98,7 +104,7 @@ def test_a_cached_result_is_not_served_when_the_directory_now_leaves_the_source(
         _swap_for_link(root, outside)
         cached.reset_mock()
         outcome = _run_task(at.run_pattern_analysis, request)
-    assert outcome.failed()
+    assert _refused(outcome)
     cached.assert_not_called()
 
 
@@ -121,7 +127,7 @@ def test_a_missing_source_checkout_refuses_the_task_before_the_cache(tmp_path):
         patch.object(at, "_load_path_checkpoint", cached),
     ):
         outcome = _run_task(at.run_pattern_analysis, {"source_id": "s1", "path": str(tmp_path / "gone" / "pkg")})
-    assert outcome.failed()
+    assert _refused(outcome)
     cached.assert_not_called()
 
 
@@ -134,6 +140,27 @@ def test_the_summary_task_rechecks_the_directory_when_it_runs(source_tree):
     with patch("code_intelligence.pattern_analysis.CodePatternAnalyzer", analyzer):
         _swap_for_link(root, outside)
         outcome = _run_task(at.run_pattern_summary_analysis, str(root / "pkg"), "s1")
-    assert outcome.failed()
-    assert isinstance(outcome.result, ValueError)
+    assert _refused(outcome)
     analyzer.return_value.analyze_directory.assert_not_called()
+
+
+def test_a_directory_swapped_during_the_scan_discards_the_result_and_the_checkpoint(source_tree):
+    from tasks import analytics_tasks as at
+
+    root, outside = source_tree
+
+    async def swap_then_report(*_a, **_k):
+        _swap_for_link(root, outside)
+        return MagicMock(to_dict=lambda: {"scanned": True})
+
+    analyzer = MagicMock()
+    analyzer.return_value.analyze_directory = swap_then_report
+    save = AsyncMock()
+    with (
+        patch("code_intelligence.pattern_analysis.CodePatternAnalyzer", analyzer),
+        patch.object(at, "_load_path_checkpoint", AsyncMock(return_value=None)),
+        patch.object(at, "_save_path_checkpoint", save),
+    ):
+        outcome = _run_task(at.run_pattern_analysis, {"source_id": "s1", "path": str(root / "pkg")})
+    assert _refused(outcome)
+    save.assert_not_called()

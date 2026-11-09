@@ -159,6 +159,25 @@ async def _scan_root_or_refusal(source_id: "str | None") -> "tuple[Path | None, 
         return None, {"status": "error", "message": f"{exc.detail}; nothing scanned"}
 
 
+async def _confirmed_dir_or_refusal(
+    source_id: str, path: str, expect: "str | None" = None
+) -> "tuple[str | None, dict | None]":
+    """The real directory *path* now is inside *source_id*, or the refusal dict a task should return (#20513).
+
+    With *expect*, also refuses when the real directory is no longer that one -- the post-scan check
+    that keeps a result produced from a directory swapped mid-scan from being returned or cached.
+    """
+    from api.codebase_analytics.endpoints.shared import UnresolvedSourceError, confirm_scan_dir_in_source
+
+    try:
+        real = await confirm_scan_dir_in_source(source_id, path)
+    except (UnresolvedSourceError, ValueError) as exc:
+        return None, {"status": "error", "message": f"{getattr(exc, 'detail', exc)}; nothing scanned"}
+    if expect is not None and real != expect:
+        return None, {"status": "error", "message": "The scan directory changed during the scan; result discarded"}
+    return real, None
+
+
 @celery_app.task(bind=True, name="analytics.run_import_tree_analysis")
 @_binds_task_id
 def run_import_tree_analysis(self, source_id: "str | None" = None) -> dict:
@@ -328,12 +347,13 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
     _progress(self, "Initializing", 0.0, started)
 
     async def _work():
-        from api.codebase_analytics.endpoints.shared import confirm_scan_dir_in_source
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
         # The route validated the directory at queue time; confirm it again now, before anything
         # (including a cached result) is served, and key the checkpoint on the confirmed path (#20513).
-        scan_dir = await confirm_scan_dir_in_source(request.source_id, request.path)
+        scan_dir, refusal = await _confirmed_dir_or_refusal(request.source_id, request.path)
+        if refusal is not None:
+            return refusal
 
         # Resume from checkpoint if analysis for this path was recently completed.
         saved = await _load_path_checkpoint(scan_dir, request.source_id)
@@ -359,6 +379,9 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
             analyzer.analyze_directory(scan_dir, progress_callback=_on_progress),
             timeout=_ANALYSIS_TIMEOUT,
         )
+        _, moved = await _confirmed_dir_or_refusal(request.source_id, scan_dir, expect=scan_dir)
+        if moved is not None:
+            return moved
         result = report.to_dict()
         await _save_path_checkpoint(scan_dir, result, request.source_id)
         return result
@@ -533,10 +556,11 @@ def run_pattern_summary_analysis(self, path: str, source_id: str) -> dict:
     _progress(self, "Initializing analyzer", 10.0, started)
 
     async def _work():
-        from api.codebase_analytics.endpoints.shared import confirm_scan_dir_in_source
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
-        scan_dir = await confirm_scan_dir_in_source(source_id, path)
+        scan_dir, refusal = await _confirmed_dir_or_refusal(source_id, path)
+        if refusal is not None:
+            return refusal
         analyzer = CodePatternAnalyzer(enable_embedding_storage=False)
 
         async def _on_progress(step: str, progress: float) -> None:
@@ -547,6 +571,9 @@ def run_pattern_summary_analysis(self, path: str, source_id: str) -> dict:
             analyzer.analyze_directory(scan_dir, progress_callback=_on_progress),
             timeout=_ANALYSIS_TIMEOUT,
         )
+        _, moved = await _confirmed_dir_or_refusal(source_id, scan_dir, expect=scan_dir)
+        if moved is not None:
+            return moved
         _progress(self, "Building summary", 80.0, started)
         return {
             "total_patterns": report.total_patterns,

@@ -101,10 +101,14 @@ def scan_text(
 ) -> tuple[int, list[str]]:
     """``(sites examined, violations)`` for one file's text; *deferred* is the exemption set in force."""
     lines = text.splitlines()
-    code_text_by_line = {entry.lineno: entry.text for entry in code_lines(text, name=filename or "scan.ts")}
-    file_scopes = "withSourceId" in text
-    file_has_source = bool(EVIDENCE.search(text))
-    examined, violations = 0, []
+    # Comments, whole-line and trailing, are not code: neither a call in one nor a source named in one counts.
+    code_text_by_line = {
+        entry.lineno: entry.text for entry in code_lines(text, name=filename or "scan.ts", strip_trailing=True)
+    }
+    code = "\n".join(code_text_by_line.values())
+    file_scopes = "withSourceId" in code
+    file_has_source = bool(EVIDENCE.search(code))
+    examined, violations, exempted = 0, [], set()
     offset = 0
     for index, line in enumerate(lines):
         line_offset, offset = offset, offset + len(line) + 1
@@ -113,7 +117,10 @@ def scan_text(
         line = code_text_by_line[index + 1]
         for match in LITERAL.finditer(line):
             path = _normalise(match.group(1))
-            if _exempt(path) or (filename, path) in deferred:
+            if _exempt(path):
+                continue
+            if (filename, path) in deferred and (filename, path) not in exempted:
+                exempted.add((filename, path))  # an entry covers ONE call; a second bare call is a new finding
                 continue
             examined += 1
             statement = _call_span(text, line_offset + match.start())
@@ -159,6 +166,22 @@ def test_every_deferred_caller_entry_still_needs_its_exemption():
         if not any(v.endswith(f": {route}") for v in violations):
             stale.append(f"{rel}: {route}")
     assert not stale, "DEFERRED_CALLERS entries the scan no longer needs (delete them):\n  " + "\n  ".join(stale)
+
+
+def test_control_a_deferred_entry_covers_one_call_not_the_file():
+    two = "await post('/api/analytics/codebase/index', a)\nawait post('/api/analytics/codebase/index', b)"
+    assert scan_text(two, "f.ts", deferred=frozenset({("f.ts", "index")}))[1] == ["line 2: index"]
+
+
+def test_control_a_trailing_comment_is_not_a_call():
+    text = "const value = 1 // api.get('/api/analytics/codebase/stats')"
+    assert scan_text(text, "f.ts") == (0, [])
+
+
+def test_control_a_source_named_only_in_a_comment_is_not_evidence():
+    factory = "const t = useTaskLoader(\n  `${getApiBase()}/analytics/codebase/analytics/import-tree`,\n  pick)"
+    assert scan_text(factory + "\n// load(undefined, sourceIdQuery.value)")[1]
+    assert scan_text(factory + "\nconst go = () => load(undefined, sourceIdQuery.value) // ok")[1] == []
 
 
 def test_control_a_stale_deferred_entry_is_detected():
