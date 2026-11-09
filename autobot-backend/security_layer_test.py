@@ -13,6 +13,7 @@ import pytest
 
 # Import the modules to test
 import security_layer
+from autobot_shared.auth.jwt_core import hash_password
 from autobot_shared.paths import project_root
 from autobot_shared.ssot_config import default_audit_log_file
 from autobot_shared.status_enums import CommandRisk
@@ -377,7 +378,7 @@ class TestSecurityLayer:
     def test_authenticate_user_auth_enabled(self):
         """Test user authentication when auth is enabled"""
         self.security.enable_auth = True
-        self.security.allowed_users = {"test_user": "test_password"}
+        self.security.allowed_users = {"test_user": {"password_hash": hash_password("test_password")}}
         self.security.security_config = {"user_roles": {"test_user": "developer"}}
 
         # Valid credentials
@@ -390,6 +391,20 @@ class TestSecurityLayer:
 
         result = self.security.authenticate_user("invalid_user", "any_password")
         assert result is None
+
+    def test_authenticate_user_verifies_through_verify_password(self):
+        """#20761/#21088: the password is checked by the canonical hasher, not ``==``."""
+        from autobot_shared.auth import configured_users
+
+        self.security.enable_auth = True
+        self.security.allowed_users = {"test_user": {"password_hash": hash_password("stored")}}
+        self.security.security_config = {"user_roles": {"test_user": "developer"}}
+        with patch.object(configured_users, "verify_password", return_value=True) as verify:
+            assert self.security.authenticate_user("test_user", "supplied") == "developer"
+        assert verify.call_count == 1
+        assert verify.call_args.args[0] == "supplied"
+        with patch.object(configured_users, "verify_password", return_value=False):
+            assert self.security.authenticate_user("test_user", "stored") is None
 
     def test_get_pending_approvals(self):
         """Test getting pending approvals list"""

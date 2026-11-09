@@ -395,6 +395,7 @@ export default class ServiceDiscovery {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
+        // eslint-disable-next-line no-restricted-syntax -- reachability probe of candidate hosts, not the backend
         const response = await fetch(testUrl, {
           method: 'HEAD',
           signal: controller.signal,
@@ -423,6 +424,7 @@ export default class ServiceDiscovery {
         testEndpoint = '/vnc.html';
       }
 
+      // eslint-disable-next-line no-restricted-syntax -- reachability probe of candidate hosts, not the backend
       const response = await fetch(`${url}${testEndpoint}`, {
         method: 'HEAD',
         signal: controller.signal,

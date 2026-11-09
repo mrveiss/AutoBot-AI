@@ -41,7 +41,6 @@ Observability:
 import asyncio
 import hashlib
 import json
-import secrets
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -53,6 +52,7 @@ from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_constants import QueryDefaults
 from knowledge.search_filters import filter_non_private_results, is_non_private, non_private_where
@@ -392,7 +392,7 @@ class AutoBotMCPServer(MemoryToolsMixin, MemorySessionToolsMixin):
         # compare_digest because this is a long-lived shared secret checked on an
         # endpoint with no other auth layer (CWE-208); same primitive as
         # middleware/service_auth_enforcement.py.
-        if not expected or not secrets.compare_digest(secret_part, expected):
+        if not expected or not secure_compare(secret_part, expected):
             return None
         scopes = [s.strip() for s in scopes_part.split(",") if s.strip()]
         return scopes if scopes else None
