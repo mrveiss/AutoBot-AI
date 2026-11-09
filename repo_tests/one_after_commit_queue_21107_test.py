@@ -4,7 +4,7 @@
 # Author: mrveiss
 """One after-commit queue: ``defer_until_commit`` owns the hook pair (#21107).
 
-Event wakes and activity publish each carried a copy of the queue in ``llc/services/after_commit.py``
+Event wakes and activity publish each carried a copy of the queue in ``llc/services/after_commit.py``; it now lives in ``autobot_shared/after_commit.py``
 (queue on ``session.info``, ``after_commit`` runs it, a rollback drops it). Two copies disagree about
 SAVEPOINTs and rollbacks, so the hook has one home. The guard fails on an ``event.listen`` /
 ``listens_for`` of ``"after_commit"`` in non-test backend code outside that home.
@@ -26,7 +26,7 @@ from repo_tests._paths import repo_root
 
 from tools.lint._scan_helpers import tracked_paths
 
-HOME = "autobot-backend/llc/services/after_commit.py"
+HOME = "autobot_shared/after_commit.py"
 #: A listener registration that names the after_commit event, on one line or the next two.
 _LISTENER = re.compile(r"""(?:event\.listen|listens_for)\(\s*[^)]*?["']after_commit["']""", re.S)
 _TEST_MARKERS = ("_test.py", "/tests/", "/test_", "conftest.py")
@@ -34,8 +34,7 @@ _TEST_MARKERS = ("_test.py", "/tests/", "/test_", "conftest.py")
 _MIN_EXAMINED = 500
 
 FROZEN: dict[str, str] = {
-    "autobot-backend/llc/services/goal.py": "once=True post-commit KB indexing hook with no rollback handling (#21243)",
-    "autobot-backend/user_management/services/person_copy_sync.py": "process-wide listener on the Session class, not a per-session queue",
+    "autobot-backend/user_management/services/person_copy_sync.py": "waits on #21260 (process-wide listener on the Session class, not a per-session queue)",
 }
 
 
@@ -112,7 +111,7 @@ def sweep(root: Path, paths: list[str]) -> dict[str, int]:
 
 
 def _backend_sources() -> list[str]:
-    paths = tracked_paths(repo_root(), "autobot-backend/*.py")
+    paths = tracked_paths(repo_root(), "autobot-backend/*.py") + tracked_paths(repo_root(), "autobot_shared/*.py")
     return [p for p in paths if not _is_test(p)]
 
 
