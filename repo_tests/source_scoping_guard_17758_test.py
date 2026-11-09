@@ -33,6 +33,7 @@ import pathlib
 import pytest
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 
 _REPO = repo_root()
@@ -110,8 +111,7 @@ _UNSCOPED_ROOT_RESOLVERS = ("get_project_root", "resolve_project_root")
 
 
 def _is_test(path: pathlib.Path) -> bool:
-    name = path.name
-    return name.endswith("_test.py") or name.startswith("test_")
+    return is_test_filename(path.name, include_js=False, include_conftest=False)
 
 
 def _is_unscoped_fallback(node: ast.AST) -> bool:

@@ -20,6 +20,8 @@ from pathlib import Path
 
 from repo_tests._mocked_config_import import REPO_ROOT, run_sweep
 
+from autobot_shared.testfile_names import is_test_filename
+
 _PACKAGE = REPO_ROOT / "autobot_shared"
 
 #: Modules that cannot be imported standalone, each with its reason. A module listed here is not
@@ -33,8 +35,7 @@ _FLOOR = 279
 
 
 def _is_test(path: Path) -> bool:
-    name = path.stem
-    return name.endswith("_test") or name.startswith("test_") or name == "conftest" or "tests" in path.parts
+    return is_test_filename(path.name, include_js=False) or "tests" in path.parts
 
 
 def _modules_on_disk() -> set[str]:

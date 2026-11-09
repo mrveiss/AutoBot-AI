@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.testfile_names import is_test_filename
 
 from .config import AutoResearchConfig
 
@@ -180,8 +181,7 @@ class MetaAgent:
             raise ValueError(f"target_module_path must be absolute, got: {path}")
         if path.suffix != ".py":
             raise ValueError(f"target_module_path must be a .py file, got: {path.suffix}")
-        stem = path.stem.lower()
-        if stem.startswith("test_") or stem.endswith("_test"):
+        if is_test_filename(path.name, include_js=False):
             raise ValueError(f"meta-agent must not target test files: {path.name}")
         if not path.exists():
             raise FileNotFoundError(f"Target module not found: {path}")
