@@ -25,6 +25,12 @@ import { useLoadingState } from '@/composables/useLoadingState'
 // Create scoped logger for useConversationFiles
 const logger = createLogger('useConversationFiles')
 
+/** The user-facing text for a failed write: a recognised 413 refusal translated, else the server's message (#20723). */
+function describeFailure(err: unknown, fallbackKey: string): string {
+  const t = (key: string, params?: Record<string, unknown>) => i18n.global.t(key, params ?? {})
+  return describeApiRefusal(err, t) ?? extractApiErrorMessage(err, t(fallbackKey))
+}
+
 /**
  * File metadata interface matching backend ConversationFile model
  */
@@ -199,11 +205,11 @@ export function useConversationFiles(sessionId: string) {
           return true
         }
 
-        error.value = 'Upload failed'
+        error.value = i18n.global.t('chat.input.uploadError.unknown')
         return false
 
       } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Upload failed')
+        error.value = describeFailure(err, 'chat.input.uploadError.unknown')
         logger.error('Upload error:', err)
         return false
       } finally {
@@ -342,12 +348,10 @@ export function useConversationFiles(sessionId: string) {
       try {
         const data = await api.post<{ success: boolean }>(`${API}/files/create`, { filename, content, mime_type: mimeType })
         if (data?.success) { await loadFiles(); return true }
-        error.value = 'Failed to create file'
+        error.value = i18n.global.t('chat.conversationFiles.createFailed')
         return false
       } catch (err: unknown) {
-        error.value =
-          describeApiRefusal(err, (key, params) => i18n.global.t(key, params ?? {})) ??
-          extractApiErrorMessage(err, 'Failed to create file')
+        error.value = describeFailure(err, 'chat.conversationFiles.createFailed')
         logger.error('Create file error:', err)
         return false
       }
@@ -391,10 +395,10 @@ export function useConversationFiles(sessionId: string) {
     try {
       const data = await api.put<{ success: boolean }>(`${API}/files/${fileId}/content`, { content })
       if (data?.success) { await loadFiles(); return true }
-      error.value = 'Save failed'
+      error.value = i18n.global.t('chat.conversationFiles.saveFailed')
       return false
     } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Save failed')
+      error.value = describeFailure(err, 'chat.conversationFiles.saveFailed')
       logger.error('Update content error:', err)
       return false
     }
@@ -407,10 +411,10 @@ export function useConversationFiles(sessionId: string) {
       try {
         const data = await api.post<{ success: boolean }>(`${API}/files/${fileId}/copy`, { new_filename: newFilename || null })
         if (data?.success) { await loadFiles(); return true }
-        error.value = 'Copy failed'
+        error.value = i18n.global.t('chat.conversationFiles.copyFailed')
         return false
       } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Copy failed')
+        error.value = describeFailure(err, 'chat.conversationFiles.copyFailed')
         logger.error('Copy error:', err)
         return false
       }

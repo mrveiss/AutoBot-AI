@@ -30,12 +30,11 @@ job spanning many PRs, and this exists so the job is finite. It is deliberately
 not a style rule: it says nothing about any individual file, only that the
 totals must move one way.
 
-**This ratchet fails in BOTH directions**, matching
-`scripts/python_file_size_known_large.py`. Growth is a regression.
-An unrecorded *shrink* is also a failure, because a baseline that silently
-drifts below the real number stops being evidence of anything — the fix is to
-lower the constant in the same commit that does the work, so the number stays
-a claim someone made on purpose.
+**This ratchet is gated against the merge base (#19673)**, like the file-size
+ratchets: every count may not exceed the same count on the merge base's tree.
+There is no recorded number to lower, so a PR that cuts a count edits nothing
+shared and two such PRs never conflict; the cut is locked in because the next
+PR is measured against a base that already has it.
 
 Counting is deliberately textual rather than AST- or type-aware. These files
 are `.ts` and `.vue`, so a Python guard cannot parse them without pulling in a
@@ -48,10 +47,12 @@ truth.
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._ratchet_base import base_text, base_tree_texts, literal_in
 
 _REPO_ROOT = repo_root()
 
@@ -60,62 +61,17 @@ _SLM_SRC = _REPO_ROOT / "autobot-slm-frontend" / "src"
 
 # --- The ratchet ---------------------------------------------------------
 #
-# Lower these as consolidation lands. Never raise one to make a new file pass:
-# extend an existing client, or import the generated contract instead.
-
-# Per app, because the two frontends are at different points on the same path
-# and one number would hide a regression in whichever app was improving slower.
+# There is no recorded number (#19673). Each dimension is measured on this tree and on the merge
+# base's, and may not exceed the base's: `now <= base`. A PR that cuts a count edits no shared
+# table, so two such PRs never conflict, and the lines it cut cannot be spent back because the
+# next PR is measured against a base that already has the cut. Never grow a count to make a new
+# file pass: extend an existing client, or import the generated contract instead.
 #
-# Each app's transport client is itself counted in the raw-fetch total — it is
-# the one file that *should* call fetch, so that count floors at 1 rather than
-# 0. The ratchet only asserts direction, so a floor is not a problem.
-_BASELINES = {
-    "autobot-frontend": {
-        "clients": 8,
-        # #12363: counts only raw-fetch files NOT recorded in `_RAW_FETCH_EXCEPTIONS`;
-        # 17 -> 0. Every remaining site is a named exception with a reason.
-        "raw_fetch": 0,
-        "axios": 0,
-        # #16460: three duplicates from the +9 were dropped, then the remaining
-        # six hand-typed invitation list/respond and activity/notification history
-        # response shapes were replaced with `components['schemas'][...]` aliases
-        # in api-contract.ts -- back to main's contract-derived approach, so the
-        # baseline returns to 187 rather than staying raised.
-        # #20173: the secret audit log's private AuditQueryResponse is gone; it reads
-        # the one in types/audit.ts (187 -> 186).
-        "responses": 186,
-        # #15455: raised for the four typed detail fetches #15429 added. Same
-        # limitation — this counts assertions, and a correct new call is one.
-        # #16245: SettingsPanel.vue's unrendered /system/health/detailed loader was
-        # removed with its two `apiClient.get<...>` calls; recounted at the rebased
-        # tree, combined with the other cuts already on main.
-        # train-35: useBackgroundTask clear-stuck drops its `apiClient.post<unknown>` (-1).
-        # #19217: the web-research settings move to the SLM admin editor (-4).
-        # #19532: the unmounted main-GUI SettingsPanel retired; the SLM admin views are the home (-3).
-        "inline_generics": 542,
-    },
-    "autobot-slm-frontend": {
-        "clients": 1,
-        "raw_fetch": 2,  # #14908: the SLM transport moved into the kit ApiClientBase
-        # #12363 step 2: `composables/useAutobotApi.ts`, the last holdout, now builds
-        # an SlmApiClient, so the SLM matches the main frontend at 0.
-        "axios": 0,
-        # #13139: 31 -> 29. Giving `/mfa/verify-login` and `/auth/sso/ldap/login`
-        # a `response_model` retired `interface MFAVerifyResponse` (useMfaApi.ts)
-        # and `interface LDAPLoginResponse` (useSsoApi.ts); both are now derived
-        # from `components['schemas'][...]`. Lowered in the same commit as the
-        # work, per this module's docstring: an unrecorded shrink is a failure.
-        # #17040: 29 -> 34. `useAutobotApi.ts` gained 5 hand-typed response
-        # interfaces (OrphanStorageListResponse, ApprovalGateResponse,
-        # OrphanListResponse, OrphanRepairResponse, AuditQueryResponse) for the
-        # Data Hygiene page's new orphan-storage/orphan-repair/audit calls
-        # (#17157). None has a generated contract yet to derive from.
-        # #18739: 34 -> 33. `interface UserResponse` left useAutobotApi.ts with
-        # the stale /users calls it typed.
-        "responses": 33,
-        "inline_generics": 87,
-    },
-}
+# Per app, because the two frontends are at different points on the same path and one number
+# would hide a regression in whichever app was improving slower. Each app's transport client is
+# itself counted in the raw-fetch total (the one file that *should* call fetch), so that count
+# floors at 1 rather than 0; the ratchet only asserts direction, so a floor is no problem.
+_APPS = ("autobot-frontend", "autobot-slm-frontend")
 
 # Raw `fetch(` sites that legitimately bypass the transport client (#12363),
 # keyed by repo-relative path. A new raw fetch must either route through
@@ -216,15 +172,20 @@ def _raw_fetch_files(root: Path, base: Path = _REPO_ROOT) -> list[str]:
     ]
 
 
-def _unlisted_raw_fetch_files(root: Path, base: Path = _REPO_ROOT) -> list[str]:
-    """Raw-fetch files with no recorded reason: the only ones the ratchet counts."""
-    return [rel for rel in _raw_fetch_files(root, base) if rel not in _RAW_FETCH_EXCEPTIONS]
+def _unlisted_raw_fetch_files(
+    root: Path, base: Path = _REPO_ROOT, exceptions: Collection[str] | None = None
+) -> list[str]:
+    """Raw-fetch files with no recorded reason: the only ones the ratchet counts.
+
+    *exceptions* defaults to this checkout's `_RAW_FETCH_EXCEPTIONS`; the base tree is measured with
+    the exceptions the BASE recorded, so removing a stale one cannot raise the base's count.
+    """
+    listed = _RAW_FETCH_EXCEPTIONS if exceptions is None else exceptions
+    return [rel for rel in _raw_fetch_files(root, base) if rel not in listed]
 
 
-def _axios_importers(root: Path) -> list[str]:
-    return [
-        path.relative_to(_REPO_ROOT).as_posix() for path in _source_files(root) if _AXIOS_IMPORT_RE.search(_read(path))
-    ]
+def _axios_importers(root: Path, base: Path = _REPO_ROOT) -> list[str]:
+    return [path.relative_to(base).as_posix() for path in _source_files(root) if _AXIOS_IMPORT_RE.search(_read(path))]
 
 
 def _hand_typed_response_count(root: Path) -> int:
@@ -236,15 +197,44 @@ def _inline_generic_count(root: Path) -> int:
     return sum(len(_INLINE_GENERIC_RE.findall(_read(path))) for path in _source_files(root))
 
 
-def _measure(app: str) -> dict[str, int]:
-    root = _APP_SRC[app]
+def _measure(app: str, repo: Path = _REPO_ROOT, exceptions: Collection[str] | None = None) -> dict[str, int]:
+    """The five counts for *app* in the tree rooted at *repo* (the checkout, or an exported base)."""
+    root = repo / app / "src"
     return {
         "clients": len(_client_class_names(root)),
-        "raw_fetch": len(_unlisted_raw_fetch_files(root)),
-        "axios": len(_axios_importers(root)),
+        "raw_fetch": len(_unlisted_raw_fetch_files(root, repo, exceptions)),
+        "axios": len(_axios_importers(root, repo)),
         "responses": _hand_typed_response_count(root),
         "inline_generics": _inline_generic_count(root),
     }
+
+
+def _export_base(dest: Path, apps: tuple[str, ...] = _APPS, sha: str | None = None) -> Path:
+    """Write each app's ``src`` tree as the merge base had it under *dest*; BaseUnavailable propagates."""
+    for app in apps:
+        for rel, text in base_tree_texts(_REPO_ROOT, f"{app}/src", sha).items():
+            target = dest / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text, encoding="utf-8")
+    return dest
+
+
+def _base_exceptions() -> frozenset[str]:
+    """The raw-fetch exceptions this file recorded at the base (this checkout's, if the base had none)."""
+    text = base_text(_REPO_ROOT, "repo_tests/frontend_api_contract_ratchet_test.py")
+    return frozenset(literal_in(text, "_RAW_FETCH_EXCEPTIONS")) if text else frozenset(_RAW_FETCH_EXCEPTIONS)
+
+
+def _regressions(app: str, head: Path, base: Path, base_exceptions: Collection[str]) -> dict[str, tuple[int, int]]:
+    """``{dimension: (base, head)}`` for each count that grew -- the ratchet's whole decision (#19673)."""
+    now, then = _measure(app, head), _measure(app, base, base_exceptions)
+    return {dim: (then[dim], now[dim]) for dim in now if now[dim] > then[dim]}
+
+
+@pytest.fixture(scope="module")
+def base_tree(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, frozenset[str]]:
+    """The merge base's app trees exported to a directory, and the exceptions the base recorded."""
+    return _export_base(tmp_path_factory.mktemp("contract_base")), _base_exceptions()
 
 
 _DIMENSION_ADVICE = {
@@ -256,7 +246,7 @@ _DIMENSION_ADVICE = {
 }
 
 
-@pytest.mark.parametrize("app", sorted(_BASELINES))
+@pytest.mark.parametrize("app", _APPS)
 def test_the_tree_this_guard_reads_is_present(app: str) -> None:
     """A moved or renamed frontend would make every count zero, and zero passes."""
     root = _APP_SRC[app]
@@ -270,27 +260,45 @@ def test_the_tree_this_guard_reads_is_present(app: str) -> None:
     )
 
 
-@pytest.mark.parametrize("app", sorted(_BASELINES))
+@pytest.mark.parametrize("app", _APPS)
 @pytest.mark.parametrize("dimension", sorted(_DIMENSION_ADVICE))
-def test_contract_sprawl_only_shrinks(app: str, dimension: str) -> None:
-    """Growth is a regression; an unrecorded shrink is a stale baseline.
+def test_contract_sprawl_only_shrinks(app: str, dimension: str, base_tree: tuple[Path, frozenset[str]]) -> None:
+    """Growth against the merge base is a regression; a shrink needs no edit anywhere (#19673).
 
-    Both directions fail, matching `python_file_size_known_large.py`. A
-    baseline that silently drifts below the real number stops being evidence of
-    anything, so the constant must be lowered in the same commit that does the
-    work — that keeps it a claim someone made on purpose.
+    `now <= base`, the base being the real merge base (`repo_tests/_ratchet_base.py`). A base
+    that cannot be read fails closed rather than reading as "nothing grew".
     """
-    actual = _measure(app)[dimension]
-    baseline = _BASELINES[app][dimension]
+    grown = _regressions(app, _REPO_ROOT, *base_tree)
+    assert dimension not in grown, (
+        f"{app}: {dimension} is {grown[dimension][1]}, the merge base has {grown[dimension][0]} "
+        f"(#12363, #12420, #19673).\n{_DIMENSION_ADVICE[dimension]}"
+    )
 
-    assert actual <= baseline, (
-        f"{app}: {dimension} is {actual}, ratchet allows {baseline} (#12363, #12420).\n"
-        f"{_DIMENSION_ADVICE[dimension]}"
-    )
-    assert actual == baseline, (
-        f"{app}: {dimension} is down to {actual} but the baseline still says {baseline} — "
-        "lower it in the commit that did the work, so the number stays a deliberate claim"
-    )
+
+def _tree(root: Path, responses: int, raw_fetch_files: tuple[str, ...] = ()) -> Path:
+    src = root / "autobot-frontend" / "src"
+    src.mkdir(parents=True)
+    (src / "a.ts").write_text("interface XResponse {}\n" * responses, encoding="utf-8")
+    for name in raw_fetch_files:
+        (src / name).write_text("await fetch('/api/x')\n", encoding="utf-8")
+    return root
+
+
+def test_the_ratchet_decision_catches_growth_and_passes_a_shrink(tmp_path: Path) -> None:
+    """Contrast pair through the real decision (`_regressions`), head tree against base tree."""
+    old, new = _tree(tmp_path / "old", 2), _tree(tmp_path / "new", 3)
+    assert _regressions("autobot-frontend", new, old, frozenset()) == {"responses": (2, 3)}
+    assert _regressions("autobot-frontend", old, new, frozenset()) == {}
+
+
+def test_the_base_is_measured_with_the_base_s_own_exceptions(tmp_path: Path) -> None:
+    """Dropping a stale exception while adding a raw fetch elsewhere must still read as growth."""
+    old = _tree(tmp_path / "old", 0, ("stale.ts",))  # at the base `stale.ts` was an excused raw fetch
+    new = _tree(tmp_path / "new", 0, ("fresh.ts",))  # the PR removed that exception and added a new one
+    base_exceptions = frozenset({"autobot-frontend/src/stale.ts"})
+    assert _regressions("autobot-frontend", new, old, base_exceptions) == {"raw_fetch": (0, 1)}
+    # the defect the control exists for: measuring the base with the HEAD's (empty) list counts stale.ts
+    assert _measure("autobot-frontend", old, frozenset())["raw_fetch"] == 1
 
 
 def test_every_raw_fetch_exception_is_still_a_raw_fetch_with_a_reason() -> None:

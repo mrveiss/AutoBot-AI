@@ -12,7 +12,7 @@
  */
 
 import { ref, watch, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createLogger } from '@autobot/ui'
 import UpdateNodesOfflineAlert from './UpdateNodesOfflineAlert.vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -29,7 +29,6 @@ import {
   type ComponentSyncJobStatus,
   type FleetSyncJobStatus,
 } from '@/composables/useCodeSync'
-import { createLogger } from '@/utils/debugUtils'
 import { buildLoginUrl } from '@/utils/loginRedirect'
 import { useUpdateAllPoll } from '@/composables/useUpdateAllPoll'
 import UpdateAllPollBanner from '@/components/UpdateAllPollBanner.vue'
@@ -38,6 +37,7 @@ import { getCommitHashDisplay, getCommitUrl } from '@/utils/commitHashUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'
 import CodeSourceModal from '@/components/CodeSourceModal.vue'
 import FullTreeDriftPanel from '@/components/FullTreeDriftPanel.vue' // #16310
+import CodeRollbackPanel from '@/components/CodeRollbackPanel.vue' // #20214
 import UpdateProgressPanel from '@/components/UpdateProgressPanel.vue' // #20254
 import { useCodeSource } from '@/composables/useCodeSource'
 
@@ -816,9 +816,9 @@ async function handleUpdateAll(): Promise<void> {
   }
 }
 
-// Resume polling if a job is already running when the view mounts
-async function _checkExistingUpdateAllJob(): Promise<void> {
-  const result = await codeSync.getUpdateAllStatus()
+// Follow the update-all job: the running one on mount, or the one a rollback just started (#20214, no re-fetch)
+async function adoptRunningUpdateAllJob(started?: UpdateAllJob): Promise<void> {
+  const result = started ?? (await codeSync.getUpdateAllStatus())
   if (result === undefined || result === null || result === UPDATE_ALL_UNAUTHENTICATED) {
     return
   }
@@ -840,7 +840,7 @@ onMounted(async () => {
     codeSync.fetchSchedules(),
     codeSync.fetchRoles(),
     codeSourceComposable.fetchCodeSource(),
-    _checkExistingUpdateAllJob(),
+    adoptRunningUpdateAllJob(),
   ])
 })
 
@@ -1502,9 +1502,8 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Full-Tree Drift Check (#16310 owner requirement) — additive to the
-         per-component card above; independent state, independent endpoint. -->
-    <div class="mb-6">
+    <div class="mb-6 space-y-6">
+      <CodeRollbackPanel :disabled="updateAllIsRunning" @started="adoptRunningUpdateAllJob" />
       <FullTreeDriftPanel />
     </div>
 

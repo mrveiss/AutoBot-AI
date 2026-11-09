@@ -435,7 +435,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
 import { createDateFormatter, formatLocalTime } from '@/utils/formatHelpers'
 import TruncationNotice from './TruncationNotice.vue';
-import { useShowMore, BaseButton } from '@autobot/ui'
+import { useShowMore, BaseButton, saveTextFile } from '@autobot/ui'
 import type { DirectiveBinding } from 'vue';
 import { BaseBadge, BaseModal, BaseTable, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
 import { useRoute } from 'vue-router';
@@ -759,7 +759,7 @@ const trendStats = computed(() => {
 
 // Removed lastUpdated computed - always recalculating is inefficient
 // Use reactive lastUpdated ref instead, updated only on data refresh
-const lastUpdated = ref(new Date().toLocaleTimeString());
+const lastUpdated = ref(formatLocalTime(new Date()));
 
 // Methods
 async function refreshData(): Promise<void> {
@@ -835,13 +835,7 @@ async function exportReport(format: string): Promise<void> {
 }
 
 function downloadFile(content: string, filename: string, type: string): void {
-  const blob = new Blob([content], { type });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  window.URL.revokeObjectURL(url);
+  saveTextFile(content, filename, type);
 }
 
 function closeExportMenu(): void {
@@ -984,10 +978,7 @@ function truncatePath(path: string): string {
 
 const formatDate = createDateFormatter({ kind: 'date', intl: { month: 'short', day: 'numeric' } });
 
-function formatShortDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
+const formatShortDate = createDateFormatter({ kind: 'date', intl: { month: 'numeric', day: 'numeric' } });
 
 // Directive for click outside
 const vClickOutside = {

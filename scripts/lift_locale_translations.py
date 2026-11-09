@@ -18,7 +18,8 @@ than a visible English one:
 
 1. The English source must be at least ``MIN_SOURCE_LENGTH`` characters. Below
    that, identical English means nothing -- "OK", "ID", "%s" and bare numerals
-   match across unrelated concepts.
+   match across unrelated concepts. The one exception is an explicit
+   ``KEY_MAPPINGS`` entry naming the main-app key for the same concept (#20199).
 2. The candidate translation must carry the same ``{placeholders}`` as the
    source. A translation that drops or adds one is not a translation of this
    string.
@@ -77,6 +78,16 @@ TARGET_LOCALES = ("ar", "de", "es", "fa", "fr", "he", "lv", "pl", "pt", "ur")
 #: Below this, an identical English string is not evidence of the same concept.
 MIN_SOURCE_LENGTH = 4
 
+#: App key -> main-app key, for a SHORT source the length refusal would otherwise
+#: leave in English (#20199). The pair is a statement that both keys are the same
+#: concept (here: a duration unit), which identical text alone cannot prove for a
+#: one-letter string. Each entry is honoured only while the main-app key still
+#: carries the same English source, so a drifted pair falls back to English.
+KEY_MAPPINGS: dict[str, str] = {
+    "agents.processMonitorTab.durationSeconds": "workflow.history.durationSeconds",
+    "agents.processMonitorTab.durationMinutes": "workflow.history.durationMinutes",
+}
+
 #: How dominant one translation must be among disagreeing candidates.
 MAJORITY_THRESHOLD = 0.8
 
@@ -104,6 +115,21 @@ def _lift(source: str, candidates: list[str]) -> str | None:
     return None
 
 
+def _source_keys(path: str, value: str, by_text: dict[str, list[str]], source_en: dict) -> list[str]:
+    """The main-app keys whose translations may be lifted for app key *path*.
+
+    The ONE lookup (#20199): an explicit ``KEY_MAPPINGS`` entry wins and bypasses
+    the length refusal; otherwise keys sharing the English *value* verbatim, for
+    a source of at least ``MIN_SOURCE_LENGTH`` characters.
+    """
+    mapped = KEY_MAPPINGS.get(path)
+    if mapped is not None:
+        return [mapped] if source_en.get(mapped) == value else []
+    if len(value) < MIN_SOURCE_LENGTH:
+        return []
+    return by_text.get(value, [])
+
+
 def refusal_reason(source: str, candidates: list[str]) -> str | None:
     """Why *source* keeps its English, or None when it lifts (#20199).
 
@@ -117,25 +143,33 @@ def refusal_reason(source: str, candidates: list[str]) -> str | None:
     return "tie" if usable else "no-translation"
 
 
-def collect_refusals(app_en_flat: dict, by_text: dict[str, list[str]], source_locale: dict) -> dict[str, list[str]]:
+def collect_refusals(
+    app_en_flat: dict, by_text: dict[str, list[str]], source_locale: dict, source_en: dict | None = None
+) -> dict[str, list[str]]:
     """App keys that keep English, grouped by reason, for one locale (#20199)."""
     out: dict[str, list[str]] = {"short": [], "no-source": [], "no-translation": [], "tie": []}
     for key, value in app_en_flat.items():
         if not isinstance(value, str):
             continue
-        if len(value) < MIN_SOURCE_LENGTH:
+        keys = _source_keys(key, value, by_text, source_en or {})
+        if not keys and len(value) < MIN_SOURCE_LENGTH:
             out["short"].append(key)
-        elif value not in by_text:
+        elif not keys:
             out["no-source"].append(key)
         else:
-            cands = [source_locale.get(k) for k in by_text[value] if isinstance(source_locale.get(k), str)]
+            cands = [source_locale.get(k) for k in keys if isinstance(source_locale.get(k), str)]
             reason = refusal_reason(value, cands)
             if reason:
                 out[reason].append(key)
     return out
 
 
-def build_locale(app_en: dict, source_en_by_text: dict[str, list[str]], source_locale: dict[str, Any]) -> dict:
+def build_locale(
+    app_en: dict,
+    source_en_by_text: dict[str, list[str]],
+    source_locale: dict[str, Any],
+    source_en: dict[str, Any] | None = None,
+) -> dict:
     """The app's English tree with every liftable value replaced."""
 
     def walk(node: dict, prefix: str = "") -> dict:
@@ -146,9 +180,9 @@ def build_locale(app_en: dict, source_en_by_text: dict[str, list[str]], source_l
                 out[key] = walk(value, path)
                 continue
             out[key] = value
-            if not isinstance(value, str) or len(value) < MIN_SOURCE_LENGTH:
+            if not isinstance(value, str):
                 continue
-            keys_with_text = source_en_by_text.get(value)
+            keys_with_text = _source_keys(path, value, source_en_by_text, source_en or {})
             if not keys_with_text:
                 continue
             lifted = _lift(
@@ -161,11 +195,11 @@ def build_locale(app_en: dict, source_en_by_text: dict[str, list[str]], source_l
     return walk(app_en)
 
 
-def _print_refusals(app_en_flat: dict, by_text: dict[str, list[str]], source_dir: Path) -> None:
+def _print_refusals(app_en_flat: dict, by_text: dict[str, list[str]], source_dir: Path, source_en: dict) -> None:
     """One line per locale: how many keys stay English, by refusal reason."""
     for locale in TARGET_LOCALES:
         source_locale = flatten(json.loads((source_dir / f"{locale}.json").read_text(encoding="utf-8")))
-        groups = collect_refusals(app_en_flat, by_text, source_locale)
+        groups = collect_refusals(app_en_flat, by_text, source_locale, source_en)
         counts = " ".join(f"{reason}={len(keys)}" for reason, keys in groups.items())
         print(f"{locale}: {counts}")  # noqa: print -- stdout IS this CLI's interface
 
@@ -194,13 +228,13 @@ def main(argv: list[str] | None = None) -> int:
             by_text.setdefault(value, []).append(key)
 
     if args.refusals:
-        _print_refusals(app_en_flat, by_text, source_dir)
+        _print_refusals(app_en_flat, by_text, source_dir, source_en)
         return 0
 
     drifted: list[str] = []
     for locale in TARGET_LOCALES:
         source_locale = flatten(json.loads((source_dir / f"{locale}.json").read_text(encoding="utf-8")))
-        built = build_locale(app_en_tree, by_text, source_locale)
+        built = build_locale(app_en_tree, by_text, source_locale, source_en)
         built["_meta"] = {"dir": "rtl" if locale in RTL_LOCALES else "ltr", "source": "lifted from autobot-frontend"}
         rendered = json.dumps(built, ensure_ascii=False, indent=2) + "\n"
         target = app_dir / f"{locale}.json"

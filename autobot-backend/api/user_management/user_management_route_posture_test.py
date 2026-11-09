@@ -74,7 +74,7 @@ _ADMIN_ONLY_BY_16276 = frozenset(
 #: observed posture. A route missing here, or an entry here with no matching
 #: route, both fail in ``TestUserManagementRoutePostureIsComplete``.
 _EXPECTED_POSTURE = {
-    ("GET", "/user-management/users"): _AUTHENTICATED,  # list_users
+    ("GET", "/user-management/users"): _ADMIN,  # list_users
     # search_users_for_sharing: login and the caller's own org (#16279). It was open (#2072).
     ("GET", "/user-management/users/search"): _AUTHENTICATED,
     ("POST", "/user-management/users"): _ADMIN,  # create_user (#15738)
@@ -82,13 +82,14 @@ _EXPECTED_POSTURE = {
     ("GET", "/user-management/users/{user_id}"): _SELF_OR_ADMIN,  # get_user (#15738)
     ("PATCH", "/user-management/users/{user_id}"): _SELF_OR_ADMIN,  # update_user (#15738)
     ("DELETE", "/user-management/users/{user_id}"): _ADMIN,  # delete_user (#15738)
-    ("POST", "/user-management/users/{user_id}/activate"): _AUTHENTICATED,
-    ("POST", "/user-management/users/{user_id}/deactivate"): _AUTHENTICATED,
+    ("POST", "/user-management/users/{user_id}/activate"): _ADMIN,
+    ("POST", "/user-management/users/{user_id}/deactivate"): _ADMIN,
     # #15743 closed: the gate is a declared dependency, so it is visible here.
     ("POST", "/user-management/users/{user_id}/change-password"): _SELF_OR_ADMIN,
     ("POST", "/user-management/users/{user_id}/roles/{role_id}"): _ADMIN,  # assign_role (#15738)
     ("DELETE", "/user-management/users/{user_id}/roles/{role_id}"): _ADMIN,  # revoke_role (#15738)
     ("PUT", "/user-management/users/{user_id}/role"): _ADMIN,  # set_user_role (#1801)
+    ("PUT", "/user-management/users/{user_id}/admin"): _ADMIN,  # set_admin_status (#20670)
     ("GET", "/user-management/teams"): _ADMIN,  # #16276
     ("POST", "/user-management/teams"): _ADMIN,  # #16276
     ("GET", "/user-management/teams/{team_id}"): _ADMIN,  # #16276

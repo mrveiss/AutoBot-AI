@@ -11,6 +11,16 @@
 import type { RouteRecordRaw } from 'vue-router'
 import WorkflowBuilderView from '@/views/WorkflowBuilderView.vue'
 
+/** The approvals page without a company (#20917): the person's waiting approvals, from any page. */
+export const approvalsRoutes: RouteRecordRaw[] = [
+  {
+    path: '/approvals',
+    name: 'approvals',
+    component: () => import('@/views/llc/ApprovalsInbox.vue'),
+    meta: { title: 'Approvals', requiresAuth: true, hideInNav: true },
+  },
+]
+
 export const llcCompanyChildren: RouteRecordRaw[] = [
   { path: '', redirect: { name: 'llc-backlog' } },
   {
@@ -72,6 +82,8 @@ export const llcCompanyChildren: RouteRecordRaw[] = [
   { path: 'heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), props: true, meta: { title: 'Heartbeat Monitor', requiresAuth: true } },
   // #18391: Overview > Agent ledger -- read-only, company-scoped by the backend.
   { path: 'ledger', name: 'llc-ledger', component: () => import('@/views/llc/AgentLedgerView.vue'), meta: { title: 'Agent ledger', requiresAuth: true } },
+  // #13714: Company OS > Mailbox -- no mailbox backend yet, so the view states that plainly.
+  { path: 'mailbox', name: 'llc-mailbox', component: () => import('@/views/llc/MailboxView.vue'), meta: { title: 'Mailbox', requiresAuth: true } },
   { path: 'routines', name: 'llc-routines', component: () => import('@/views/llc/RoutinesView.vue'), props: true, meta: { title: 'Routines', requiresAuth: true } },
   { path: 'ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
   { path: 'activity', name: 'llc-activity', component: () => import('@/views/llc/ActivityFeedView.vue'), props: true, meta: { title: 'Activity', requiresAuth: true } },
@@ -80,6 +92,7 @@ export const llcCompanyChildren: RouteRecordRaw[] = [
   // #18245: Organization > Teams -- company-scoped; the server limits writes to platform administrators.
   { path: 'teams', name: 'llc-teams', component: () => import('@/views/llc/TeamsView.vue'), props: true, meta: { title: 'Teams', requiresAuth: true } },
   { path: 'portability', name: 'llc-company-portability', component: () => import('@/views/llc/CompanyPortabilityView.vue'), props: true, meta: { title: 'Portability', requiresAuth: true } },
+  { path: 'settings', name: 'llc-company-settings', component: () => import('@/views/llc/CompanySettingsView.vue'), props: true, meta: { title: 'Company settings', requiresAuth: true } },
   { path: 'secrets', name: 'llc-company-secrets', component: () => import('@/views/llc/CompanySecretsView.vue'), props: true, meta: { title: 'Secrets', requiresAuth: true } },
   // GH#10750 (B3): in-layout variants of the formerly top-level dashboard/
   // goals/org-chart views so the LlcSidebar stays mounted on navigation.

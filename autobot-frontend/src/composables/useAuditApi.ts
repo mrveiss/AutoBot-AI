@@ -14,6 +14,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from '@/composables/useLoadingState'
+import { isoDateStamp } from '@/utils/formatHelpers'
 import type {
   AuditEntry,
   AuditQueryParams,
@@ -26,7 +27,7 @@ import type {
   AuditFilter,
   AuditResult
 } from '@/types/audit'
-import { DEFAULT_AUDIT_FILTER, getDateRangeForFilter } from '@/types/audit'
+import { DEFAULT_AUDIT_FILTER, auditTimestampToDate, getDateRangeForFilter } from '@/types/audit'
 import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useAuditApi')
@@ -368,16 +369,15 @@ export function useAuditState() {
   }
 
   function exportToCsv(): string {
-    const headers = ['Timestamp', 'Operation', 'Result', 'User ID', 'Session ID', 'VM Name', 'IP Address', 'Error Message']
+    const headers = ['Timestamp', 'Operation', 'Result', 'User ID', 'Session ID', 'VM Name', 'IP Address']
     const rows = entries.value.map((entry) => [
-      escapeCsvField(entry.timestamp),
+      escapeCsvField(auditTimestampToDate(entry.timestamp).toISOString()),
       escapeCsvField(entry.operation),
       escapeCsvField(entry.result),
       escapeCsvField(entry.user_id),
       escapeCsvField(entry.session_id),
       escapeCsvField(entry.vm_name),
-      escapeCsvField(entry.ip_address),
-      escapeCsvField(entry.error_message)
+      escapeCsvField(entry.ip_address)
     ])
     return [headers.join(','), ...rows.map((row) => row.join(','))].join('\n')
   }
@@ -385,7 +385,7 @@ export function useAuditState() {
   function downloadExport(format: 'json' | 'csv') {
     const content = format === 'json' ? exportToJson() : exportToCsv()
     const mimeType = format === 'json' ? 'application/json' : 'text/csv'
-    const filename = `audit-logs-${new Date().toISOString().split('T')[0]}.${format}`
+    const filename = `audit-logs-${isoDateStamp()}.${format}`
     const blob = new Blob([content], { type: mimeType })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')

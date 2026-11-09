@@ -513,7 +513,7 @@ and a control string matched. A number with any other unit (`24h`, `3d`) is stil
 
 ## Down-only tables are compared with the base, not with a hand total (#19283)
 
-A per-entry table (file-size `KNOWN_LARGE`, the colour and palette baselines) used to carry a
+A per-entry table (file-size `KNOWN_LARGE` until #19673, the colour and palette baselines) used to carry a
 hand-summed total or a mirrored copy, so that a raise showed up somewhere. Every PR that lowered
 *any* entry then edited the same total line, and two such PRs always conflicted.
 `repo_tests/_ratchet_base.py` now holds each entry to the same table at the base commit instead:
@@ -531,6 +531,47 @@ an entry above the base, or a key the base lacks, is a raise.
 - **Moving a table:** pass the old path after the new one,
   `base_table(root, ("new.py", "old.py"), NAME)`. Without it every entry reads as an addition.
 
+## Size ratchets are gated against the merge base, not against their own table (#19673)
+
+The three file-size gates (Python, shell, frontend) and the frontend API-contract ratchet used to
+demand that a recorded number equal the file's current length, so every PR that shrank a
+grandfathered file edited a shared sorted table, and PRs shrinking neighbouring entries conflicted.
+
+**Rule:** for each grandfathered file F, `lines(F@HEAD) <= min(KNOWN_LARGE[F], lines(F@base))`
+(`_ratchet_base.growth_over_base`). The recorded ceiling is a down-only upper bound; the base blob
+is the tight gate, so a shrink needs **no** table edit and the lines it cut cannot be spent back.
+The frontend contract ratchet measures its five counts on the head and on the base tree and
+requires `now <= base`; it keeps no recorded number at all.
+
+- **The base** is whatever `_ratchet_base.base_commit` returns, and it measures the PR's own delta
+  in both places:
+  - *Locally:* `git merge-base HEAD origin/main` (override the ref with `AUTOBOT_RATCHET_BASE_REF`).
+    Never the moving `origin/main` tip, so a file the branch did not touch reads equal to its base
+    even after main has moved on.
+  - *In CI* (`GITHUB_ACTIONS=true`): `AUTOBOT_RATCHET_BASE_SHA` when `ci.yml` sets it -- a merge
+    group's `base_sha`, `github.event.before` on a push to main, or on a PR into `release` the merge
+    base with main (#19466) -- else `HEAD^1`. For a pull request that is `HEAD^1` of the PR merge
+    ref (`refs/pull/N/merge`), i.e. the base branch tip; the checkout uses `fetch-depth: 2` so it is
+    readable.
+  - *Why those agree:* the merge ref's tree is the base tip plus the PR's changes. A file the PR
+    did not touch is identical at `HEAD` and at `HEAD^1` (main's newer content is in both), and a
+    file it did touch differs by exactly the PR's edit. Locally `HEAD` is the unmerged branch, so
+    the same file is identical at `HEAD` and at the fork point, and differs by the same edit. Both
+    compare "this PR's edit" with "the file before it".
+- **A file the base did not have is blocked:** a new file never earns an entry (an add still fails
+  `test_no_entry_may_be_added`, a raised ceiling still fails `test_no_ceiling_may_exceed_its_baseline`).
+  The message says `renamed? move its entry in the table` for a `git mv`.
+- **Removed:** the "under its recorded ceiling, lower it" failure in `tools/lint/_file_size_guard.py`.
+- **What the repo enforces about the table:** ceilings are down-only upper bounds; a ceiling above
+  the measured size is harmless (the base gates the file); an entry is deleted when its file reaches
+  600 lines or fewer (the guard fails until it is). Nothing repins the ints automatically and the
+  merge train does not run a repin.
+- **Optional tidy:** `python scripts/check_python_file_size.py --repin-ceilings` (likewise the shell
+  and frontend checkers) rewrites the integers of existing entries downward and deletes entries at
+  or under 600; it reports an entry it cannot rewrite, and keeps line endings. It is a manual
+  convenience, not a step anything depends on.
+- **Fail closed:** an unreadable base raises `BaseUnavailable`; it never reads as "nothing grew".
+
 ## Local date and time formatters (#19905)
 
 `repo_tests/frontend_local_date_formatter_ratchet_19905_test.py` pins the local declarations named
@@ -543,9 +584,20 @@ folder cannot read as a clean 0.
 - **Boundary:** a `function` or `const` bound to an arrow/function expression, or an object or
   class method/property, with one of those names. `const formatTime = createDateFormatter({...})`
   and `const formatDate = formatDateTime` are bindings of the kit's functions and are not counted.
-- **What the pin holds:** i18n-aware relative-time formatters (the kit's `formatTimeAgo` is
-  English only), formatters whose name says time but that format a duration (#19680, #19929), and declarations in files an
+- **What the pin holds:** i18n-aware relative-time formatters (the kit's English-only
+  `formatTimeAgo` is gone, #19606; the name stays caught), formatters whose name says time but that format a duration (#19680, #19929), and declarations in files an
   open PR held when the ratchet landed. Lower `PINS` in the PR that moves one.
+- **Inline and hand-assembled shapes (#19905):** the same guard also pins five shapes a declaration
+  scan cannot see, each as its own `PINS` key over comment-stripped text: `inline_date_locale_calls`
+  (`.toLocaleDateString(` / `.toLocaleTimeString(`), `inline_date_to_locale_string`
+  (`new Date(x).toLocaleString(`), `intl_date_time_format_outside_kit` (`new Intl.DateTimeFormat(`),
+  `hardcoded_locale_formatters` (a locale literal given to `createDateFormatter` /
+  `createRecencyFormatter` or to a `toLocale*String` call; a live `locale: () => ...` is the
+  accepted form) and `hand_assembled_date_fields` (`${d.getMonth()}`-style pieces). All are 0 except
+  `hand_assembled_date_fields`, which is 1: GanttTimelineView's quarter tick ("Q3 2025") has no `Intl`
+  form and is the one named exception. A number's `toLocaleString()` and
+  `Intl.DateTimeFormat().resolvedOptions()` are not date formatting and are not counted. Only the
+  first two keys count towards `scan()`; the rest are compared per key. Controls are in the test file.
 - **Not independently re-derived.** Rule 3 asks for a second enumeration; this ratchet has only the
   detector's, so its count is as good as the regex. The fixtures in the test file are its positive
   and negative controls.

@@ -15,12 +15,10 @@
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert, createLogger, createDateFormatter } from '@autobot/ui'
 import { useDashboardPoller } from '@/composables/useDashboardPoller'
-import { createLogger } from '@/utils/debugUtils'
 import type { SLMNode, NPUWorkerMetrics } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
-import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('NPUWorkerMonitor')
 

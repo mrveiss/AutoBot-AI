@@ -18,6 +18,7 @@ import pytest
 from llc.exceptions import HeartbeatDispatchSkipped
 from llc.org_role_authority import (
     ORG_ROLE_AUTHORITY,
+    _no_bound_reason,
     apply_org_role_bound,
     claude_code_bound,
     describe_role_bound,
@@ -80,6 +81,16 @@ class TestAdapters:
 
         assert view["runs"] is False and "no enforcement decision" in view["reason"]
 
+    @pytest.mark.parametrize("role", [None, "", "ceo"])
+    def test_an_unknown_role_reason_is_our_text_never_the_exception(self, role):
+        """#20703: this view reaches the agent list, so no exception text may land in ``reason``."""
+        leak = "exception text that must not reach a response"
+        with patch("llc.org_role_authority.org_role_authority", side_effect=ValueError(leak)):
+            view = describe_role_bound(role, "claude_code")
+
+        assert view["runs"] is False and view["reason"] == _no_bound_reason(role)
+        assert leak not in str(view)
+
     def test_an_unclassified_adapter_is_refused_at_dispatch(self):
         with pytest.raises(HeartbeatDispatchSkipped, match="no enforcement decision"):
             apply_org_role_bound(_agent("worker", adapter="plugin_adapter"))
@@ -131,7 +142,7 @@ async def test_the_scheduler_refuses_before_any_adapter_is_resolved_when_the_fla
     """The real dispatch point, with enforcement on: every heartbeat/comment-wake run passes it (#16974)."""
     from llc.scheduler import heartbeat_scheduler
 
-    with patch.object(heartbeat_scheduler, "is_feature_enabled", return_value=True):
+    with patch("llc.org_role_authority.is_feature_enabled", return_value=True):
         with patch.object(heartbeat_scheduler, "get_adapter") as get_adapter:
             with pytest.raises(HeartbeatDispatchSkipped):
                 await heartbeat_scheduler._dispatch_adapter(_agent("worker", adapter="copilot_local"), {})
@@ -144,7 +155,7 @@ async def test_the_scheduler_does_not_enforce_when_the_flag_is_off():
     """Default is off (#16974 owner decision): a deployment that never set the flag runs exactly as before."""
     from llc.scheduler import heartbeat_scheduler
 
-    with patch.object(heartbeat_scheduler, "is_feature_enabled", return_value=False):
+    with patch("llc.org_role_authority.is_feature_enabled", return_value=False):
         with patch.object(heartbeat_scheduler, "get_adapter") as get_adapter:
             with patch.object(heartbeat_scheduler, "_dispatch_registry_adapter", AsyncMock(return_value=None)):
                 await heartbeat_scheduler._dispatch_adapter(_agent("worker", adapter="copilot_local"), {})

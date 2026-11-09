@@ -9,6 +9,10 @@
  "autobot-backend/llc/services/budget.py",
  "autobot-backend/llc/exceptions.py",
  "autobot-backend/llc/scheduler/run_status.py",
+ "autobot-backend/llc/services/company_os/**",
+ "autobot-backend/services/ai_line_change_proposal.py",
+ "autobot_shared/ai_lines.py",
+ "autobot-backend/llc/services/goal.py",
  "autobot-backend/services/*secret*.py",
  "autobot-backend/services/credential_*.py",
  "autobot-backend/services/orphan_repair*.py",
@@ -22,5 +26,14 @@
  "autobot_shared/auth/device_capabilities.py",
  "autobot_shared/secrets_vault.py",
  "autobot_shared/legacy_secret_keys.py",
- "autobot_shared/db_errors.py"
+ "autobot_shared/db_errors.py",
+ "autobot_shared/db_session.py",
+ "autobot_shared/user_management/password_epoch.py",
+ "autobot_shared/user_management/base_service.py",
+ "autobot_shared/user_management/models/audit.py",
+ "autobot_shared/user_management/models/user.py",
+ "autobot_shared/user_management/user_service.py",
+ "autobot_shared/user_management/user_service_lifecycle.py",
+ "autobot_shared/user_management/revocation_outcome.py",
+ "autobot_shared/user_management/__init__.py"
 ]

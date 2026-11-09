@@ -118,7 +118,6 @@
 2|other|autobot-backend/api/anthropic_compat.py|"system"
 1|other|autobot-backend/api/batch_jobs.py|30
 10|other|autobot-backend/api/chat.py|"assistant"
-1|other|autobot-backend/api/chat.py|"user"
 1|other|autobot-backend/api/chat_compare.py|"user"
 2|other|autobot-backend/api/chat_embed.py|"user"
 1|other|autobot-backend/api/chat_sessions.py|100
@@ -172,7 +171,6 @@
 1|other|autobot-backend/api/state_tracking.py|100
 1|other|autobot-backend/api/task_memory.py|100
 1|other|autobot-backend/api/telegram_bot.py|"user"
-1|other|autobot-backend/api/terminal.py|30
 1|other|autobot-backend/api/terminal_handlers.py|"user"
 1|other|autobot-backend/api/user_management/users.py|50
 1|other|autobot-backend/api/user_management/users.py|offset=0
@@ -565,11 +563,10 @@
 1|other|autobot-backend/utils/path_validation.py|"/opt/autobot/backups/../../../etc/passwd
 1|other|autobot-backend/utils/path_validation.py|"/opt/autobot/backups/kb_backup.json
 1|other|autobot-backend/utils/service_client.py|30
-2|other|autobot-backend/utils/timeout_migration_examples.py|300
+1|other|autobot-backend/utils/timeout_migration_examples.py|300
 2|other|autobot-backend/voice_interface.py|https://alphacephei.com/vosk/models
 1|other|autobot-backend/voice_processing/providers/cloud/assemblyai_provider.py|https://api.assemblyai.com/v2
 1|other|autobot-backend/voice_processing/providers/cloud/deepgram_provider.py|https://api.deepgram.com/v1/listen
-1|other|autobot-backend/voice_processing/providers/lv/late_provider.py|300
 1|other|autobot-backend/voice_processing/realtime/openai_provider.py|https://api.openai.com/v1/realtime/sessions
 1|other|autobot-backend/web_fetch/fetcher.py|https://r.jina.ai/
 1|other|autobot-backend/web_fetch/site_mapper.py|http://www.sitemaps.org/schemas/sitemap/0.9
@@ -615,12 +612,10 @@
 1|other|autobot-frontend/src/composables/analytics/useCodeIntelScores.ts|'/opt/autobot
 1|other|autobot-frontend/src/composables/analytics/useSourceRegistry.ts|'/opt/autobot
 2|other|autobot-frontend/src/composables/chat/useContextOverflowProtection.ts|'system'
-1|other|autobot-frontend/src/composables/collaboration/useCollaborationInvite.ts|offset=0
 1|other|autobot-frontend/src/composables/knowledge/useKnowledgeBrowser.ts|offset=0
 2|other|autobot-frontend/src/composables/knowledge/useKnowledgeCategories.ts|100
 1|other|autobot-frontend/src/composables/useAIDocument.ts|50
 1|other|autobot-frontend/src/composables/useCodeIntelligence.ts|50
-1|other|autobot-frontend/src/composables/useCollaborationInvites.ts|offset=0
 3|other|autobot-frontend/src/composables/useKnowledgeCollaboration.ts|100
 3|other|autobot-frontend/src/composables/usePatternAnalysis.ts|50
 1|other|autobot-frontend/src/composables/usePlugins.ts|50
@@ -1144,7 +1139,6 @@
 1|ssot|autobot-slm-backend/api/slm_users.py|:5432
 1|other|autobot-slm-backend/api/tls.py|300
 1|other|autobot-slm-backend/api/updates.py|100
-4|other|autobot-slm-backend/api/websocket.py|30
 1|other|autobot-slm-backend/middleware/security_headers.py|https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
 1|ssot|autobot-slm-backend/migrations/add_agents.py|qwen3.5:9b
 2|other|autobot-slm-backend/migrations/migrate_system_secrets_to_vault.py|"postgresql://"
