@@ -25,9 +25,11 @@ at error level, never swallowed.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Awaitable, Callable, Dict
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once, reset_log_once
 
 logger = get_logger(__name__)
 
@@ -35,7 +37,6 @@ logger = get_logger(__name__)
 SpendRecorder = Callable[..., Awaitable[None]]
 
 _recorder: SpendRecorder | None = None
-_warned_sites: set[str] = set()
 
 
 def register_spend_recorder(recorder: SpendRecorder | None) -> None:
@@ -52,7 +53,7 @@ def spend_recorder_registered() -> bool:
 def _reset_for_tests() -> None:
     """Forget the recorder and the once-per-site warnings."""
     register_spend_recorder(None)
-    _warned_sites.clear()
+    reset_log_once(logger)
 
 
 async def report_spend(response: Any, *, site: str, metadata: Dict[str, Any] | None = None) -> None:
@@ -62,12 +63,13 @@ async def report_spend(response: Any, *, site: str, metadata: Dict[str, Any] | N
     """
     recorder = _recorder
     if recorder is None:
-        if site not in _warned_sites:
-            _warned_sites.add(site)
-            logger.warning(
-                "%s finished an LLM call but no spend recorder is registered; its spend is not recorded (#19650)",
-                site,
-            )
+        log_once(
+            logger,
+            logging.WARNING,
+            site,
+            "%s finished an LLM call but no spend recorder is registered; its spend is not recorded (#19650)",
+            site,
+        )
         return
     try:
         await recorder(response, endpoint=site, metadata=metadata)
