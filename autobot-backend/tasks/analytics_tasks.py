@@ -374,6 +374,8 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
             # Issue #12384: tag every stored pattern with the requester's
             # source_id so the read-side endpoints can scope queries to it.
             source_id=request.source_id,
+            # Findings are written only after the post-scan containment check below passes (#20513).
+            enable_embedding_storage=False,
         )
         report = await asyncio.wait_for(
             analyzer.analyze_directory(scan_dir, progress_callback=_on_progress),
@@ -382,6 +384,8 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
         _, moved = await _confirmed_dir_or_refusal(request.source_id, scan_dir, expect=scan_dir)
         if moved is not None:
             return moved
+        analyzer.enable_embedding_storage = True
+        await analyzer._store_patterns(report)
         result = report.to_dict()
         await _save_path_checkpoint(scan_dir, result, request.source_id)
         return result

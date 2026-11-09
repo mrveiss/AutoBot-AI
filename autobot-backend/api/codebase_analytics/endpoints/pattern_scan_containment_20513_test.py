@@ -84,7 +84,7 @@ def _run_task(task, *args):
 def _refused(outcome) -> bool:
     """The task returned the structured refusal (timestamps kept), not a failure."""
     body = outcome.result
-    return not outcome.failed() and body["result"]["status"] == "error" and "completed_at" in body
+    return not outcome.failed() and body["result"].get("status") == "error" and "completed_at" in body
 
 
 def _swap_for_link(root, outside):
@@ -164,3 +164,53 @@ def test_a_directory_swapped_during_the_scan_discards_the_result_and_the_checkpo
         outcome = _run_task(at.run_pattern_analysis, {"source_id": "s1", "path": str(root / "pkg")})
     assert _refused(outcome)
     save.assert_not_called()
+
+
+def _patching_analyzer(report, before_return=None):
+    analyzer = MagicMock()
+    instance = analyzer.return_value
+    instance.store_calls = []
+
+    async def analyze(*_a, **_k):
+        if before_return:
+            before_return()
+        return report
+
+    async def store(stored):
+        instance.store_calls.append((instance.enable_embedding_storage, stored))
+
+    instance.analyze_directory = analyze
+    instance._store_patterns = store
+    return analyzer
+
+
+def test_findings_are_written_only_after_the_post_scan_check_passes(source_tree):
+    from tasks import analytics_tasks as at
+
+    root, _ = source_tree
+    report = MagicMock(to_dict=lambda: {"scanned": True})
+    analyzer = _patching_analyzer(report)
+    with (
+        patch("code_intelligence.pattern_analysis.CodePatternAnalyzer", analyzer),
+        patch.object(at, "_load_path_checkpoint", AsyncMock(return_value=None)),
+        patch.object(at, "_save_path_checkpoint", AsyncMock()),
+    ):
+        outcome = _run_task(at.run_pattern_analysis, {"source_id": "s1", "path": str(root / "pkg")})
+    assert not _refused(outcome)
+    assert analyzer.call_args.kwargs["enable_embedding_storage"] is False  # nothing is written during the scan
+    assert analyzer.return_value.store_calls == [(True, report)]
+
+
+def test_a_failed_post_scan_check_writes_no_embeddings(source_tree):
+    from tasks import analytics_tasks as at
+
+    root, outside = source_tree
+    analyzer = _patching_analyzer(MagicMock(), before_return=lambda: _swap_for_link(root, outside))
+    with (
+        patch("code_intelligence.pattern_analysis.CodePatternAnalyzer", analyzer),
+        patch.object(at, "_load_path_checkpoint", AsyncMock(return_value=None)),
+        patch.object(at, "_save_path_checkpoint", AsyncMock()),
+    ):
+        outcome = _run_task(at.run_pattern_analysis, {"source_id": "s1", "path": str(root / "pkg")})
+    assert _refused(outcome)
+    assert analyzer.return_value.store_calls == []
