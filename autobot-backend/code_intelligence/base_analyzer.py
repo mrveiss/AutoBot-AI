@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Pattern, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity as IssueSeverity  # noqa: F401  # #6689 consolidation
-from code_intelligence.python_files import discover_files
+from code_intelligence.python_files import discover_files, matches_exclusion
 
 logger = get_logger(__name__)
 
@@ -446,8 +446,7 @@ class MultiLanguageAnalyzer:
                 continue
 
             # Check exclusions
-            excluded = any(file_path.match(exclude) for exclude in all_excludes)
-            if excluded:
+            if matches_exclusion(file_path, all_excludes, directory):
                 continue
 
             # Check if we have an analyzer for this file

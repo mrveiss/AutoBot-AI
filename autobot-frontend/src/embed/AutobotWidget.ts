@@ -185,6 +185,7 @@ const EmbedChatApp = defineComponent({
       try {
         const apiBase = props.config.apiUrl.replace(/\/$/, '')
         const endpoint = `${apiBase}/api/chats/embed/message`
+        // eslint-disable-next-line no-restricted-syntax -- third-party page, no AutoBot session or shared client
         const resp = await fetch(endpoint, {
           method: 'POST',
           headers: {

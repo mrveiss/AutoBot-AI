@@ -136,9 +136,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseButton, BaseTable, type BaseTableColumn } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import api from '@/services/api'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('AgentCostPanel')
 
@@ -191,8 +190,8 @@ const formatNumber = (num: number): string => {
 const fetchAgentCosts = async () => {
   loading.value = true
   try {
-    const res = await api.get<{ data: { agents: AgentCost[] } }>(`${getApiBase()}/analytics/cost/by-agent`)
-    agents.value = res.data?.agents || []
+    const res = await apiClient.call('get', '/api/analytics/cost/by-agent')
+    agents.value = (res.agents as AgentCost[] | undefined) || []
   } catch (error) {
     logger.error('Failed to fetch agent costs:', error)
   } finally {
@@ -217,10 +216,10 @@ const closeBudgetDialog = () => {
 const saveBudget = async () => {
   budgetDialog.value.saving = true
   try {
-    await api.put<unknown>(
-      `${getApiBase()}/analytics/cost/by-agent/${budgetDialog.value.agentId}/budget`,
-      { budget_monthly_usd: budgetDialog.value.amount }
-    )
+    await apiClient.call('put', '/api/analytics/cost/by-agent/{agent_id}/budget', {
+      path: { agent_id: budgetDialog.value.agentId },
+      body: { budget_monthly_usd: budgetDialog.value.amount },
+    })
     closeBudgetDialog()
     await fetchAgentCosts()
   } catch (error) {
