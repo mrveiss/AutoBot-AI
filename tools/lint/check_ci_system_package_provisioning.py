@@ -80,6 +80,8 @@ from _scan_helpers import configure_logging  # noqa: E402
 from _scan_helpers import project_root as repo_root  # noqa: E402
 from _scan_helpers import report_audit, scrubbed_git_env, tracked_paths  # noqa: E402
 
+from autobot_shared.testfile_names import is_test_filename  # noqa: E402
+
 # Plain stdlib logging (matching check_flake8_exclude_anchoring.py and
 # check_requirements_ci_drift.py): this runs inside `code-quality`, which
 # installs linters only, never the application's own dependencies.
@@ -260,7 +262,7 @@ def _walked_test_files(root: pathlib.Path) -> list[str]:
             if not name.endswith(".py"):
                 continue
             rel = (pathlib.Path(dirpath) / name).relative_to(root).as_posix()
-            if name.startswith("test_") or name.endswith("_test.py") or "/tests/" in f"/{rel}":
+            if is_test_filename(name, include_js=False, include_conftest=False) or "/tests/" in f"/{rel}":
                 found.append(rel)
     return sorted(found)
 

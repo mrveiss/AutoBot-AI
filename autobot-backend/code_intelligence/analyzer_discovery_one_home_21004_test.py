@@ -12,6 +12,8 @@ from typing import List, Set
 
 import pytest
 
+from autobot_shared.testfile_names import is_test_filename
+
 _PKG = Path(__file__).resolve().parent
 _CANONICAL = "python_files.py"
 _WALKS = {"rglob", "walk"}
@@ -51,7 +53,7 @@ def _production_files(root: Path) -> List[Path]:
     return sorted(
         p
         for p in root.rglob("*.py")  # noqa: bare-walk (the guard's own scan)
-        if p.name != _CANONICAL and not p.name.endswith("_test.py") and "tests" not in p.relative_to(root).parts
+        if p.name != _CANONICAL and not is_test_filename(p.name) and "tests" not in p.relative_to(root).parts
     )
 
 

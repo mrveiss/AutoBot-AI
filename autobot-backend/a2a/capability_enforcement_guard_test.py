@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 
 from a2a.trust_score import TrustCapability
+from autobot_shared.testfile_names import is_test_filename
 
 _BACKEND = Path(__file__).resolve().parents[1]
 _DEFINITION = _BACKEND / "a2a" / "trust_score.py"
@@ -30,7 +31,7 @@ def _members_named(source: str) -> set:
 
 def _is_test_file(name: str) -> bool:
     """pytest.ini's ``python_files`` naming, not a substring: ``"test" in name`` would skip ``attestation.py``."""
-    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
+    return is_test_filename(name, include_js=False)
 
 
 def test_a_production_module_whose_name_contains_test_is_still_scanned():
