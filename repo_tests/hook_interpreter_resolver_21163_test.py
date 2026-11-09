@@ -29,6 +29,7 @@ import yaml
 from repo_tests._paths import repo_root
 
 from autobot_shared.isolated_git import isolated_git_env
+from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
@@ -51,7 +52,7 @@ def _code(line: str) -> str:
 
     The body of a ``bash -c`` / ``sh -c`` string stays in: it is a program, not a message.
     """
-    if line.strip().startswith("#"):
+    if not code_lines(line, name="hook.sh"):  # a whole-line comment: the shared stripper decides
         return ""
     inner = " ".join(_code(m.group(1) or m.group(2) or "") for m in _SHELL_C.finditer(line))
     return _code_of_line(line) + " " + inner
