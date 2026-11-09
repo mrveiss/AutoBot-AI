@@ -28,16 +28,14 @@ The rules, each kept in exactly one place:
 """
 
 import uuid
-from dataclasses import dataclass
 from typing import Any, Dict, Optional, Union
 
-from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session, SessionTransaction
 
 from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, HeartbeatInvocationSource
+from ..services.after_commit import defer_until_commit, within_transaction
 from .dispatch_gate import as_uuid, resolve_agent
 from .run_status import active_run
 
@@ -52,17 +50,6 @@ EVENT_WAKE_SOURCES = frozenset(
         HeartbeatInvocationSource.APPROVAL_DECIDED,
     }
 )
-
-_PENDING_KEY = "llc_event_wake_pending"
-_HOOKED_KEY = "llc_event_wake_hooked"
-
-
-@dataclass
-class _PendingDispatch:
-    agent: Dict[str, Any]
-    run_id: uuid.UUID
-    context: Dict[str, Any]
-    transaction: Optional[SessionTransaction]
 
 
 async def _wakeable_slug(session: AsyncSession, company_id: Any, agent_ref: Any) -> Optional[str]:
@@ -116,46 +103,20 @@ async def wake_agent(
 
 
 def _dispatch_after_commit(session: AsyncSession, agent: Dict[str, Any], run_id: uuid.UUID, context: Dict) -> None:
-    """Queue the dispatch on *session*; it fires on commit and is dropped on rollback."""
-    sync = session.sync_session
-    if not sync.info.get(_HOOKED_KEY):
-        event.listen(sync, "after_commit", _on_commit)
-        event.listen(sync, "after_soft_rollback", _on_rollback)
-        sync.info[_HOOKED_KEY] = True
-    txn = sync.get_nested_transaction() or sync.get_transaction()
-    sync.info.setdefault(_PENDING_KEY, []).append(_PendingDispatch(agent, run_id, context, txn))
+    """Queue the dispatch on *session*; it fires on commit and is dropped on rollback.
 
-
-def _on_commit(sync: Session) -> None:
-    """Dispatch every queued wake; a dispatch that raises is logged, never raised.
-
-    This runs inside ``commit()`` after the data is durable, so an exception here
-    would make the caller's write look failed when it succeeded. ``dispatch_run``
-    cannot write a FAILED status from this synchronous hook; the run stays QUEUED,
-    stops counting as busy once it is stale, and the stalled-run sweep (#16817)
-    closes it out.
+    ``dispatch_run`` runs synchronously inside the ``after_commit`` hook. A failure is logged, never raised: it
+    would make the caller's write look failed after the data is durable. ``dispatch_run`` cannot write a FAILED
+    status from this synchronous hook; the run stays QUEUED, stops counting as busy once it is stale, and the
+    stalled-run sweep (#16817) closes it out.
     """
     from .heartbeat_scheduler import get_heartbeat_scheduler
 
-    for wake in sync.info.pop(_PENDING_KEY, []):
-        try:
-            get_heartbeat_scheduler().dispatch_run(wake.agent, wake.run_id, wake.context)
-        except Exception:
-            logger.exception("Event wake: dispatch of run %s failed after commit", wake.run_id)
-
-
-def within_transaction(txn: Optional[SessionTransaction], ancestor: SessionTransaction) -> bool:
-    while txn is not None:
-        if txn is ancestor:
-            return True
-        txn = txn.parent
-    return False
-
-
-def _on_rollback(sync: Session, previous_transaction: SessionTransaction) -> None:
-    """Drop the dispatches whose run row this rollback (outer or savepoint) undid."""
-    pending = sync.info.get(_PENDING_KEY, [])
-    pending[:] = [wake for wake in pending if not within_transaction(wake.transaction, previous_transaction)]
+    defer_until_commit(
+        session,
+        lambda: get_heartbeat_scheduler().dispatch_run(agent, run_id, context),
+        f"event wake dispatch of run {run_id}",
+    )
 
 
 __all__ = ["EVENT_WAKE_SOURCES", "wake_agent", "within_transaction"]

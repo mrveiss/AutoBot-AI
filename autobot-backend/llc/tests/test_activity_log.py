@@ -148,10 +148,10 @@ class TestRecordUnit:
 
         published_calls: list = []
 
-        async def fake_publish(cid: str, row: LLCActivityLog) -> None:
-            published_calls.append((cid, row))
+        async def fake_deliver(cid: str, payload: dict) -> None:
+            published_calls.append((cid, payload))
 
-        with patch.object(svc, "_publish", side_effect=fake_publish):
+        with patch.object(svc, "_deliver", side_effect=fake_deliver):
             await svc.record(
                 session=session,
                 company_id=company_id,

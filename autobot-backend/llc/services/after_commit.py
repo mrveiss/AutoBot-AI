@@ -36,11 +36,28 @@ _HOOKED_KEY = "llc_after_commit_hooked"
 after_commit_tasks: "set[asyncio.Task[None]]" = set()
 
 
+#: Asked at commit and at rollback whether the work is still wanted (e.g. its row is still in the session).
+StillValid = Callable[[], bool]
+
+
 @dataclass(frozen=True)
 class _Pending:
     callback: AfterCommitCallback
     description: str
     transaction: Optional[SessionTransaction]
+    still_valid: Optional[StillValid] = None
+
+    def wanted(self) -> bool:
+        return self.still_valid is None or self.still_valid()
+
+
+def within_transaction(txn: Optional[SessionTransaction], ancestor: SessionTransaction) -> bool:
+    """True when *txn* is *ancestor* or nested (SAVEPOINT) inside it."""
+    while txn is not None:
+        if txn is ancestor:
+            return True
+        txn = txn.parent
+    return False
 
 
 async def _await_logged(awaitable: Awaitable[None], description: str) -> None:
@@ -75,22 +92,29 @@ def _run_committed(sync: Session) -> None:
     if sync.in_nested_transaction():
         return
     for pending in sync.info.pop(_PENDING_KEY, []):
-        _run(pending.callback, pending.description)
+        if pending.wanted():
+            _run(pending.callback, pending.description)
 
 
 def _drop_undone(sync: Session, previous_transaction: SessionTransaction) -> None:
     """``after_soft_rollback``: drop the callbacks whose transaction this rollback undid."""
-    # Imported here: event_wake reaches the work-item accessors through dispatch_gate, and they import this module.
-    from ..scheduler.event_wake import within_transaction
-
     pending = sync.info.get(_PENDING_KEY, [])
-    pending[:] = [p for p in pending if not within_transaction(p.transaction, previous_transaction)]
+    pending[:] = [p for p in pending if not within_transaction(p.transaction, previous_transaction) and p.wanted()]
 
 
 def defer_until_commit(
-    session: AsyncSession, callback: AfterCommitCallback, description: str = "callback"
+    session: AsyncSession,
+    callback: AfterCommitCallback,
+    description: str = "callback",
+    *,
+    still_valid: Optional[StillValid] = None,
 ) -> Optional["asyncio.Task[None]"]:
     """Queue *callback* until *session* commits; a rollback of its transaction drops it.
+
+    A plain function runs synchronously inside the ``after_commit`` hook, never as a task, so a caller
+    that relies on the work having started when ``commit()`` returns can. A function returning a coroutine
+    becomes a task. *still_valid*, if given, is checked at commit and after any rollback: when it returns
+    False the callback is dropped (e.g. ``lambda: sa_inspect(entry).persistent`` for a row since expunged).
 
     An object that is not a real SQLAlchemy session has no commit to follow, so it runs at once; the task
     that started, if any, is returned so the caller can await it. Otherwise returns None.
@@ -103,5 +127,5 @@ def defer_until_commit(
         event.listen(sync, "after_soft_rollback", _drop_undone)
         sync.info[_HOOKED_KEY] = True
     txn = sync.get_nested_transaction() or sync.get_transaction()
-    sync.info.setdefault(_PENDING_KEY, []).append(_Pending(callback, description, txn))
+    sync.info.setdefault(_PENDING_KEY, []).append(_Pending(callback, description, txn, still_valid))
     return None

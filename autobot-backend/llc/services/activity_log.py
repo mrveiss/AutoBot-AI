@@ -8,7 +8,6 @@ via LLCServiceBase.activity_log — never write to llc_activity_log directly.
 Append-only guarantee: this service exposes no update() or delete() methods.
 """
 
-import asyncio
 import json
 import logging
 import uuid
@@ -16,50 +15,20 @@ from datetime import datetime, timezone
 from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy import event
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
 
 from autobot_shared.redis_client import get_async_redis_client
 
 from ..models.activity import ActorType, LLCActivityLog
 from ..models.enums import ActivityEventType
 from .actor import ActivityRecordError, require_actor_id
+from .after_commit import defer_until_commit
 
 logger = logging.getLogger(__name__)
 
 _PUBSUB_CHANNEL_PREFIX = "llc:activity"
-#: ``session.info`` key: rows written in the open transaction whose live event waits for its commit.
-_ACTIVITY_PENDING_KEY = "llc_activity_pending_publish"
-_ACTIVITY_HOOKED_KEY = "llc_activity_publish_hooked"
-#: Strong references so a publish task is not collected before it runs.
-_publish_tasks: set["asyncio.Task[None]"] = set()
-
-
-def _spawn_publish(service: "LLCActivityLogService", company_id: str, payload: dict[str, Any]) -> None:
-    task = asyncio.get_running_loop().create_task(service._deliver(company_id, payload))
-    _publish_tasks.add(task)
-    task.add_done_callback(_publish_tasks.discard)
-
-
-def _send_committed_activity(sync_session: Session) -> None:
-    """``after_commit``: publish each row that is now durable; a row since expunged is skipped.
-
-    This event also fires when a SAVEPOINT is released, and that row can still be rolled back.
-    """
-    if sync_session.in_nested_transaction():
-        return
-    for service, company_id, entry, payload in sync_session.info.pop(_ACTIVITY_PENDING_KEY, []):
-        if sa_inspect(entry).persistent:
-            _spawn_publish(service, company_id, payload)
-
-
-def _drop_undone(sync_session: Session) -> None:
-    """``after_rollback`` (a SAVEPOINT's too): keep only rows still in the session; the rest were undone."""
-    pending = sync_session.info.get(_ACTIVITY_PENDING_KEY, [])
-    pending[:] = [item for item in pending if sa_inspect(item[2]).persistent]
 
 
 class ActivityLogQuery:
@@ -315,18 +284,18 @@ class LLCActivityLogService:
         and sent from its ``after_commit`` hook, which fires for any commit (``llc`` sessions are
         opened with ``get_session`` or ``get_async_session_factory()`` and committed by the caller,
         not through ``async_session_scope``, so ``run_after_commit`` has no list to queue on).
-        A rollback clears the queue. An object that is not a real SQLAlchemy session has no
-        commit to follow, so the event goes out at once, best-effort as always.
+        A rollback clears the queue, and a row since expunged is skipped (``still_valid``). An object that
+        is not a real SQLAlchemy session has no commit to follow, so the event goes out at once, best-effort as always.
         """
-        sync = getattr(session, "sync_session", None)
-        if not isinstance(sync, Session):
-            await self._publish(company_id, entry)
-            return
-        if not sync.info.get(_ACTIVITY_HOOKED_KEY):
-            event.listen(sync, "after_commit", _send_committed_activity)
-            event.listen(sync, "after_rollback", _drop_undone)
-            sync.info[_ACTIVITY_HOOKED_KEY] = True
-        sync.info.setdefault(_ACTIVITY_PENDING_KEY, []).append((self, company_id, entry, self._event_payload(entry)))
+        payload = self._event_payload(entry)
+        task = defer_until_commit(
+            session,
+            lambda: self._deliver(company_id, payload),
+            f"publish activity {payload.get('id', '')}",
+            still_valid=lambda: sa_inspect(entry).persistent,
+        )
+        if task is not None:
+            await task
 
     async def _publish(self, company_id: str, entry: LLCActivityLog) -> None:
         """Publish *entry* now: see :meth:`_deliver`."""
