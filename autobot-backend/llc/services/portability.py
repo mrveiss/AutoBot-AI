@@ -272,10 +272,7 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
                     skipped["goals"].append(goal.get("title", ""))
 
             # projects, then work items (parents first)
-            project_ids = await self._import_projects(template, company_id, created_entities)
-            skipped_items = await self._import_seed_items(
-                template, company_id, project_ids, created_entities, skipped, warnings
-            )
+            skipped_items = await self._import_work(template, company_id, created_entities, skipped, warnings)
 
             await sp.commit()
         except Exception as exc:

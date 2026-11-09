@@ -2,14 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Library and built-in template import: projects and work items, via the one portability implementation (#20472)."""
+"""Library and built-in template import: projects and work items, via the one shared import (#20472)."""
 
 import uuid
 from typing import Any, Dict, List
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .portability import PortabilityService
+from .portability import TemplateImportError
+from .work_item_import import import_template_work
 
 
 async def import_template_entities(
@@ -17,13 +18,16 @@ async def import_template_entities(
 ) -> List[Dict[str, Any]]:
     """Create the template's projects and work items; update ``counts`` to what was created.
 
-    Uses the same project and work-item import as ``PortabilityService.execute_import`` so the hierarchy
-    rules, parent remapping and skip reporting are one implementation. Returns the skipped items with reasons.
+    Runs in a savepoint, and an invalid value in the template (a bad type or priority) rolls it back and
+    raises ``TemplateImportError``, as ``PortabilityService.execute_import`` does. Returns the skipped items.
     """
-    svc = PortabilityService(session=session)
     created: Dict[str, Any] = {"projects": [], "work_items": []}
-    skipped: Dict[str, Any] = {"work_items": []}
-    project_ids = await svc._import_projects(template_json, company_id, created)
-    skipped_items = await svc._import_seed_items(template_json, company_id, project_ids, created, skipped, [])
+    sp = await session.begin_nested()
+    try:
+        skipped_items = await import_template_work(session, template_json, company_id, created, {"work_items": []}, [])
+        await sp.commit()
+    except Exception as exc:
+        await sp.rollback()
+        raise TemplateImportError(f"Import rolled back: {exc}") from exc
     counts.update({key: len(ids) for key, ids in created.items()})
     return skipped_items

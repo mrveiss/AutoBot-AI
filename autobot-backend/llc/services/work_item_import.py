@@ -14,6 +14,9 @@ cannot be created is reported with a reason code rather than dropped.
 import uuid
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from llc.models.sprint import LLCProject
 from llc.services.work_item_hierarchy import HierarchyViolation
 
 # Reason codes in ``skipped_work_items``; the UI maps each to a translated message.
@@ -26,6 +29,7 @@ REASON_HIERARCHY = "hierarchy_violation"
 
 DEFAULT_PROJECT_NAME = "Imported Project"
 DEFAULT_TYPE = "epic"
+DEFAULT_PROJECT_STATUS = "backlog"  # the column default; "planning" is not a project status
 
 _REASON_TEXT = {
     REASON_NO_PROJECT: "the template has no project for it",
@@ -153,3 +157,99 @@ async def import_work_items(
             break
         pending = remaining
     return report
+
+
+def merge_report(
+    report: Dict[str, Any], created: Dict[str, Any], skipped: Dict[str, Any], warnings: List[str]
+) -> List[Dict[str, Any]]:
+    """Fold an :func:`import_work_items` report into the import result; return the structured skips."""
+    created["work_items"].extend(report["created"])
+    skipped["work_items"].extend(report["skipped_titles"])
+    warnings.extend(report["warnings"])
+    return report["skipped_items"]
+
+
+async def create_project(session: AsyncSession, project: Dict[str, Any], company_id: uuid.UUID) -> uuid.UUID:
+    """Insert one project for the import."""
+    new_id = uuid.uuid4()
+    session.add(
+        LLCProject(
+            id=new_id,
+            company_id=company_id,
+            name=project.get("name", DEFAULT_PROJECT_NAME),
+            description=project.get("description"),
+            status=project.get("status", DEFAULT_PROJECT_STATUS),
+        )
+    )
+    await session.flush()
+    return new_id
+
+
+async def create_work_item(
+    session: AsyncSession,
+    item: Dict[str, Any],
+    company_id: uuid.UUID,
+    project_id: Optional[str],
+    parent_id: Optional[str] = None,
+) -> uuid.UUID:
+    """Create a work item through ``WorkItemService``, so the hierarchy rules apply.
+
+    No agent is woken: an import records existing work, it does not hand anyone a new assignment.
+    """
+    from llc.models.enums import WorkItemPriority, WorkItemType  # noqa: PLC0415
+    from llc.services.accessors import get_work_item_service  # noqa: PLC0415
+
+    created = await get_work_item_service().create(
+        session,
+        company_id=str(company_id),
+        type=WorkItemType(item.get("type") or DEFAULT_TYPE),
+        title=item.get("title", ""),
+        description=item.get("description"),
+        priority=WorkItemPriority(item.get("priority", "medium")),
+        labels=item.get("labels", []),
+        project_id=project_id,
+        parent_id=parent_id,
+        wake_agents=False,
+    )
+    return created.id
+
+
+async def import_projects(
+    session: AsyncSession, template: Dict[str, Any], company_id: uuid.UUID, created: Dict[str, Any]
+) -> Dict[str, str]:
+    """Import the template's projects; map source id -> new id.
+
+    A template with work items but no projects gets one project named after it, so every item has a home.
+    """
+    projects = list(template.get("projects", []))
+    if not projects and select_items(template):
+        projects = [{"id": None, "name": template_name(template)}]
+    project_ids: Dict[str, str] = {}
+    for project in projects:
+        new_id = await create_project(session, project, company_id)
+        created["projects"].append(str(new_id))
+        project_ids[str(project.get("id"))] = str(new_id)
+    return project_ids
+
+
+async def import_template_work(
+    session: AsyncSession,
+    template: Dict[str, Any],
+    company_id: uuid.UUID,
+    created: Dict[str, Any],
+    skipped: Dict[str, Any],
+    warnings: List[str],
+    create_item: Optional[ItemCreator] = None,
+) -> List[Dict[str, Any]]:
+    """The public seam both imports call: projects, then work items parents-first.
+
+    Returns the structured skip list (title, source_id, reason code); ``created``, ``skipped`` and
+    ``warnings`` are filled in place.
+    """
+    project_ids = await import_projects(session, template, company_id, created)
+
+    async def _default(item, cid, project_id, parent_id):  # noqa: ANN001, ANN202
+        return await create_work_item(session, item, cid, project_id, parent_id)
+
+    report = await import_work_items(select_items(template), company_id, project_ids, create_item or _default)
+    return merge_report(report, created, skipped, warnings)
