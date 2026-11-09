@@ -1548,6 +1548,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
         command: str,
         max_wait_time: int = 3600,
         poll_interval: float = 0.5,
+        command_id: str | None = None,
     ):
         """Poll for approval status until approved/denied or timeout. Issue #620.
 
@@ -1559,7 +1560,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
 
         # #13480, #21202: register this turn as the interpreter. The worker that runs the command waits for it, so
         # the result is interpreted once (one LLM call, one persisted message) whichever worker ran it.
-        turn_token = await self._begin_interpretation_turn(terminal_session_id)
+        turn_token = await self._begin_interpretation_turn(terminal_session_id, command_id)
 
         try:
             while elapsed_time < max_wait_time:
@@ -1575,7 +1576,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
                         session_info, command, elapsed_time, max_wait_time
                     )
                     if should_break:
-                        await self._settle_interpretation(terminal_session_id, turn_token, result_data)
+                        await self._settle_interpretation(terminal_session_id, command_id, turn_token, result_data)
                         yield (result_data, status_msg)
                         return
                 except Exception as check_error:
@@ -1587,7 +1588,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
             # timeout, decision, an exception, or the consumer closing this generator early (GeneratorExit runs
             # finally). A leaked token makes the command's worker wait out its hand-off deadline for a turn
             # that is no longer listening.
-            await self._end_interpretation_turn(terminal_session_id, turn_token)
+            await self._end_interpretation_turn(terminal_session_id, command_id, turn_token)
 
     async def _handle_pending_approval(
         self,
@@ -1643,7 +1644,9 @@ class ToolHandlerMixin(InterpretationTurnMixin):
             terminal_session_id,
         )
 
-        async for poll_result in self._poll_for_approval(terminal_session_id, command):
+        async for poll_result in self._poll_for_approval(
+            terminal_session_id, command, command_id=result.get("command_id")
+        ):
             approval_result, status_msg = poll_result
             if approval_result:
                 # Issue #4264: Fire APPROVAL_RECEIVED hook when approval decision is made

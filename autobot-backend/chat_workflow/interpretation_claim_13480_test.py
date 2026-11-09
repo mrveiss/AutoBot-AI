@@ -57,20 +57,20 @@ def _service():
 async def _poll(handler, **kwargs):
     kwargs.setdefault("max_wait_time", 0.02)
     kwargs.setdefault("poll_interval", 0.01)
-    return [r async for r in handler._poll_for_approval("term-1", "ls -la", **kwargs)]
+    return [r async for r in handler._poll_for_approval("term-1", "ls -la", command_id="cmd-1", **kwargs)]
 
 
 async def test_the_turn_registers_while_polling():
     service = _service()
     await asyncio.wait_for(_poll(_handler(service)), timeout=5)
-    service.begin_interpreting_turn.assert_awaited_once_with("term-1")
+    service.begin_interpreting_turn.assert_awaited_once_with("term-1", "cmd-1")
 
 
 async def test_the_token_is_released_when_the_poll_times_out():
     """The regression that would silently re-break #13479."""
     service = _service()
     await asyncio.wait_for(_poll(_handler(service)), timeout=5)
-    service.end_interpreting_turn.assert_awaited_once_with("term-1", "tok-1")
+    service.end_interpreting_turn.assert_awaited_once_with("term-1", "cmd-1", "tok-1")
 
 
 async def test_the_token_is_released_when_the_consumer_stops_early():
@@ -79,10 +79,12 @@ async def test_the_token_is_released_when_the_consumer_stops_early():
     Closing a generator raises GeneratorExit at the suspension point, so only a `finally` releases here.
     """
     service = _service()
-    gen = _handler(service)._poll_for_approval("term-1", "ls -la", max_wait_time=0.05, poll_interval=0.01)
+    gen = _handler(service)._poll_for_approval(
+        "term-1", "ls -la", max_wait_time=0.05, poll_interval=0.01, command_id="cmd-1"
+    )
     await asyncio.wait_for(gen.__anext__(), timeout=5)
     await gen.aclose()
-    service.end_interpreting_turn.assert_awaited_once_with("term-1", "tok-1")
+    service.end_interpreting_turn.assert_awaited_once_with("term-1", "cmd-1", "tok-1")
 
 
 async def test_a_service_without_the_methods_does_not_break_the_turn():
@@ -109,7 +111,7 @@ async def _finish_with(handler, service, owned: bool):
 async def test_a_turn_that_wins_the_swap_interprets():
     service = _service()
     result = await _finish_with(_handler(service), service, owned=True)
-    service.take_turn_interpretation.assert_awaited_once_with("term-1", "tok-1")
+    service.take_turn_interpretation.assert_awaited_once_with("term-1", "cmd-1", "tok-1")
     assert "interpretation_owned_elsewhere" not in result
 
 

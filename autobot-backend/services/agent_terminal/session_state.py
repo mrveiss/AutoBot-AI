@@ -95,6 +95,7 @@ return released
 #: Close a session: the tombstone and the record's removal are one step (#21202).
 CLOSE_SESSION_LUA = """
 redis.call('SET', KEYS[2], '1', 'EX', tonumber(ARGV[1]))
+redis.call('DEL', KEYS[3])
 return redis.call('DEL', KEYS[1])
 """
 
@@ -144,6 +145,11 @@ def pending_decision_id(pending: dict | None) -> str | None:
 def closed_key(session_id: str) -> str:
     """The durable tombstone of a closed session (#21202)."""
     return f"agent_terminal:closed:{session_id}"
+
+
+def conversation_pointer_key(session_id: str) -> str:
+    """The pointer from a session to its conversation, which lets a vanished session's approval be rebuilt."""
+    return f"agent_terminal:approval_conversation:{session_id}"
 
 
 def decided_key(decision_id: str | None) -> str:
@@ -268,9 +274,14 @@ async def decided_marker_exists(redis, decision_id: str | None) -> bool:
 
 
 async def close_record(redis, session_id: str) -> None:
-    """Tombstone the session and drop its record in one step, so no worker's older copy can bring it back."""
+    """Tombstone the session and drop its record and pointer in one step; no older copy can bring it back."""
     await redis.eval(
-        CLOSE_SESSION_LUA, 2, session_key(session_id), closed_key(session_id), CLOSED_TOMBSTONE_TTL_SECONDS
+        CLOSE_SESSION_LUA,
+        3,
+        session_key(session_id),
+        closed_key(session_id),
+        conversation_pointer_key(session_id),
+        CLOSED_TOMBSTONE_TTL_SECONDS,
     )
 
 

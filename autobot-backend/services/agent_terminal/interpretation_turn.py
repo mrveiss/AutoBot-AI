@@ -53,6 +53,17 @@ end
 return v
 """
 
+#: Register a turn: only while no one has taken the result. An absent key or an earlier turn's token is replaced;
+#: ``done`` is never overwritten, so a turn that registers after the command finished cannot interpret it again.
+REGISTER_TURN_LUA = """
+local v = redis.call('GET', KEYS[1])
+if v == 'done' then
+  return 0
+end
+redis.call('SET', KEYS[1], ARGV[1], 'EX', tonumber(ARGV[2]))
+return 1
+"""
+
 #: Drop the turn's token while it still owns the key. ``done`` and a newer turn's token are left alone.
 RELEASE_TURN_LUA = """
 if redis.call('GET', KEYS[1]) == ARGV[1] then
@@ -62,8 +73,9 @@ return 0
 """
 
 
-def interpretation_key(session_id: str) -> str:
-    return f"agent_terminal:interpretation:{session_id}"
+def interpretation_key(session_id: str, command_id: str | None) -> str:
+    """One key per approval, so a ``done`` of one command never decides another's interpretation."""
+    return f"agent_terminal:interpretation:{session_id}:{command_id or 'unidentified'}"
 
 
 def _require(redis) -> None:
@@ -71,31 +83,34 @@ def _require(redis) -> None:
         raise ApprovalStateUnavailableError("no usable Redis client")
 
 
-async def _swap(redis, session_id: str, expected: str) -> str:
+async def _swap(redis, session_id: str, command_id: str | None, expected: str) -> str:
     """Compare-and-set the key to ``done``; the result is ``taken`` or what the key held instead."""
-    held = await redis.eval(TAKE_LUA, 1, interpretation_key(session_id), expected, INTERPRETATION_TTL_SECONDS)
+    held = await redis.eval(
+        TAKE_LUA, 1, interpretation_key(session_id, command_id), expected, INTERPRETATION_TTL_SECONDS
+    )
     return held.decode("utf-8") if isinstance(held, bytes) else held
 
 
-async def register_turn(redis, session_id: str, token: str) -> None:
-    """The polling turn becomes the interpreter. A new turn replaces a ``done`` left by an earlier command."""
+async def register_turn(redis, session_id: str, command_id: str | None, token: str) -> bool:
+    """The polling turn becomes the interpreter; ``False`` if the command's result was taken already."""
     _require(redis)
-    await redis.set(interpretation_key(session_id), TURN_PREFIX + token, ex=INTERPRETATION_TTL_SECONDS)
+    key = interpretation_key(session_id, command_id)
+    return bool(await redis.eval(REGISTER_TURN_LUA, 1, key, TURN_PREFIX + token, INTERPRETATION_TTL_SECONDS))
 
 
-async def take_for_turn(redis, session_id: str, token: str) -> bool:
+async def take_for_turn(redis, session_id: str, command_id: str | None, token: str) -> bool:
     """The turn has the result: ``True`` if it won the interpretation, ``False`` if the command's worker did."""
     _require(redis)
-    return await _swap(redis, session_id, TURN_PREFIX + token) == TAKEN
+    return await _swap(redis, session_id, command_id, TURN_PREFIX + token) == TAKEN
 
 
-async def release_turn(redis, session_id: str, token: str) -> None:
+async def release_turn(redis, session_id: str, command_id: str | None, token: str) -> None:
     """The turn is leaving: drop its token, so the command's worker no longer waits for it."""
     _require(redis)
-    await redis.eval(RELEASE_TURN_LUA, 1, interpretation_key(session_id), TURN_PREFIX + token)
+    await redis.eval(RELEASE_TURN_LUA, 1, interpretation_key(session_id, command_id), TURN_PREFIX + token)
 
 
-async def take_for_command(redis, session_id: str) -> bool:
+async def take_for_command(redis, session_id: str, command_id: str | None) -> bool:
     """The command has finished: ``True`` if this worker must interpret its result.
 
     A live turn gets ``INTERPRETATION_HANDOFF_SECONDS`` to take it; after that this worker swaps that turn's
@@ -105,7 +120,7 @@ async def take_for_command(redis, session_id: str) -> bool:
     _require(redis)
     deadline = asyncio.get_running_loop().time() + INTERPRETATION_HANDOFF_SECONDS
     while True:
-        state = await _swap(redis, session_id, "")
+        state = await _swap(redis, session_id, command_id, "")
         if not state.startswith(TURN_PREFIX):
             return state == TAKEN
         remaining = deadline - asyncio.get_running_loop().time()
@@ -113,12 +128,12 @@ async def take_for_command(redis, session_id: str) -> bool:
             break
         await asyncio.sleep(min(INTERPRETATION_RECHECK_SECONDS, remaining))
     logger.warning("Turn on session %s did not take the interpretation in time; taking it over", session_id)
-    return await _take_over(redis, session_id)
+    return await _take_over(redis, session_id, command_id)
 
 
-async def _take_over(redis, session_id: str) -> bool:
+async def _take_over(redis, session_id: str, command_id: str | None) -> bool:
     """Swap the turn still holding the key for ``done``; ``False`` if the turn, or another owner, got there first."""
-    state = await _swap(redis, session_id, "")
+    state = await _swap(redis, session_id, command_id, "")
     if state.startswith(TURN_PREFIX):
-        state = await _swap(redis, session_id, state)
+        state = await _swap(redis, session_id, command_id, state)
     return state == TAKEN

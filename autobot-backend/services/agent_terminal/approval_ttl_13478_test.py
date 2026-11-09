@@ -38,6 +38,7 @@ def _manager():
     mgr = SessionManager.__new__(SessionManager)
     mgr.sessions = {}
     mgr.redis_client = AsyncMock()
+    mgr.redis_client.exists = AsyncMock(return_value=0)  # no closed tombstone (#21202)
     mgr.chat_history_manager = None
     import asyncio
 
