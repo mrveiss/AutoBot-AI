@@ -108286,15 +108286,16 @@ export interface components {
             workflow_id: string;
             /** Name */
             name?: string | null;
-            /**
-             * Status
-             * @default planned
-             */
-            status: string;
+            /** @default planned */
+            status: components["schemas"]["WorkflowStatus"];
             /** Definition */
             definition?: {
                 [key: string]: unknown;
             };
+            /** @default workflow */
+            kind: components["schemas"]["WorkflowKind"];
+            /** Owner Role Id */
+            owner_role_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -108511,6 +108512,10 @@ export interface components {
             definition: {
                 [key: string]: unknown;
             };
+            /** Kind */
+            kind: string;
+            /** Owner Role Id */
+            owner_role_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -108608,6 +108613,24 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * WorkflowStatus
+         * @description Lifecycle of a workflow *definition* (#14210).
+         *
+         *     A new axis, not a duplicate of an existing one — ``LLCRunStatus`` describes a
+         *     single *execution*, while a workflow definition can sit ``PLANNED`` having
+         *     never run, or stay ``RUNNING`` across many runs. #14263 is the umbrella for
+         *     telling a genuine axis apart from a fork; this is the former, and it is
+         *     deliberately small so it does not grow into a second run vocabulary.
+         *
+         *     Before this existed ``Workflow.status`` was a bare ``String(50)`` that the
+         *     Redis backfill populated from ``current_step`` — i.e. a *step name* stored in
+         *     a *status* column. That is the same untyped-discriminator defect as #13937,
+         *     whose cost was #13954: a Kanban swimlane filtering on a value the backend
+         *     never wrote, which matched nothing for months.
+         * @enum {string}
+         */
+        WorkflowStatus: "planned" | "running" | "completed" | "failed" | "cancelled";
         /**
          * WorkflowStatusResponse
          * @description Response shape for GET /workflow/{workflow_id}/status.

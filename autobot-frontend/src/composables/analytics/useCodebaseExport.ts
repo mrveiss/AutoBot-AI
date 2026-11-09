@@ -7,7 +7,7 @@
  * AutoBot - AI-Powered Automation Platform
  * Author: mrveiss
  */
-import { saveTextFile } from '@autobot/ui'
+import { saveTextFile, isoTimestampStamp } from '@autobot/ui'
 import type { Ref } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
@@ -384,10 +384,7 @@ export function useCodebaseExport(deps: {
       parseResponse: async (r) => await r.text(),
       pickData: (raw) => raw,
       onSuccess: (content, _raw, ctx) => {
-        const timestamp = new Date()
-          .toISOString()
-          .replace(/[:.]/g, '-')
-          .slice(0, 19)
+        const timestamp = isoTimestampStamp()
         _downloadFile(
           content,
           `code-analysis-report-${ctx.reportType}-${timestamp}.md`,
@@ -486,7 +483,7 @@ export function useCodebaseExport(deps: {
     section: SectionType,
     format: 'md' | 'json' = 'md',
   ): Promise<void> => {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const timestamp = isoTimestampStamp()
 
     // Resolve section data (environment uses a special async fetch)
     let data: unknown
