@@ -47,6 +47,8 @@ EXEMPT = {
     "transformers": "the Windows NPU worker is exact-pinned to the vetted release (#15298); others float",
     "tokenizers": "ai-stack and npu-worker cap <0.24, which implies huggingface-hub<2.0; tts-worker gets tokenizers "
     "transitively and needs hub>=2.2 -- a shared cap would bind it (same conflict as huggingface-hub)",
+    "pandas": "the backend and ai-stack manifests want >=3.1.0, but the CI llama-index-readers-file "
+    "(every release up to 0.7.0) declares pandas<3 -- a shared constraint is unsatisfiable in the CI install",
     "redis": "declared >=8.1 in six manifests but the backend has no spec and a transitive redisvl "
     "(via langgraph-checkpoint-redis) that requires redis<8.0 -- a shared >=8.1 would major-bump the backend",
 }

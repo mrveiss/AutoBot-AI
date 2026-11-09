@@ -105,7 +105,6 @@ opentelemetry-api==1.45.2
 opentelemetry-exporter-otlp-proto-grpc==1.45.2
 opentelemetry-proto==1.45.2
 opentelemetry-sdk==1.45.2
-pandas>=3.1.0
 paramiko>=5.1.0
 pdfplumber>=0.11.10
 pillow>=13.0.0
