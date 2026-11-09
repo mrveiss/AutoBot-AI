@@ -1514,6 +1514,7 @@ class ToolHandlerMixin:
                 "requires_approval": True,
                 "terminal_session_id": terminal_session_id,
                 "conversation_id": session_id,
+                "command_id": result.get("command_id"),
             },
         )
 
@@ -1555,9 +1556,8 @@ class ToolHandlerMixin:
         elapsed_time = 0
         poll_count = 0
 
-        # #13480: claim interpretation for this turn. The approve path skips its
-        # own interpretation while this is set, so the same command is not
-        # interpreted twice — two LLM calls, two persisted interpretations.
+        # #13480: claim interpretation for this turn. The approve path skips its own interpretation
+        # while this is set, so the command is not interpreted twice (two LLM calls, two persisted).
         await self._claim_interpretation(terminal_session_id, True)
 
         try:
