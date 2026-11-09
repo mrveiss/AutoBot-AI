@@ -20,11 +20,10 @@ it, and it maps to no user. An unset token refuses every scrape -- a missing
 credential must never read as an open endpoint.
 """
 
-import secrets
-
 from fastapi import Header, HTTPException, status
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.ssot_config import config as ssot_config
 
 logger = get_logger(__name__)
@@ -44,7 +43,7 @@ def scrape_token_matches(presented: str) -> bool:
     expected = ssot_config.misc.prometheus_scrape_token
     if not expected or not presented:
         return False
-    return secrets.compare_digest(presented.encode("utf-8"), expected.encode("utf-8"))
+    return secure_compare(presented, expected)
 
 
 def require_scrape_token(authorization: str | None = Header(default=None)) -> None:
