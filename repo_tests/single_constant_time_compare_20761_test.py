@@ -91,7 +91,7 @@ def _discover(root: Path) -> list[Path]:
 REACH = declare(
     "single-constant-time-compare",
     discover=_discover,
-    floor=3624,  # population 3626 less the 2 _DEFERRED files the guard cannot complete: window (3624, 3624)
+    floor=3628,  # population 3626 less the 2 _DEFERRED files the guard cannot complete: window (3624, 3624)
     skips=2,
     what="production python files",
     roots=_TREES,
