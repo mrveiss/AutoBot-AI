@@ -99,6 +99,7 @@ wiring:
   - *backend_python
   - 'autobot-frontend/src/**'
   - 'scripts/audit_api_wiring.py'
+  - 'scripts/audit_api_wiring_args.py'
   - 'scripts/api_wiring_baseline.txt'
   - 'requirements*.txt'
   - '.github/workflows/api-wiring.yml'
