@@ -289,8 +289,11 @@ async function onDrop(colId: string) {
     })
   } catch (err) {
     logger.error('Move failed', err)
-    // A live update may have placed the card since: only the column this move put it in is rolled back.
-    if (item.column_id === colId) item.column_id = prevCol
+    // The CURRENT card, by id: `onItemUpdated` or a refetch may have replaced the object captured above, and
+    // rolling that one back leaves the card in the refused column. A live update that placed it elsewhere since
+    // is newer than this move: only the column this move put it in is rolled back.
+    const current = items.value.find(i => i.id === item.id)
+    if (current && current.column_id === colId) current.column_id = prevCol
     moveError.value = err instanceof Error ? err.message : String(err)
   } finally {
     setMoving(item.id, false)

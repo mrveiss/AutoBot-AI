@@ -67,7 +67,7 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "frontend-hand-rolled-file-save-scan",
     discover=_population,
-    floor=1126,  # mid-window: population 1156, window (1096, 1156)
+    floor=1155,  # mid-window: population 1185, window (1125, 1185)
     growth=60,
     what="vue and ts sources in both frontends",
     roots=_ROOTS,
