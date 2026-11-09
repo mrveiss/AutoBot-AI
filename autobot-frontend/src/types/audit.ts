@@ -8,6 +8,8 @@
  * Issue #578 - Audit Logging Dashboard GUI Integration
  */
 
+import type { AuditQueryResponse } from '@autobot/ui'
+
 /**
  * Audit result types matching backend AuditResult enum
  */
@@ -48,15 +50,9 @@ export interface AuditQueryParams {
 }
 
 /**
- * Audit log query response from backend
+ * Audit log query response from backend (envelope declared once in the kit, #20173)
  */
-export interface AuditQueryResponse<E = AuditEntry> {
-  success: boolean
-  total_returned: number
-  has_more: boolean
-  entries: E[]
-  query: AuditQueryParams
-}
+export type AuditDashboardResponse<E = AuditEntry> = AuditQueryResponse<E, AuditQueryParams>
 
 /**
  * Audit statistics response from backend
