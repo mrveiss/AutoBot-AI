@@ -5,7 +5,7 @@
   AdvancedControlView — admin-only Advanced Control panel (#12162, #12102,
   #11506 T1 — Stage 1; #12169, #12102 — Stage 2 streaming sessions;
   #12173, #12102 — Stage 3 system monitoring + emergency-stop). Tabbed
-  shell wired to AdvancedControlApiClient's takeover-management, desktop
+  shell wired to the typed API client's takeover-management, desktop
   streaming, and system-monitoring endpoints.
 -->
 <template>
@@ -433,7 +433,7 @@ import type {
   TakeoverStatus,
   StreamingSession,
   StreamingSessionRequest,
-} from '@/utils/AdvancedControlApiClient'
+} from '@/types/advancedControl'
 
 const { t } = useI18n()
 const { confirm } = useConfirmDialog()
