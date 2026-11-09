@@ -1579,6 +1579,7 @@ export interface paths {
          *     Body:
          *         approved (bool): Whether the command was approved
          *         reason (str, optional): Reason for denial
+         *         answer (str, optional): The answer to a stall question the graph asked (#21022)
          */
         post: operations["resume_chat_graph_api_chats__chat_id__resume_post"];
         delete?: never;
@@ -21395,6 +21396,8 @@ export interface paths {
         /**
          * Get Codebase Problems
          * @description Get real code problems detected during analysis (#1710: per-source).
+         *
+         *     ``file_category`` (#20493) narrows to one category, e.g. ``code`` or ``test``.
          */
         get: operations["get_codebase_problems_api_analytics_codebase_problems_get"];
         put?: never;
@@ -92822,6 +92825,14 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ProblemCategory
+         * @description ``code`` and ``test`` select that category; ``all`` applies no filter.
+         *
+         *     Rows written before categories existed carry no ``file_category`` and are read as ``code``.
+         * @enum {string}
+         */
+        ProblemCategory: "code" | "test" | "all";
         /** ProcessCreate */
         ProcessCreate: {
             /** Process Key */
@@ -136773,6 +136784,7 @@ export interface operations {
             query?: {
                 problem_type?: string | null;
                 source_id?: string | null;
+                file_category?: components["schemas"]["ProblemCategory"] | null;
             };
             header?: never;
             path?: never;
