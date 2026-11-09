@@ -4371,7 +4371,7 @@ class UpdateAllJob(BaseModel):
     completed_fleet_nodes: int = 0
     failed_fleet_nodes: int = 0
     skipped_fleet_nodes: int = 0  # non-operational nodes skipped (#11511)
-    enrollment_skipped_nodes: List[EnrollmentSkip] = []  # last enrollment failed (#21036)
+    enrollment_skipped_nodes: List[EnrollmentSkip] = []  # not fully enrolled: failed, pending or degraded (#21036)
     created_at: str = ""
     completed_at: Optional[str] = None
     failure_reason: Optional[str] = None

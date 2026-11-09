@@ -8,14 +8,15 @@
 """
 
 import uuid
-from typing import Iterable, List, Set, Tuple
+from datetime import datetime
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
-from models.database import EventSeverity, NodeEvent, NodeEventType
-from models.enrollment_skip import ENROLLMENT_SKIP_REASON, EnrollmentSkip
+from models.database import EventSeverity, Node, NodeEvent, NodeEventType, NodeStatus
+from models.enrollment_skip import STATE_DEGRADED, STATE_FAILED, STATE_PENDING, EnrollmentSkip, skip_reason
 
 logger = get_logger(__name__)
 
@@ -78,9 +79,45 @@ async def get_enrollment_failed_node_ids(db: AsyncSession, node_ids: Iterable[st
     return set(rows.scalars().all())
 
 
+#: The ONE definition of "fully enrolled" (owner decision on #21036, 2026-11-09): a node is fully enrolled unless
+#: its latest enrollment failed (event evidence, ``get_enrollment_failed_node_ids``), its NodeStatus is one of these
+#: (-> the state named in the skip reason), or it has never heartbeated (enrollment unconfirmed -> pending).
+NOT_ENROLLED_STATUS_STATES = {
+    NodeStatus.PENDING.value: STATE_PENDING,
+    NodeStatus.ENROLLING.value: STATE_PENDING,
+    NodeStatus.DEGRADED.value: STATE_DEGRADED,
+}
+
+
+def unenrolled_state(status: str, last_heartbeat: Optional[datetime]) -> Optional[str]:
+    """The not-fully-enrolled state a node's row shows, or None when the row shows a fully enrolled node."""
+    state = NOT_ENROLLED_STATUS_STATES.get(status)
+    if state is None and last_heartbeat is None:
+        return STATE_PENDING
+    return state
+
+
+async def get_unenrolled_nodes(db: AsyncSession, node_ids: Iterable[str]) -> Dict[str, str]:
+    """node_id -> not-fully-enrolled state for the nodes among *node_ids* that are not fully enrolled (#21036).
+
+    A failed latest enrollment wins; otherwise the node row decides (``unenrolled_state``). Two queries.
+    """
+    ids = list(node_ids)
+    if not ids:
+        return {}
+    states = {n: STATE_FAILED for n in await get_enrollment_failed_node_ids(db, ids)}
+    rows = await db.execute(select(Node.node_id, Node.status, Node.last_heartbeat).where(Node.node_id.in_(ids)))
+    for node_id, status, last_heartbeat in rows.all():
+        state = unenrolled_state(status, last_heartbeat)
+        if state and node_id not in states:
+            states[node_id] = state
+    return states
+
+
 async def split_enrollment_failed(db: AsyncSession, node_ids: List[str]) -> Tuple[List[str], List[EnrollmentSkip]]:
-    """Split *node_ids* into (targets, skipped with reason) by enrollment outcome; log each skip (#21036)."""
-    failed = await get_enrollment_failed_node_ids(db, node_ids)
-    for node_id in sorted(failed):
-        logger.warning("fleet update: skipping node %s — %s (#21036)", node_id, ENROLLMENT_SKIP_REASON)
-    return [n for n in node_ids if n not in failed], [EnrollmentSkip(node_id=n) for n in sorted(failed)]
+    """Split *node_ids* into (targets, skipped with reason) by enrollment state; log each skip (#21036)."""
+    states = await get_unenrolled_nodes(db, node_ids)
+    skipped = [EnrollmentSkip(node_id=n, reason=skip_reason(states[n])) for n in sorted(states)]
+    for skip in skipped:
+        logger.warning("fleet update: skipping node %s — %s (#21036)", skip.node_id, skip.reason)
+    return [n for n in node_ids if n not in states], skipped
