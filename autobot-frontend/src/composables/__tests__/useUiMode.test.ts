@@ -14,6 +14,12 @@ async function fresh() {
   return import('../useUiMode')
 }
 
+// #21245: every test re-imports the composable after vi.resetModules(). The first import
+// transforms the composable's module graph (the @autobot/ui barrel via debugUtils), which cost
+// 2-10s inside the first test's 10s budget under a loaded run. Importing once at collection
+// time pays that cost outside any test timer; per-test imports then only re-evaluate.
+await import('../useUiMode')
+
 beforeEach(() => {
   localStorage.clear()
   document.documentElement.removeAttribute('data-ui')
