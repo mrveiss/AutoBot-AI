@@ -357,6 +357,18 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "claims exist to prevent. Every claim carries a TTL and is renewed by its holder, so the "
         "durable record of the work is the a2a Task, never the claim.",
     ),
+    "terminal_session_state": Concept(
+        name="terminal_session_state",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot-backend/services/agent_terminal/session_state.py",),
+        rebuilt_by="SessionManager.get_session refreshes a worker's copy from the Redis record before use (#20674).",
+        note="Deliberate exception (#20674). A terminal session and its pending approval are live, "
+        "TTL'd hot-path state that only has meaning while the session runs; the durable record of a "
+        "decision is the approvals mirror row. Each worker's in-memory copy is a cache: it is refreshed "
+        "from Redis before a decision, a save is refused when the stored version moved on, and one "
+        "decision per approval is claimed atomically.",
+    ),
     "approval": Concept(
         name="approval",
         system_of_record=Store.POSTGRES,

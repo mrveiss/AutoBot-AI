@@ -391,6 +391,17 @@ class TestSecurityLayer:
         result = self.security.authenticate_user("invalid_user", "any_password")
         assert result is None
 
+    def test_authenticate_user_compares_through_secure_compare(self):
+        """#20761: the stored password is compared via secure_compare, not ``==``."""
+        self.security.enable_auth = True
+        self.security.allowed_users = {"test_user": "stored"}
+        self.security.security_config = {"user_roles": {"test_user": "developer"}}
+        with patch.object(security_layer, "secure_compare", return_value=True) as compare:
+            assert self.security.authenticate_user("test_user", "supplied") == "developer"
+        compare.assert_called_once_with("supplied", "stored")
+        with patch.object(security_layer, "secure_compare", return_value=False):
+            assert self.security.authenticate_user("test_user", "stored") is None
+
     def test_get_pending_approvals(self):
         """Test getting pending approvals list"""
         # Initially empty
