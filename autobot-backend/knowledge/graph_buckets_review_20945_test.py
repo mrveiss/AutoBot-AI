@@ -173,3 +173,56 @@ async def test_a_failing_preview_read_keeps_every_section():
     assert {s["key"] for s in built["sections"]} == {"research", "memory"}
     names = {n["id"]: n["name"] for n in built["nodes"] if n["type"] == "bucket_record"}
     assert names["bucket:trajectories:t"] == "t", "falls back to the id"
+
+
+async def _walk_by_cursor(kb, size, category=None, **who):
+    seen, cursor = [], None
+    while True:
+        page = await visible_facts_page(kb, category, size, 0, ALICE, None, [], False, cursor=cursor or "0:0")
+        seen.extend(f["fact_id"] for f in page.facts)
+        cursor = page.cursor
+        if cursor is None:
+            return seen
+
+
+@pytest.mark.asyncio
+async def test_a_cursor_resumes_past_the_scan_cap_where_offset_alone_cannot(monkeypatch):
+    monkeypatch.setattr("api.knowledge_graph_facts.GRAPH_SCAN_LIMIT", SCAN_BATCH)
+    count = SCAN_BATCH * 2 + 70
+    kb = ListingKB([fact(f"f{i:05d}", ALICE) for i in range(count)])
+    control = await visible_facts_page(kb, None, 50, SCAN_BATCH + 20, ALICE, None, [], False)
+    assert control.facts == [] and control.truncated, "offset alone never reaches a fact beyond the scan cap"
+    first = await visible_facts_page(kb, None, 50, 0, ALICE, None, [], False)
+    assert first.cursor == f"{SCAN_BATCH}:0", "the capped scan hands back where to resume"
+    for category in (None, "cat"):
+        seen = await _walk_by_cursor(kb, 50, category)
+        assert seen == [f"f{i:05d}" for i in range(count)], "every readable fact once, in order, past the cap"
+
+
+@pytest.mark.asyncio
+async def test_a_cursor_page_ending_inside_a_batch_neither_repeats_nor_skips_a_fact():
+    kb = ListingKB([fact(f"f{i:03d}", ALICE if i % 3 else "bob") for i in range(1300)])
+    seen = await _walk_by_cursor(kb, 37)
+    assert seen == [f"f{i:03d}" for i in range(1300) if i % 3]
+
+
+@pytest.mark.asyncio
+async def test_a_cursor_read_filters_by_permission_and_reports_more_only_while_a_cursor_returns():
+    kb = ListingKB([fact("a", ALICE), fact("b", "bob"), fact("c", ALICE)])
+    page = await visible_facts_page(kb, None, 1, 0, ALICE, None, [], False, cursor="0:0")
+    assert [f["fact_id"] for f in page.facts] == ["a"] and page.cursor == "0:1" and page.total is None
+    last = await visible_facts_page(kb, None, 5, 0, ALICE, None, [], False, cursor=page.cursor)
+    assert [f["fact_id"] for f in last.facts] == ["c"] and last.cursor is None
+
+
+def test_a_malformed_cursor_is_refused():
+    from pydantic import ValidationError
+
+    from api.knowledge_graph_facts import parse_cursor
+    from api.schemas_knowledge_graph import GraphRequest
+
+    assert parse_cursor("500:12") == (500, 12)
+    with pytest.raises(ValidationError):
+        GraphRequest(cursor="-1:0")
+    with pytest.raises(ValidationError):
+        GraphRequest(cursor="abc")

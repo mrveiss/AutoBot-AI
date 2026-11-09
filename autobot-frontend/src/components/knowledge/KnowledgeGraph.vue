@@ -129,9 +129,7 @@
       </div>
     </div>
 
-    <!-- A drawn graph can still be missing a whole store. That has to stay on
-         screen: the failure notification above is a 5s toast, so without this
-         the gap became invisible while the incomplete picture stayed (#17612). -->
+    <!-- A drawn graph can still lack a whole store; the failure toast above lasts 5s, so keep this on screen (#17612). -->
     <div v-if="graphIsPartial && entities.length > 0" class="error-notification" role="status">
       <Icon name="exclamation-triangle" />
       <span>
@@ -142,6 +140,7 @@
       <button @click="refreshGraph" class="btn-link">{{ $t('knowledge.graph.retry') }}</button>
     </div>
 
+    <KnowledgeGraphMoreFacts v-if="hasMoreFacts && entities.length > 0" @more="loadMoreFacts().then(updateCytoscapeElements)" />
     <!-- Loading State -->
     <div v-if="isLoading" class="loading-state">
       <div class="spinner">
@@ -450,6 +449,7 @@ import { useTransientError } from '@/composables/useTransientError'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebouncedFn } from '@/composables/useDebounce'
 import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
+import KnowledgeGraphMoreFacts from '@/components/knowledge/KnowledgeGraphMoreFacts.vue'
 import { isReducedMotion } from '@/composables/useReducedMotion'
 import { createDateFormatter } from '@/utils/formatHelpers'
 const KnowledgeGraph3D = defineAsyncComponent(() =>
@@ -502,7 +502,7 @@ const {
   errorMessage: graphError,
   sources: graphSources,
   fetchGraphData,
-  createGraphEntity,
+  createGraphEntity, hasMoreFacts, loadMoreFacts,
 } = useKnowledgeGraphEntities()
 
 /**

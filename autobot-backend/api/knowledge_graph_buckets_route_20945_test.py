@@ -117,7 +117,12 @@ async def test_get_graph_accepts_offset():
         patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)),
     ):
         result = await get_multi_source_graph_simple(
-            MagicMock(), max_facts=1, include_categories=False, offset=1, current_user=_user("adm", role="admin")
+            MagicMock(),
+            max_facts=1,
+            include_categories=False,
+            offset=1,
+            cursor=None,
+            current_user=_user("adm", role="admin"),
         )
     sections = {s["key"]: s for s in result["stats"]["sections"]}
     assert sections["facts"]["returned"] == 1 and sections["research"]["returned"] == 1

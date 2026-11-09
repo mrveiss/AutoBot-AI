@@ -11,6 +11,9 @@ from pydantic import BaseModel, Field
 from constants.rag_graph_constants import RAG_GRAPH_TRAVERSAL_DEPTH
 from knowledge.graph_limits import GRAPH_MAX_OFFSET
 
+#: A facts-scan cursor: ``<raw position>:<readable facts already returned from that batch>``.
+CURSOR_PATTERN = r"^\d{1,9}:\d{1,6}$"
+
 
 class GraphRequest(BaseModel):
     """Request model for multi-source knowledge graph."""
@@ -21,6 +24,14 @@ class GraphRequest(BaseModel):
         ge=0,
         le=GRAPH_MAX_OFFSET,
         description="Facts and bucket records to skip, so a client can page to every one the caller may read (#20945)",
+    )
+    cursor: str | None = Field(
+        None,
+        pattern=CURSOR_PATTERN,
+        description=(
+            "Facts only: the `cursor` of the previous response's facts section. The scan resumes there, so every "
+            "readable fact is reachable however deep the listing is; `offset` then pages bucket records only (#20945)"
+        ),
     )
     include_buckets: bool = Field(True, description="Include one section per non-fact knowledge bucket (#20945)")
     max_depth: int = Field(RAG_GRAPH_TRAVERSAL_DEPTH, ge=1, le=3, description="Maximum relation depth")
@@ -38,6 +49,7 @@ class GraphSection(BaseModel):
     returned: int = Field(description="Records on this page")
     limited: bool = Field(description="True while readable records remain past this page")
     truncated: bool = Field(False, description="True when the scan cap cut the listing short")
+    cursor: str | None = Field(None, description="Facts section only: pass as `cursor` to continue the scan")
 
 
 class GraphStats(BaseModel):

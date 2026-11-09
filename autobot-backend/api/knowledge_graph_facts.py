@@ -28,6 +28,8 @@ class FactsPage:
     facts: List[Dict[str, Any]] = field(default_factory=list)
     total: int | None = None
     truncated: bool = False
+    cursor: str | None = None  # where the scan resumes (``position:skip``); None at the end of the listing
+    by_cursor: bool = False  # the page was read from a cursor, so no visible total exists (O(batch) per page)
 
 
 def decode_fact_metadata(raw_fact: Dict[str, Any]) -> Dict[str, Any]:
@@ -87,6 +89,44 @@ async def _listing_continues(kb: Any, category_filter: str | None, scanned: int,
     return bool(await kb.get_all_facts(limit=1, offset=scanned))
 
 
+def parse_cursor(cursor: str | None) -> tuple:
+    """``(raw scan position, readable facts to skip in that batch)`` of a cursor; ValueError when malformed."""
+    position, skip = (int(part) for part in (cursor or "0:0").split(":"))
+    if position < 0 or skip < 0:
+        raise ValueError("cursor out of range")
+    return position, skip
+
+
+def _cursor(position: int, skip: int) -> str:
+    return f"{position}:{skip}"
+
+
+async def _page_from_cursor(kb: Any, category_filter: str | None, max_facts: int, who: tuple, cursor: str) -> FactsPage:
+    """The next ``max_facts`` readable facts from *cursor*, scanning at most ``GRAPH_SCAN_LIMIT`` raw records.
+
+    Resumes at the batch the previous page ended in and skips the readable facts it already returned, so no
+    readable fact is unreachable however deep the listing is.
+    """
+    position, skip = parse_cursor(cursor)
+    taken: List[Dict[str, Any]] = []
+    scanned, next_cursor = 0, None
+    while scanned < GRAPH_SCAN_LIMIT and next_cursor is None:
+        size = min(SCAN_BATCH, GRAPH_SCAN_LIMIT - scanned)
+        advance, more, readable = await _readable_batch(kb, category_filter, position, size, who)
+        readable, room = readable[skip:], max_facts - len(taken)
+        if len(readable) > room:  # the page ends inside this batch
+            taken.extend(readable[:room])
+            next_cursor = _cursor(position, skip + room)
+            break
+        taken.extend(readable)
+        position, scanned, skip = position + advance, scanned + advance, 0
+        if not more:
+            break
+        if len(taken) == max_facts or scanned >= GRAPH_SCAN_LIMIT:
+            next_cursor = _cursor(position, 0)
+    return FactsPage(taken, None, False, next_cursor, True)
+
+
 async def visible_facts_page(
     kb: Any,
     category_filter: str | None,
@@ -97,11 +137,27 @@ async def visible_facts_page(
     user_group_ids: List[str],
     is_admin: Any,
     is_superadmin: bool = False,
+    cursor: str | None = None,
 ) -> FactsPage:
-    """The page of facts *user_id* may read, with the visible total (#16665: filtered before counted)."""
+    """The page of facts *user_id* may read, with the visible total (#16665: filtered before counted).
+
+    With a *cursor* the scan resumes there instead (``offset`` is ignored for facts; no total is computed).
+    Without one, the first ``GRAPH_SCAN_LIMIT`` records are scanned and, when the cap cut the listing short,
+    the returned ``cursor`` continues after them.
+    """
+    who = (user_id, user_org_id, user_group_ids, is_admin, is_superadmin)
+    if cursor:
+        page = await _page_from_cursor(kb, category_filter, max_facts, who, cursor)
+    else:
+        page = await _page_from_start(kb, category_filter, max_facts, offset, who)
+    if isinstance(is_admin, AdminReadLedger):  # #19860: the admin read is audited for what it returns
+        is_admin.record(page.facts)
+    return page
+
+
+async def _page_from_start(kb: Any, category_filter: str | None, max_facts: int, offset: int, who: tuple) -> FactsPage:
     visible: List[Dict[str, Any]] = []
     scanned, truncated = 0, False
-    who = (user_id, user_org_id, user_group_ids, is_admin, is_superadmin)
     while scanned < GRAPH_SCAN_LIMIT:
         size = min(SCAN_BATCH, GRAPH_SCAN_LIMIT - scanned)
         advance, more, readable = await _readable_batch(kb, category_filter, scanned, size, who)
@@ -111,7 +167,6 @@ async def visible_facts_page(
             break
         if scanned >= GRAPH_SCAN_LIMIT:
             truncated = await _listing_continues(kb, category_filter, scanned, more)
-    page = visible[offset : offset + max_facts]
-    if isinstance(is_admin, AdminReadLedger):  # #19860: the admin read is audited for what it returns
-        is_admin.record(page)
-    return FactsPage(page, len(visible), truncated)
+    return FactsPage(
+        visible[offset : offset + max_facts], len(visible), truncated, _cursor(scanned, 0) if truncated else None
+    )

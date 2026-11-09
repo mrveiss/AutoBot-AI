@@ -79434,6 +79434,11 @@ export interface components {
              */
             offset: number;
             /**
+             * Cursor
+             * @description Facts only: the `cursor` of the previous response's facts section. The scan resumes there, so every readable fact is reachable however deep the listing is; `offset` then pages bucket records only (#20945)
+             */
+            cursor?: string | null;
+            /**
              * Include Buckets
              * @description Include one section per non-fact knowledge bucket (#20945)
              * @default true
@@ -79502,6 +79507,11 @@ export interface components {
              * @default false
              */
             truncated: boolean;
+            /**
+             * Cursor
+             * @description Facts section only: pass as `cursor` to continue the scan
+             */
+            cursor?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -117959,6 +117969,8 @@ export interface operations {
                 include_categories?: boolean;
                 /** @description Facts and bucket records to skip */
                 offset?: number;
+                /** @description Resume the facts scan (see GraphRequest) */
+                cursor?: string | null;
             };
             header?: never;
             path?: never;

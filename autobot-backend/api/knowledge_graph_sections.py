@@ -17,7 +17,11 @@ logger = get_logger(__name__)
 
 def facts_section(page: FactsPage, offset: int) -> Dict[str, Any]:
     """The facts section: the VISIBLE total vs this page (never a count of facts the caller cannot read)."""
-    return section_report("facts", "Knowledge base facts", page.total, len(page.facts), offset, page.truncated)
+    report = section_report("facts", "Knowledge base facts", page.total, len(page.facts), offset, page.truncated)
+    if page.by_cursor:  # no visible total in a cursor read: more remains exactly while a cursor is returned
+        report["limited"] = page.cursor is not None
+    report["cursor"] = page.cursor
+    return report
 
 
 async def bucket_sections_for_graph(

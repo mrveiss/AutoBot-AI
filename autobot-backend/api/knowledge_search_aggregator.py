@@ -36,6 +36,7 @@ from api.schemas_knowledge import (
     KnowledgeMultiSourceStatsResponse,
     SearchRequest,
 )
+from api.schemas_knowledge_graph import CURSOR_PATTERN
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -837,7 +838,7 @@ async def get_multi_source_graph(req: Request, body: GraphRequest, current_user:
         if kb is not None:
             try:
                 scope = (kb, body.category_filter, body.max_facts, body.offset, user_id, user_org_id, user_group_ids)
-                page = await visible_facts_page(*scope, is_admin, is_superadmin_user(current_user))
+                page = await visible_facts_page(*scope, is_admin, is_superadmin_user(current_user), body.cursor)
             except Exception as e:
                 logger.warning("Failed to get facts: %s", e)
         facts = page.facts
@@ -884,6 +885,7 @@ async def get_multi_source_graph_simple(
     max_facts: int = Query(50, ge=1, le=200, description="Maximum facts to include"),
     include_categories: bool = Query(True, description="Include category nodes"),
     offset: int = Query(0, ge=0, le=GRAPH_MAX_OFFSET, description="Facts and bucket records to skip"),
+    cursor: str | None = Query(None, pattern=CURSOR_PATTERN, description="Resume the facts scan (see GraphRequest)"),
     current_user: Dict = Depends(get_current_user),
 ):
     """
@@ -892,9 +894,5 @@ async def get_multi_source_graph_simple(
     Returns a multi-source knowledge graph with default settings.
     For more control, use POST /multi-source/graph with GraphRequest body.
     """
-    body = GraphRequest(
-        max_facts=max_facts,
-        include_categories=include_categories,
-        offset=offset,
-    )
+    body = GraphRequest(max_facts=max_facts, include_categories=include_categories, offset=offset, cursor=cursor)
     return await get_multi_source_graph(req, body, current_user)
