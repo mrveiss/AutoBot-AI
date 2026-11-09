@@ -17,6 +17,15 @@ A package declared in two or more requirements files must also sit in the constr
 (#18060), otherwise each file carries its own spec and they drift apart. EXEMPT lists the few
 that cannot yet share one range.
 
+The CI plane (requirements-ci/*, requirements-ci-test.txt) keeps exact pins for a reproducible
+install (#18060 review). Such a pin may repeat a constrained package ONLY when it satisfies the
+constraint; one below a shared floor or past a cap is a violation.
+
+Not covered (stated gap): a second declaration inside ``pyproject.toml`` (autobot_shared) is not seen,
+because this guard reads requirements files only. That manifest has no ``-c`` and no dependabot block
+reaches ``constraints/shared.txt`` from it, so ``repo_tests/autobot_shared_restates_no_constrained_floor_20092_test.py``
+guards it instead.
+
 Run from the repo root:  python3 scripts/check_constraint_drift.py
 """
 
@@ -36,6 +45,10 @@ EXEMPT = {
     "websockets": "backend caps <16 (langgraph-sdk needs <16); the SLM backend floors >=17.3 -- no single range",
     "huggingface-hub": "tts-worker needs >=2.2,<3; ai-stack and npu-worker cap <2.0 -- no single range",
     "transformers": "the Windows NPU worker is exact-pinned to the vetted release (#15298); others float",
+    "tokenizers": "ai-stack and npu-worker cap <0.24, which implies huggingface-hub<2.0; tts-worker gets tokenizers "
+    "transitively and needs hub>=2.2 -- a shared cap would bind it (same conflict as huggingface-hub)",
+    "redis": "declared >=8.1 in six manifests but the backend has no spec and a transitive redisvl "
+    "(via langgraph-checkpoint-redis) that requires redis<8.0 -- a shared >=8.1 would major-bump the backend",
 }
 _EXCLUDE_DIRS = ("node_modules", ".worktrees", ".git", "__pycache__")
 
@@ -89,12 +102,59 @@ def _declarations(files: list[pathlib.Path]) -> dict[str, list[tuple[pathlib.Pat
     return decls
 
 
-def find_violations(decls, pinned: set[str]) -> list[str]:
+def _vkey(version: str) -> tuple[int, ...]:
+    return tuple(int(x) if x.isdigit() else 0 for x in version.split("."))
+
+
+def _satisfies(version: str, spec: str) -> bool:
+    """Does *version* meet a shared clause list made of ``==``, ``>=`` and ``<``?"""
+    for clause in spec.split(","):
+        m = re.match(r"\s*(==|>=|<)\s*([0-9][A-Za-z0-9.]*)", clause)
+        if not m:
+            return False
+        op, bound = m.groups()
+        have, want = _vkey(version), _vkey(bound)
+        if (op == "==" and have != want) or (op == ">=" and have < want) or (op == "<" and have >= want):
+            return False
+    return True
+
+
+def constraint_specs() -> dict[str, str]:
+    """Package -> its specifier text in constraints/shared.txt."""
+    specs = {}
+    for line in CONSTRAINTS.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s*((?:==|>=|<)[^#\s]*)", line.strip())
+        if m:
+            specs[_norm(m.group(1))] = m.group(2)
+    return specs
+
+
+def _is_ci_plane(path: pathlib.Path) -> bool:
+    return path.parts[0] == "requirements-ci" or path.name in ("requirements-ci.txt", "requirements-ci-test.txt")
+
+
+def _ci_pin_ok(path: pathlib.Path, raw: str, spec: str | None) -> bool:
+    """A CI-plane exact pin (or floor) that itself satisfies the shared constraint."""
+    if spec is None or not _is_ci_plane(path):
+        return False
+    m = re.match(
+        r"^\s*[A-Za-z0-9._-]+\s*(?:\[[^\]]*\])?\s*(?:==|>=)\s*([0-9][A-Za-z0-9.]*)",
+        raw.split("#", 1)[0].split(";", 1)[0],
+    )
+    return bool(m) and _satisfies(m.group(1), spec)
+
+
+def find_violations(decls, pinned: set[str], specs: dict[str, str] | None = None) -> list[str]:
     """Re-pins of a constrained package, and multiply-declared packages outside the constraints."""
     out: list[str] = []
+    specs = specs or {}
     for pkg, sites in sorted(decls.items()):
         if pkg in pinned:
-            out += [f"{f}:{n}: '{raw}' re-pins a constrained package" for f, n, raw, spec in sites if spec]
+            out += [
+                f"{f}:{n}: '{raw}' re-pins a constrained package"
+                for f, n, raw, spec in sites
+                if spec and not _ci_pin_ok(f, raw, specs.get(pkg))
+            ]
         elif pkg not in EXEMPT and len({f for f, *_ in sites}) >= 2 and any(s for *_, s in sites):
             where = ", ".join(sorted({str(f) for f, *_ in sites}))
             out.append(
@@ -116,7 +176,7 @@ def main() -> int:
         print(f"ERROR: {CONSTRAINTS} pins no packages — nothing to guard.", file=sys.stderr)
         return 2
 
-    violations = find_violations(_declarations(requirement_files()), pinned)
+    violations = find_violations(_declarations(requirement_files()), pinned, constraint_specs())
     if violations:
         print("Constraint drift — these versions belong ONLY in constraints/shared.txt:\n", file=sys.stderr)
         for v in violations:

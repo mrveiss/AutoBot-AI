@@ -1,9 +1,8 @@
 # Security tooling and cryptography
--c ../constraints/shared.txt  # single source of truth for shared versions (#10524, #18060)
 pre-commit==4.6.2
 detect-secrets==1.5.0
 pycryptodome==3.23.0
-cryptography
+cryptography==50.0.2
 # #13411: imported unconditionally at module scope by autobot_shared/auth/jwt_core.py
 # and autobot-backend/api/jwks.py, and declared in autobot_shared/pyproject.toml — but CI
 # installs these files, not that package, so it was only ever satisfied transitively.
@@ -12,15 +11,15 @@ cryptography
 # CI pins what production runs; an unbounded service constraint takes whatever
 # published last, and the drift audit (#17448) fails the pair rather than letting
 # the two resolve to different releases.
-PyJWT[crypto]
+PyJWT[crypto]>=2.15.1
 # #14551: same shape as PyJWT[crypto] above — autobot_shared/auth/jwt_core.py:61
 # does an unconditional `import bcrypt` (both backends' auth systems import this
 # module), and it is declared in autobot_shared/pyproject.toml but NOT installed
 # from there by CI. Absent here, importing jwt_core — and therefore
 # auth_middleware.py and everything that imports it — fails collection outright.
-bcrypt
+bcrypt>=5.0.0
 # #14551: production dep of autobot-slm-backend/tests/api/*sso*.py's SSO/LDAP
 # auth path — sso_e2e_test.py skip-gates 2 tests on
 # `importlib.util.find_spec("ldap3") is None`, so without this they have been
 # silently skipping rather than exercising the real LDAP bind.
-ldap3
+ldap3>=2.9.1

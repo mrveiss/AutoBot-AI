@@ -54,10 +54,6 @@ updates:
         patterns:
           - "*"
     ignore:
-      - dependency-name: "tokenizers"
-        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
-        # hard-exclude the other blocks carry (#14727), so no block can lift it.
-        versions: [">=0.23.1"]
       - dependency-name: "openai"
         # #14431: cap <3.0 — every published llama-index-llms-openai release pins
         # openai<3, so a grouped bump to 3.x is unsatisfiable and dies with
@@ -149,10 +145,6 @@ updates:
         # #18060: protobuf now lives in constraints/shared.txt, which this block reaches; the same
         # hard-exclude the other blocks carry (#14727), so no block can lift it.
         versions: [">=8.0.0"]
-      - dependency-name: "tokenizers"
-        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
-        # hard-exclude the other blocks carry (#14727), so no block can lift it.
-        versions: [">=0.23.1"]
       - dependency-name: "pydantic"
         update-types: ["version-update:semver-major"]
       - dependency-name: "sqlalchemy"
@@ -408,10 +400,6 @@ updates:
         # #18060: sqlalchemy now lives in constraints/shared.txt, which this block reaches; the same
         # hard-exclude the other blocks carry (#14727), so no block can lift it.
         versions: [">=2.1"]
-      - dependency-name: "tokenizers"
-        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
-        # hard-exclude the other blocks carry (#14727), so no block can lift it.
-        versions: [">=0.23.1"]
 
   - package-ecosystem: "npm"
     directory: "/autobot-browser-worker"
@@ -455,10 +443,6 @@ updates:
         # #18060: sqlalchemy now lives in constraints/shared.txt, which this block reaches; the same
         # hard-exclude the other blocks carry (#14727), so no block can lift it.
         versions: [">=2.1"]
-      - dependency-name: "tokenizers"
-        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
-        # hard-exclude the other blocks carry (#14727), so no block can lift it.
-        versions: [">=0.23.1"]
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]
       - dependency-name: "numpy"
@@ -491,10 +475,6 @@ updates:
         # #18060: sqlalchemy now lives in constraints/shared.txt, which this block reaches; the same
         # hard-exclude the other blocks carry (#14727), so no block can lift it.
         versions: [">=2.1"]
-      - dependency-name: "tokenizers"
-        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
-        # hard-exclude the other blocks carry (#14727), so no block can lift it.
-        versions: [">=0.23.1"]
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]
       - dependency-name: "numpy"
@@ -650,10 +630,6 @@ updates:
         # #18060: sqlalchemy now lives in constraints/shared.txt, which this block reaches; the same
         # hard-exclude the other blocks carry (#14727), so no block can lift it.
         versions: [">=2.1"]
-      - dependency-name: "tokenizers"
-        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
-        # hard-exclude the other blocks carry (#14727), so no block can lift it.
-        versions: [">=0.23.1"]
       # Kept in step with /autobot-backend: this block reaches
       # constraints/shared.txt through the `-c` line in the code_analysis
       # manifest, and numpy/pandas majors break the same consumers there.
@@ -689,10 +665,6 @@ updates:
         # #18060: sqlalchemy now lives in constraints/shared.txt, which this block reaches; the same
         # hard-exclude the other blocks carry (#14727), so no block can lift it.
         versions: [">=2.1"]
-      - dependency-name: "tokenizers"
-        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
-        # hard-exclude the other blocks carry (#14727), so no block can lift it.
-        versions: [">=0.23.1"]
 
   - package-ecosystem: "pip"
     directory: "/autobot-npu-worker/resources/windows-npu-worker"
@@ -763,10 +735,6 @@ updates:
         patterns:
           - "*"
     ignore:
-      - dependency-name: "tokenizers"
-        # #18060: tokenizers now lives in constraints/shared.txt, which this block reaches; the same
-        # hard-exclude the other blocks carry (#14727), so no block can lift it.
-        versions: [">=0.23.1"]
       - dependency-name: "ansible-core"
         # #15983: `constraints/ansible-core.txt` is NOT an upstream dependency. It
         # tracks a DEPLOYMENT FACT -- "the ansible-core the fleet's control node

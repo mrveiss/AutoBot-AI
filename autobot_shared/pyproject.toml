@@ -17,7 +17,7 @@ authors = [{ name = "mrveiss" }]
 license = { text = "Apache-2.0" }
 dependencies = [
     # Floors for everything below that is bare come from constraints/shared.txt (#18060, #20092).
-    "redis",
+    "redis>=7.4.0",
     "pyyaml",
     "pydantic",
     "pydantic-settings",           # ssot_config.py

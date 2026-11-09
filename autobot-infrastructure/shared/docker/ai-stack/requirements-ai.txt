@@ -17,7 +17,7 @@ sentence-transformers
 
 # Model and Tokenization
 transformers>=5.20.2
-tokenizers  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
+tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
                           # unsatisfiable. #10416 (a grouped dependency bump) raised it back to
                           # >=0.23.1 two days after #10332 fixed it, keeping this comment, and the
                           # ai-stack + npu-worker installs have failed to resolve ever since.
@@ -114,7 +114,7 @@ sqlalchemy
 aiosqlite
 
 # Redis client (for communication with host Redis)
-redis
+redis>=8.1.0
 
 # Optional: ONNX Runtime for model optimization
 onnxruntime>=1.31.0

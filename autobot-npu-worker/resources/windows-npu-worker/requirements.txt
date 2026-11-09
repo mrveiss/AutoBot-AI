@@ -11,7 +11,7 @@ pydantic
 aiohttp  # GH#8323 + #17304: 3.14.3 is the patched floor every sibling manifest already uses
 
 # Redis Client
-redis
+redis>=8.1.0
 
 # =============================================================================
 # ONNX Runtime with OpenVINO Execution Provider (Issue #640)
@@ -46,7 +46,7 @@ openvino  # version from constraints/shared.txt
 # pass only `trust_remote_code`, which 5.16.1 still accepts (verified against PyPI
 # metadata, no execution) -- the same read-only method #15054 used.
 transformers==5.16.1
-tokenizers  # #10331: transformers caps tokenizers<=0.23.0, so a floor above
+tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above
                           # that is unsatisfiable. Matches the ai-stack and npu-worker-docker
                           # siblings now that #15298 aligned this file's transformers pin with
                           # theirs -- the old 0.15.0 floor existed only to avoid narrowing the

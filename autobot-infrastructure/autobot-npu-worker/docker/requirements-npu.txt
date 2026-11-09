@@ -16,7 +16,7 @@ pydantic
 openvino  # version from constraints/shared.txt
 
 # Model and Tokenization (lightweight)
-tokenizers  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
+tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
                           # unsatisfiable. #10416 (a grouped dependency bump) raised it back to
                           # >=0.23.1 two days after #10332 fixed it, keeping this comment, and the
                           # ai-stack + npu-worker installs have failed to resolve ever since.
@@ -47,7 +47,7 @@ tenacity
 async-timeout
 
 # Redis client for communication
-redis
+redis>=8.1.0
 
 # Development and Testing
 pytest

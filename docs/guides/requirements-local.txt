@@ -3,7 +3,7 @@
 fastapi  # version from constraints/shared.txt (#18060)
 uvicorn[standard]
 python-dotenv
-redis
+redis>=8.1.0
 psutil
 requests  # GH#8326: CVE-2026-25645
 aiohttp  # GH#8323 + #17304: 3.14.3 is the patched floor every sibling manifest already uses

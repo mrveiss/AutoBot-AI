@@ -67,13 +67,24 @@ _ROWS = [
         "/autobot-infrastructure/shared/docker/ai-stack",
         "upper-bound",
     ),
-    # #18060: the CI plane no longer pins `==2.0.x`; it takes the same `<2.1` bound as the others.
-    ("requirements-ci/storage.txt", "/", "upper-bound"),
+    ("requirements-ci/storage.txt", "/", "exact"),
 ]
 _IDS = [row[0] for row in _ROWS]
 
 
 _SHARED_INCLUDE = re.compile(r"^-c\s+\S*constraints/shared\.txt\b", re.MULTILINE)
+
+
+def _sqlalchemy_lines(text: str) -> list:
+    """Every sqlalchemy Requirement in *text*, parsed by packaging."""
+    found = []
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if line and not line.startswith("-"):
+            req = packaging_requirements.Requirement(line)
+            if req.name.lower() == "sqlalchemy":
+                found.append(req)
+    return found
 
 
 def _sqlalchemy_specifier(text: str) -> packaging_specifiers.SpecifierSet:
@@ -82,19 +93,13 @@ def _sqlalchemy_specifier(text: str) -> packaging_specifiers.SpecifierSet:
     The cap lives ONCE in constraints/shared.txt (#18060); a manifest that carries
     `-c .../constraints/shared.txt` is bound by it, whatever it lists itself.
     """
-    sources = [text]
+    own = _sqlalchemy_lines(text)
+    assert len(own) == 1, f"expected exactly one sqlalchemy requirement in the manifest, found {len(own)}"
+    found = list(own)
     if _SHARED_INCLUDE.search(text):
-        sources.append((repo_root() / "constraints" / "shared.txt").read_text(encoding="utf-8"))
-    found = []
-    for source in sources:
-        for raw in source.splitlines():
-            line = raw.split("#", 1)[0].strip()
-            if not line or line.startswith("-"):
-                continue
-            req = packaging_requirements.Requirement(line)
-            if req.name.lower() == "sqlalchemy":
-                found.append(req)
-    assert found, "expected a sqlalchemy requirement in the manifest or its constraints, found none"
+        shared = _sqlalchemy_lines((repo_root() / "constraints" / "shared.txt").read_text(encoding="utf-8"))
+        assert len(shared) <= 1, f"constraints/shared.txt declares sqlalchemy {len(shared)} times"
+        found += shared
     spec = packaging_specifiers.SpecifierSet()
     for req in found:
         spec &= req.specifier

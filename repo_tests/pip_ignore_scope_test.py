@@ -332,12 +332,23 @@ def test_a_pyproject_contributes_its_real_dependencies() -> None:
 
     packages = _packages_pinned_in(shared)
     assert packages, "no dependency parsed out of pyproject.toml"
-    # redis/pydantic/fastapi are bare there since #18060 (their floors live in constraints/shared.txt),
-    # so the still-pinned opentelemetry-exporter-otlp stands as the proof of a real dependency.
-    assert {"redis", "pydantic", "fastapi", "opentelemetry-exporter-otlp"} & packages, (
-        f"parsed {sorted(packages)[:8]} — those are TOML keys, not dependencies, "
-        "so the file is being read line-wise instead of as TOML"
-    )
+    # #18060: most dependencies there are bare (their floors live in constraints/shared.txt), so the
+    # proof is read from the tree, not named: every dependency that carries a specifier must be
+    # parsed as a pin, and every bare one that shared.txt constrains must NOT be.
+    import tomllib
+
+    from packaging.requirements import Requirement
+
+    deps = [Requirement(d) for d in tomllib.loads(shared.read_text(encoding="utf-8"))["project"]["dependencies"]]
+    pinned = {_normalise(r.name) for r in deps if str(r.specifier)}
+    constrained = {
+        _normalise(re.split(r"[<>=!~\[\s]", ln.split("#")[0].strip())[0])
+        for ln in (_REPO_ROOT / "constraints" / "shared.txt").read_text(encoding="utf-8").splitlines()
+        if ln.split("#")[0].strip()
+    }
+    bare_constrained = {_normalise(r.name) for r in deps if not str(r.specifier)} & constrained
+    assert pinned and pinned <= packages, f"pyproject pins {sorted(pinned)}, parsed {sorted(packages)}"
+    assert bare_constrained and not (bare_constrained & packages), "a bare dependency was parsed as a pin"
     assert not (
         {"authors", "description", "license", "version"} & packages
     ), "TOML keys are leaking into the package set as pseudo-dependencies"

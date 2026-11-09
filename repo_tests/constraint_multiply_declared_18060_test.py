@@ -75,3 +75,28 @@ def test_the_guard_reads_the_real_manifests_and_the_tree_is_clean(guard):
         assert guard.main() == 0
     finally:
         os.chdir(cwd)
+
+
+def _ci_site(guard, raw: str, specs: dict[str, str]) -> list[str]:
+    decls = {"planted-pkg": [(Path("requirements-ci/x.txt"), 1, raw, True)]}
+    found = guard.find_violations(decls, {"planted-pkg"}, specs)
+    return [v for v in found if "stale EXEMPT" not in v]
+
+
+def test_a_ci_exact_pin_that_meets_the_shared_constraint_is_allowed(guard):
+    assert _ci_site(guard, "planted-pkg==2.3.0", {"planted-pkg": ">=2.0,<3.0"}) == []
+
+
+def test_a_ci_exact_pin_below_the_shared_floor_is_named(guard):
+    found = _ci_site(guard, "planted-pkg==1.9.0", {"planted-pkg": ">=2.0,<3.0"})
+    assert any("re-pins a constrained package" in v for v in found), found
+
+
+def test_a_ci_exact_pin_past_the_shared_cap_is_named(guard):
+    assert _ci_site(guard, "planted-pkg==3.1.0", {"planted-pkg": ">=2.0,<3.0"})
+
+
+def test_a_non_ci_file_may_not_repeat_a_constrained_pin_even_when_it_satisfies(guard):
+    decls = {"planted-pkg": [(Path("autobot-backend/requirements.txt"), 1, "planted-pkg==2.3.0", True)]}
+    found = guard.find_violations(decls, {"planted-pkg"}, {"planted-pkg": ">=2.0"})
+    assert [v for v in found if "stale EXEMPT" not in v]
