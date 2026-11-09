@@ -144,14 +144,12 @@
           :plan="message.metadata.plan as any"
           :steps="message.metadata?.steps as any"
         />
-
         <StallQuestionCard v-else-if="message.type === 'human_question'" :message="message" /> <!-- #21022 -->
         <!-- Issue #690: Overseer Agent Step Message -->
         <OverseerStepMessage
           v-else-if="message.type === 'overseer_step' && message.metadata?.step"
           :step="message.metadata.step as any"
         />
-
         <!-- GH#9015: AI-generated image message -->
         <ImageCell
           v-else-if="(message.type === 'image' || message.metadata?.display_type === 'image') && message.metadata?.image_payload"
@@ -563,16 +561,18 @@
 
 <script setup lang="ts">
 import { stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
-import Icon, { type IconName } from '@/components/ui/Icon.vue'
+import type { IconName } from '@/components/ui/Icon.vue'
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
-import { useChatStore, type ChatMessage } from '@/stores/useChatStore'
+import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { usePermissionStore } from '@/stores/usePermissionStore'
 import { useVirtualChatScroll } from '@/composables/useVirtualChatScroll'
+import type { ChatMessage } from '@/stores/useChatStore'
 import type { FileAttachment } from '@/types/api'
 import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
