@@ -83,6 +83,7 @@ on:
       - 'autobot-frontend/package.json'
       - 'autobot-frontend/package-lock.json'
       - 'scripts/audit_api_wiring.py'
+      - 'scripts/audit_api_wiring_args.py'
       - 'requirements*.txt'
       - '.github/workflows/verify-generated-types.yml'
       - '.github/workflows/_changes.yml'
@@ -133,6 +134,7 @@ jobs:
           - 'autobot-frontend/package.json'
           - 'autobot-frontend/package-lock.json'
           - 'scripts/audit_api_wiring.py'
+          - 'scripts/audit_api_wiring_args.py'
           - '**/requirements*.txt'
           - '.github/workflows/verify-generated-types.yml'
         slm_types:
@@ -142,6 +144,7 @@ jobs:
           - 'autobot-slm-frontend/package.json'
           - 'autobot-slm-frontend/package-lock.json'
           - 'scripts/audit_api_wiring.py'
+          - 'scripts/audit_api_wiring_args.py'
           - '**/requirements*.txt'
           - '.github/workflows/verify-generated-types.yml'
 
@@ -198,14 +201,14 @@ jobs:
           set -o pipefail
           export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
           mkdir -p data logs static config
-          if ! python scripts/audit_api_wiring.py --dump-openapi openapi.raw.json; then
+          # The schema the contract is generated from, without the audit-only x-websocket-paths extension,
+          # so it matches exactly what the live server serves to `npm run gen:types` (and what the offline
+          # `npm run gen:types:openapi` writes locally) (#12363).
+          if ! python scripts/audit_api_wiring.py --dump-openapi openapi.json --no-websocket-paths; then
             echo "::error::Backend app.openapi() build failed — cannot verify generated types."
             echo "This usually means the backend does not import cleanly in CI (see startup-import-smoke)."
             exit 1
           fi
-          # Strip the audit-only x-websocket-paths extension so the schema matches
-          # exactly what the live server serves to `npm run gen:types`.
-          python -c "import json; s=json.load(open('openapi.raw.json')); s.pop('x-websocket-paths', None); json.dump(s, open('openapi.json','w'))"
 
       # #13572: reject absolute-path schema defaults here, where the contract has
       # just been built, rather than paying for a second app.openapi().
@@ -217,7 +220,7 @@ jobs:
       - name: Check no schema default is an absolute filesystem path (#13572)
         run: |
           export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
-          python scripts/check_openapi_absolute_defaults.py --contract openapi.raw.json
+          python scripts/check_openapi_absolute_defaults.py --contract openapi.json
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
