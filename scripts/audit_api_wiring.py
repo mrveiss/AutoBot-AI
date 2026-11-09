@@ -65,6 +65,7 @@ if str(REPO_ROOT) not in sys.path:
 from autobot_shared.api_routing import frontend_call_paths as _fcp  # noqa: E402
 from autobot_shared.api_routing import router_prefixes as _routing  # noqa: E402
 from autobot_shared.openapi_schema import normalize_pattern_anchors  # noqa: E402
+from autobot_shared.testfile_names import is_test_filename as _is_test_name  # noqa: E402
 
 BACKEND = REPO_ROOT / "autobot-backend"
 # #12381: the SLM control-plane backend (autobot-slm-backend, :8000) mounts its own '/api'-prefixed route table,
@@ -261,16 +262,14 @@ def _registry_module_prefixes(root: Path) -> dict[str, str]:
 def _scan_route_decorators(
     root: Path,
 ) -> tuple[dict[str, list[tuple[str, str]]], dict[str, str], set[str]]:
-    """Regex-scan `root` for @router.<method>(...) decorators, APIRouter
-    prefixes, and include_router() mount prefixes. Returns
-    (module -> [(method, path), ...], module -> own prefix, mount prefixes).
-    """
+    """Regex-scan `root` for @router.<method>(...) decorators, APIRouter prefixes and include_router()
+    mount prefixes. Returns (module -> [(method, path), ...], module -> own prefix, mount prefixes)."""
     raw: dict[str, list[tuple[str, str]]] = defaultdict(list)
     module_prefix: dict[str, str] = {}
     prefixes: set[str] = set()
     for py in root.rglob("*.py"):
         sp = str(py)
-        if "__pycache__" in sp or "/tests/" in sp or sp.endswith("_test.py") or "/test_" in sp:
+        if "__pycache__" in sp or "/tests/" in sp or _is_test_name(py.name, include_js=False, include_conftest=False):
             continue
         txt = py.read_text(encoding="utf-8", errors="ignore")
         mp = apirouter_prefix(txt)
@@ -387,7 +386,7 @@ def find_unmounted_routers(backend: set[str] | None = None) -> list[str]:
         module_txt = {
             py.stem: py.read_text(encoding="utf-8", errors="ignore")
             for py in api_dir.glob("*.py")
-            if py.stem != "__init__" and not py.stem.endswith("_test") and not py.stem.startswith("test_")
+            if py.stem != "__init__" and not _is_test_name(py.name, include_js=False, include_conftest=False)
         }
         init_txt = (
             (api_dir / "__init__.py").read_text(encoding="utf-8", errors="ignore")
