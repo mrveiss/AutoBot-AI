@@ -183,20 +183,20 @@ class RegressionReport:
                 }
                 for name, d in self.per_class().items()
             },
-            "trajectories": [
-                {
-                    "trajectory_id": o.trajectory_id,
-                    "task_class": o.task_class,
-                    "verdict": o.classify(self.epsilon),
-                    "baseline_score": round(o.baseline_score, 3),
-                    "candidate_score": round(o.candidate_score, 3),
-                    "tools_ok": o.tools_ok,
-                    "status_ok": o.status_ok,
-                    "detail": o.detail,
-                    **live_fields(o),
-                }
-                for o in self.outcomes
-            ],
+            "trajectories": [self._trajectory_dict(o) for o in self.outcomes],
+        }
+
+    def _trajectory_dict(self, o: TrajectoryOutcome) -> Dict[str, Any]:
+        return {
+            "trajectory_id": o.trajectory_id,
+            "task_class": o.task_class,
+            "verdict": o.classify(self.epsilon),
+            "baseline_score": round(o.baseline_score, 3),
+            "candidate_score": round(o.candidate_score, 3),
+            "tools_ok": o.tools_ok,
+            "status_ok": o.status_ok,
+            "detail": o.detail,
+            **live_fields(o),
         }
 
     def _outcome_line(self, outcome: TrajectoryOutcome) -> str:

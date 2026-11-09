@@ -7,16 +7,42 @@
   },
   "expected_tools": [],
   "tool_match": "subsequence",
+  "allowed_tools": [],
   "success_criteria": [
     {
       "type": "output_pattern",
-      "parameters": {"pattern": "DEFAULT_TIMEOUT"},
-      "description": "falls back to the module default"
+      "parameters": {
+        "pattern": "(?s)\\.get\\(\\s*['\"]timeout['\"]\\s*,\\s*DEFAULT_TIMEOUT\\s*\\)|if\\s[^\\n]*['\"]timeout['\"][^\\n]*:\\s*\\n[^\\n]*DEFAULT_TIMEOUT"
+      },
+      "description": "applies the fallback: .get('timeout', DEFAULT_TIMEOUT) or an explicit branch that assigns DEFAULT_TIMEOUT"
     },
     {
       "type": "output_pattern",
-      "parameters": {"pattern": "\\.get\\(\\s*['\"]timeout['\"]|['\"]timeout['\"]\\s+in\\s|except\\s+KeyError"},
-      "description": "guards the missing key instead of indexing it"
+      "parameters": {
+        "pattern": "```"
+      },
+      "description": "answers with a code fence"
+    },
+    {
+      "type": "output_pattern",
+      "parameters": {
+        "pattern": "(?is)^(?!.*(?:i (?:do not|don't|cannot|can't|am unable to) (?:know|help|answer|assist)|i'm not sure|i am not sure|as an ai|unable to (?:help|answer|assist)|no information)).*$"
+      },
+      "description": "is not a refusal"
+    },
+    {
+      "type": "output_pattern",
+      "parameters": {
+        "pattern": "(?s)^.{60,}"
+      },
+      "description": "at least 60 characters"
+    },
+    {
+      "type": "resource_exists",
+      "parameters": {
+        "key": "no_tool_calls"
+      },
+      "description": "called no tool (the prompt says to run nothing)"
     }
   ],
   "baseline_score": 0.9,

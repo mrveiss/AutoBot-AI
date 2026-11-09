@@ -243,3 +243,18 @@ register_env_var(
         component="eval",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EVAL_SUBSTANTIVE_MIN_WORDS",
+        type=int,
+        default=12,
+        description=(
+            "Words an answer needs before the live eval treats it as a claim that must be grounded (#20843). "
+            "A shorter answer (a refusal, an acknowledgement) is not an unsupported claim, and fails its "
+            "golden's content criteria instead."
+        ),
+        component="eval",
+        range=(1, 500),
+    )
+)

@@ -22,13 +22,11 @@ from __future__ import annotations
 import asyncio
 import shutil
 import tempfile
-import uuid
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List
 
 from autobot_shared.env_registry import env
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS
 from eval.live_classify import (  # noqa: F401  (re-exported: the live API surface)
     CATEGORIES,
     GROUNDED_TASK_CLASSES,
@@ -36,115 +34,85 @@ from eval.live_classify import (  # noqa: F401  (re-exported: the live API surfa
     classify_failures,
     is_heuristic,
 )
-from eval.live_guard import EndpointResolver, Locality, assert_local_only  # noqa: F401
+from eval.live_guard import (  # noqa: F401
+    EndpointResolver,
+    Locality,
+    RemoteProviderRefused,
+    assert_chains_local,
+    assert_local_only,
+)
 from eval.live_judge import Judge
+from eval.live_turn import (  # noqa: F401  (re-exported: the live API surface)
+    KB_POPULATED,
+    READ_ONLY_AGENT_ID,
+    GraphDidNotRun,
+    build_record,
+    chat_endpoint_for,
+    chat_resolved_provider,
+    chat_turn_runner,
+    probe_knowledge_base,
+    run_context,
+)
 from eval.runner import CandidateResult, RecordingUnusable, tools_match
 from eval.store import GoldenTrajectory
-from orchestration.success_criteria import SuccessCriteriaEvaluator
+from orchestration.success_criteria import SuccessCriteria, SuccessCriteriaEvaluator
 
 logger = get_logger(__name__)
 
-#: The bounded profile every live run is governed by (``orchestration.agent_registry``).
-READ_ONLY_AGENT_ID = "research_agent"
-STATUS_COMPLETED, STATUS_ERROR, STATUS_AWAITING_APPROVAL, STATUS_TIMEOUT = (
-    "completed",
-    "error",
-    "awaiting_approval",
-    "timeout",
-)
-
 #: ``(golden, model, workspace) -> LiveRunRecord``: one headless turn.
 TurnRunner = Callable[[GoldenTrajectory, str, Path], Awaitable[LiveRunRecord]]
+#: The ``resource_exists`` key a golden uses to require grounded answers; judged apart from the content criteria,
+#: so a missing citation is an ``unsupported_claim`` and never also a ``false_done``.
+GROUNDED_KEY = "grounded"
+#: Resource key that is true only when the turn called no tool at all.
+NO_TOOLS_KEY = "no_tool_calls"
 
 
-def run_context(model: str) -> Dict[str, Any]:
-    """The chat context for one live turn: the pinned model, the bounded profile, every approval gate."""
-    return {
-        "model": model,
-        "agent_id": READ_ONLY_AGENT_ID,
-        "requires_approval_before": sorted(APPROVAL_CATEGORY_TOOLS),
-    }
+def _is_grounding(criterion: SuccessCriteria) -> bool:
+    return criterion.parameters.get("key") == GROUNDED_KEY
 
 
-def _as_dict(message: Any) -> Dict[str, Any]:
-    if isinstance(message, dict):
-        return message
-    return {
-        "type": getattr(message, "type", ""),
-        "content": getattr(message, "content", ""),
-        "metadata": dict(getattr(message, "metadata", None) or {}),
-    }
+def _resources(record: LiveRunRecord) -> Dict[str, bool]:
+    """What the evaluator's ``resource_exists`` criteria can ask about: tools called, no tools, grounding."""
+    resources = {tool: True for tool in record.tool_sequence}
+    resources[NO_TOOLS_KEY] = not record.tool_sequence
+    resources[GROUNDED_KEY] = bool(record.used_knowledge or record.rag_citations)
+    return resources
 
 
-def _final_text(state: Dict[str, Any], messages: List[Dict[str, Any]]) -> str:
-    for text in reversed(state.get("all_llm_responses") or []):
-        if text and text.strip():
-            return text
-    replies = [m.get("content", "") for m in messages if m.get("type") == "response"]
-    return replies[-1] if replies else ""
-
-
-def _status(state: Dict[str, Any]) -> str:
-    if state.get("error"):
-        return STATUS_ERROR
-    return STATUS_AWAITING_APPROVAL if state.get("pending_approval") else STATUS_COMPLETED
-
-
-def build_record(raw_messages: List[Any], state: Dict[str, Any]) -> LiveRunRecord:
-    """A ``LiveRunRecord`` from the messages a turn streamed and the graph state read back afterwards."""
-    messages = [_as_dict(m) for m in raw_messages]
-    history = list(state.get("execution_history") or [])
-    return LiveRunRecord(
-        final_text=_final_text(state, messages),
-        final_status=_status(state),
-        tool_sequence=[str(e["tool"]) for e in history if e.get("tool")],
-        raw_responses=list(state.get("all_llm_responses") or []),
-        messages=messages,
-        execution_history=history,
-        tool_loop_count=int(state.get("tool_loop_count") or 0),
-        iteration_count=int(state.get("iteration_count") or 0),
-        should_continue=bool(state.get("should_continue")),
-        used_knowledge=bool(state.get("used_knowledge")),
-        rag_citations=list(state.get("rag_citations") or []),
-        error=state.get("error"),
-    )
-
-
-async def chat_turn_runner(golden: GoldenTrajectory, model: str, workspace: Path) -> LiveRunRecord:
-    """The default turn: the real chat graph on a unique throwaway session, whose checkpoints are always removed."""
-    from chat_workflow import get_chat_workflow_manager
-    from chat_workflow.graph import delete_thread_checkpoints, get_compiled_graph
-
-    manager = get_chat_workflow_manager()
-    await manager.initialize()
-    session_id = f"eval-{golden.trajectory_id}-{uuid.uuid4().hex}"
-    try:
-        messages = await manager.process_message(session_id, golden.query, run_context(model))
-        graph = await get_compiled_graph(manager)
-        snapshot = await graph.aget_state({"configurable": {"thread_id": session_id}})
-        return build_record(messages, dict(snapshot.values or {}))
-    finally:
-        await delete_thread_checkpoints(session_id)
-
-
-async def chat_endpoint_for(model: str) -> str:
-    """The endpoint chat will send *model*'s prompts to: SLM discovery first, then the SSOT routing."""
-    from chat_workflow import get_chat_workflow_manager
-
-    manager = get_chat_workflow_manager()
-    return await manager._discover_ollama_from_slm() or manager._get_ollama_endpoint_for_model(model)
+def _detail(result: Any) -> str:
+    return "; ".join(f"{r.criteria.description or r.criteria.criteria_type.value}: {r.detail}" for r in result.results)
 
 
 async def _evaluate_criteria(record: LiveRunRecord, golden: GoldenTrajectory) -> str:
-    """Run the golden's declared criteria over the final answer; returns the detail text."""
+    """Run the golden's declared criteria over the answer; returns the detail text.
+
+    Grounding criteria are judged separately (``record.grounding_ok``) from the content criteria
+    (``record.criteria_overall``), so the two failures stay distinct categories.
+    """
     criteria = golden.criteria()
     if not criteria:
         return ""
-    result = await SuccessCriteriaEvaluator().evaluate(
-        criteria, {"output": record.final_text, "resources": {t: True for t in record.tool_sequence}}
-    )
-    record.criteria_overall = result.overall
-    return "; ".join(f"{r.criteria.description or r.criteria.criteria_type.value}: {r.detail}" for r in result.results)
+    workflow_result = {"output": record.final_text, "resources": _resources(record)}
+    evaluator = SuccessCriteriaEvaluator()
+    content = [c for c in criteria if not _is_grounding(c)]
+    grounding = [c for c in criteria if _is_grounding(c)]
+    details = []
+    if content:
+        result = await evaluator.evaluate(content, workflow_result)
+        record.criteria_overall = result.overall
+        details.append(_detail(result))
+    if grounding:
+        result = await evaluator.evaluate(grounding, workflow_result)
+        record.grounding_ok = result.overall == "full"
+        details.append(_detail(result))
+    return "; ".join(details)
+
+
+def forbidden_tools(golden: GoldenTrajectory, record: LiveRunRecord) -> List[str]:
+    """Tools the turn called that the golden neither expects nor allows (``allowed_tools`` is empty by default)."""
+    permitted = set(golden.expected_tools) | set(golden.allowed_tools)
+    return [tool for tool in dict.fromkeys(record.tool_sequence) if tool not in permitted]
 
 
 def _make_workspace(root: str) -> str:
@@ -163,6 +131,8 @@ class LiveChatCandidate:
         allow_remote: bool = False,
         resolve_endpoint: EndpointResolver | None = None,
         timeout_s: float | None = None,
+        resolve_provider: Callable[[], str] | None = None,
+        probe_kb: Callable[[], Awaitable[str]] | None = None,
     ):
         self.models = list(models)
         self.provider = provider
@@ -170,14 +140,28 @@ class LiveChatCandidate:
         self.judge = judge
         self.allow_remote = allow_remote
         self.resolve_endpoint = resolve_endpoint or chat_endpoint_for
+        self.resolve_provider = resolve_provider or chat_resolved_provider
+        self.probe_kb = probe_kb or probe_knowledge_base
         self.timeout_s = timeout_s if timeout_s is not None else float(env("AUTOBOT_EVAL_LIVE_TIMEOUT_S"))
         self.localities: Dict[str, Locality] = {}
+        self.kb_status: str = ""
 
     async def prepare(self) -> Dict[str, Locality]:
-        """Run the local-only guard. Raises ``RemoteProviderRefused`` before any turn can run."""
+        """Run the guards and probe the KB. Raises ``RemoteProviderRefused`` before any turn can run.
+
+        The provider checked is the one chat resolves; a different ``provider`` label is refused, not trusted.
+        """
+        resolved = self.resolve_provider()
+        if self.provider and self.provider.lower() != resolved.lower():
+            raise RemoteProviderRefused(
+                f"--provider {self.provider!r} is not the provider chat resolves for its turns ({resolved!r})"
+            )
+        self.provider = resolved
+        assert_chains_local(allow_remote=self.allow_remote)
         self.localities = await assert_local_only(
-            self.models, self.provider, self.resolve_endpoint, allow_remote=self.allow_remote
+            self.models, resolved, self.resolve_endpoint, allow_remote=self.allow_remote
         )
+        self.kb_status = await self.probe_kb()
         return self.localities
 
     def runner_for(self, model: str) -> "ModelRunner":
@@ -211,12 +195,21 @@ class ModelRunner:
         self.provider = owner.provider
         self.timeout_s = owner.timeout_s
 
-    async def __call__(self, golden: GoldenTrajectory) -> CandidateResult:
+    def _require_ready(self, golden: GoldenTrajectory) -> None:
         owner = self._owner
         if self.model not in owner.localities:
             raise RuntimeError("the local-only guard has not run; call LiveChatCandidate.prepare() first")
+        if golden.task_class in GROUNDED_TASK_CLASSES and owner.kb_status != KB_POPULATED:
+            # An environment cause, not the model's: with no documents the answer cannot be grounded.
+            raise RecordingUnusable(f"environment: the knowledge base is {owner.kb_status or 'unprobed'}")
+
+    async def __call__(self, golden: GoldenTrajectory) -> CandidateResult:
+        owner = self._owner
+        self._require_ready(golden)
         try:
             record = await owner.run_turn(golden, self.model)
+        except RecordingUnusable:
+            raise
         except Exception as exc:  # noqa: BLE001 - infrastructure failure: "not run", never a pass or a model failure
             logger.warning("live turn for %s failed", golden.trajectory_id, exc_info=True)
             raise RecordingUnusable(f"live turn for {golden.trajectory_id!r} failed: {type(exc).__name__}") from exc
@@ -228,14 +221,18 @@ class ModelRunner:
 
     def _result(self, golden: GoldenTrajectory, record: LiveRunRecord, detail: str) -> CandidateResult:
         categories = classify_failures(record)
-        heuristic = [c for c in categories if is_heuristic(record, c)]
-        if heuristic:
-            detail = "; ".join(filter(None, [detail, f"heuristic: {', '.join(heuristic)}"]))
+        notes = [detail] if detail else []
+        if heuristic := [c for c in categories if is_heuristic(record, c)]:
+            notes.append(f"heuristic: {', '.join(heuristic)}")
+        if forbidden := forbidden_tools(golden, record):
+            notes.append(f"forbidden_tool: {', '.join(forbidden)}")
         passed = (
             record.final_status == golden.expected_status
             and tools_match(golden.expected_tools, record.tool_sequence, golden.tool_match)
             and record.criteria_overall in (None, "full")
+            and record.grounding_ok in (None, True)
             and not categories
+            and not forbidden
         )
         return CandidateResult(
             response_text=record.final_text,
@@ -245,6 +242,6 @@ class ModelRunner:
             provider=self.provider,
             failure_categories=categories,
             passed=passed,
-            criteria_detail=detail,
+            criteria_detail="; ".join(notes),
             tokens=record.tokens,
         )

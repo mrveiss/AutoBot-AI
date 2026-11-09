@@ -33,7 +33,18 @@ def _o(tid, model, passed, cats=(), not_run=False, tokens=None):
 
 
 def _run_pins(**over):
-    pins = {"label": "x", "step_budget": 5, "timeout": 300.0, "corpus_size": 3, "models": [{"model": "m1"}]}
+    pins = {
+        "label": "x",
+        "step_budget": 5,
+        "loop_abort_threshold": 2,
+        "timeout": 300.0,
+        "corpus_size": 3,
+        "repeats": 1,
+        "judge_model": None,
+        "local_only": True,
+        "kb_status": "populated",
+        "models": [{"model": "m1", "provider": "ollama", "endpoint_class": "loopback", "local_only": True}],
+    }
     return {**pins, **over}
 
 
@@ -81,11 +92,29 @@ def test_compare_reports_the_per_model_delta():
     assert "| m1 | 0.33 | 1.00 |" in compare.render_markdown(delta)
 
 
+def _m1(**over):
+    return [{"model": "m1", "provider": "ollama", "endpoint_class": "loopback", "local_only": True, **over}]
+
+
 @pytest.mark.parametrize(
-    "pin,value", [("step_budget", 9), ("timeout", 60.0), ("corpus_size", 4), ("models", [{"model": "m2"}])]
+    "pin,value,message",
+    [
+        ("step_budget", 9, "step_budget"),
+        ("loop_abort_threshold", 3, "loop_abort_threshold"),
+        ("timeout", 60.0, "timeout"),
+        ("corpus_size", 4, "corpus_size"),
+        ("repeats", 5, "repeats"),
+        ("judge_model", "judge-x", "judge_model"),
+        ("local_only", False, "local_only"),
+        ("kb_status", "empty", "kb_status"),
+        ("models", [{"model": "m2"}], "model"),
+        ("models", _m1(provider="openai"), "provider"),
+        ("models", _m1(endpoint_class="private"), "endpoint_class"),
+        ("models", _m1(local_only=False), "m1 local_only"),
+    ],
 )
-def test_compare_refuses_reports_whose_pins_differ(pin, value):
-    with pytest.raises(compare.NotComparable, match=pin if pin != "models" else "model"):
+def test_compare_refuses_reports_whose_pins_differ(pin, value, message):
+    with pytest.raises(compare.NotComparable, match=message):
         compare.compare_reports(_report([True]), _report([True], **{pin: value}))
 
 
@@ -99,6 +128,10 @@ def test_compare_cli_exits_2_on_a_refusal_and_0_on_a_comparison(tmp_path):
     assert compare.main([str(before), str(tmp_path / "missing.json")]) == 2
 
 
+async def _kb():
+    return "populated"
+
+
 async def _resolve(model):
     return "http://127.0.0.1:11434"
 
@@ -109,7 +142,14 @@ async def test_run_live_eval_loops_models_by_repeats_and_stamps_the_pins():
         return LiveRunRecord(final_text="DEFAULT_TIMEOUT .get('timeout' websocket proxy slm role")
 
     report = await run_live_eval(
-        ["m1", "m2", "m1"], "ollama", repeat=2, label="before", turn_runner=turn, resolve_endpoint=_resolve
+        ["m1", "m2", "m1"],
+        "ollama",
+        repeat=2,
+        label="before",
+        turn_runner=turn,
+        resolve_endpoint=_resolve,
+        resolve_provider=lambda: "ollama",
+        probe_kb=_kb,
     )
     corpus = len({o.trajectory_id for o in report.outcomes})
     assert len(report.outcomes) == 2 * 2 * corpus  # duplicate model collapsed

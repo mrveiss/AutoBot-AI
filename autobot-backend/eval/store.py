@@ -93,6 +93,9 @@ class GoldenTrajectory:
     #: in the ``orchestration.success_criteria`` shape. A v1 fixture carries neither.
     tool_match: str = "exact"
     success_criteria: List[Dict[str, Any]] = field(default_factory=list)
+    #: Tools a live run may call beyond ``expected_tools``; anything else fails the run as ``forbidden_tool``.
+    #: Empty by default, so a read-only golden allows nothing (#20843).
+    allowed_tools: List[str] = field(default_factory=list)
 
     def criteria(self) -> List[SuccessCriteria]:
         """The ``success_criteria`` entries as evaluator objects."""
@@ -125,6 +128,7 @@ class GoldenTrajectory:
             agent_config=dict(data.get("agent_config") or {}),
             tool_match=_checked_tool_match(data),
             success_criteria=_checked_criteria(data),
+            allowed_tools=[str(t) for t in (data.get("allowed_tools") or [])],
         )
 
 

@@ -164,7 +164,6 @@ def _emit(report: RegressionReport, json_path: str) -> None:
 def _live_report(args: argparse.Namespace) -> RegressionReport | None:
     """Run the live eval; None when the local-only guard refused it (nothing was sent anywhere)."""
     from autobot_shared.ssot_config import config
-    from chat_workflow.llm_provider import configured_provider
     from eval.live_guard import RemoteProviderRefused
     from eval.live_run import run_live_eval
 
@@ -172,7 +171,7 @@ def _live_report(args: argparse.Namespace) -> RegressionReport | None:
         return run_or_schedule(
             run_live_eval(
                 models=args.model or [config.default_llm_model],
-                provider=args.provider or configured_provider().value,
+                provider=args.provider,
                 repeat=args.repeat,
                 label=args.label,
                 judge_model=args.judge_model,

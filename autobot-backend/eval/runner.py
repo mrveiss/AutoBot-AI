@@ -114,7 +114,12 @@ class TrajectoryReplayer:
         status_ok = result.final_status == golden.expected_status
         if result.passed is not None:
             return self._live_outcome(golden, result, tools_ok, status_ok)
+        return await self._scored_outcome(golden, result, tools_ok, status_ok)
 
+    async def _scored_outcome(
+        self, golden: GoldenTrajectory, result: CandidateResult, tools_ok: bool, status_ok: bool
+    ) -> TrajectoryOutcome:
+        """Non-live outcome: the deterministic checks plus the RLM quality score."""
         reflection = await self.evaluator.evaluate(query=golden.query, response=result.response_text)
 
         detail = _drift_detail(golden, result, tools_ok, status_ok)

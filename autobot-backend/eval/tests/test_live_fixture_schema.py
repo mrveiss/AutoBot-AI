@@ -67,3 +67,16 @@ def test_a_shipped_golden_is_valid_json_with_a_version():
 
     for path in GOLDEN_DIR.glob("*.json"):
         assert json.loads(path.read_text(encoding="utf-8"))["fixture_version"] == "2"
+
+
+def test_every_shipped_golden_declares_tool_match_allowed_tools_and_two_criteria_explicitly():
+    """Read the raw JSON: a default would hide an author who never decided."""
+    from eval.store import GOLDEN_DIR
+
+    paths = sorted(GOLDEN_DIR.glob("*.json"))
+    assert len(paths) >= 3
+    for path in paths:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        assert raw.get("tool_match") in ("exact", "subsequence"), path.name
+        assert isinstance(raw.get("allowed_tools"), list), path.name
+        assert len(raw.get("success_criteria") or []) >= 2, path.name

@@ -22,8 +22,9 @@ from chat_workflow import graph as graph_module
 from chat_workflow.manager import ChatWorkflowManager
 from chat_workflow.tool_call_loop import _LOOP_ABORT_THRESHOLD
 from chat_workflow.tool_dispatch_guards import unknown_tool_error
-from eval import live
+from eval import live, live_turn
 from eval.live_classify import classify_failures
+from eval.runner import RecordingUnusable
 from eval.store import GoldenTrajectory
 
 pytestmark = pytest.mark.asyncio
@@ -77,10 +78,26 @@ def _golden() -> GoldenTrajectory:
     return GoldenTrajectory("g", "knowledge_qa", {"prompt": "why?"}, [], 0.9, tool_match="subsequence")
 
 
-async def _drive(script, workspace_root):
+class _History:
+    """Stands in for ``ChatHistoryManager``: records which session ids the eval deleted."""
+
+    deleted: list = []
+
+    async def delete_session(self, session_id):
+        _History.deleted.append(session_id)
+        return True
+
+
+async def _boom(self, *args, **kwargs):
+    raise RuntimeError("graph exploded")
+    yield  # pragma: no cover - makes this an async generator like the real one
+
+
+async def _drive(script, workspace_root, graph_raises=False):
     """Run the default turn runner with *script* as the model; returns (record, contexts, deleted_threads)."""
     contexts: list = []
     deleted: list = []
+    _History.deleted = []
     saver = MemorySaver()
     graph_module._compiled_graph = None
 
@@ -95,6 +112,7 @@ async def _drive(script, workspace_root):
         await real_delete(thread_id)
 
     manager = _manager(contexts)
+    via = _boom if graph_raises else ChatWorkflowManager._process_via_graph
     try:
         with (
             patch.object(graph_module, "get_redis_checkpointer", AsyncMock(return_value=saver)),
@@ -103,6 +121,8 @@ async def _drive(script, workspace_root):
             patch("chat_workflow.graph.attachment_prompt", AsyncMock(return_value="p")),
             patch("chat_workflow.get_chat_workflow_manager", lambda: manager),
             patch("chat_workflow.graph.delete_thread_checkpoints", spy_delete),
+            patch("chat_history.ChatHistoryManager", _History),
+            patch.object(ChatWorkflowManager, "_process_via_graph", via),
         ):
             record = await live.chat_turn_runner(_golden(), "pinned-model", workspace_root)
     finally:
@@ -154,3 +174,39 @@ async def test_an_unparsed_tool_call_in_the_model_text_is_classified_malformed(t
     record, *_ = await _drive(script, tmp_path)
     assert record.raw_responses == [broken]
     assert "malformed_tool_call" in classify_failures(record)
+
+
+async def test_the_chat_history_the_turn_persisted_is_deleted_under_the_evals_own_id_only(tmp_path):
+    async def script(iteration, ctx):
+        yield ("an answer", False)
+
+    _, _, deleted, _ = await _drive(script, tmp_path)
+    assert _History.deleted == deleted and deleted[0].startswith("eval-g-")
+
+
+async def test_a_history_delete_for_a_session_that_is_not_the_evals_own_is_refused():
+    with pytest.raises(ValueError, match="not the eval's own"):
+        await live_turn._delete_history("a-real-users-session")
+
+
+async def test_a_graph_that_raised_and_fell_back_to_legacy_is_not_run_and_is_still_cleaned_up(tmp_path):
+    async def script(iteration, ctx):
+        yield ("never reached", False)
+
+    with pytest.raises(live.GraphDidNotRun) as raised:
+        await _drive(script, tmp_path, graph_raises=True)
+    assert isinstance(raised.value, RecordingUnusable)  # the runner reports it as not_run, not as a clean run
+    assert len(_History.deleted) == 1
+
+
+async def test_a_paused_approval_is_denied_with_the_eval_reason_and_a_finished_turn_is_left_alone():
+    resumed = []
+
+    class Manager:
+        async def resume_graph(self, session_id, decision):
+            resumed.append((session_id, decision))
+            yield None
+
+    await live_turn._deny_pending_approval(Manager(), None, "eval-g-1", SimpleNamespace(next=("execute_tools",)))
+    await live_turn._deny_pending_approval(Manager(), None, "eval-g-2", SimpleNamespace(next=()))
+    assert resumed == [("eval-g-1", {"approved": False, "reason": "denied: eval run"})]

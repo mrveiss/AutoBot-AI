@@ -29,7 +29,18 @@ from eval.report_live import FAIL, NOT_RUN, PASS
 logger = get_logger(__name__)
 
 #: Pins that must be equal for two reports to be comparable.
-COMPARED_PINS = ("step_budget", "timeout", "corpus_size")
+COMPARED_PINS = (
+    "step_budget",
+    "loop_abort_threshold",
+    "timeout",
+    "corpus_size",
+    "repeats",
+    "judge_model",
+    "local_only",
+    "kb_status",
+)
+#: Per-model pins that must also agree: where the prompts went, not just which model answered.
+COMPARED_MODEL_PINS = ("provider", "endpoint_class", "local_only")
 
 
 class NotComparable(ValueError):
@@ -51,8 +62,21 @@ def check_comparable(before: Dict[str, Any], after: Dict[str, Any]) -> None:
     for pin in COMPARED_PINS:
         if run_a.get(pin) != run_b.get(pin):
             problems.append(f"{pin}: {run_a.get(pin)!r} vs {run_b.get(pin)!r}")
+    problems += _model_pin_problems(run_a, run_b)
     if problems:
         raise NotComparable("; ".join(problems))
+
+
+def _model_pin_problems(run_a: Dict[str, Any], run_b: Dict[str, Any]) -> List[str]:
+    """Per-model pin differences, for the models both reports name."""
+    by_name = {m["model"]: m for m in run_b.get("models", [])}
+    problems = []
+    for pin in run_a.get("models", []):
+        other = by_name.get(pin["model"])
+        for key in COMPARED_MODEL_PINS:
+            if other is not None and pin.get(key) != other.get(key):
+                problems.append(f"{pin['model']} {key}: {pin.get(key)!r} vs {other.get(key)!r}")
+    return problems
 
 
 def _rate(entry: Dict[str, Any]) -> float:

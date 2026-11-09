@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_registry import env
 from chat_workflow import limits
 from chat_workflow.tool_call_loop import _LOOP_ABORT_THRESHOLD
 from chat_workflow.tool_handler import ToolHandlerMixin
@@ -39,7 +39,7 @@ CATEGORIES = (MALFORMED_TOOL_CALL, UNKNOWN_TOOL, LOOP_STALL, FALSE_DONE, UNSUPPO
 #: Task classes whose answers must rest on retrieved knowledge (the grounding signal applies to them only).
 GROUNDED_TASK_CLASSES = frozenset({"knowledge_qa", "troubleshooting"})
 #: An answer shorter than this many words is not a claim worth grounding (a refusal, an acknowledgement).
-SUBSTANTIVE_MIN_WORDS = env_int("EVAL_SUBSTANTIVE_MIN_WORDS", 12)
+SUBSTANTIVE_MIN_WORDS = int(env("AUTOBOT_EVAL_SUBSTANTIVE_MIN_WORDS"))
 
 _PARSER = ToolHandlerMixin()  # the detectors read no instance state; the chat handler stays the only parser
 
@@ -65,6 +65,8 @@ class LiveRunRecord:
     criteria_overall: str | None = None
     #: The golden's task class needs grounded answers (set by the candidate from ``GROUNDED_TASK_CLASSES``).
     grounding_required: bool = False
+    #: The golden's grounding criteria (``resource_exists`` on ``grounded``) held; None when it declares none.
+    grounding_ok: bool | None = None
     #: A pinned judge's verdict that the answer is unsupported; None when no judge ran.
     judge_unsupported: bool | None = None
     #: Tokens the provider reported for the run; None when it reported none. Never estimated.

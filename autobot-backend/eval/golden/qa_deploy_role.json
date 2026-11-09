@@ -7,16 +7,35 @@
   },
   "expected_tools": [],
   "tool_match": "subsequence",
+  "allowed_tools": [],
   "success_criteria": [
     {
       "type": "output_pattern",
-      "parameters": {"pattern": "(?i)\\bslm\\b"},
-      "description": "answers about the SLM"
+      "parameters": {
+        "pattern": "(?is)(?=.*\\bwizard\\b)(?=.*\\bplaybook\\b)(?=.*code_source)"
+      },
+      "description": "names the setup wizard, the playbook and the code_source sync"
     },
     {
       "type": "output_pattern",
-      "parameters": {"pattern": "(?i)\\brole\\b"},
-      "description": "answers about the service role"
+      "parameters": {
+        "pattern": "(?is)^(?!.*(?:i (?:do not|don't|cannot|can't|am unable to) (?:know|help|answer|assist)|i'm not sure|i am not sure|as an ai|unable to (?:help|answer|assist)|no information)).*$"
+      },
+      "description": "is not a refusal"
+    },
+    {
+      "type": "output_pattern",
+      "parameters": {
+        "pattern": "(?s)^.{200,}"
+      },
+      "description": "at least 200 characters"
+    },
+    {
+      "type": "resource_exists",
+      "parameters": {
+        "key": "grounded"
+      },
+      "description": "grounded in retrieved knowledge (used_knowledge or citations)"
     }
   ],
   "baseline_score": 0.85,

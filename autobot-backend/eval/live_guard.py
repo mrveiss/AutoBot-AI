@@ -88,3 +88,29 @@ async def assert_local_only(
             "Set AUTOBOT_EVAL_ALLOW_REMOTE_PROVIDER=true to run it anyway; the report will say local_only=false."
         )
     return found
+
+
+def non_local_fallback_chains() -> List[str]:
+    """Env names of operator fallback chains (``AUTOBOT_FALLBACK_CHAIN_*``) with a hop to a non-local provider.
+
+    A hop that names no provider inherits the request's own, so it is as local as the primary. The chain is
+    named by its primary model key, never by an endpoint.
+    """
+    from llm_shared.fallback_chain import FallbackChainManager
+
+    found = []
+    for chain in FallbackChainManager().operator_chains():
+        providers = chain.fallback_providers or []
+        if any(p and not is_local_provider(p) for p in providers):
+            found.append(chain.primary_model)
+    return found
+
+
+def assert_chains_local(allow_remote: bool = False) -> None:
+    """Refuse the run when an operator fallback chain could move a prompt to a hosted provider."""
+    remote = non_local_fallback_chains()
+    if remote and not (allow_remote or remote_allowed()):
+        raise RemoteProviderRefused(
+            f"refusing a live eval: AUTOBOT_FALLBACK_CHAIN_* for {', '.join(remote)} can fail over to a "
+            "non-local provider. Set AUTOBOT_EVAL_ALLOW_REMOTE_PROVIDER=true to run it anyway."
+        )

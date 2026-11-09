@@ -21,6 +21,10 @@ def _resolver(url):
     return resolve
 
 
+async def _kb():
+    return "populated"
+
+
 def _golden():
     return GoldenTrajectory("g", "knowledge_qa", {"prompt": "p"}, [], 0.9)
 
@@ -70,7 +74,13 @@ async def test_a_refused_run_never_invokes_the_turn_runner():
         calls.append(model)
         return LiveRunRecord()
 
-    candidate = LiveChatCandidate(["m1"], "openai", turn_runner=turn, resolve_endpoint=_resolver("http://127.0.0.1:1"))
+    candidate = LiveChatCandidate(
+        ["m1"],
+        "openai",
+        turn_runner=turn,
+        resolve_endpoint=_resolver("http://127.0.0.1:1"),
+        resolve_provider=lambda: "openai",
+    )
     with pytest.raises(RemoteProviderRefused):
         await candidate.prepare()
     with pytest.raises(RuntimeError, match="guard has not run"):
@@ -96,7 +106,53 @@ async def test_a_turn_that_raises_is_not_run_not_a_model_failure():
     async def turn(golden, model, workspace):
         raise ConnectionError("down")
 
-    candidate = LiveChatCandidate(["m1"], "ollama", turn_runner=turn, resolve_endpoint=_resolver("http://127.0.0.1:1"))
+    candidate = LiveChatCandidate(
+        ["m1"],
+        "ollama",
+        turn_runner=turn,
+        resolve_endpoint=_resolver("http://127.0.0.1:1"),
+        resolve_provider=lambda: "ollama",
+        probe_kb=_kb,
+    )
     await candidate.prepare()
     with pytest.raises(RecordingUnusable):
         await candidate.runner_for("m1")(_golden())
+
+
+@pytest.mark.asyncio
+async def test_the_provider_checked_is_the_one_chat_resolves_not_the_typed_label():
+    """`--provider ollama` while chat resolves a hosted provider must not pass for a local run."""
+    candidate = LiveChatCandidate(
+        ["m1"], "ollama", resolve_endpoint=_resolver("http://127.0.0.1:1"), resolve_provider=lambda: "openai"
+    )
+    with pytest.raises(RemoteProviderRefused, match="chat resolves"):
+        await candidate.prepare()
+
+
+@pytest.mark.asyncio
+async def test_an_omitted_label_takes_chats_resolution_and_is_judged_by_it():
+    candidate = LiveChatCandidate(
+        ["m1"], "", resolve_endpoint=_resolver("http://127.0.0.1:1"), resolve_provider=lambda: "openai"
+    )
+    with pytest.raises(RemoteProviderRefused):
+        await candidate.prepare()  # the resolved hosted provider is refused, whatever the label said
+
+
+@pytest.mark.asyncio
+async def test_a_non_local_fallback_chain_refuses_the_run_and_a_local_one_does_not(monkeypatch):
+    def candidate():
+        return LiveChatCandidate(
+            ["m1"],
+            "ollama",
+            resolve_endpoint=_resolver("http://127.0.0.1:1"),
+            resolve_provider=lambda: "ollama",
+            probe_kb=_kb,
+        )
+
+    monkeypatch.setenv("AUTOBOT_FALLBACK_CHAIN_M1", "ollama:backup")
+    await candidate().prepare()  # a local-to-local hop is fine
+    monkeypatch.setenv("AUTOBOT_FALLBACK_CHAIN_M1", "ollama:backup,openai:gpt-x")
+    with pytest.raises(RemoteProviderRefused, match="fail over"):
+        await candidate().prepare()
+    monkeypatch.setenv(_ENV, "true")
+    await candidate().prepare()  # the explicit override still works

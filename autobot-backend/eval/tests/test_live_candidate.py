@@ -33,6 +33,10 @@ def _golden(task_class="code_fix", criteria=None, tools=None, mode="subsequence"
 _MATCHES = [{"type": "output_pattern", "parameters": {"pattern": "DEFAULT"}, "description": "mentions default"}]
 
 
+async def _kb_populated():
+    return "populated"
+
+
 async def _resolve(model):
     return _LOCAL
 
@@ -41,6 +45,8 @@ def _candidate(record_or_fn, **kw):
     async def turn(golden, model, workspace):
         return record_or_fn(golden, model, workspace) if callable(record_or_fn) else record_or_fn
 
+    kw.setdefault("resolve_provider", lambda: "ollama")
+    kw.setdefault("probe_kb", _kb_populated)
     return LiveChatCandidate(["m1"], "ollama", turn_runner=turn, resolve_endpoint=_resolve, **kw)
 
 
@@ -132,7 +138,15 @@ async def test_a_live_timeout_is_a_failed_loop_stall_not_unmeasured():
     async def slow(golden, model, workspace):
         await asyncio.sleep(5)
 
-    candidate = LiveChatCandidate(["m1"], "ollama", turn_runner=slow, resolve_endpoint=_resolve, timeout_s=0.05)
+    candidate = LiveChatCandidate(
+        ["m1"],
+        "ollama",
+        turn_runner=slow,
+        resolve_endpoint=_resolve,
+        timeout_s=0.05,
+        resolve_provider=lambda: "ollama",
+        probe_kb=_kb_populated,
+    )
     await candidate.prepare()
     report = await TrajectoryReplayer().run([_golden()], candidate.runner_for("m1"))
     (outcome,) = report.outcomes
