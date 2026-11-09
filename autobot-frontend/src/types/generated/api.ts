@@ -21395,6 +21395,8 @@ export interface paths {
         /**
          * Get Codebase Problems
          * @description Get real code problems detected during analysis (#1710: per-source).
+         *
+         *     ``file_category`` (#20493) narrows to one category, e.g. ``code`` or ``test``.
          */
         get: operations["get_codebase_problems_api_analytics_codebase_problems_get"];
         put?: never;
@@ -52840,6 +52842,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/work-items/hierarchy-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Hierarchy Rules */
+        get: operations["get_hierarchy_rules_api_llc_work_items_hierarchy_rules_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/work-items/hierarchy-violations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Hierarchy Violations */
+        get: operations["get_hierarchy_violations_api_llc_work_items_hierarchy_violations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/work-items": {
         parameters: {
             query?: never;
@@ -80090,6 +80126,55 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** HierarchyRule */
+        HierarchyRule: {
+            /** Type */
+            type: string;
+            /** Allowed Parent Types */
+            allowed_parent_types: string[];
+            /** Project Required */
+            project_required: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** HierarchyRulesResponse */
+        HierarchyRulesResponse: {
+            /** Rules */
+            rules: components["schemas"]["HierarchyRule"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /** HierarchyViolationRow */
+        HierarchyViolationRow: {
+            /** Id */
+            id: string;
+            /** Identifier */
+            identifier: string;
+            /** Code */
+            code: string;
+            /** Reason */
+            reason: string;
+            /** Type */
+            type: string;
+            /** Parent Type */
+            parent_type?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** HierarchyViolationsResponse */
+        HierarchyViolationsResponse: {
+            /** Violations */
+            violations: components["schemas"]["HierarchyViolationRow"][];
+            /** Count */
+            count: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        } & {
+            [key: string]: unknown;
+        };
         /** HolderCreate */
         HolderCreate: {
             holder_type: components["schemas"]["RoleHolderType"];
@@ -92739,6 +92824,14 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ProblemCategory
+         * @description ``code`` and ``test`` select that category; ``all`` applies no filter.
+         *
+         *     Rows written before categories existed carry no ``file_category`` and are read as ``code``.
+         * @enum {string}
+         */
+        ProblemCategory: "code" | "test" | "all";
         /** ProcessCreate */
         ProcessCreate: {
             /** Process Key */
@@ -136690,6 +136783,7 @@ export interface operations {
             query?: {
                 problem_type?: string | null;
                 source_id?: string | null;
+                file_category?: components["schemas"]["ProblemCategory"] | null;
             };
             header?: never;
             path?: never;
@@ -180474,6 +180568,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SprintScorecardResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hierarchy_rules_api_llc_work_items_hierarchy_rules_get: {
+        parameters: {
+            query: {
+                company_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HierarchyRulesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hierarchy_violations_api_llc_work_items_hierarchy_violations_get: {
+        parameters: {
+            query: {
+                company_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HierarchyViolationsResponse"];
                 };
             };
             /** @description Validation Error */
