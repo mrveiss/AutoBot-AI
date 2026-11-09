@@ -38,11 +38,31 @@ async def _too_large() -> HTTPException:
     return file_too_large(MAX_FILE_SIZE)
 
 
-async def validate_and_read_upload_file(file: UploadFile, quota_manager=None, user_id: str | None = None) -> bytes:
+async def _read_under_quota(file: UploadFile, quota_manager, user_id: str | None, session_id: str | None) -> bytes:
+    """Read under the user's remaining quota, but let an identical re-upload through (``add_file`` dedupes it).
+
+    A body can only dedupe against a file the session already holds, so the read may run to that file's size; a body
+    still past the quota afterwards is kept only if ``would_deduplicate`` (the storage rule) says it adds no bytes.
+    """
+    remaining = max(await quota_manager.remaining_upload_quota(user_id), 0)
+    if remaining >= MAX_FILE_SIZE:
+        return await _read_within(file, MAX_FILE_SIZE, _too_large)
+    dedupable = 0 if session_id is None else await quota_manager.largest_live_session_file(session_id)
+    refuse = lambda: quota_manager.upload_quota_refusal(user_id)  # noqa: E731
+    content = await _read_within(file, min(max(remaining, dedupable), MAX_FILE_SIZE), refuse)
+    if len(content) > remaining and not await quota_manager.would_deduplicate(session_id, content):
+        raise await refuse()
+    return content
+
+
+async def validate_and_read_upload_file(
+    file: UploadFile, quota_manager=None, user_id: str | None = None, session_id: str | None = None
+) -> bytes:
     """Validate the name, then read the body under the size cap and *user_id*'s remaining quota (#20217).
 
     ``quota_manager`` (the conversation file manager) says what the user may still store; ``None`` = no
-    quota. The stricter limit ends the read early, each refusal with its own stable code.
+    quota. The stricter limit ends the read early, each refusal with its own stable code. With *session_id*,
+    bytes the session already holds are not charged again (#20722).
 
     Raises:
         HTTPException: 400 for a bad name; 413 (``UploadRefused``) for an oversize file or an exhausted quota
@@ -51,7 +71,6 @@ async def validate_and_read_upload_file(file: UploadFile, quota_manager=None, us
         raise_invalid_input("filename", "required")
     if not is_safe_file(file.filename):
         raise_invalid_input("filename", f"file type not allowed: {file.filename}")
-    remaining = None if quota_manager is None else await quota_manager.remaining_upload_quota(user_id)
-    if remaining is not None and remaining < MAX_FILE_SIZE:
-        return await _read_within(file, max(remaining, 0), lambda: quota_manager.upload_quota_refusal(user_id))
-    return await _read_within(file, MAX_FILE_SIZE, _too_large)
+    if quota_manager is None:
+        return await _read_within(file, MAX_FILE_SIZE, _too_large)
+    return await _read_under_quota(file, quota_manager, user_id, session_id)

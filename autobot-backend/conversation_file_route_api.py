@@ -65,6 +65,27 @@ class ConversationFileRouteApi:
             await connection.close()
         return quota_refusal(held["live"], held["pending_removal"])
 
+    async def largest_live_session_file(self, session_id: str) -> int:
+        """Size of the biggest live file this session holds: a re-upload can only dedupe against a file that size."""
+        connection = await self._get_async_db_connection()
+        try:
+            async with connection.execute(
+                "SELECT COALESCE(MAX(file_size), 0) FROM conversation_files WHERE session_id = ? AND is_deleted = 0",
+                (session_id,),
+            ) as cursor:
+                return (await cursor.fetchone())[0]
+        finally:
+            await connection.close()
+
+    async def would_deduplicate(self, session_id: str, content: bytes) -> bool:
+        """True when ``add_file`` would store nothing new for *content*: this session already holds identical bytes."""
+        connection = await self._get_async_db_connection()
+        try:
+            existing = await self._check_existing_file(connection, session_id, self._compute_file_hash(content))
+        finally:
+            await connection.close()
+        return existing is not None
+
     async def get_file_info(self, session_id: str, file_id: str) -> Dict[str, Any] | None:
         """The live file ``file_id`` of ``session_id`` as a ``ConversationFileInfo`` dict, else ``None``."""
         connection = await self._get_async_db_connection()

@@ -69,7 +69,35 @@ def test_the_quota_is_per_user_not_shared(real, monkeypatch):  # noqa: F811
     assert asyncio.run(real.real.remaining_upload_quota("bob")) == 20
 
 
-def test_the_quota_limit_is_the_registered_env_default():
+def test_the_registered_quota_default_is_one_gib():
+    """Only the registered default is asserted: the runtime value follows the environment (#20722)."""
     from autobot_shared.env_registry import REGISTRY
 
-    assert REGISTRY["AUTOBOT_CONVERSATION_FILE_USER_QUOTA_BYTES"].default == quota.USER_QUOTA_BYTES == 1 << 30
+    assert REGISTRY["AUTOBOT_CONVERSATION_FILE_USER_QUOTA_BYTES"].default == 1 << 30
+
+
+def test_a_reupload_of_identical_bytes_past_the_quota_is_not_refused(real, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(quota, "USER_QUOTA_BYTES", 10)
+    assert _upload(real, body=b"x" * 10).status_code == 200
+    assert asyncio.run(real.real.remaining_upload_quota("alice")) == 0
+    again = _upload(real, name="copy.txt", body=b"x" * 10)
+    assert again.status_code == 200, again.text
+    assert asyncio.run(real.real.remaining_upload_quota("alice")) == 0  # deduplicated: charged once
+
+
+def test_different_bytes_past_the_quota_are_still_refused_when_a_file_could_dedupe(real, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(quota, "USER_QUOTA_BYTES", 10)
+    assert _upload(real, body=b"x" * 10).status_code == 200
+    response = _upload(real, name="other.txt", body=b"y" * 10)
+    assert response.status_code == 413 and response.json()["detail"]["code"] == quota.QUOTA_EXCEEDED
+    assert asyncio.run(real.real.remaining_upload_quota("alice")) == 0
+
+
+def test_identical_bytes_held_by_another_session_are_charged(real, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(quota, "USER_QUOTA_BYTES", 10)
+    stored = asyncio.run(
+        real.real.add_file("elsewhere", b"x" * 10, "a.txt", mime_type="text/plain", uploaded_by="alice")
+    )
+    assert stored["file_size"] == 10
+    response = _upload(real, body=b"x" * 10)  # this session holds nothing: add_file would charge it
+    assert response.status_code == 413 and response.json()["detail"]["code"] == quota.QUOTA_EXCEEDED

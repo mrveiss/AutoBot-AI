@@ -142,7 +142,7 @@ async def upload_conversation_file(
     try:
         user_data = await _authorize_file_operation(request, session_id, "upload", existing_only=True)
         file_manager = _get_required_file_manager(request)
-        content = await validate_and_read_upload_file(file, file_manager, user_data.get("username"))
+        content = await validate_and_read_upload_file(file, file_manager, user_data.get("username"), session_id)
 
         file_info_dict = await file_manager.upload_file(
             session_id=session_id,
