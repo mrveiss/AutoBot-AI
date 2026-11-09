@@ -153,7 +153,8 @@ def test_the_production_query_locks_the_target_and_the_active_admins_in_one_id_o
 
 
 @pytest.mark.asyncio
-async def test_a_target_that_is_not_an_active_admin_locks_nothing(maker):
+async def test_a_target_that_is_not_an_active_admin_passes_but_still_takes_the_one_lock(maker):
+    """It is locked with the admins in the one id-ordered statement, so a concurrent promotion cannot slip past."""
     _admin, plain = await _seed(maker, 1, 1)
     async with maker() as session:
         statements = []
@@ -166,7 +167,7 @@ async def test_a_target_that_is_not_an_active_admin_locks_nothing(maker):
         session.execute = spy
         await ensure_not_last_platform_admin(session, _User, plain)
         await ensure_not_last_platform_admin(session, _User, uuid.uuid4())  # a missing user too
-    assert statements and all(getattr(s, "_for_update_arg", None) is None for s in statements)
+    assert len(statements) == 2 and all(getattr(s, "_for_update_arg", None) is not None for s in statements)
 
 
 @pytest.mark.asyncio
@@ -235,6 +236,23 @@ async def test_with_two_admins_one_demotion_deactivation_and_deletion_each_succe
     async with maker() as session:
         with pytest.raises(LastPlatformAdminError):  # now third is the only one left
             await _wire(_service(session)).delete_user(third)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("hard_delete", [False, True])
+async def test_with_two_active_admins_deleting_one_succeeds_and_the_other_survives(maker, hard_delete):
+    """The control for the delete refusals: with a second active admin the same delete goes through."""
+    first, second = await _seed(maker, 2)
+    async with maker() as session:
+        svc = _wire(_service(session))
+        svc._queue_membership_epoch_bumps = AsyncMock()  # reads the membership tables, which this harness lacks
+        await svc.delete_user(first, hard_delete=hard_delete)
+        await session.commit()
+    async with maker() as session:
+        gone = await session.get(_User, first)
+        assert gone is None if hard_delete else gone.deleted_at is not None
+        survivor = await session.get(_User, second)
+        assert survivor.deleted_at is None and survivor.is_active is True and survivor.is_platform_admin is True
 
 
 @pytest.mark.asyncio

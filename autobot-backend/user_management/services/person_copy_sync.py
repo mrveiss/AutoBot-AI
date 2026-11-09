@@ -178,12 +178,13 @@ def _due_link_ids():
     the error (an explicit push after the person's own change always goes)."""
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=PERSON_COPY_REFUSED_RETRY_INTERVAL_S)
     return select(PersonLink.user_id).where(
+        PersonLink.user_id.is_not(None),  # an orphaned link (its person deleted) has nothing to push
         or_(
             PersonLink.push_error.is_(None),
             PersonLink.push_error != PersonCopyRefused.__name__,
             PersonLink.updated_at.is_(None),
             PersonLink.updated_at <= cutoff,
-        )
+        ),
     )
 
 

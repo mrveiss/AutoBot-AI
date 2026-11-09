@@ -92,10 +92,15 @@ def _client(user, monkeypatch, last_admin=False):
         async def _audit_log(self, *args, **kwargs):
             session.audits.append(kwargs.get("outcome") or args[4:])
 
+    calls = []
+
     async def database_check(_session, _model, _user_id):  # the DB query; the guard, audit and refusal are real
+        calls.append(1)
+        if last_admin == "late" and len(calls) == 1:  # passes the early check, refuses while the changes apply
+            return
         if last_admin == "retry":
             raise LastPlatformAdminRetry()
-        if last_admin:
+        if last_admin:  # True, or "late" on its second call
             raise LastPlatformAdminError()
 
     # The module whose globals the service's own method reads (the helper may load it under another object).
@@ -219,6 +224,22 @@ async def test_deprovisioning_the_last_platform_admin_is_a_scim_409(store, monke
     assert session.profile_writes == [] and (user.email, user.display_name) == ("a@x.io", "A")
     assert session.audits == ["denied"]  # the refusal is audited, by the real guard
     assert session.commits == 1  # and committed: only that audit row
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["PUT", "PATCH"])
+async def test_a_refusal_that_arises_while_applying_is_a_scim_409_and_commits_nothing(store, monkeypatch, method):
+    """#21018: the guard refused after the early check passed (a state change between them); the request's
+    changes are rolled back, not committed with the denial row, and the IdP gets the 409, not a 500."""
+    user = _user()
+    session, transport = _client(user, monkeypatch, last_admin="late")
+    body = {"PUT": _put_inactive(), "PATCH": _patch_rename_then_inactive()}[method]
+
+    response = await _call(transport, method, f"/scim/v2/Users/{user.id}", json=body)
+
+    assert response.status_code == 409
+    assert LAST_PLATFORM_ADMIN_CODE in response.json()["detail"]["detail"]
+    assert session.commits == 0 and session.rollbacks >= 1 and store.tries == []
 
 
 @pytest.mark.asyncio

@@ -157,7 +157,6 @@ async def test_concurrent_demotions_of_the_last_two_admins_never_deadlock(engine
     )
     maker = async_sessionmaker(engine, expire_on_commit=False)
     for round_no in range(_RACE_ROUNDS):
-        barrier.reset()
         arrived.clear()
         ids = [await _create(engine, f"a{round_no}", True), await _create(engine, f"b{round_no}", True)]
         async with engine.begin() as conn:  # earlier rounds' survivors are not part of this round's two
@@ -208,7 +207,9 @@ async def test_the_refusal_is_a_409_with_the_stable_code(engine):  # noqa: ANN00
     assert await _active_admins(engine) == [only]
 
 
-async def test_deleting_a_user_who_is_not_an_admin_does_not_wait_for_a_demotion(engine):  # noqa: ANN001
+async def test_a_non_admin_deactivation_queues_behind_a_demotion_then_goes_through(engine):  # noqa: ANN001
+    """A non-admin target takes the same id-ordered lock (admins plus itself), so it waits for the in-flight
+    demotion and is then judged on the committed rows; it is not refused, as it is no admin."""
     first = await _create(engine, "a", True)
     await _create(engine, "b", True)
     plain = await _create(engine, "plain", False)
@@ -216,7 +217,34 @@ async def test_deleting_a_user_who_is_not_an_admin_does_not_wait_for_a_demotion(
 
     async with async_session_scope(maker) as holder:
         await _service(holder).set_platform_admin(first, False)  # the admin rows are locked, uncommitted
-        async with async_session_scope(maker) as other:
-            await asyncio.wait_for(_service(other).deactivate_user(plain), timeout=10)  # takes no admin lock
-            await other.rollback()
-        await holder.rollback()
+        other = asyncio.create_task(_deactivate(maker, plain))
+        await _wait_until_blocked(maker, other)
+        await holder.commit()
+        assert await asyncio.wait_for(other, timeout=10) == 200
+
+
+async def test_a_promotion_in_flight_holds_back_the_deactivation_of_its_target(engine):  # noqa: ANN001
+    """The target looked like a non-admin when the deactivation started; a concurrent promotion of it commits
+    first, and the deactivation is then judged on the committed rows (two admins: allowed), never on a stale
+    read that would let a demotion of the other admin leave nobody."""
+    first = await _create(engine, "a", True)
+    plain = await _create(engine, "plain", False)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+
+    async with async_session_scope(maker) as holder:
+        await _service(holder).set_platform_admin(plain, True)  # the target row is locked, uncommitted
+        other = asyncio.create_task(_deactivate(maker, plain))
+        await _wait_until_blocked(maker, other)
+        await holder.commit()
+        assert await asyncio.wait_for(other, timeout=10) == 200
+    assert await _active_admins(engine) == [first]
+
+
+async def _deactivate(maker, user_id) -> int:  # noqa: ANN001
+    async with async_session_scope(maker) as session:
+        try:
+            await _service(session).deactivate_user(user_id)
+        except LastPlatformAdminError as exc:
+            return (await refuse_last_platform_admin(session, exc)).status_code
+        await session.commit()
+        return 200

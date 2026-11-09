@@ -9,9 +9,10 @@ One check, reached by every route that can take the last admin away: demotion
 SLM person-copy push that flips ``is_active`` directly. It answers 409 with the
 stable code :data:`LAST_PLATFORM_ADMIN_CODE`, which a screen maps to its own text.
 
-Race safety: lock order is ONE everywhere. The check reads the target cheaply first and returns
-without a lock when it is not an active admin. Otherwise it locks, in one ``SELECT ... FOR UPDATE``
-ordered by id, EVERY active-admin row plus the target row, and decides on the rows it got back. Every
+Race safety: lock order is ONE everywhere. The check locks, in one ``SELECT ... FOR UPDATE`` ordered
+by id, EVERY active-admin row plus the target row (an admin or not: a target that looks like a non-admin may be
+promoted concurrently, and the target lock is what holds that promotion off until this change commits), and
+decides on the rows it got back. Every
 caller takes this lock before it locks the target on its own, so two concurrent changes to the last two
 admins queue on the same rows in the same order and cannot deadlock; the second re-evaluates after the
 first commits, no longer sees the first admin as active, and is refused. A deadlock or serialization
@@ -97,19 +98,10 @@ def _is_serialization_failure(exc: DBAPIError) -> bool:
 async def ensure_not_last_platform_admin(session: AsyncSession, user_model: Any, user_id: uuid.UUID) -> None:
     """Raise :class:`LastPlatformAdminError` if *user_id* is the only active platform admin.
 
-    A target that is not an active admin is judged on a plain read and locks nothing; one that is
-    gets the id-ordered lock and is judged again on the locked rows (not on a stale copy).
+    Always takes the id-ordered lock (active admins plus the target) and judges the locked rows, never a
+    stale copy; a target that is not an active admin is simply not among the admins and passes.
     """
     try:
-        target = (
-            await session.execute(
-                select(user_model.is_platform_admin, user_model.is_active, user_model.deleted_at).where(
-                    user_model.id == user_id
-                )
-            )
-        ).first()
-        if target is None or not _is_active_admin(target):
-            return
         rows = await lock_platform_admin_rows(session, user_model, user_id)
     except DBAPIError as exc:
         if not _is_serialization_failure(exc):

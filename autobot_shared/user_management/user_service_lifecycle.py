@@ -210,24 +210,6 @@ class UserLifecycleMixin(UserServiceBase):
     async def _guard_demotion(self, user_id: uuid.UUID) -> None:
         await self._guard_last_admin(user_id, IdentityAuditAction.PLATFORM_ADMIN_CHANGED, "demote")
 
-    async def _guard_demotion_before_target_lock(self, user_id: uuid.UUID, seen_admin: bool) -> None:
-        """Guard a demotion with no target-only lock held first (#21018).
-
-        An admin by the first read goes straight to the guard (admin rows plus target, id-ordered). A target
-        that looked like a non-admin is locked only if it STILL is one (``IS NOT true``, re-evaluated on the
-        locked row): a concurrent promotion since the first read drops it from the result, and the guard runs
-        before the target is ever locked on its own, so the one lock order holds in that interleaving too.
-        """
-        if not seen_admin:
-            held = await self.session.execute(
-                select(self.user_model.id)
-                .where(self.user_model.id == user_id, self.user_model.is_platform_admin.isnot(True))
-                .with_for_update()
-            )
-            if held.first() is not None:
-                return
-        await self._guard_demotion(user_id)
-
     async def set_platform_admin(self, user_id: uuid.UUID, is_admin: bool) -> AdminStatusChange:
         """Make *user_id* a platform admin, or not -- the one place that changes it (#20670).
 
@@ -241,7 +223,7 @@ class UserLifecycleMixin(UserServiceBase):
         """
         user = await self._require_user(user_id)
         if not is_admin:  # admin-row locks come BEFORE the target's own lock: one lock order everywhere (#21018)
-            await self._guard_demotion_before_target_lock(user_id, bool(user.is_platform_admin))
+            await self._guard_demotion(user_id)
         await self.session.refresh(user, with_for_update=True)
         transitions = await self._admin_transitions(user)
         latest = self._latest_transition(transitions)

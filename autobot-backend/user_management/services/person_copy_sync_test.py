@@ -236,3 +236,8 @@ async def test_the_periodic_pass_selects_the_due_links() -> None:
     await sync.push_people(session)
     statement = session.execute.await_args.args[0]
     assert "push_error" in str(statement)
+
+
+def test_an_orphaned_link_is_never_due_for_a_push():
+    """A link whose person was deleted (``user_id`` NULL) has nothing to push, so the periodic pass skips it (#21018)."""
+    assert "person_links.user_id IS NOT NULL" in str(sync._due_link_ids().compile())

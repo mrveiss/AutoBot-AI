@@ -29,7 +29,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.security.constant_time import secure_compare
-from autobot_shared.user_management.last_platform_admin import LastPlatformAdminError, refuse_last_platform_admin
+from autobot_shared.user_management import last_platform_admin as last_admin
+from autobot_shared.user_management.last_platform_admin import LastPlatformAdminError
 from autobot_shared.user_management.revocation_outcome import (
     REVOCATION_INCOMPLETE_MESSAGE,
     RevocationIncompleteError,
@@ -127,15 +128,18 @@ async def _commit_scim(db: AsyncSession) -> None:
         ) from exc
 
 
-async def _scim_last_admin_refusal(db: AsyncSession, exc: LastPlatformAdminError) -> HTTPException:
+async def _scim_last_admin_refusal(db: AsyncSession, exc: LastPlatformAdminError, *, late=False) -> HTTPException:
     """SCIM 409 for a deprovisioning that would remove the last active platform admin (#21018).
 
     The IdP's push is refused and the audit row of the refusal is committed, nothing else: the callers run the
     guard before any other change of the request. RFC 7644 section 3.12 defines no ``scimType`` for this 409
     (``uniqueness`` and ``invalidVers`` are about other conflicts), so none is sent; the stable ``code`` rides
-    in ``detail`` so an operator can find it.
+    in ``detail`` so an operator can find it. A *late* refusal (it arose while the request's changes were being
+    applied) rolls everything back, the denial row too, instead of committing that row alone.
     """
-    refused = await refuse_last_platform_admin(db, exc)
+    if late:
+        await db.rollback()
+    refused = last_admin.last_admin_http_error(exc) if late else await last_admin.refuse_last_platform_admin(db, exc)
     body = _scim_error(f"{exc.code}: {exc}", None, refused.status_code)
     return HTTPException(status_code=refused.status_code, detail=body, headers=refused.headers)
 
@@ -314,8 +318,11 @@ async def scim_replace_user(user_id: str, request: Request, db: AsyncSession = D
     context = TenantContext(is_platform_admin=True)
     user_svc = UserService(db, context)
     await _refuse_before_changes(user_svc, user, not fields["active"])
-    await user_svc.update_user(user.id, email=fields["email"], display_name=fields["display_name"])
-    await _apply_active_flag(user, fields["active"], user_svc)
+    try:
+        await user_svc.update_user(user.id, email=fields["email"], display_name=fields["display_name"])
+        await _apply_active_flag(user, fields["active"], user_svc)
+    except LastPlatformAdminError as exc:  # a refusal that arose after the early check
+        raise await _scim_last_admin_refusal(db, exc, late=True) from exc
     await _commit_scim(db)
     updated = await user_svc.get_user(user.id)
     return JSONResponse(content=_user_to_scim(updated, _base_url(request)))
@@ -340,7 +347,10 @@ async def scim_patch_user(user_id: str, request: Request, db: AsyncSession = Dep
     user_svc = UserService(db, context)
     ops = body.get("Operations", [])
     await _refuse_before_changes(user_svc, user, any(_op_active(op) is False for op in ops))
-    await _apply_patch_ops(ops, user, user_svc)
+    try:
+        await _apply_patch_ops(ops, user, user_svc)
+    except LastPlatformAdminError as exc:  # e.g. one operation reactivates the admin, a later one deactivates it
+        raise await _scim_last_admin_refusal(db, exc, late=True) from exc
     await _commit_scim(db)
     updated = await user_svc.get_user(user.id)
     return JSONResponse(content=_user_to_scim(updated, _base_url(request)))
