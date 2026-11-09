@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import re
 import subprocess  # nosec B404  # fixed argv, no shell
+import sys
 from pathlib import Path
 
 import pytest
@@ -278,3 +279,116 @@ def test_the_resolver_reads_the_floor_from_python_version(tmp_path: Path) -> Non
         assert probe.stdout.strip() == "True"
     else:
         assert floor in done.stderr
+
+
+# --- resolver behaviour (#18029 AC3/AC4, #21163): a stub tree per case, no real venv needed -----------
+
+
+def _wrapper(path: Path, body: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("#!/bin/sh\n" + body, encoding="utf-8")
+    path.chmod(0o755)
+    return path
+
+
+def _real_python_wrapper(path: Path) -> Path:
+    return _wrapper(path, f'exec "{sys.executable}" "$@"\n')
+
+
+def _resolve(root: Path, *args: str, path: str, virtual_env: str = "") -> subprocess.CompletedProcess[str]:
+    env = {**isolated_git_env(), "PATH": path, "VIRTUAL_ENV": virtual_env}
+    return subprocess.run(  # nosec B603 B607
+        ["bash", "-c", f'. "{_ROOT / _RESOLVER}"; resolve_repo_python --root "$1" "${{@:2}}"', "x", str(root), *args],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+def _root_with_floor(tmp_path: Path, floor: str) -> Path:
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / ".python-version").write_text(floor + "\n", encoding="utf-8")
+    return root
+
+
+def _no_python_path(tmp_path: Path) -> str:
+    """PATH with only an empty directory first plus the system tools the resolver itself needs."""
+    empty = tmp_path / "empty-bin"
+    empty.mkdir(exist_ok=True)
+    return f"{empty}:/usr/bin:/bin"
+
+
+def test_a_below_floor_interpreter_on_path_is_refused_naming_the_required_version(tmp_path: Path) -> None:
+    """#18029 AC4: a stub python3 reporting a version below the floor is never handed back."""
+    root = _root_with_floor(tmp_path, "3.99")
+    stub = tmp_path / "stub"
+    _wrapper(stub / "python3", 'case "$2" in *sys.exit*) exit 1 ;; esac\necho 3.10.0\n')
+    done = _resolve(root, path=f"{stub}:/usr/bin:/bin")
+    assert done.returncode == 1 and done.stdout == ""
+    assert "3.99" in done.stderr and "python3.99" not in done.stdout
+
+
+def test_the_chosen_interpreter_path_and_version_are_announced_on_one_stderr_line(tmp_path: Path) -> None:
+    """#18029 AC3: one line, path plus version, on stderr; stdout stays the bare interpreter."""
+    root = _root_with_floor(tmp_path, "3.0")
+    venv_python = _real_python_wrapper(tmp_path / "venv" / "bin" / "python")
+    done = _resolve(root, path=_no_python_path(tmp_path), virtual_env=str(tmp_path / "venv"))
+    lines = [line for line in done.stderr.splitlines() if "[hook-python]" in line]
+    assert done.returncode == 0 and done.stdout == str(venv_python)
+    assert len(lines) == 1 and str(venv_python) in lines[0] and re.search(r"Python \d+\.\d+\.\d+", lines[0])
+
+
+def test_virtual_env_outranks_the_checkout_venv(tmp_path: Path) -> None:
+    root = _root_with_floor(tmp_path, "3.0")
+    _real_python_wrapper(root / "venv" / "bin" / "python")
+    active = _real_python_wrapper(tmp_path / "active" / "bin" / "python")
+    done = _resolve(root, path=_no_python_path(tmp_path), virtual_env=str(tmp_path / "active"))
+    assert done.stdout == str(active), done.stderr
+    assert _resolve(root, path=_no_python_path(tmp_path)).stdout == str(root / "venv" / "bin" / "python")
+
+
+def test_a_worktree_uses_the_main_checkouts_venv(tmp_path: Path) -> None:
+    main, tree = tmp_path / "main", tmp_path / "wt"
+    env = isolated_git_env()
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-C", str(main)]
+    main.mkdir()
+    (main / ".python-version").write_text("3.0\n", encoding="utf-8")
+    for argv in (
+        ["init", "-q"],
+        ["add", ".python-version"],
+        ["commit", "-q", "-m", "x"],
+        ["worktree", "add", "-q", str(tree)],
+    ):
+        subprocess.run([*git, *argv], check=True, capture_output=True, env=env)  # nosec B603 B607
+    venv_python = _real_python_wrapper(main / "venv" / "bin" / "python")
+    done = _resolve(tree, path=_no_python_path(tmp_path))
+    assert done.returncode == 0 and Path(done.stdout).resolve() == venv_python.resolve(), done.stderr
+
+
+@pytest.mark.parametrize("text", ["3..5", "3.", ".14", "3.x", "three", ""])
+def test_a_malformed_python_version_is_unreadable_not_a_number(tmp_path: Path, text: str) -> None:
+    root = _root_with_floor(tmp_path, text)
+    done = _resolve(root, path=_no_python_path(tmp_path))
+    assert done.returncode == 1 and done.stdout == ""
+    assert "cannot read the required Python version" in done.stderr
+
+
+def test_require_with_a_missing_module_refuses_and_names_it(tmp_path: Path) -> None:
+    root = _root_with_floor(tmp_path, "3.0")
+    _real_python_wrapper(root / "venv" / "bin" / "python")
+    done = _resolve(root, "--require", "no_such_module_21163", path=_no_python_path(tmp_path))
+    assert done.returncode == 1 and done.stdout == ""
+    assert "no_such_module_21163" in done.stderr
+
+
+def test_an_empty_require_list_is_safe_under_set_u(tmp_path: Path) -> None:
+    root = _root_with_floor(tmp_path, "3.0")
+    _real_python_wrapper(root / "venv" / "bin" / "python")
+    done = subprocess.run(  # nosec B603 B607
+        ["bash", "-c", f'set -u; . "{_ROOT / _RESOLVER}"; resolve_repo_python --root "$1"', "x", str(root)],
+        capture_output=True,
+        text=True,
+        env={**isolated_git_env(), "PATH": _no_python_path(tmp_path), "VIRTUAL_ENV": ""},
+    )
+    assert done.returncode == 0, done.stderr
