@@ -23,6 +23,7 @@ from fastapi import FastAPI
 from starlette.testclient import TestClient
 
 from auth_middleware import get_current_user
+from services.workflow_secret_service import StepSecrets
 
 from . import routes
 from .models import ActiveWorkflow, AutomationMode
@@ -32,6 +33,11 @@ from .ws_endpoint import may_control
 ALICE = {"username": "alice", "user_id": "u-alice", "role": "user"}
 BOB = {"username": "bob", "user_id": "u-bob", "role": "user"}
 ADMIN = {"username": "root", "user_id": "u-root", "role": "admin"}
+OPERATOR = {
+    "username": "alice",
+    "user_id": "u-alice",
+    "role": "admin",
+}  # only an administrator creates command workflows (#19807)
 
 
 def _workflow(owner_id: str | None, workflow_id: str = "wf-1") -> ActiveWorkflow:
@@ -201,7 +207,7 @@ def test_create_workflow_records_the_caller_as_owner(monkeypatch):
     monkeypatch.setattr(routes, "get_workflow_manager", lambda: manager)
     app = FastAPI()
     app.include_router(routes.router)
-    app.dependency_overrides[get_current_user] = lambda: ALICE
+    app.dependency_overrides[get_current_user] = lambda: OPERATOR
     client = TestClient(app, raise_server_exceptions=False)
 
     response = client.post(
@@ -247,13 +253,13 @@ def test_secret_resolution_without_an_owner_resolves_nothing(monkeypatch):
     monkeypatch.setattr(
         executor,
         "get_workflow_secret_service",
-        lambda: SimpleNamespace(resolve_secrets=lambda c, o: called.append(o) or (c, frozenset())),
+        lambda: SimpleNamespace(resolve_secrets=lambda c, o: called.append(o) or (c, StepSecrets())),
     )
 
-    command, names = executor._resolve_command_secrets("echo ${secrets.TOKEN}", None)
+    command, injected = executor._resolve_command_secrets("echo ${secrets.TOKEN}", None)
 
     assert command == "echo ${secrets.TOKEN}"
-    assert names == frozenset()
+    assert not injected
     assert called == [], "the secret service must not be asked on behalf of a non-user"
 
 
@@ -264,12 +270,14 @@ def test_secret_resolution_with_an_owner_still_uses_it(monkeypatch):
     monkeypatch.setattr(
         executor,
         "get_workflow_secret_service",
-        lambda: SimpleNamespace(resolve_secrets=lambda c, o: (seen.append(o), ("resolved", frozenset({"TOKEN"})))[1]),
+        lambda: SimpleNamespace(
+            resolve_secrets=lambda c, o: (seen.append(o), ("resolved", StepSecrets({"TOKEN": "v"})))[1]
+        ),
     )
 
-    command, names = executor._resolve_command_secrets("echo ${secrets.TOKEN}", "u-alice")
+    command, injected = executor._resolve_command_secrets("echo ${secrets.TOKEN}", "u-alice")
 
-    assert (command, names) == ("resolved", frozenset({"TOKEN"}))
+    assert command == "resolved" and injected.names == frozenset({"TOKEN"})
     assert seen == ["u-alice"]
 
 

@@ -53,7 +53,6 @@ removed is a separate question with its own evidence, and it is asked in
 ``llc.services.workspace_disposal``.
 """
 
-import asyncio
 from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
@@ -62,7 +61,8 @@ from sqlalchemy import func, select
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.redis_utils import delete_if_holder
+from autobot_shared.worker_loop import run_in_worker_loop
 from llc.models.activity import ActorType
 from llc.models.enums import ActivityEventType, LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
@@ -119,12 +119,7 @@ _activity_log = LLCActivityLogService()
 )
 def run_stalled_run_sweep(self: object) -> dict:  # type: ignore[type-arg]
     """Sync Celery entry point — closes out runs that stopped reporting."""
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop.run_until_complete(_async_sweep())
+    return run_in_worker_loop(_async_sweep())
 
 
 def stall_cutoff(now: datetime | None = None) -> datetime:
@@ -234,7 +229,7 @@ async def _drop_checkout_fences(fences: list[tuple[str, str]]) -> None:
     for item_id, holder in fences:
         key = f"llc:checkout:{item_id}"
         try:
-            await delete_if_value(redis, key, holder)
+            await delete_if_holder(redis, key, holder)
         except Exception as exc:
             logger.warning("Stalled-run sweep could not drop checkout fence %s: %s", key, exc)
 

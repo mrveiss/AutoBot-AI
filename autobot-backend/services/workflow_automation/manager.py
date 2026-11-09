@@ -196,6 +196,9 @@ class WorkflowAutomationManager:
     ) -> str:
         """Create new automated workflow.
 
+        Issue #19807: command steps run as owner_id in the role that account holds
+        when the step runs; with no owner_id no command runs.
+
         Issue #2304: owner_id should be passed by callers that have authenticated
         user context (e.g. API endpoints using Depends(get_current_user)).
         Internal callers without user context leave owner_id=None.

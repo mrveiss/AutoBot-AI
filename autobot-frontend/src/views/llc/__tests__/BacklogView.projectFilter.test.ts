@@ -134,4 +134,60 @@ describe('BacklogView project filter (#17680)', () => {
     expect(options.map(o => o.text())).toContain('First')
     expect(options.map(o => o.text())).toContain('Second')
   })
+
+  it('refetches after a create instead of prepending into a filtered list', async () => {
+    const wrapper = await mountView()
+    const before = backlogUrls().length
+    wrapper.findComponent({ name: 'BacklogCreateModal' }).vm.$emit('created', { id: 'other-project-item' })
+    await flushPromises()
+    expect(backlogUrls().length).toBe(before + 1)
+    expect((wrapper.vm as unknown as { items: unknown[] }).items).toEqual([])
+  })
+
+  it('reports a failed project load to the form and retries on request', async () => {
+    get.mockImplementation((url?: string) =>
+      url?.includes('/projects') ? Promise.reject(new Error('down')) : routeGet(url),
+    )
+    const wrapper = mount(BacklogView, {
+      global: { plugins: [i18n], stubs: { LlcBreadcrumb: true, 'router-link': true } },
+    })
+    await flushPromises()
+    const form = wrapper.findComponent({ name: 'BacklogCreateModal' })
+    expect(form.props('projectsFailed')).toBe(true)
+    get.mockImplementation(routeGet)
+    form.vm.$emit('retry-projects')
+    await flushPromises()
+    expect(form.props('projectsFailed')).toBe(false)
+    expect(form.props('projects')).toHaveLength(PROJECTS.length)
+  })
+
+  it('keeps the project filter on the refresh after a create, and the rows it returns stay in items (#20930)', async () => {
+    const wrapper = await mountView()
+    ;(wrapper.vm as unknown as BacklogVm).projectFilterId = 'proj-2'
+    await flushPromises()
+    const row = { id: 'wi-new', identifier: 'WI-9', title: 'New', type: 'task', priority: 'medium' }
+    get.mockImplementation((url?: string) =>
+      url?.includes('/backlog') ? Promise.resolve({ items: [row] }) : routeGet(url),
+    )
+    wrapper.findComponent({ name: 'BacklogCreateModal' }).vm.$emit('created', row)
+    await flushPromises()
+    const last = backlogUrls().at(-1) as string
+    expect(last).toContain('project_id=proj-2')
+    expect(last).toContain('company_id=c1')
+    expect((wrapper.vm as unknown as { items: { id: string }[] }).items.map(i => i.id)).toEqual(['wi-new'])
+  })
+
+  it('says the item was created when the refresh after it fails, and Retry refreshes again (#20930)', async () => {
+    const wrapper = await mountView()
+    get.mockImplementation((url?: string) =>
+      url?.includes('/backlog') ? Promise.reject(new Error('down')) : routeGet(url),
+    )
+    wrapper.findComponent({ name: 'BacklogCreateModal' }).vm.$emit('created', { id: 'wi-new' })
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.llc.backlog.createdRefreshFailed)
+    get.mockImplementation(routeGet)
+    await wrapper.get('[data-testid="retry-refresh"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain(en.llc.backlog.createdRefreshFailed)
+  })
 })

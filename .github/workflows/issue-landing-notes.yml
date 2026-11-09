@@ -60,6 +60,13 @@ jobs:
             pipeline-scripts
             .github/actions/upsert-pr-comment
 
+      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
+      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
       - name: Post landing notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -86,6 +93,13 @@ jobs:
           sparse-checkout: |
             pipeline-scripts
             .github/actions/upsert-pr-comment
+
+      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
+      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
 
       - name: Remove the label when the comment holds an AC evidence table
         env:

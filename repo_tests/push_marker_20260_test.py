@@ -12,6 +12,7 @@ import sys
 import threading
 from pathlib import Path
 
+from repo_tests._machine_slot_hook import fake_load, hook_functions
 from repo_tests._paths import repo_root
 
 _ROOT = repo_root()
@@ -124,8 +125,8 @@ def test_queueing_renews_the_marker(tmp_path: Path) -> None:
     fcntl.flock(held, fcntl.LOCK_EX)
     threading.Timer(1.5, os.close, (held,)).start()
     body = (
-        f"{_fn('machine_slot_wait')}\nlog() {{ :; }}\nunset CI AUTOBOT_MACHINE_SLOT_HELD\n"
-        f"export AUTOBOT_MACHINE_SLOT_DIR={tmp_path} AUTOBOT_MACHINE_SLOTS=1 AUTOBOT_MACHINE_SLOT_POLL=0.2\n"
+        f"{hook_functions()}\nlog() {{ :; }}\nunset CI AUTOBOT_MACHINE_SLOT_HELD\n"
+        f"export AUTOBOT_MACHINE_SLOT_DIR={tmp_path} AUTOBOT_MACHINE_SLOTS=1 AUTOBOT_MACHINE_SLOT_POLL=0.2 AUTOBOT_MACHINE_SLOT_LOADAVG={fake_load(tmp_path / 'loadavg')}\n"
         "branch_name=issue-1-a; remote_sha=abc; machine_slot_wait\n"
     )
     done, calls = _hook(tmp_path, body)
@@ -135,9 +136,31 @@ def test_queueing_renews_the_marker(tmp_path: Path) -> None:
 
 def test_contrast_no_wait_means_no_extra_network_call(tmp_path: Path) -> None:
     body = (
-        f"{_fn('machine_slot_wait')}\nlog() {{ :; }}\nunset CI AUTOBOT_MACHINE_SLOT_HELD\n"
-        f"export AUTOBOT_MACHINE_SLOT_DIR={tmp_path} AUTOBOT_MACHINE_SLOTS=1\n"
+        f"{hook_functions()}\nlog() {{ :; }}\nunset CI AUTOBOT_MACHINE_SLOT_HELD\n"
+        f"export AUTOBOT_MACHINE_SLOT_DIR={tmp_path} AUTOBOT_MACHINE_SLOTS=1 AUTOBOT_MACHINE_SLOT_LOADAVG={fake_load(tmp_path / 'loadavg')}\n"
         "branch_name=issue-1-a; remote_sha=abc; machine_slot_wait\n"
     )
     _, calls = _hook(tmp_path, body)
     assert calls == ""
+
+
+def _first_attempt_across_a_second_boundary(tmp_path: Path, hook: str) -> str:
+    """A slot taken on the first attempt, with the SECONDS clock moved on while taking it (#21225)."""
+    body = (
+        f"{hook}\nlog() {{ :; }}\nunset CI AUTOBOT_MACHINE_SLOT_HELD\n"
+        "machine_slot_take() { SECONDS=$((SECONDS + 5)); return 0; }\n"
+        f"export AUTOBOT_MACHINE_SLOT_DIR={tmp_path} AUTOBOT_MACHINE_SLOT_LOADAVG={fake_load(tmp_path / 'loadavg')}\n"
+        "branch_name=issue-1-a; remote_sha=abc; machine_slot_wait\n"
+    )
+    done, calls = _hook(tmp_path, body)
+    assert done.returncode == 0, done.stderr
+    return calls
+
+
+def test_a_first_attempt_take_across_a_second_boundary_sets_no_marker(tmp_path: Path) -> None:
+    assert _first_attempt_across_a_second_boundary(tmp_path, hook_functions()) == ""
+
+
+def test_contrast_the_clock_comparison_counted_that_take_as_a_wait(tmp_path: Path) -> None:
+    clock = hook_functions().replace('[ "$waited" = 1 ] || return 0', '[ "$SECONDS" != "$start" ] || return 0')
+    assert "ref=refs/push-gate/issue-1-a/" in _first_attempt_across_a_second_boundary(tmp_path, clock)

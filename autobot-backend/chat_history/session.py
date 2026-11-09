@@ -17,7 +17,7 @@ import json
 import os
 import time
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Awaitable, Callable, Dict, List
 
 import aiofiles
 
@@ -26,13 +26,17 @@ from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
 from chat_history.file_io import existing_chat_path, run_in_chat_io_executor
 from chat_history.graph_owner import create_entity_on_missing, session_owner_scope
+from chat_history.owner_keys import owner_from_metadata
+from chat_history.session_lease import CHAT_LEASE_BEST_EFFORT_WAIT_S, ChatFileUnreadable, SessionLeaseTimeout
+from chat_history.session_locked import SessionLockMixin
+from chat_history.session_merge import combine_messages
 from constants.redis_constants import REDIS_KEY
 from security.session_owner_errors import SessionOwnerUnreadable
 
 logger = get_logger(__name__)
 
 
-class SessionMixin:
+class SessionMixin(SessionLockMixin):
     """
     Mixin providing session CRUD operations for chat history.
 
@@ -118,29 +122,28 @@ class SessionMixin:
         return None
 
     async def _load_existing_chat_data(self, session_id: str, chat_file: str, chats_directory: str) -> Dict[str, Any]:
-        """Load existing chat data with backward compatibility. (Issue #315 - extracted)"""
-        file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
-        if file_exists:
-            try:
-                async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
-                    file_content = await f.read()
-                return self._decrypt_data(file_content)
-            except Exception as e:
-                logger.warning("Could not load existing chat data for %s: %s", session_id, e)
-                return {}
+        """Load existing chat data with backward compatibility. (Issue #315 - extracted)
 
+        ``{}`` only when no file exists. A file that exists but cannot be read or decoded raises
+        ChatFileUnreadable, so a save never writes fresh data over it (#20862).
+        """
+        if await run_in_chat_io_executor(os.path.exists, chat_file):
+            return await self._read_chat_file(session_id, chat_file)
         # Try old format for backward compatibility
         chat_file_old = str(validate_relative_path(f"chat_{session_id}.json", chats_directory))
-        old_file_exists = await run_in_chat_io_executor(os.path.exists, chat_file_old)
-        if old_file_exists:
-            try:
-                async with aiofiles.open(chat_file_old, "r", encoding="utf-8") as f:
-                    file_content = await f.read()
-                logger.debug("Migrating session %s from old format", session_id)
-                return self._decrypt_data(file_content)
-            except Exception as e:
-                logger.warning("Could not load old format data: %s", e)
+        if await run_in_chat_io_executor(os.path.exists, chat_file_old):
+            logger.debug("Migrating session %s from old format", session_id)
+            return await self._read_chat_file(session_id, chat_file_old)
         return {}
+
+    async def _read_chat_file(self, session_id: str, path: str) -> Dict[str, Any]:
+        """Read and decrypt one existing chat file; ChatFileUnreadable when it cannot be."""
+        try:
+            async with aiofiles.open(path, "r", encoding="utf-8") as f:
+                file_content = await f.read()
+            return self._decrypt_data(file_content)
+        except Exception as e:
+            raise ChatFileUnreadable(session_id, e) from e
 
     def _build_session_data(
         self,
@@ -256,22 +259,41 @@ class SessionMixin:
         return self._decrypt_data(file_content)
 
     async def _process_loaded_messages(self, session_id: str, chat_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Deduplicate messages and save cleaned version if needed. Issue #620."""
+        """Deduplicate messages; when the file had duplicates, clean it under the lease. Issue #620, #20862.
+
+        The cleanup re-reads the file once the lease is held and dedupes *that*, so a message appended
+        after this load is kept. A busy lease (waited at most CHAT_LEASE_BEST_EFFORT_WAIT_S) skips the cleanup and
+        serves the deduped messages (a read must not fail over housekeeping; the next load retries); other lease
+        errors are raised.
+        """
         messages = chat_data.get("messages", [])
         cleaned_messages = self._dedupe_streaming_messages(messages)
-
         if len(cleaned_messages) < len(messages):
             logger.info(
-                "Cleaned %d duplicate streaming messages from session %s",
+                "Cleaning %d duplicate streaming messages from session %s",
                 len(messages) - len(cleaned_messages),
                 session_id,
             )
-            chat_data["messages"] = cleaned_messages
-            try:
-                await self.save_session(session_id, messages=cleaned_messages)
-            except Exception as save_err:
-                logger.warning("Could not save cleaned session: %s", save_err)
 
+            def dedupe(current: Dict[str, Any]) -> None:
+                current["messages"] = self._dedupe_streaming_messages(current.get("messages", []))
+
+            try:
+                committed = await self._locked_update(
+                    session_id,
+                    "dedupe_streaming",
+                    dedupe,
+                    must_exist=True,
+                    after=self._update_redis_cache_on_save,
+                    wait_s=CHAT_LEASE_BEST_EFFORT_WAIT_S,
+                )
+            except SessionLeaseTimeout:
+                logger.warning("Duplicate cleanup of busy session %s skipped; retried on the next load", session_id)
+                return cleaned_messages
+            if committed is not None:  # None: deleted since it was read
+                chat_data.clear()
+                chat_data.update(committed)
+                return committed.get("messages", [])
         return cleaned_messages
 
     async def load_session(self, session_id: str) -> List[Dict[str, Any]]:
@@ -307,11 +329,11 @@ class SessionMixin:
             # Session file not found — not an error, just an empty result.
             return []
 
-        # Process messages (Issue #620 - uses helper)
         cleaned_messages = await self._process_loaded_messages(session_id, chat_data)
 
-        # Warm up Redis cache with cleaned data
-        await self._warm_cache_safe(session_id, chat_data)
+        # Warm the cache from the file under the lease; not while a skipped cleanup left duplicates in it (#20862)
+        if len(cleaned_messages) == len(chat_data.get("messages", [])):
+            await self._warm_cache_safe(session_id)
 
         return cleaned_messages
 
@@ -325,17 +347,6 @@ class SessionMixin:
         """
         self._sanitize_session_id(session_id)
         return await self._load_session_from_file(session_id)
-
-    async def _warm_cache_safe(self, session_id: str, chat_data: Dict[str, Any]) -> None:
-        """Warm up Redis cache safely. (Issue #315 - extracted)"""
-        if not self.redis_client:
-            return
-        try:
-            cache_key = f"chat:session:{session_id}"
-            await self._async_cache_session(cache_key, chat_data)
-            logger.debug("Warmed cache for session %s", session_id)
-        except Exception as e:
-            logger.error("Failed to warm cache: %s", e)
 
     async def _update_redis_cache_on_save(self, session_id: str, chat_data: Dict[str, Any]) -> None:
         """Update Redis cache on session save. (Issue #315 - extracted)"""
@@ -407,26 +418,14 @@ class SessionMixin:
         self,
         chat_file: str,
         chat_data: Dict[str, Any],
+        before_replace: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
+        """Atomic write under the session lease and file lock (#665, #20862); a failure is raised.
+
+        A filesystem refusal of the atomic path falls back to an in-place write, still locked and
+        fenced by ``before_replace`` (``file_io.atomic_write``); if that raises, nothing is written.
         """
-        Write session data to storage with atomic write and fallback.
-
-        Attempts atomic write first for data integrity, falls back to
-        direct write if atomic operation fails.
-
-        Args:
-            chat_file: Path to the chat session file.
-            chat_data: The session data dictionary to save.
-
-        Issue #665: Extracted from save_session for single responsibility.
-        """
-        encrypted_data = self._encrypt_data(chat_data)
-        try:
-            await self._atomic_write(chat_file, encrypted_data)
-        except Exception as atomic_error:
-            logger.warning(f"Atomic write failed, falling back to direct write: {atomic_error}")
-            async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
-                await f.write(encrypted_data)
+        await self._atomic_write(chat_file, self._encrypt_data(chat_data), before_replace)
 
     async def _handle_periodic_cleanup(self) -> None:
         """
@@ -510,9 +509,11 @@ class SessionMixin:
         messages: List[Dict[str, Any]] | None = None,
         name: str = "",
         metadata: Dict[str, Any] | None = None,
+        append: bool = False,
+        replace: bool = False,
+        discard: frozenset | None = None,
     ):
-        """
-        Save a chat session with messages and metadata.
+        """Save a chat session with messages and metadata.
 
         Args:
             session_id: The identifier for the session to save.
@@ -522,36 +523,37 @@ class SessionMixin:
                 metadata. Defaults to None, which leaves any existing on-disk
                 metadata untouched (Issue #12129) — callers that never pass
                 metadata keep their exact prior behavior.
+            append: Treat *messages* as new messages to add to the file as it is when the
+                session lease is held (#20862), not as a snapshot of the whole session.
+            replace: Write *messages* as the whole list, dropping stored messages they lack. The
+                explicit delete operation; without it a snapshot is merged by message id and can
+                only add or update.
+            discard: ``message_keys`` of stored messages the caller's snapshot deliberately dropped.
 
         Issue #665, #620, #12129: Refactored to use extracted helper methods.
+        #20862: the write runs under the per-session lease; a failure (a wait that timed out, a
+        stale generation) is raised to the caller instead of dropping the save.
         """
-        try:
-            self._sanitize_session_id(session_id)
-            chats_directory = self._get_chats_directory()
-            await self._ensure_chats_directory_exists(chats_directory)
+        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        session_messages = self._prepare_session_messages(session_id, messages)
 
-            chat_file = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
-            current_time = time.strftime("%Y-%m-%d %H:%M:%S")
-            session_messages = self._prepare_session_messages(session_id, messages)
+        def apply(chat_data: Dict[str, Any]) -> None:
+            on_disk = chat_data.get("messages", [])
+            on_disk = self._dedupe_streaming_messages(on_disk) if append else on_disk  # as a load cleans them
+            merged = combine_messages(on_disk, session_messages, append=append, replace=replace, discard=discard)
+            merged = self._prepare_session_messages(session_id, merged)
+            self._build_session_chat_data(chat_data, session_id, name, merged, current_time, metadata)
 
-            chat_data = await self._load_existing_chat_data(session_id, chat_file, chats_directory)
-            chat_data = self._build_session_chat_data(
-                chat_data, session_id, name, session_messages, current_time, metadata
-            )
+        chat_data = await self._locked_update(session_id, "save_session", apply, after=self._update_redis_cache_on_save)
+        await self._after_save(session_id, chat_data, name, current_time)
 
-            await self._write_session_to_storage(chat_file, chat_data)
-            await self._update_redis_cache_on_save(session_id, chat_data)
-            logger.info("Chat session '%s' saved successfully", session_id)
-
-            if self.memory_graph_enabled and self.memory_graph:
-                await self._update_memory_graph_entity(
-                    session_id, session_messages, name, current_time, chat_data.get("metadata")
-                )
-
-            await self._handle_periodic_cleanup()
-
-        except Exception as e:
-            logger.error("Error saving chat session %s: %s", session_id, e)
+    async def _after_save(self, session_id: str, chat_data: Dict[str, Any], name: str, saved_at: str) -> None:
+        """The steps that follow a committed save: the memory graph entity, then the periodic file cleanup."""
+        logger.info("Chat session '%s' saved successfully", session_id)
+        if self.memory_graph_enabled and self.memory_graph:
+            messages, metadata = chat_data.get("messages", []), chat_data.get("metadata")
+            await self._update_memory_graph_entity(session_id, messages, name, saved_at, metadata)
+        await self._handle_periodic_cleanup()
 
     def _build_memory_graph_observations(
         self,
@@ -702,37 +704,6 @@ class SessionMixin:
         except Exception as e:
             logger.error("Failed to clear Redis cache: %s", e)
 
-    async def delete_session(self, session_id: str) -> bool:
-        """
-        Delete a chat session and its companion files.
-
-        Args:
-            session_id: The identifier for the session to delete
-
-        Returns:
-            True if deletion was successful, False otherwise
-
-        Issue #620: Refactored to use extracted helper methods.
-        """
-        try:
-            self._sanitize_session_id(session_id)
-            chats_directory = self._get_chats_directory()
-
-            deleted = await self._delete_session_files(session_id, chats_directory)
-            await self._delete_companion_files(session_id, chats_directory)
-            await self._clear_session_redis_cache(session_id)
-
-            if not deleted:
-                logger.warning("Chat session %s not found for deletion", session_id)
-                return False
-
-            logger.info("Chat session '%s' deleted successfully", session_id)
-            return True
-
-        except Exception as e:
-            logger.error("Error deleting chat session %s: %s", session_id, e)
-            return False
-
     async def _update_redis_session_cache(self, session_id: str, chat_data: Dict[str, Any]) -> None:
         """
         Update the Redis cache for a session.
@@ -745,131 +716,6 @@ class SessionMixin:
                 await self._async_cache_session(cache_key, chat_data)
             except Exception as e:
                 logger.error("Failed to update Redis cache: %s", e)
-
-    async def update_session(self, session_id: str, updates: Dict[str, Any]) -> bool:
-        """
-        Update session metadata (name, etc).
-
-        Args:
-            session_id: The session identifier
-            updates: Dictionary of fields to update
-
-        Returns:
-            True if update successful, False otherwise
-        """
-        try:
-            self._sanitize_session_id(session_id)
-            chats_directory = self._get_chats_directory()
-            chat_file = await self._resolve_session_file_path(session_id, chats_directory)
-            if not chat_file:
-                logger.warning("Session %s not found for update", session_id)
-                return False
-
-            # Load existing data
-            async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
-                file_content = await f.read()
-            chat_data = self._decrypt_data(file_content)
-
-            # Update fields
-            chat_data.update(updates)
-            chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
-
-            # Save updated data (always use new format)
-            chat_file_new = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
-            encrypted_data = self._encrypt_data(chat_data)
-            async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
-                await f.write(encrypted_data)
-
-            await self._update_redis_session_cache(session_id, chat_data)
-            logger.info("Session %s updated successfully", session_id)
-            return True
-
-        except OSError as e:
-            logger.error("Failed to read/write session file for %s: %s", session_id, e)
-            return False
-        except Exception as e:
-            logger.error("Error updating session %s: %s", session_id, e)
-            return False
-
-    async def update_session_name(self, session_id: str, name: str) -> bool:
-        """
-        Update the name of a chat session.
-
-        Args:
-            session_id: The identifier for the session to update
-            name: The new name for the session
-
-        Returns:
-            True if update was successful, False otherwise.
-            Issue #620: Refactored to use existing helpers.
-        """
-        try:
-            self._sanitize_session_id(session_id)
-            chats_directory = self._get_chats_directory()
-
-            # Resolve file path using existing helper
-            chat_file = await self._resolve_session_file_path(session_id, chats_directory)
-            if not chat_file:
-                logger.warning("Chat session %s not found for name update", session_id)
-                return False
-
-            # Load and update session data (Issue #620: extracted helper)
-            chat_data = await self._load_and_update_session_name(chat_file, name)
-
-            # Save and cache updated data (Issue #620: extracted helper)
-            await self._save_session_name_update(session_id, chats_directory, chat_data, name)
-
-            return True
-
-        except Exception as e:
-            logger.error("Error updating chat session %s name: %s", session_id, e)
-            return False
-
-    async def _load_and_update_session_name(self, chat_file: str, name: str) -> Dict[str, Any]:
-        """
-        Load session data and update the name field.
-
-        Args:
-            chat_file: Path to the chat session file
-            name: New name for the session
-
-        Returns:
-            Updated chat data dictionary. Issue #620.
-        """
-        async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
-            file_content = await f.read()
-        chat_data = self._decrypt_data(file_content)  # #19864: raw JSON failed on an encrypted chat
-
-        chat_data["name"] = name
-        chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
-
-        return chat_data
-
-    async def _save_session_name_update(
-        self,
-        session_id: str,
-        chats_directory: str,
-        chat_data: Dict[str, Any],
-        name: str,
-    ) -> None:
-        """
-        Save updated session data and update Redis cache.
-
-        Args:
-            session_id: Session identifier
-            chats_directory: Directory containing chat files
-            chat_data: Updated chat data to save
-            name: New session name (for logging). Issue #620.
-        """
-        # Save updated data (always use new format, #1721)
-        chat_file_new = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
-        async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
-            await f.write(self._encrypt_data(chat_data))  # #19864: a rename must not leave plaintext
-
-        # Update Redis cache using existing helper
-        await self._update_redis_session_cache(session_id, chat_data)
-
-        logger.info("Chat session '%s' name updated to '%s'", session_id, name)
 
     async def load_full_session(self, session_id: str) -> Dict[str, Any] | None:
         """
@@ -914,8 +760,7 @@ class SessionMixin:
                 raise ValueError("the chat file resolved outside the chats directory")
             async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
                 file_content = await f.read()
-            metadata = self._decrypt_data(file_content).get("metadata", {})
-            return metadata.get("owner") or metadata.get("username")
+            return owner_from_metadata(self._decrypt_data(file_content).get("metadata", {}))
         except Exception as e:
             logger.warning("Failed to get session owner for %s: %s", session_id, e)
             raise SessionOwnerUnreadable(session_id) from e

@@ -118,7 +118,6 @@
 2|other|autobot-backend/api/anthropic_compat.py|"system"
 1|other|autobot-backend/api/batch_jobs.py|30
 10|other|autobot-backend/api/chat.py|"assistant"
-1|other|autobot-backend/api/chat.py|"user"
 1|other|autobot-backend/api/chat_compare.py|"user"
 2|other|autobot-backend/api/chat_embed.py|"user"
 1|other|autobot-backend/api/chat_sessions.py|100
@@ -613,12 +612,10 @@
 1|other|autobot-frontend/src/composables/analytics/useCodeIntelScores.ts|'/opt/autobot
 1|other|autobot-frontend/src/composables/analytics/useSourceRegistry.ts|'/opt/autobot
 2|other|autobot-frontend/src/composables/chat/useContextOverflowProtection.ts|'system'
-1|other|autobot-frontend/src/composables/collaboration/useCollaborationInvite.ts|offset=0
 1|other|autobot-frontend/src/composables/knowledge/useKnowledgeBrowser.ts|offset=0
 2|other|autobot-frontend/src/composables/knowledge/useKnowledgeCategories.ts|100
 1|other|autobot-frontend/src/composables/useAIDocument.ts|50
 1|other|autobot-frontend/src/composables/useCodeIntelligence.ts|50
-1|other|autobot-frontend/src/composables/useCollaborationInvites.ts|offset=0
 3|other|autobot-frontend/src/composables/useKnowledgeCollaboration.ts|100
 3|other|autobot-frontend/src/composables/usePatternAnalysis.ts|50
 1|other|autobot-frontend/src/composables/usePlugins.ts|50
@@ -1142,7 +1139,6 @@
 1|ssot|autobot-slm-backend/api/slm_users.py|:5432
 1|other|autobot-slm-backend/api/tls.py|300
 1|other|autobot-slm-backend/api/updates.py|100
-4|other|autobot-slm-backend/api/websocket.py|30
 1|other|autobot-slm-backend/middleware/security_headers.py|https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
 1|ssot|autobot-slm-backend/migrations/add_agents.py|qwen3.5:9b
 2|other|autobot-slm-backend/migrations/migrate_system_secrets_to_vault.py|"postgresql://"

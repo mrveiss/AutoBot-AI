@@ -18,6 +18,8 @@ Each run recovers inside its own SAVEPOINT. A failure, the audit write included,
 run alone and is logged; the other runs in the scan, and the transaction they share, are untouched.
 """
 
+import json
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -26,16 +28,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.redis_utils import delete_if_holder
 from user_management.database import get_async_session_factory
 
 from ..models.activity import ActorType
 from ..models.enums import ActivityEventType, WorkItemStatus, WorkItemType
 from ..models.heartbeat_run import LLCHeartbeatRun
+from ..models.sprint import LLCProject
 from ..models.work_item import LLCWorkItem
+from ..services.accessors import get_work_item_service
 from ..services.activity_log import LLCActivityLogService
 from ..services.actor import audit
-from ..services.work_item_service import WorkItemService
+from ..services.work_item_hierarchy import HierarchyViolation, parent_if_allowed
 from .base import PollLoopScheduler
 from .dispatch_gate import agent_ref_block_reason
 
@@ -161,7 +165,7 @@ class LivenessMonitor(PollLoopScheduler):
         if redis is None:
             return
         try:
-            await delete_if_value(redis, f"llc:checkout:{work_item_id}", agent_id)
+            await delete_if_holder(redis, f"llc:checkout:{work_item_id}", agent_id)
         except Exception:
             logger.debug("Redis DEL llc:checkout:%s failed (swallowed)", work_item_id)
 
@@ -183,26 +187,41 @@ class LivenessMonitor(PollLoopScheduler):
     ) -> None:
         identifier = work_item.identifier if work_item else run_id_label(str(run.id))
         title = f"Recovery: agent {agent_id} timed out on {identifier}"
-
-        # Resolve manager via company hierarchy — default to None (board-visible)
-        manager_agent_id = await self._resolve_manager(session, company_id, agent_id)
-
-        svc = WorkItemService()
-        await svc.create(
-            session,
-            company_id=company_id,
-            type=WorkItemType.BUG,
-            title=title,
-            description=(
-                f"Automatic recovery item. Run {run.id} for agent {agent_id} "
-                f"exceeded the liveness timeout and was marked timed_out. "
-                f"Work item {identifier} has been set to blocked. "
-                f"Investigate and unblock manually."
-            ),
-            assignee_agent_id=manager_agent_id,
-            parent_id=str(work_item.parent_id) if work_item and work_item.parent_id else None,
-            goal_id=str(work_item.goal_id) if work_item and work_item.goal_id else None,
+        description = (
+            f"Automatic recovery item. Run {run.id} for agent {agent_id} "
+            f"exceeded the liveness timeout and was marked timed_out. "
+            f"Work item {identifier} has been set to blocked. "
+            f"Investigate and unblock manually."
         )
+        svc = get_work_item_service()
+        # #18978: the Bug follows the stuck item's parent only where the hierarchy rules allow it
+        # (a stuck Subtask's parent is a Task) and always sits in the stuck item's project.
+        project_id = await _recovery_project(session, work_item, company_id)
+        parent_id = await parent_if_allowed(
+            session,
+            svc.get,
+            company_id,
+            WorkItemType.BUG,
+            str(work_item.parent_id) if work_item and work_item.parent_id else None,
+            project_id,
+        )
+        try:
+            await svc.create(
+                session,
+                company_id=company_id,
+                type=WorkItemType.BUG,
+                title=title,
+                description=description,
+                # Resolve manager via company hierarchy -- default to None (board-visible)
+                assignee_agent_id=await self._resolve_manager(session, company_id, agent_id),
+                parent_id=parent_id,
+                project_id=project_id,
+                goal_id=str(work_item.goal_id) if work_item and work_item.goal_id else None,
+            )
+        except HierarchyViolation as exc:
+            await _note_unfiled_recovery(
+                session, svc, work_item, company_id, f"{title}. {description}", exc, run, agent_id, self._activity_log
+            )
 
     async def _resolve_manager(self, session: AsyncSession, company_id: str, agent_id: str) -> Optional[str]:
         """Best-effort lookup for the agent's manager agent_id."""
@@ -240,6 +259,99 @@ class LivenessMonitor(PollLoopScheduler):
             after={"status": "timed_out"},
             metadata={"agent_id": str(agent_id), "reason": "liveness_timeout"},
         )
+
+
+async def _recovery_project(session: AsyncSession, work_item: Optional[LLCWorkItem], company_id: str) -> Optional[str]:
+    """The stuck item's project, else the company's oldest (#18978); None when the company has none."""
+    if work_item is not None and work_item.project_id:
+        return str(work_item.project_id)
+    oldest = await session.execute(
+        select(LLCProject.id)
+        .where(LLCProject.company_id == uuid.UUID(str(company_id)))
+        .order_by(LLCProject.created_at, LLCProject.id)
+        .limit(1)
+    )
+    found = oldest.scalar_one_or_none()
+    return str(found) if found else None
+
+
+async def _note_unfiled_recovery(
+    session,
+    svc,
+    work_item,
+    company_id: str,
+    text_: str,
+    exc: Exception,
+    run: LLCHeartbeatRun,
+    agent_id: str,
+    log: LLCActivityLogService,
+) -> None:
+    """The recovery Bug was refused (a stuck item from before the every-item-has-a-project rule may have no
+    project, #18978): record it on the stuck item itself so the recovery is not lost. A run with no work item has
+    nowhere to comment, so the company is told instead (#20687, #20930): an activity-feed entry, which is what
+    company users see, and the notification router's live event; nothing is created for it."""
+    logger.error("Recovery item not created (%s); noting it on the stuck work item", exc)
+    if work_item is not None:
+        await svc.add_comment(session, str(work_item.id), company_id, f"{text_} ({exc})")
+        return
+    await _log_unfiled_recovery(log, session, company_id, agent_id, run, exc)
+    await _notify_admins_unfiled_recovery(company_id, agent_id, run, exc)
+
+
+async def _log_unfiled_recovery(
+    log: LLCActivityLogService, session, company_id: str, agent_id: str, run: LLCHeartbeatRun, exc: Exception
+) -> None:
+    """The company activity feed's entry for an unfiled recovery: best-effort, in its own savepoint, so a failed
+    write rolls back only itself and never fails the recovery it annotates. The row is a write in the caller's
+    transaction (it cannot be deferred past the commit); the live publish to the company's dashboard follows the
+    commit, as every activity record's does."""
+    try:
+        async with session.begin_nested():
+            await audit(
+                log,
+                session,
+                company_id=company_id,
+                actor_type=ActorType.SYSTEM,
+                actor_id=None,
+                event_type=ActivityEventType.HEARTBEAT_FAILED,
+                entity_type="heartbeat_run",
+                entity_id=str(run.id),
+                metadata={
+                    "agent_id": str(agent_id),
+                    "reason": "recovery_unfiled",
+                    "message": f"Agent {agent_id} timed out on run {run.id}; no recovery item could be filed ({exc})",
+                },
+            )
+    except Exception:
+        logger.warning("Unfiled-recovery activity entry for run %s not written", run.id, exc_info=True)
+
+
+async def _notify_admins_unfiled_recovery(company_id: str, agent_id: str, run: LLCHeartbeatRun, exc: Exception) -> None:
+    """Tell the company about a timed-out run whose recovery could not be filed: ``heartbeat_missed``
+    (reason ``recovery_unfiled``) on the router's ``llc:agent:*`` channel, naming the agent and the run.
+
+    The router addresses a company only, so this notice is company-wide, not admin-only, until #20885 adds
+    role addressing; the event carries no user ids."""
+    redis = await get_async_redis_client()
+    if redis is None:
+        logger.warning("Redis unavailable; company %s not told of the unfiled recovery", company_id)
+        return
+    event = {
+        "company_id": str(company_id),
+        "event_type": "heartbeat_missed",
+        "entity_type": "heartbeat_run",
+        "entity_id": str(run.id),
+        "payload": {
+            "agent_id": str(agent_id),
+            "run_id": str(run.id),
+            "reason": "recovery_unfiled",
+            "message": f"Agent {agent_id} timed out on run {run.id}; no recovery item could be filed ({exc})",
+        },
+    }
+    try:
+        await redis.publish(f"llc:agent:{agent_id}", json.dumps(event))
+    except Exception as err:
+        logger.warning("Failed to notify company %s of the unfiled recovery: %s", company_id, err)
 
 
 def run_id_label(run_id: str) -> str:

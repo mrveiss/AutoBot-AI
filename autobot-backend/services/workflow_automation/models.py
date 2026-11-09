@@ -24,6 +24,10 @@ from autobot_shared.risk_tier import presented_risk_tier_value
 from type_defs.common import Metadata
 
 
+class StepNotAwaitingApproval(Exception):
+    """The step a decision targets is not waiting for one; a route maps it to 409."""
+
+
 class WorkflowStepStatus(Enum):
     """Status of a workflow step"""
 
@@ -153,6 +157,25 @@ class WorkflowStep:
     # Issue #2397: Step-level configuration dict for vision and future step types.
     step_config: Metadata | None = None
 
+    def begin_after_approval(self) -> None:
+        """Move a parked step to EXECUTING. A repeated approve finds it already past WAITING_APPROVAL and is refused."""
+        if self.status != WorkflowStepStatus.WAITING_APPROVAL:
+            raise StepNotAwaitingApproval(f"Step {self.step_id} is {self.status.value}, not waiting for approval")
+        self.status = WorkflowStepStatus.EXECUTING
+
+    def __post_init__(self) -> None:
+        """Issue #19807: every step that is not a vision step needs confirmation, whoever built it.
+
+        The executor sends any ``step_type`` outside ``VISION_STEP_TYPES`` down the command path
+        (``_resolve_and_run_step``), so an unknown type still runs ``command``. Vision steps call the
+        vision API with ``step_config`` and run no command; their flag stays the creator's choice.
+        """
+        # Here, not at the top: gen_frontend_types.py loads this file alone, with no package around it.
+        from .vision_step_handler import VISION_STEP_TYPES
+
+        if self.step_type not in VISION_STEP_TYPES:
+            self.requires_confirmation = True
+
     # === Issue #372: Feature Envy Reduction Methods ===
 
     def to_status_dict(self) -> Metadata:
@@ -210,6 +233,24 @@ class ActiveWorkflow:
     # Issue #1380: Current workflow phase from state machine
     phase: str | None = None
     active_service: str | None = None
+
+    def step_awaiting_decision(self, step_id: str) -> WorkflowStep:
+        """Return the current step if *step_id* names it and it is parked, else refuse (#20918).
+
+        A decision for any other step, or for a step that is not in WAITING_APPROVAL (already
+        executing, completed or skipped), is a failure, not a silent no-op: the control route
+        maps StepNotAwaitingApproval to 409 rather than reporting success.
+        """
+        if self.current_step_index >= len(self.steps):
+            raise StepNotAwaitingApproval(f"Step {step_id} is not waiting for a decision: no step is pending")
+        current = self.steps[self.current_step_index]
+        if current.step_id != step_id:
+            raise StepNotAwaitingApproval(
+                f"Step {step_id} is not the step waiting for a decision (current: {current.step_id})"
+            )
+        if current.status != WorkflowStepStatus.WAITING_APPROVAL:
+            raise StepNotAwaitingApproval(f"Step {step_id} is {current.status.value}, not waiting for approval")
+        return current
 
     def _serialize_notification_config(self) -> Metadata | None:
         """Serialize notification_config to a plain dict for API responses."""
