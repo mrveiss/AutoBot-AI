@@ -4722,6 +4722,8 @@
       "stepApprovalSkip": "Skip step",
       "stepApproveFailed": "Could not confirm the step was approved; check the workflow status before trying again",
       "stepStatusRefreshFailed": "Your answer was sent, but the step status could not be refreshed; it will update when the connection recovers",
+      "stepRetryStillWaiting": "The server refused your retry and the step is still waiting for approval; it stays locked while the status is re-checked",
+      "stepLockReleased": "The step is still waiting for approval after the refused retry; you can answer it again",
       "stepSkipFailed": "Could not confirm the step was skipped; check the workflow status before trying again",
       "stepRejectedByJudge": "Step refused before it ran: {reason}",
       "controlRefused": "Refused: only an administrator or the workflow's owner may control it",

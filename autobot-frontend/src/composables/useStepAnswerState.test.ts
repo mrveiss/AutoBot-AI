@@ -8,12 +8,13 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 const http = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
+const toast = vi.hoisted(() => vi.fn());
 
 vi.mock('@/composables/useWebSocket', () => ({
   useWebSocket: () => ({ connect: vi.fn(), disconnect: vi.fn(), isConnected: { value: false } }),
 }));
 vi.mock('@/utils/ApiClient', () => ({ default: http }));
-vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => ({ showToast: vi.fn() }) }));
+vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => ({ showToast: toast }) }));
 vi.mock('@/i18n', () => ({ default: { global: { t: (key: string) => key } } }));
 
 import { HttpError } from '@autobot/ui';
@@ -26,6 +27,7 @@ describe('step answer lock', () => {
   beforeEach(() => {
     http.get.mockReset();
     http.post.mockReset();
+    toast.mockReset();
     for (const id of ['wf-1', 'wf-2']) useStepAnswerState().dropWorkflow(id);
   });
 
@@ -177,5 +179,67 @@ describe('step answer lock', () => {
     await expect(approveStep('wf-1', 's1')).resolves.toBe(false);
     expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(false);
     expect(http.get).toHaveBeenCalledTimes(3);
+  });
+
+  const timedOutThenReleased = async () => {
+    http.post.mockRejectedValueOnce(new HttpError(408, 'timeout'));
+    http.get.mockResolvedValue(wf('waiting_approval'));
+    const api = useWorkflowBuilder();
+    await api.approveStep('wf-1', 's1');
+    await api.getWorkflowStatus('wf-1'); // released as unconfirmed while still waiting
+    return api;
+  };
+
+  it('a refused retry that never resolves is released after the bounded reads and the user is told', async () => {
+    const api = await timedOutThenReleased();
+    http.post.mockRejectedValueOnce(new HttpError(403, 'forbidden'));
+    await api.approveStep('wf-1', 's1'); // read 1 (its own reconcile): still waiting
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(true);
+    expect(toast).toHaveBeenCalledWith('workflow.builder.stepRetryStillWaiting', 'warning');
+    await api.getWorkflowStatus('wf-1');
+    await api.getWorkflowStatus('wf-1'); // third read still waiting: the bound
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(false);
+    expect(toast).toHaveBeenCalledWith('workflow.builder.stepLockReleased', 'warning');
+  });
+
+  it('the retry flag is cleared when the step stops waiting: a later plain 4xx unlocks at once', async () => {
+    const api = await timedOutThenReleased();
+    http.get.mockResolvedValue(wf('approved'));
+    await api.getWorkflowStatus('wf-1'); // no longer waiting: flag cleared
+    http.get.mockResolvedValue(wf('waiting_approval')); // the step waits again (rerun)
+    http.post.mockRejectedValueOnce(new HttpError(409, 'plain refusal'));
+    await api.approveStep('wf-1', 's1');
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(false);
+  });
+
+  it('dropping the workflow clears the retry flag', async () => {
+    const api = await timedOutThenReleased();
+    useStepAnswerState().dropWorkflow('wf-1');
+    http.post.mockRejectedValueOnce(new HttpError(409, 'plain refusal'));
+    await api.approveStep('wf-1', 's1');
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(false);
+  });
+
+  it('a stale refresh result does not raise the refresh-failed toast', async () => {
+    const state = useStepAnswerState();
+    const resp = { success: true, data: { workflow: { steps: [{ step_id: 's1', status: 'waiting_approval' }] } } };
+    let finishOlder!: (v: typeof resp) => void;
+    const older = state.fetchStatus('wf-1', () => new Promise<typeof resp>((r) => { finishOlder = r; }));
+    await state.answer('wf-1', 's1', async () => true, async () => {
+      await state.fetchStatus('wf-1', async () => resp);
+      finishOlder(resp);
+      return (await older).success; // superseded: false
+    });
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('a 404 leaves a tombstone: an older in-flight success is not applied afterwards', async () => {
+    const state = useStepAnswerState();
+    const ok = { success: true, data: { workflow: { steps: [{ step_id: 's1', status: 'approved' }] } } };
+    let finishOlder!: (v: typeof ok) => void;
+    const older = state.fetchStatus('wf-1', () => new Promise<typeof ok>((r) => { finishOlder = r; }));
+    await state.fetchStatus('wf-1', async () => ({ success: false, httpStatus: 404 }));
+    finishOlder(ok);
+    expect((await older).success).toBe(false);
   });
 });
