@@ -14,6 +14,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from '@/composables/useLoadingState'
+import { isoDateStamp } from '@/utils/formatHelpers'
 import type {
   AuditEntry,
   AuditQueryParams,
@@ -384,7 +385,7 @@ export function useAuditState() {
   function downloadExport(format: 'json' | 'csv') {
     const content = format === 'json' ? exportToJson() : exportToCsv()
     const mimeType = format === 'json' ? 'application/json' : 'text/csv'
-    const filename = `audit-logs-${new Date().toISOString().split('T')[0]}.${format}`
+    const filename = `audit-logs-${isoDateStamp()}.${format}`
     const blob = new Blob([content], { type: mimeType })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')

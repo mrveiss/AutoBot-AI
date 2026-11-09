@@ -300,7 +300,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/security/session_ownership.py": 813,
     "autobot-backend/security/threat_detection_refactor_test.py": 880,
     "autobot-backend/security/threat_intelligence.py": 762,
-    "autobot-backend/security_layer.py": 663,
+    "autobot-backend/security_layer.py": 661,
     "autobot-backend/services/agent_analytics.py": 686,
     "autobot-backend/services/agent_terminal/service.py": 915,
     "autobot-backend/services/ai_stack_client.py": 764,
@@ -482,7 +482,7 @@ KNOWN_LARGE: dict[str, int] = {
     "repo_tests/enum_union_guard_test.py": 801,
     "repo_tests/sync_deletions_ansible_wiring_16310_test.py": 674,  # #16310
     "repo_tests/sys_modules_leak_guard.py": 1145,
-    "scripts/audit_api_wiring.py": 883,  # #16816: reporting moved to dead_surface.py
+    "scripts/audit_api_wiring.py": 843,  # #16816: reporting moved to dead_surface.py; #12363 -40 (arg parser split out)
 }
 
 #: Entries annotated by hand as live, tracked violations rather than #5060's

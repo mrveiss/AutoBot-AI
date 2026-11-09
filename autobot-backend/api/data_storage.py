@@ -65,7 +65,7 @@ def _safe_data_path(user_segment: str) -> Path:
     that lives outside DATA_DIR (#18293).
     """
     if user_segment == LEGACY_TRANSCRIPTS_CATEGORY:
-        return category_dir(DATA_DIR, user_segment)
+        return category_dir(DATA_DIR, LEGACY_TRANSCRIPTS_CATEGORY)
     return require_contained_relative_path(user_segment, DATA_DIR)
 
 
