@@ -20,9 +20,10 @@ from services.command_approval_manager import AgentRole, CommandApprovalManager
 from services.command_execution_queue import get_command_queue
 from type_defs.common import Metadata
 
-from .ai_line_gate import claim_pending, decide_command, permission_refusal, settle_pending, write_reservation
+from .ai_line_gate import claim_pending, decide_command, permission_refusal, queue_reservation, settle_pending
 from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
+from .decision_session import claim_for_decision, mark_queued_approved
 from .errors import PostExecutionError, execution_failed_response, post_execution_failed_response, post_execution_guard
 from .models import AgentSessionState, AgentTerminalSession
 from .session_manager import SessionManager
@@ -231,11 +232,9 @@ class AgentTerminalService:
             interactive_reasons=interactive_reasons,
         )
 
-        await write_reservation(session, cmd_execution, self.command_queue, self.redis_client)
-        logger.info("✅ [QUEUE] Added command %s to queue", cmd_execution.command_id)
-
-        if self.redis_client:
-            await self.session_manager._persist_session(session)
+        refusal = await queue_reservation(session, self.session_manager, cmd_execution, self.command_queue, risk)
+        if refusal is not None:
+            return refusal
 
         user_id = session.get_user_id()
         if session.has_conversation():
@@ -511,12 +510,7 @@ class AgentTerminalService:
         extract logging/post-execution helpers. Issue #1088: extracted
         _run_approved_command_body to reduce function length.
         """
-        await self.approval_handler.update_command_queue_status(
-            command_id=command_id,
-            approved=True,
-            user_id=user_id,
-            comment=comment,
-        )
+        await mark_queued_approved(self.approval_handler, self.session_manager, session, command_id, user_id, comment)
 
         try:
             return await self._run_approved_command_body(
@@ -534,7 +528,7 @@ class AgentTerminalService:
         except (TypeError, AttributeError):
             raise
         except Exception:
-            logger.error("Approved command execution error", exc_info=True)
+            await self.session_manager.release_after_failed_run(session)
             return execution_failed_response(command)
 
     async def _handle_denied_command(
@@ -831,12 +825,9 @@ class AgentTerminalService:
 
         Issue #281: Refactored from 182 lines to use extracted helper methods.
         """
-        session = await self.get_session(session_id)
-        if not session:
-            return {"status": "error", "error": "Session not found"}
-
-        if not session.has_pending_approval():
-            return {"status": "error", "error": "No pending approval"}
+        session, refusal = await claim_for_decision(self.session_manager, session_id)
+        if refusal:
+            return refusal
 
         command = session.get_pending_command()
         risk_level = session.get_pending_risk_level()
@@ -886,7 +877,8 @@ class AgentTerminalService:
             return {"status": "error", "error": "Session not found"}
 
         previous_state = session.state
-        session.state = AgentSessionState.USER_CONTROL
+        if refusal := await self.session_manager.persist_control(session, AgentSessionState.USER_CONTROL):
+            return refusal
 
         logger.info(
             f"User {user_id} interrupted agent session {session_id} " f"(previous state: {previous_state.value})"
@@ -912,7 +904,8 @@ class AgentTerminalService:
                 "error": f"Cannot resume from state: {session.state.value}",
             }
 
-        session.state = AgentSessionState.AGENT_CONTROL
+        if refusal := await self.session_manager.persist_control(session, AgentSessionState.AGENT_CONTROL):
+            return refusal
         logger.info("Agent resumed control of session %s", session_id)
 
         return {
