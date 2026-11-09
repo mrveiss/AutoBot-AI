@@ -101,12 +101,16 @@ async def _plan():
     return _Plan.value
 
 
+def _stub_wipe_action(monkeypatch):
+    """Stand in for the backend's ``services.kb_wipe_action`` -- an infra test never imports the backend (#18288)."""
+    stub = types.SimpleNamespace(plan_kb_wipe=_plan)
+    monkeypatch.setitem(sys.modules, "services.kb_wipe_action", stub)
+
+
 @pytest.mark.asyncio
 async def test_dry_run_lists_the_plan_and_neither_proposes_nor_deletes(monkeypatch, caplog):
     """#21048: ``--dry-run`` only reads; no approval is raised and no delete command is issued."""
-    from services import kb_wipe_action
-
-    monkeypatch.setattr(kb_wipe_action, "plan_kb_wipe", _plan)
+    _stub_wipe_action(monkeypatch)
     proposed = []
 
     async def fake_propose(plan):
@@ -123,9 +127,7 @@ async def test_dry_run_lists_the_plan_and_neither_proposes_nor_deletes(monkeypat
 @pytest.mark.asyncio
 async def test_a_bare_run_only_requests_approval(monkeypatch):
     """#21048: running the script proposes the wipe through the approval gate and deletes nothing itself."""
-    from services import kb_wipe_action
-
-    monkeypatch.setattr(kb_wipe_action, "plan_kb_wipe", _plan)
+    _stub_wipe_action(monkeypatch)
     proposed = []
 
     async def fake_propose(plan):
