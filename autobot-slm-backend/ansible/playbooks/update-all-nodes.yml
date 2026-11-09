@@ -174,7 +174,10 @@
       loop:
         - { name: slm-backend, path: autobot-slm-backend/ }
         - { name: slm-frontend, path: autobot-slm-frontend/ }
-        - { name: shared, path: autobot_shared/ }
+        # #20942: .python-version rides in the SAME archive as autobot_shared, so the Python
+        # floor python_floor.py reads comes from the deploy_ref checkout that supplied the
+        # code, lands on every node that unpacks it, and precedes every backend restart.
+        - { name: shared, path: "autobot_shared/ .python-version" }
         # #15462: both frontends declare `file:` dependencies on these two
         # (@autobot/ui, @autobot/terminal, @autobot/vnc). npm installs them as
         # symlinks INTO the deployed tree, so a frontend build resolves them
@@ -431,15 +434,6 @@
         dest: "{{ autobot.base_dir }}/"
       become: true
       tags: [slm, shared]
-
-    - name: "[PLAY 1] SLM | Stage .python-version onto the node (#20942)"
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../../.python-version"
-        dest: "{{ autobot.base_dir }}/.python-version"
-        owner: autobot
-        mode: "0644"
-      become: true
-      tags: [always]
 
     # #15462: must land BEFORE the npm ci / build tasks below, which resolve
     # @autobot/ui and the plugins through symlinks into these directories.
@@ -948,15 +942,6 @@
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/../../../constraints/shared.txt"
         dest: "{{ autobot.base_dir }}/constraints/shared.txt"
-        owner: autobot
-        mode: "0644"
-      become: true
-      tags: [always]
-
-    - name: "[PLAY 2] Stage .python-version onto the node (#20942)"
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../../.python-version"
-        dest: "{{ autobot.base_dir }}/.python-version"
         owner: autobot
         mode: "0644"
       become: true

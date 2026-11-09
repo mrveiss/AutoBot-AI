@@ -62,9 +62,11 @@
 # #20942: autobot_shared/python_floor.py reads <install root>/.python-version at
 # startup (the Python floor SSOT, #13842). Nothing placed it on a node, so every
 # backend start logged ".python-version unreadable" and fell back to a hardcoded floor.
+# Taken from the same checkout the autobot_shared role deploys from (code_source_dir),
+# so the floor and the code that reads it cannot come from different trees.
 - name: "Shared manifests | Stage .python-version onto the node (#20942)"
   ansible.builtin.copy:
-    src: "{{ role_path | default(playbook_dir ~ '/x') }}/../../../../.python-version"
+    src: "{{ code_source_dir | default((role_path | default(playbook_dir ~ '/x')) ~ '/../../../..') }}/.python-version"
     dest: "{{ autobot.base_dir }}/.python-version"
     owner: "{{ autobot.user }}"
     mode: "0644"
