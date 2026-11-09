@@ -9,7 +9,9 @@ Issue: #7458
 """
 
 import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 # Ensure repo root is first on sys.path so `tools.lint.canonical.*` resolves.
@@ -20,6 +22,23 @@ if _REPO_ROOT not in sys.path:
 # The test profile serves the frontend from the Vite dev server (#19326), whatever environment a
 # test module runs under; test modules read config.frontend_url at import.
 os.environ.setdefault("AUTOBOT_FRONTEND_SERVED_BY", "vite")
+
+# No test run writes logs into the source tree (#20894): one temp log directory for the whole run,
+# inherited by every subprocess a test starts (repo_tests/_reach_base.py base checkouts included).
+os.environ.setdefault("AUTOBOT_TESTING", "1")  # the explicit "this is a test run" flag (autobot_shared/log_dir.py)
+# Created only when the run does not already inherit one, so an xdist worker or a nested pytest
+# never leaves an orphan temp directory behind.
+_RUN_LOGS_DIR = None if os.environ.get("AUTOBOT_LOGS_DIR") else tempfile.mkdtemp(prefix="autobot-logs-")
+if _RUN_LOGS_DIR:
+    os.environ["AUTOBOT_LOGS_DIR"] = _RUN_LOGS_DIR
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:
+    """Remove the run's temp log directory (#20894); xdist workers share the controller's via env, so
+    only the process that created it removes it."""
+    if _RUN_LOGS_DIR and not os.environ.get("PYTEST_XDIST_WORKER"):
+        shutil.rmtree(_RUN_LOGS_DIR, ignore_errors=True)
+
 
 # Repo-wide sys.modules leak guard (#13337). Declared here — the rootdir
 # conftest is the only conftest where ``pytest_plugins`` is still legal in

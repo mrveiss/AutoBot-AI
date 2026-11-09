@@ -24,6 +24,8 @@ Type=simple
 User=autobot
 Group=video
 WorkingDirectory=/opt/autobot/autobot-npu-worker
+# #20894: the log directory, as before the resolver (the working directory's logs/)
+Environment=AUTOBOT_LOGS_DIR=/opt/autobot/autobot-npu-worker/logs
 
 # Environment
 Environment="PYTHONUNBUFFERED=1"

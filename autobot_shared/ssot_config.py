@@ -52,6 +52,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from autobot_shared import deployment_profile as _profile  # #19315/#19316: environment/mode/debug home
 from autobot_shared import postgres_identity as _pg
 from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.log_dir import resolve_logs_dir
 from autobot_shared.paths import install_base_dir, project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
 from autobot_shared.ssot_chat_graph_settings import ChatGraphSettings
@@ -81,7 +82,7 @@ def default_audit_log_file() -> str:
     """The ONE definition of the audit-log default (#14070): was ALSO spelled out
     as ``security_layer._AUDIT_LOG_FILE_DEFAULT``, kept in step by an equality
     test -- agreement today, not derivation. A function, so it stays lazy."""
-    return str(project_root() / "logs" / "audit.log")
+    return str(resolve_logs_dir() / "audit.log")  # #20894
 
 
 # Default model constants - single source of truth for fallback values (#2553)
@@ -1240,11 +1241,10 @@ class PathConfig(RedactedSettings):
     # resolve into the checkout rather than into the live install.
     base_dir: str = Field(default_factory=lambda: str(install_base_dir()), alias="AUTOBOT_BASE_DIR")
 
-    # Well-known sub-directories (all relative to base_dir unless absolute).
-    # Override individual paths via AUTOBOT_PLUGINS_DIR etc. when needed.
+    # Well-known sub-directories (relative to base_dir unless absolute); override via AUTOBOT_PLUGINS_DIR etc.
     plugins_dir: str = Field(default="plugins", alias="AUTOBOT_PLUGINS_DIR")
     data_dir: str = Field(default="data", alias="AUTOBOT_DATA_DIR")
-    logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
+    logs_dir: str = Field(default_factory=lambda: str(resolve_logs_dir()), alias="AUTOBOT_LOGS_DIR")  # #20894
     models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
     docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
     upload_dir: str = Field(default="", alias="AUTOBOT_UPLOAD_DIR")  # #19823: empty is under the transcriber's data
