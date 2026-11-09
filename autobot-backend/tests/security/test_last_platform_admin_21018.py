@@ -52,34 +52,34 @@ class _User(_Base):
     deleted_at: Mapped[object] = mapped_column(DateTime, nullable=True)
 
 
-class _LockingSession(AsyncSession):
-    """A session whose locking read waits for the previous holder to commit (the FOR UPDATE contract)."""
+def _with_row_lock(session: AsyncSession, row_lock: asyncio.Lock) -> AsyncSession:
+    """Give *session* the FOR UPDATE contract: a locking read waits for the previous holder to commit."""
+    held = False
+    real_execute, real_commit, real_rollback = session.execute, session.commit, session.rollback
 
-    row_lock: asyncio.Lock
-    holds_lock = False
+    async def execute(statement, *args, **kwargs):
+        nonlocal held
+        if getattr(statement, "_for_update_arg", None) is not None and not held:
+            await row_lock.acquire()
+            held = True
+        return await real_execute(statement, *args, **kwargs)
 
-    async def execute(self, statement, *args, **kwargs):
-        if getattr(statement, "_for_update_arg", None) is not None and not self.holds_lock:
-            await self.row_lock.acquire()
-            self.holds_lock = True
-        return await super().execute(statement, *args, **kwargs)
+    def release() -> None:
+        nonlocal held
+        if held:
+            held = False
+            row_lock.release()
 
-    def _release(self) -> None:
-        if self.holds_lock:
-            self.holds_lock = False
-            self.row_lock.release()
-
-    async def commit(self):
+    async def finish(real):
         try:
-            await super().commit()
+            await real()
         finally:
-            self._release()
+            release()
 
-    async def rollback(self):
-        try:
-            await super().rollback()
-        finally:
-            self._release()
+    session.execute = execute  # type: ignore[method-assign]
+    session.commit = lambda: finish(real_commit)  # type: ignore[method-assign]
+    session.rollback = lambda: finish(real_rollback)  # type: ignore[method-assign]
+    return session
 
 
 @pytest_asyncio.fixture
@@ -89,10 +89,8 @@ async def maker(tmp_path):
         await conn.run_sync(_Base.metadata.create_all)
     row_lock = asyncio.Lock()
 
-    def make() -> _LockingSession:
-        session = _LockingSession(engine, expire_on_commit=False)
-        session.row_lock = row_lock
-        return session
+    def make() -> AsyncSession:
+        return _with_row_lock(AsyncSession(engine, expire_on_commit=False), row_lock)
 
     yield make
     await engine.dispose()
