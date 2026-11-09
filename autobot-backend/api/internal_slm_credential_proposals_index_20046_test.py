@@ -74,3 +74,24 @@ def test_duplicate_cleanups_on_one_node_fail_and_other_nodes_do_not_collide(monk
     assert _run(monkeypatch, ok).call_count == 2
     with pytest.raises(RuntimeError, match=r"a \(2 pending\)"):
         _run(monkeypatch, ok[:1] * 2)
+
+
+def test_the_env_copies_index_definition_matches_the_migration_and_the_model(monkeypatch) -> None:
+    """Columns/expressions, uniqueness and the partial WHERE of the created index, against the model's index."""
+    from sqlalchemy.dialects import postgresql
+
+    from models.approval import PENDING_ENV_COPIES_INDEX, PENDING_ENV_COPIES_WHERE, Approval
+
+    create = _run(monkeypatch, [])
+    call = next(c for c in create.call_args_list if c.args[0] == PENDING_ENV_COPIES_INDEX)
+    assert call.args[1] == "approvals" and call.kwargs["unique"] is True
+    assert [str(e) for e in call.args[2]] == ["(context ->> 'action')", "(context ->> 'node')"]
+    assert str(call.kwargs["postgresql_where"]) == PENDING_ENV_COPIES_WHERE
+    model_index = {i.name: i for i in Approval.__table__.indexes}[PENDING_ENV_COPIES_INDEX]
+    assert model_index.unique is True
+    assert str(model_index.dialect_options["postgresql"]["where"]) == PENDING_ENV_COPIES_WHERE
+    literal = {"dialect": postgresql.dialect(), "compile_kwargs": {"literal_binds": True}}
+    model_expressions = [
+        str(e.compile(**literal)).replace("approvals.", "").strip("()") for e in model_index.expressions
+    ]
+    assert model_expressions == [str(e).strip("()") for e in call.args[2]]

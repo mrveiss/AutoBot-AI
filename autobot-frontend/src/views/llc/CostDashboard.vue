@@ -295,7 +295,7 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { createDateFormatter } from '@/utils/formatHelpers'
+import { createDateFormatter, isoDateStamp } from '@/utils/formatHelpers'
 import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import type { components } from '@/types/generated/api'
@@ -482,7 +482,7 @@ const dailyBars = computed(() => {
   for (let i = 29; i >= 0; i--) {
     const d = new Date(now)
     d.setDate(d.getDate() - i)
-    const key = d.toISOString().slice(0, 10)
+    const key = isoDateStamp(d)
     map[key] = 0
   }
   for (const ev of costEvents.value) {
@@ -526,7 +526,7 @@ function exportCsv() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `cost-events-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `cost-events-${isoDateStamp()}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
