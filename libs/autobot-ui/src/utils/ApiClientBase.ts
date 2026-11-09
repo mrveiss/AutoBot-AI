@@ -172,7 +172,7 @@ type CallArgs<Op, O extends TransportRequestOptions> = {} extends CallInit<Op, O
  */
 export function fillPathParams(template: string, params: Record<string, unknown> | undefined): string {
   const named = new Set<string>()
-  const filled = template.replace(/\{([^}]+)\}/g, (_match, name: string) => {
+  const filled = template.replace(/\{([^{}]+)\}/g, (_match, name: string) => {
     named.add(name)
     const value = params?.[name]
     if (value === undefined || value === null) throw new Error(`Missing path parameter "${name}" for ${template}`)
