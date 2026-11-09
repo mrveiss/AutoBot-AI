@@ -9,7 +9,6 @@ Week 3 Phase 2: Comprehensive endpoint categorization and selective enforcement
 """
 
 import random
-import secrets
 import time
 from collections import defaultdict
 from typing import Dict, List
@@ -18,6 +17,7 @@ import structlog
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.ssot_config import config
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH
 from security.service_auth import validate_service_auth
@@ -256,7 +256,7 @@ def _has_override_token(request: Request) -> bool:
     expected = config.service_auth_override_token
     if not override_token or not expected:
         return False
-    return secrets.compare_digest(override_token, expected)
+    return secure_compare(override_token, expected)
 
 
 def _get_enforcement_percentage() -> int:
