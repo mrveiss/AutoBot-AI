@@ -82,20 +82,20 @@ describe('recent tasks: not reported vs measured empty (#21270)', () => {
 
   it('null feeds read "not reported", not "no recent tasks"', async () => {
     const w = await expanded({ recentTasks: null, activityTimeline: null })
-    const empty = w.get('.task-empty').text()
+    const empty = w.get('.detail-section p').text()
     expect(empty).toBe(A.notReported)
     expect(w.text()).not.toContain(A.noRecentTasks)
   })
 
   it('a measured empty list reads "no recent tasks"', async () => {
     const w = await expanded({ recentTasks: [], activityTimeline: [] })
-    expect(w.get('.task-empty').text()).toBe(A.noRecentTasks)
+    expect(w.get('.detail-section p').text()).toBe(A.noRecentTasks)
     expect(w.text()).not.toContain(`${A.recentTasks}${A.notReported}`)
   })
 
   it('measured tasks list the task names', async () => {
     const w = await expanded({ recentTasks: [{ id: 't', name: 'Deploy', status: 'completed', completedAt: Date.now() }] })
-    expect(w.find('.task-empty').exists()).toBe(false)
+    expect(w.find('.detail-section p').exists()).toBe(false)
     expect(w.get('.task-list').text()).toContain('Deploy')
   })
 })
