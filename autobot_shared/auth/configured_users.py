@@ -33,12 +33,33 @@ def _stored_hash(entry: Any) -> Optional[str]:
     return None
 
 
+# Log-once per process and user; #21071 tracks the shared helper this should move to.
+_reported: set = set()
+
+
 def _report_rejected(username: Any) -> None:
+    if username in _reported:
+        return
+    _reported.add(username)
     logger.error(
         "allowed_users entry for %r has no password hash and is rejected; "
         "generate one with generate-password-hashes.py",
         username,
     )
+
+
+def is_configured_user(allowed_users: Any, username: str) -> bool:
+    """True when *allowed_users* is a mapping that lists *username*."""
+    return isinstance(allowed_users, dict) and username in allowed_users
+
+
+def failure_reason(allowed_users: Any, username: str) -> str:
+    """Audit reason for a failed verification of *username*."""
+    if not is_configured_user(allowed_users, username):
+        return "user_not_found"
+    if _stored_hash(allowed_users[username]) is None:
+        return "credential_not_hashed"
+    return "invalid_password"
 
 
 def load_hashed_users(configured: Any) -> Dict[str, dict]:

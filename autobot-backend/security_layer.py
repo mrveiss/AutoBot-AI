@@ -61,9 +61,9 @@ async def _layer_entries(flt: AuditFilter, limit: int) -> List[Dict[str, Any]]:
 class SecurityLayer:
     """Security layer with RBAC, audit logging, and command execution controls.
 
-    Combines role-based access control, authentication, and secure command execution
-    in a single cohesive class. Authentication is always derived from security_config;
-    there is no single-user bypass (#10713, #10636).
+    Combines RBAC, authentication, and secure command execution in one class. Authentication
+    is always derived from security_config; no single-user bypass (#10713, #10636).
+    ``allowed_users`` is a filtered snapshot (hashed entries only) taken at init.
     """
 
     def __init__(self):

@@ -305,8 +305,8 @@ value) is rejected: the username is logged as an error and that user cannot auth
 Stored values are never rewritten, and an unknown user still costs one verification.
 
 To produce a hash for an entry, run
-`python autobot-infrastructure/shared/scripts/utilities/generate-password-hashes.py`
-(prompted, not echoed) and paste the printed `password_hash` into that user's entry.
+`python autobot-infrastructure/shared/scripts/utilities/generate-password-hashes.py <username>`
+(several names may be given; with none, the SSOT admin account name is used; the password is prompted, not echoed) and paste the printed `password_hash` into that user's entry.
 
 ### Config File (`config/config.yaml`)
 
