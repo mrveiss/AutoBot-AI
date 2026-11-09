@@ -25,6 +25,17 @@ import { installMonotonicDateNow } from './utils/monotonicClock'
 // because the `beforeEach` below already made that impossible.
 enableAutoUnmount(afterEach)
 
+// #21245: pre-transform the shared module graph once, outside any test timer. Specs that call
+// `vi.resetModules()` and then `await import(...)` a composable inside a test or `beforeEach` pay
+// the FIRST transform of that composable's graph (the `@autobot/ui` barrel, reached through
+// `debugUtils`/`useAnnounce`/`saveTextFile`, plus `vue-i18n`) inside the first test's 10s budget;
+// under a loaded run that first import alone took 5-9s and timed out. Vite caches the transform
+// for the whole run, so doing it here -- in setup, before any test body starts -- removes the cost
+// from every spec's first test, including specs written later. Nothing here is mocked by a spec's
+// `vi.mock`, because only the two bare package/barrel specifiers are imported, never an app module.
+await import('@autobot/ui')
+await import('vue-i18n')
+
 // #18254: a wall clock that steps backwards (WSL2 time correction, under load)
 // makes Vue's event invoker drop clicks; see utils/monotonicClock.ts.
 installMonotonicDateNow()
