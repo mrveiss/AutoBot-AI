@@ -46,6 +46,7 @@ from autobot_shared.ai_lines import ATTACHMENT_TURN_KEY, VERIFIED_ATTACHMENT_ACC
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers, sanitize_injected
 from chat_workflow import attachment_extract, attachment_floor, attachment_guards, limits
+from chat_workflow.session_role import overlay_verified_identity
 
 logger = get_logger(__name__)
 
@@ -314,7 +315,7 @@ async def restore_block(manager, session_id: str, context: Dict[str, Any], model
     return result.block + prompt if result.block else prompt
 
 
-async def resume_context(graph, session_id: str, allowed: bool) -> Dict[str, Any]:
+async def resume_context(graph, session_id: str, allowed: bool, scope: dict | None = None) -> Dict[str, Any]:
     """The state update for a resumed turn: its checkpointed context with the attachment verdict REPLACED (#20195).
 
     ``VERIFIED_ATTACHMENT_ACCESS_KEY`` was set by the turn that paused, for the person who sent it. Whoever
@@ -322,7 +323,7 @@ async def resume_context(graph, session_id: str, allowed: bool) -> Dict[str, Any
     ``restore_block`` reads nothing for them. Stripping is also what an absent verdict means.
     """
     snapshot = await graph.aget_state({"configurable": {"thread_id": session_id}})
-    context = dict((getattr(snapshot, "values", None) or {}).get("context") or {})
+    context = overlay_verified_identity((getattr(snapshot, "values", None) or {}).get("context"), scope)  # #20709
     if allowed:
         context[VERIFIED_ATTACHMENT_ACCESS_KEY] = True
     else:
@@ -345,11 +346,11 @@ async def checkpoint_carries_floor(manager, session_id: str) -> bool:
     return context.get(ATTACHMENT_TURN_KEY) is True or context.get(ATTACHMENT_CHAT_KEY) is True
 
 
-async def resume_command(graph, session_id: str, decision: Dict[str, Any], allowed: bool):
+async def resume_command(graph, session_id: str, decision: Dict[str, Any], allowed: bool, scope: dict | None = None):
     """The ``Command`` that resumes *session_id* with *decision* and the resumer's own attachment verdict (#20195)."""
     from langgraph.types import Command
 
-    return Command(resume=decision, update=await resume_context(graph, session_id, allowed))
+    return Command(resume=decision, update=await resume_context(graph, session_id, allowed, scope))
 
 
 async def attachment_prompt(manager, ctx) -> str:
