@@ -56,6 +56,43 @@ class TestDedupe:
         assert a["severity"] == MEDIUM and b["type"] == "code_smell_long_method"
 
 
+class TestEveryTypeCountsOncePerLocation:
+    def test_the_same_type_twice_at_one_line_counts_once_with_the_higher_severity(self):
+        out = dedupe_same_location_problems([_p("code_smell_deep_nesting", 4), _p("code_smell_deep_nesting", 4, HIGH)])
+        assert [(p["type"], p["severity"]) for p in out] == [("code_smell_deep_nesting", HIGH)]
+
+    def test_same_type_and_line_with_different_descriptions_are_two_defects(self):
+        a = dict(_p("race_condition", 9), description="lazy init of cache")
+        b = dict(_p("race_condition", 9), description="shared counter")
+        assert len(dedupe_same_location_problems([a, b])) == 2
+
+    def test_descriptions_differing_only_in_case_and_spacing_are_one_defect(self):
+        a = dict(_p("debug_code", 9), description="print  call")
+        b = dict(_p("debug_code", 9), description="Print call ")
+        assert len(dedupe_same_location_problems([a, b])) == 1
+
+    def test_the_same_line_of_two_files_is_two_defects(self):
+        a, b = dict(_p("debug_code", 3), file_path="a.py"), dict(_p("debug_code", 3), file_path="b.py")
+        assert len(dedupe_same_location_problems([a, b])) == 2
+
+    def test_a_multi_file_list_collapses_per_file(self):
+        mk = lambda t, f: dict(_p(t, 8), file_path=f)  # noqa: E731
+        probs = [mk("long_function", "a.py"), mk("code_smell_long_method", "a.py"), mk("long_function", "b.py")]
+        assert [p["file_path"] for p in dedupe_same_location_problems(probs)] == ["a.py", "b.py"]
+
+    def test_the_survivor_does_not_depend_on_input_order(self):
+        a = dict(_p("long_function", 5, HIGH), description="alpha", suggestion="x")
+        b = dict(_p("code_smell_long_method", 5, HIGH), description="beta", suggestion="y")
+        forward = dedupe_same_location_problems([a, b])
+        backward = dedupe_same_location_problems([b, a])
+        assert forward == backward and len(forward) == 1
+
+    def test_an_already_canonical_or_untyped_finding_is_returned_as_is(self):
+        canonical, untyped = _p("long_function", 1), {"line": 2, "severity": LOW}
+        out = dedupe_same_location_problems([canonical, untyped])
+        assert out[0] is canonical and out[1] is untyped
+
+
 class TestAnalysisPhasesApplyTheDedupe:
     """Deleting the call in ``_run_analysis_phases`` must fail this test."""
 
