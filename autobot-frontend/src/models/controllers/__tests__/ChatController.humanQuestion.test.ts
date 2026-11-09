@@ -17,6 +17,8 @@ vi.mock('@/models/repositories', async () => {
 
 import { ChatController } from '../ChatController'
 import { useChatStore } from '@/stores/useChatStore'
+import { chatRepository } from '@/models/repositories'
+import { keepUnansweredQuestions } from '../stallQuestions'
 
 type Internals = {
   _processStreamLine(line: string, ids: Map<string, string>, fallback: string | null): string | null
@@ -50,5 +52,43 @@ describe('ChatController human_question (#21022)', () => {
   it('control: an ordinary response chunk is not a question', () => {
     const messages = feed({ type: 'response', content: 'hello', metadata: {} })
     expect(messages.some((m) => m.type === 'human_question')).toBe(false)
+  })
+})
+
+const question = (id: string, extra: Record<string, unknown> = {}) =>
+  ({ id: `card-${id}`, type: 'human_question', content: 'How?', metadata: { question_id: id, ...extra } }) as never
+
+describe('an unanswered question survives a history poll (#21022)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    useChatStore().createNewSession()
+  })
+
+  it('keepUnansweredQuestions re-adds a local open card the loaded history lacks', () => {
+    const loaded = [{ id: 'u1', type: 'message', metadata: {} }]
+    const merged = keepUnansweredQuestions([question('q1')], loaded as never[])
+    expect(merged.map((m: { id: string }) => m.id)).toEqual(['u1', 'card-q1'])
+  })
+
+  it('does not duplicate a card the history holds, nor keep an answered one', () => {
+    const held = keepUnansweredQuestions([question('q1')], [question('q1')])
+    expect(held).toHaveLength(1)
+    const answered = keepUnansweredQuestions([question('q2', { answered: true })], [])
+    expect(answered).toHaveLength(0)
+  })
+
+  it('loadChatMessages keeps the open card when the backend history is newer but lacks it', async () => {
+    const store = useChatStore()
+    const sessionId = store.currentSessionId as string
+    const session = store.sessions.find((s) => s.id === sessionId)!
+    session.messages = [question('q1')]
+    vi.spyOn(chatRepository, 'getChatMessages').mockResolvedValue([
+      { id: 'a', content: 'one', sender: 'user', timestamp: new Date() },
+      { id: 'b', content: 'two', sender: 'assistant', timestamp: new Date() },
+    ] as never)
+    await new ChatController().loadChatMessages(sessionId)
+    const types = store.sessions.find((s) => s.id === sessionId)!.messages.map((m) => m.type)
+    expect(types).toContain('human_question')
+    expect(store.sessions.find((s) => s.id === sessionId)!.messages).toHaveLength(3)
   })
 })

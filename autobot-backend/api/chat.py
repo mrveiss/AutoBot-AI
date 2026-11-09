@@ -71,6 +71,7 @@ from chat_history.message_schema import llm_role, message_text, message_type
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
 from chat_history.session_merge import dropped_keys
 from chat_workflow.session_work_item import SessionWorkItemService
+from chat_workflow.stall_pending import check_resume_binding
 from constants.threshold_constants import TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
@@ -1578,8 +1579,8 @@ async def resume_chat_graph(
 
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_workflow_manager(chat_workflow_manager)
-
     decision = resume_decision(request_data, chat_id)
+    await check_resume_binding(chat_workflow_manager, chat_id, request_data)  # #21022
 
     return _create_streaming_response(
         _stream_graph_resume(

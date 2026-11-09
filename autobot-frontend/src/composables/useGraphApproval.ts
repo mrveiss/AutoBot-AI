@@ -38,14 +38,28 @@ type TerminalApprove = (
 ) => Promise<unknown> | unknown
 
 /** What a paused chat graph is resumed with: an approval decision, or the answer to a stall question (#21022). */
-export type ResumeBody = { approved: boolean; reason: string } | { answer: string }
+export type ResumeBody = { approved: boolean; reason: string } | { answer: string; question_id?: string }
+
+/** The server refused the resume request; `status` tells the card why (400: blocked by policy, 409: no longer pending). */
+export class ResumeRejectedError extends Error {
+  constructor(readonly status: number) {
+    super(`resume failed: ${status}`)
+  }
+}
+
+/** Thrown when the server accepted a resume (HTTP 200) but its stream reported an error: the graph did not move on. */
+export class ResumeStreamError extends Error {}
 
 /** The one POST to `/chats/{id}/resume`, whose SSE reply the chat controller's stream consumer renders. */
 function useResumePost() {
   const store = useChatStore()
   const controller = useChatController()
 
-  return async function postResume(message: ChatMessage, body: ResumeBody, onAccepted?: () => void): Promise<void> {
+  return async function postResume(
+    message: ChatMessage,
+    body: ResumeBody,
+    hooks: { onAccepted?: () => void; onStreamError?: () => void } = {}
+  ): Promise<void> {
     const chatId = String((message.metadata as Record<string, unknown>)?.session_id || store.currentSessionId || '')
     store.setTyping(true)
     try {
@@ -54,9 +68,12 @@ function useResumePost() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      if (!response.ok) throw new Error(`resume failed: ${response.status}`)
-      onAccepted?.()
-      await controller.handleStreamingResponse(response)
+      if (!response.ok) throw new ResumeRejectedError(response.status)
+      hooks.onAccepted?.()
+      if ((await controller.handleStreamingResponse(response)) === true) {
+        hooks.onStreamError?.() // HTTP 200 is not the graph resuming: the question is still open
+        throw new ResumeStreamError('resume stream reported an error')
+      }
     } catch (error) {
       logger.error('Resuming the chat failed:', error)
       throw error
@@ -66,13 +83,17 @@ function useResumePost() {
   }
 }
 
-/** Answer the question a stalled turn asked; an empty answer stops the turn. The card is marked answered only once the server accepted it (#21022). */
+/** Answer the question a stalled turn asked; an empty answer stops the turn. The card stays answered only if the server accepted the request AND its stream did not report an error (#21022). */
 export function useStallAnswer() {
   const store = useChatStore()
   const postResume = useResumePost()
   return async function answerStallQuestion(message: ChatMessage, answer: string): Promise<void> {
-    const accepted = () => store.updateMessageMetadata(message.id, { answered: true, answer_text: answer })
-    await postResume(message, { answer }, accepted)
+    const questionId = (message.metadata as Record<string, unknown> | undefined)?.question_id
+    const body: ResumeBody = { answer, ...(typeof questionId === 'string' ? { question_id: questionId } : {}) }
+    await postResume(message, body, {
+      onAccepted: () => store.updateMessageMetadata(message.id, { answered: true, answer_text: answer }),
+      onStreamError: () => store.updateMessageMetadata(message.id, { answered: false, answer_text: '' }),
+    })
   }
 }
 

@@ -43,6 +43,14 @@ async def attachments_allowed(chat_id: str, current_user: dict | None, request) 
     return decision.get("reason") != "legacy_unowned"
 
 
+def _text_field(request_data: dict, key: str) -> str:
+    """The string at *key* (empty when absent); anything else is the client's error, not a scanner crash (400)."""
+    value = request_data.get(key) or ""
+    if not isinstance(value, str):
+        raise HTTPException(status_code=400, detail=f"{key} must be a string")
+    return value
+
+
 def resume_decision(request_data: dict, chat_id: str) -> dict:
     """What ``POST /chats/{id}/resume`` hands the paused graph: the verdict, plus a stall question's answer (#21022).
 
@@ -50,15 +58,15 @@ def resume_decision(request_data: dict, chat_id: str) -> dict:
     """
     from security.chat_message_safety import scan_chat_message
 
+    reason, answer = _text_field(request_data, "reason"), _text_field(request_data, "answer")
     decision = {
         "approved": request_data.get("approved", False),
-        "reason": scan_chat_message(request_data.get("reason", ""), chat_id),  # #16561
+        "reason": scan_chat_message(reason, chat_id),  # #16561
     }
-    if request_data.get("answer"):
+    if answer:
         from autobot_shared.ssot_config import config
 
-        capped = str(request_data["answer"])[: config.llm.chat_stall_answer_max_chars]
-        decision["answer"] = scan_chat_message(capped, chat_id)
+        decision["answer"] = scan_chat_message(answer[: config.llm.chat_stall_answer_max_chars], chat_id)
     return decision
 
 

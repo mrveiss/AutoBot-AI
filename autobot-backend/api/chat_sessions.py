@@ -52,6 +52,7 @@ from chat_history.owner_keys import owner_from_metadata, strip_server_controlled
 
 # Import session lifecycle hooks (Issue #4260)
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
+from chat_workflow.stall_pending import with_pending_question
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
 from exceptions import get_exceptions_lazy
@@ -364,6 +365,8 @@ async def get_session_messages(
 
     messages = await _fetch_session_messages_or_raise(chat_history_manager, session_id, per_page, (page - 1) * per_page)
     total_count = await chat_history_manager.get_session_message_count(session_id)
+    # #21022: an open stall question survives a reload
+    messages = await with_pending_question(request, session_id, messages)
 
     return create_chat_response(
         data={

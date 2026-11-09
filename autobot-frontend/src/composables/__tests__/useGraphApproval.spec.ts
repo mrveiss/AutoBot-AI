@@ -33,7 +33,13 @@ vi.mock('@/models/controllers', () => ({ useChatController: () => ({ handleStrea
 vi.mock('@/utils/debugUtils', () => ({ createLogger: () => ({ error: vi.fn(), warn: vi.fn(), debug: vi.fn() }) }))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => fakeStore }))
 
-import { isGraphApproval, useApprovalRouting } from '@/composables/useGraphApproval'
+import {
+  isGraphApproval,
+  ResumeRejectedError,
+  ResumeStreamError,
+  useApprovalRouting,
+  useStallAnswer,
+} from '@/composables/useGraphApproval'
 
 function seedCard(metadata: Record<string, unknown>) {
   const card = { id: 'm1', metadata: { terminal_session_id: 'term-1', requires_approval: true, ...metadata } }
@@ -93,5 +99,47 @@ describe('graph-interrupt approval cards', () => {
     fetchWithAuth.mockResolvedValue({ ok: false, status: 403 })
     await expect(useApprovalRouting(vi.fn())('term-1', true)).rejects.toThrow()
     expect(handleStreamingResponse).not.toHaveBeenCalled()
+  })
+})
+
+describe('stall question answers (#21022)', () => {
+  const card = () => ({ id: 'q-card', metadata: { session_id: 'chat-1', question_id: 'q1' } })
+  const answered = () => fakeStore.currentMessages[0].metadata.answered
+
+  beforeEach(() => {
+    fakeStore.currentMessages = [card()]
+    fetchWithAuth.mockReset()
+    handleStreamingResponse.mockReset()
+    fetchWithAuth.mockResolvedValue({ ok: true })
+  })
+
+  it('binds the answer to its question and marks the card answered once the stream is clean', async () => {
+    handleStreamingResponse.mockResolvedValue(false)
+    await useStallAnswer()(fakeStore.currentMessages[0] as never, 'use host B')
+    expect(JSON.parse(fetchWithAuth.mock.calls[0][1].body)).toEqual({ answer: 'use host B', question_id: 'q1' })
+    expect(answered()).toBe(true)
+  })
+
+  it('an HTTP 200 whose stream reports an error leaves the question open and retryable', async () => {
+    handleStreamingResponse.mockResolvedValue(true)
+    await expect(useStallAnswer()(fakeStore.currentMessages[0] as never, 'use host B')).rejects.toBeInstanceOf(
+      ResumeStreamError
+    )
+    expect(answered()).toBe(false)
+  })
+
+  it('a rejected request carries its status and never marks the card answered', async () => {
+    fetchWithAuth.mockResolvedValue({ ok: false, status: 400 })
+    const attempt = useStallAnswer()(fakeStore.currentMessages[0] as never, 'bad')
+    await expect(attempt).rejects.toMatchObject({ status: 400 })
+    await expect(attempt).rejects.toBeInstanceOf(ResumeRejectedError)
+    expect(answered()).toBeUndefined()
+    expect(handleStreamingResponse).not.toHaveBeenCalled()
+  })
+
+  it('control: an empty answer (stop here) is still sent as an explicit answer', async () => {
+    handleStreamingResponse.mockResolvedValue(false)
+    await useStallAnswer()(fakeStore.currentMessages[0] as never, '')
+    expect(JSON.parse(fetchWithAuth.mock.calls[0][1].body)).toEqual({ answer: '', question_id: 'q1' })
   })
 })

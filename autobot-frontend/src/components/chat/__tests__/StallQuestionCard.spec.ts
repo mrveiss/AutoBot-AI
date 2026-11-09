@@ -11,7 +11,15 @@ import en from '@/i18n/locales/en.json'
 import StallQuestionCard from '../StallQuestionCard.vue'
 
 const answerStallQuestion = vi.fn()
-vi.mock('@/composables/useGraphApproval', () => ({ useStallAnswer: () => answerStallQuestion }))
+class FakeRejected extends Error {
+  constructor(readonly status: number) {
+    super(`resume failed: ${status}`)
+  }
+}
+vi.mock('@/composables/useGraphApproval', () => ({
+  useStallAnswer: () => answerStallQuestion,
+  ResumeRejectedError: FakeRejected,
+}))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => ({ isTyping: false }) }))
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
@@ -48,6 +56,25 @@ describe('StallQuestionCard', () => {
     await flushPromises()
     expect(answerStallQuestion).toHaveBeenCalledTimes(2)
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
+
+  it('a policy block (400) tells the person to reword the answer and keeps the form', async () => {
+    answerStallQuestion.mockRejectedValueOnce(new FakeRejected(400))
+    const wrapper = mountCard()
+    await wrapper.find('input').setValue('blocked text')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[role="alert"]').text()).toBe(en.chat.stallQuestion.blocked)
+    expect(wrapper.find('form').exists()).toBe(true)
+  })
+
+  it('a question that is no longer pending (409) says so instead of the generic failure', async () => {
+    answerStallQuestion.mockRejectedValueOnce(new FakeRejected(409))
+    const wrapper = mountCard()
+    await wrapper.find('input').setValue('late answer')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[role="alert"]').text()).toBe(en.chat.stallQuestion.stale)
   })
 
   it('control: an answered card shows the answer and no form', () => {

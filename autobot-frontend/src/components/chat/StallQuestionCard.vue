@@ -9,7 +9,7 @@
       {{ answerText ? $t('chat.stallQuestion.answered', { answer: answerText }) : $t('chat.stallQuestion.stopped') }}
     </p>
     <form v-else @submit.prevent="send(draft.trim())">
-      <p v-if="failed" class="text-autobot-error" role="alert">{{ $t('chat.stallQuestion.failed') }}</p>
+      <p v-if="failure" class="text-autobot-error" role="alert">{{ $t(FAILURE_KEYS[failure]) }}</p>
       <BaseInput v-model="draft" :label="$t('chat.stallQuestion.answerLabel')" :placeholder="$t('chat.stallQuestion.placeholder')" />
       <div class="mt-2 flex gap-2">
         <BaseButton type="submit" variant="primary" size="sm" :disabled="submitting || !draft.trim()">
@@ -32,7 +32,7 @@
 import { computed, ref } from 'vue'
 import { BaseButton, BaseInput } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
-import { useStallAnswer } from '@/composables/useGraphApproval'
+import { ResumeRejectedError, useStallAnswer } from '@/composables/useGraphApproval'
 import type { ChatMessage } from '@/stores/useChatStore'
 
 const props = defineProps<{ message: ChatMessage }>()
@@ -42,15 +42,27 @@ const draft = ref('')
 const answered = computed(() => props.message.metadata?.answered === true)
 const answerText = computed(() => String(props.message.metadata?.answer_text ?? ''))
 const submitting = ref(false)
-const failed = ref(false)
+type Failure = 'failed' | 'blocked' | 'stale'
+const FAILURE_KEYS: Record<Failure, string> = {
+  failed: 'chat.stallQuestion.failed',
+  blocked: 'chat.stallQuestion.blocked',
+  stale: 'chat.stallQuestion.stale',
+}
+const failure = ref<Failure | null>(null)
+
+/** Why a rejected answer did not go through: a policy block asks for different words, a stale question cannot be retried. */
+function failureKey(error: unknown): Failure {
+  const status = error instanceof ResumeRejectedError ? error.status : 0
+  return status === 400 ? 'blocked' : status === 409 ? 'stale' : 'failed'
+}
 
 async function send(text: string): Promise<void> {
   submitting.value = true
-  failed.value = false
+  failure.value = null
   try {
     await answerStallQuestion(props.message, text)
-  } catch {
-    failed.value = true // not accepted: the form stays so the person can try again
+  } catch (error) {
+    failure.value = failureKey(error) // not accepted: the form stays so the person can try again
   } finally {
     submitting.value = false
   }

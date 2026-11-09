@@ -434,7 +434,9 @@
       "stop": "Stop here",
       "answered": "You answered: {answer}",
       "stopped": "You chose to stop here.",
-      "failed": "Your answer could not be sent. Please try again."
+      "failed": "Your answer could not be sent. Please try again.",
+      "blocked": "Your answer was blocked by the content policy. Please reword it and try again.",
+      "stale": "This question is no longer waiting for an answer. Reload the chat to see its current state."
     },
     "approval": {
       "autoApproved": "Auto-Approved",
