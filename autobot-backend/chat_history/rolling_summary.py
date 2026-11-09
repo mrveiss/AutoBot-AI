@@ -79,6 +79,7 @@ from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.store_authority import system_of_record
@@ -237,7 +238,7 @@ def locate_tail(entry: SummaryEntry, messages: List[Dict[str, Any]]) -> Optional
     if len(messages) < entry.messages_seen:
         return None
     tail = project_indexed_pairs(messages, entry.last_start)
-    if not tail or tail[0][0] != entry.last_start or turn_digest(tail[0][1]) != entry.last_digest:
+    if not tail or tail[0][0] != entry.last_start or not secure_compare(turn_digest(tail[0][1]), entry.last_digest):
         return None
     return tail[1:]
 
