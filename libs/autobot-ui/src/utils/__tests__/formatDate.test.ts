@@ -9,13 +9,19 @@ import {
   formatTime,
   formatRelativeTime,
   formatLocalTime,
-  createRecencyFormatter
+  createRecencyFormatter,
+  isoDateStamp,
+  isoTimestampStamp,
+  toDateTimeLocalValue
 } from '../format'
 
 const ISO = '2025-10-30T14:30:15Z'
 const UTC = { timeZone: 'UTC' } as const
 
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 describe('createDateFormatter (#19905)', () => {
   it('formats the part asked for, in the locale asked for', () => {
@@ -253,5 +259,48 @@ describe('createRecencyFormatter (#19606)', () => {
     const f = createRecencyFormatter({ locale: 'en', style: 'narrow', maxUnit: 'day', olderThanMs: cutoff, older: () => 'older', now })
     expect(f(at(cutoff - 60_000))).toBe(justUnder)
     expect(f(at(cutoff))).toBe('older')
+  })
+})
+
+describe('isoDateStamp and toDateTimeLocalValue (#19905)', () => {
+  it('isoDateStamp is the UTC day, now by default, and empty for a bad value', () => {
+    expect(isoDateStamp('2025-10-30T23:59:59Z')).toBe('2025-10-30')
+    expect(isoDateStamp(new Date(Date.UTC(2025, 0, 2)))).toBe('2025-01-02')
+    expect(isoDateStamp(Date.UTC(2025, 5, 7))).toBe('2025-06-07')
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-08T12:00:00Z'))
+    expect(isoDateStamp()).toBe('2026-11-08')
+    expect(isoDateStamp('nope')).toBe('')
+    expect(isoDateStamp(null)).toBe('')
+  })
+
+  it('isoTimestampStamp is the filename-safe UTC second, now by default, empty for a bad value', () => {
+    expect(isoTimestampStamp('2025-10-30T14:05:59.123Z')).toBe('2025-10-30T14-05-59')
+    expect(isoTimestampStamp(new Date(Date.UTC(2025, 0, 2, 3, 4, 5)))).toBe('2025-01-02T03-04-05')
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-08T12:30:45Z'))
+    expect(isoTimestampStamp()).toBe('2026-11-08T12-30-45')
+    expect(isoTimestampStamp('nope')).toBe('')
+  })
+
+  it('toDateTimeLocalValue shifts by the zone offset in force at that instant, and is empty for a bad value', () => {
+    const offset = vi.spyOn(Date.prototype, 'getTimezoneOffset')
+    const noon = '2025-10-30T12:00:00Z'
+    offset.mockReturnValue(-120) // UTC+2
+    expect(toDateTimeLocalValue(noon)).toBe('2025-10-30T14:00')
+    offset.mockReturnValue(300) // UTC-5
+    expect(toDateTimeLocalValue(noon)).toBe('2025-10-30T07:00')
+    offset.mockReturnValue(0)
+    expect(toDateTimeLocalValue(noon)).toBe('2025-10-30T12:00')
+    // A DST transition: the offset the instant carries is the one used (spring forward at 01:00Z).
+    const jump = Date.UTC(2025, 2, 30, 1, 0, 0)
+    offset.mockImplementation(function (this: Date) {
+      return this.getTime() < jump ? -60 : -120
+    })
+    expect(toDateTimeLocalValue(jump - 1000)).toBe('2025-03-30T01:59')
+    expect(toDateTimeLocalValue(jump)).toBe('2025-03-30T03:00')
+    offset.mockRestore()
+    expect(toDateTimeLocalValue('nope')).toBe('')
+    expect(toDateTimeLocalValue(undefined)).toBe('')
   })
 })
