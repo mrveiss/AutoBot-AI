@@ -10,7 +10,7 @@ export const TOKEN_LIMIT_MIN = 1
 export interface BudgetLimitForm {
   budget_mode: 'dollars' | 'tokens'
   budget_limit: number
-  /** null (or an emptied field) means no token limit; a typed value must be >= TOKEN_LIMIT_MIN. */
+  /** null (or an emptied field) is dropped by the backend (the stored limit is unchanged, not removed); a typed value must be >= TOKEN_LIMIT_MIN. */
   token_limit: number | null | ''
   alert_threshold_pct: number
 }
