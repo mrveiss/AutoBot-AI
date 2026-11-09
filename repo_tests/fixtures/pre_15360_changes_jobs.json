@@ -65,13 +65,14 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
     ]
    },
    "file": ".github/filters/backend-python-paths.yml",
-   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+   "sha256": "cf7a1625-818dce02-fe613676-195d7680-2277a25c-52308681-b2d07114-18a4d67a"
   },
   "header_sha256": "6b14b130-240ae654-3579fc89-8b24097f-83d5a130-a63919da-2fa62ef4-9719e66c",
   "job_level_extras": [],
@@ -174,15 +175,16 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
     ]
    },
    "file": ".github/filters/backend-python-paths.yml",
-   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+   "sha256": "cf7a1625-818dce02-fe613676-195d7680-2277a25c-52308681-b2d07114-18a4d67a"
   },
-  "header_sha256": "a87bc1db-91fe7005-6f25388c-4a9b806f-e9f98d50-8fbac86c-4e4f5d3f-28af4f51",
+  "header_sha256": "feea5164-90c702cf-e9ece10c-0e09aa12-62db0225-0f3f557f-efff2a5d-5626902d",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
@@ -210,6 +212,7 @@
      ".github/filters/backend-python-paths.yml",
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
@@ -304,13 +307,14 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
     ]
    },
    "file": ".github/filters/backend-python-paths.yml",
-   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+   "sha256": "cf7a1625-818dce02-fe613676-195d7680-2277a25c-52308681-b2d07114-18a4d67a"
   },
   "header_sha256": "66426f3b-cd2c9019-8031f6b4-84badbc9-04b2e676-ed7a79ba-cd5eed18-9d7cf578",
   "job_level_extras": [],
@@ -1209,13 +1213,14 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
     ]
    },
    "file": ".github/filters/backend-python-paths.yml",
-   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+   "sha256": "cf7a1625-818dce02-fe613676-195d7680-2277a25c-52308681-b2d07114-18a4d67a"
   },
   "header_sha256": "92479c26-000545fb-b54a09b3-9b80a220-6bef0434-11c56cf4-8f7c9fcc-210efd02",
   "job_level_extras": [],
@@ -1441,13 +1446,14 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
     ]
    },
    "file": ".github/filters/backend-python-paths.yml",
-   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+   "sha256": "cf7a1625-818dce02-fe613676-195d7680-2277a25c-52308681-b2d07114-18a4d67a"
   },
   "header_sha256": "d50c032a-9f0e2896-9221c59a-39bb4c03-36587bab-a7940be0-327b22c2-2849df56",
   "job_level_extras": [],
@@ -1519,6 +1525,7 @@
      "autobot-slm-frontend/package.json",
      "autobot-slm-frontend/package-lock.json",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "**/requirements*.txt",
      ".github/workflows/verify-generated-types.yml"
     ],
@@ -1531,12 +1538,13 @@
      "autobot-frontend/package.json",
      "autobot-frontend/package-lock.json",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "**/requirements*.txt",
      ".github/workflows/verify-generated-types.yml"
     ]
    }
   },
-  "header_sha256": "3b94f14c-8d7bc5e0-620ee3a1-3189e067-7d49ecde-3bf32e69-78ee82cd-2ea5e795",
+  "header_sha256": "4818ceae-75aa678f-c3772955-6a4e2f77-1f8f9a98-bdd7660d-4e683860-ca7ad7e7",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
@@ -1566,6 +1574,7 @@
      "autobot-frontend/package.json",
      "autobot-frontend/package-lock.json",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "requirements*.txt",
      ".github/workflows/verify-generated-types.yml"
     ]
@@ -1591,7 +1600,7 @@
   "other_jobs_sha256": {
    "verify-generated-types": "9837b4da-2d68ed9f-30eadb36-0430d02e-e2530dcf-94418877-b19fd27b-ea023cdf",
    "verify-generated-types-slm": "eb4a15aa-0f4241c9-ea167c54-1edb7ef6-8f9f134e-f01901be-215c867f-56ec646e",
-   "verify-types-run": "6a6ead76-eb7b8da6-9d1f5b0e-52c553c3-2ab69bb8-8aef31a1-b46e0fe3-c9d8d1fa"
+   "verify-types-run": "786829d3-d27a71f9-f24f5309-108dc1b8-a4dc9cb0-0f4648ce-7969df5e-fe2cd23e"
   },
   "outputs": [
    "slm_types",
