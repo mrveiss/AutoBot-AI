@@ -223,7 +223,7 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
     if (!factsCursor.value) return
     await wrap(async () => {
       try {
-        const page = await apiClient.get<Record<string, unknown>>(
+        const page: Record<string, unknown> = await apiClient.get(
           `${getApiBase()}/knowledge_base/multi-source/graph?max_facts=100&include_buckets=false`
           + `&cursor=${encodeURIComponent(factsCursor.value as string)}`,
         )
