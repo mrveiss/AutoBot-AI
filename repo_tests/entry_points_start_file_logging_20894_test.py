@@ -1,30 +1,38 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""Every service entry point starts file logging with the ONE call, ``setup_logging()`` (#20894).
+"""Every LAUNCHED Python target starts file logging with the ONE call, ``setup_logging()`` (#20894).
 
 Loggers write to the console only until a service's startup calls
 ``autobot_shared.logging_manager.setup_logging``, so importing a module creates no file (owner
-decision 2026-11-09). An entry point that skips the call silently loses its log file. Enumerated
-mechanically, never by hand:
+decision 2026-11-09). A launched target that skips the call silently loses its log file. The
+population is what something actually launches, enumerated mechanically from these sources only:
 
 * the source each Python systemd unit template runs (``UNIT_TARGETS``; a new unit fails until mapped),
+* the source each Python docker-compose service runs (``COMPOSE_TARGETS``; a new service fails
+  until mapped),
 * modules that build an app at module level (``FastAPI``/``Starlette``/``create_app``/``Celery``),
-* modules with an ``if __name__ == "__main__":`` block that import the logging manager.
+* ``[project.scripts]`` entry points in ``pyproject.toml`` (none today),
+* ``__main__`` scripts that import the logging manager under ``SCRIPT_DIRS`` (``scripts/``, ``tools/``,
+  ``pipeline-scripts/`` and the infrastructure scripts tree),
+* the ops CLIs already wired (``OPS_CLIS``).
 
-Each must call that function, imported from ``autobot_shared.logging_manager`` (a local function
-of the same name does not count), or be exempt here with a reason. ``NO_MANAGER`` exemptions are
-checked: the file must not name the logging manager. Tests are not entry points (pytest runs them).
-Library modules whose ``__main__`` demo block predates this are frozen in the baseline module and
-only go down.
+A library module's demo ``if __name__ == "__main__":`` block is NOT a service entry point (Trainmaster
+ruling 2026-11-09) and is outside the population unless one of the sources above launches it.
+
+Each target must call that function, imported from ``autobot_shared.logging_manager`` (a local
+function of the same name does not count), or be exempt here with a reason. ``NO_MANAGER``
+exemptions are checked: the file must not name the logging manager. Tests are not entry points.
 """
 
 from __future__ import annotations
 
 import ast
+import re
+import tomllib
 from pathlib import Path
 
+import yaml
 from repo_tests._paths import repo_root
-from repo_tests.entry_points_start_file_logging_20894_baseline import PENDING
 from repo_tests.service_units_set_logs_dir_20894_test import _python_units
 
 from tools.lint._scan_helpers import tracked_paths
@@ -65,6 +73,43 @@ UNIT_TARGETS: dict[str, str | None] = {
     ),
 }
 
+#: Every Python docker-compose service -> the tracked source it runs ("file::service" keys).
+_COMPOSE = "docker-compose.yml"
+_OVERRIDE = "docker-compose.override.example.yml"
+COMPOSE_TARGETS: dict[str, str | None] = {
+    f"{_OVERRIDE}::autobot-backend": "autobot-backend/main.py",
+    f"{_OVERRIDE}::autobot-slm": "autobot-slm-backend/main.py",
+    f"{_COMPOSE}::autobot-backend": "autobot-backend/main.py",
+    f"{_COMPOSE}::autobot-worker": "autobot-backend/celery_app.py",
+    f"{_COMPOSE}::autobot-celery-beat": "autobot-backend/celery_app.py",
+    f"{_COMPOSE}::autobot-docker-proxy": "docker/docker-proxy/proxy.py",
+    f"{_COMPOSE}::autobot-slm": "autobot-slm-backend/main.py",
+    (
+        "autobot-infrastructure/shared/docker/compose/docker-compose.secure-sandbox.yml::sandbox-monitor"
+    ): "autobot-infrastructure/shared/docker/security/security-monitor.py",
+}
+
+#: Directories whose ``__main__`` scripts (importing the manager) are launched by hand or by ops.
+SCRIPT_DIRS = ("scripts/", "tools/", "pipeline-scripts/", "autobot-infrastructure/shared/scripts/")
+
+#: Ops CLIs and workers launched by name (not by a unit, compose service or script dir).
+OPS_CLIS: frozenset[str] = frozenset(
+    {
+        "autobot-backend/acp/__main__.py",
+        "autobot-backend/api/codebase_analytics/indexing_worker.py",
+        "autobot-backend/chat_history/session_reply_backfill.py",
+        "autobot-backend/chat_history/session_scope_backfill.py",
+        "autobot-backend/database/migrations/001_create_conversation_files.py",
+        "autobot-backend/eval/run.py",
+        "autobot-backend/pki/cli.py",
+        "autobot-backend/services/autoresearch/run_experiment.py",
+        "autobot-backend/services/mcp_bridge_workers/worker_entrypoint.py",
+        "autobot-backend/services/pricing_refresh.py",
+        "autobot-backend/services/workflow_redis_backfill.py",
+        "autobot_shared/error_boundaries/__main__.py",
+    }
+)
+
 _STDLIB = "stdlib logging only; never uses the logging manager, so it has no deferred file handler"
 #: Entry points that never use the logging manager. Checked: the file must not name it.
 NO_MANAGER: dict[str, str] = {
@@ -73,6 +118,15 @@ NO_MANAGER: dict[str, str] = {
     f"{_TEMPLATES}/npu-worker/templates/npu-worker.py.j2": _STDLIB,
     f"{_TEMPLATES}/tts-worker/templates/tts-worker.py.j2": _STDLIB,
     "autobot-slm-backend/slm/agent/agent.py": _STDLIB,
+    "docker/docker-proxy/proxy.py": _STDLIB,
+    "autobot-infrastructure/shared/docker/security/security-monitor.py": _STDLIB,
+}
+
+_TOO_BIG = "launched script over the 600-line ceiling: the size hook rejects any edit, so it is wired with its split"
+#: Launched scripts that cannot take the call until split. Checked: gone from here once they call it.
+OVERSIZE: dict[str, str] = {
+    "autobot-infrastructure/shared/scripts/analysis/npu_performance_measurement.py": _TOO_BIG,
+    "autobot-infrastructure/shared/scripts/utilities/enhance_workflow_ui.py": _TOO_BIG,
 }
 
 #: Entry points that use the manager and deliberately stay console-only.
@@ -158,9 +212,58 @@ def calls_setup_logging(tree: ast.Module) -> bool:
     return False
 
 
-def entry_points(root: Path, paths: list[str], unit_targets: dict[str, str | None]) -> set[str]:
-    """Unit targets present in the tree, module-level app builders, and ``__main__`` modules using the manager."""
-    found = {t for t in unit_targets.values() if t and (root / t).is_file()}
+_PY_TOKEN = re.compile(r"^python[\d.]*$")
+
+
+def compose_python_services(root: Path) -> set[str]:
+    """``file::service`` for every tracked compose service whose command/entrypoint runs python."""
+    return compose_python_services_in(root, tracked_paths(root, "*docker-compose*.yml"))
+
+
+def compose_python_services_in(root: Path, paths: list[str]) -> set[str]:
+    """Same, over an explicit list of compose files."""
+    found = set()
+    for path in paths:
+        services = (yaml.safe_load((root / path).read_text(encoding="utf-8")) or {}).get("services") or {}
+        for name, svc in services.items():
+            tokens: list[str] = []
+            for key in ("entrypoint", "command"):
+                value = svc.get(key) or []
+                tokens += value.split() if isinstance(value, str) else [str(v) for v in value]
+            if any(_PY_TOKEN.match(t) for t in tokens):
+                found.add(f"{path}::{name}")
+    return found
+
+
+def console_scripts(root: Path) -> set[str]:
+    """Tracked sources of the ``[project.scripts]`` entry points in ``pyproject.toml``."""
+    data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    found = set()
+    for target in (data.get("project", {}).get("scripts") or {}).values():
+        module = target.split(":")[0].replace(".", "/")
+        found |= {c for c in (f"{module}.py", f"{module}/__init__.py") if (root / c).is_file()}
+    return found
+
+
+def _is_launched_script(root: Path, path: str) -> bool:
+    if not path.startswith(SCRIPT_DIRS):
+        return False
+    tree = _parse(root, path)
+    return tree is not None and any(_is_main_guard(n) for n in tree.body) and _imports_manager(tree)
+
+
+def entry_points(
+    root: Path,
+    paths: list[str],
+    unit_targets: dict[str, str | None],
+    compose_targets: dict[str, str | None] | None = None,
+    ops_clis: frozenset[str] = frozenset(),
+) -> set[str]:
+    """The launched population: unit/compose targets, app builders, console scripts, scripts, ops CLIs."""
+    targets = [*unit_targets.values(), *(compose_targets or {}).values(), *ops_clis]
+    found = {t for t in targets if t and (root / t).is_file()}
+    if (root / "pyproject.toml").is_file():
+        found |= console_scripts(root)
     for path in paths:
         if _is_test(path):
             continue
@@ -170,9 +273,7 @@ def entry_points(root: Path, paths: list[str], unit_targets: dict[str, str | Non
         tree = _parse(root, path)
         if tree is None:
             continue
-        if any(_builds_app(n) for n in tree.body):
-            found.add(path)
-        elif any(_is_main_guard(n) for n in tree.body) and _imports_manager(tree):
+        if any(_builds_app(n) for n in tree.body) or _is_launched_script(root, path):
             found.add(path)
     return found
 
@@ -188,7 +289,7 @@ def missing_call(root: Path, entries: set[str], exempt: set[str]) -> list[str]:
 
 
 def _live_entries() -> set[str]:
-    return entry_points(_ROOT, tracked_paths(_ROOT, "*.py"), UNIT_TARGETS)
+    return entry_points(_ROOT, tracked_paths(_ROOT, "*.py"), UNIT_TARGETS, COMPOSE_TARGETS, OPS_CLIS)
 
 
 def test_every_python_unit_is_mapped_to_its_source() -> None:
@@ -200,11 +301,21 @@ def test_every_python_unit_is_mapped_to_its_source() -> None:
     assert not gone, f"mapped source(s) not in the tree: {gone}"
 
 
-def test_every_entry_point_calls_setup_logging() -> None:
+def test_every_python_compose_service_is_mapped_to_its_source() -> None:
+    services = compose_python_services(_ROOT)
+    assert services == set(COMPOSE_TARGETS), (
+        f"unmapped compose service(s): {sorted(services - set(COMPOSE_TARGETS))}; "
+        f"gone: {sorted(set(COMPOSE_TARGETS) - services)}"
+    )
+    gone = [t for t in (*COMPOSE_TARGETS.values(), *OPS_CLIS) if t and not (_ROOT / t).is_file()]
+    assert not gone, f"mapped source(s) not in the tree: {gone}"
+
+
+def test_every_launched_target_calls_setup_logging() -> None:
     entries = _live_entries()
-    assert len(entries) >= 100, f"discovery found only {len(entries)} entry points"
-    missing = missing_call(_ROOT, entries, set(NO_MANAGER) | set(CONSOLE_ONLY) | set(PENDING))
-    assert not missing, f"entry point(s) never call {_MANAGER}.{_CALL}(), so they write no log file: {missing}"
+    assert len(entries) >= 30, f"discovery found only {len(entries)} launched targets"
+    missing = missing_call(_ROOT, entries, set(NO_MANAGER) | set(CONSOLE_ONLY) | set(OVERSIZE))
+    assert not missing, f"launched target(s) never call {_MANAGER}.{_CALL}(), so they write no log file: {missing}"
 
 
 def test_no_manager_exemptions_hold() -> None:
@@ -212,12 +323,12 @@ def test_no_manager_exemptions_hold() -> None:
     assert not named, f"exempt as manager-free, but now name the logging manager -- call {_CALL}(): {named}"
 
 
-def test_exemptions_and_pending_are_not_stale() -> None:
+def test_exemptions_are_not_stale() -> None:
     entries = _live_entries()
-    stale = sorted(p for p in (*NO_MANAGER, *CONSOLE_ONLY, *PENDING) if p not in entries)
-    assert not stale, f"no longer an entry point -- drop from the exemptions/PENDING: {stale}"
-    done = sorted(p for p in PENDING if calls_setup_logging(_parse(_ROOT, p) or ast.Module(body=[], type_ignores=[])))
-    assert not done, f"now call {_CALL}() -- drop from PENDING: {done}"
+    stale = sorted(p for p in (*NO_MANAGER, *CONSOLE_ONLY, *OVERSIZE) if p not in entries)
+    assert not stale, f"no longer launched -- drop from the exemptions: {stale}"
+    done = sorted(p for p in OVERSIZE if calls_setup_logging(_parse(_ROOT, p) or ast.Module(body=[], type_ignores=[])))
+    assert not done, f"now call {_CALL}() -- drop from OVERSIZE: {done}"
 
 
 def _plant(root: Path, files: dict[str, str]) -> list[str]:
@@ -227,23 +338,61 @@ def _plant(root: Path, files: dict[str, str]) -> list[str]:
     return sorted(files)
 
 
-def test_control_an_entry_point_without_the_call_is_reported(tmp_path: Path) -> None:
-    """Control: a synthetic entry point of every kind without the call fails; with it, passes."""
+def test_control_a_launched_target_without_the_call_is_reported(tmp_path: Path) -> None:
+    """Control: a synthetic launched target of every kind without the call fails; with it, passes."""
     imp = f"from {_MANAGER} import get_logger\n"
+    demo = imp + "if __name__ == '__main__':\n    get_logger(__name__)\n"
     paths = _plant(
         tmp_path,
         {
             "svc/app.py": "from fastapi import FastAPI\napp = FastAPI()\n",
-            "svc/cli.py": imp + "if __name__ == '__main__':\n    get_logger(__name__)\n",
+            "scripts/cli.py": demo,
             "svc/unit_target.py": "def main():\n    pass\n",
+            "svc/compose_target.py": "def main():\n    pass\n",
+            "svc/ops.py": "def main():\n    pass\n",
             "svc/ok.py": f"from {_MANAGER} import {_CALL}\napp = FastAPI()\n{_CALL}()\n",
             "svc/lazy.py": f"def main():\n    from {_MANAGER} import {_CALL}\n    {_CALL}()\napp = Celery('x')\n",
-            "svc/own_fn.py": imp + f"def {_CALL}():\n    pass\nif __name__ == '__main__':\n    {_CALL}()\n",
-            "svc/x_test.py": imp + "if __name__ == '__main__':\n    pass\n",
+            "scripts/own_fn.py": imp + f"def {_CALL}():\n    pass\nif __name__ == '__main__':\n    {_CALL}()\n",
+            "svc/x_test.py": demo,
         },
     )
-    entries = entry_points(tmp_path, paths, {"svc/u.service": "svc/unit_target.py"})
+    entries = entry_points(
+        tmp_path,
+        paths,
+        {"svc/u.service": "svc/unit_target.py"},
+        {"compose.yml::svc": "svc/compose_target.py"},
+        frozenset({"svc/ops.py"}),
+    )
     assert "svc/x_test.py" not in entries
-    missing = missing_call(tmp_path, entries, set())
-    assert missing == ["svc/app.py", "svc/cli.py", "svc/own_fn.py", "svc/unit_target.py"]
-    assert missing_call(tmp_path, entries, {"svc/app.py", "svc/cli.py", "svc/own_fn.py", "svc/unit_target.py"}) == []
+    expected = [
+        "scripts/cli.py",
+        "scripts/own_fn.py",
+        "svc/app.py",
+        "svc/compose_target.py",
+        "svc/ops.py",
+        "svc/unit_target.py",
+    ]
+    assert missing_call(tmp_path, entries, set()) == expected
+    assert missing_call(tmp_path, entries, set(expected)) == []
+
+
+def test_control_a_library_demo_main_is_not_in_the_population(tmp_path: Path) -> None:
+    """Control: a ``__main__`` demo in a library module that nothing launches is outside the guard."""
+    imp = f"from {_MANAGER} import get_logger\n"
+    paths = _plant(tmp_path, {"lib/demo.py": imp + "if __name__ == '__main__':\n    get_logger(__name__)\n"})
+    assert entry_points(tmp_path, paths, {}) == set()
+    assert entry_points(tmp_path, paths, {}, {}, frozenset({"lib/demo.py"})) == {"lib/demo.py"}
+
+
+def test_control_a_new_compose_service_without_the_call_is_reported(tmp_path: Path) -> None:
+    """Control: an unmapped compose service is detected, and once mapped its target must call the function."""
+    _plant(
+        tmp_path,
+        {
+            "docker-compose.yml": "services:\n  web:\n    command: [python3, /app/web.py]\n  db:\n    command: [postgres]\n",
+            "web.py": "def main():\n    pass\n",
+        },
+    )
+    assert compose_python_services_in(tmp_path, ["docker-compose.yml"]) == {"docker-compose.yml::web"}
+    entries = entry_points(tmp_path, [], {}, {"docker-compose.yml::web": "web.py"})
+    assert missing_call(tmp_path, entries, set()) == ["web.py"]
