@@ -29,7 +29,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
     "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1780,
     "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1216,
-    "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1260,
+    "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1259,
     "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 756,
     "autobot-frontend/src/components/analytics/ConversationFlowDashboard.vue": 909,
     "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": 1078,
@@ -112,7 +112,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/composables/__tests__/useModal.test.ts": 761,
     "autobot-frontend/src/composables/__tests__/usePagination.test.ts": 808,
     "autobot-frontend/src/composables/__tests__/useTimeout.test.ts": 1211,
-    "autobot-frontend/src/composables/analytics/useAnalyticsDataFetchers.ts": 701,
+    "autobot-frontend/src/composables/analytics/useAnalyticsDataFetchers.ts": 685,
     "autobot-frontend/src/composables/useKeyboard.ts": 650,
     "autobot-frontend/src/composables/useKnowledgeVectorization.ts": 679,
     "autobot-frontend/src/composables/usePatternAnalysis.ts": 865,
@@ -147,7 +147,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 848,
     "autobot-frontend/src/views/WorkflowBuilderView.vue": 2142,  # #21043: 2166 -> 2151 -> 2142; #17677; #13421
-    "autobot-frontend/src/views/llc/BacklogView.vue": 611,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 755,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1012,  # #20123: 1015 -> 1012 (mixed bucket lists each currency)
