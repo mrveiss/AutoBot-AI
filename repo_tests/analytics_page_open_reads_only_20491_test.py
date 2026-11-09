@@ -110,6 +110,7 @@ def test_both_readers_of_the_current_job_check_its_source() -> None:
 
 
 SCORES = "autobot-frontend/src/composables/analytics/useCodeIntelScores.ts"
+CACHED_SCORE = "autobot-frontend/src/composables/analytics/useCachedSecurityScore.ts"
 INTELLIGENCE = "autobot-frontend/src/composables/useCodeIntelligence.ts"
 
 
@@ -124,34 +125,76 @@ def _block(source: str, start: str, end: str) -> str:
 
 
 def sends_its_source(block: str) -> bool:
-    """True when the block scopes the read to a source (option set to true, scoper passed)."""
+    """True when the read is scoped to a source: ``scopeToSource: true`` and the scoper handed on."""
     code = _strip_comments(block)
-    return bool(re.search(r"scopeToSource:\s*true", code)) and "{ withSourceId }" in code
+    return bool(re.search(r"scopeToSource:\s*true", code)) and bool(
+        re.search(r"\{\s*withSourceId(?::\s*options\.withSourceId)?\s*\}", code)
+    )
 
 
-def scoped_by_with_source_id(block: str) -> bool:
-    """True when the block builds its URL through ``withSourceId(...)``."""
-    return bool(re.search(r"withSourceId\(", _strip_comments(block)))
+def passes_its_scoper(block: str) -> bool:
+    """True when the caller hands ``withSourceId`` to the cached-score composable."""
+    return bool(re.search(r"\bwithSourceId\b", _strip_comments(block)))
+
+
+def writes_on_open(block: str) -> bool:
+    """True when the cached read could write: a non-GET ``method`` or a ``.post(`` / ``.delete(`` call."""
+    code = _strip_comments(block)
+    return bool(re.search(r"method:\s*['\"](?!GET)", code) or re.search(r"\.(post|put|patch|delete)\(", code))
+
+
+def passes_to_cached_read(source: str) -> bool:
+    """True when the source builds ``useCachedSecurityScore`` with the ``withSourceId`` scoper."""
+    return bool(re.search(r"useCachedSecurityScore\(\{\s*withSourceId\b", _strip_comments(source)))
+
+
+def _security_read_blocks() -> tuple[str, str]:
+    """The cached security read lives in ``CACHED_SCORE`` (#18907); ``SCORES`` only wires it in."""
+    home = _block(_read(CACHED_SCORE), "export function useCachedSecurityScore", "\n}\n")
+    caller = _block(_read(SCORES), "const cachedSecurityScoreEndpoint", "const loadCachedSecurityScore")
+    return home, caller
 
 
 def test_the_source_detectors_fail_without_the_scoping() -> None:
-    real = _block(_read(SCORES), "const cachedSecurityScoreEndpoint", "const loadCachedSecurityScore")
-    assert sends_its_source(real), "control: the real block is scoped"
-    assert not sends_its_source(real.replace("scopeToSource: true", "scopeToSource: false"))
-    assert not sends_its_source(real.replace("{ withSourceId }", "{}"))
+    home, caller = _security_read_blocks()
+    assert sends_its_source(home) and passes_its_scoper(caller), "control: the real read is scoped"
+    assert not sends_its_source(home.replace("scopeToSource: true", "scopeToSource: false"))
+    assert not sends_its_source(home.replace("{ withSourceId: options.withSourceId }", "{}"))
     assert not sends_its_source("// scopeToSource: true { withSourceId }\npath: 'x'")
-    cached = _block(_read(INTELLIGENCE), "async function getSecurityScoreCached", "\n  }\n")
-    assert scoped_by_with_source_id(cached), "control: the real read is scoped"
-    assert not scoped_by_with_source_id(cached.replace("withSourceId(", "noop("))
-    assert not scoped_by_with_source_id("// withSourceId(url)\nget(url)")
+    assert not passes_its_scoper(caller.replace("withSourceId", "noop"))
+    wired = _read(INTELLIGENCE)
+    assert passes_to_cached_read(wired), "control: the other reader hands its scoper to the cached read"
+    assert not passes_to_cached_read(wired.replace("useCachedSecurityScore({ withSourceId", "useCachedSecurityScore({"))
+    assert not passes_to_cached_read("// useCachedSecurityScore({ withSourceId })\nx()")
 
 
 def test_the_cached_security_read_sends_its_source() -> None:
     """The route requires ``source_id``; without it the page-open read answers 422."""
-    block = _block(_read(SCORES), "const cachedSecurityScoreEndpoint", "const loadCachedSecurityScore")
-    assert sends_its_source(block)
+    home, caller = _security_read_blocks()
+    assert sends_its_source(home)
+    assert passes_its_scoper(caller)
+
+
+def test_the_cached_security_read_writes_nothing_on_open() -> None:
+    home, caller = _security_read_blocks()
+    assert not writes_on_open(home) and not writes_on_open(caller)
+    assert writes_on_open(home.replace("scopeToSource: true,", "scopeToSource: true, method: 'POST',"))
+    assert writes_on_open("await api.post(url)")
+    assert not writes_on_open("// method: 'POST'\nmethod: 'GET'")
+
+
+def test_a_planted_page_open_scan_is_caught() -> None:
+    """Control: the allow-lists fail on a scan or mount call added back to the page-open path."""
+    planted_scan = (
+        "const codeIntelExtraScans = (): X[] => [\n  { run: async () => { await runCodeIntelligenceAnalysis() } },\n]\n"
+    )
+    assert scan_calls(planted_scan) - SCAN_ALLOWED == {"runCodeIntelligenceAnalysis"}
+    planted_mount = "onMounted(async () => {\n  await loadSources()\n  await loadRedisHealth()\n})\n"
+    assert mount_calls(planted_mount) - MOUNT_ALLOWED == {"loadRedisHealth"}
 
 
 def test_the_other_cached_security_read_sends_its_source() -> None:
-    block = _block(_read(INTELLIGENCE), "async function getSecurityScoreCached", "\n  }\n")
-    assert scoped_by_with_source_id(block)
+    source = _read(INTELLIGENCE)
+    assert passes_to_cached_read(source)
+    block = _block(source, "async function getSecurityScoreCached", "\n  }\n")
+    assert "cachedScore.load()" in block and not writes_on_open(block)
