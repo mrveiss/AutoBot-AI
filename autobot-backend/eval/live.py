@@ -29,6 +29,7 @@ from autobot_shared.env_registry import env
 from autobot_shared.logging_manager import get_logger
 from eval.live_classify import (  # noqa: F401  (re-exported: the live API surface)
     CATEGORIES,
+    FORBIDDEN_TOOL,
     GROUNDED_TASK_CLASSES,
     LiveRunRecord,
     classify_failures,
@@ -221,10 +222,13 @@ class ModelRunner:
 
     def _result(self, golden: GoldenTrajectory, record: LiveRunRecord, detail: str) -> CandidateResult:
         categories = classify_failures(record)
+        forbidden = forbidden_tools(golden, record)
+        if forbidden:
+            categories.append(FORBIDDEN_TOOL)  # counted in the per-model histogram like any other category
         notes = [detail] if detail else []
         if heuristic := [c for c in categories if is_heuristic(record, c)]:
             notes.append(f"heuristic: {', '.join(heuristic)}")
-        if forbidden := forbidden_tools(golden, record):
+        if forbidden:
             notes.append(f"forbidden_tool: {', '.join(forbidden)}")
         passed = (
             record.final_status == golden.expected_status

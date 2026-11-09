@@ -11,6 +11,7 @@ queued). A turn whose graph never ran (``process_message_stream`` fell back to t
 
 from __future__ import annotations
 
+import re
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List
@@ -30,6 +31,15 @@ STATUS_COMPLETED, STATUS_ERROR, STATUS_AWAITING_APPROVAL = "completed", "error",
 DENIED_REASON = "denied: eval run"
 #: Knowledge-base states a live run can find: documents present, no documents, or unreachable.
 KB_POPULATED, KB_EMPTY, KB_UNREACHABLE = "populated", "empty", "unreachable"
+
+
+#: The exact shape of a session id this module creates: ``eval-<trajectory_id>-<uuid4 hex>``.
+_OWN_SESSION = re.compile(r"^eval-[\w-]+-[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$")
+
+
+def new_session_id(golden: GoldenTrajectory) -> str:
+    """A unique throwaway session id of the one shape ``_delete_history`` will agree to delete."""
+    return f"eval-{golden.trajectory_id}-{uuid.uuid4().hex}"
 
 
 class GraphDidNotRun(RecordingUnusable):
@@ -112,7 +122,7 @@ async def _delete_history(session_id: str) -> None:
     """Remove the chat-history session ``process_message`` persisted under this eval's own id, and only that id."""
     from chat_history import ChatHistoryManager
 
-    if not session_id.startswith("eval-"):
+    if not _OWN_SESSION.fullmatch(session_id):
         raise ValueError("refusing to delete a chat-history session that is not the eval's own")
     try:
         await ChatHistoryManager().delete_session(session_id)
@@ -134,7 +144,7 @@ async def chat_turn_runner(golden: GoldenTrajectory, model: str, workspace: Path
 
     manager = get_chat_workflow_manager()
     await manager.initialize()
-    session_id = f"eval-{golden.trajectory_id}-{uuid.uuid4().hex}"
+    session_id = new_session_id(golden)
     try:
         messages = await manager.process_message(session_id, golden.query, run_context(model))
         graph = await get_compiled_graph(manager)

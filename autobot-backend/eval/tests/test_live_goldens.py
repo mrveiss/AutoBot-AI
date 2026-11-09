@@ -123,6 +123,7 @@ async def test_calling_any_tool_fails_a_golden_that_allows_none():
     golden = _GOLDENS["code_fix_null_guard"]
     result = await _run(golden, final_text=_GOOD[golden.trajectory_id], tool_sequence=["execute_command"])
     assert result.passed is False and "forbidden_tool: execute_command" in result.criteria_detail
+    assert "forbidden_tool" in result.failure_categories  # so the per-model histogram counts it
 
 
 def test_the_allowlist_is_expected_tools_plus_allowed_tools_and_empty_by_default():
@@ -134,3 +135,25 @@ def test_the_allowlist_is_expected_tools_plus_allowed_tools_and_empty_by_default
         assert forbidden_tools(golden, record) == ["read_file"]
     finally:
         golden.allowed_tools = []
+
+
+_PARAPHRASE = (
+    "Use the SLM's guided setup page: choose the node and the role, then kick off the Ansible run. The code is "
+    "synced from the code source onto the node and the service is restarted afterwards, so verify the node "
+    "reports healthy once it is back."
+)
+
+
+@pytest.mark.asyncio
+async def test_a_correct_paraphrase_of_the_deploy_answer_passes_without_the_exact_words():
+    result = await _run(_GOLDENS["qa_deploy_role"], final_text=_PARAPHRASE, used_knowledge=True)
+    assert result.passed is True, result.criteria_detail
+
+
+@pytest.mark.asyncio
+async def test_an_answer_covering_only_one_of_the_three_concepts_still_fails():
+    one = (
+        "Open the setup wizard on the SLM page and pick the node you want from the list it shows you, then pick "
+        "the role from the dropdown and confirm the choice. Afterwards look at the node details to check things."
+    )
+    assert (await _run(_GOLDENS["qa_deploy_role"], final_text=one, used_knowledge=True)).passed is False

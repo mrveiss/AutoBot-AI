@@ -12,6 +12,7 @@ that drifted into a parallel re-implementation would not satisfy them.
 
 from __future__ import annotations
 
+import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -184,9 +185,52 @@ async def test_the_chat_history_the_turn_persisted_is_deleted_under_the_evals_ow
     assert _History.deleted == deleted and deleted[0].startswith("eval-g-")
 
 
-async def test_a_history_delete_for_a_session_that_is_not_the_evals_own_is_refused():
-    with pytest.raises(ValueError, match="not the eval's own"):
-        await live_turn._delete_history("a-real-users-session")
+_UUID4 = uuid.UUID(int=0xABCDEF00, version=4).hex
+
+
+@pytest.mark.parametrize(
+    "session_id",
+    [
+        "a-real-users-session",
+        "eval-g-123",
+        f"eval-g-{_UUID4}-extra",
+        f"evalx-g-{_UUID4}",
+        f"eval--{_UUID4}",
+        f"eval-g-{_UUID4[:12]}1{_UUID4[13:]}",  # not a uuid4 (version nibble)
+        f"eval-g-{_UUID4[:16]}0{_UUID4[17:]}",  # not a uuid4 (variant nibble)
+        f"eval-g-{_UUID4.upper()}",
+        f"eval-g-{_UUID4}\n",
+    ],
+)
+async def test_a_history_delete_for_a_session_that_is_not_the_evals_own_is_refused(session_id):
+    _History.deleted = []
+    with patch("chat_history.ChatHistoryManager", _History):
+        with pytest.raises(ValueError, match="not the eval's own"):
+            await live_turn._delete_history(session_id)
+    assert _History.deleted == []
+
+
+async def test_a_session_id_the_eval_made_is_accepted_by_its_own_delete_guard():
+    _History.deleted = []
+    session_id = live_turn.new_session_id(_golden())
+    with patch("chat_history.ChatHistoryManager", _History):
+        await live_turn._delete_history(session_id)
+    assert _History.deleted == [session_id]
+
+
+async def test_a_denied_approval_ends_the_turn_and_runs_no_tool():
+    """Chat's resume supports a terminal deny: the denied branch of execute_tools skips every call."""
+    state = {
+        "session_id": "eval-g-1",
+        "tool_calls": [{"name": "navigate", "params": {"url": "x"}, "needs_approval": True}],
+        "approval_decision": {"approved": False, "reason": live_turn.DENIED_REASON, "bound": []},
+        "workflow_messages": [],
+        "iteration_count": 1,
+    }
+    with patch.object(graph_module, "dispatch_approved_calls", AsyncMock(side_effect=AssertionError("ran a tool"))):
+        update = await graph_module.execute_tools(state, {"configurable": {"manager": object()}})
+    assert update["should_continue"] is False and "execution_history" not in update
+    assert graph_module.route_after_execution({**state, **update}) == "persist_conversation"
 
 
 async def test_a_graph_that_raised_and_fell_back_to_legacy_is_not_run_and_is_still_cleaned_up(tmp_path):

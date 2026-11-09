@@ -93,3 +93,14 @@ async def test_a_grounded_golden_on_an_empty_or_unreachable_kb_is_not_run_as_an_
     assert calls == ["fix"], "the grounded turn must not have run"
     assert second.passed is True
     assert candidate.kb_status == status
+
+
+def test_every_mutating_member_of_the_still_allowed_set_is_gated_by_an_approval_category():
+    """The profile does not block these, so the approval categories must: each mutating one is gated."""
+    from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, ToolEffect, match_tool_name, tools_with
+
+    gated = [tool for tools in APPROVAL_CATEGORY_TOOLS.values() for tool in tools]
+    mutating = sorted(t for t in _STILL_ALLOWED if t in tools_with(ToolEffect.MUTATING))
+    assert {"navigate", "click", "fill", "select", "evaluate", "code_interpreter"} <= set(mutating), mutating
+    ungated = [t for t in mutating if match_tool_name(t, gated, word_boundary=True) is None]
+    assert ungated == [], f"allowed by the profile and gated by no approval category: {ungated}"

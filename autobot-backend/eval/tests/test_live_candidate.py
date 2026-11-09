@@ -70,10 +70,10 @@ async def test_a_missed_criterion_fails_with_false_done_and_the_criterion_detail
 
 
 @pytest.mark.asyncio
-async def test_a_wrong_tool_sequence_fails_even_with_no_category():
+async def test_a_wrong_tool_sequence_fails_and_the_unexpected_tool_is_a_forbidden_tool_category():
     record = LiveRunRecord(final_text="DEFAULT", tool_sequence=["web_search"])
     result = await _run(_candidate(record), _golden(criteria=_MATCHES, tools=["read_file"]))
-    assert result.passed is False and result.failure_categories == []
+    assert result.passed is False and result.failure_categories == ["forbidden_tool"]
 
 
 @pytest.mark.asyncio

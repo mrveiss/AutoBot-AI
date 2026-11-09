@@ -34,6 +34,8 @@ UNKNOWN_TOOL = "unknown_tool"
 LOOP_STALL = "loop_stall"
 FALSE_DONE = "false_done"
 UNSUPPORTED_CLAIM = "unsupported_claim"
+#: Not in ``CATEGORIES``: it needs the golden's allowlist, so the candidate adds it (``eval.live.forbidden_tools``).
+FORBIDDEN_TOOL = "forbidden_tool"
 CATEGORIES = (MALFORMED_TOOL_CALL, UNKNOWN_TOOL, LOOP_STALL, FALSE_DONE, UNSUPPORTED_CLAIM)
 
 #: Task classes whose answers must rest on retrieved knowledge (the grounding signal applies to them only).

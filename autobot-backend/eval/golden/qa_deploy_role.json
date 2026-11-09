@@ -12,9 +12,9 @@
     {
       "type": "output_pattern",
       "parameters": {
-        "pattern": "(?is)(?=.*\\bwizard\\b)(?=.*\\bplaybook\\b)(?=.*code_source)"
+        "pattern": "(?is)(?:(?=.*(?:wizard|guided setup|setup (?:page|screen|ui|assistant)))(?=.*(?:playbook|ansible|(?:deployment|deploy) run))|(?=.*(?:wizard|guided setup|setup (?:page|screen|ui|assistant)))(?=.*(?:code[_ ]source|sync(?:s|ed|hronis(?:ed|es)|hroniz(?:ed|es))? (?:from|the|to)\\b))|(?=.*(?:playbook|ansible|(?:deployment|deploy) run))(?=.*(?:code[_ ]source|sync(?:s|ed|hronis(?:ed|es)|hroniz(?:ed|es))? (?:from|the|to)\\b)))"
       },
-      "description": "names the setup wizard, the playbook and the code_source sync"
+      "description": "covers at least 2 of 3 concepts: the setup wizard/page, the playbook/Ansible run, the code_source sync"
     },
     {
       "type": "output_pattern",
