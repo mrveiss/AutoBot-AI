@@ -251,14 +251,14 @@ class SearchMixin(BasicVectorSearchMixin):
         session_id: str | None = None,
         include_unservable: bool = False,
         include_quarantined: bool = False,
+        hardware_backend: str = "auto",
     ):
         """Canonical KB search — consolidates basic, enhanced, and advanced paths (#10666).
 
         Three call modes, selected automatically by parameter presence:
 
         **Basic** (returns ``List[Dict]``): pass only ``query`` / ``top_k`` / ``filters``.
-          Delegates to VectorSearchEngine with a ChromaDB fallback.
-          Issue #398, #934, #3828.
+          Delegates to VectorSearchEngine on ``hardware_backend`` with a ChromaDB fallback. #398, #934, #3828, #20940.
 
         **Enhanced** (returns ``Dict[str, Any]``): pass any of ``limit``, ``tags``,
           ``category``, ``min_score``, ``board_id``, ``enable_reranking``.
@@ -326,7 +326,7 @@ class SearchMixin(BasicVectorSearchMixin):
             )
 
         where = store_side_where(filters, include_unservable, include_quarantined)
-        return await self._search_basic(query, top_k, similarity_top_k, where)
+        return await self._search_basic(query, top_k, similarity_top_k, where, hardware_backend)
 
     async def _get_query_embedding(self, query: str, model: str | None = None) -> List[float]:
         """Get embedding for query, using cache when available.
