@@ -11,6 +11,8 @@ import hashlib
 import hmac
 from typing import Optional
 
+from autobot_shared.security.constant_time import secure_compare
+
 _SIGNATURE_PREFIX = "sha256="
 
 
@@ -26,7 +28,4 @@ def verify_webhook_signature(payload: bytes, signature_header: Optional[str], se
         return False
     provided = signature_header[len(_SIGNATURE_PREFIX) :]
     expected = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
-    try:
-        return hmac.compare_digest(provided.encode("utf-8"), expected.encode("ascii"))
-    except (UnicodeError, TypeError):
-        return False
+    return secure_compare(provided, expected)
