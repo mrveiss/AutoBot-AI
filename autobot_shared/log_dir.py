@@ -27,6 +27,7 @@ import logging
 import logging.handlers
 import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Callable
 
@@ -45,11 +46,17 @@ UnwritableCallback = Callable[[Path, OSError], None]
 
 
 def _state_home() -> Path:
-    """``$XDG_STATE_HOME`` when it is an absolute path (the spec), else ``~/.local/state``."""
+    """``$XDG_STATE_HOME`` when it is an absolute path (the spec), else ``~/.local/state``.
+
+    With no resolvable home (``Path.home()`` raises ``RuntimeError``) a per-user temp directory.
+    """
     configured = os.environ.get(_STATE_HOME_ENV, "")
     if configured and os.path.isabs(configured):
         return Path(configured)
-    return Path.home() / ".local" / "state"
+    try:
+        return Path.home() / ".local" / "state"
+    except RuntimeError:  # no resolvable home (a bare container user): never raise at import
+        return Path(tempfile.gettempdir()) / f"autobot-state-{os.getuid() if hasattr(os, 'getuid') else 0}"
 
 
 def _configured() -> str:

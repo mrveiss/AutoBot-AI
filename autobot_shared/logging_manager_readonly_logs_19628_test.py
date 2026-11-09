@@ -96,6 +96,24 @@ def test_a_read_only_logs_dir_turns_file_logging_off_at_the_first_write(
         _close(logger)
 
 
+def test_two_loggers_on_an_unwritable_path_give_one_stderr_line(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One disabled marker per path (#20894): a later logger neither rebuilds the handler nor warns again."""
+    monkeypatch.setattr(Path, "mkdir", _read_only_logs_mkdir)
+    first = _fresh_logger()
+    first.error("one")
+    second = _fresh_logger()
+    try:
+        second.error("two")
+        assert _file_handlers(first)[0] is _file_handlers(second)[0]
+        err = capsys.readouterr().err
+        assert err.count("autobot logging: cannot write logs") == 1
+    finally:
+        _close(first)
+        _close(second)
+
+
 def test_an_unopenable_log_file_turns_off_only_its_own_handler(capsys: pytest.CaptureFixture[str]) -> None:
     logs_dir = Path(os.environ["AUTOBOT_LOGS_DIR"])
     (logs_dir / "backend.log").mkdir(parents=True)  # a directory where the file goes: open() fails

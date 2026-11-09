@@ -32,6 +32,18 @@ def test_unset_resolves_outside_the_repo_and_the_cwd(tmp_path: Path, monkeypatch
     assert not resolved.is_relative_to(tmp_path)
 
 
+def test_no_resolvable_home_falls_back_to_a_temp_dir_instead_of_raising(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+
+    def _no_home() -> Path:
+        raise RuntimeError("Could not determine home directory")
+
+    monkeypatch.setattr(Path, "home", staticmethod(_no_home))
+    resolved = resolve_logs_dir()
+    assert resolved.is_absolute() and resolved.parts[-2:] == ("autobot", "logs")
+    assert not resolved.is_relative_to(REPO_ROOT)
+
+
 def test_unset_is_the_xdg_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     assert resolve_logs_dir() == tmp_path / "state" / "autobot" / "logs"

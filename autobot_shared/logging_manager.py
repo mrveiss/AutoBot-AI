@@ -457,8 +457,10 @@ class LoggingManager:
 
         key = os.path.abspath(log_file)
         cached = cls._file_handlers.get(key)
-        if cached is not None and not cached.unwritable:
-            return cached  # one whose first write failed is replaced, so a later logger retries
+        if cached is not None:
+            # Also one whose first write failed: it is the path's disabled marker (it writes nothing and
+            # warned once), so a later logger shares it instead of rebuilding and warning again (#20894).
+            return cached
         handler = FirstWriteFileHandler(
             log_file, max_bytes=max_bytes, backup_count=backup_count, on_unwritable=cls._file_unwritable
         )

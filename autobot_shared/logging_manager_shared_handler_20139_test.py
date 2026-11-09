@@ -96,15 +96,16 @@ def test_handler_level_and_formatter_are_unchanged_for_callers() -> None:
     assert handler.maxBytes == _CAP
 
 
-def test_a_handler_whose_first_write_failed_is_not_reused(tmp_path: Path) -> None:
-    """The file is opened at the first record since #20894, so that is where a build can fail."""
+def test_a_handler_whose_first_write_failed_stays_the_paths_disabled_marker(tmp_path: Path) -> None:
+    """The file is opened at the first record since #20894; a failure there is kept, not rebuilt (#20894)."""
     failed = _logger()
     with patch.object(Path, "mkdir", side_effect=OSError(errno.EROFS, "read-only")):
         failed.info("dropped")
-    retried = _logger()
-    assert _file_handlers(retried)[0] is not _file_handlers(failed)[0]
-    retried.info("written on the retry")
-    assert any("written on the retry" in x for x in _lines(tmp_path))
+    later = _logger()
+    assert _file_handlers(later)[0] is _file_handlers(failed)[0]
+    assert _file_handlers(later)[0].unwritable
+    later.info("also dropped")
+    assert not _lines(tmp_path)
 
 
 def test_one_rotation_shifts_the_backups_once(tmp_path: Path) -> None:

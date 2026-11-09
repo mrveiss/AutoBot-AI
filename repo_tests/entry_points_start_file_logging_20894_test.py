@@ -22,11 +22,16 @@ ruling 2026-11-09) and is outside the population unless one of the sources above
 Each target must call that function, imported from ``autobot_shared.logging_manager`` (a local
 function of the same name does not count), or be exempt here with a reason. ``NO_MANAGER``
 exemptions are checked: the file must not name the logging manager. Tests are not entry points.
+
+``calls_setup_logging`` accepts a call at module level, inside the ``__main__`` block, or in a function
+that one of those (or a Celery signal handler / app factory) calls, one level deep. It does not prove the
+call runs on every path: a call under an unrelated condition still counts.
 """
 
 from __future__ import annotations
 
 import ast
+import importlib.util
 import re
 import tomllib
 from pathlib import Path
@@ -35,12 +40,24 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests.service_units_set_logs_dir_20894_test import _python_units
 
+from tools.lint._file_size_guard import count_lines
 from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
 _MANAGER = "autobot_shared.logging_manager"
 _CALL = "setup_logging"
 _APP_FACTORIES = frozenset({"FastAPI", "Starlette", "create_app", "Celery"})
+
+
+def _size_ceiling() -> int:
+    """``MAX_LINES`` read from the size hook itself, so the exemption follows the real ceiling."""
+    spec = importlib.util.spec_from_file_location("check_python_file_size", _ROOT / "scripts/check_python_file_size.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.MAX_LINES
+
+
+MAX_LINES = _size_ceiling()
 _TEMPLATES = "autobot-slm-backend/ansible/roles"
 
 #: Every Python unit template -> the tracked source its ExecStart runs; None when that source is not
@@ -122,7 +139,10 @@ NO_MANAGER: dict[str, str] = {
     "autobot-infrastructure/shared/docker/security/security-monitor.py": _STDLIB,
 }
 
-_TOO_BIG = "launched script over the 600-line ceiling: the size hook rejects any edit, so it is wired with its split"
+_TOO_BIG = (
+    "launched script over the 600-line ceiling: the size hook rejects any edit, so it is wired with its split "
+    "(#20894); the exemption leaves once it is under the ceiling"
+)
 #: Launched scripts that cannot take the call until split. Checked: gone from here once they call it.
 OVERSIZE: dict[str, str] = {
     "autobot-infrastructure/shared/scripts/analysis/npu_performance_measurement.py": _TOO_BIG,
@@ -197,18 +217,72 @@ def _bound_names(tree: ast.Module) -> tuple[set[str], set[str]]:
     return funcs, modules
 
 
-def calls_setup_logging(tree: ast.Module) -> bool:
-    """True when *tree* calls ``setup_logging`` imported from the logging manager (nested imports count)."""
-    funcs, modules = _bound_names(tree)
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        func = node.func
-        if isinstance(func, ast.Name) and func.id in funcs:
+_HANDLER_DECORATORS = frozenset({"connect", "on_event", "on_startup"})
+_FACTORY_NAMES = frozenset({"create_app", "lifespan"})
+_DEFS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+
+
+def _walk_no_defs(nodes: list[ast.stmt]) -> list[ast.AST]:
+    """Every node under *nodes* without descending into a def, class or lambda body."""
+    out: list[ast.AST] = []
+    stack: list[ast.AST] = list(nodes)
+    while stack:
+        node = stack.pop()
+        out.append(node)
+        if not isinstance(node, _DEFS):
+            stack.extend(ast.iter_child_nodes(node))
+    return out
+
+
+def _startup_statements(tree: ast.Module) -> list[ast.stmt]:
+    """Module-level statements, with the ``if __name__ == "__main__":`` body included (not its def)."""
+    return list(tree.body) + [s for n in tree.body if _is_main_guard(n) for s in n.body]  # type: ignore[attr-defined]
+
+
+def _is_handler(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    if fn.name in _FACTORY_NAMES:
+        return True
+    for dec in fn.decorator_list:
+        target = dec.func if isinstance(dec, ast.Call) else dec
+        if getattr(target, "attr", getattr(target, "id", None)) in _HANDLER_DECORATORS:
             return True
-        if isinstance(func, ast.Attribute) and func.attr == _CALL and isinstance(func.value, ast.Name):
-            if func.value.id in modules:
-                return True
+    return False
+
+
+def _is_setup_call(node: ast.AST, funcs: set[str], modules: set[str]) -> bool:
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    if isinstance(func, ast.Name):
+        return func.id in funcs
+    return (
+        isinstance(func, ast.Attribute)
+        and func.attr == _CALL
+        and isinstance(func.value, ast.Name)
+        and func.value.id in modules
+    )
+
+
+def calls_setup_logging(tree: ast.Module) -> bool:
+    """True when startup reaches a ``setup_logging`` imported from the logging manager.
+
+    Reachable means: a call at module level or in the ``__main__`` block; or in a top-level function that
+    those reference by name (called or passed, one level deep), that a signal/startup decorator
+    registers, or that is an app factory (``create_app``/``lifespan``). A call in a def nothing
+    references, or in a nested def, does not count (#20894).
+    """
+    funcs, modules = _bound_names(tree)
+    startup = _walk_no_defs(_startup_statements(tree))
+    if any(_is_setup_call(n, funcs, modules) for n in startup):
+        return True
+    referenced = {n.id for n in startup if isinstance(n, ast.Name)}
+    for fn in tree.body:
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if fn.name not in referenced and not _is_handler(fn):
+            continue
+        if any(_is_setup_call(n, funcs, modules) for n in _walk_no_defs(fn.body)):
+            return True
     return False
 
 
@@ -327,6 +401,8 @@ def test_exemptions_are_not_stale() -> None:
     entries = _live_entries()
     stale = sorted(p for p in (*NO_MANAGER, *CONSOLE_ONLY, *OVERSIZE) if p not in entries)
     assert not stale, f"no longer launched -- drop from the exemptions: {stale}"
+    small = sorted(p for p in OVERSIZE if (count_lines(_ROOT / p) or 0) <= MAX_LINES)
+    assert not small, f"now at or under {MAX_LINES} lines -- wire {_CALL}() and drop from OVERSIZE (#20894): {small}"
     done = sorted(p for p in OVERSIZE if calls_setup_logging(_parse(_ROOT, p) or ast.Module(body=[], type_ignores=[])))
     assert not done, f"now call {_CALL}() -- drop from OVERSIZE: {done}"
 
@@ -351,7 +427,12 @@ def test_control_a_launched_target_without_the_call_is_reported(tmp_path: Path) 
             "svc/compose_target.py": "def main():\n    pass\n",
             "svc/ops.py": "def main():\n    pass\n",
             "svc/ok.py": f"from {_MANAGER} import {_CALL}\napp = FastAPI()\n{_CALL}()\n",
-            "svc/lazy.py": f"def main():\n    from {_MANAGER} import {_CALL}\n    {_CALL}()\napp = Celery('x')\n",
+            "svc/lazy.py": f"def main():\n    from {_MANAGER} import {_CALL}\n    {_CALL}()\napp = Celery('x')\nmain()\n",
+            "svc/uncalled.py": f"from {_MANAGER} import {_CALL}\napp = FastAPI()\ndef unused():\n    {_CALL}()\n",
+            "svc/handler.py": (
+                f"from {_MANAGER} import {_CALL}\napp = Celery('x')\n"
+                f"@signals.setup_logging.connect\ndef h(**kw):\n    {_CALL}()\n"
+            ),
             "scripts/own_fn.py": imp + f"def {_CALL}():\n    pass\nif __name__ == '__main__':\n    {_CALL}()\n",
             "svc/x_test.py": demo,
         },
@@ -370,6 +451,7 @@ def test_control_a_launched_target_without_the_call_is_reported(tmp_path: Path) 
         "svc/app.py",
         "svc/compose_target.py",
         "svc/ops.py",
+        "svc/uncalled.py",
         "svc/unit_target.py",
     ]
     assert missing_call(tmp_path, entries, set()) == expected
