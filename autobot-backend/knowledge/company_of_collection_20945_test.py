@@ -53,6 +53,9 @@ def test_a_prefix_of_the_viewers_id_is_not_the_viewers_company():
         "company:a.b",
         "company_a.b",
         "company:a b",
+        f"company:{CID}\n",  # trailing newline must not match
+        f"company_{CID}\n",
+        f"company:{CID}:agents\n",
         "companyx_1",
         "company-1",
         "project_x",

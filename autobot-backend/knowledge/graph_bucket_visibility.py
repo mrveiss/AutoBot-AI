@@ -23,6 +23,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
+from autobot_shared.kb_collection_prefixes import COMPANY_PREFIX
+from knowledge.backends.async_chromadb_adapter import _chroma_safe_name
 from knowledge.quarantine import not_quarantined
 from knowledge.root_read import is_superadmin_user
 from knowledge.search_filters import extract_user_context_from_request, filter_search_results_by_permission
@@ -77,16 +79,22 @@ def as_fact(collection: str, record_id: str, meta: Dict[str, Any]) -> Dict[str, 
     return {"id": f"bucket:{collection}:{record_id}", "metadata": metadata}
 
 
+# Logical (``company:``) and ChromaDB-stored (``company_``, via ``_chroma_safe_name``) prefixes, both derived from
+# the canonical prefix.
+_LOGICAL_PREFIX = f"{COMPANY_PREFIX}:"
+_STORED_PREFIX = _chroma_safe_name(_LOGICAL_PREFIX)
+
+
 def is_company_collection(collection: str) -> bool:
     """A ``company:<id>`` collection, in its logical or ChromaDB-stored (``company_<id>``) form (#10743)."""
-    return collection.startswith(("company:", "company_"))
+    return collection.startswith((_LOGICAL_PREFIX, _STORED_PREFIX))
 
 
 # A company id is a UUID or ``-`` slug: ``_`` is excluded because ``_chroma_safe_name`` maps ``:`` to ``_``, so an id
-# holding one could not be told from its suffix once stored (#20945).
+# holding one could not be told from its suffix once stored (#20945). ``\Z`` (not ``$``) so a trailing newline fails.
 _COMPANY_ID = r"[A-Za-z0-9-]+"
-_LOGICAL_COMPANY = re.compile(rf"^company:({_COMPANY_ID})(?::.+)?$")
-_STORED_COMPANY = re.compile(rf"^company_({_COMPANY_ID})(?:_.+)?$")
+_LOGICAL_COMPANY = re.compile(rf"\A{re.escape(_LOGICAL_PREFIX)}({_COMPANY_ID})(?::.+)?\Z")
+_STORED_COMPANY = re.compile(rf"\A{re.escape(_STORED_PREFIX)}({_COMPANY_ID})(?:_.+)?\Z")
 
 
 def company_of_collection(collection: str) -> str | None:
