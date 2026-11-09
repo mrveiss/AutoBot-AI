@@ -178,6 +178,22 @@ def env_float_clamped(
     return _clamped(name, value, min_v, max_v)
 
 
+def env_registered(name: str, *, positive_finite: bool = False):
+    """A registered numeric env var, read within the range its registry entry declares.
+
+    The default and the ``(min, max)`` come from ``REGISTRY``, so the registered range is the one enforced; a
+    malformed value falls back to the default and an out-of-range one is clamped, each with a warning.
+    ``positive_finite`` (floats only) also rejects NaN, infinity and non-positive values.
+    """
+    from autobot_shared.env_registry import REGISTRY
+
+    spec = REGISTRY[name]
+    low, high = spec.range or (None, None)
+    if spec.type is int:
+        return env_int_clamped(name, spec.default, low, high)
+    return env_float_clamped(name, spec.default, low, high, positive_finite=positive_finite)
+
+
 # Canonical truthy set for boolean env flags. Single source of truth so guards
 # don't drift (config_guard used to omit "on", silently ignoring
 # ``AUTOBOT_ALLOW_CONFIG_EDITS=on`` — #11220).
