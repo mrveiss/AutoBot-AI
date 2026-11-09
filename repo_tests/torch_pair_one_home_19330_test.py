@@ -4,14 +4,16 @@
 # Author: mrveiss
 """torch / torchvision have ONE home: a coupled pair in ``constraints/shared.txt`` (#19330).
 
-Maintainer decision 2026-10-26: 2.14.1 / 0.29.1. The pair used to be pinned in seven places at
+Maintainer decision 2026-10-26 (first set 2.14.1 / 0.29.1; bumped to 2.15.0 / 0.29.2 by #20840).
+The pair used to be pinned in seven places at
 three patch levels -- 2.12.1 in the backend image (#19072), 2.14.0 on GPU hosts, 2.14.1 elsewhere.
 
 Requirements files are guarded by ``scripts/check_constraint_drift.py`` (a constrained package
 listed with a version fails). This guard covers what that script does not read: a ``torch==`` /
 ``torchvision>=`` literal in a Dockerfile, a workflow, an Ansible file, a shell script or a
 template. Those install the pair with ``-c constraints/shared.txt`` or read the pin from it.
-It also holds the pair coupled: torchvision ``0.N`` is built for torch ``2.(N-15)``.
+It also holds the pair coupled: torchvision ``0.N`` needs torch ``>= 2.(N-15)`` (0.29.x declares
+``torch>=2.14.0`` and is ABI-stable above it, so torch 2.15.0 pairs with 0.29.2).
 """
 
 from __future__ import annotations
@@ -77,12 +79,14 @@ def pair() -> dict[str, tuple[int, int, int]]:
 
 
 def test_the_home_holds_the_decided_coupled_pair() -> None:
-    assert pair() == {"torch": (2, 14, 1), "torchvision": (0, 29, 1)}, "maintainer decision 2026-10-26 (#19330)"
+    assert pair() == {"torch": (2, 15, 0), "torchvision": (0, 29, 2)}, "maintainer decision 2026-10-26 (#19330)"
 
 
 def test_torchvision_is_built_for_the_pinned_torch() -> None:
     p = pair()
-    assert p["torchvision"][1] - 15 == p["torch"][1], f"torchvision {p['torchvision']} is not torch {p['torch']}'s"
+    assert (
+        p["torchvision"][1] - 15 <= p["torch"][1]
+    ), f"torchvision {p['torchvision']} needs a newer torch than {p['torch']}"
 
 
 def test_no_torch_literal_outside_the_constraints_file() -> None:
@@ -98,10 +102,10 @@ def test_no_torch_literal_outside_the_constraints_file() -> None:
         "               torch==2.12.1 torchvision==0.27.1 \\\n",
         "    pip install torch>=2.6.0\n",
         "RUN pip install Torch==2.12.1\n",
-        '      name: "torchvision==0.29.1"\n',
+        '      name: "torchvision==0.29.2"\n',
         "    pip install 'torch>2' 'torchvision<1'\n",
         "    pip install torch!=2.13.0\n",
-        "    pip install https://example.invalid/torch-2.14.1-cp314-cp314-linux_x86_64.whl\n",
+        "    pip install https://example.invalid/torch-2.15.0-cp314-cp314-linux_x86_64.whl\n",
     ],
 )
 def test_each_literal_shape_is_flagged(text: str) -> None:
