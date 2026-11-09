@@ -145,8 +145,9 @@ def import_modules_with_real_orm(import_names: tuple, path_loaded: dict | None =
     try:
         with real_modules_swapped():
             loaded = [load_real_module(name, path) for name, path in path_loaded.items()]
-            for name in import_names:
+            for name in import_names:  # all evicted first: a name imported by an earlier one is bound once, not twice
                 sys.modules.pop(name, None)
+            for name in import_names:
                 loaded.append(importlib.import_module(name))
             return tuple(loaded)
     finally:
@@ -191,6 +192,69 @@ def _evict_stub_built_modules(exclude: tuple) -> dict:
             continue
         if any(isinstance(v, NonCallableMock) and id(_mock_root(v)) in stubs for v in vars(mod).values()):
             evicted[name] = sys.modules.pop(name)
+    evicted.update(_evict_built_on_another_sqlalchemy(exclude, evicted))
+    return evicted
+
+
+_SHARED_ROOTS = ("autobot_shared", "user_management")
+
+
+def _built_on_another_sqlalchemy(mod) -> bool:
+    """Whether *mod* holds a sqlalchemy name that is not the one ``REAL_MODULES`` carries.
+
+    A module first imported while another test module had its own private copy of sqlalchemy
+    swapped in (``test_deactivated_user_token_20443``) keeps that copy's ``Column`` and ``Mapped``.
+    Mixed with the copy used here, a model declares no primary key.
+    """
+    homes = [REAL_MODULES[n] for n in ("sqlalchemy", "sqlalchemy.orm") if n in REAL_MODULES]
+    for value in vars(mod).values():
+        if not str(getattr(value, "__module__", "")).startswith("sqlalchemy"):
+            continue
+        for home in homes:
+            ours = getattr(home, getattr(value, "__name__", ""), value)
+            if ours is not value:
+                return True
+    return False
+
+
+def _derives_from(mod, names: set) -> bool:
+    """Whether *mod* holds a name defined in, or a class subclassing a class defined in, one of *names*."""
+    for value in vars(mod).values():
+        if isinstance(value, types.ModuleType):
+            if value.__name__ in names:
+                return True
+            continue
+        mro = value.__mro__ if isinstance(value, type) else (value,)
+        if any(getattr(k, "__module__", None) in names for k in mro):
+            return True
+    return False
+
+
+def _evict_built_on_another_sqlalchemy(exclude: tuple, already: dict) -> dict:
+    """Pop, and return, cached shared-model modules bound to a different sqlalchemy copy (see above).
+
+    Taken to a fixed point: a module that only subclasses an evicted ``Base`` (``organization``) holds no
+    sqlalchemy name itself, yet is bound to the same copy, and must be rebuilt with the rest.
+    """
+    candidates = {
+        name: mod
+        for name, mod in sys.modules.items()
+        if name not in exclude
+        and name not in already
+        and name.split(".")[0] in _SHARED_ROOTS
+        and isinstance(mod, types.ModuleType)
+        and not hasattr(mod, "__path__")
+    }
+    evicted = {n: m for n, m in candidates.items() if _built_on_another_sqlalchemy(m)}
+    grew = True
+    while grew:
+        grew = False
+        for name, mod in candidates.items():
+            if name not in evicted and _derives_from(mod, set(evicted)):
+                evicted[name] = mod
+                grew = True
+    for name in evicted:
+        sys.modules.pop(name, None)
     return evicted
 
 

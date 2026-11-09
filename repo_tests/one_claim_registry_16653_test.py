@@ -120,9 +120,15 @@ _ALLOWED: dict[str, tuple[int, str]] = {
         "one pending approval per terminal session (#20059): a slot on a record, not a work claim with subtree overlap",
     ),
     "autobot-backend/services/agent_terminal/session_state.py": (
-        1,
+        2,
         "#20674 -- a one-use decision token per terminal approval (SET NX): the first decision wins, "
-        "every later one is refused. No holder, no renewal, not a work claim.",
+        "every later one is refused. No holder, no renewal, not a work claim. #21202 -- the closed-tombstone "
+        "compare-and-set: a state transition on the session record, its TTL is garbage collection only.",
+    ),
+    "autobot-backend/services/agent_terminal/interpretation_turn.py": (
+        2,
+        "#21202 -- the per-command interpretation compare-and-set (absent -> turn:<token> -> done): a state "
+        "transition, no holder renews it and its TTL is garbage collection only. Not a work claim.",
     ),
     "autobot_shared/membership_epoch.py": (
         1,
