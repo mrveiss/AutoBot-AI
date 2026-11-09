@@ -1,7 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect } from 'vitest'
-import { HttpError, extractErrorInfo, httpErrorFrom, isHttpClientError, isHttpError, parseJsonBody } from '../httpError'
+import { HttpError, extractErrorInfo, httpErrorFrom, httpErrorText, isHttpClientError, isHttpError, parseJsonBody } from '../httpError'
 
 describe('HttpError', () => {
   it('keeps the message every existing check reads, and adds status and details', () => {
@@ -90,5 +90,18 @@ describe('parseJsonBody', () => {
     expect(await parseJsonBody(res(200, '{"a":1}'))).toEqual({ a: 1 })
     expect(await parseJsonBody(res(204, null, ''))).toEqual({})
     expect(await parseJsonBody(res(200, 'ok', 'text/plain'))).toEqual({})
+  })
+})
+
+describe('httpErrorText', () => {
+  it('shows the backend detail, never the raw HTTP text', () => {
+    expect(httpErrorText(new HttpError(500, 'boom', { detail: 'Quota exceeded' }), 'fb')).toBe('Quota exceeded')
+    expect(httpErrorText(new HttpError(500, 'boom'), 'fb')).toBe('fb')
+  })
+
+  it('uses the message of a plain Error, else the fallback', () => {
+    expect(httpErrorText(new Error('network down'), 'fb')).toBe('network down')
+    expect(httpErrorText(new Error(''), 'fb')).toBe('fb')
+    expect(httpErrorText('x', 'fb')).toBe('fb')
   })
 })
