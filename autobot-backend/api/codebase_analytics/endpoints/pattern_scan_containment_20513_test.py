@@ -71,3 +71,69 @@ async def test_a_clone_path_without_a_directory_is_no_checkout(tmp_path):
     with patch.object(shared, "resolve_source_root", AsyncMock(return_value=tmp_path / "missing")):
         with pytest.raises(shared.UnresolvedSourceError):
             await shared.resolve_scan_root("s1")
+
+
+# --- the queued tasks re-check before serving anything, a cached result included ----------------
+
+
+def _run_task(task, *args):
+    with patch("tasks.analytics_tasks._progress"):
+        return task.apply(args=args)
+
+
+def _swap_for_link(root, outside):
+    (root / "pkg").rmdir()
+    (root / "pkg").symlink_to(outside, target_is_directory=True)
+
+
+def test_a_cached_result_is_not_served_when_the_directory_now_leaves_the_source(source_tree):
+    from tasks import analytics_tasks as at
+
+    root, outside = source_tree
+    cached = AsyncMock(return_value={"cached": True})
+    request = {"source_id": "s1", "path": str(root / "pkg")}
+    with patch.object(at, "_load_path_checkpoint", cached):
+        assert _run_task(at.run_pattern_analysis, request).failed() is False
+        assert cached.await_count == 1
+        _swap_for_link(root, outside)
+        cached.reset_mock()
+        outcome = _run_task(at.run_pattern_analysis, request)
+    assert outcome.failed()
+    cached.assert_not_called()
+
+
+def test_the_checkpoint_is_keyed_on_the_confirmed_real_path(source_tree):
+    from tasks import analytics_tasks as at
+
+    root, _ = source_tree
+    cached = AsyncMock(return_value={"cached": True})
+    with patch.object(at, "_load_path_checkpoint", cached):
+        _run_task(at.run_pattern_analysis, {"source_id": "s1", "path": str(root / "pkg" / ".." / "pkg")})
+    assert cached.await_args.args[0] == str((root / "pkg").resolve())
+
+
+def test_a_missing_source_checkout_refuses_the_task_before_the_cache(tmp_path):
+    from tasks import analytics_tasks as at
+
+    cached = AsyncMock(return_value={"cached": True})
+    with (
+        patch.object(shared, "resolve_source_root", AsyncMock(return_value=tmp_path / "gone")),
+        patch.object(at, "_load_path_checkpoint", cached),
+    ):
+        outcome = _run_task(at.run_pattern_analysis, {"source_id": "s1", "path": str(tmp_path / "gone" / "pkg")})
+    assert outcome.failed()
+    cached.assert_not_called()
+
+
+def test_the_summary_task_rechecks_the_directory_when_it_runs(source_tree):
+    from tasks import analytics_tasks as at
+
+    root, outside = source_tree
+    analyzer = MagicMock()
+    analyzer.return_value.analyze_directory = AsyncMock(side_effect=AssertionError("scanned"))
+    with patch("code_intelligence.pattern_analysis.CodePatternAnalyzer", analyzer):
+        _swap_for_link(root, outside)
+        outcome = _run_task(at.run_pattern_summary_analysis, str(root / "pkg"), "s1")
+    assert outcome.failed()
+    assert isinstance(outcome.result, ValueError)
+    analyzer.return_value.analyze_directory.assert_not_called()

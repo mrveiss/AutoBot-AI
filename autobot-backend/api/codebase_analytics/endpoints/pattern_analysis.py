@@ -240,7 +240,7 @@ async def start_pattern_summary_analysis(
 ):
     """Enqueue pattern summary analysis as a Celery task (GH#6505)."""
     scan_path = await scan_path_in_source(source_id, path)
-    result = run_pattern_summary_analysis.delay(scan_path)
+    result = run_pattern_summary_analysis.delay(scan_path, source_id)
     await store_latest_task_id(source_scoped_prefix(_SUMMARY_REDIS_PREFIX, source_id), result.id)
     return {"task_id": result.id, "status": "pending", "source_id": source_id}
 

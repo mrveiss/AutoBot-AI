@@ -328,21 +328,23 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
     _progress(self, "Initializing", 0.0, started)
 
     async def _work():
-        # Resume from checkpoint if analysis for this path was recently completed.
-        saved = await _load_path_checkpoint(request.path, request.source_id)
-        if saved:
-            logger.info("run_pattern_analysis: resuming from checkpoint for path %s", request.path)
-            _progress(self, "Loaded from checkpoint", 100.0, started)
-            return saved
-
         from api.codebase_analytics.endpoints.shared import confirm_scan_dir_in_source
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
+
+        # The route validated the directory at queue time; confirm it again now, before anything
+        # (including a cached result) is served, and key the checkpoint on the confirmed path (#20513).
+        scan_dir = await confirm_scan_dir_in_source(request.source_id, request.path)
+
+        # Resume from checkpoint if analysis for this path was recently completed.
+        saved = await _load_path_checkpoint(scan_dir, request.source_id)
+        if saved:
+            logger.info("run_pattern_analysis: resuming from checkpoint for path %s", scan_dir)
+            _progress(self, "Loaded from checkpoint", 100.0, started)
+            return saved
 
         async def _on_progress(step: str, progress: float) -> None:
             _progress(self, step, progress, started)
 
-        # The route validated the directory at queue time; confirm it again now (#20513).
-        scan_dir = await confirm_scan_dir_in_source(request.source_id, request.path)
         analyzer = CodePatternAnalyzer(
             enable_clone_detection=request.enable_clone_detection,
             enable_anti_pattern_detection=request.enable_anti_pattern_detection,
@@ -358,7 +360,7 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
             timeout=_ANALYSIS_TIMEOUT,
         )
         result = report.to_dict()
-        await _save_path_checkpoint(request.path, result, request.source_id)
+        await _save_path_checkpoint(scan_dir, result, request.source_id)
         return result
 
     return _wrap(_run_async(_work()), started)
@@ -519,16 +521,22 @@ def run_dashboard_analysis(self) -> dict:
 
 @celery_app.task(bind=True, name="analytics.run_pattern_summary_analysis")
 @_binds_task_id
-def run_pattern_summary_analysis(self, path: str) -> dict:
-    """Celery wrapper for pattern summary background job (#6505)."""
+def run_pattern_summary_analysis(self, path: str, source_id: str) -> dict:
+    """Celery wrapper for pattern summary background job (#6505).
+
+    ``source_id`` is the source *path* belongs to; the directory is confirmed inside it again
+    when the task runs (#20513).
+    """
     from api.codebase_analytics.endpoints.pattern_analysis import _ANALYSIS_TIMEOUT
 
     started = datetime.now(tz=timezone.utc).isoformat()
     _progress(self, "Initializing analyzer", 10.0, started)
 
     async def _work():
+        from api.codebase_analytics.endpoints.shared import confirm_scan_dir_in_source
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
+        scan_dir = await confirm_scan_dir_in_source(source_id, path)
         analyzer = CodePatternAnalyzer(enable_embedding_storage=False)
 
         async def _on_progress(step: str, progress: float) -> None:
@@ -536,7 +544,7 @@ def run_pattern_summary_analysis(self, path: str) -> dict:
             _progress(self, step, scaled, started)
 
         report = await asyncio.wait_for(
-            analyzer.analyze_directory(path, progress_callback=_on_progress),
+            analyzer.analyze_directory(scan_dir, progress_callback=_on_progress),
             timeout=_ANALYSIS_TIMEOUT,
         )
         _progress(self, "Building summary", 80.0, started)
