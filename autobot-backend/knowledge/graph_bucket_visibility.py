@@ -82,11 +82,17 @@ def is_company_collection(collection: str) -> bool:
 
 
 def company_of_collection(collection: str) -> str | None:
-    """The company id a company collection names, from either name form; None when it is not parseable."""
+    """The company id a company collection names, from either name form; None when it is not parseable.
+
+    Company ids are UUIDs (or ``-`` slugs): ``-`` survives ``_chroma_safe_name`` and never contains ``_``, so in
+    the stored form (``company_<id>[_<suffix>]``, every ``:`` mapped to ``_``) the id is the text up to the next ``_``.
+    """
     from llc.kb.collections import company_id_of  # noqa: PLC0415 -- keeps the LLC stack off this import
 
+    if collection.startswith("company_"):
+        collection = "company:" + collection[len("company_") :].split("_", 1)[0]
     try:
-        return company_id_of(collection.replace("company_", "company:", 1))
+        return company_id_of(collection)
     except ValueError:
         return None
 
