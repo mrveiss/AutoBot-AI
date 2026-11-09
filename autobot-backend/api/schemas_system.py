@@ -2906,16 +2906,6 @@ class AuditQueryRequest(BaseModel):
     offset: int = Field(0, ge=0, description="Pagination offset")
 
 
-class AuditQueryResponse(BaseModel):
-    """Audit log query response."""
-
-    success: bool
-    total_returned: int
-    has_more: bool
-    entries: List[dict]
-    query: dict
-
-
 class AuditStatisticsResponse(BaseModel):
     """Audit statistics response."""
 
