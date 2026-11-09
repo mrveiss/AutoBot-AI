@@ -58238,11 +58238,11 @@ export interface components {
             /** Recenttasks */
             recentTasks?: {
                 [key: string]: unknown;
-            }[];
+            }[] | null;
             /** Activitytimeline */
             activityTimeline?: {
                 [key: string]: unknown;
-            }[];
+            }[] | null;
         } & {
             [key: string]: unknown;
         };

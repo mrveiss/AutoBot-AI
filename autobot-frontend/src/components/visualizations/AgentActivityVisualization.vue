@@ -118,16 +118,7 @@
           <div v-if="isAgentExpanded(agent.id)" class="expanded-details">
             <div class="detail-section">
               <h5>{{ t('visualizations.agentActivity.recentTasks') }}</h5>
-              <ul class="task-list">
-                <li
-                  v-for="task in agent.recentTasks"
-                  :key="task.id"
-                  :class="task.status"
-                >
-                  <span class="task-name">{{ task.name }}</span>
-                  <span class="task-time">{{ formatTimeAgo(task.completedAt) }}</span>
-                </li>
-              </ul>
+              <AgentRecentTasks :tasks="agent.recentTasks" />
             </div>
             <div class="detail-actions">
               <button @click.stop="viewDetails(agent)" class="action-btn">
@@ -160,8 +151,9 @@
             <span class="name">{{ agent.name }}</span>
           </div>
           <div class="activity-bars">
+            <span v-if="agent.activityTimeline == null" class="timeline-not-reported">{{ t('visualizations.agentActivity.notReported') }}</span>
             <div
-              v-for="(activity, idx) in agent.activityTimeline"
+              v-for="(activity, idx) in agent.activityTimeline ?? []"
               :key="idx"
               class="activity-bar"
               :class="activity.type"
@@ -204,6 +196,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import AgentRecentTasks from './AgentRecentTasks.vue'
 import { formatDuration } from '@/utils/formatHelpers'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -667,39 +660,6 @@ defineExpose({
   font-weight: var(--font-semibold);
   color: var(--text-secondary);
   margin: 0 0 var(--spacing-2) 0;
-}
-
-.task-list {
-  list-style: none;
-  padding: var(--spacing-0);
-  margin: 0 0 var(--spacing-3) 0;
-}
-
-.task-list li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-1-5) var(--spacing-2);
-  background: rgba(51, 65, 85, 0.3);
-  border-radius: var(--radius-default);
-  margin-bottom: var(--spacing-1);
-  font-size: var(--text-xs);
-}
-
-.task-list li.completed {
-  border-left: 2px solid var(--color-success);
-}
-
-.task-list li.failed {
-  border-left: 2px solid var(--color-error);
-}
-
-.task-name {
-  color: var(--text-primary);
-}
-
-.task-time {
-  color: var(--text-tertiary);
 }
 
 .detail-actions {

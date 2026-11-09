@@ -38,8 +38,9 @@ function toAgent(item: AgentStatusItem): ActivityAgent {
     tasksCompleted: item.tasksCompleted ?? null,
     uptime: item.uptime ?? null,
     successRate: item.successRate ?? null,
-    recentTasks: (item.recentTasks ?? []) as ActivityAgent['recentTasks'],
-    activityTimeline: (item.activityTimeline ?? []) as ActivityAgent['activityTimeline'],
+    // #21270: null = the history was not readable; [] = measured, nothing happened.
+    recentTasks: (item.recentTasks ?? null) as ActivityAgent['recentTasks'],
+    activityTimeline: (item.activityTimeline ?? null) as ActivityAgent['activityTimeline'],
   }
 }
 
@@ -59,19 +60,20 @@ export interface ActivityAgent {
   tasksCompleted: number | null
   uptime: number | null
   successRate: number | null
+  // #21270: null = not reported (feed unreadable); [] = measured, none.
   recentTasks: Array<{
     id: string
     name: string
     status: 'completed' | 'failed' | 'cancelled'
     completedAt: number
-  }>
+  }> | null
   activityTimeline: Array<{
     task: string
     type: 'working' | 'idle' | 'error'
     startPercent: number
     widthPercent: number
     duration: number
-  }>
+  }> | null
 }
 
 export interface ActivityEvent {

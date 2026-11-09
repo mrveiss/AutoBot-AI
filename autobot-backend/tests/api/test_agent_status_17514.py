@@ -136,3 +136,17 @@ async def test_a_soft_deleted_company_is_not_named(factory):  # noqa: ANN001
     by_id = {a["id"]: a for a in await _status(factory)}
     assert by_id["ceo-globex"]["companyName"] is None
     assert by_id["ceo-acme"]["companyName"] == "Acme"  # contrast: a live company is still named
+
+
+@pytest.mark.asyncio
+async def test_unreadable_feeds_are_none_on_the_wire_and_measured_empty_is_a_list(factory, monkeypatch):  # noqa: ANN001
+    """#21270: the status response carries None for an unmeasured feed and [] only for a measured one."""
+    from services import agent_org_service
+
+    async def feeds(ids):  # noqa: ANN001, ANN202
+        return {i: ({"recentTasks": [], "activityTimeline": []} if i == "paused" else None) for i in ids}
+
+    monkeypatch.setattr(agent_org_service, "get_agent_feeds", feeds)
+    by_id = {a["id"]: a for a in await _status(factory)}
+    assert by_id["ceo-acme"]["recentTasks"] is None and by_id["ceo-acme"]["activityTimeline"] is None
+    assert by_id["paused"]["recentTasks"] == [] and by_id["paused"]["activityTimeline"] == []
