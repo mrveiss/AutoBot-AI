@@ -28,6 +28,9 @@ UNSCOPED = frozenset(
         # #19982: every tracked non-changelog file, since the product name can be misspelled into an
         # edition in any component; the population is the whole tree, so no prefix describes it.
         "autobot-has-no-pro-name",
+        # #21048: every tracked file, since an automatic caller of the KB setup script could live in any
+        # component; the population is the whole tree, so no prefix describes it.
+        "kb-wipe-never-invoked",
         # Whole tree (#18940): every tracked test file, wherever a test lives; the population is
         # the test suite itself, so a roots= list would only go stale as tests move.
         "isolated-git-env",
