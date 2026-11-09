@@ -119,8 +119,7 @@ import { ref, computed, watch } from 'vue'
 import { displayNameOf } from '@/utils/displayName'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
-import { apiService } from '@/services/api'
-import { getApiBase } from '@/config/ssot-config'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
@@ -192,13 +191,13 @@ const fetchEntityName = async (id: string, type: 'user' | 'group'): Promise<stri
   try {
     let displayName = id
     if (type === 'user') {
-      const userData = await apiService.getUserById(id)
+      const userData = await apiClient.call('get', '/api/user-management/users/{user_id}', { path: { user_id: id } })
       if (userData) {
         // #14939: the shared ladder -- no email rung, which put addresses where names go.
         displayName = displayNameOf(userData, id)
       }
     } else {
-      const groupData = await apiService.getGroupById(id)
+      const groupData = await apiClient.call('get', '/api/user-management/teams/{team_id}', { path: { team_id: id } })
       if (groupData) {
         displayName = groupData.name || id
       }
@@ -270,12 +269,9 @@ const handleSearch = async () => {
   searchResults.value = []
 
   try {
-    const url = `${getApiBase()}/user-management/users/search?q=${encodeURIComponent(query)}&limit=10`
-    const response = await apiService.get<{
-      users: ShareEntity[]
-      available: boolean
-      message: string
-    }>(url)
+    const response = (await apiClient.call('get', '/api/user-management/users/search', {
+      query: { q: query, limit: 10 },
+    })) as { users: ShareEntity[]; available: boolean; message?: string }
 
     if (!response.available) {
       searchError.value = response.message || t('knowledge.share.searchUnavailable')
