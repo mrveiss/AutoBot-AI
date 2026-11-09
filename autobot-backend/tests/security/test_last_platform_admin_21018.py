@@ -15,7 +15,7 @@ production query cannot drift apart.
 import asyncio
 import uuid
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -33,7 +33,9 @@ from autobot_shared.db_session import POST_COMMIT_CALLBACKS
 from autobot_shared.user_management.base_service import TenantContext
 from autobot_shared.user_management.last_platform_admin import (
     LAST_PLATFORM_ADMIN_CODE,
+    LAST_PLATFORM_ADMIN_RETRY_CODE,
     LastPlatformAdminError,
+    LastPlatformAdminRetry,
     ensure_not_last_platform_admin,
     lock_platform_admin_rows,
     refuse_last_platform_admin,
@@ -169,11 +171,12 @@ async def test_a_target_that_is_not_an_active_admin_locks_nothing(maker):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("sqlstate", ["40P01", "40001"])
-async def test_a_deadlock_or_serialization_failure_is_the_same_refusal_and_rolls_back(sqlstate):
+async def test_a_deadlock_or_serialization_failure_is_a_retry_not_a_refusal_and_rolls_back(sqlstate):
     session = MagicMock(rollback=AsyncMock())
     session.execute = AsyncMock(side_effect=DBAPIError("stmt", {}, SimpleNamespace(sqlstate=sqlstate)))
-    with pytest.raises(LastPlatformAdminError):
+    with pytest.raises(LastPlatformAdminRetry) as caught:
         await ensure_not_last_platform_admin(session, _User, uuid.uuid4())
+    assert caught.value.status_code == 503 and caught.value.code == LAST_PLATFORM_ADMIN_RETRY_CODE
     session.rollback.assert_awaited_once()
 
 
@@ -345,3 +348,57 @@ async def test_the_user_routes_answer_409_and_commit_the_refusal(route, method):
         await route(svc, uuid.uuid4())
     assert caught.value.status_code == 409 and caught.value.detail["code"] == LAST_PLATFORM_ADMIN_CODE
     svc.session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_a_retry_is_a_503_with_retry_after_and_its_own_code():
+    session = MagicMock(commit=AsyncMock())
+    error = await refuse_last_platform_admin(session, LastPlatformAdminRetry())
+    assert error.status_code == 503 and error.detail["code"] == LAST_PLATFORM_ADMIN_RETRY_CODE
+    assert int(error.headers["Retry-After"]) >= 1
+    session.commit.assert_awaited_once()  # the failure audit row is kept; nothing else was applied
+
+
+@pytest.mark.asyncio
+async def test_a_retry_is_audited_as_a_failure_not_as_denied(maker):
+    (admin,) = await _seed(maker, 1)
+    async with maker() as session:
+        svc = _wire(_service(session))
+        with patch(
+            "autobot_shared.user_management.user_service_lifecycle.ensure_not_last_platform_admin",
+            AsyncMock(side_effect=LastPlatformAdminRetry()),
+        ):
+            with pytest.raises(LastPlatformAdminRetry):
+                await svc.set_platform_admin(admin, False)
+    action = IdentityAuditAction.PLATFORM_ADMIN_CHANGED
+    assert svc._audits == [(action, admin, {"attempt": "demote", "reason": LAST_PLATFORM_ADMIN_RETRY_CODE}, "failure")]
+
+
+@pytest.mark.asyncio
+async def test_a_concurrent_promotion_is_guarded_before_the_target_is_locked_on_its_own(maker):
+    """The first read saw a non-admin; the row is an admin by the time of the lock. The admin rows (guard) come
+    first, the target-only lock never: otherwise this is the target-first order that deadlocks."""
+    (admin,) = await _seed(maker, 1, others=0)
+    async with maker() as session:
+        svc = _wire(_service(session))
+        stale = await session.get(_User, admin)
+        session.expunge(stale)
+        stale.is_platform_admin = False  # what the first read saw
+        order: list[str] = []
+        real_guard, real_refresh = svc._guard_demotion, session.refresh
+
+        async def get_stale(user_id, include_deleted=False):
+            return stale
+
+        async def guard(user_id):
+            order.append("guard")
+            return await real_guard(user_id)
+
+        async def refresh(*args, **kwargs):
+            order.append("target_lock")
+            return await real_refresh(*args, **kwargs)
+
+        svc.get_user, svc._guard_demotion, session.refresh = get_stale, guard, refresh
+        with pytest.raises(LastPlatformAdminError):
+            await svc.set_platform_admin(admin, False)
+    assert order == ["guard"]  # the only admin is refused before the target was ever locked alone

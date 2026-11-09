@@ -23,7 +23,12 @@ import pytest
 
 from autobot_shared.db_session import async_session_scope
 from autobot_shared.user_management import password_epoch
-from autobot_shared.user_management.last_platform_admin import LAST_PLATFORM_ADMIN_CODE, LastPlatformAdminError
+from autobot_shared.user_management.last_platform_admin import (
+    LAST_PLATFORM_ADMIN_CODE,
+    LAST_PLATFORM_ADMIN_RETRY_CODE,
+    LastPlatformAdminError,
+    LastPlatformAdminRetry,
+)
 from autobot_shared.user_management.revocation_outcome import REVOCATION_INCOMPLETE_MESSAGE
 from testkit.fake_async_session import FakeAsyncSession
 
@@ -88,6 +93,8 @@ def _client(user, monkeypatch, last_admin=False):
             session.audits.append(kwargs.get("outcome") or args[4:])
 
     async def database_check(_session, _model, _user_id):  # the DB query; the guard, audit and refusal are real
+        if last_admin == "retry":
+            raise LastPlatformAdminRetry()
         if last_admin:
             raise LastPlatformAdminError()
 
@@ -212,6 +219,24 @@ async def test_deprovisioning_the_last_platform_admin_is_a_scim_409(store, monke
     assert session.profile_writes == [] and (user.email, user.display_name) == ("a@x.io", "A")
     assert session.audits == ["denied"]  # the refusal is audited, by the real guard
     assert session.commits == 1  # and committed: only that audit row
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["PUT", "PATCH", "DELETE"])
+async def test_a_transient_lock_failure_is_a_scim_503_with_retry_after_not_the_409(store, monkeypatch, method):
+    """#21018: the IdP retries a 503; the change was not judged, so nothing of it is applied or audited as denied."""
+    user = _user()
+    session, transport = _client(user, monkeypatch, last_admin="retry")
+    body = {"PUT": _put_inactive(), "PATCH": _patch_rename_then_inactive(), "DELETE": None}[method]
+    kwargs = {"json": body} if body else {}
+
+    response = await _call(transport, method, f"/scim/v2/Users/{user.id}", **kwargs)
+
+    assert response.status_code == 503 and int(response.headers["Retry-After"]) >= 1
+    error = response.json()["detail"]
+    assert LAST_PLATFORM_ADMIN_RETRY_CODE in error["detail"] and error["status"] == "503"
+    assert user.is_active is True and user.deleted_at is None and store.tries == []
+    assert session.profile_writes == [] and session.audits == ["failure"]
 
 
 @pytest.mark.asyncio

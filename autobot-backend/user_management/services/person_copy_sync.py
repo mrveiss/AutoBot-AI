@@ -19,7 +19,7 @@ import asyncio
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import AsyncIterator, Iterable
 
 from aiohttp import ClientTimeout
@@ -43,6 +43,12 @@ logger = get_logger(__name__)
 
 PERSON_COPY_COMPARE_INTERVAL_S = env_int_clamped("AUTOBOT_PERSON_COPY_COMPARE_INTERVAL_S", 300, min_v=30)
 
+#: A link the SLM refused (last platform admin) is tried again only after this long since its last attempt: the
+#: SLM may have gained another admin meanwhile, but a refusal is not worth a push every compare pass.
+PERSON_COPY_REFUSED_RETRY_INTERVAL_S = env_int_clamped(
+    "AUTOBOT_PERSON_COPY_REFUSED_RETRY_INTERVAL_S", 3600, min_v=60, max_v=7 * 24 * 3600
+)
+
 _COPY_PATH = "/api/internal/person-copy"
 _LOCK_TTL_S = env_int_clamped("AUTOBOT_PERSON_COPY_LOCK_TTL_S", 60, min_v=10, max_v=600)
 _LOCK_WAIT_S = env_int_clamped("AUTOBOT_PERSON_COPY_LOCK_WAIT_S", 15, min_v=1, max_v=120)
@@ -58,8 +64,10 @@ _loop_task: asyncio.Task | None = None
 class PersonCopyRefused(Exception):
     """The SLM refused the push: it would leave the SLM with no active platform admin (#21018).
 
-    Not a transport failure, so the periodic pass does not repeat it (:func:`_unrefused_link_ids`); the type
-    name is the error shown on the link, which is how an admin sees why the SLM copy is still active.
+    Not a transport failure, so the periodic pass repeats it only on the slow cadence of
+    :data:`PERSON_COPY_REFUSED_RETRY_INTERVAL_S` (:func:`_due_link_ids`); the type name is the error shown on the
+    link, which is how an admin sees why the SLM copy is still active. A transient lock failure on the SLM is a 503,
+    not this: it is a transport failure and is retried every pass.
     """
 
 
@@ -131,7 +139,10 @@ async def _read_pair(session: AsyncSession, user_id: uuid.UUID) -> tuple[PersonL
 
 def _record(link: PersonLink, error: str | None) -> None:
     link.push_error = error
-    link.push_failed_at = (link.push_failed_at or datetime.now(timezone.utc)) if error else None
+    now = datetime.now(timezone.utc)
+    link.push_failed_at = (link.push_failed_at or now) if error else None
+    if error == PersonCopyRefused.__name__:
+        link.updated_at = now  # the time of this attempt: the refused-retry cadence counts from it
 
 
 async def _push_person(session: AsyncSession, user_id: uuid.UUID) -> None:
@@ -161,18 +172,25 @@ async def _push_person(session: AsyncSession, user_id: uuid.UUID) -> None:
         await session.commit()
 
 
-def _unrefused_link_ids():
-    """Linked people whose last push the SLM did not refuse as last-platform-admin: a refusal is not retried
-    every pass, it stands on the link until the person next changes (an explicit push) or an admin clears it."""
+def _due_link_ids():
+    """Linked people due a push: every link except one the SLM refused as last-platform-admin within the retry
+    interval. A refused link is tried again once its last attempt is older than the interval, and a success clears
+    the error (an explicit push after the person's own change always goes)."""
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=PERSON_COPY_REFUSED_RETRY_INTERVAL_S)
     return select(PersonLink.user_id).where(
-        or_(PersonLink.push_error.is_(None), PersonLink.push_error != PersonCopyRefused.__name__)
+        or_(
+            PersonLink.push_error.is_(None),
+            PersonLink.push_error != PersonCopyRefused.__name__,
+            PersonLink.updated_at.is_(None),
+            PersonLink.updated_at <= cutoff,
+        )
     )
 
 
 async def push_people(session: AsyncSession, user_ids: Iterable[uuid.UUID] | None = None) -> None:
-    """Push the given linked people, or everyone linked (but not those the SLM has refused)."""
+    """Push the given linked people, or everyone linked (a refused link only after the retry interval)."""
     if user_ids is None:
-        user_ids = (await session.execute(_unrefused_link_ids())).scalars().all()
+        user_ids = (await session.execute(_due_link_ids())).scalars().all()
     for user_id in list(user_ids):
         await _push_person(session, user_id)
 

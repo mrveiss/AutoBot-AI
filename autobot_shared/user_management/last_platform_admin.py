@@ -15,17 +15,19 @@ ordered by id, EVERY active-admin row plus the target row, and decides on the ro
 caller takes this lock before it locks the target on its own, so two concurrent changes to the last two
 admins queue on the same rows in the same order and cannot deadlock; the second re-evaluates after the
 first commits, no longer sees the first admin as active, and is refused. A deadlock or serialization
-failure that still happens is rolled back and answered as the same refusal. Locks are held until commit.
+failure that still happens is rolled back and answered as a RETRY (:class:`LastPlatformAdminRetry`, 503 with
+Retry-After), never as the refusal: the change was not judged, so the caller retries. Locks are held until commit.
 """
 
 import uuid
 from typing import Any
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.user_management.user_service_errors import UserServiceError
 
@@ -37,6 +39,10 @@ _RETRYABLE_SQLSTATES = frozenset({"40P01", "40001"})
 #: Stable machine-readable code of the 409; the frontend keys its translated message on it.
 LAST_PLATFORM_ADMIN_CODE = "last_platform_admin"
 LAST_PLATFORM_ADMIN_MESSAGE = "This would leave no active platform admin; make another user an active admin first."
+#: Code of the 503 answered for a transient lock failure, and the Retry-After (seconds) sent with it.
+LAST_PLATFORM_ADMIN_RETRY_CODE = "last_platform_admin_retry"
+LAST_PLATFORM_ADMIN_RETRY_MESSAGE = "Another admin change was in progress; nothing was changed, retry shortly."
+LAST_ADMIN_RETRY_AFTER_S = env_int_clamped("AUTOBOT_LAST_ADMIN_RETRY_AFTER_S", 1, min_v=1, max_v=30)
 
 
 class LastPlatformAdminError(UserServiceError):
@@ -46,6 +52,16 @@ class LastPlatformAdminError(UserServiceError):
     code = LAST_PLATFORM_ADMIN_CODE
 
     def __init__(self, message: str = LAST_PLATFORM_ADMIN_MESSAGE):
+        super().__init__(message)
+
+
+class LastPlatformAdminRetry(LastPlatformAdminError):
+    """A deadlock or serialization failure while judging the change: it was rolled back, not refused (#21018)."""
+
+    status_code = 503
+    code = LAST_PLATFORM_ADMIN_RETRY_CODE
+
+    def __init__(self, message: str = LAST_PLATFORM_ADMIN_RETRY_MESSAGE):
         super().__init__(message)
 
 
@@ -98,25 +114,27 @@ async def ensure_not_last_platform_admin(session: AsyncSession, user_model: Any,
     except DBAPIError as exc:
         if not _is_serialization_failure(exc):
             raise
-        await session.rollback()  # the transaction is aborted: nothing of it stands, the change is refused
-        raise LastPlatformAdminError() from exc
+        await session.rollback()  # the transaction is aborted: nothing of it stands, the change was not judged
+        raise LastPlatformAdminRetry() from exc
     admins = {row.id for row in rows if _is_active_admin(row)}
     if user_id in admins and len(admins) == 1:
         raise LastPlatformAdminError()
 
 
 def last_admin_http_error(exc: LastPlatformAdminError) -> HTTPException:
-    """The 409 a route answers: stable ``code`` plus a human message."""
-    return HTTPException(status.HTTP_409_CONFLICT, detail={"code": exc.code, "message": str(exc)})
+    """The answer a route gives: the 409 refusal, or the 503 + Retry-After for a retryable lock failure."""
+    headers = {"Retry-After": str(LAST_ADMIN_RETRY_AFTER_S)} if isinstance(exc, LastPlatformAdminRetry) else None
+    return HTTPException(exc.status_code, detail={"code": exc.code, "message": str(exc)}, headers=headers)
 
 
 async def refuse_last_platform_admin(session: AsyncSession, exc: LastPlatformAdminError) -> HTTPException:
-    """Commit the refusal's audit row (and release the locks), then return the 409 to raise.
+    """Commit the refusal's audit row (and release the locks), then return the 409 (or retry 503) to raise.
 
     The service wrote the denied audit entry before raising; a route that lets the exception
     roll the session back would lose it, so the route commits it here. The caller MUST run the
     guard before it applies any other change in the request, so the audit row is all that commits.
     """
     await session.commit()
-    logger.warning("Refused: change would leave no active platform admin")
+    verdict = "Retry" if isinstance(exc, LastPlatformAdminRetry) else "Refused"
+    logger.warning("%s: change to the last platform admin", verdict)
     return last_admin_http_error(exc)

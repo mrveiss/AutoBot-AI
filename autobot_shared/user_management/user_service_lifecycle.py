@@ -29,7 +29,11 @@ from autobot_shared.db_session import run_after_commit
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.membership_epoch import MembershipEpochBump
 from autobot_shared.time_utils import now_utc
-from autobot_shared.user_management.last_platform_admin import LastPlatformAdminError, ensure_not_last_platform_admin
+from autobot_shared.user_management.last_platform_admin import (
+    LastPlatformAdminError,
+    LastPlatformAdminRetry,
+    ensure_not_last_platform_admin,
+)
 from autobot_shared.user_management.models.audit import AuditLog, AuditResourceType, IdentityAuditAction
 from autobot_shared.user_management.models.team import Team, TeamMembership
 from autobot_shared.user_management.models.user import UserCore
@@ -140,8 +144,9 @@ class UserLifecycleMixin(UserServiceBase):
         try:
             await ensure_not_last_platform_admin(self.session, self.user_model, user_id)
         except LastPlatformAdminError as exc:
+            outcome = "failure" if isinstance(exc, LastPlatformAdminRetry) else "denied"
             await self._audit_log(
-                action, AuditResourceType.USER, user_id, {"attempt": attempt, "reason": exc.code}, outcome="denied"
+                action, AuditResourceType.USER, user_id, {"attempt": attempt, "reason": exc.code}, outcome=outcome
             )
             await self.session.flush()
             raise
@@ -205,6 +210,24 @@ class UserLifecycleMixin(UserServiceBase):
     async def _guard_demotion(self, user_id: uuid.UUID) -> None:
         await self._guard_last_admin(user_id, IdentityAuditAction.PLATFORM_ADMIN_CHANGED, "demote")
 
+    async def _guard_demotion_before_target_lock(self, user_id: uuid.UUID, seen_admin: bool) -> None:
+        """Guard a demotion with no target-only lock held first (#21018).
+
+        An admin by the first read goes straight to the guard (admin rows plus target, id-ordered). A target
+        that looked like a non-admin is locked only if it STILL is one (``IS NOT true``, re-evaluated on the
+        locked row): a concurrent promotion since the first read drops it from the result, and the guard runs
+        before the target is ever locked on its own, so the one lock order holds in that interleaving too.
+        """
+        if not seen_admin:
+            held = await self.session.execute(
+                select(self.user_model.id)
+                .where(self.user_model.id == user_id, self.user_model.is_platform_admin.isnot(True))
+                .with_for_update()
+            )
+            if held.first() is not None:
+                return
+        await self._guard_demotion(user_id)
+
     async def set_platform_admin(self, user_id: uuid.UUID, is_admin: bool) -> AdminStatusChange:
         """Make *user_id* a platform admin, or not -- the one place that changes it (#20670).
 
@@ -217,9 +240,8 @@ class UserLifecycleMixin(UserServiceBase):
         ``LastPlatformAdminError`` when demoting the only active admin (#21018).
         """
         user = await self._require_user(user_id)
-        guarded = not is_admin and bool(user.is_platform_admin)
-        if guarded:  # admin-row locks come BEFORE the target's own lock: one lock order everywhere (#21018)
-            await self._guard_demotion(user_id)
+        if not is_admin:  # admin-row locks come BEFORE the target's own lock: one lock order everywhere (#21018)
+            await self._guard_demotion_before_target_lock(user_id, bool(user.is_platform_admin))
         await self.session.refresh(user, with_for_update=True)
         transitions = await self._admin_transitions(user)
         latest = self._latest_transition(transitions)
@@ -228,8 +250,6 @@ class UserLifecycleMixin(UserServiceBase):
             if pending:
                 self._queue_admin_change_revocation(user, is_admin)
             return AdminStatusChange(changed=False, sessions_revoked=pending)
-        if not is_admin and not guarded:  # promoted by a concurrent change since the first read
-            await self._guard_demotion(user_id)
         await self._apply_admin_change(user, is_admin, int((latest or {}).get("revision") or 0) + 1)
         return AdminStatusChange(changed=True, sessions_revoked=True)
 

@@ -24,7 +24,10 @@ from autobot_shared.user_management import last_platform_admin, password_epoch
 from autobot_shared.user_management.base_service import TenantContext
 from autobot_shared.user_management.last_platform_admin import (
     LAST_PLATFORM_ADMIN_CODE,
+    LAST_PLATFORM_ADMIN_RETRY_CODE,
     LastPlatformAdminError,
+    LastPlatformAdminRetry,
+    ensure_not_last_platform_admin,
     refuse_last_platform_admin,
 )
 from tests.migrations.conftest import create_all_schema, requires_postgres
@@ -165,6 +168,33 @@ async def test_concurrent_demotions_of_the_last_two_admins_never_deadlock(engine
         assert sorted(outcomes) == [200, 409], outcomes
         assert len(await _active_admins(engine)) == 1
         assert database_errors == [], "a database deadlock or serialization failure was mapped to the 409"
+
+
+async def test_a_forced_deadlock_is_a_503_retry_never_the_409_refusal(engine):  # noqa: ANN001
+    """Each session already holds one admin row (the order the guard prevents) and then runs the guard: Postgres
+    kills one of them with 40P01. That one is answered as a retry (503 + Retry-After), the other is judged
+    normally, and nothing is refused."""
+    from user_management.models import User
+
+    first, second = await _create(engine, "a", True), await _create(engine, "b", True)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as one, maker() as two:
+        for session, user_id in ((one, first), (two, second)):
+            await session.execute(select(User.id).where(User.id == user_id).with_for_update())
+
+        async def guard(session, user_id):  # noqa: ANN001
+            try:
+                await asyncio.wait_for(ensure_not_last_platform_admin(session, User, user_id), timeout=20)
+            except LastPlatformAdminRetry as exc:
+                return await refuse_last_platform_admin(session, exc)
+            await session.rollback()
+            return None
+
+        answers = await asyncio.gather(guard(one, first), guard(two, second))
+    retries = [answer for answer in answers if answer is not None]
+    assert len(retries) == 1, answers  # exactly one deadlock victim; the other was judged (two admins: allowed)
+    assert retries[0].status_code == 503 and retries[0].detail["code"] == LAST_PLATFORM_ADMIN_RETRY_CODE
+    assert int(retries[0].headers["Retry-After"]) >= 1
 
 
 async def test_the_refusal_is_a_409_with_the_stable_code(engine):  # noqa: ANN001

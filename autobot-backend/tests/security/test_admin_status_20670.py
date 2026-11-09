@@ -60,6 +60,7 @@ def _service(user, audits=None):
     svc.get_user = AsyncMock(return_value=user)
     svc._audit_log = AsyncMock(side_effect=write_audit)
     svc._guard_last_admin = AsyncMock()  # the last-admin guard has its own tests (#21018)
+    svc._guard_demotion_before_target_lock = AsyncMock()  # ... and so does its lock order
     return svc
 
 

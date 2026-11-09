@@ -136,8 +136,8 @@ async def _scim_last_admin_refusal(db: AsyncSession, exc: LastPlatformAdminError
     in ``detail`` so an operator can find it.
     """
     refused = await refuse_last_platform_admin(db, exc)
-    body = _scim_error(f"{exc.code}: {exc}", None, 409)
-    return HTTPException(status_code=refused.status_code, detail=body)
+    body = _scim_error(f"{exc.code}: {exc}", None, refused.status_code)
+    return HTTPException(status_code=refused.status_code, detail=body, headers=refused.headers)
 
 
 async def _commit_new_user(db: AsyncSession) -> None:
