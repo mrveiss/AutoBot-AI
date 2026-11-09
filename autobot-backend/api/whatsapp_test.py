@@ -337,3 +337,20 @@ class TestVerifyTokenUsesSecureCompare20761:
         path = "/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=%C3%A9&hub.challenge=1"
         with patch.object(whatsapp, "get_whatsapp_verify_token", AsyncMock(return_value="stored")):  # nosec B105
             assert self._client().get(path).status_code == 403
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "hub.mode=subscribe&hub.challenge=42",
+            "hub.mode=unsubscribe&hub.verify_token=stored&hub.challenge=42",
+            "hub.verify_token=stored&hub.challenge=42",
+        ],
+    )
+    def test_a_missing_token_or_a_non_subscribe_mode_is_a_403(self, query):
+        from unittest.mock import AsyncMock, patch
+
+        from api import whatsapp
+
+        with patch.object(whatsapp, "get_whatsapp_verify_token", AsyncMock(return_value="stored")):  # nosec B105
+            resp = self._client().get(f"/whatsapp/webhook?{query}")
+        assert resp.status_code == 403 and "42" not in resp.text

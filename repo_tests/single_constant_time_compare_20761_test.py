@@ -13,6 +13,7 @@ import ast
 import re
 from pathlib import Path
 
+import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
@@ -89,7 +90,7 @@ def _discover(root: Path) -> list[Path]:
 REACH = declare(
     "single-constant-time-compare",
     discover=_discover,
-    floor=3621,  # mid-window: population 3621, window (3621, 3621)
+    floor=3623,  # mid-window: population 3623, window (3623, 3623)
     what="production python files",
     roots=_TREES,
 )
@@ -103,6 +104,21 @@ def _operand_name(node: ast.AST) -> str | None:
         return node.attr
     if isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
         return node.slice.value
+    return _getter_key(node)
+
+
+_GETTERS = frozenset({"get", "pop", "getenv", "getlist", "getfirst"})
+
+
+def _getter_key(node: ast.AST) -> str | None:
+    """The literal key of ``d.get("api_key")`` / ``os.getenv("API_KEY")``; None for any other call."""
+    if not (isinstance(node, ast.Call) and node.args):
+        return None
+    fn = node.func
+    fn_name = fn.attr if isinstance(fn, ast.Attribute) else fn.id if isinstance(fn, ast.Name) else None
+    first = node.args[0]
+    if fn_name in _GETTERS and isinstance(first, ast.Constant) and isinstance(first.value, str):
+        return first.value
     return None
 
 
@@ -152,33 +168,44 @@ def _is_state_label(node: ast.AST) -> bool:
     return name is not None and name.isupper()
 
 
+def _is_state_constant(name: str) -> bool:
+    """A compound UPPER_CASE module constant (``STATE_ACTIVE``, ``HEALTH_STATE_KEY``) is a label; a bare ``STATE`` is not."""
+    return name.isupper() and "_" in name
+
+
 def _is_secret_operand(node: ast.AST, others: list[ast.AST]) -> bool:
     """Secret-named operand. A name secret only by ``state`` (not csrf/cookie/token/...) compared to a
-    state label is a state-machine check; ``state`` against a variable stays a hit (OAuth CSRF binding)."""
+    state label is a state-machine check; ``state`` (any case) against a variable stays a hit (OAuth CSRF binding)."""
     name = _operand_name(node)
     if not _is_secret_name(name):
         return False
     only_state = not _SECRET_NAME_NO_STATE.search(name)
-    if only_state and (name.isupper() or any(_is_state_label(o) for o in others)):
+    if only_state and (_is_state_constant(name) or any(_is_state_label(o) for o in others)):
         return False
     return True
 
 
+def _is_secret_edge(left: ast.AST, right: ast.AST) -> bool:
+    """One ``left ==/!= right`` edge: a presence test is not a secret compare, a secret-named side is."""
+    if _is_emptiness_check([left, right]):
+        return False
+    return _is_secret_operand(left, [right]) or _is_secret_operand(right, [left])
+
+
 def _is_secret_eq(node: ast.AST) -> bool:
-    if not isinstance(node, ast.Compare) or not any(isinstance(op, (ast.Eq, ast.NotEq)) for op in node.ops):
+    """Any ``==``/``!=`` edge of the chain is a secret compare (each edge judged alone, ``a == b != None``)."""
+    if not isinstance(node, ast.Compare):
         return False
     operands = [node.left, *node.comparators]
-    if _is_emptiness_check(operands):
-        return False
-    return any(_is_secret_operand(o, [x for x in operands if x is not o]) for o in operands)
+    return any(
+        isinstance(op, (ast.Eq, ast.NotEq)) and _is_secret_edge(operands[i], operands[i + 1])
+        for i, op in enumerate(node.ops)
+    )
 
 
 def _offenders(text: str) -> list[int]:
     """Lines with a raw/aliased ``compare_digest`` call or a ``==``/``!=`` on a secret-named operand."""
-    try:
-        tree = parse_cache.parse(text)
-    except SyntaxError:
-        return []
+    tree = parse_cache.parse(text)  # a SyntaxError propagates: an unparsable file must fail the guard, not read clean
     funcs, modules = _compare_digest_aliases(tree)
     return sorted({n.lineno for n in ast.walk(tree) if _is_digest_call(n, funcs, modules) or _is_secret_eq(n)})
 
@@ -201,8 +228,28 @@ def _unallowed(rel: Path, text: str, allowlist: dict[str, str] | None = None, co
     return out
 
 
-def _allowed_keys(rel: Path, text: str) -> set[str]:
-    return {k for n in _offenders(text) if (k := _allow_key(rel, text, n)) in _COMPARE_ALLOWLIST}
+def _allowed_counts(rel: Path, text: str, allowlist: dict[str, str] | None = None) -> dict[str, int]:
+    """How many offending lines in *text* carry each allowlist key."""
+    allow = _COMPARE_ALLOWLIST if allowlist is None else allowlist
+    out: dict[str, int] = {}
+    for n in _offenders(text):
+        key = _allow_key(rel, text, n)
+        if key in allow:
+            out[key] = out.get(key, 0) + 1
+    return out
+
+
+def _count_mismatches(
+    observed: dict[str, int], allowlist: dict[str, str] | None = None, counts: dict[str, int] | None = None
+) -> list[str]:
+    """Allowlist entries whose observed count is not EXACTLY the recorded one (absent = stale, lower = stale)."""
+    allow = _COMPARE_ALLOWLIST if allowlist is None else allowlist
+    limit = _ALLOWED_COUNT if counts is None else counts
+    return [
+        f"{key} (recorded {limit.get(key, 1)}, observed {observed.get(key, 0)})"
+        for key in sorted(allow)
+        if observed.get(key, 0) != limit.get(key, 1)
+    ]
 
 
 def _digest_offenders(text: str) -> list[int]:
@@ -214,17 +261,25 @@ def _digest_offenders(text: str) -> list[int]:
 
 def test_no_raw_compare_digest_outside_the_helper() -> None:
     reached = REACH.examined(_ROOT)
-    found = []
-    seen_allow: set[str] = set()
+    found, unparsable = [], []
+    observed: dict[str, int] = {}
+    parsed = 0
     for rel in reached:
         if rel.as_posix() in _DEFERRED:
             continue
         text = (_ROOT / rel).read_text(encoding="utf-8", errors="replace")
-        found.extend(f"{rel}:{n}" for n in _unallowed(rel, text))
-        seen_allow.update(_allowed_keys(rel, text))
-    REACH.completed(len(reached), _ROOT)
-    stale = set(_COMPARE_ALLOWLIST) - seen_allow
-    assert not stale, f"stale _COMPARE_ALLOWLIST entries, drop them: {sorted(stale)}"
+        try:
+            found.extend(f"{rel}:{n}" for n in _unallowed(rel, text))
+        except SyntaxError as exc:
+            unparsable.append(f"{rel}: {exc}")
+            continue
+        parsed += 1
+        for key, count in _allowed_counts(rel, text).items():
+            observed[key] = observed.get(key, 0) + count
+    REACH.completed(parsed, _ROOT)  # the floor binds the files actually inspected, not the ones listed
+    assert not unparsable, f"files the guard could not parse, so did not inspect: {unparsable}"
+    stale = _count_mismatches(observed)
+    assert not stale, f"_COMPARE_ALLOWLIST / _ALLOWED_COUNT entries out of date, make them exact: {stale}"
     assert found == [], f"use autobot_shared.security.constant_time.secure_compare: {found}"
 
 
@@ -293,4 +348,43 @@ def test_a_duplicated_allowlisted_line_is_still_flagged() -> None:
     assert _unallowed(rel, text, {}, {}) == [1, 3]
     assert _unallowed(rel, text, {key: "reviewed"}, {}) == [3]
     assert _unallowed(rel, text, {key: "reviewed"}, {key: 2}) == []
-    assert _unallowed(rel, line + "\n", {key: "reviewed"}, {}) == []
+    single = f"{line}\n    pass\n"
+    assert _unallowed(rel, single, {key: "reviewed"}, {}) == []
+    assert _unallowed(rel, single, {}, {}) == [1]  # contrast: the same single line, no allowlist entry
+
+
+def test_an_unparsable_file_fails_instead_of_reading_clean() -> None:
+    with pytest.raises(SyntaxError):
+        _offenders("if token == other:\n")
+
+
+def test_a_reduced_or_missing_allowlist_count_is_stale() -> None:
+    allow = {"k": "reviewed"}
+    assert _count_mismatches({"k": 2}, allow, {"k": 2}) == []
+    assert _count_mismatches({"k": 1}, allow, {"k": 2}) == ["k (recorded 2, observed 1)"]
+    assert _count_mismatches({}, allow, {}) == ["k (recorded 1, observed 0)"]
+    assert _count_mismatches({"k": 2}, allow, {}) == ["k (recorded 1, observed 2)"]
+
+
+def test_each_chain_edge_is_judged_alone() -> None:
+    assert _offenders("ok = token == expected != None") == [1]
+    assert _offenders("ok = None != expected == token") == [1]  # contrast: the secret edge is the second one
+    assert _offenders("ok = token != None") == []  # contrast: a lone presence test stays exempt
+    assert _offenders("ok = x is not None != y") == []
+
+
+def test_getter_calls_and_uppercase_state_names_are_secret_operands() -> None:
+    for snippet in (
+        'ok = data.get("api_key") == x',
+        'ok = os.getenv("API_TOKEN") != x',
+        "ok = STATE == user_state",
+        "ok = x == STATE",
+    ):
+        assert _offenders(snippet) == [1], snippet
+    for snippet in (
+        'ok = data.get("mode") == x',
+        "ok = STATE == OTHER_STATE",
+        "ok = state == STATE_ACTIVE",
+        'ok = data.get("api_key") == ""',
+    ):
+        assert _offenders(snippet) == [], snippet  # contrasts
