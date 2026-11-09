@@ -873,8 +873,7 @@ register_local_node() {
     # Auto-assign SLM Manager as code source (#2755)
     info "Assigning code source to SLM Manager..."
     local cs_code
-    # #15825: same as above -- capturing the status code means not using -f,
-    # and a transport failure must reach the wildcard arm rather than abort.
+    # #15825: same as above -- the status code is captured, so no -f, and a transport failure reaches the wildcard arm.
     cs_code=$(curl -sk --max-time 10 -o /dev/null -w "%{http_code}" \
         -X POST "${api_url}/api/code-source/assign" \
         -H "Content-Type: application/json" \
@@ -886,8 +885,9 @@ register_local_node() {
         }" 2>/dev/null) || true
 
     case "${cs_code:-000}" in
-        200) success "Code source assigned: ${CODE_SOURCE} (branch: ${GIT_BRANCH})" ;;
-        *)   warn "Optional step 'code source' returned HTTP ${cs_code:-000} — assign it in SLM UI > Code Sync" ;;
+        200) success "Code source assigned: ${CODE_SOURCE} (branch: ${GIT_BRANCH})"
+             bash "${CODE_SOURCE}/scripts/deployment/mark_local_node_synced.sh" "${CODE_SOURCE}" "${SLM_NODE_ID}" "${INSTALL_TMP}/ansible-vars.json" "${LOG_FILE}" || warn "Step 'mark synced' did not complete. Check the node's status in Code Sync. See ${LOG_FILE}" ;;
+        *)   warn "Optional step 'code source' returned HTTP ${cs_code:-000}, so mark-synced was skipped (#18663) — assign it in SLM UI > Code Sync" ;;
     esac
 }
 
