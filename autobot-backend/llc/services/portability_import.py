@@ -19,15 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 from llc.models.goal import LLCGoal
 from llc.models.sprint import LLCProject
+from llc.services.work_item_import import DEFAULT_TYPE, import_work_items, select_items, template_name
 
 logger = get_logger(__name__)
 
 _PLACEHOLDER_RE = re.compile(r"\{\{(\w+)\}\}")
-
-
-def _template_work_items(template: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """The work items a template carries: a template export's ``seed_work_items`` and a snapshot's ``work_items``."""
-    return [*template.get("seed_work_items", []), *template.get("work_items", [])]
 
 
 class PortabilityImportMixin:
@@ -152,30 +148,58 @@ class PortabilityImportMixin:
             company_id=company_id,
             name=project.get("name", "Imported Project"),
             description=project.get("description"),
-            status=project.get("status", "planning"),
+            status=project.get("status", "backlog"),
         )
         self.session.add(obj)
         await self.session.flush()
         return new_id
 
     async def _import_work_item(
-        self, item: Dict[str, Any], company_id: uuid.UUID, project_id: str
+        self,
+        item: Dict[str, Any],
+        company_id: uuid.UUID,
+        project_id: Optional[str],
+        parent_id: Optional[str] = None,
     ) -> Optional[uuid.UUID]:
-        """Create a seed work item through ``WorkItemService``, so the hierarchy rules apply (#20472)."""
+        """Create a work item through ``WorkItemService``, so the hierarchy rules apply (#20472).
+
+        No agent is woken: an import records existing work, it does not hand anyone a new assignment.
+        """
         from llc.models.enums import WorkItemPriority, WorkItemType  # noqa: PLC0415
         from llc.services.accessors import get_work_item_service  # noqa: PLC0415
 
         created = await get_work_item_service().create(
             self.session,
             company_id=str(company_id),
-            type=WorkItemType(item.get("type", "epic")),
+            type=WorkItemType(item.get("type") or DEFAULT_TYPE),
             title=item.get("title", ""),
             description=item.get("description"),
             priority=WorkItemPriority(item.get("priority", "medium")),
             labels=item.get("labels", []),
             project_id=project_id,
+            parent_id=parent_id,
+            wake_agents=False,
         )
         return created.id
+
+    async def _import_projects(
+        self, template: Dict[str, Any], company_id: uuid.UUID, created_entities: Dict[str, Any]
+    ) -> Dict[str, str]:
+        """Import the template's projects; map source id -> new id.
+
+        A template with work items but no projects gets one project named after it (#20472), so
+        every item has somewhere to live.
+        """
+        project_ids: Dict[str, str] = {}
+        projects = list(template.get("projects", []))
+        if not projects and select_items(template):
+            projects = [{"id": None, "name": template_name(template)}]
+        for project in projects:
+            project_id = await self._import_project(project, company_id)
+            if project_id:
+                created_entities["projects"].append(str(project_id))
+                project_ids[str(project.get("id"))] = str(project_id)
+        return project_ids
 
     async def _import_seed_items(
         self,
@@ -185,25 +209,17 @@ class PortabilityImportMixin:
         created_entities: Dict[str, Any],
         skipped: Dict[str, Any],
         warnings: List[str],
-    ) -> None:
-        """Import the template's seed items, each into the project it names; one naming none goes to the first.
+    ) -> List[Dict[str, Any]]:
+        """Import the template's work items parents-first; return the structured skip list.
 
-        Every work item needs a project, so a seed that cannot be placed is skipped, and the import says so. One
-        whose named project was not imported is never moved to an unrelated project.
+        Each item goes into the project it names, one naming none into the first. Every item that
+        cannot be created is reported with a reason code, in ``skipped``, ``warnings`` and the return.
         """
-        fallback = next(iter(project_ids.values()), None)
-        for item in _template_work_items(template):
-            if not item.get("is_seed"):
-                continue
-            named = item.get("project_id")
-            project_id = project_ids.get(str(named)) if named else fallback
-            if project_id is None:
-                reason = "the project it names was not imported" if named else "the template has no project for it"
-                skipped["work_items"].append(item.get("title", ""))
-                warnings.append(f"Work item {item.get('title', '')!r} skipped: {reason}")
-                continue
-            item_id = await self._import_work_item(item, company_id, project_id)
-            created_entities["work_items"].append(str(item_id))
+        report = await import_work_items(select_items(template), company_id, project_ids, self._import_work_item)
+        created_entities["work_items"].extend(report["created"])
+        skipped["work_items"].extend(report["skipped_titles"])
+        warnings.extend(report["warnings"])
+        return report["skipped_items"]
 
     async def _goal_titles_exist(self, titles: List[str], company_id: Optional[uuid.UUID] = None) -> List[str]:
         if not titles:
