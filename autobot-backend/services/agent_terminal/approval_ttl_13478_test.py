@@ -38,6 +38,7 @@ def _manager():
     mgr = SessionManager.__new__(SessionManager)
     mgr.sessions = {}
     mgr.redis_client = AsyncMock()
+    mgr.redis_client.exists = AsyncMock(return_value=0)  # no closed tombstone (#21202)
     mgr.chat_history_manager = None
     import asyncio
 
@@ -63,7 +64,7 @@ def _session(session_id="sess-1", conversation_id="conv-1", pending=None):
 
 def _setex_calls(mgr):
     """Every write with a TTL as ``(key, ttl, value)``: the session save is a compare-and-set script (#20674)."""
-    saves = [(c.args[2], c.args[4], c.args[5]) for c in mgr.redis_client.eval.call_args_list]
+    saves = [(c.args[2], c.args[5], c.args[6]) for c in mgr.redis_client.eval.call_args_list]
     return saves + [c.args for c in mgr.redis_client.setex.call_args_list]
 
 
