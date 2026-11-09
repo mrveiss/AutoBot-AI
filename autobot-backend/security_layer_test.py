@@ -392,6 +392,20 @@ class TestSecurityLayer:
         result = self.security.authenticate_user("invalid_user", "any_password")
         assert result is None
 
+    def test_authenticate_user_verifies_through_verify_password(self):
+        """#20761/#21088: the password is checked by the canonical hasher, not ``==``."""
+        from autobot_shared.auth import configured_users
+
+        self.security.enable_auth = True
+        self.security.allowed_users = {"test_user": {"password_hash": hash_password("stored")}}
+        self.security.security_config = {"user_roles": {"test_user": "developer"}}
+        with patch.object(configured_users, "verify_password", return_value=True) as verify:
+            assert self.security.authenticate_user("test_user", "supplied") == "developer"
+        assert verify.call_count == 1
+        assert verify.call_args.args[0] == "supplied"
+        with patch.object(configured_users, "verify_password", return_value=False):
+            assert self.security.authenticate_user("test_user", "stored") is None
+
     def test_get_pending_approvals(self):
         """Test getting pending approvals list"""
         # Initially empty
