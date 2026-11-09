@@ -899,23 +899,53 @@
       run_once: true
       tags: ['mark-synced']
 
-    - name: "Mark-synced | POST to /api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+    # #18663: the endpoint looks up Node.node_id. Fleet inventories set slm_node_id on every
+    # registered host (equal to the host name in the static inventories); the install inventory
+    # names its one host `localhost` and carries the node id only in slm_node_id.
+    - name: "Mark-synced | POST to /api/code-sync/nodes/{{ slm_node_id | default(inventory_hostname) }}/mark-synced"
       ansible.builtin.uri:
-        url: "https://{{ _slm_api_host }}/slm/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+        url: "https://{{ _slm_api_host }}/slm/api/code-sync/nodes/{{ slm_node_id | default(inventory_hostname) }}/mark-synced"
         method: POST
         headers:
           Authorization: "Bearer {{ _slm_login.json.access_token | default('') }}"
           Content-Type: "application/json"
-        body: "{}"
+        # Send the deployed commit: without it the endpoint stores the slm_agent_latest_commit
+        # setting, which may be empty or differ from this checkout.
+        body: "{{ {'version': _provision_commit.stdout | trim} if (_provision_commit.stdout | default('') | trim | length > 0) else {} }}"
         body_format: json
         validate_certs: false
+        # 404 is tolerated for the fleet-wide run: a node the wizard has not registered yet
+        # has no row to stamp. It is NOT a pass, so the task below reports anything but 200
+        # by name (#18663); install.sh runs this play after register_local_node and surfaces it.
         status_code: [200, 404]
         timeout: 10
+      register: _mark_synced
       delegate_to: localhost
       ignore_errors: true
       when: _slm_login.status == 200
       tags: ['mark-synced']
       no_log: true  # #19764: credentials in the request or response
+
+    - name: "Mark-synced | Report a node that was not marked synced (#18663)"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: mark-synced did not stamp {{ slm_node_id | default(inventory_hostname) }} (HTTP
+          {{ _mark_synced.status | default('none') }}); 404 means no registered node has that ID
+          (look up the node_id the wizard registered). Check the node's status in Code Sync.
+      when: _slm_login.status == 200 and (_mark_synced.status | default(-1)) != 200
+      tags: ['mark-synced']
+
+    # #18663: the install path passes mark_synced_strict=true, so a login failure or a POST that
+    # did not return 200 fails the play there instead of only printing; the fleet run stays lenient.
+    - name: "Mark-synced | Fail the strict (install) run when the node was not stamped (#18663)"
+      ansible.builtin.fail:
+        msg: >-
+          mark-synced did not stamp {{ slm_node_id | default(inventory_hostname) }}: SLM login HTTP
+          {{ _slm_login.status | default('none') }}, mark-synced HTTP {{ _mark_synced.status | default('none') }}
+      when:
+        - mark_synced_strict | default(false) | bool
+        - _slm_login.status != 200 or (_mark_synced.status | default(-1)) != 200
+      tags: ['mark-synced']
 
 # -------------------------------------------------------------------
 # Phase 7: Summary
