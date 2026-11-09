@@ -6,7 +6,6 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from services.audit_logger import AuditResult
 from type_defs.common import Metadata
 
 
@@ -14,13 +13,17 @@ class AuditEntryResponse(BaseModel):
     """One audit row, as ``AuditEntry.to_response_dict`` sends it (#20173).
 
     ``timestamp`` is epoch SECONDS; the operation's data is in ``details``.
+    ``result`` is the canonical audit event's ``outcome`` (``services/audit/taxonomy.py``),
+    an open string: operation rows say success/denied/failed/error/attempted, identity
+    rows add verified/backup-code and more. It is never narrowed to a Literal, which
+    would turn one off-vocabulary row into a 500 for the whole query.
     """
 
     id: str
     timestamp: float
     date: str
     operation: str
-    result: AuditResult
+    result: str
     user_id: Optional[str] = None
     ip_address: Optional[str] = None
     session_id: Optional[str] = None

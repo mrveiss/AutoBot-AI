@@ -60996,6 +60996,10 @@ export interface components {
          * @description One audit row, as ``AuditEntry.to_response_dict`` sends it (#20173).
          *
          *     ``timestamp`` is epoch SECONDS; the operation's data is in ``details``.
+         *     ``result`` is the canonical audit event's ``outcome`` (``services/audit/taxonomy.py``),
+         *     an open string: operation rows say success/denied/failed/error/attempted, identity
+         *     rows add verified/backup-code and more. It is never narrowed to a Literal, which
+         *     would turn one off-vocabulary row into a 500 for the whole query.
          */
         AuditEntryResponse: {
             /** Id */
@@ -61006,11 +61010,8 @@ export interface components {
             date: string;
             /** Operation */
             operation: string;
-            /**
-             * Result
-             * @enum {string}
-             */
-            result: "success" | "denied" | "failed" | "error" | "attempted";
+            /** Result */
+            result: string;
             /** User Id */
             user_id?: string | null;
             /** Ip Address */

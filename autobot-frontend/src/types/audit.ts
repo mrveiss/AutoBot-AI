@@ -18,7 +18,7 @@ export type AuditResult = 'success' | 'denied' | 'failed' | 'error' | 'attempted
 
 /**
  * One row as `GET /audit/logs` sends it: the generated `AuditEntryResponse`
- * (backend `api/schemas_system.py`). `timestamp` is epoch SECONDS (a float),
+ * (backend `api/schemas_audit.py`). `timestamp` is epoch SECONDS (a float),
  * the operation's data is in `details`, and there is no `metadata`,
  * `error_message` or `user_agent` field (#20173, #20176).
  */
