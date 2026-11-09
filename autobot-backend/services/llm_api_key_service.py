@@ -24,6 +24,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 
@@ -254,14 +255,14 @@ class LLMApiKeyService:
             return None
         # Constant-time comparison against current hash
         candidate = _hash_raw_key(raw_key)
-        if secrets.compare_digest(candidate, record.key_hash):
+        if secure_compare(candidate, record.key_hash):
             return record
         # Also accept old hash during grace period
         if (
             record.prev_key_hash
             and record.rotated_at
             and (time.time() - record.rotated_at) < _ROTATION_GRACE_SECS
-            and secrets.compare_digest(candidate, record.prev_key_hash)
+            and secure_compare(candidate, record.prev_key_hash)
         ):
             return record
         return None
