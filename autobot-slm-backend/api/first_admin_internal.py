@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
+from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.user_management.last_platform_admin import (
     LastPlatformAdminError,
     ensure_not_last_platform_admin,
@@ -91,7 +92,7 @@ async def update_person_copy(
         except LastPlatformAdminError as exc:
             raise await refuse_last_platform_admin(session, exc) from exc
     # No hash means the main app holds none. That must not wipe the password this person logs in with.
-    password_changed = bool(body.password_hash) and user.password_hash != body.password_hash
+    password_changed = bool(body.password_hash) and not secure_compare(body.password_hash, user.password_hash)
     # The epoch goes FIRST, as scripts/autobot-admin.py does: if the epoch cannot be recorded nothing has
     # changed, the push fails and the retry still sees the difference; if the commit then fails the old
     # sessions are already revoked and the person only signs in again.
