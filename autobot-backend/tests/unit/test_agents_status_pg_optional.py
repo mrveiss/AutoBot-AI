@@ -136,8 +136,8 @@ class TestFallbackAgentsFromRegistry:
                 "tasksCompleted": 0,
                 "uptime": 0,
                 "successRate": int(profile.success_rate * 100),
-                "recentTasks": [],
-                "activityTimeline": [],
+                "recentTasks": None,
+                "activityTimeline": None,
             }
             assert required_keys == set(item.keys()), f"Missing keys for {profile.agent_id}"
             assert isinstance(item["successRate"], int)

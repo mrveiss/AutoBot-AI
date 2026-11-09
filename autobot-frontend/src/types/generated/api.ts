@@ -58243,6 +58243,11 @@ export interface components {
             activityTimeline?: {
                 [key: string]: unknown;
             }[] | null;
+            /**
+             * Activitywindowstart
+             * @description UTC ms of the timeline axis start (6 one-hour columns)
+             */
+            activityWindowStart?: number | null;
         } & {
             [key: string]: unknown;
         };

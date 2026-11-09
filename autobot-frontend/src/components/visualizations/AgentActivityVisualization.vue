@@ -118,7 +118,7 @@
           <div v-if="isAgentExpanded(agent.id)" class="expanded-details">
             <div class="detail-section">
               <h5>{{ t('visualizations.agentActivity.recentTasks') }}</h5>
-              <p v-if="!agent.recentTasks?.length">{{ agent.recentTasks == null ? t('visualizations.agentActivity.notReported') : t('visualizations.agentActivity.noRecentTasks') }}</p>
+              <p v-if="!agent.recentTasks?.length">{{ recentTasksEmptyText(agent) }}</p>
               <ul v-else class="task-list">
                 <li v-for="task in agent.recentTasks" :key="task.id" :class="task.status">
                   <span class="task-name">{{ task.name }}</span>
@@ -246,17 +246,13 @@ const activeAgentCount = computed(() => {
 
 // #17514: a status nobody reported is not "idle"; the header says so instead of "0 active".
 const statusReported = computed(() => agents.value.some(a => a.status != null))
-const { successText, getAgentIcon, formatAgentType, formatUptime, formatTimeAgo, formatHourLabel, truncate } = agentActivityFormat(t, () => locale.value)
+const { successText, getAgentIcon, formatAgentType, formatUptime, formatTimeAgo, timelineLabels, truncate } = agentActivityFormat(t, () => locale.value)
 
-const timeLabels = computed(() => {
-  const now = new Date()
-  const labels: string[] = []
-  for (let i = 5; i >= 0; i--) {
-    const hour = new Date(now.getTime() - i * 60 * 60 * 1000)
-    labels.push(formatHourLabel(new Date(hour.setMinutes(0, 0, 0))))
-  }
-  return labels
-})
+const timeLabels = computed(() => timelineLabels(agents.value.find(a => a.activityWindowStart != null)?.activityWindowStart))
+
+function recentTasksEmptyText(agent: ActivityAgent): string {
+  return t(agent.recentTasks == null ? 'visualizations.agentActivity.notReported' : 'visualizations.agentActivity.noRecentTasks')
+}
 
 function getEventIcon(type: string): string {
   const icons: Record<string, string> = {

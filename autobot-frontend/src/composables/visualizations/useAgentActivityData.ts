@@ -41,6 +41,7 @@ function toAgent(item: AgentStatusItem): ActivityAgent {
     // #21270: null = the history was not readable; [] = measured, nothing happened.
     recentTasks: (item.recentTasks ?? null) as ActivityAgent['recentTasks'],
     activityTimeline: (item.activityTimeline ?? null) as ActivityAgent['activityTimeline'],
+    activityWindowStart: item.activityWindowStart ?? null,
   }
 }
 
@@ -74,6 +75,8 @@ export interface ActivityAgent {
     widthPercent: number
     duration: number
   }> | null
+  // #21270: UTC ms the timeline axis starts at; the widget labels its columns from it.
+  activityWindowStart?: number | null
 }
 
 export interface ActivityEvent {

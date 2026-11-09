@@ -144,7 +144,9 @@ async def test_unreadable_feeds_are_none_on_the_wire_and_measured_empty_is_a_lis
     from services import agent_org_service
 
     async def feeds(ids):  # noqa: ANN001, ANN202
-        return {i: ({"recentTasks": [], "activityTimeline": []} if i == "paused" else None) for i in ids}
+        return {
+            i: ({"recentTasks": [], "activityTimeline": [], "windowStart": 1} if i == "paused" else None) for i in ids
+        }
 
     monkeypatch.setattr(agent_org_service, "get_agent_feeds", feeds)
     by_id = {a["id"]: a for a in await _status(factory)}
