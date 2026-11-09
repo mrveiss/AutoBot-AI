@@ -62,6 +62,30 @@ AUTH_ROLE_CONTEXT_KEY = "auth_role"
 DEFAULT_AUTH_ROLE = "user"
 
 
+def _identity_pairs(scope: "dict | None") -> tuple:
+    """The verified-context keys paired with the authenticated principal's values (#18430)."""
+    return (
+        (VERIFIED_COMPANY_KEY, (scope or {}).get("org_id")),
+        (VERIFIED_USER_KEY, (scope or {}).get("user_id")),
+    )
+
+
+def overlay_verified_identity(context: "dict | None", scope: "dict | None") -> dict:
+    """Return *context* with the verified principal REPLACED by *scope*'s (#18430, #20709).
+
+    The one overlay for a new turn (``apply_auth_role``) and a resumed one (``resume_context``). Fail closed: a
+    present value overwrites the old one, an absent value removes the key, so a previous or client-supplied
+    identity never survives into the tool seam and the audit row falls to ``system``, never to another user.
+    """
+    merged = {**(context or {})}
+    for key, value in _identity_pairs(scope):
+        if value:
+            merged[key] = str(value)
+        else:
+            merged.pop(key, None)
+    return merged
+
+
 def apply_auth_role(context: "dict | None", role: Optional[str], scope: "dict | None" = None) -> "dict | None":
     """Overlay the trusted authenticated *role* onto *context* (#13821).
 
@@ -77,15 +101,7 @@ def apply_auth_role(context: "dict | None", role: Optional[str], scope: "dict | 
     ``verified_company_id`` / ``verified_user_id``, the scope the AI lines are decided for. The request's own
     ``company_id`` and ``user_id`` are client claims and never scope a decision.
     """
-    merged = {**(context or {})}
-    for key, value in (
-        (VERIFIED_COMPANY_KEY, (scope or {}).get("org_id")),
-        (VERIFIED_USER_KEY, (scope or {}).get("user_id")),
-    ):
-        if value:
-            merged[key] = str(value)
-        else:
-            merged.pop(key, None)
+    merged = overlay_verified_identity(context, scope)
     if (scope or {}).get("attachment_access") is True:  # #20195: the route's STRICT check, never the client's word
         merged[VERIFIED_ATTACHMENT_ACCESS_KEY] = True
     else:
