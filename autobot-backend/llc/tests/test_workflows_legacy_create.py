@@ -8,13 +8,13 @@ Real routers and services on SQLite; only the session and the two auth dependenc
 from __future__ import annotations
 
 import uuid
-from typing import AsyncIterator
+from typing import AsyncIterator, cast
 
 import httpx
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
-from sqlalchemy import select
+from sqlalchemy import Table, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from api.user_management.dependencies import get_current_user, require_org_context
@@ -36,15 +36,15 @@ from user_management.services import TenantContext
 
 COMPANY_A, COMPANY_B = uuid.uuid4(), uuid.uuid4()
 ADMIN_A, MEMBER_A, PLATFORM = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-_TABLES = [
-    LLCActivityLog.__table__,
-    Role.__table__,
-    Workflow.__table__,
-    LLCProcess.__table__,
-    LLCWorkflowNode.__table__,
-    LLCWorkflowTransition.__table__,
-    LLCRoleSkill.__table__,
-    LLCCompanyMembership.__table__,
+_TABLES: list[Table] = [
+    cast(Table, LLCActivityLog.__table__),
+    cast(Table, Role.__table__),
+    cast(Table, Workflow.__table__),
+    cast(Table, LLCProcess.__table__),
+    cast(Table, LLCWorkflowNode.__table__),
+    cast(Table, LLCWorkflowTransition.__table__),
+    cast(Table, LLCRoleSkill.__table__),
+    cast(Table, LLCCompanyMembership.__table__),
 ]
 _COMPARED = ("name", "status", "source", "kind", "owner_role_id", "trigger_type", "trigger_config", "definition")
 
@@ -116,8 +116,6 @@ async def test_non_admin_is_refused_and_admin_creates(factory):  # noqa: ANN001
         assert res.status_code == 201
         assert res.json()["kind"] == "workflow" and res.json()["owner_role_id"] == str(role)
         assert (await c.post(f"/api/llc/workflows/{COMPANY_A}", json=body)).status_code == 409
-        meta = await c.post(f"/api/llc/workflows/{COMPANY_A}", json={"workflow_id": "m", "kind": "meta_skill"})
-        assert meta.status_code == 201 and meta.json()["kind"] == "meta_skill"
         assert (await c.post(f"/api/llc/workflows/{COMPANY_A}", json={"workflow_id": "x"})).status_code == 400
 
 
@@ -134,9 +132,44 @@ async def test_both_routes_write_identical_rows(factory):  # noqa: ANN001
 
 
 @pytest.mark.asyncio
-async def test_platform_admin_creates_in_the_path_company(factory):  # noqa: ANN001
+async def test_company_admin_member_creates_in_the_path_company(factory):  # noqa: ANN001
     role = await _role(factory, COMPANY_A)
     async with _client(factory, COMPANY_B, PLATFORM, platform=True) as c:
         res = await c.post(f"/api/llc/workflows/{COMPANY_A}", json={"workflow_id": "wf", "owner_role_id": str(role)})
     assert res.status_code == 201 and res.json()["company_id"] == str(COMPANY_A)
     assert (await _row(factory, COMPANY_A, "wf")).company_id == COMPANY_A
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_without_membership_is_refused(factory):  # noqa: ANN001
+    role = await _role(factory, COMPANY_A)
+    stranger = uuid.uuid4()
+    async with _client(factory, COMPANY_B, stranger, platform=True) as c:
+        res = await c.post(f"/api/llc/workflows/{COMPANY_A}", json={"workflow_id": "wf", "owner_role_id": str(role)})
+    assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_out_of_vocabulary_status_is_422(factory):  # noqa: ANN001
+    role = await _role(factory, COMPANY_A)
+    async with _client(factory, COMPANY_A, ADMIN_A) as c:
+        res = await c.post(
+            f"/api/llc/workflows/{COMPANY_A}",
+            json={"workflow_id": "wf", "owner_role_id": str(role), "status": "bogus"},
+        )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_legacy_create_rejects_meta_skill(factory):  # noqa: ANN001
+    async with _client(factory, COMPANY_A, ADMIN_A) as c:
+        res = await c.post(f"/api/llc/workflows/{COMPANY_A}", json={"workflow_id": "m", "kind": "meta_skill"})
+    assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_foreign_company_owner_role_is_refused(factory):  # noqa: ANN001
+    foreign = await _role(factory, COMPANY_B)
+    async with _client(factory, COMPANY_A, ADMIN_A) as c:
+        res = await c.post(f"/api/llc/workflows/{COMPANY_A}", json={"workflow_id": "wf", "owner_role_id": str(foreign)})
+    assert res.status_code == 404

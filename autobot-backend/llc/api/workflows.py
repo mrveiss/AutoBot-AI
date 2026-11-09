@@ -47,6 +47,7 @@ from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ..models.company_os_enums import WorkflowKind
+from ..models.enums import WorkflowStatus
 from ..services.authz import NotAuthorisedError
 from ..services.company_os.errors import CompanyOsError
 from ..services.company_os.loaders import is_company_os_row
@@ -95,7 +96,7 @@ async def _company_os_status(
 class WorkflowCreate(BaseModel):
     workflow_id: str = Field(..., min_length=1, max_length=255)
     name: Optional[str] = Field(None, max_length=255)
-    status: str = Field("planned", max_length=50)
+    status: WorkflowStatus = WorkflowStatus.PLANNED
     definition: Dict[str, Any] = Field(default_factory=dict)
     kind: WorkflowKind = WorkflowKind.WORKFLOW
     owner_role_id: Optional[uuid.UUID] = None
@@ -145,12 +146,14 @@ async def create_workflow(
 ) -> WorkflowResponse:
     assert_company_access(ctx, company_id)
     try:
+        if body.kind is not WorkflowKind.WORKFLOW:  # meta skills stay on the Company OS route
+            raise CompanyOsError(f"kind {body.kind.value!r} is created through the Company OS route")
         workflow = await _company_os().create(
             session,
             company_id,
             workflow_id=body.workflow_id,
             name=body.name,
-            status=body.status,
+            status=body.status.value,
             definition=body.definition,
             kind=body.kind.value,
             owner_role_id=body.owner_role_id,
@@ -158,8 +161,6 @@ async def create_workflow(
         )
     except (CompanyOsError, NotAuthorisedError) as exc:
         raise http_error(exc) from exc
-    except ValueError as exc:  # a status outside the vocabulary
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     await session.commit()
     return WorkflowResponse.model_validate(workflow)
 
