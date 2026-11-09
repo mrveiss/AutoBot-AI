@@ -57,7 +57,7 @@ REACH = declare(
     discover=_population,
     what="python modules",
     roots=("repo_tests",),
-    floor=831,  # mid-window: population 851, window (811, 851)
+    floor=850,  # mid-window: population 870, window (830, 870)
     growth=40,
 )
 
