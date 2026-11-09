@@ -77,7 +77,7 @@ from ..services.work_item_service import (
     resolve_actor_role,
 )
 from ._common import actor_id as verified_user_id
-from ._common import own_task_actor, refused_transition
+from ._common import own_task_actor, refused_transition, write_refusal
 from ._handoff_identity import handing_off_agent, member_reviewer
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
@@ -410,8 +410,8 @@ async def create_work_item(
             labels=body.labels,
             requires_approval_before=body.requires_approval_before,
         )
-    except ValueError as exc:  # e.g. unknown approval category (GH#11206)
-        raise HTTPException(status_code=400, detail=str(exc))
+    except ValueError as exc:  # hierarchy breach -> 422; else 400, e.g. unknown approval category (GH#11206)
+        raise write_refusal(exc)
     await session.commit()
     return await _item_to_dict(item, session)
 
@@ -498,8 +498,8 @@ async def update_work_item(
     fields = {k: v for k, v in body.model_dump(exclude_none=True).items()}
     try:
         item = await _service().update(session, work_item_id, **fields)
-    except ValueError as exc:  # e.g. unknown approval category (GH#11206)
-        raise HTTPException(status_code=400, detail=str(exc))
+    except ValueError as exc:  # hierarchy breach -> 422; else 400, e.g. unknown approval category (GH#11206)
+        raise write_refusal(exc)
     if item is None:
         raise HTTPException(status_code=404, detail="Work item not found")
     await session.commit()
