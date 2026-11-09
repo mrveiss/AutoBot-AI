@@ -297,19 +297,16 @@ In single-user mode:
 
 ### Configured user credentials (`allowed_users`)
 
-`security_config.allowed_users` holds password hashes only (#21088). Plaintext
-entries are rejected at load: the username is logged as an error, the entry is
-ignored, and that user cannot authenticate. Stored values are never rewritten.
-An entry is either a bcrypt hash string or `{password_hash: <hash>}`.
+Each `security_config.allowed_users` entry is a mapping with a bcrypt `password_hash` (#21088).
+`AuthenticationMiddleware.authenticate_user` and `SecurityLayer.authenticate_user` both verify
+through `autobot_shared.auth.configured_users.verify_configured_user`, which uses
+`jwt_core.hash_password` / `verify_password`. An entry without a hash (for example a plain
+value) is rejected: the username is logged as an error and that user cannot authenticate.
+Stored values are never rewritten, and an unknown user still costs one verification.
 
-To produce a hash for an entry, run (the password is prompted, not echoed):
-
-```bash
-python autobot-backend/security_layer_credentials.py <username>
-```
-
-Paste the printed value into the entry for that user. Hashing and verification
-use `autobot_shared.auth.jwt_core.hash_password` / `verify_password`.
+To produce a hash for an entry, run
+`python autobot-infrastructure/shared/scripts/utilities/generate-password-hashes.py`
+(prompted, not echoed) and paste the printed `password_hash` into that user's entry.
 
 ### Config File (`config/config.yaml`)
 

@@ -378,7 +378,7 @@ class TestSecurityLayer:
     def test_authenticate_user_auth_enabled(self):
         """Test user authentication when auth is enabled"""
         self.security.enable_auth = True
-        self.security.allowed_users = {"test_user": hash_password("test_password")}
+        self.security.allowed_users = {"test_user": {"password_hash": hash_password("test_password")}}
         self.security.security_config = {"user_roles": {"test_user": "developer"}}
 
         # Valid credentials

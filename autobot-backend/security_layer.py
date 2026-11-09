@@ -18,13 +18,13 @@ from datetime import timezone
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.auth.configured_users import load_hashed_users, verify_configured_user
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.status_enums import CommandRisk
 from command_run_policy import CommandRunPolicy
 from config import get_config_manager
 from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
-from security_layer_credentials import load_hashed_users, verify_user_password
 from security_layer_roles import DEPRECATED_PRIVILEGED_ROLES, _normalise_role, canonical_role_permissions
 from services.audit.audit import emit_security, query_filtered
 from services.audit.taxonomy import AuditCategory, AuditFilter
@@ -623,14 +623,10 @@ class SecurityLayer:
         if not self.enable_auth:
             return "admin"
 
-        if verify_user_password(self.allowed_users, username, password):
-            user_roles = self.security_config.get("user_roles", {})
-            role = user_roles.get(username)
-            if role:
-                return role
-            return "admin" if username == "admin" else "user"
-
-        return None
+        if verify_configured_user(self.allowed_users, username, password) is None:
+            return None
+        role = self.security_config.get("user_roles", {}).get(username)
+        return role or ("admin" if username == "admin" else "user")
 
 
 # Test entry point
