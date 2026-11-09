@@ -39,6 +39,7 @@ from api.chat_streaming import (
     attach_scope,
     principal_scope,
     resume_attachment_verdict,
+    resume_decision,
 )
 from api.schemas_chat import (
     ChatCapabilitiesData,
@@ -1570,6 +1571,7 @@ async def resume_chat_graph(
     Body:
         approved (bool): Whether the command was approved
         reason (str, optional): Reason for denial
+        answer (str, optional): The answer to a stall question the graph asked (#21022)
     """
     request_id = generate_request_id()
     log_request_context(request, "resume_chat_graph", request_id)
@@ -1577,10 +1579,7 @@ async def resume_chat_graph(
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_workflow_manager(chat_workflow_manager)
 
-    decision = {
-        "approved": request_data.get("approved", False),
-        "reason": scan_chat_message(request_data.get("reason", ""), chat_id),  # #16561
-    }
+    decision = resume_decision(request_data, chat_id)
 
     return _create_streaming_response(
         _stream_graph_resume(
