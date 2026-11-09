@@ -19,6 +19,7 @@ owner, api/knowledge_search_documentation.py module docstring), ``owner`` holds 
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
@@ -81,20 +82,22 @@ def is_company_collection(collection: str) -> bool:
     return collection.startswith(("company:", "company_"))
 
 
+# A company id is a UUID or ``-`` slug: ``_`` is excluded because ``_chroma_safe_name`` maps ``:`` to ``_``, so an id
+# holding one could not be told from its suffix once stored (#20945).
+_COMPANY_ID = r"[A-Za-z0-9-]+"
+_LOGICAL_COMPANY = re.compile(rf"^company:({_COMPANY_ID})(?::.+)?$")
+_STORED_COMPANY = re.compile(rf"^company_({_COMPANY_ID})(?:_.+)?$")
+
+
 def company_of_collection(collection: str) -> str | None:
-    """The company id a company collection names, from either name form; None when it is not parseable.
+    """The company id a company collection names, from its logical or stored name; None when it is not exactly one.
 
-    Company ids are UUIDs (or ``-`` slugs): ``-`` survives ``_chroma_safe_name`` and never contains ``_``, so in
-    the stored form (``company_<id>[_<suffix>]``, every ``:`` mapped to ``_``) the id is the text up to the next ``_``.
+    Logical ``company:<id>[:<suffix>]``; stored (``_chroma_safe_name``: ``:`` -> ``_``) ``company_<id>[_<suffix>]``.
+    Anything else, or an id outside ``[A-Za-z0-9-]``, is None, so a tenant admin is never granted a collection
+    that cannot be attributed to exactly their company.
     """
-    from llc.kb.collections import company_id_of  # noqa: PLC0415 -- keeps the LLC stack off this import
-
-    if collection.startswith("company_"):
-        collection = "company:" + collection[len("company_") :].split("_", 1)[0]
-    try:
-        return company_id_of(collection)
-    except ValueError:
-        return None
+    match = _LOGICAL_COMPANY.match(collection) or _STORED_COMPANY.match(collection)
+    return match.group(1) if match else None
 
 
 def within_admin_tenant(meta: Dict[str, Any], is_admin: bool, is_superadmin: bool, company_id: str | None) -> bool:
