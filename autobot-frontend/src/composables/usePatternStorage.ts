@@ -30,7 +30,7 @@ export interface PatternStorageDeps {
 export function usePatternStorage(deps: PatternStorageDeps) {
   const { withSourceId, wrap, error, storageStats } = deps
 
-  const t = (key: string): string => i18n.global.t(`analytics.patterns.${key}`) as string
+  const t = (key: string): string => i18n.global.t(key) as string
 
   // The route answers the statistics at the top level; an unavailable store comes back as `{ error }`.
   const statsEndpoint = useFetchEndpoint<Partial<PatternStorageStats> & { error?: string }, PatternStorageStats>(
@@ -47,7 +47,7 @@ export function usePatternStorage(deps: PatternStorageDeps) {
       },
       // A failed stats read stays distinguishable from "nothing stored" (#17651).
       onError: (message) => {
-        error.value = message || t('storageStatsFailed')
+        error.value = message || t('analytics.patterns.storageStatsFailed')
       },
       label: 'Pattern storage stats',
     },
@@ -69,7 +69,7 @@ export function usePatternStorage(deps: PatternStorageDeps) {
       },
       onResponse: async (response) => (await extractResponseErrorDetail(response)) || undefined,
       onError: (_message, err) => {
-        error.value = extractErrorMessage(err, t('storageClearFailed'))
+        error.value = extractErrorMessage(err, t('analytics.patterns.storageClearFailed'))
       },
       label: 'Pattern storage clear',
     },
@@ -91,7 +91,7 @@ export function usePatternStorage(deps: PatternStorageDeps) {
   const clearStorage = async (): Promise<boolean> => {
     cleared = false
     await wrap(() => clearEndpoint.load()).catch((e: unknown) => {
-      error.value = extractErrorMessage(e, t('storageClearFailed'))
+      error.value = extractErrorMessage(e, t('analytics.patterns.storageClearFailed'))
       logger.error('Clear storage failed:', e)
     })
     return cleared
@@ -110,7 +110,7 @@ export function usePatternStorage(deps: PatternStorageDeps) {
         reportText = report
       },
       onError: (_message, err) => {
-        error.value = extractErrorMessage(err, t('reportFetchFailed'))
+        error.value = extractErrorMessage(err, t('analytics.patterns.reportFetchFailed'))
       },
       label: 'Pattern report',
     },
@@ -123,7 +123,7 @@ export function usePatternStorage(deps: PatternStorageDeps) {
   const getReport = async (path?: string): Promise<string | null> => {
     reportText = null
     await wrap(() => reportEndpoint.load({ format: 'markdown', ...(path ? { path } : {}) })).catch((e: unknown) => {
-      error.value = extractErrorMessage(e, t('reportFetchFailed'))
+      error.value = extractErrorMessage(e, t('analytics.patterns.reportFetchFailed'))
       logger.error('Report fetch failed:', e)
     })
     return reportText
