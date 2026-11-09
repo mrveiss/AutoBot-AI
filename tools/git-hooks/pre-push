@@ -391,7 +391,10 @@ stage_record() {
 # on an older python3 and reports the resulting StrEnum / cachetools collection
 # errors as test failures.
 # ---------------------------------------------------------------------------
-_PYTHON_LIB="$_HOOK_ROOT/scripts/lib/hook-python.sh"
+# The pushing checkout's copy wins: an installed hook is shared by every worktree and can be
+# newer than the checkout it was installed from, which then has no such library yet.
+_PYTHON_LIB="$REPO_ROOT/scripts/lib/hook-python.sh"
+[ -r "$_PYTHON_LIB" ] || _PYTHON_LIB="$_HOOK_ROOT/scripts/lib/hook-python.sh"
 # shellcheck source=../../scripts/lib/hook-python.sh
 if ! . "$_PYTHON_LIB"; then
     echo "[pre-push FAIL] cannot load $_PYTHON_LIB" >&2
