@@ -708,14 +708,14 @@ EOF
 
     info "Running Ansible deployment (this may take several minutes)..."
     # #6600: keep `provision` so backend role applies to the SLM manager node in single-host mode. Skip only
-    # `seed` — fleet seeding requires SLM DB rows absent on a fresh install. #19867: the re-run hint shares this set.
-    local skip_tags="seed"; log "  Playbook: deploy-slm-manager.yml --skip-tags ${skip_tags}"
+    # `seed` — fleet seeding requires SLM DB rows absent on a fresh install — and `mark-synced`, which register_local_node runs once the node exists (#18663). #19867: the re-run hint shares this set.
+    local skip_tags="seed,mark-synced"; log "  Playbook: deploy-slm-manager.yml --skip-tags ${skip_tags}"
     info "  Live progress below — full output also in ${LOG_FILE}"
     echo
 
     cd "${ansible_dir}"
-    local vars_file="${INSTALL_TMP}/ansible-vars.json"  # #19236: never argv; the EXIT trap removes INSTALL_TMP
-    (umask 077 && PW="${ADMIN_PASSWORD}" jq -n '{slm_admin_password: env.PW}' > "${vars_file}"); set +o pipefail
+    local vars_file="${INSTALL_TMP}/ansible-vars.json"  # #19236: never argv; the EXIT trap removes INSTALL_TMP. deploy_ref: Play 0 resyncs code_source to the installed branch, not main (#18663)
+    (umask 077 && PW="${ADMIN_PASSWORD}" REF="${GIT_BRANCH}" jq -n '{slm_admin_password: env.PW, deploy_ref: env.REF}' > "${vars_file}"); set +o pipefail
     ansible-playbook \
         -i "${inventory}" \
         playbooks/deploy-slm-manager.yml \
@@ -886,7 +886,7 @@ register_local_node() {
 
     case "${cs_code:-000}" in
         200) success "Code source assigned: ${CODE_SOURCE} (branch: ${GIT_BRANCH})"
-             bash "${CODE_SOURCE}/scripts/deployment/mark_local_node_synced.sh" "${CODE_SOURCE}" "${SLM_NODE_ID}" "${INSTALL_TMP}/ansible-vars.json" "${LOG_FILE}" || warn "Step 'mark synced' did not complete. Check the node's status in Code Sync. See ${LOG_FILE}" ;;
+             bash "${CODE_SOURCE}/scripts/deployment/mark_local_node_synced.sh" "${CODE_SOURCE}" "${SLM_NODE_ID}" "${api_url}" "${INSTALL_TMP}/ansible-vars.json" "${LOG_FILE}" || warn "Step 'mark synced' did not complete. Check the node's status in Code Sync. See ${LOG_FILE}" ;;
         *)   warn "Optional step 'code source' returned HTTP ${cs_code:-000}, so mark-synced was skipped (#18663) — assign it in SLM UI > Code Sync" ;;
     esac
 }

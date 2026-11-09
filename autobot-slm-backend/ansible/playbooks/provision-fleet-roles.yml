@@ -848,11 +848,14 @@
       {{ hostvars[slm_manager_inventory_host].ansible_host
          if (slm_manager_inventory_host | default('')) in (hostvars | default({}))
          else '127.0.0.1' }}
+    # #18663: install.sh passes slm_api_url -- the base its own login and register_local_node
+    # just used -- so mark-synced reaches the SLM on exactly that URL; the fleet run derives it.
+    _slm_api_base: "{{ slm_api_url | default('https://' ~ (_slm_api_host | trim) ~ '/slm') }}"
 
   tasks:
     - name: "Mark-synced | Get deployed commit (once on controller)"
       ansible.builtin.command:
-        cmd: git rev-parse HEAD
+        cmd: git -c safe.directory={{ (playbook_dir ~ "/../../..") | realpath }} rev-parse HEAD
         chdir: "{{ playbook_dir }}/../../.."
       register: _provision_commit
       changed_when: false
@@ -873,7 +876,7 @@
 
     - name: "Mark-synced | Login to SLM API"
       ansible.builtin.uri:
-        url: "https://{{ _slm_api_host }}/slm/api/auth/login"
+        url: "{{ _slm_api_base }}/api/auth/login"
         method: POST
         body_format: json
         body:
@@ -904,7 +907,7 @@
     # names its one host `localhost` and carries the node id only in slm_node_id.
     - name: "Mark-synced | POST to /api/code-sync/nodes/{{ slm_node_id | default(inventory_hostname) }}/mark-synced"
       ansible.builtin.uri:
-        url: "https://{{ _slm_api_host }}/slm/api/code-sync/nodes/{{ slm_node_id | default(inventory_hostname) }}/mark-synced"
+        url: "{{ _slm_api_base }}/api/code-sync/nodes/{{ slm_node_id | default(inventory_hostname) }}/mark-synced"
         method: POST
         headers:
           Authorization: "Bearer {{ _slm_login.json.access_token | default('') }}"
