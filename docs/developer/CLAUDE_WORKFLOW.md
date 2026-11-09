@@ -173,13 +173,15 @@ single deterministic command, run it inline. Delegate mechanical work only when 
 fan out in parallel), or **high-discard** (most of what is read is thrown away).
 
 **Tiers — pick by output type, not task difficulty.** This is the in-repo copy; the extended
-routing table and the never-hand-to-Haiku list live in the global model-tiers doc.
+routing table and the never-hand-to-Haiku list live in the global model-tiers doc. The tiers are
+named by alias; the pinned ID for each alias is written only in
+[`autobot_shared/ssot_claude_models.py`](../../autobot_shared/ssot_claude_models.py) (`CLAUDE_TIER_MODELS`).
 
 | Tier | Model | Use for |
 |---|---|---|
-| Haiku | `claude-haiku-4-5-20251001` | mechanical work — sweeps, status checks, inventories, capture |
-| Fable | `claude-fable-5` | plans and design documents — PRDs, architecture proposals |
-| Sonnet | `claude-sonnet-5` | deliverables — code, reviews, acceptance criteria, approvals |
+| Haiku | `haiku` | mechanical work — sweeps, status checks, inventories, capture |
+| Fable | `fable` | plans and design documents — PRDs, architecture proposals |
+| Sonnet | `sonnet` | deliverables — code, reviews, acceptance criteria, approvals |
 
 Never hand Haiku a deliverable or a judgement that ships. Each agent declares its own tier in
 its `.claude/agents/` definition; an agent with no `model:` inherits the caller's model, which

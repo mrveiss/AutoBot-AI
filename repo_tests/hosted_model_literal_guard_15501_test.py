@@ -252,7 +252,6 @@ _CLAUDE_BASELINE: dict[str, tuple[int, str]] = {
     "docs/developer/DEVELOPER_SETUP.md": (1, "prose/examples naming a Claude 3 id"),
     "docs/developer/HARDCODING_PREVENTION.md": (1, "prose/examples naming a Claude 3 id"),
     "docs/guides/chat-ollama-configuration.md": (1, "prose/examples naming a Claude 3 id"),
-    "docs/developer/CLAUDE_WORKFLOW.md": (3, "model-tier table; edited in a separate PR that also touches this file"),
 }
 
 
