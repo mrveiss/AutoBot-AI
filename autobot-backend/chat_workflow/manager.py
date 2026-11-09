@@ -3538,12 +3538,11 @@ before summarizing.
         message: str,
         context: Dict[str, Any] | None = None,
         auth_role: str | None = None,
+        auth_scope: dict | None = None,
     ) -> List[WorkflowMessage]:
         """Process a message through the workflow system and return all messages."""
-        messages = []
-        async for msg in self.process_message_stream(session_id, message, context, auth_role):
-            messages.append(msg)
-        return messages
+        stream = self.process_message_stream(session_id, message, context, auth_role, auth_scope)
+        return [msg async for msg in stream]
 
     async def _process_special_intents(
         self,
@@ -3723,7 +3722,7 @@ before summarizing.
         from .graph import get_compiled_graph
 
         graph = await get_compiled_graph(self)
-        resume = await resume_command(graph, session_id, decision, attachment_access)
+        resume = await resume_command(graph, session_id, decision, attachment_access, auth_scope)
         with llm_principal_scope_for(auth_scope):
             async with aclosing(stream_graph_turn(self, graph, session_id, resume)) as turn:
                 async for msg in turn:
