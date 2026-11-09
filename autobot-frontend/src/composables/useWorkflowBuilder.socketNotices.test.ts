@@ -187,6 +187,18 @@ describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
       expect(stepsAwaitingApproval.value.map((s) => s.step_id)).toEqual(['b']);
     });
 
+    it('restores only on the initial load: a later load after the user cleared the display neither re-displays nor reads a status', async () => {
+      mockServer();
+      const { loadActiveWorkflows, currentWorkflow } = useWorkflowBuilder();
+      await loadActiveWorkflows();
+      expect(currentWorkflow.value?.workflow_id).toBe('wf-wait');
+      currentWorkflow.value = null; // the user clears the display
+      http.get.mockClear();
+      await loadActiveWorkflows(); // e.g. a socket notice or a post-start reload
+      expect(currentWorkflow.value).toBeNull();
+      expect(getUrls()).not.toContain('workflow_status');
+    });
+
     it('never replaces a workflow that is already displayed', async () => {
       mockServer();
       const { loadActiveWorkflows, currentWorkflow } = useWorkflowBuilder();

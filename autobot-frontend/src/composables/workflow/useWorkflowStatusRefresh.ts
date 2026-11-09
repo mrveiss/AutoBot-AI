@@ -49,7 +49,12 @@ export function useWorkflowStatusRefresh<W extends Listed>(deps: StatusRefreshDe
     return response.data.workflow;
   }
 
+  let restoreAttempted = false;
+
+  /** One-shot per mount: only the initial load restores, so a later reload never re-displays a cleared workflow. */
   async function restoreWaitingWorkflow(): Promise<void> {
+    if (restoreAttempted) return;
+    restoreAttempted = true;
     if (currentWorkflow.value) return;
     const waiting = activeWorkflows.value.find((wf) => wf.steps?.some((s) => s.status === 'waiting_approval'));
     if (!waiting) return;
