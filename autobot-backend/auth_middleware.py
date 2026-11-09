@@ -19,6 +19,7 @@ from fastapi import HTTPException, Request, status
 
 from auth_revocation import resolve_human_user_via, token_passes_revocation, with_session_issue_time
 from auth_service_opt_in import admit_opted_in_service, warn_if_key_without_session
+from autobot_shared.auth.configured_users import failure_reason, verify_configured_user
 from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_login_token, is_purpose_bound
 from autobot_shared.auth.internal_api_key import verify_internal_api_key  # noqa: F401  (re-exported)
 from autobot_shared.auth.jwt_core import (
@@ -385,13 +386,9 @@ class AuthenticationMiddleware:
             self._handle_locked_account(username, ip_address)
 
         allowed_users = self.security_config.get("allowed_users", {})
-        if username not in allowed_users:
-            self._handle_failed_login(username, ip_address, "user_not_found")
-            return None
-
-        user_config = allowed_users[username]
-        if not self.verify_password(password, user_config.get("password_hash", "")):
-            self._handle_failed_login(username, ip_address, "invalid_password")
+        user_config = verify_configured_user(allowed_users, username, password)
+        if user_config is None:
+            self._handle_failed_login(username, ip_address, failure_reason(allowed_users, username))
             return None
 
         return self._build_successful_auth_response(username, user_config, ip_address)
