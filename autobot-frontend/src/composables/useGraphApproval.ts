@@ -37,9 +37,48 @@ type TerminalApprove = (
   commandInfo?: { command: string; risk_level: string }
 ) => Promise<unknown> | unknown
 
-export function useApprovalRouting(terminalApprove: TerminalApprove) {
+/** What a paused chat graph is resumed with: an approval decision, or the answer to a stall question (#21022). */
+export type ResumeBody = { approved: boolean; reason: string } | { answer: string }
+
+/** The one POST to `/chats/{id}/resume`, whose SSE reply the chat controller's stream consumer renders. */
+function useResumePost() {
   const store = useChatStore()
   const controller = useChatController()
+
+  return async function postResume(message: ChatMessage, body: ResumeBody, onAccepted?: () => void): Promise<void> {
+    const chatId = String((message.metadata as Record<string, unknown>)?.session_id || store.currentSessionId || '')
+    store.setTyping(true)
+    try {
+      const response = await fetchWithAuth(`${getApiBase()}/chats/${encodeURIComponent(chatId)}/resume`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!response.ok) throw new Error(`resume failed: ${response.status}`)
+      onAccepted?.()
+      await controller.handleStreamingResponse(response)
+    } catch (error) {
+      logger.error('Resuming the chat failed:', error)
+      throw error
+    } finally {
+      store.setTyping(false)
+    }
+  }
+}
+
+/** Answer the question a stalled turn asked; an empty answer stops the turn. The card is marked answered only once the server accepted it (#21022). */
+export function useStallAnswer() {
+  const store = useChatStore()
+  const postResume = useResumePost()
+  return async function answerStallQuestion(message: ChatMessage, answer: string): Promise<void> {
+    const accepted = () => store.updateMessageMetadata(message.id, { answered: true, answer_text: answer })
+    await postResume(message, { answer }, accepted)
+  }
+}
+
+export function useApprovalRouting(terminalApprove: TerminalApprove) {
+  const store = useChatStore()
+  const postResume = useResumePost()
 
   const findPending = (sessionId: string) =>
     store.currentMessages.find(
@@ -47,24 +86,9 @@ export function useApprovalRouting(terminalApprove: TerminalApprove) {
     )
 
   async function resumeGraph(message: ChatMessage, approved: boolean, comment?: string): Promise<void> {
-    const chatId = String((message.metadata as Record<string, unknown>)?.session_id || store.currentSessionId || '')
     store.updateMessageMetadata(message.id, { approval_status: approved ? 'approved' : 'denied', approval_comment: comment })
     store.setPendingApproval(false)
-    store.setTyping(true)
-    try {
-      const response = await fetchWithAuth(`${getApiBase()}/chats/${encodeURIComponent(chatId)}/resume`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approved, reason: comment || '' }),
-      })
-      if (!response.ok) throw new Error(`resume failed: ${response.status}`)
-      await controller.handleStreamingResponse(response)
-    } catch (error) {
-      logger.error('Resuming the chat after an approval failed:', error)
-      throw error
-    } finally {
-      store.setTyping(false)
-    }
+    await postResume(message, { approved, reason: comment || '' })
   }
 
   /** Same signature as the terminal approve; a graph card goes to resume, any other card to the terminal route. */

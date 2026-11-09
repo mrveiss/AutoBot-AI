@@ -590,11 +590,11 @@ export class ChatController {
   private mapMessageType(
     backendType?: string,
     metadataType?: string
-  ): 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | undefined {
+  ): 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | 'human_question' | undefined {
     const type = backendType || metadataType
     if (!type) return 'response'
 
-    // Map backend types to frontend types
+    if (type === 'human_question') return type // #21022
     if (type === 'thought' || type.includes('thought')) return 'thought'
     if (type.includes('planning')) return 'planning'
     if (type.includes('debug')) return 'debug'
