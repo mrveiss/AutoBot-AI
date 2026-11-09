@@ -12,8 +12,9 @@ from __future__ import annotations
 import fnmatch
 import subprocess
 
-from autobot_shared.paths import scrubbed_git_env
 from repo_tests._paths import repo_root
+
+from autobot_shared.paths import scrubbed_git_env
 
 REPO_ROOT = repo_root()
 
