@@ -306,7 +306,7 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
     "hardcoded-colour-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
-        "One frontend tree's source, against all tracked `.vue`/`.ts`/`.js` including the other frontend.",
+        "Both frontends' source (#17567), against all tracked `.vue`/`.ts`/`.js`, which includes the shared kit.",
     ),
     "container-hardening-inline": (
         ABSOLUTE,
