@@ -18,6 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
+from autobot_shared.security.constant_time import secure_compare
+from autobot_shared.user_management.password_epoch import DEACTIVATION_EPOCH_LEAD_SECONDS, record_password_epoch
 from user_management.database import get_slm_session
 from user_management.models.user import User
 
@@ -68,14 +70,28 @@ async def update_person_copy(
     session: Annotated[AsyncSession, Depends(get_slm_session)],
     x_internal_api_key: Annotated[str | None, Header()] = None,
 ) -> None:
-    """Write only what differs, so the periodic pass changes nothing when the two agree."""
+    """Write only what differs, so the periodic pass changes nothing when the two agree.
+
+    The person's issued SLM sessions are revoked on a deactivation or a password change (#21154): the
+    SLM's request gate reads the epoch store, never ``is_active`` or the hash. The deactivation epoch is
+    recorded on every push of an inactive person, and both epochs are written before the change is committed.
+    """
     if not verify_internal_api_key(x_internal_api_key):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "internal service key required")
     user = await session.get(User, body.slm_user_id)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such SLM user")
     # No hash means the main app holds none. That must not wipe the password this person logs in with.
-    if body.password_hash and user.password_hash != body.password_hash:
+    password_changed = bool(body.password_hash) and not secure_compare(body.password_hash, user.password_hash)
+    # The epoch goes FIRST, as scripts/autobot-admin.py does: if the epoch cannot be recorded nothing has
+    # changed, the push fails and the retry still sees the difference; if the commit then fails the old
+    # sessions are already revoked and the person only signs in again.
+    if not body.is_active:
+        await record_password_epoch(user.username, lead_seconds=DEACTIVATION_EPOCH_LEAD_SECONDS)
+    elif password_changed:
+        # No lead: the person signs straight back in and that new token must pass (as in the lifecycle).
+        await record_password_epoch(user.username)
+    if password_changed:
         user.password_hash = body.password_hash
     if user.is_active != body.is_active:
         user.is_active = body.is_active
