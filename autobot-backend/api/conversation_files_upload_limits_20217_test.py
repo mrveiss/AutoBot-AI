@@ -13,7 +13,7 @@ from fastapi import HTTPException, UploadFile
 import conversation_file_quota as quota
 from api import conversation_file_upload as upload
 from api.conversation_files_owner_upload_20133_test import world  # noqa: F401 -- fixture
-from api.conversation_files_real_manager_20225_test import _SESSION, _upload, real  # noqa: F401 -- fixture
+from api.conversation_files_real_manager_20225_test import _SESSION, _rows, _upload, real  # noqa: F401 -- fixture
 
 
 class _CountingStream(io.BytesIO):
@@ -101,3 +101,27 @@ def test_identical_bytes_held_by_another_session_are_charged(real, monkeypatch):
     assert stored["file_size"] == 10
     response = _upload(real, body=b"x" * 10)  # this session holds nothing: add_file would charge it
     assert response.status_code == 413 and response.json()["detail"]["code"] == quota.QUOTA_EXCEEDED
+
+
+def _stored_bytes(w) -> list:
+    return [p for p in (w.tmp / "storage").rglob("*") if p.is_file()]
+
+
+def test_a_twin_deleted_after_the_dedupe_check_is_refused_and_writes_nothing(real, monkeypatch):  # noqa: F811
+    """``would_deduplicate`` is advisory: ``add_file`` re-checks, so a vanished twin cannot buy a free store."""
+    monkeypatch.setattr(quota, "USER_QUOTA_BYTES", 10)
+    assert _upload(real, body=b"x" * 10).status_code == 200
+    before = len(_stored_bytes(real))
+
+    async def vanished_twin(session_id, content, file_hash=None):
+        await real.real.delete_session_files(_SESSION, hard_delete=True)  # gone after the check said "duplicate"
+        return True
+
+    monkeypatch.setattr(real.real, "would_deduplicate", vanished_twin)
+    monkeypatch.setattr(quota, "USER_QUOTA_BYTES", 5)  # the held 10 bytes no longer fit: only a dedupe could admit it
+    response = _upload(real, name="copy.txt", body=b"x" * 10)
+    assert response.status_code == 413 and response.json()["detail"]["code"] == quota.QUOTA_EXCEEDED
+    assert _rows(real, "SELECT COUNT(*), SUM(is_deleted = 0) FROM conversation_files") == [
+        (1, 0)
+    ]  # no new row, no live one
+    assert len(_stored_bytes(real)) <= before  # the refused upload left no bytes behind

@@ -10,6 +10,7 @@ A mixin in its own module because ``conversation_file_manager.py`` is at its siz
 
 from __future__ import annotations
 
+import asyncio
 import mimetypes
 from typing import Any, Dict, List
 
@@ -32,10 +33,24 @@ FILE_INFO_COLUMNS = """
 class ConversationFileRouteApi:
     """Route-facing methods, mixed into ``ConversationFileManager`` (uses its connection, lock, cache)."""
 
+    async def hash_content(self, content: bytes) -> str:
+        """SHA-256 of *content* (``_compute_file_hash``) in a worker thread: up to 50 MiB must not stall the loop."""
+        return await asyncio.to_thread(self._compute_file_hash, content)
+
     async def upload_file(
-        self, session_id: str, filename: str, content: bytes, user_id: str | None, description: str | None = None
+        self,
+        session_id: str,
+        filename: str,
+        content: bytes,
+        user_id: str | None,
+        description: str | None = None,
+        file_hash: str | None = None,
     ) -> Dict[str, Any]:
-        """Store an uploaded file via ``add_file`` and return it shaped as ``ConversationFileInfo``."""
+        """Store an uploaded file via ``add_file`` and return it shaped as ``ConversationFileInfo``.
+
+        *file_hash* is the content's SHA-256 when the caller already has it; hashed once here (off the loop) if not.
+        """
+        file_hash = file_hash or await self.hash_content(content)
         mime_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
         stored = await self.add_file(
             session_id,
@@ -44,6 +59,7 @@ class ConversationFileRouteApi:
             mime_type=mime_type,
             uploaded_by=user_id,
             metadata={"description": description} if description else None,
+            file_hash=file_hash,
         )
         extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else None
         return {**stored, "filename": filename, "size": stored["file_size"], "extension": extension}
@@ -77,11 +93,12 @@ class ConversationFileRouteApi:
         finally:
             await connection.close()
 
-    async def would_deduplicate(self, session_id: str, content: bytes) -> bool:
+    async def would_deduplicate(self, session_id: str, content: bytes, file_hash: str | None = None) -> bool:
         """True when ``add_file`` would store nothing new for *content*: this session already holds identical bytes."""
+        file_hash = file_hash or await self.hash_content(content)
         connection = await self._get_async_db_connection()
         try:
-            existing = await self._check_existing_file(connection, session_id, self._compute_file_hash(content))
+            existing = await self._check_existing_file(connection, session_id, file_hash)
         finally:
             await connection.close()
         return existing is not None
