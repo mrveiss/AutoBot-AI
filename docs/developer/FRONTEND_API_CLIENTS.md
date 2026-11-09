@@ -25,7 +25,7 @@ const res = await apiClient.callRaw('post', '/api/chat/stream', { body })
 - `call` sends a GET through `get()` (retry) and every other method once. Use `rawRequest`/`callRaw` for streams
   and blobs. An endpoint the contract lacks is a backend gap: add the route and `response_model`, regenerate
   the types, then call it; do not fall back to a string path.
-- The domain clients below are being dissolved into this call (#12363 slices 1-3); do not add endpoints to them.
+- The domain clients are being dissolved into this call (#12363). Slice 4 retired `AdvancedControlApiClient`, `FeatureFlagsApiClient` and `VisionMultimodalApiClient`: their calls live in `composables/useAdvancedControl.ts`, `useFeatureFlagsApi.ts` and `useVisionApi.ts`. Do not add endpoints to the clients that remain.
 
 ## Roles
 
@@ -34,11 +34,11 @@ const res = await apiClient.callRaw('post', '/api/chat/stream', { body })
 | Any authenticated backend call from a composable, store or repository | `apiClient.call(method, path, init)` (default export of `utils/ApiClient.ts`) | Owns base URL, bearer token, `X-Organization-Id`, timeout, retry on GET, 401 handling. `call` is typed from the generated contract and returns parsed JSON; `callRaw`/`rawRequest` return the `Response` (streaming, blobs). `get/post/put/delete` with a string path remain for code not yet moved. |
 | A call that must stay a `fetch` (needs the `Response`, custom `credentials`, runs where the client singleton is awkward) | `fetchWithAuth` (`utils/fetchWithAuth.ts`) | Same token and org header as `ApiClient`, nothing else: no timeout, no retry, no 401 redirect. Prefer `rawRequest` for new code. |
 | Fail-fast against a dependency that may be down | `apiClient.rawRequest/get/post(..., { circuitBreaker: '<dependency key>' })` | Opt-in circuit breaker (`utils/apiCircuitBreaker.ts`): 3 failures open the circuit for 30 s; 502/503/504 and thrown errors count, other responses do not. |
-| A new domain-specific endpoint | `apiClient.call(method, path, init)`, never a domain client | The domain clients (`SecretsApiClient`, `FeatureFlagsApiClient`, `VisionMultimodalApiClient`, `AdvancedControlApiClient`) are legacy wrappers being dissolved into the typed `call` (#12363 slices 1-3, #11682); existing methods stay until then, no endpoint is added to them and none is a second transport. |
+| Domain-specific endpoints | A composable over `apiClient.call` (`useVisionApi`, `useFeatureFlagsApi`, `useAdvancedControl`); `SecretsApiClient` until it is dissolved | The domain wrappers are folded into the shared `apiClient` (#11682, #12363); never a second transport. |
 | `/api/*` calls through a service object | `ApiService` (`services/api.ts`) | A wrapper that holds the `apiClient` singleton and adds typed convenience methods (session presence, invitations, collaboration events). It is not a second client. |
 | Several calls batched at chat start | `BatchApiService` (`services/BatchApiService.ts`) | Aggregates multiple `apiClient` calls with per-call error isolation; takes an injected client for tests. |
 | Workflow builder REST calls | `WorkflowBuilderApiClient` (`composables/useWorkflowBuilder.ts`) | Private to the composable; wraps `httpClient` with a 60 s timeout and a `{ success, data, error }` envelope. |
-| The SLM admin backend (separate origin, separate token) | `SlmClient` (`utils/slmClient.ts`) | Must not receive the main-app JWT. |
+| The SLM admin backend (separate origin, separate token) | `SlmClient` (`utils/slmClient.ts`), an `ApiClientBase` subclass bound to `getSLMUrl()` and its own token | Must not receive the main-app JWT; a 401 from it never ends the main session (`defaultKeepSessionOn401`). |
 
 Raw `fetch(` that is none of the above is banned by eslint (`no-restricted-syntax`, the same selectors the SLM
 app uses). A legitimate one (bootstrap before any client exists, another origin, a worker, telemetry that must
