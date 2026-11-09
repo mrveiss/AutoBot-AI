@@ -15,10 +15,11 @@ from datetime import timedelta
 
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import beat_init, worker_process_init, worker_process_shutdown
+from celery.signals import beat_init, celeryd_init, worker_process_init, worker_process_shutdown
 from kombu import Queue
 
 from autobot_shared.logging_manager import get_logger as _get_logger
+from autobot_shared.logging_manager import setup_logging
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
@@ -361,6 +362,17 @@ def _assert_beat_tasks_registered() -> None:
 
 
 _assert_beat_tasks_registered()
+
+
+@celeryd_init.connect
+@beat_init.connect
+def _start_file_logging(**_kwargs: object) -> None:
+    """Worker and beat startup turn file logging on (#20894); forked pool children inherit it.
+
+    A signal, not a module-level call: API modules import this app to enqueue tasks, and importing
+    must write no file. Connected before the beat reconciliation below, so its records reach the file.
+    """
+    setup_logging()
 
 
 # GH#12354: complement to _assert_beat_tasks_registered() (#12353, which guards

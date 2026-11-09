@@ -307,6 +307,11 @@ class LoggingManager:
     # file that do not share a lock each see the file over the cap after another has renamed it, and
     # rotate again: one rotation shifts the backups once per handler. Guarded by ``_lock``.
     _file_handlers: Dict[str, FirstWriteFileHandler] = {}
+    # Off until a service's startup calls setup_logging() (#20894): before that a logger writes to the
+    # console only (journald/docker capture it), so importing a module that logs creates no file.
+    _file_logging_enabled = False
+    # Every logger this manager gave handlers, with its log type: setup_logging() adds the file handler.
+    _managed: Dict[str, tuple[logging.Logger, str]] = {}
     # Set by set_level(): wins over the configured level for every logger, existing and future.
     _level_override: int | None = None
     # Re-entrant: get_logger() holds this lock while the lazy config-manager
@@ -348,9 +353,9 @@ class LoggingManager:
 
             # Don't add handlers if already configured
             if not logger.handlers:
-                handler = cls._get_file_handler(log_type)
-                if handler:
-                    logger.addHandler(handler)
+                cls._managed[logger_key] = (logger, log_type)
+                if cls._file_logging_enabled:
+                    cls._attach_file_handler(logger, log_type)
 
                 # Console handler is intentionally unconditional (#12506).
                 # This used to be gated on `_get_config_manager().get_nested(
@@ -416,10 +421,22 @@ class LoggingManager:
 
     @classmethod
     def _setup_logging(cls) -> None:
-        """Setup basic logging configuration (thread-safe public method)"""
+        """Start file logging for every logger made so far and every later one; idempotent (#20894)."""
         with cls._lock:
             if not cls._initialized:
                 cls._setup_logging_internal()
+            if cls._file_logging_enabled:
+                return
+            cls._file_logging_enabled = True
+            for logger, log_type in cls._managed.values():
+                cls._attach_file_handler(logger, log_type)
+
+    @classmethod
+    def _attach_file_handler(cls, logger: logging.Logger, log_type: str) -> None:
+        """Give *logger* the shared file handler for *log_type*, once (called under ``_lock``)."""
+        handler = cls._get_file_handler(log_type)
+        if handler is not None and handler not in logger.handlers:
+            logger.addHandler(handler)
 
     @classmethod
     def _get_file_handler(cls, log_type: str) -> logging.Handler | None:
@@ -560,7 +577,11 @@ def get_audit_channel_logger(name: str) -> logging.Logger:
     return get_logger(name, "audit")
 
 
-# Maintain backward compatibility with existing logging setup
 def setup_logging() -> None:
-    """Setup logging - backward compatibility function"""
+    """Start file logging: the ONE call every service entry point makes at startup (#20894).
+
+    Until it runs, loggers write to the console only, so importing a module never creates a log file.
+    It attaches the file handler to every logger already made and to every later one. Idempotent.
+    Enforced for every entry point by repo_tests/entry_points_start_file_logging_20894_test.py.
+    """
     LoggingManager._setup_logging()

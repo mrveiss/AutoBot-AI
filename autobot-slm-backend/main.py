@@ -74,6 +74,7 @@ from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
 from autobot_shared.fastapi_validation_handlers import register_validation_error_handlers
 from autobot_shared.integrity_manifest import verify_integrity_at_startup
+from autobot_shared.logging_manager import setup_logging
 from autobot_shared.stream_logging import (
     build_stderr_handler,
     build_stdout_handler,
@@ -116,6 +117,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[build_stdout_handler(), build_stderr_handler()],
 )
+setup_logging()  # service startup (uvicorn imports this module): file logging on (#20894)
 logger = logging.getLogger(__name__)
 
 
@@ -301,9 +303,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Reconfigure root logger AFTER uvicorn's setup so application
     # logs (code_sync, git_tracker, etc.) are visible in service logs.
-    # #12488: keep the same stdout/stderr level split as the module-level
-    # basicConfig() above — force=True replaces it, so it must be
-    # re-applied here too.
+    # #12488: the same stdout/stderr split as the module-level basicConfig(); force=True replaces it.
     logging.basicConfig(
         level=logging.DEBUG if settings.debug else logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",

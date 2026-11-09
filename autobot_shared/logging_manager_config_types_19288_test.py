@@ -36,6 +36,9 @@ class _DictConfig:
 def _isolated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
     monkeypatch.setenv("AUTOBOT_LOGS_DIR", str(tmp_path / "logs"))
     monkeypatch.setattr(logging_manager, "_warned_config_keys", set())
+    # File-handler config is read once file logging is on, i.e. after startup (#20894).
+    monkeypatch.setattr(LoggingManager, "_file_logging_enabled", True)
+    monkeypatch.setattr(LoggingManager, "_managed", {})
     yield
 
 

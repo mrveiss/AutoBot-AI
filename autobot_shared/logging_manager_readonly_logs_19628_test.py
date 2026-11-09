@@ -35,6 +35,9 @@ def _isolated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]
     monkeypatch.setattr(logging_manager, "_warned_config_keys", set())
     monkeypatch.setattr(LoggingManager, "_initialized", False)
     monkeypatch.setattr(LoggingManager, "_file_logging_disabled", False)
+    # The degrade is about a service after startup: file logging on (#20894, setup_logging()).
+    monkeypatch.setattr(LoggingManager, "_file_logging_enabled", True)
+    monkeypatch.setattr(LoggingManager, "_managed", {})
     yield
 
 

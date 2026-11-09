@@ -210,6 +210,9 @@ async def run_index(force: bool, rebuild: bool, args: argparse.Namespace | None 
 def main(argv: list[str] | None = None) -> int:
     """Entry point. `--incremental` is the default when no mode is given."""
     args = parse_args(argv)
+    from autobot_shared.logging_manager import setup_logging
+
+    setup_logging()  # script startup: file logging on (#20894)
     if args.verbose:
         from autobot_shared.logging_manager import LoggingManager
 

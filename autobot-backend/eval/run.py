@@ -36,7 +36,7 @@ import os
 from pathlib import Path
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from eval.candidates import baseline_candidate, recorded_replay_candidate
 from eval.report import DEFAULT_SCORE_EPSILON, RegressionReport
 from eval.runner import CandidateRunner, TrajectoryReplayer
@@ -215,4 +215,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     raise SystemExit(main())

@@ -142,6 +142,9 @@ def test_the_configured_logging_path_writes_a_scheduler_record_to_the_backend_lo
     monkeypatch.setenv("AUTOBOT_LOGS_DIR", str(tmp_path))
     monkeypatch.setattr(lm.LoggingManager, "_loggers", {})
     monkeypatch.setattr(lm.LoggingManager, "_initialized", False)
+    # The scheduler runs in a started service: file logging is on (#20894, setup_logging()).
+    monkeypatch.setattr(lm.LoggingManager, "_file_logging_enabled", True)
+    monkeypatch.setattr(lm.LoggingManager, "_managed", {})
     stdlib = logging.getLogger(name)
     saved = (list(stdlib.handlers), list(stdlib.filters), stdlib.level)
     stdlib.handlers.clear()

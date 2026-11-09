@@ -115,8 +115,9 @@ def test_an_unwritable_directory_turns_the_handler_off_once(tmp_path: Path) -> N
         handler.close()
 
 
-_WRITER = (
-    "from autobot_shared.logging_manager import get_logger\n"
+_WRITER = (  # a started service: setup_logging() turns file logging on
+    "from autobot_shared.logging_manager import get_logger, setup_logging\n"
+    "setup_logging()\n"
     "get_logger('probe', 'backend').error('written by #20894 test')\n"
 )
 

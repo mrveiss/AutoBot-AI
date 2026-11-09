@@ -49,6 +49,9 @@ def _isolated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]
     monkeypatch.setattr(logging_manager, "_warned_config_keys", set())
     monkeypatch.setattr(LoggingManager, "_file_handlers", {})
     monkeypatch.setattr(LoggingManager, "_loggers", {})
+    # Sharing is about a service after startup: file logging on (#20894, setup_logging()).
+    monkeypatch.setattr(LoggingManager, "_file_logging_enabled", True)
+    monkeypatch.setattr(LoggingManager, "_managed", {})
     config = _Config({"logging.rotation.max_bytes": _CAP, "logging.rotation.backup_count": 200})
     with patch.object(logging_manager, "_get_config_manager", return_value=config):
         yield

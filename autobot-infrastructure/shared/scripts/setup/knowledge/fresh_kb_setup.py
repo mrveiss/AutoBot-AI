@@ -21,7 +21,7 @@ for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
     if str(_root) not in sys.path:
         sys.path.insert(0, str(_root))
 
-from autobot_shared.logging_manager import get_logger  # noqa: E402
+from autobot_shared.logging_manager import get_logger, setup_logging  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -184,6 +184,7 @@ async def fresh_setup():
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     success = asyncio.run(fresh_setup())
     if success:
         logger.info("\n✓ Knowledge base setup successful!")
