@@ -65,6 +65,7 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
@@ -163,6 +164,7 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
@@ -197,6 +199,7 @@
      ".github/filters/backend-python-paths.yml",
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
@@ -277,6 +280,7 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
@@ -1043,6 +1047,7 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
@@ -1228,6 +1233,7 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
@@ -1295,6 +1301,7 @@
      "autobot-slm-frontend/package.json",
      "autobot-slm-frontend/package-lock.json",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "**/requirements*.txt",
      ".github/workflows/verify-generated-types.yml"
     ],
@@ -1307,6 +1314,7 @@
      "autobot-frontend/package.json",
      "autobot-frontend/package-lock.json",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "**/requirements*.txt",
      ".github/workflows/verify-generated-types.yml"
     ]
@@ -1341,6 +1349,7 @@
      "autobot-frontend/package.json",
      "autobot-frontend/package-lock.json",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "requirements*.txt",
      ".github/workflows/verify-generated-types.yml"
     ]
