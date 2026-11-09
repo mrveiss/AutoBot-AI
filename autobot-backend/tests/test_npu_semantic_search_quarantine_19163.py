@@ -5,11 +5,11 @@
 """#19163: the NPU engine's retrieval paths that bypass KB.search withhold research-quarantined facts."""
 
 import asyncio
+import re
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from autobot_shared.ssot_config import config
-from knowledge.quarantine import with_quarantine
 from npu_semantic_search import NPUSemanticSearch
 
 HELD = {"collection": config.research_quarantine_collection}
@@ -42,12 +42,10 @@ def test_batch_chromadb_path_withholds_quarantined():
 
 def test_basic_fallbacks_pass_filters_by_keyword_not_into_the_wrong_slot():
     obj = _engine()
-    obj.knowledge_base = SimpleNamespace(
-        vector_store=None, vector_index=None, basic_vector_search=AsyncMock(return_value=[])
-    )
+    obj.knowledge_base = SimpleNamespace(vector_store=None, vector_index=None, search=AsyncMock(return_value=[]))
     asyncio.run(obj._perform_vector_search("q", 7, {"a": 1}))
-    call = obj.knowledge_base.basic_vector_search.await_args  # the non-recursive leaf (#20940)
-    assert call.args == ("q", 7, with_quarantine({"a": 1})) and call.kwargs == {}
+    call = obj.knowledge_base.search.await_args  # KB.search's gate, pinned to the CPU leg (#20940)
+    assert call.args == ("q",) and call.kwargs == {"top_k": 7, "filters": {"a": 1}, "hardware_backend": "cpu"}
 
 
 def test_hybrid_index_path_withholds_quarantined(monkeypatch):
@@ -77,36 +75,31 @@ def test_single_modality_chroma_conversion_withholds_quarantined(monkeypatch):
 
 def _fallback_engine() -> NPUSemanticSearch:
     obj = _engine()
-    rows = [{"content": n, "metadata": m, "score": 0.5, "doc_id": n} for n, m in CASES.items()]
-    obj.knowledge_base = SimpleNamespace(
-        vector_store=None, vector_index=None, basic_vector_search=AsyncMock(return_value=rows)
-    )
+    obj.knowledge_base = SimpleNamespace(vector_store=None, vector_index=None, search=AsyncMock(return_value=[]))
     return obj
 
 
-def test_cpu_fallback_withholds_quarantined_and_sends_quarantine_filter():
+def test_error_fallback_goes_through_kb_search_on_the_cpu_leg():
+    """The withholding itself is KB.search's: knowledge/quarantine_callers_19144_test.py drives it for real."""
     obj = _fallback_engine()
-    out, _ = asyncio.run(obj._perform_vector_search("q", 5, {"a": 1}))
-    assert [r.doc_id for r in out] == ["good"]
-    assert obj.knowledge_base.basic_vector_search.await_args.args[2] == with_quarantine({"a": 1})
+    asyncio.run(obj._handle_search_error(RuntimeError("x"), "q", 5, None, 0.0))
+    assert obj.knowledge_base.search.await_args.kwargs == {"top_k": 5, "filters": None, "hardware_backend": "cpu"}
 
 
-def test_error_fallback_withholds_quarantined_and_sends_quarantine_filter():
-    obj = _fallback_engine()
-    out, _ = asyncio.run(obj._handle_search_error(RuntimeError("x"), "q", 5, None, 0.0))
-    assert [r.doc_id for r in out] == ["good"]
-    assert obj.knowledge_base.basic_vector_search.await_args.args[2] == with_quarantine(None)
+_KB_SEARCH_CALL = re.compile(r"knowledge_base\.search\(([^\n]*)\)")
 
 
-def _calls_kb_search(src: str) -> bool:
-    return "knowledge_base.search(" in src
+def _unpinned_kb_search_calls(src: str) -> list:
+    return [args for args in _KB_SEARCH_CALL.findall(src) if 'hardware_backend="cpu"' not in args]
 
 
-def test_npu_module_never_calls_kb_search_directly():
-    """#20940: only the non-recursive leaf; ``KB.search`` re-enters the NPU engine."""
+def test_npu_module_calls_kb_search_only_on_the_cpu_leg():
+    """#20940: an unpinned ``KB.search`` dispatches back into this NPU engine and recurses."""
     import inspect
 
     import npu_semantic_search as mod
 
-    assert not _calls_kb_search(inspect.getsource(mod))
-    assert _calls_kb_search("self.knowledge_base.search(q)")  # control: the matcher does match
+    src = inspect.getsource(mod)
+    assert len(_KB_SEARCH_CALL.findall(src)) == 2  # both fallbacks: a zero would mean the matcher is blind
+    assert _unpinned_kb_search_calls(src) == []
+    assert _unpinned_kb_search_calls("self.knowledge_base.search(q, top_k=5)") == ["q, top_k=5"]  # control
