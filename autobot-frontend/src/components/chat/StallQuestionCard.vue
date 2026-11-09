@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col gap-2 rounded-lg border border-amber-600 px-4 py-3" :class="{ 'opacity-80': answered }" role="group" :aria-label="$t('chat.stallQuestion.title')">
+  <div class="flex flex-col gap-2 rounded-lg border border-autobot-warning px-4 py-3" :class="{ 'opacity-80': answered }" role="group" :aria-label="$t('chat.stallQuestion.title')">
     <div class="flex items-center gap-2 font-semibold">
       <Icon name="question-circle" />
       <span>{{ $t('chat.stallQuestion.title') }}</span>
@@ -9,7 +9,7 @@
       {{ answerText ? $t('chat.stallQuestion.answered', { answer: answerText }) : $t('chat.stallQuestion.stopped') }}
     </p>
     <form v-else @submit.prevent="send(draft.trim())">
-      <p v-if="failed" class="text-red-600" role="alert">{{ $t('chat.stallQuestion.failed') }}</p>
+      <p v-if="failed" class="text-autobot-error" role="alert">{{ $t('chat.stallQuestion.failed') }}</p>
       <BaseInput v-model="draft" :label="$t('chat.stallQuestion.answerLabel')" :placeholder="$t('chat.stallQuestion.placeholder')" />
       <div class="mt-2 flex gap-2">
         <BaseButton type="submit" variant="primary" size="sm" :disabled="submitting || !draft.trim()">
