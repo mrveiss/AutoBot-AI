@@ -25,6 +25,7 @@ on:
       - 'autobot-frontend/src/views/llc/**'
       - 'autobot-frontend/src/composables/llc/**'
       - 'scripts/audit_api_wiring.py'
+      - 'scripts/audit_api_wiring_args.py'
       - '.github/workflows/company-os-contract.yml'
       - '.github/actions/free-disk-space/**'
       - '.github/actions/install-ci-requirements/**'

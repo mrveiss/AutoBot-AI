@@ -317,8 +317,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import AdvancedAnalytics from '@/components/analytics/AdvancedAnalytics.vue'
 import AgentCostPanel from '@/components/analytics/AgentCostPanel.vue'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
-import api from '@/services/api'
-import { getApiBase } from '@/config/ssot-config'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { createDateFormatter } from '@/utils/formatHelpers'
 
@@ -438,8 +437,8 @@ const getTrendIcon = (trend: string | undefined): IconName => {
 const fetchDashboard = async () => {
   try {
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.get<{ data: BiDashboard }>(`${getApiBase()}/advanced/dashboard`)
-    dashboard.value = res.data
+    const res = await apiClient.call('get', '/api/advanced/dashboard')
+    dashboard.value = res as BiDashboard
   } catch (error) {
     logger.error('Failed to fetch dashboard:', error)
   }
@@ -448,8 +447,8 @@ const fetchDashboard = async () => {
 const fetchMaintenance = async () => {
   try {
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.get<{ data: BiMaintenance }>(`${getApiBase()}/advanced/maintenance`)
-    maintenance.value = res.data
+    const res = await apiClient.call('get', '/api/advanced/maintenance')
+    maintenance.value = res as unknown as BiMaintenance
   } catch (error) {
     logger.error('Failed to fetch maintenance:', error)
   }
@@ -458,8 +457,8 @@ const fetchMaintenance = async () => {
 const fetchOptimization = async () => {
   try {
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.get<{ data: BiOptimization }>(`${getApiBase()}/advanced/optimization`)
-    optimization.value = res.data
+    const res = await apiClient.call('get', '/api/advanced/optimization')
+    optimization.value = res as BiOptimization
   } catch (error) {
     logger.error('Failed to fetch optimization:', error)
   }
@@ -468,8 +467,8 @@ const fetchOptimization = async () => {
 const fetchInsights = async () => {
   try {
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.get<{ data: BiInsights }>(`${getApiBase()}/advanced/insights`)
-    insights.value = res.data
+    const res = await apiClient.call('get', '/api/advanced/insights')
+    insights.value = res as BiInsights
   } catch (error) {
     logger.error('Failed to fetch insights:', error)
   }
@@ -479,11 +478,10 @@ const generateReport = async (reportType: string) => {
   try {
     loading.value = true
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.post<{ data: BiReport }>(`${getApiBase()}/advanced/report`, {
-      report_type: reportType,
-      days: 30
+    const res = await apiClient.call('post', '/api/advanced/report', {
+      body: { report_type: reportType, days: 30 }
     })
-    generatedReport.value = res.data
+    generatedReport.value = res as BiReport
   } catch (error) {
     logger.error('Failed to generate report:', error)
   } finally {
