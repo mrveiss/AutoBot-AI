@@ -331,10 +331,10 @@ def test_a_pyproject_contributes_its_real_dependencies() -> None:
         pytest.skip("autobot_shared/pyproject.toml has moved; re-point this guard")
 
     packages = _packages_pinned_in(shared)
-    assert packages, "no dependency parsed out of pyproject.toml"
     # #18060: most dependencies there are bare (their floors live in constraints/shared.txt), so the
     # proof is read from the tree, not named: every dependency that carries a specifier must be
-    # parsed as a pin, and every bare one that shared.txt constrains must NOT be.
+    # parsed as a pin, and every bare one that shared.txt constrains must NOT be. Either set may be
+    # empty on a live tree; the fixture pair below proves the parser on known input.
     import tomllib
 
     from packaging.requirements import Requirement
@@ -347,11 +347,27 @@ def test_a_pyproject_contributes_its_real_dependencies() -> None:
         if ln.split("#")[0].strip()
     }
     bare_constrained = {_normalise(r.name) for r in deps if not str(r.specifier)} & constrained
-    assert pinned and pinned <= packages, f"pyproject pins {sorted(pinned)}, parsed {sorted(packages)}"
-    assert bare_constrained and not (bare_constrained & packages), "a bare dependency was parsed as a pin"
-    assert not (
-        {"authors", "description", "license", "version"} & packages
-    ), "TOML keys are leaking into the package set as pseudo-dependencies"
+    assert pinned <= packages, f"pyproject pins {sorted(pinned)}, parsed {sorted(packages)}"
+    assert not (bare_constrained & packages), "a bare dependency was parsed as a pin"
+    leaked = {"authors", "description", "license", "version"} & packages
+    assert not leaked, "TOML keys are leaking into the package set as pseudo-dependencies"
+
+
+def _pyproject_with(tmp_path: Path, dependencies: list[str]) -> Path:
+    path = tmp_path / "pyproject.toml"
+    quoted = ", ".join(f'"{d}"' for d in dependencies)
+    path.write_text(f'[project]\nname = "x"\nversion = "1"\ndependencies = [{quoted}]\n', encoding="utf-8")
+    return path
+
+
+def test_the_pyproject_parser_takes_a_pinned_dependency_and_leaves_a_bare_one(tmp_path: Path) -> None:
+    packages = _packages_pinned_in(_pyproject_with(tmp_path, ["pinned-pkg>=1.0", "bare-pkg"]))
+    assert "pinned-pkg" in packages
+    assert "bare-pkg" not in packages
+
+
+def test_the_pyproject_parser_finds_nothing_when_every_dependency_is_bare(tmp_path: Path) -> None:
+    assert _packages_pinned_in(_pyproject_with(tmp_path, ["bare-pkg", "other-bare"])) == set()
 
 
 def test_an_exclusion_never_sits_below_its_own_manifest_floor() -> None:

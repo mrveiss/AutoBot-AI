@@ -100,3 +100,39 @@ def test_a_non_ci_file_may_not_repeat_a_constrained_pin_even_when_it_satisfies(g
     decls = {"planted-pkg": [(Path("autobot-backend/requirements.txt"), 1, "planted-pkg==2.3.0", True)]}
     found = guard.find_violations(decls, {"planted-pkg"}, {"planted-pkg": ">=2.0"})
     assert [v for v in found if "stale EXEMPT" not in v]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "planted-pkg (>=1.0)",
+        "planted-pkg @ https://example.invalid/planted-pkg-1.0.tar.gz",
+        "planted-pkg>=1.0; python_version<'3.12'",
+    ],
+    ids=["parenthesised", "direct-url", "versioned-with-marker"],
+)
+def test_a_versioned_requirement_in_any_spelling_counts_as_a_declaration_with_a_version(guard, tmp_path, line):
+    found = _violations(guard, tmp_path, {"a.txt": line + "\n", "b.txt": "planted-pkg (>=2.0)\n"}, set())
+    assert any("planted-pkg" in v and "absent from" in v for v in found), found
+
+
+def test_a_bare_requirement_with_a_marker_stays_clean(guard, tmp_path, monkeypatch):
+    monkeypatch.setattr(guard, "EXEMPT", {})
+    files = {"a.txt": "shared-pkg; python_version<'3.12'\n", "b.txt": "shared-pkg\n"}
+    assert _violations(guard, tmp_path, files, {"shared-pkg"}) == []
+
+
+def test_a_marked_pin_of_a_constrained_package_is_reported(guard, tmp_path):
+    found = _violations(guard, tmp_path, {"a.txt": "planted-pkg>=1.0; python_version<'3.12'\n"}, {"planted-pkg"})
+    assert any("re-pins a constrained package" in v for v in found), found
+
+
+def test_two_parenthesised_specs_of_one_package_are_drift_not_silence(guard, tmp_path):
+    found = _violations(guard, tmp_path, {"a.txt": "planted-pkg (>=1)\n", "b.txt": "planted-pkg (>=2)\n"}, set())
+    assert found, "parenthesised specifiers were treated as bare"
+
+
+def test_a_ci_prerelease_below_the_shared_floor_is_named(guard):
+    found = _ci_site(guard, "planted-pkg==2.0rc1", {"planted-pkg": ">=2.0,<3.0"})
+    assert any("re-pins a constrained package" in v for v in found), found
+    assert _ci_site(guard, "planted-pkg==2.0", {"planted-pkg": ">=2.0,<3.0"}) == []

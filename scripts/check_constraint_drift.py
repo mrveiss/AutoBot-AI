@@ -17,9 +17,10 @@ A package declared in two or more requirements files must also sit in the constr
 (#18060), otherwise each file carries its own spec and they drift apart. EXEMPT lists the few
 that cannot yet share one range.
 
-The CI plane (requirements-ci/*, requirements-ci-test.txt) keeps exact pins for a reproducible
-install (#18060 review). Such a pin may repeat a constrained package ONLY when it satisfies the
-constraint; one below a shared floor or past a cap is a violation.
+The CI plane (requirements-ci/*, requirements-ci-test.txt) carries exact pins and, for the long-standing ones,
+floors. Either may repeat a constrained package ONLY when its version satisfies the constraint, compared by
+PEP 440 (so ``2.0rc1`` is below ``>=2.0``); one below a shared floor or past a cap is a violation. Converting
+those floors to exact pins needs a resolver run against the whole CI set and is not done here.
 
 Not covered (stated gap): a second declaration inside ``pyproject.toml`` (autobot_shared) is not seen,
 because this guard reads requirements files only. That manifest has no ``-c`` and no dependabot block
@@ -33,10 +34,14 @@ import pathlib
 import re
 import sys
 
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+from packaging.version import InvalidVersion, Version
+
 CONSTRAINTS = pathlib.Path("constraints/shared.txt")
-# A requirement line carrying a version specifier for some package.
-_SPEC = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(==|>=|<=|~=|!=|>|<)")
-_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(?:[=<>!~;]|$)")
+# A requirement line carrying a version for some package: a specifier (also in the parenthesised form
+# ``pkg (>=1)``) or a direct URL (``pkg @ https://...``), which pins a build just as a specifier does.
+_SPEC = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*\(?\s*(===|==|>=|<=|~=|!=|>|<|@)")
+_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(?:[=<>!~;(@]|$)")
 # Test fixtures that merely match the `requirements*.txt` glob (package::reason lists, not manifests).
 _EXCLUDE_TOP = ("repo_tests",)
 # Packages declared in 2+ files that CANNOT share one pin yet. Each entry is a recorded conflict
@@ -104,21 +109,12 @@ def _declarations(files: list[pathlib.Path]) -> dict[str, list[tuple[pathlib.Pat
     return decls
 
 
-def _vkey(version: str) -> tuple[int, ...]:
-    return tuple(int(x) if x.isdigit() else 0 for x in version.split("."))
-
-
 def _satisfies(version: str, spec: str) -> bool:
-    """Does *version* meet a shared clause list made of ``==``, ``>=`` and ``<``?"""
-    for clause in spec.split(","):
-        m = re.match(r"\s*(==|>=|<)\s*([0-9][A-Za-z0-9.]*)", clause)
-        if not m:
-            return False
-        op, bound = m.groups()
-        have, want = _vkey(version), _vkey(bound)
-        if (op == "==" and have != want) or (op == ">=" and have < want) or (op == "<" and have >= want):
-            return False
-    return True
+    """Does *version* meet the shared specifier? PEP 440 semantics: ``2.0rc1`` is below ``>=2.0``."""
+    try:
+        return SpecifierSet(spec).contains(Version(version), prereleases=True)
+    except (InvalidSpecifier, InvalidVersion):
+        return False
 
 
 def constraint_specs() -> dict[str, str]:
@@ -140,7 +136,7 @@ def _ci_pin_ok(path: pathlib.Path, raw: str, spec: str | None) -> bool:
     if spec is None or not _is_ci_plane(path):
         return False
     m = re.match(
-        r"^\s*[A-Za-z0-9._-]+\s*(?:\[[^\]]*\])?\s*(?:==|>=)\s*([0-9][A-Za-z0-9.]*)",
+        r"^\s*[A-Za-z0-9._-]+\s*(?:\[[^\]]*\])?\s*(?:==|>=)\s*([0-9][^\s,;#]*)",
         raw.split("#", 1)[0].split(";", 1)[0],
     )
     return bool(m) and _satisfies(m.group(1), spec)

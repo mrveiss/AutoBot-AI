@@ -62,3 +62,14 @@ def test_the_stager_points_the_include_at_the_copy_it_makes() -> None:
     assert "'-c constraints-shared.txt'" in text and '"constraints-shared.txt"' in text
     assert "throw" in text
     assert "GetUnresolvedProviderPathFromPSPath($staged)" in text  # an update must not copy the file onto itself
+
+
+def test_install_copies_the_gui_requirements_so_the_stager_rewrites_its_constraint_path() -> None:
+    """#18060 review: a GUI file that is not copied before staging keeps the repo-relative `-c` and breaks the launcher."""
+    root = repo_root() / _ROOT
+    install = (root / "scripts/install.ps1").read_text(encoding="utf-8")
+    assert '"requirements-gui.txt"' in install.split("$itemsToCopy", 1)[1].split(")", 1)[0]
+    assert 'Join-Path $InstallPath "requirements-gui.txt"' in (root / "scripts/stage-constraints.ps1").read_text(
+        encoding="utf-8"
+    )
+    assert "-c ../../../constraints/shared.txt" in (root / "requirements-gui.txt").read_text(encoding="utf-8")
