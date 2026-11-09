@@ -320,26 +320,24 @@
 </template>
 
 <script setup lang="ts">
-import { BaseButton, BaseCard, saveBlob } from '@autobot/ui'
+import { BaseButton, BaseCard, httpErrorFrom, saveBlob } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import { formatDuration } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import api from '@/services/api'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
 
 const { t } = useI18n()
 
 const logger = createLogger('AdvancedAnalytics')
 
-// Issue #701: Type for API response with data property
-interface ApiDataResponse {
-  data?: unknown
-  [key: string]: unknown
-}
+// #21066: every analytics route above answers its model at the top level (no `data` envelope; verified
+// against the response models in api/schemas_analytics.py and the producers in analytics_cost,
+// analytics_agents, analytics_export and user_behavior_analytics), so the replies are read directly.
+// The /behavior/* models are opaque (`extra=allow`); #21066 owns typing them.
 
 // Domain shapes for analytics responses (fields consumed by the template)
 interface CostSummary {
@@ -506,13 +504,13 @@ const fetchCostData = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertions for Promise.all results
     const [summaryRes, trendsRes, modelsRes] = await Promise.all([
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/summary`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/trends`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/by-model`)
+      apiClient.call('get', '/api/analytics/cost/summary'),
+      apiClient.call('get', '/api/analytics/cost/trends'),
+      apiClient.call('get', '/api/analytics/cost/by-model')
     ])
-    costSummary.value = (summaryRes as ApiDataResponse).data as CostSummary | null
-    costTrends.value = (trendsRes as ApiDataResponse).data as CostTrends | null
-    modelCosts.value = ((modelsRes as ApiDataResponse).data as ModelCostsData | undefined)?.models || []
+    costSummary.value = summaryRes as CostSummary | null
+    costTrends.value = trendsRes as CostTrends | null
+    modelCosts.value = (modelsRes as ModelCostsData | undefined)?.models || []
   } catch (error) {
     logger.error('Failed to fetch cost data:', error)
   }
@@ -523,11 +521,11 @@ const fetchAgentData = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertions for Promise.all results
     const [metricsRes, recsRes] = await Promise.all([
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/agents/performance`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/agents/recommendations`)
+      apiClient.call('get', '/api/analytics/agents/performance'),
+      apiClient.call('get', '/api/analytics/agents/recommendations')
     ])
-    agentMetrics.value = (metricsRes as ApiDataResponse).data as AgentMetrics | null
-    recommendations.value = (recsRes as ApiDataResponse).data as Recommendations | null
+    agentMetrics.value = metricsRes as AgentMetrics | null
+    recommendations.value = recsRes as Recommendations | null
   } catch (error) {
     logger.error('Failed to fetch agent data:', error)
   }
@@ -537,8 +535,8 @@ const fetchExportFormats = async () => {
   try {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertion for response
-    const res = await api.get<ApiDataResponse>(`${getApiBase()}/analytics/export/formats`)
-    exportFormats.value = ((res as ApiDataResponse).data as ExportFormatsData | undefined)?.formats || []
+    const res = await apiClient.call('get', '/api/analytics/export/formats')
+    exportFormats.value = (res as ExportFormatsData | undefined)?.formats || []
     // Add icons
     exportFormats.value.forEach((f: ExportFormat) => {
       if (f.format === 'CSV') f.icon = 'file-csv'
@@ -557,13 +555,13 @@ const fetchBehaviorData = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertions for Promise.all results
     const [engagementRes, featuresRes, heatmapRes] = await Promise.all([
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/engagement`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/features`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/stats/heatmap`)
+      apiClient.call('get', '/api/analytics/behavior/engagement'),
+      apiClient.call('get', '/api/analytics/behavior/features'),
+      apiClient.call('get', '/api/analytics/behavior/stats/heatmap')
     ])
-    engagementMetrics.value = (engagementRes as ApiDataResponse).data as EngagementMetricsData | null
-    behaviorMetrics.value = (featuresRes as ApiDataResponse).data
-    usageHeatmap.value = (heatmapRes as ApiDataResponse).data as UsageHeatmap | null
+    engagementMetrics.value = engagementRes as EngagementMetricsData | null
+    behaviorMetrics.value = featuresRes
+    usageHeatmap.value = heatmapRes as UsageHeatmap | null
   } catch (error) {
     logger.error('Failed to fetch behavior data:', error)
   }
@@ -582,11 +580,12 @@ const getPopularityWidth = (views: number): string => {
 
 const downloadExport = async (path: string) => {
   try {
-    // Issue #701: Fixed api.get call - use responseType option properly
-    const response = await api.get<Blob>(path, { responseType: 'blob' })
+    // The server names the export route (from /analytics/export/formats), so the path is dynamic: a raw request.
+    const response = await apiClient.rawRequest(path)
+    if (!response.ok) throw await httpErrorFrom(response)
     // Extract filename from path
     const filename = path.split('/').pop() + (path.includes('csv') ? '.csv' : '.json')
-    saveBlob(new Blob([response as unknown as BlobPart]), filename)
+    saveBlob(await response.blob(), filename)
   } catch (error) {
     logger.error('Failed to download export:', error)
   }
