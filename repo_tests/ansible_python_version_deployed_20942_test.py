@@ -11,8 +11,9 @@ import copy as _copy
 from pathlib import Path
 
 import yaml
+from repo_tests._paths import repo_root
 
-_ROOT = Path(__file__).resolve().parent.parent
+_ROOT = repo_root()
 _ANSIBLE = _ROOT / "autobot-slm-backend" / "ansible"
 _ROLE = _ANSIBLE / "roles" / "_shared" / "tasks" / "stage_shared_manifests.yml"
 _PLAYBOOK = _ANSIBLE / "playbooks" / "update-all-nodes.yml"
