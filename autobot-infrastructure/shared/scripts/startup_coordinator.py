@@ -37,6 +37,7 @@ if str(_REPO_ROOT) not in sys.path:
 from autobot_shared.network_constants import NetworkConstants, ServiceURLs  # noqa: E402
 
 from autobot_shared.process_group import stop_process_group  # noqa: E402
+from autobot_shared.log_dir import FirstWriteFileHandler, resolve_logs_dir  # noqa: E402
 from autobot_shared.redis_client import get_async_redis_client  # noqa: E402
 from autobot_shared.redis_management.endpoint import resolve_redis_endpoint  # noqa: E402
 from autobot_shared.ssot_constants import TimingConstants  # noqa: E402
@@ -47,7 +48,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("logs/startup_coordinator.log"),
+        FirstWriteFileHandler(str(resolve_logs_dir() / "startup_coordinator.log")),
     ],
 )
 logger = logging.getLogger(__name__)
