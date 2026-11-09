@@ -18,6 +18,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from tools.lint import _parse_cache as parse_cache
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
 _TREES = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
@@ -73,26 +74,30 @@ _ALLOWED_COUNT: dict[str, int] = {
 
 
 def _production_files(root: Path = _ROOT):
-    for tree in _TREES:
-        for path in (root / tree).rglob("*.py"):
-            rel = path.relative_to(root)
-            name = path.name
-            if rel == _HELPER or "tests" in rel.parts or name.startswith("test_") or name.endswith("_test.py"):
-                continue
-            yield rel, path
+    """Tracked production ``.py`` files: the population is the index, so a base can measure it (#19676)."""
+    try:
+        names = tracked_paths(root, *(f"{tree}/*.py" for tree in _TREES))
+    except EmptyEnumeration:
+        return  # an empty tree is the floor's refusal to make (ReachFloorError), not a discover error
+    for name in names:
+        rel = Path(name)
+        if rel == _HELPER or "tests" in rel.parts or rel.name.startswith("test_") or rel.name.endswith("_test.py"):
+            continue
+        yield rel, root / rel
 
 
 def _discover(root: Path) -> list[Path]:
     return [rel for rel, _ in _production_files(root)]
 
 
-#: Measured at the time of writing: ~3500 production ``.py`` files under the three trees; the floor
-#: leaves room for moves without letting an empty enumeration pass.
+#: Measured at the time of writing: ~3500 production ``.py`` files under the three trees. No ``floor=``:
+#: it is derived from the base's own population less ``skips`` and ``growth`` (#19676), so it never
+#: goes stale. ``growth`` is the allowance a PR adding files may use before it must be a deliberate ratchet.
 REACH = declare(
     "single-constant-time-compare",
     discover=_discover,
-    floor=3624,  # population 3626 less the 2 _DEFERRED files the guard cannot complete: window (3624, 3624)
-    skips=2,
+    skips=2,  # the _DEFERRED files the guard cannot complete
+    growth=300,
     what="production python files",
     roots=_TREES,
 )
