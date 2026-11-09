@@ -425,7 +425,7 @@ const checkConnectionFn = async () => {
   // Create controller for timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
-
+  // eslint-disable-next-line no-restricted-syntax -- probes the VNC server, a different origin, for vnc.html
   const response = await fetch(`${vncBaseUrl}/vnc.html`, {
     method: 'HEAD',
     signal: controller.signal
