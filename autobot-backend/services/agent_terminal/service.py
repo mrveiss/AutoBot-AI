@@ -25,6 +25,7 @@ from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
 from .decision_session import claim_for_decision, mark_queued_approved
 from .errors import PostExecutionError, execution_failed_response, post_execution_failed_response, post_execution_guard
+from .interpretation_service import InterpretationOwnershipMixin
 from .models import AgentSessionState, AgentTerminalSession
 from .session_manager import SessionManager
 from .utils import (
@@ -38,7 +39,7 @@ from .utils import (
 logger = get_logger(__name__)
 
 
-class AgentTerminalService:
+class AgentTerminalService(InterpretationOwnershipMixin):
     """
     Service layer for agent terminal access with security controls.
 
@@ -578,20 +579,17 @@ class AgentTerminalService:
     async def _interpret_approved_command(self, session: AgentTerminalSession, command: str, result: Metadata) -> None:
         """Interpret approved command results with workflow manager (Issue #281: extracted).
 
-        #13480: skipped when a chat turn is still polling this approval — it
-        streams its own interpretation of the same result, and both paths
-        persist, so running both meant two LLM calls and two interpretations of
-        one command in the conversation.
+        #13480, #21202: skipped when a chat turn polling this approval took the
+        interpretation — it streams its own, and both paths persist, so running
+        both meant two LLM calls and two interpretations of one command.
 
-        The skip is deliberately conditional on a marker the poller clears in a
-        `finally`. If the turn has gone, the marker is gone and this runs — which
-        is what makes a late approval produce anything at all (#13479).
+        Ownership is one compare-and-set key in Redis (``interpretation_turn``),
+        so exactly one side interprets whichever worker ran the command. If the
+        turn has gone the key is free and this runs, which is what makes a late
+        approval produce anything at all (#13479).
         """
-        if session.has_live_turn_interpreting():
-            logger.info(
-                "[#13480] Skipping approve-path interpretation for %s — a live chat turn owns it",
-                command[:50],
-            )
+        if not await self._owns_interpretation(session):
+            logger.info("[#21202] Skipping approve-path interpretation for %s: a live chat turn took it", command[:50])
             return
 
         if session.has_conversation() and self.chat_workflow_manager:
@@ -771,21 +769,6 @@ class AgentTerminalService:
     # ============================================================================
     # Approval Workflow (delegated to ApprovalHandler)
     # ============================================================================
-
-    async def set_live_turn_interpreting(self, session_id: str, live: bool) -> None:
-        """Register/withdraw a chat turn as the interpreter for a pending approval (#13480).
-
-        Exposed as a service method so the chat turn never reaches into
-        `pending_approval` directly, and so the change is persisted — the approve
-        path may well read the session back from Redis rather than from memory.
-        """
-        session = await self.get_session(session_id)
-        if not session:
-            return
-
-        session.set_live_turn_interpreting(live)
-        if self.redis_client:
-            await self.session_manager._persist_session(session)
 
     async def approve_command(
         self,
