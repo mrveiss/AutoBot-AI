@@ -119,3 +119,42 @@ async def test_the_failed_hydration_still_refuses_every_vault_resolved_name(monk
 
     await _unreachable_log(monkeypatch, caplog, _SessionOpenFails)
     assert vault._vault_state == vault.VAULT_UNREACHABLE
+
+
+@pytest.mark.asyncio
+async def test_a_transient_vault_failure_then_success_ends_with_the_key_loaded(monkeypatch) -> None:
+    """#21089 AC5: the first hydration hits a transient DB error, the second succeeds; the key resolves."""
+    from services import provider_key_vault as vault
+
+    name = "GROQ_API_KEY"  # pragma: allowlist secret
+    attempts: list[int] = []
+
+    async def _found(_session, _name):
+        return "id-1" if _name == name else None
+
+    async def _registered(_session, **_kw) -> None:
+        return None
+
+    async def _read(_session, _service, *, name, secret_id):  # noqa: ARG001 - external boundary stub
+        return "vaulted-value-1"  # pragma: allowlist secret
+
+    def _flaky_factory():
+        attempts.append(1)
+        return _SessionOpenFails() if len(attempts) == 1 else FakeAsyncSession()
+
+    monkeypatch.setattr(vault, "_find_system_secret_id", _found)
+    monkeypatch.setattr(vault, "_register_credential_dependency", _registered)
+    monkeypatch.setattr(vault, "_read_one_key", _read)
+    monkeypatch.setattr(vault, "_hydrated_keys", {})
+    monkeypatch.setattr(vault, "_unreadable_keys", set())
+    monkeypatch.setattr(vault, "_vault_state", vault.VAULT_NOT_HYDRATED)
+
+    assert await vault.hydrate_at_startup(lambda: _flaky_factory) == []
+    assert vault._vault_state == vault.VAULT_UNREACHABLE and len(attempts) == 1
+    with pytest.raises(vault.VaultKeyUnavailableError):
+        vault.resolve_provider_key(name, "env-value")  # pragma: allowlist secret
+
+    assert await vault.hydrate_at_startup(lambda: _flaky_factory) == [name]
+    assert len(attempts) == 2
+    assert vault._vault_state == vault.VAULT_REACHABLE
+    assert vault.resolve_provider_key(name, "env-value") == "vaulted-value-1"  # pragma: allowlist secret
