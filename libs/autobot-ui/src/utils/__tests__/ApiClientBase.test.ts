@@ -292,6 +292,17 @@ describe('ApiClientBase typed call layer', () => {
     expect(fillPathParams('/a/{x}/b/{y}', { x: 1, y: 'z' })).toBe('/a/1/b/z')
   })
 
+  it('fillPathParams is linear on a run of unbalanced opening braces (CodeQL polynomial regex)', () => {
+    const hostile = '{'.repeat(5000)
+    const started = performance.now()
+    expect(fillPathParams(hostile, undefined)).toBe(hostile)
+    expect(performance.now() - started).toBeLessThan(500)
+  })
+
+  it('fillPathParams still fills a plain placeholder', () => {
+    expect(fillPathParams('/a/{x}/b', { x: 1 })).toBe('/a/1/b')
+  })
+
   it('routes query through withQuery and skips null/undefined', async () => {
     fetchMock.mockResolvedValue(json([]))
     await new TypedClient().call('get', '/api/items', { query: { limit: 5, q: undefined } })
