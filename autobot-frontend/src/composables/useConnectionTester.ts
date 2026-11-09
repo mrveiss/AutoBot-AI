@@ -280,6 +280,7 @@ export function useConnectionTester(
       }
 
       // Make request
+      // eslint-disable-next-line no-restricted-syntax -- user-supplied endpoint, the app token must not leak
       const response = await fetch(endpoint.value, requestOptions)
 
       clearTimeout(timeoutId)

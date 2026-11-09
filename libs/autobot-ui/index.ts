@@ -165,6 +165,9 @@ export {
   createRecencyFormatter,
   createDateFormatter,
   formatLocalTime,
+  isoDateStamp,
+  isoTimestampStamp,
+  toDateTimeLocalValue,
   DEFAULT_DATE_TIME_INTL
 } from './src/utils/format'
 export type { DateInput, DateFormatterOptions, FormatRelativeTimeOptions, RecencyFormatterOptions } from './src/utils/format'
@@ -194,7 +197,7 @@ export { backoffDelay, RETRY_BACKOFF } from './src/utils/backoff'
 export type { BackoffOptions } from './src/utils/backoff'
 
 // What a canonical API client throws for a non-2xx response: status and details kept (#12363).
-export { HttpError, isHttpError, isHttpClientError, extractErrorInfo, httpErrorFrom, parseJsonBody, type ErrorInfo } from './src/utils/httpError'
+export { HttpError, isHttpError, isHttpClientError, httpErrorText, extractErrorInfo, httpErrorFrom, parseJsonBody, type ErrorInfo } from './src/utils/httpError'
 
 export { default as SchedulePicker } from './src/components/SchedulePicker.vue'
 export * from './src/schedule'
@@ -213,8 +216,8 @@ export { default as LedgerSectionState } from './src/components/LedgerSectionSta
 export type { LedgerStateLabels } from './src/components/LedgerSectionState.vue'
 
 // The one HTTP transport under both apps' ApiClients; each app subclasses it for auth (#14908).
-export { ApiClientBase, withQuery, parseRetryAfterMs, SERVICE_UNAVAILABLE_STATUS } from './src/utils/ApiClientBase'
-export type { TransportRequestOptions, RawRequestOptions, TransportLogger } from './src/utils/ApiClientBase'
+export { ApiClientBase, fillPathParams, withQuery, parseRetryAfterMs, SERVICE_UNAVAILABLE_STATUS } from './src/utils/ApiClientBase'
+export type { TransportRequestOptions, RawRequestOptions, TransportLogger, HttpMethod, MethodsOf, JsonMethodsOf, CallInit, CallResponse } from './src/utils/ApiClientBase'
 
 // The one spinner and the one skeleton for every loading state (#19906).
 export { default as BaseSpinner } from './src/components/BaseSpinner.vue'
