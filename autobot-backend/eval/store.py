@@ -28,6 +28,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
+from orchestration.success_criteria import SuccessCriteria, SuccessCriteriaType
 
 # #11062: bound the golden loader so a runaway fixture dir cannot OOM/hang the
 # harness. Env-tunable; defaults are generous vs the current ~75 goldens.
@@ -38,7 +39,42 @@ logger = get_logger(__name__)
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 
-FIXTURE_VERSION = "1"
+FIXTURE_VERSION = "2"
+#: Fixture versions ``from_fixture`` understands. v1 has no ``tool_match`` or ``success_criteria`` (#20843).
+SUPPORTED_FIXTURE_VERSIONS = frozenset({"1", "2"})
+#: ``exact``: the tool sequence must equal ``expected_tools`` (v1 behaviour). ``subsequence``: the expected tools
+#: must appear in order, other calls may interleave.
+TOOL_MATCH_MODES = ("exact", "subsequence")
+
+
+def _criterion_from_dict(entry: Dict[str, Any]) -> SuccessCriteria:
+    """One fixture entry as a ``SuccessCriteria``; ``custom`` is refused (a callable cannot live in JSON)."""
+    kind = SuccessCriteriaType(entry["type"])
+    if kind is SuccessCriteriaType.CUSTOM:
+        raise ValueError("a fixture success criterion cannot be 'custom': a callable is not serialisable")
+    return SuccessCriteria(
+        criteria_type=kind,
+        parameters=dict(entry.get("parameters") or {}),
+        weight=float(entry.get("weight", 1.0)),
+        required=bool(entry.get("required", True)),
+        description=str(entry.get("description", "")),
+    )
+
+
+def _checked_tool_match(data: Dict[str, Any]) -> str:
+    """The fixture's ``tool_match``, refusing an unknown mode rather than silently comparing another way."""
+    mode = str(data.get("tool_match") or "exact")
+    if mode not in TOOL_MATCH_MODES:
+        raise ValueError(f"tool_match must be one of {TOOL_MATCH_MODES}, got {mode!r}")
+    return mode
+
+
+def _checked_criteria(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The fixture's ``success_criteria``, validated at load so a bad entry fails the load, not the run."""
+    entries = [dict(e) for e in (data.get("success_criteria") or [])]
+    for entry in entries:
+        _criterion_from_dict(entry)
+    return entries
 
 
 @dataclass
@@ -53,6 +89,14 @@ class GoldenTrajectory:
     expected_status: str = "completed"
     expected_output_excerpt: str = ""
     agent_config: Dict[str, Any] = field(default_factory=dict)
+    #: v2 (#20843): how ``expected_tools`` is compared, and the typed criteria a live answer must satisfy,
+    #: in the ``orchestration.success_criteria`` shape. A v1 fixture carries neither.
+    tool_match: str = "exact"
+    success_criteria: List[Dict[str, Any]] = field(default_factory=list)
+
+    def criteria(self) -> List[SuccessCriteria]:
+        """The ``success_criteria`` entries as evaluator objects."""
+        return [_criterion_from_dict(entry) for entry in self.success_criteria]
 
     @property
     def query(self) -> str:
@@ -66,6 +110,9 @@ class GoldenTrajectory:
     @classmethod
     def from_fixture(cls, data: Dict[str, Any]) -> "GoldenTrajectory":
         """Build a golden from a replay-fixture-shaped dict."""
+        version = str(data.get("fixture_version") or "1")
+        if version not in SUPPORTED_FIXTURE_VERSIONS:
+            raise ValueError(f"unsupported golden fixture_version {version!r}")
         expected = data.get("expected_output") or {}
         return cls(
             trajectory_id=str(data.get("trajectory_id") or data.get("run_id") or "unknown"),
@@ -76,6 +123,8 @@ class GoldenTrajectory:
             expected_status=str(expected.get("final_status") or "completed"),
             expected_output_excerpt=str(expected.get("output_text_excerpt") or ""),
             agent_config=dict(data.get("agent_config") or {}),
+            tool_match=_checked_tool_match(data),
+            success_criteria=_checked_criteria(data),
         )
 
 

@@ -1,11 +1,24 @@
 {
-  "fixture_version": "1",
+  "fixture_version": "2",
   "trajectory_id": "qa_deploy_role",
   "task_class": "knowledge_qa",
   "inputs": {
     "prompt": "How do I deploy a new service role to an SLM node?"
   },
-  "expected_tools": ["search_knowledge_base"],
+  "expected_tools": [],
+  "tool_match": "subsequence",
+  "success_criteria": [
+    {
+      "type": "output_pattern",
+      "parameters": {"pattern": "(?i)\\bslm\\b"},
+      "description": "answers about the SLM"
+    },
+    {
+      "type": "output_pattern",
+      "parameters": {"pattern": "(?i)\\brole\\b"},
+      "description": "answers about the service role"
+    }
+  ],
   "baseline_score": 0.85,
   "expected_output": {
     "final_status": "completed",

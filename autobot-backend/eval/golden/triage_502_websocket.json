@@ -1,11 +1,24 @@
 {
-  "fixture_version": "1",
+  "fixture_version": "2",
   "trajectory_id": "triage_502_websocket",
   "task_class": "troubleshooting",
   "inputs": {
     "prompt": "My backend returns 502 after restart. The health endpoint works but WebSocket connections fail. What could cause this?"
   },
-  "expected_tools": ["search_knowledge_base", "read_file"],
+  "expected_tools": [],
+  "tool_match": "subsequence",
+  "success_criteria": [
+    {
+      "type": "output_pattern",
+      "parameters": {"pattern": "(?i)web\\s?socket"},
+      "description": "addresses the WebSocket failure"
+    },
+    {
+      "type": "output_pattern",
+      "parameters": {"pattern": "(?i)proxy|nginx|upgrade|worker"},
+      "description": "names a proxy, upgrade-header or worker cause"
+    }
+  ],
   "baseline_score": 0.88,
   "expected_output": {
     "final_status": "completed",

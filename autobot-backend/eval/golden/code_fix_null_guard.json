@@ -1,15 +1,28 @@
 {
-  "fixture_version": "1",
+  "fixture_version": "2",
   "trajectory_id": "code_fix_null_guard",
   "task_class": "code_fix",
   "inputs": {
-    "prompt": "The function crashes when the config dict is missing the 'timeout' key. Add a null guard that falls back to the module default."
+    "prompt": "This function crashes when the config dict is missing the 'timeout' key:\n\ndef connect(config):\n    return open_connection(config['host'], timeout=config['timeout'])\n\nAdd a null guard that falls back to the module default DEFAULT_TIMEOUT. Reply with the corrected function. Do not run anything."
   },
-  "expected_tools": ["read_file", "edit_file", "run_tests"],
+  "expected_tools": [],
+  "tool_match": "subsequence",
+  "success_criteria": [
+    {
+      "type": "output_pattern",
+      "parameters": {"pattern": "DEFAULT_TIMEOUT"},
+      "description": "falls back to the module default"
+    },
+    {
+      "type": "output_pattern",
+      "parameters": {"pattern": "\\.get\\(\\s*['\"]timeout['\"]|['\"]timeout['\"]\\s+in\\s|except\\s+KeyError"},
+      "description": "guards the missing key instead of indexing it"
+    }
+  ],
   "baseline_score": 0.9,
   "expected_output": {
     "final_status": "completed",
-    "output_text_excerpt": "Added a guard that defaults timeout to DEFAULT_TIMEOUT when absent; ran the test suite and all tests pass."
+    "output_text_excerpt": "Added a guard that defaults timeout to DEFAULT_TIMEOUT when absent: config.get('timeout', DEFAULT_TIMEOUT)."
   },
   "agent_config": {
     "adapter_type": "autobot_agent"

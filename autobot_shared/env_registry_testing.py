@@ -13,6 +13,9 @@ reasoning).
 
 Registration contract (import side effect, ordering): see ``env_registry`` (#16415).
 
+The ``AUTOBOT_EVAL_*`` entries (#20843) are the live-eval harness's: a harness that tests the product, so they
+live with the testing registrations rather than costing ``env_registry.py`` an import line it has no room for.
+
 Closes GH#7081.
 """
 
@@ -185,3 +188,58 @@ for _name, _type, _default, _description in (
     register_env_var(
         EnvVarSpec(name=_name, type=_type, default=_default, description=_description, component="testing")
     )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EVAL_ALLOW_REMOTE_PROVIDER",
+        type=bool,
+        default=False,
+        description=(
+            "Let the live eval (`python -m eval.run --live`) run against a provider or endpoint that is not "
+            "local-only (#20843). Off by default: the run is refused (exit 2) before any prompt leaves, and the "
+            "report stamps `local_only` so a remote run can never pass for a local one."
+        ),
+        component="eval",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EVAL_LIVE_TIMEOUT_S",
+        type=float,
+        default=300.0,
+        description=(
+            "Seconds one live-eval turn (one golden, one repeat) may run before it is recorded as a "
+            "`loop_stall` failure (#20843). Stamped in the report, because two runs with different "
+            "timeouts are not comparable."
+        ),
+        component="eval",
+        range=(10.0, 3600.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EVAL_JUDGE_MODEL",
+        type=str,
+        default="",
+        description=(
+            "Model pinned for the optional response judge that backs the `unsupported_claim` category of the "
+            "live eval (#20843). Empty means no judge: the category then rests on the grounding signal alone."
+        ),
+        component="eval",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EVAL_WORKSPACE_ROOT",
+        type=str,
+        default="",
+        description=(
+            "Directory under which each live-eval run gets its own throwaway workspace (#20843). Empty means "
+            "the system temporary directory. The workspace is removed when the run ends."
+        ),
+        component="eval",
+    )
+)

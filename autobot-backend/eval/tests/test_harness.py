@@ -52,7 +52,8 @@ def test_seed_golden_set_loads():
     goldens = load_golden_set()
     assert len(goldens) >= 2
     assert all(g.task_class for g in goldens)
-    assert all(g.expected_tools for g in goldens)
+    # A v2 golden may expect no tool (chat grounds through its RAG pre-fetch) but must then assert criteria (#20843).
+    assert all(g.expected_tools or g.success_criteria for g in goldens)
     assert {g.task_class for g in goldens} >= {"code_fix", "knowledge_qa"}
 
 
