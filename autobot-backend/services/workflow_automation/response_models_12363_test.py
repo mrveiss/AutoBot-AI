@@ -12,11 +12,12 @@ drive every route through FastAPI (so ``response_model`` validates the real payl
 from __future__ import annotations
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from starlette.testclient import TestClient
 
+from services.notification_service import NotificationConfig
 from services.workflow_automation import routes
-from services.workflow_automation.models import ActiveWorkflow, WorkflowStep
+from services.workflow_automation.models import ActiveWorkflow, StepNotAwaitingApproval, WorkflowStep
 from services.workflow_automation.response_models import (
     AutomationWorkflowListResponse,
     AutomationWorkflowStatusResponse,
@@ -51,7 +52,19 @@ class _Manager:
 
 def _workflow() -> ActiveWorkflow:
     step = WorkflowStep(step_id="step_1", command="echo hi", description="say hi", risk_level="low")
-    return ActiveWorkflow(workflow_id="wf-1", name="n", description="d", session_id="s", steps=[step], owner_id="u-1")
+    return ActiveWorkflow(
+        workflow_id="wf-1",
+        name="n",
+        description="d",
+        session_id="s",
+        steps=[step],
+        owner_id="u-1",
+        phase="executing",
+        active_service="shell",
+        user_interventions=[{"action": "approve_step", "step_id": "step_1", "at": 12.5}],
+        notification_config=NotificationConfig(workflow_id="wf-1"),
+        trigger_payload={"event": "push", "nested": {"n": 1}},
+    )
 
 
 @pytest.fixture
@@ -131,3 +144,59 @@ def test_the_openapi_contract_documents_the_models(client):
     ok = paths["/workflow_status/{workflow_id}"]["get"]["responses"]
     assert ok["200"]["content"]["application/json"]["schema"]["$ref"].endswith("AutomationWorkflowStatusResponse")
     assert "404" in ok and "500" in ok
+
+
+def test_populated_nested_fields_survive_the_response_model(client):
+    workflow = client.get("/workflow_status/wf-1").json()["workflow"]
+    assert workflow["phase"] == "executing"
+    assert workflow["active_service"] == "shell"
+    assert workflow["user_interventions"] == [{"action": "approve_step", "step_id": "step_1", "at": 12.5}]
+    assert workflow["trigger_payload"] == {"event": "push", "nested": {"n": 1}}
+    assert isinstance(workflow["notification_config"], dict) and workflow["notification_config"]
+
+
+def test_a_caller_who_may_not_run_commands_gets_a_403_error_body(client, monkeypatch):
+    def _refuse(_user):
+        raise HTTPException(status_code=403, detail="Running workflow commands requires an administrator")
+
+    monkeypatch.setattr(routes, "require_command_permission", _refuse)
+    response = client.post("/create_workflow", json={"name": "w", "steps": [], "session_id": "s"})
+    assert response.status_code == 403
+    WorkflowErrorResponse.model_validate(response.json())
+
+
+def test_a_step_not_awaiting_approval_is_a_409_error_body(client, manager):
+    async def _refuse(_request):
+        raise StepNotAwaitingApproval("Step step_1 is pending, not waiting for approval")
+
+    manager.handle_workflow_control = _refuse
+    body = {"workflow_id": "wf-1", "action": "approve_step", "step_id": "step_1"}
+    response = client.post("/control_workflow", json=body)
+    assert response.status_code == 409
+    WorkflowErrorResponse.model_validate(response.json())
+
+
+def test_an_unexpected_failure_is_a_500_error_body(client, manager):
+    def _boom():
+        raise RuntimeError("store down")
+
+    manager.get_completed_workflows = _boom
+    response = client.get("/completed_workflows")
+    assert response.status_code == 500
+    WorkflowErrorResponse.model_validate(response.json())
+
+
+@pytest.mark.parametrize(
+    "path,method,codes",
+    [
+        ("/create_workflow", "post", {"401", "403", "500"}),
+        ("/start_workflow/{workflow_id}", "post", {"401", "403", "404", "500"}),
+        ("/control_workflow", "post", {"401", "403", "404", "409", "500"}),
+        ("/workflow_status/{workflow_id}", "get", {"401", "403", "404", "500"}),
+        ("/active_workflows", "get", {"401", "403", "500"}),
+        ("/completed_workflows", "get", {"401", "403", "500"}),
+    ],
+)
+def test_each_route_documents_only_the_errors_it_raises(client, path, method, codes):
+    documented = set(client.app.openapi()["paths"][path][method]["responses"]) - {"200", "422"}
+    assert documented == codes

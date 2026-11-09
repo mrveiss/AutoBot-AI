@@ -90,7 +90,15 @@ class WorkflowErrorResponse(BaseModel):
     detail: str
 
 
-# Documented once for every typed route; the raised bodies are all ``{"detail": str}``.
-ERROR_RESPONSES: Dict[int | str, Dict[str, Any]] = {
-    code: {"model": WorkflowErrorResponse} for code in (403, 404, 409, 500)
-}
+def _errors(*codes: int) -> Dict[int | str, Dict[str, Any]]:
+    return {code: {"model": WorkflowErrorResponse} for code in codes}
+
+
+# Per route, what its handler and its auth dependency raise (all bodies are ``{"detail": str}``).
+# 401/403: ``get_current_user`` (403 also for a run-scoped token); 403 also from the command-permission
+# gate (create) and the owner-or-admin check; 404: workflow not found; 409: ``StepNotAwaitingApproval``.
+CREATE_ERRORS = _errors(401, 403, 500)
+START_ERRORS = _errors(401, 403, 404, 500)
+CONTROL_ERRORS = _errors(401, 403, 404, 409, 500)
+STATUS_ERRORS = _errors(401, 403, 404, 500)
+LIST_ERRORS = _errors(401, 403, 500)

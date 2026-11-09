@@ -19,6 +19,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 from services.notification_service import NotificationConfig
 
+from . import response_models as rm
 from .approval_support import execute_approval_outcome, validate_approval_request
 from .command_step import require_command_permission
 from .manager import WorkflowAutomationManager
@@ -35,13 +36,6 @@ from .models import (
     WorkflowStep,
 )
 from .persistence import load_notification_config, save_notification_config
-from .response_models import ERROR_RESPONSES as _ERRORS
-from .response_models import (
-    AutomationWorkflowListResponse,
-    AutomationWorkflowStatusResponse,
-    WorkflowActionResponse,
-    WorkflowCreatedResponse,
-)
 from .workflow_ownership import caller_id, find_workflow
 from .ws_endpoint import serve_workflow_socket
 
@@ -57,7 +51,7 @@ get_workflow_manager = lazy_singleton(WorkflowAutomationManager)
     operation="create_workflow",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
-@router.post("/create_workflow", response_model=WorkflowCreatedResponse, responses=_ERRORS)
+@router.post("/create_workflow", response_model=rm.WorkflowCreatedResponse, responses=rm.CREATE_ERRORS)
 async def create_workflow(
     request: AutomatedWorkflowRequest,
     current_user: dict = Depends(get_current_user),
@@ -105,7 +99,7 @@ async def create_workflow(
     operation="start_workflow",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
-@router.post("/start_workflow/{workflow_id}", response_model=WorkflowActionResponse, responses=_ERRORS)
+@router.post("/start_workflow/{workflow_id}", response_model=rm.WorkflowActionResponse, responses=rm.START_ERRORS)
 async def start_workflow(
     workflow_id: str,
     request: WorkflowStartRequest | None = None,
@@ -156,7 +150,7 @@ async def start_workflow(
     operation="control_workflow",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
-@router.post("/control_workflow", response_model=WorkflowActionResponse, responses=_ERRORS)
+@router.post("/control_workflow", response_model=rm.WorkflowActionResponse, responses=rm.CONTROL_ERRORS)
 async def control_workflow(
     request: WorkflowControlRequest,
     current_user: dict = Depends(get_current_user),
@@ -195,7 +189,11 @@ async def control_workflow(
     operation="get_workflow_status",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
-@router.get("/workflow_status/{workflow_id}", response_model=AutomationWorkflowStatusResponse, responses=_ERRORS)
+@router.get(
+    "/workflow_status/{workflow_id}",
+    response_model=rm.AutomationWorkflowStatusResponse,
+    responses=rm.STATUS_ERRORS,
+)
 async def get_workflow_status(workflow_id: str, current_user: dict = Depends(get_current_user)):
     """Get current workflow status"""
     try:
@@ -219,7 +217,7 @@ async def get_workflow_status(workflow_id: str, current_user: dict = Depends(get
     operation="get_active_workflows",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
-@router.get("/active_workflows", response_model=AutomationWorkflowListResponse, responses=_ERRORS)
+@router.get("/active_workflows", response_model=rm.AutomationWorkflowListResponse, responses=rm.LIST_ERRORS)
 async def get_active_workflows(
     current_user: dict = Depends(get_current_user),
 ):
@@ -243,7 +241,7 @@ async def get_active_workflows(
     operation="get_completed_workflows",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
-@router.get("/completed_workflows", response_model=AutomationWorkflowListResponse, responses=_ERRORS)
+@router.get("/completed_workflows", response_model=rm.AutomationWorkflowListResponse, responses=rm.LIST_ERRORS)
 async def get_completed_workflows(
     current_user: dict = Depends(get_current_user),
 ):
