@@ -25,7 +25,7 @@ from typing import Any, Dict, FrozenSet, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
-from code_intelligence.python_files import discover_files
+from code_intelligence.python_files import TEST_FILE_PATTERN, discover_files, matches_exclusion
 
 logger = get_logger(__name__)
 
@@ -425,18 +425,11 @@ class RedisOptimizer:
 
     def _get_default_exclude_patterns(self) -> List[str]:
         """Return default patterns to exclude from analysis."""
-        return [
-            "**/test_*.py",
-            "**/*_test.py",
-            "**/tests/**",
-        ]
+        return [TEST_FILE_PATTERN, "**/tests/**"]
 
     def _is_path_excluded(self, rel_path: str, exclude_patterns: List[str]) -> bool:
         """Check if a relative path matches any exclusion pattern."""
-        for pattern in exclude_patterns:
-            if Path(rel_path).match(pattern.replace("**/", "")):
-                return True
-        return False
+        return matches_exclusion(rel_path, exclude_patterns)
 
     def analyze_directory(
         self,
