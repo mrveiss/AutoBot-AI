@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
+from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.user_management.password_epoch import DEACTIVATION_EPOCH_LEAD_SECONDS, record_password_epoch
 from user_management.database import get_slm_session
 from user_management.models.user import User
@@ -81,7 +82,7 @@ async def update_person_copy(
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such SLM user")
     # No hash means the main app holds none. That must not wipe the password this person logs in with.
-    password_changed = bool(body.password_hash) and user.password_hash != body.password_hash
+    password_changed = bool(body.password_hash) and not secure_compare(body.password_hash, user.password_hash)
     # The epoch goes FIRST, as scripts/autobot-admin.py does: if the epoch cannot be recorded nothing has
     # changed, the push fails and the retry still sees the difference; if the commit then fails the old
     # sessions are already revoked and the person only signs in again.

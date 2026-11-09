@@ -134,6 +134,7 @@ DECLARED_SCOPES = {
         "autobot-infrastructure/shared/tools/index_documentation.py",
     ),
     "single-attribute-writer-scan": ("autobot-frontend/src",),
+    "single-constant-time-compare": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "torch-pair-literals": (
         ".github",
         "docker",
