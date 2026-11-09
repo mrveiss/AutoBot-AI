@@ -26,6 +26,7 @@ import { computed, ref } from 'vue'
 import i18n from '@/i18n'
 import { useTaskLoader } from '@/composables/useTaskLoader'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { useCachedSecurityScore } from '@/composables/analytics/useCachedSecurityScore'
 import { createLogger } from '@/utils/debugUtils'
 import type {
   UseCodeIntelAnalysisDeps,
@@ -279,53 +280,14 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
   // --- Cached security score loader (#5235: best-effort read; on failure
   // the useTaskLoader-backed `securityScore` ref is left untouched) ---
 
-  interface CachedSecurityScoreRaw {
-    status: string
-    security_score?: number
-    grade?: string
-    risk_level?: string
-    status_message?: string
-    total_findings?: number
-    critical_issues?: number
-    high_issues?: number
-    files_analyzed?: number
-    severity_breakdown?: Record<string, number>
-    owasp_breakdown?: Record<string, number>
-  }
-
-  const cachedSecurityScoreEndpoint = useFetchEndpoint<
-    CachedSecurityScoreRaw,
-    SecurityScoreResult
-  >(
-    {
-      path: '/api/code-intelligence/security/score/cached',
-      // #20491: the route requires source_id; without it the page-open read answered 422.
-      scopeToSource: true,
-      label: 'Cached security score',
-      pickData: (r) =>
-        r.status === 'success' && r.security_score !== undefined
-          ? {
-              security_score: r.security_score ?? 0,
-              grade: r.grade ?? 'N/A',
-              risk_level: r.risk_level ?? 'unknown',
-              status_message: r.status_message ?? '',
-              total_findings: r.total_findings ?? 0,
-              critical_issues: r.critical_issues ?? 0,
-              high_issues: r.high_issues ?? 0,
-              files_analyzed: r.files_analyzed ?? 0,
-              severity_breakdown: r.severity_breakdown ?? {},
-              owasp_breakdown: r.owasp_breakdown ?? {},
-            }
-          : null,
-      // Mutate the useTaskLoader-backed `securityScore` ref only on a
-      // successful cached read. On no_data / error / !ok, leave it alone
-      // so a prior live-scan result remains visible.
-      onSuccess: (picked) => {
-        securityScore.value = picked
-      },
+  // The read itself lives in useCachedSecurityScore (#18907). On no_data / error the
+  // `securityScore` ref is left alone so a prior live-scan result remains visible.
+  const cachedSecurityScoreEndpoint = useCachedSecurityScore({
+    withSourceId,
+    onSuccess: (picked) => {
+      securityScore.value = picked
     },
-    { withSourceId },
-  )
+  })
 
   // A failed stored read (422, network) shows in the panel's error slot; a legitimate
   // `no_data` leaves the endpoint error empty, so it stays the empty state.
