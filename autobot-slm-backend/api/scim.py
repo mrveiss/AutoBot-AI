@@ -20,7 +20,6 @@ the identical reconcile logic runs for both SSO logins and SCIM pushes.
 """
 
 import logging
-import secrets
 import uuid
 from datetime import datetime, timezone
 
@@ -29,6 +28,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.user_management.revocation_outcome import (
     REVOCATION_INCOMPLETE_MESSAGE,
     RevocationIncompleteError,
@@ -92,7 +92,7 @@ async def _require_scim_bearer(request: Request) -> None:
         )
     provided = auth_header[len("bearer ") :].strip()
     expected = await _load_scim_token()
-    if not expected or not secrets.compare_digest(provided, expected):
+    if not expected or not secure_compare(provided, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=_scim_error("Invalid bearer token", "invalidCredentials"),

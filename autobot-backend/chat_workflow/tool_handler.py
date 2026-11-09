@@ -56,6 +56,7 @@ from chat_workflow.compose_tool_handler import (
     poll_compose_approval,
     reject_delegated_compose,
 )
+from chat_workflow.interpretation_turn_mixin import InterpretationTurnMixin
 from chat_workflow.mcp_approval_message import build_mcp_approval_message as _build_mcp_approval_message
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
 from chat_workflow.tool_call_loop import stamp_call_fingerprint
@@ -1237,7 +1238,7 @@ def _format_map_results(site_result) -> str:
     return "".join(lines)
 
 
-class ToolHandlerMixin:
+class ToolHandlerMixin(InterpretationTurnMixin):
     """Mixin for tool and command handling."""
 
     def _init_terminal_tool(self):
@@ -1514,6 +1515,7 @@ class ToolHandlerMixin:
                 "requires_approval": True,
                 "terminal_session_id": terminal_session_id,
                 "conversation_id": session_id,
+                "command_id": result.get("command_id"),
             },
         )
 
@@ -1546,6 +1548,7 @@ class ToolHandlerMixin:
         command: str,
         max_wait_time: int = 3600,
         poll_interval: float = 0.5,
+        command_id: str | None = None,
     ):
         """Poll for approval status until approved/denied or timeout. Issue #620.
 
@@ -1555,10 +1558,9 @@ class ToolHandlerMixin:
         elapsed_time = 0
         poll_count = 0
 
-        # #13480: claim interpretation for this turn. The approve path skips its
-        # own interpretation while this is set, so the same command is not
-        # interpreted twice — two LLM calls, two persisted interpretations.
-        await self._claim_interpretation(terminal_session_id, True)
+        # #13480, #21202: register this turn as the interpreter. The worker that runs the command waits for it, so
+        # the result is interpreted once (one LLM call, one persisted message) whichever worker ran it.
+        turn_token = await self._begin_interpretation_turn(terminal_session_id, command_id)
 
         try:
             while elapsed_time < max_wait_time:
@@ -1574,6 +1576,7 @@ class ToolHandlerMixin:
                         session_info, command, elapsed_time, max_wait_time
                     )
                     if should_break:
+                        await self._settle_interpretation(terminal_session_id, command_id, turn_token, result_data)
                         yield (result_data, status_msg)
                         return
                 except Exception as check_error:
@@ -1581,29 +1584,11 @@ class ToolHandlerMixin:
 
             yield (None, None)
         finally:
-            # Load-bearing, and the reason this is a `finally` rather than a line
-            # after the loop: the claim MUST be released on every exit — timeout,
-            # decision, an exception, or the consumer closing this generator
-            # early (GeneratorExit runs finally). A leaked claim means the approve
-            # path keeps skipping while no turn is listening, so a late approval
-            # produces no interpretation at all — silently re-breaking #13479 in
-            # exactly the case it was filed for.
-            await self._claim_interpretation(terminal_session_id, False)
-
-    async def _claim_interpretation(self, terminal_session_id: str, live: bool) -> None:
-        """Mark/unmark this turn as the interpreter for a pending approval (#13480).
-
-        Never raises: failing to claim only costs a duplicate interpretation,
-        and failing to release is already guarded by the approve path treating an
-        absent marker as "interpret". Neither is worth failing the turn over.
-        """
-        service = getattr(self.terminal_tool, "agent_terminal_service", None)
-        if service is None or not hasattr(service, "set_live_turn_interpreting"):
-            return
-        try:
-            await service.set_live_turn_interpreting(terminal_session_id, live)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Could not %s interpretation claim: %s", "set" if live else "release", exc)
+            # Load-bearing, and the reason this is a `finally`: the token MUST be released on every exit --
+            # timeout, decision, an exception, or the consumer closing this generator early (GeneratorExit runs
+            # finally). A leaked token makes the command's worker wait out its hand-off deadline for a turn
+            # that is no longer listening.
+            await self._end_interpretation_turn(terminal_session_id, command_id, turn_token)
 
     async def _handle_pending_approval(
         self,
@@ -1659,7 +1644,9 @@ class ToolHandlerMixin:
             terminal_session_id,
         )
 
-        async for poll_result in self._poll_for_approval(terminal_session_id, command):
+        async for poll_result in self._poll_for_approval(
+            terminal_session_id, command, command_id=result.get("command_id")
+        ):
             approval_result, status_msg = poll_result
             if approval_result:
                 # Issue #4264: Fire APPROVAL_RECEIVED hook when approval decision is made
@@ -1718,7 +1705,8 @@ class ToolHandlerMixin:
             },
         )
 
-        async for interp_chunk in self._interpret_command_results(
+        async for interp_chunk in self._interpret_unless_elsewhere(
+            approval_result,
             command,
             approval_result.get("stdout", ""),
             approval_result.get("stderr", ""),
