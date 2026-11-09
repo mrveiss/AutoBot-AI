@@ -59,4 +59,13 @@ class ListingKB:
 
     async def get_facts_in_category(self, category_id, include_descendants=False, limit=50, offset=0):
         self.calls.append(("category", limit, offset))
-        return {"success": True, "facts": [{**f, "id": f["fact_id"]} for f in self.facts[offset : offset + limit]]}
+        page = self.facts[offset : offset + limit]
+        return {
+            "success": True,
+            "facts": [{**f, "id": f["fact_id"]} for f in page],
+            "has_more": offset + limit < len(self.facts),
+        }
+
+    def get_fact(self, fact_id):
+        """The sync lookup the summary visibility pass uses."""
+        return next((f for f in self.facts if f["fact_id"] == fact_id), None)

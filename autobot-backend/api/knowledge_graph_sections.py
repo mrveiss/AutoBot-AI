@@ -35,7 +35,7 @@ async def bucket_sections_for_graph(
     try:
         viewer = viewer_for(current_user, ledger)
         built = await build_bucket_sections(
-            client, viewer, getattr(kb, "ownership_manager", None), limit=body.max_facts, offset=body.offset
+            client, viewer, getattr(kb, "ownership_manager", None), limit=body.max_facts, offset=body.offset, kb=kb
         )
     except Exception as e:
         logger.warning("Failed to build bucket sections: %s", e)

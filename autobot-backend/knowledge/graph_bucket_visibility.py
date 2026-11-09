@@ -31,6 +31,9 @@ OWNER = "owner"
 TENANT_ADMIN = "tenant_admin"
 _OWNER_KEYS = ("owner_id", "user_id")
 _TENANT_KEYS = ("organization_id", "company_id", "tenant_id")
+UNSCOPED_SOURCE = (
+    "default"  # the source_id the code indexers write for AutoBot's own code (pattern_analysis/storage.py)
+)
 
 
 @dataclass(frozen=True)
@@ -73,13 +76,36 @@ def as_fact(collection: str, record_id: str, meta: Dict[str, Any]) -> Dict[str, 
     return {"id": f"bucket:{collection}:{record_id}", "metadata": metadata}
 
 
+def is_company_collection(collection: str) -> bool:
+    """A ``company:<id>`` collection, in its logical or ChromaDB-stored (``company_<id>``) form (#10743)."""
+    return collection.startswith(("company:", "company_"))
+
+
+def company_of_collection(collection: str) -> str | None:
+    """The company id a company collection names, from either name form; None when it is not parseable."""
+    from llc.kb.collections import company_id_of  # noqa: PLC0415 -- keeps the LLC stack off this import
+
+    try:
+        return company_id_of(collection.replace("company_", "company:", 1))
+    except ValueError:
+        return None
+
+
+def within_admin_tenant(meta: Dict[str, Any], is_admin: bool, is_superadmin: bool, company_id: str | None) -> bool:
+    """An admin bypass stays in the caller's tenant; a record of another tenant is out (a superadmin crosses)."""
+    if is_superadmin or not is_admin:
+        return True
+    tenant = tenant_of(meta)
+    return tenant is None or tenant == company_id
+
+
 def _within_tenant(kind: str, collection: str, fact: Dict[str, Any], viewer: Viewer) -> bool:
     """An admin (not a superadmin) sees their own tenant: untenanted ``owner`` records, never another tenant's.
 
     A ``company:<id>`` collection is already tenant-scoped by its name (:func:`collection_in_scope`); the other
     per-entity buckets name no tenant, so their records must carry the caller's.
     """
-    if viewer.is_superadmin or not viewer.is_admin or collection.startswith("company:"):
+    if viewer.is_superadmin or not viewer.is_admin or is_company_collection(collection):
         return True
     tenant = fact["metadata"]["organization_id"]
     return tenant == viewer.company_id if tenant or kind == TENANT_ADMIN else True
@@ -87,11 +113,35 @@ def _within_tenant(kind: str, collection: str, fact: Dict[str, Any], viewer: Vie
 
 def collection_in_scope(kind: str, collection: str, viewer: Viewer) -> bool:
     """False for a ``company:<id>`` collection of another tenant, before any record is read."""
-    from llc.kb.collections import company_id_of  # noqa: PLC0415 -- keeps the LLC stack off this import
-
-    if kind != TENANT_ADMIN or viewer.is_superadmin or not collection.startswith("company:"):
+    if kind != TENANT_ADMIN or viewer.is_superadmin or not is_company_collection(collection):
         return True
-    return company_id_of(collection) == viewer.company_id
+    return company_of_collection(collection) == viewer.company_id
+
+
+async def _may_read_source(source_id: str, viewer: Viewer) -> bool:
+    """Whether the viewer may read code source *source_id*: the codebase-analytics source authorisation (#12358).
+
+    Not found or not visible is False; an unreachable registry (503) propagates, so the collection reads as unreadable.
+    """
+    from fastapi import HTTPException  # noqa: PLC0415
+
+    from api.codebase_analytics.endpoints.shared import authorize_source_access  # noqa: PLC0415 -- heavy router stack
+
+    try:
+        await authorize_source_access(source_id, {"id": viewer.user_id})
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return False
+        raise
+    return True
+
+
+async def _readable_public(collection: str, rows: List[Dict[str, Any]], viewer: Viewer) -> List[Dict[str, Any]]:
+    """Public rows minus quarantined ones, and minus those of a code source the viewer may not read."""
+    rows = [r for r in rows if not_quarantined(as_fact(collection, r["id"], r.get("metadata") or {}))]
+    named = {(r.get("metadata") or {}).get("source_id") for r in rows} - {None, "", UNSCOPED_SOURCE}
+    allowed = {sid for sid in named if await _may_read_source(sid, viewer)}
+    return [r for r in rows if (r.get("metadata") or {}).get("source_id") in allowed | {None, "", UNSCOPED_SOURCE}]
 
 
 async def visible_records(
@@ -99,7 +149,7 @@ async def visible_records(
 ) -> List[Dict[str, Any]]:
     """The *rows* (``id``, ``metadata``) the viewer may read; an admin's are recorded in the ledger."""
     if kind == PUBLIC:
-        return rows
+        return await _readable_public(collection, rows, viewer)
     facts = [as_fact(collection, r["id"], r.get("metadata") or {}) for r in rows]
     facts = [f for f in facts if not_quarantined(f) and _within_tenant(kind, collection, f, viewer)]
     kept = await filter_search_results_by_permission(

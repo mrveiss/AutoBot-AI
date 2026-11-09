@@ -79,6 +79,20 @@ async def test_an_unaudited_admin_bucket_read_is_withheld():
 
 
 @pytest.mark.asyncio
+async def test_an_unaudited_admin_read_with_bucket_records_only_is_withheld():
+    from fastapi import HTTPException
+
+    kb = ListingKB([], await client_with(_RECORDS))
+    with (
+        patch("api.knowledge_search_aggregator.get_or_create_knowledge_base", new=AsyncMock(return_value=kb)),
+        patch("services.audit_logger.audit_log", new=AsyncMock(return_value=False)),
+        pytest.raises(HTTPException) as refused,
+    ):
+        await get_multi_source_graph(MagicMock(), _body(), _user("adm", role="admin"))
+    assert refused.value.status_code == 503
+
+
+@pytest.mark.asyncio
 async def test_sections_are_typed_in_the_response_model():
     result, _ = await _call(_user(ALICE), _body())
     typed = KnowledgeMultiSourceGraphResponse(**result)
@@ -92,6 +106,7 @@ async def test_post_offset_pages_buckets_and_facts_together():
     sections = {s["key"]: s for s in result["stats"]["sections"]}
     assert (sections["facts"]["returned"], sections["facts"]["limited"]) == (1, False)
     assert (sections["research"]["total"], sections["research"]["returned"]) == (2, 1)
+    assert {n["id"] for n in result["data"]["entities"]} >= {"f-bob", "bucket:trajectories:t-mine"}
 
 
 @pytest.mark.asyncio
@@ -106,3 +121,4 @@ async def test_get_graph_accepts_offset():
         )
     sections = {s["key"]: s for s in result["stats"]["sections"]}
     assert sections["facts"]["returned"] == 1 and sections["research"]["returned"] == 1
+    assert {n["id"] for n in result["data"]["entities"]} >= {"f-bob", "bucket:trajectories:t-mine"}

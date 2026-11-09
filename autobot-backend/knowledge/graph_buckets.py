@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.backends.async_chromadb_adapter import _chroma_safe_name
 from knowledge.graph_bucket_visibility import (
     OWNER,
     PUBLIC,
@@ -35,6 +36,7 @@ from knowledge.index_embedding_space import (
     CODE_INDEX,
     PATTERN_INDEXES,
 )
+from knowledge.summary_visibility import resolve_sources
 from llc.kb.collections import KbCollectionManager
 
 logger = get_logger(__name__)
@@ -51,7 +53,13 @@ class BucketSection:
     access: str = OWNER  # who reads a record: PUBLIC (product docs/code), OWNER (per-user), TENANT_ADMIN
 
     def matches(self, collection: str) -> bool:
-        return collection in self.names or any(collection.startswith(p + ":") for p in self.prefixes)
+        """True for the logical name or the ChromaDB-stored one (``:`` is stored as ``_``, #10743)."""
+        stored = _chroma_safe_name(collection)
+        return (
+            collection in self.names
+            or stored in {_chroma_safe_name(n) for n in self.names}
+            or any(collection.startswith(p + ":") or stored.startswith(p + "_") for p in self.prefixes)
+        )
 
 
 _P = KbCollectionManager
@@ -130,11 +138,15 @@ async def _scan_collection(client: Any, name: str) -> Tuple[List[Dict[str, Any]]
 
 
 async def _previews(client: Any, picked: List[Tuple[str, str]]) -> Dict[Tuple[str, str], str]:
-    """The preview text of each ``(collection, id)`` on the page."""
+    """The preview text of each ``(collection, id)`` on the page; a failed collection read has none (id fallback)."""
     out: Dict[Tuple[str, str], str] = {}
     for name in sorted({n for n, _ in picked}):
         ids = [rid for n, rid in picked if n == name]
-        got = await (await client.get_collection(name)).get(ids=ids, include=["documents"])
+        try:
+            got = await (await client.get_collection(name)).get(ids=ids, include=["documents"])
+        except Exception as exc:  # one collection's preview must not drop the healthy sections
+            logger.warning("Graph preview of collection %s unavailable: %s", name, exc)
+            continue
         docs = got.get("documents") or []
         out.update(
             {(name, rid): _preview(docs[i] if i < len(docs) else None) for i, rid in enumerate(got.get("ids") or [])}
@@ -142,7 +154,27 @@ async def _previews(client: Any, picked: List[Tuple[str, str]]) -> Dict[Tuple[st
     return out
 
 
-async def _section_rows(client: Any, section: BucketSection, names: List[str], viewer: Viewer, manager) -> tuple:
+SUMMARY_COLLECTION = "knowledge_summaries"
+
+
+async def _readable_rows(section: BucketSection, name: str, scanned: list, viewer: Viewer, manager, kb) -> list:
+    """The scanned rows the viewer may read. A summary derives from its source fact and is judged by that fact."""
+    if name != SUMMARY_COLLECTION:
+        return await visible_records(section.access, name, scanned, viewer, manager)
+    if kb is None:
+        return []  # no way to resolve the source fact: fail closed
+    resolved = await resolve_sources(
+        scanned, kb, lambda r: r["metadata"].get("document_id"), withhold_quarantined_source=True
+    )
+    by_id = {row["id"]: row for row, _ in resolved}
+    judged = [{"id": row["id"], "metadata": source} for row, source in resolved]
+    seen = await visible_records(section.access, name, judged, viewer, manager)
+    return [by_id[r["id"]] for r in seen]
+
+
+async def _section_rows(
+    client: Any, section: BucketSection, names: List[str], viewer: Viewer, manager, kb: Any = None
+) -> tuple:
     """Every record of the section's collections the viewer may read, sorted, and whether a scan was cut short."""
     rows: List[Tuple[str, str, Dict[str, Any]]] = []
     truncated = False
@@ -151,11 +183,11 @@ async def _section_rows(client: Any, section: BucketSection, names: List[str], v
             continue
         try:
             scanned, cut = await _scan_collection(client, name)
+            seen = await _readable_rows(section, name, scanned, viewer, manager, kb)
         except Exception as exc:  # one broken collection must not hide the other sections
             logger.warning("Graph section %s: collection %s unreadable: %s", section.key, name, exc)
             continue
         truncated = truncated or cut
-        seen = await visible_records(section.access, name, scanned, viewer, manager)
         rows.extend((name, r["id"], r["metadata"]) for r in seen)
     return sorted(rows, key=lambda r: (r[0], r[1])), truncated
 
@@ -180,7 +212,12 @@ def _nodes_of(section: BucketSection, page: List[Tuple[str, str, Dict[str, Any]]
 
 
 async def build_bucket_sections(
-    client: Any, viewer: Viewer, ownership_manager: Any, limit: int = SECTION_SAMPLE_LIMIT, offset: int = 0
+    client: Any,
+    viewer: Viewer,
+    ownership_manager: Any,
+    limit: int = SECTION_SAMPLE_LIMIT,
+    offset: int = 0,
+    kb: Any = None,
 ) -> Dict[str, Any]:
     """Section nodes, record nodes, edges and the per-section visible total vs returned report.
 
@@ -201,8 +238,8 @@ async def build_bucket_sections(
         if section.access != TENANT_ADMIN or viewer.is_admin:
             by_section.setdefault(section.key, []).append(name)
     for section in (s for s in BUCKET_SECTIONS if s.key in by_section):
-        rows, truncated = await _section_rows(client, section, by_section[section.key], viewer, ownership_manager)
-        if not rows:
+        rows, truncated = await _section_rows(client, section, by_section[section.key], viewer, ownership_manager, kb)
+        if not rows and not truncated:
             continue
         page = rows[offset : offset + max(limit, 0)]
         record_page(viewer, section.access, page)

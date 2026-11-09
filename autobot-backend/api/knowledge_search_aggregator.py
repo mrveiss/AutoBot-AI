@@ -43,7 +43,7 @@ from constants.threshold_constants import CategoryDefaults
 from knowledge.graph_limits import GRAPH_MAX_OFFSET
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.relations import relations_by_direction
-from knowledge.root_read import admin_read_audit
+from knowledge.root_read import admin_read_audit, is_superadmin_user
 from knowledge.search_filters import (
     extract_user_context_from_request,
     filter_search_results_by_permission,
@@ -837,7 +837,7 @@ async def get_multi_source_graph(req: Request, body: GraphRequest, current_user:
         if kb is not None:
             try:
                 scope = (kb, body.category_filter, body.max_facts, body.offset, user_id, user_org_id, user_group_ids)
-                page = await visible_facts_page(*scope, is_admin)
+                page = await visible_facts_page(*scope, is_admin, is_superadmin_user(current_user))
             except Exception as e:
                 logger.warning("Failed to get facts: %s", e)
         facts = page.facts

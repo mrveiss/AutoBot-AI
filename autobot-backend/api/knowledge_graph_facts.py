@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from constants.threshold_constants import CategoryDefaults
+from knowledge.graph_bucket_visibility import within_admin_tenant
 from knowledge.graph_limits import GRAPH_SCAN_LIMIT, SCAN_BATCH
 from knowledge.root_read import AdminReadLedger
 from knowledge.search_filters import filter_search_results_by_permission
@@ -43,21 +44,31 @@ def decode_fact_metadata(raw_fact: Dict[str, Any]) -> Dict[str, Any]:
     return decoded if isinstance(decoded, dict) else {}
 
 
+def _fact_in_tenant(fact: Dict[str, Any], user_org_id: str | None, is_admin: Any, is_superadmin: bool) -> bool:
+    """An admin bypass is bound to the caller's tenant; only a superadmin crosses tenants (#20945)."""
+    return within_admin_tenant(fact.get("metadata") or {}, bool(is_admin), is_superadmin, user_org_id)
+
+
 async def _readable_batch(kb: Any, category_filter: str | None, offset: int, size: int, who: tuple) -> tuple:
-    """One raw batch of facts and the part of it the caller may read: ``(raw count, readable facts)``."""
+    """One raw batch of facts: ``(scan advance, more listing remains, readable facts)``."""
+    user_id, user_org_id, user_group_ids, is_admin, is_superadmin = who
     if category_filter:
         # get_facts_in_category's facts carry metadata JSON-encoded, unlike kb.search()'s decoded results (#16665)
         result = await kb.get_facts_in_category(
             category_id=category_filter, include_descendants=True, limit=size, offset=offset
         )
-        raw = result.get("facts", []) if result.get("success") else []
+        if not result.get("success"):
+            raise RuntimeError(f"category {category_filter!r} listing unreadable")  # the route reports an unknown total
+        raw = result.get("facts", [])
         facts = [{**fact, "metadata": decode_fact_metadata(fact)} for fact in raw]
+        advance, more = size, bool(result.get("has_more"))  # a deleted fact shortens the batch, not the index
     else:
         # #19727: listed, not a search for "*", which the keyword fallback matches nothing for; quarantine stays out
         raw = await kb.get_all_facts(limit=size, offset=offset)
         category_of = lambda fact: (fact.get("metadata") or {}).get("category", CategoryDefaults.GENERAL)  # noqa: E731
         facts = [{**fact, "id": fact.get("fact_id"), "category": category_of(fact)} for fact in raw]
-    user_id, user_org_id, user_group_ids, is_admin = who
+        advance, more = len(raw), len(raw) >= size
+    facts = [f for f in facts if _fact_in_tenant(f, user_org_id, is_admin, is_superadmin)]
     readable = await filter_search_results_by_permission(
         facts,
         user_id=user_id,
@@ -66,7 +77,14 @@ async def _readable_batch(kb: Any, category_filter: str | None, offset: int, siz
         ownership_manager=getattr(kb, "ownership_manager", None),
         is_admin=bool(is_admin),  # the ledger records only the returned page, not the whole scan
     )
-    return len(raw), readable
+    return advance, more, readable
+
+
+async def _listing_continues(kb: Any, category_filter: str | None, scanned: int, more: bool) -> bool:
+    """Whether facts remain past the scan cap; a plain listing is probed for one more, a category knows."""
+    if not more or category_filter:
+        return more
+    return bool(await kb.get_all_facts(limit=1, offset=scanned))
 
 
 async def visible_facts_page(
@@ -78,21 +96,21 @@ async def visible_facts_page(
     user_org_id: str | None,
     user_group_ids: List[str],
     is_admin: Any,
+    is_superadmin: bool = False,
 ) -> FactsPage:
     """The page of facts *user_id* may read, with the visible total (#16665: filtered before counted)."""
     visible: List[Dict[str, Any]] = []
     scanned, truncated = 0, False
-    who = (user_id, user_org_id, user_group_ids, is_admin)
-    while True:
-        if scanned >= GRAPH_SCAN_LIMIT:
-            truncated = True
-            break
+    who = (user_id, user_org_id, user_group_ids, is_admin, is_superadmin)
+    while scanned < GRAPH_SCAN_LIMIT:
         size = min(SCAN_BATCH, GRAPH_SCAN_LIMIT - scanned)
-        raw_count, readable = await _readable_batch(kb, category_filter, scanned, size, who)
-        scanned += raw_count
+        advance, more, readable = await _readable_batch(kb, category_filter, scanned, size, who)
+        scanned += advance
         visible.extend(readable)
-        if raw_count < size:
+        if not more:
             break
+        if scanned >= GRAPH_SCAN_LIMIT:
+            truncated = await _listing_continues(kb, category_filter, scanned, more)
     page = visible[offset : offset + max_facts]
     if isinstance(is_admin, AdminReadLedger):  # #19860: the admin read is audited for what it returns
         is_admin.record(page)
