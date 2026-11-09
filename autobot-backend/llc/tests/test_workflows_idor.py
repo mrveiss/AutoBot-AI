@@ -36,6 +36,8 @@ def _make_workflow_dict(company_id: str, workflow_id: str) -> dict:
         "status": "planned",
         "source": "created",
         "definition": {},
+        "kind": "workflow",
+        "owner_role_id": None,
         "created_at": "2026-08-13T00:00:00+00:00",
         "updated_at": "2026-08-13T00:00:00+00:00",
     }
@@ -67,7 +69,7 @@ def _make_client(caller_company_id: str, is_platform_admin: bool = False) -> Tes
         setattr(created, key, value)
 
     patch("llc.api.workflows.WorkflowService.list_by_company", new=AsyncMock(return_value=[])).start()
-    patch("llc.api.workflows.WorkflowService.create", new=AsyncMock(return_value=created)).start()
+    patch("llc.api.workflows.CompanyOsWorkflowService.create", new=AsyncMock(return_value=created)).start()
     patch("llc.api.workflows.WorkflowService.get", new=AsyncMock(return_value=created)).start()
     patch("llc.api.workflows.WorkflowService.update_status", new=AsyncMock(return_value=created)).start()
     patch("llc.api.workflows.WorkflowService.delete", new=AsyncMock(return_value=True)).start()
@@ -130,9 +132,17 @@ class TestWorkflowsScopeGuard:
     def test_create_own_company_returns_201(self):
         company_id = str(uuid.uuid4())
         client = _make_client(company_id)
-        with patch("llc.api.workflows.WorkflowService.get", new=AsyncMock(return_value=None)):
-            resp = client.post(f"/api/llc/workflows/{company_id}", json={"workflow_id": "wf-1"})
+        resp = client.post(f"/api/llc/workflows/{company_id}", json={"workflow_id": "wf-1"})
         assert resp.status_code == 201
+
+    def test_create_platform_admin_other_company_passes_the_path_company(self):
+        from llc.api.workflows import CompanyOsWorkflowService  # noqa: PLC0415
+
+        client = _make_client(str(uuid.uuid4()), is_platform_admin=True)
+        resp = client.post(f"/api/llc/workflows/{_OTHER_COMPANY}", json={"workflow_id": "wf-1"})
+        assert resp.status_code == 201
+        args, _ = CompanyOsWorkflowService.create.call_args
+        assert str(args[1]) == _OTHER_COMPANY
 
     def test_create_other_company_returns_404(self):
         company_id = str(uuid.uuid4())
@@ -182,14 +192,13 @@ class TestWorkflowsActorDerivation:
     authenticated session, never from client-supplied input."""
 
     def test_create_derives_actor_from_authenticated_user(self):
-        from llc.api.workflows import WorkflowService  # noqa: PLC0415
+        from llc.api.workflows import CompanyOsWorkflowService  # noqa: PLC0415
 
         company_id = str(uuid.uuid4())
         client = _make_client(company_id)
-        with patch("llc.api.workflows.WorkflowService.get", new=AsyncMock(return_value=None)):
-            resp = client.post(f"/api/llc/workflows/{company_id}", json={"workflow_id": "wf-1"})
+        resp = client.post(f"/api/llc/workflows/{company_id}", json={"workflow_id": "wf-1"})
         assert resp.status_code == 201
-        _, kwargs = WorkflowService.create.call_args
+        _, kwargs = CompanyOsWorkflowService.create.call_args
         assert kwargs["actor"] == _FIXED_USER_ID
 
     def test_delete_derives_actor_from_authenticated_user(self):
@@ -204,27 +213,19 @@ class TestWorkflowsActorDerivation:
 
 
 class TestWorkflowsConflictHandling:
-    """#14271: a same-company duplicate that races past the pre-check must
-    surface as the route's documented 409, never an unhandled 500.
+    """#14271: a same-company duplicate must surface as the route's documented 409, never a 500.
 
-    ``WorkflowService.create`` is mocked here to raise ``WorkflowConflictError``
-    directly — the shape it actually raises when the DB's
-    ``UNIQUE(company_id, workflow_id)`` constraint rejects a concurrent
-    duplicate the ``get()`` pre-check already passed (see
-    ``test_workflows_scoping.py::test_same_company_duplicate_workflow_id_raises_a_clean_conflict``
-    for that translation at the service layer)."""
+    The Company OS service raises ``CompanyOsConflict`` (it translates the DB's
+    ``UNIQUE(company_id, workflow_id)`` rejection); the route maps it through ``http_error``."""
 
-    def test_create_race_past_the_pre_check_returns_409_not_500(self):
-        from llc.api.workflows import WorkflowConflictError  # noqa: PLC0415
+    def test_duplicate_create_returns_409_not_500(self):
+        from llc.services.company_os.errors import CompanyOsConflict  # noqa: PLC0415
 
         company_id = str(uuid.uuid4())
         client = _make_client(company_id)
-        with (
-            patch("llc.api.workflows.WorkflowService.get", new=AsyncMock(return_value=None)),
-            patch(
-                "llc.api.workflows.WorkflowService.create",
-                new=AsyncMock(side_effect=WorkflowConflictError("workflow 'wf-1' already exists")),
-            ),
+        with patch(
+            "llc.api.workflows.CompanyOsWorkflowService.create",
+            new=AsyncMock(side_effect=CompanyOsConflict("workflow 'wf-1' already exists")),
         ):
             resp = client.post(f"/api/llc/workflows/{company_id}", json={"workflow_id": "wf-1"})
         assert resp.status_code == 409
