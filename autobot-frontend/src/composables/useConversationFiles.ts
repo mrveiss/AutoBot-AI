@@ -14,6 +14,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { useBatchSelection } from './useBatchSelection'
+import { useLoadingState } from './useLoadingState'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage } from '@/utils/errorExtract'
 import { describeApiRefusal } from '@/utils/conversationFileUpload'
@@ -97,21 +98,10 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
     generated_count: 0
   })
   /**
-   * Mutations (upload, delete, ...) in flight for the CURRENT conversation (#21159). A mutation started in a previous
-   * conversation neither counts toward `loading` after the switch nor decrements the new conversation's count.
+   * Mutations (upload, delete, ...) in flight for the CURRENT conversation (#21159). `resetOps()` on a conversation
+   * switch drops those started in the previous one so they neither count toward `loading` nor settle the new count.
    */
-  const opCount = ref(0)
-  let opEpoch = 0
-  const opLoading = computed(() => opCount.value > 0)
-  const wrap = async <T>(fn: () => Promise<T>): Promise<T> => {
-    const epoch = opEpoch
-    opCount.value++
-    try {
-      return await fn()
-    } finally {
-      if (epoch === opEpoch) opCount.value--
-    }
-  }
+  const { isLoading: opLoading, wrap, reset: resetOps } = useLoadingState()
   /** True while the latest list request is in flight; a superseded request never clears it (#21159). */
   const listLoading = ref(false)
   const loading = computed(() => opLoading.value || listLoading.value)
@@ -302,8 +292,7 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
   const resetForSession = (): void => {
     listRequest.invalidate()
     uploadRequest.invalidate()
-    opEpoch++
-    opCount.value = 0
+    resetOps()
     listLoading.value = false
     uploadProgress.value = 0
     files.value = []
