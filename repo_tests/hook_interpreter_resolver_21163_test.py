@@ -33,7 +33,7 @@ from tools.lint._scan_helpers import tracked_paths
 _ROOT = repo_root()
 _HOOKS_DIR = "autobot-infrastructure/shared/scripts/hooks"
 _RESOLVER = "scripts/lib/hook-python.sh"
-_EXTRA = ("scripts/lint-conventions.sh",)
+_EXTRA = ("scripts/lint-conventions.sh",)  # a `language: system` hook outside any hooks directory
 _NOT_A_HOOK = {"README.md", "fast_guard_tests.txt"}
 
 # A bare interpreter word at command position: not part of a path, option, variable or filename.
@@ -41,10 +41,22 @@ _BARE = re.compile(r"(?<![\w./$\"'{}=-])(?:python3?(?:\.\d+)?|pytest)(?![\w.\-/]
 _QUOTED = re.compile(r"""(?:"(?:\\.|\$\([^)]*\)|[^"\\])*"|'[^']*')""")
 
 
+# The program text of `bash -c '...'` / `sh -lc "..."`: it executes, so it is judged like a line of its own.
+_SHELL_C = re.compile(r"""\b(?:ba|da|z)?sh\s+(?:-\w+\s+)*-\w*c\s+(?:'([^']*)'|"((?:\\.|[^"\\])*)")""")
+
+
 def _code(line: str) -> str:
-    """The line with comments and literal quoted text removed (message strings are not invocations)."""
+    """The line with comments and literal quoted text removed (message strings are not invocations).
+
+    The body of a ``bash -c`` / ``sh -c`` string stays in: it is a program, not a message.
+    """
     if line.strip().startswith("#"):
         return ""
+    inner = " ".join(_code(m.group(1) or m.group(2) or "") for m in _SHELL_C.finditer(line))
+    return _code_of_line(line) + " " + inner
+
+
+def _code_of_line(line: str) -> str:
     # command substitutions inside double quotes execute, so their bodies stay (minus their own quotes)
     unsingled = re.sub(r"'[^']*'", " ", line)  # single quotes never execute
     subs = " ".join(_QUOTED.sub(" ", body) for body in re.findall(r"\$\(([^)]*)\)", unsingled))
@@ -68,23 +80,65 @@ def _tracked(*pathspecs: str) -> list[str]:
     return tracked_paths(_ROOT, *pathspecs)
 
 
-def _is_text_script(path: str) -> bool:
+def _shebang(path: str) -> bytes | None:
+    """The first line of a tracked regular file when it is a shebang, else None."""
     p = _ROOT / path
-    return p.is_file() and not p.is_symlink() and p.read_bytes()[:2] == b"#!" and b"python" not in p.read_bytes()[:80]
+    if not p.is_file() or p.is_symlink():
+        return None
+    with p.open("rb") as handle:
+        first = handle.readline(512)
+    return first if first.startswith(b"#!") else None
+
+
+def _is_text_script(path: str) -> bool:
+    """A shell script by its shebang line alone: ``#!`` and no ``python`` on that line."""
+    first = _shebang(path)
+    return first is not None and b"python" not in first
+
+
+def _hook_dirs() -> set[str]:
+    """Git-hook directories, derived from the tracked tree (a ``hooks`` / ``git-hooks`` path component)."""
+    dirs = set()
+    for path in _tracked():
+        parent = Path(path).parent
+        if parent.parts and not parent.parts[0].startswith("."):  # dot-dirs hold agent hooks, not git hooks
+            for name in ("hooks", "git-hooks"):
+                if name in parent.parts:
+                    dirs.add(str(Path(*parent.parts[: parent.parts.index(name) + 1])))
+    return dirs
+
+
+def _sourced_libs(scripts: set[str], tracked: list[str]) -> set[str]:
+    """Tracked ``lib/*.sh`` files a hook script names: a library a hook sources runs in the hook."""
+    wanted = {
+        name
+        for path in scripts
+        for name in re.findall(r"[\w.-]+\.sh", (_ROOT / path).read_text(encoding="utf-8", errors="replace"))
+    }
+    return {p for p in tracked if "/lib/" in p and Path(p).name in wanted}
 
 
 def hook_scripts() -> list[str]:
-    """Every tracked shell hook wrapper / script this guard judges."""
-    paths = [
-        p
-        for p in _tracked("tools/git-hooks", "scripts/hooks", _HOOKS_DIR, *_EXTRA)
-        if Path(p).name not in _NOT_A_HOOK
-        and not p.endswith(("_test.py", ".py", ".ere", ".awk", ".md"))
-        and not p.startswith(f"{_HOOKS_DIR}/lib/")
-        and not p.startswith("scripts/lib/")
-        and p != _RESOLVER
-    ]
-    return [p for p in paths if _is_text_script(p)]
+    """Every tracked shell hook wrapper / script this guard judges; only the resolver file is exempt.
+
+    Reach is derived, not listed: files under a hooks directory, the non-Python files the pre-commit
+    config points ``language: script|system`` entries at, ``_EXTRA``, and the libraries those source.
+    """
+    tracked = _tracked()
+    dirs = _hook_dirs()
+    entries = {e.split()[0] for _hid, e in config_entries() if e.split()}
+    base = {p for p in tracked if any(p.startswith(f"{d}/") for d in dirs)}
+    base |= {p for p in tracked if p in entries and "/" in p} | set(_EXTRA)
+    base = {p for p in base if _is_shell_hook_file(p)}
+    return sorted(p for p in base | _sourced_libs(base, tracked) if p != _RESOLVER and not p.endswith("_test.sh"))
+
+
+def _is_shell_hook_file(path: str) -> bool:
+    return (
+        Path(path).name not in _NOT_A_HOOK
+        and not path.endswith(("_test.py", ".py", ".ere", ".awk", ".md"))
+        and (_is_text_script(path) or path.endswith(".sh"))
+    )
 
 
 def config_entries() -> list[tuple[str, str]]:
@@ -112,6 +166,9 @@ def config_entries() -> list[tuple[str, str]]:
         "FOO=1 python -c 'print(1)'",
         'if python3 -c "import sys"; then',
         'echo "$files" | python3 checker.py',
+        "bash -c 'python3 -m tools.lint.check_x'",
+        'sh -c "cd x && pytest -q"',
+        "bash -lc 'FOO=1 python script.py'",
     ],
 )
 def test_control_a_planted_bare_interpreter_is_flagged(line: str) -> None:
@@ -129,6 +186,9 @@ def test_control_a_planted_bare_interpreter_is_flagged(line: str) -> None:
         'log "  validate with python3 scripts/validate_pr_body.py"',
         '"$py" scripts/x.py --pytest-flag',
         "exec bash tests/python_floor_test.sh",
+        "bash -c 'echo hello'",
+        """bash -c 'echo "needs python3.14 or newer"'""",
+        'sh -c "\\"$py\\" -m pytest -q"',
     ],
 )
 def test_control_resolver_use_comments_and_messages_are_not_flagged(line: str) -> None:
