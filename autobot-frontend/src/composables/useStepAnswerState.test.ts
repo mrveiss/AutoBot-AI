@@ -138,4 +138,44 @@ describe('step answer lock', () => {
     await getWorkflowStatus('wf-1');
     expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(false);
   });
+
+  it('an older status response that arrives after a newer one is not applied and cannot restore the lock', async () => {
+    const state = useStepAnswerState();
+    const resp = (status: string) => ({ success: true, data: { workflow: { steps: [{ step_id: 's1', status }] } } });
+    let finishOlder!: (v: ReturnType<typeof resp>) => void;
+    const older = state.fetchStatus('wf-1', () => new Promise<ReturnType<typeof resp>>((r) => { finishOlder = r; }));
+    await state.answer('wf-1', 's1', async () => true, async () => (await state.fetchStatus('wf-1', async () => resp('approved'))).success);
+    expect(state.isStepLocked('wf-1', 's1')).toBe(false);
+    finishOlder(resp('waiting_approval'));
+    expect((await older).success).toBe(false); // superseded: the caller keeps the newer state
+    expect(state.isStepLocked('wf-1', 's1')).toBe(false);
+  });
+
+  it('a 409 on the retry after a timeout keeps the step locked while the first answer still shows waiting', async () => {
+    http.post.mockRejectedValueOnce(new HttpError(408, 'timeout'));
+    http.get.mockResolvedValue(wf('waiting_approval'));
+    const { approveStep, getWorkflowStatus } = useWorkflowBuilder();
+    await approveStep('wf-1', 's1');
+    await getWorkflowStatus('wf-1'); // released as unconfirmed: the retry is allowed
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(false);
+    http.post.mockRejectedValueOnce(new HttpError(409, 'already executing'));
+    await expect(approveStep('wf-1', 's1')).resolves.toBe(false);
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(true); // not unlocked as a plain refusal
+    http.get.mockResolvedValue(wf('approved')); // the first approval finished
+    await getWorkflowStatus('wf-1');
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(false);
+  });
+
+  it('a 409 on the retry reflects the real outcome at once when the re-read shows the step decided', async () => {
+    http.post.mockRejectedValueOnce(new HttpError(408, 'timeout'));
+    http.get.mockResolvedValue(wf('waiting_approval'));
+    const { approveStep, getWorkflowStatus } = useWorkflowBuilder();
+    await approveStep('wf-1', 's1');
+    await getWorkflowStatus('wf-1');
+    http.post.mockRejectedValueOnce(new HttpError(409, 'not awaiting approval'));
+    http.get.mockResolvedValue(wf('approved'));
+    await expect(approveStep('wf-1', 's1')).resolves.toBe(false);
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(false);
+    expect(http.get).toHaveBeenCalledTimes(3);
+  });
 });

@@ -17,6 +17,10 @@ import i18n from '@/i18n';
 const inFlight = reactive(new Set<string>());
 /** A decided step: `after` is the refresh sequence when its send settled; `unconfirmed` means the server's receipt is unknown. */
 const decided = reactive(new Map<string, { unconfirmed: boolean; after: number }>());
+/** Steps whose unconfirmed answer was released while still waiting: the first request may yet execute, so a refusal on the retry is not a plain refusal. */
+const retryAfterTimeout = reactive(new Set<string>());
+/** Per workflow, the sequence of the newest status response applied: an older response must not overwrite it. */
+const appliedSeq = new Map<string, number>();
 let refreshSeq = 0;
 
 const keyOf = (workflowId: string, stepId: string) => `${workflowId}\u0000${stepId}`;
@@ -44,9 +48,11 @@ export function useStepAnswerState() {
       inFlight.add(key);
       try {
         const sent = await send();
-        if (sent === false) return false; // refused: the step is still waiting and may be answered again
+        if (sent === false && !retryAfterTimeout.has(key)) return false; // refused: the step is still waiting and may be answered again
+        // A refusal of the retry after a timeout (a 409 while the first answer executes) is settled by the status, not taken as plain.
         decided.set(key, { unconfirmed: sent === 'unconfirmed', after: refreshSeq }); // a status refresh decides it
-        if (!(await refresh())) showToast(i18n.global.t('workflow.builder.stepStatusRefreshFailed') as string, 'warning');
+        retryAfterTimeout.delete(key);
+        if (!(await refresh()) && decided.has(key)) showToast(i18n.global.t('workflow.builder.stepStatusRefreshFailed') as string, 'warning');
         return sent === true;
       } finally {
         inFlight.delete(key);
@@ -62,7 +68,9 @@ export function useStepAnswerState() {
     async fetchStatus<R extends StatusResponse>(workflowId: string, request: () => Promise<R>): Promise<R> {
       const issued = ++refreshSeq;
       const r = await request();
+      if (issued < (appliedSeq.get(workflowId) ?? 0)) return { ...r, success: false }; // a newer response already owns the state
       const steps = r.data?.workflow?.steps;
+      if (r.success) appliedSeq.set(workflowId, issued);
       if (r.httpStatus === 404) dropWorkflow(workflowId);
       else if (r.success && Array.isArray(steps)) clearDecided(workflowId, steps, issued);
       return r;
@@ -80,6 +88,8 @@ export function useStepAnswerState() {
 /** Forget the decided entries of one workflow (in-flight entries clear themselves in the send's finally). */
 function dropWorkflow(workflowId: string): void {
   for (const key of decided.keys()) if (key.startsWith(`${workflowId}\u0000`)) decided.delete(key);
+  for (const key of retryAfterTimeout) if (key.startsWith(`${workflowId}\u0000`)) retryAfterTimeout.delete(key);
+  appliedSeq.delete(workflowId);
 }
 
 type StepInfo = { step_id: string; status: string };
@@ -95,6 +105,12 @@ function clearDecided(workflowId: string, steps: ReadonlyArray<StepInfo>, issued
   const waiting = new Set(steps.filter((s) => s.status === 'waiting_approval').map((s) => keyOf(workflowId, s.step_id)));
   for (const [key, entry] of decided) {
     if (!key.startsWith(`${workflowId}\u0000`)) continue;
-    if (!waiting.has(key) || (entry.unconfirmed && issued > entry.after)) decided.delete(key);
+    if (!waiting.has(key)) {
+      decided.delete(key);
+      retryAfterTimeout.delete(key);
+    } else if (entry.unconfirmed && issued > entry.after) {
+      decided.delete(key);
+      retryAfterTimeout.add(key); // released while still waiting: a retry's refusal must be reconciled
+    }
   }
 }
