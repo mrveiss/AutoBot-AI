@@ -109,6 +109,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseAlert, BaseButton, BaseFormField, BaseInput, BaseModal } from '@autobot/ui'
 import { useApiClient } from '@/plugins/api'
+import { CONTROL_CLASS } from './controlClass'
 import { createLogger } from '@/utils/debugUtils'
 import { WORK_ITEM_TYPES, PRIORITIES, type WorkItem } from '@/views/llc/workItemTypes'
 
@@ -139,9 +140,6 @@ const { t } = useI18n()
 const blankItem = (projectId: string) => ({
   title: '', type: 'pbi', priority: 'medium', story_points: null as number | null, description: '', project_id: projectId,
 })
-// Native select/textarea have no kit component; shared utility classes keep them on the tokens.
-const CONTROL_CLASS =
-  'w-full px-3 py-2 text-sm rounded-md border border-autobot-border bg-autobot-bg-card text-autobot-text-primary'
 const newItem = ref(blankItem(props.defaultProjectId))
 const isCreating = ref(false)
 const createError = ref('')
