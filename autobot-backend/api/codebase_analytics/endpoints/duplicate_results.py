@@ -12,10 +12,10 @@ belongs next to the scan, not to the formatting.
 import asyncio
 from pathlib import Path
 
+from api.source_scope import require_source_id
 from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
 
-from ..source_scope import require_source_id
 from ..storage import get_code_collection
 
 logger = get_logger(__name__)

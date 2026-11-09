@@ -12,6 +12,7 @@ Mount point: /api/analytics/codebase (via router.py)
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.source_scope import CROSS_SOURCE_OPENAPI
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
@@ -23,7 +24,6 @@ from ..scanner import (
     _tasks_lock,
     indexing_tasks,
 )
-from ..source_scope import CROSS_SOURCE_OPENAPI
 
 logger = get_logger(__name__)
 

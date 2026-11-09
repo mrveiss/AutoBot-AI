@@ -28,11 +28,11 @@ import asyncio
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from api.source_scope import CROSS_SOURCE_OPENAPI
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.knowledge.impact_analysis import find_impact
 
-from ..source_scope import CROSS_SOURCE_OPENAPI
 from ..storage import get_code_graph_collection
 
 logger = get_logger(__name__)

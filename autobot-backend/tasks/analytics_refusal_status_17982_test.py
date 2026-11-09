@@ -23,7 +23,7 @@ from fastapi import HTTPException
 
 from api.codebase_analytics.endpoints.scan_responses import ScanTimedOut
 from api.codebase_analytics.endpoints.shared import UnresolvedSourceError
-from api.codebase_analytics.source_scope import cached_task_result
+from api.source_scope import cached_task_result
 from utils.celery_task_status import celery_result_to_status
 
 _REFUSAL = {"status": "error", "message": f"{UnresolvedSourceError.MESSAGE}; nothing scanned"}

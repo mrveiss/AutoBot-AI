@@ -24,7 +24,7 @@ from autobot_shared.code_graph import (
     is_external_module,
 )
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_validator import validate_relative_path
+from autobot_shared.security.path_http import require_contained_relative_path
 from utils.file_categorization import SKIP_DIRS
 
 # Logger
@@ -143,10 +143,7 @@ async def scan_path_in_source(source_id: str, path: str | None) -> str:
     root = await resolve_scan_root(source_id)
     if not path:
         return str(root)
-    try:
-        return str(validate_relative_path(path, root))
-    except ValueError:
-        raise HTTPException(status_code=400, detail="path must be relative to the source root") from None
+    return str(require_contained_relative_path(path, root))
 
 
 def tag_source(response: Response, source_id: str) -> None:

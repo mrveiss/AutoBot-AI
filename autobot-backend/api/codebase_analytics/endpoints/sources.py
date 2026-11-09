@@ -19,6 +19,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from api.source_scope import CROSS_SOURCE_OPENAPI
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
@@ -35,7 +36,6 @@ from ..source_models import (
     SourceSyncResponse,
 )
 from ..source_paths import CODE_SOURCES_BASE, make_clone_path
-from ..source_scope import CROSS_SOURCE_OPENAPI
 from ..source_storage import get_source, list_sources, save_source
 from .shared import _caller_owner_id
 

@@ -15,6 +15,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from api.analytics_shared import no_data_response
+from api.source_scope import CROSS_SOURCE_OPENAPI, SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
@@ -23,7 +24,6 @@ from utils.chromadb_client import get_all_paginated
 
 from ..analyzers import normalize_hardcode_record
 from ..scanner import _tasks_sync_lock, indexing_tasks
-from ..source_scope import CROSS_SOURCE_OPENAPI, SourceIdQuery, require_source_id
 from ..storage import get_code_collection, get_redis_connection
 from .shared import (
     _in_memory_storage,

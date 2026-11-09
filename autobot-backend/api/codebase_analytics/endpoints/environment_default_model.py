@@ -11,10 +11,9 @@ module because ``environment.py`` is a grandfathered large file that may not gro
 
 from fastapi import APIRouter
 
+from api.source_scope import CROSS_SOURCE_OPENAPI
 from autobot_shared.error_boundaries import bounded
 from autobot_shared.ssot_config import QUALITY_MODEL
-
-from ..source_scope import CROSS_SOURCE_OPENAPI
 
 router = APIRouter()
 

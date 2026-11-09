@@ -17,6 +17,7 @@ import aiofiles
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from api.source_scope import SourceIdQuery
 from autobot_shared.code_graph import compute_node_id, extract_dotted_callee, module_path_from_rel_path
 from autobot_shared.code_graph import resolve_callee as _shared_resolve_callee
 from autobot_shared.env_utils import blank_to_none, env_float
@@ -27,7 +28,6 @@ from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 from utils.io_executor import get_analytics_executor
 
-from ..source_scope import SourceIdQuery
 from .call_graph_shaping import build_connected_nodes as _build_connected_nodes
 from .call_graph_shaping import build_orphaned_nodes as _build_orphaned_nodes
 from .call_graph_shaping import calculate_metrics as _calculate_metrics

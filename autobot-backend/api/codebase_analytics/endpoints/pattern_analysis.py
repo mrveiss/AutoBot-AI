@@ -16,14 +16,14 @@ from typing import Any, Dict, List
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
-from api.codebase_analytics.source_scope import (
+from api.codebase_analytics.task_routes import HUMAN_ADMIN_DEPENDENCIES, add_clear_stuck_route
+from api.schemas_pattern_analysis import PatternAnalysisRequest, PatternAnalysisStatus, PatternSummary
+from api.source_scope import (
     CROSS_SOURCE_OPENAPI,
     SourceIdQuery,
     require_source_id,
     source_scoped_prefix,
 )
-from api.codebase_analytics.task_routes import HUMAN_ADMIN_DEPENDENCIES, add_clear_stuck_route
-from api.schemas_pattern_analysis import PatternAnalysisRequest, PatternAnalysisStatus, PatternSummary
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import bounded
 from autobot_shared.logging_manager import get_logger

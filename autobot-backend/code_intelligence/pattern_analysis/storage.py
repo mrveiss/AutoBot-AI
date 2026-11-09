@@ -160,7 +160,7 @@ def _write_source_id(source_id: "str | None") -> str:
     """
     # Lazy: the `api.codebase_analytics` package imports the routers, which
     # import this module, so a top-level import here would be a cycle.
-    from api.codebase_analytics.source_scope import require_source_id  # noqa: PLC0415
+    from api.source_scope import require_source_id  # noqa: PLC0415
 
     return require_source_id(source_id, "pattern-store write")
 
@@ -395,7 +395,7 @@ def build_source_scoped_where(
     """
     # Lazy: the `api.codebase_analytics` package imports the routers, which
     # import this module, so a top-level import here would be a cycle.
-    from api.codebase_analytics.source_scope import require_source_id  # noqa: PLC0415
+    from api.source_scope import require_source_id  # noqa: PLC0415
 
     conditions = [{"source_id": require_source_id(source_id, "pattern-store query")}]
     if extra:

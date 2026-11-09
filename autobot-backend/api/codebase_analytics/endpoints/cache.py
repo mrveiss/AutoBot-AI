@@ -11,10 +11,10 @@ import asyncio
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.source_scope import SourceIdQuery
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
-from ..source_scope import SourceIdQuery
 from ..storage import get_redis_connection
 from .shared import _in_memory_storage
 

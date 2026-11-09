@@ -11,11 +11,11 @@ import asyncio
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
 
-from ..source_scope import SourceIdQuery, require_source_id
 from ..storage import get_code_collection
 from .store_state import index_state, store_unavailable
 

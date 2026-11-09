@@ -17,7 +17,7 @@ outage and a source nobody had indexed both rendered as a blank panel.
 
 from fastapi import HTTPException, status
 
-from ..source_scope import require_source_id
+from api.source_scope import require_source_id
 
 STORE_UNAVAILABLE_DETAIL = "Code index store unavailable"
 NOT_INDEXED_MESSAGE = "This source has not been indexed yet. Run indexing first."

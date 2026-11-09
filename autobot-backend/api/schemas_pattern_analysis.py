@@ -13,7 +13,7 @@ from typing import Any, Dict
 
 from pydantic import BaseModel, Field, field_validator
 
-from api.codebase_analytics.source_scope import require_source_id
+from api.source_scope import require_source_id
 
 
 class PatternAnalysisRequest(BaseModel):

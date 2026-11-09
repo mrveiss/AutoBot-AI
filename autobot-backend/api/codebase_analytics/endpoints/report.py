@@ -19,6 +19,7 @@ from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 
 from api.codebase_analytics.problem_severity import PROBLEM_SEVERITY_ORDER
+from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
@@ -55,7 +56,6 @@ from ..duplicate_detector import (  # noqa: F401
     DuplicateCodeDetector,
 )
 from ..models import APIEndpointAnalysis
-from ..source_scope import SourceIdQuery, require_source_id
 from ..storage import get_code_collection
 from .duplicates import _run_standard_analysis
 from .scan_responses import ScanUnavailable

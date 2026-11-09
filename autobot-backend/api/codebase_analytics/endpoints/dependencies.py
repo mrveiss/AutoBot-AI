@@ -15,13 +15,13 @@ import aiofiles
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-from api.codebase_analytics.source_scope import (
+from api.codebase_analytics.task_routes import add_clear_stuck_route
+from api.source_scope import (
     SourceIdQuery,
     cached_task_result,
     require_source_id,
     source_scoped_prefix,
 )
-from api.codebase_analytics.task_routes import add_clear_stuck_route
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger

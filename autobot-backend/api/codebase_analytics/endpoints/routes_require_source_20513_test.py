@@ -149,7 +149,7 @@ def test_pattern_analyze_body_requires_a_well_formed_source():
 def _throwaway():
     from fastapi import Query
 
-    from api.codebase_analytics.source_scope import CROSS_SOURCE_OPENAPI, SourceIdQuery
+    from api.source_scope import CROSS_SOURCE_OPENAPI, SourceIdQuery
 
     router = APIRouter()
 

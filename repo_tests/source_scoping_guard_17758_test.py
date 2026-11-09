@@ -385,7 +385,7 @@ def test_every_inline_source_id_pattern_matches_the_canonical_one():
     """
     import re as _re
 
-    canonical_src = (_REPO / "autobot-backend/api/codebase_analytics/source_scope.py").read_text(encoding="utf-8")
+    canonical_src = (_REPO / "autobot-backend/api/source_scope.py").read_text(encoding="utf-8")
     canonical = _re.search(r'_SOURCE_ID_SHAPE = re\.compile\(r"([^"]+)"\)', canonical_src)
     assert canonical, "source_scope._SOURCE_ID_SHAPE is gone or reshaped; this pin needs rewriting"
 
