@@ -145,6 +145,7 @@
           :steps="message.metadata?.steps as any"
         />
 
+        <StallQuestionCard v-else-if="message.type === 'human_question'" :message="message" /> <!-- #21022 -->
         <!-- Issue #690: Overseer Agent Step Message -->
         <OverseerStepMessage
           v-else-if="message.type === 'overseer_step' && message.metadata?.step"
@@ -153,14 +154,12 @@
 
         <!-- GH#9015: AI-generated image message -->
         <ImageCell
-          v-else-if="(message.type === 'image' || message.metadata?.display_type === 'image') && message.metadata?.image_payload"
-          :rich-payload="(message.metadata.image_payload as Record<string, unknown>)"
+          v-else-if="(message.type === 'image' || message.metadata?.display_type === 'image') && message.metadata?.image_payload" :rich-payload="(message.metadata.image_payload as Record<string, unknown>)"
         />
 
         <!-- GH#9016: AI-generated video message -->
         <VideoCell
-          v-else-if="(message.type === 'video' || message.metadata?.display_type === 'video') && message.metadata?.video_payload"
-          :rich-payload="(message.metadata.video_payload as Record<string, unknown>)"
+          v-else-if="(message.type === 'video' || message.metadata?.display_type === 'video') && message.metadata?.video_payload" :rich-payload="(message.metadata.video_payload as Record<string, unknown>)"
         />
 
         <!-- MVA-2006: Context summary message -->
@@ -581,6 +580,7 @@ import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
 import StableLoadingState from '@/components/ui/StableLoadingState.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { BaseModal, BaseButton } from '@autobot/ui'
+import StallQuestionCard from '@/components/chat/StallQuestionCard.vue'
 import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'

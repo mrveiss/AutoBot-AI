@@ -426,6 +426,15 @@
       "confirmDelete": "Delete this message? This action cannot be undone.",
       "thinkingUsed": "Thinking used"
     },
+    "stallQuestion": {
+      "title": "The assistant needs your input",
+      "answerLabel": "Your answer",
+      "placeholder": "Tell the assistant how to proceed",
+      "send": "Send answer",
+      "stop": "Stop here",
+      "answered": "You answered: {answer}",
+      "stopped": "You chose to stop here."
+    },
     "approval": {
       "autoApproved": "Auto-Approved",
       "commandApproved": "Command Approved",
