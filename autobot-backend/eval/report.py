@@ -160,7 +160,7 @@ class RegressionReport:
     def to_dict(self) -> Dict[str, Any]:
         """Serialize the report for JSON output / CI artifacts."""
         data = self._base_dict()
-        if any(o.is_live for o in self.outcomes):
+        if self.run or any(o.is_live for o in self.outcomes):
             data["run"] = self.run
             data["per_model"] = per_model(self.outcomes)
         return data

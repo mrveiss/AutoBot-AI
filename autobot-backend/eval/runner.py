@@ -243,7 +243,7 @@ class TrajectoryReplayer:
         timeout_s = getattr(candidate, "timeout_s", None) if live else _REPLAY_TIMEOUT_S
         try:
             return await asyncio.wait_for(self.replay_one(golden, candidate), timeout=timeout_s)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return self._live_timed_out(golden, candidate, timeout_s) if live else self._timed_out(golden)
         except RecordingUnusable as exc:
             return self._unmeasured(golden, exc, candidate)

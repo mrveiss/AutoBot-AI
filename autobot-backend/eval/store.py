@@ -22,6 +22,7 @@ in as a golden with only these three keys added — no new format invented.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
@@ -47,14 +48,29 @@ SUPPORTED_FIXTURE_VERSIONS = frozenset({"1", "2"})
 TOOL_MATCH_MODES = ("exact", "subsequence")
 
 
+def _check_pattern(kind: SuccessCriteriaType, parameters: Dict[str, Any]) -> None:
+    """An ``output_pattern`` criterion needs a non-empty, compilable pattern: a bad one fails the load, not a run."""
+    if kind is not SuccessCriteriaType.OUTPUT_PATTERN:
+        return
+    pattern = parameters.get("pattern")
+    if not isinstance(pattern, str) or not pattern:
+        raise ValueError("an output_pattern success criterion needs a non-empty string 'pattern'")
+    try:
+        re.compile(pattern)
+    except re.error as exc:
+        raise ValueError(f"an output_pattern success criterion has an invalid pattern: {exc}") from exc
+
+
 def _criterion_from_dict(entry: Dict[str, Any]) -> SuccessCriteria:
     """One fixture entry as a ``SuccessCriteria``; ``custom`` is refused (a callable cannot live in JSON)."""
     kind = SuccessCriteriaType(entry["type"])
     if kind is SuccessCriteriaType.CUSTOM:
         raise ValueError("a fixture success criterion cannot be 'custom': a callable is not serialisable")
+    parameters = dict(entry.get("parameters") or {})
+    _check_pattern(kind, parameters)
     return SuccessCriteria(
         criteria_type=kind,
-        parameters=dict(entry.get("parameters") or {}),
+        parameters=parameters,
         weight=float(entry.get("weight", 1.0)),
         required=bool(entry.get("required", True)),
         description=str(entry.get("description", "")),

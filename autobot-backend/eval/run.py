@@ -188,7 +188,10 @@ def _run_live(args: argparse.Namespace) -> int:
     if report is None:
         return 2  # refused: nothing was examined, so no claim about the corpus
     _emit(report, args.json)
-    if report.outcomes and report.total_unmeasured == len(report.outcomes):
+    if not report.outcomes:
+        logger.error("UNMEASURED: the golden set is empty, so nothing was examined.")
+        return 2
+    if report.total_unmeasured == len(report.outcomes):
         logger.error("UNMEASURED: no live turn produced an answer, so nothing was examined.")
         return 2
     return _gated_exit(args, report)

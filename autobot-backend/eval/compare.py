@@ -11,7 +11,9 @@ Usage::
 
 Exit codes follow ``eval.run``: ``0`` compared, ``2`` refused (the reports are not comparable, so no claim is made).
 Two reports are comparable only when their pins agree on the model set, the step budget, the timeout and the corpus
-size: a difference in any of them moves the pass rate without the change under test having moved anything.
+(size and a content fingerprint), and when each carries every pin and an aggregate for every pinned model: a
+difference in any of them moves the pass rate without the change under test having moved anything, and a pin
+missing from both reports proves nothing about the runs.
 """
 
 from __future__ import annotations
@@ -34,9 +36,13 @@ COMPARED_PINS = (
     "loop_abort_threshold",
     "timeout",
     "corpus_size",
+    "corpus_fingerprint",
     "repeats",
     "judge_model",
+    "judge_local_only",
+    "judge_endpoint_class",
     "local_only",
+    "fallback_local_only",
     "kb_status",
 )
 #: Per-model pins that must also agree: where the prompts went, not just which model answered.
@@ -56,7 +62,10 @@ def check_comparable(before: Dict[str, Any], after: Dict[str, Any]) -> None:
     run_a, run_b = before.get("run"), after.get("run")
     if not run_a or not run_b:
         raise NotComparable("a report has no `run` pins block, so it is not a live report")
-    problems = []
+    problems = _missing_pins(run_a, "before") + _missing_pins(run_b, "after")
+    problems += _missing_aggregates(before, "before") + _missing_aggregates(after, "after")
+    if problems:
+        raise NotComparable("; ".join(problems))
     if _model_names(before) != _model_names(after):
         problems.append(f"model: {_model_names(before)} vs {_model_names(after)}")
     for pin in COMPARED_PINS:
@@ -65,6 +74,26 @@ def check_comparable(before: Dict[str, Any], after: Dict[str, Any]) -> None:
     problems += _model_pin_problems(run_a, run_b)
     if problems:
         raise NotComparable("; ".join(problems))
+
+
+def _missing_pins(run: Dict[str, Any], side: str) -> List[str]:
+    """Pins a report does not carry: a pin absent from both reports must not read as two equal pins."""
+    problems = [f"{side}: missing pin {pin!r}" for pin in COMPARED_PINS if pin not in run]
+    for entry in run.get("models") or []:
+        problems += [
+            f"{side}: model {entry.get('model')!r} missing pin {key!r}"
+            for key in COMPARED_MODEL_PINS
+            if key not in entry
+        ]
+    return problems
+
+
+def _missing_aggregates(report: Dict[str, Any], side: str) -> List[str]:
+    """Pinned models without a per-model aggregate: their failures and not-run results would drop out of the delta."""
+    aggregates = report.get("per_model") or {}
+    return [
+        f"{side}: no aggregate for pinned model {name!r}" for name in _model_names(report) if name not in aggregates
+    ]
 
 
 def _model_pin_problems(run_a: Dict[str, Any], run_b: Dict[str, Any]) -> List[str]:
@@ -148,7 +177,11 @@ def main(argv: List[str] | None = None) -> int:
         return 2
     logger.info("%s", render_markdown(delta))
     if args.json:
-        Path(args.json).write_text(json.dumps(delta, indent=2), encoding="utf-8")
+        try:
+            Path(args.json).write_text(json.dumps(delta, indent=2), encoding="utf-8")
+        except OSError as exc:
+            logger.error("NOT WRITTEN: the delta could not be saved (%s)", type(exc).__name__)
+            return 2
     return 0
 
 

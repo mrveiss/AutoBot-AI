@@ -39,9 +39,13 @@ def _run_pins(**over):
         "loop_abort_threshold": 2,
         "timeout": 300.0,
         "corpus_size": 3,
+        "corpus_fingerprint": "f1",
         "repeats": 1,
         "judge_model": None,
+        "judge_local_only": None,
+        "judge_endpoint_class": None,
         "local_only": True,
+        "fallback_local_only": True,
         "kb_status": "populated",
         "models": [{"model": "m1", "provider": "ollama", "endpoint_class": "loopback", "local_only": True}],
     }
@@ -103,6 +107,9 @@ def _m1(**over):
         ("loop_abort_threshold", 3, "loop_abort_threshold"),
         ("timeout", 60.0, "timeout"),
         ("corpus_size", 4, "corpus_size"),
+        ("corpus_fingerprint", "f2", "corpus_fingerprint"),
+        ("judge_local_only", False, "judge_local_only"),
+        ("fallback_local_only", False, "fallback_local_only"),
         ("repeats", 5, "repeats"),
         ("judge_model", "judge-x", "judge_model"),
         ("local_only", False, "local_only"),
@@ -126,6 +133,36 @@ def test_compare_cli_exits_2_on_a_refusal_and_0_on_a_comparison(tmp_path):
     assert compare.main([str(before), str(after)]) == 0
     assert compare.main([str(before), str(other)]) == 2
     assert compare.main([str(before), str(tmp_path / "missing.json")]) == 2
+
+
+@pytest.mark.parametrize("pin", ["timeout", "corpus_fingerprint", "step_budget"])
+def test_compare_refuses_reports_that_both_omit_a_pin(pin):
+    before, after = _report([True]), _report([True])
+    del before["run"][pin], after["run"][pin]
+    with pytest.raises(compare.NotComparable, match=f"missing pin '{pin}'"):
+        compare.compare_reports(before, after)
+
+
+def test_compare_refuses_a_model_pin_that_both_reports_omit():
+    before, after = _report([True]), _report([True])
+    for report in (before, after):
+        del report["run"]["models"][0]["provider"]
+    with pytest.raises(compare.NotComparable, match="missing pin 'provider'"):
+        compare.compare_reports(before, after)
+
+
+def test_compare_refuses_a_report_without_the_aggregate_of_a_pinned_model():
+    before, after = _report([True]), _report([True])
+    del after["per_model"]["m1"]
+    with pytest.raises(compare.NotComparable, match="no aggregate for pinned model 'm1'"):
+        compare.compare_reports(before, after)
+
+
+def test_compare_cli_exits_2_when_the_json_output_cannot_be_written(tmp_path):
+    before, after = tmp_path / "b.json", tmp_path / "a.json"
+    before.write_text(json.dumps(_report([True])), encoding="utf-8")
+    after.write_text(json.dumps(_report([False])), encoding="utf-8")
+    assert compare.main([str(before), str(after), "--json", str(tmp_path / "no-such-dir" / "d.json")]) == 2
 
 
 async def _kb():
@@ -153,6 +190,11 @@ async def test_run_live_eval_loops_models_by_repeats_and_stamps_the_pins():
     )
     corpus = len({o.trajectory_id for o in report.outcomes})
     assert len(report.outcomes) == 2 * 2 * corpus  # duplicate model collapsed
+    rows = json.loads(json.dumps(report.to_dict()))["trajectories"]
+    for model in ("m1", "m2"):
+        for trajectory_id in {o.trajectory_id for o in report.outcomes}:
+            indices = [r["repeat"] for r in rows if r["model"] == model and r["trajectory_id"] == trajectory_id]
+            assert sorted(indices) == [0, 1]
     run = report.run
     assert (run["repeats"], run["label"], run["corpus_size"], run["local_only"]) == (2, "before", corpus, True)
     assert {m["model"]: (m["endpoint_class"], m["tokens"]) for m in run["models"]} == {
@@ -189,3 +231,34 @@ def test_the_gate_can_still_go_red_in_live_mode():
     assert _gated_exit(Args, RegressionReport([_o("a", "m1", True), _o("b", "m1", False, ["loop_stall"])])) == 1
     assert _gated_exit(Args, RegressionReport([_o("a", "m1", True)])) == 0
     assert _gated_exit(Args, RegressionReport([_o("a", "m1", False, not_run=True)])) == 2
+
+
+def test_a_candidate_pass_that_fails_a_deterministic_check_is_a_fail_in_every_view():
+    outcome = _o("a", "m1", True)
+    outcome.tools_ok = False
+    data = RegressionReport([outcome], run=_run_pins()).to_dict()
+    row = data["trajectories"][0]
+    assert (row["state"], row["passed"]) == ("fail", False)
+    assert (data["per_model"]["m1"]["pass"], data["per_model"]["m1"]["fail"]) == (0, 1)
+
+
+def test_the_corpus_fingerprint_follows_the_content_of_a_golden_not_its_count():
+    from eval.live_run import corpus_fingerprint
+    from eval.store import GoldenTrajectory
+
+    def golden(prompt):
+        return GoldenTrajectory("g", "code_fix", {"prompt": prompt}, [], 0.9)
+
+    assert corpus_fingerprint([golden("a")]) == corpus_fingerprint([golden("a")])
+    assert corpus_fingerprint([golden("a")]) != corpus_fingerprint([golden("b")])
+
+
+def test_an_empty_live_report_exits_2_and_still_carries_the_run_pins(monkeypatch, tmp_path):
+    empty = RegressionReport([], run=_run_pins())
+    monkeypatch.setattr("eval.run._live_report", lambda args: empty)
+    out = tmp_path / "r.json"
+    monkeypatch.setenv("EVAL_OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setattr("sys.argv", ["eval.run", "--live", "--json", str(out)])
+    assert _run(_parse_args()) == 2
+    assert json.loads(out.read_text(encoding="utf-8"))["run"]["corpus_size"] == 3
+    assert "**Run pins:**" in empty.render_markdown()

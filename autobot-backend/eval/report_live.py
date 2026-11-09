@@ -21,10 +21,15 @@ UNATTRIBUTED = "unattributed"
 
 
 def outcome_state(outcome: "TrajectoryOutcome") -> str:
-    """``pass``, ``fail`` or ``not_run`` for one live outcome; ``not_run`` whenever it was never compared."""
-    if outcome.classify() == "unmeasured":
+    """``pass``, ``fail`` or ``not_run`` for one live outcome; ``not_run`` whenever it was never compared.
+
+    The report's own verdict decides: a candidate that said ``passed`` but failed a tool or status check is a
+    regression, so it is a ``fail`` here too.
+    """
+    verdict = outcome.classify()
+    if verdict == "unmeasured":
         return NOT_RUN
-    return PASS if outcome.passed else FAIL
+    return PASS if outcome.passed and verdict != "regression" else FAIL
 
 
 def live_fields(outcome: "TrajectoryOutcome") -> Dict[str, Any]:
@@ -35,8 +40,8 @@ def live_fields(outcome: "TrajectoryOutcome") -> Dict[str, Any]:
         "model": outcome.model,
         "provider": outcome.provider,
         "repeat": outcome.repeat,
-        "state": outcome_state(outcome),
-        "passed": outcome.passed,
+        "state": (state := outcome_state(outcome)),
+        "passed": state == PASS,
         "failure_categories": list(outcome.failure_categories),
         "criteria_detail": outcome.criteria_detail,
         "tokens": outcome.tokens,
@@ -96,8 +101,8 @@ def _pin_lines(run: Dict[str, Any] | None) -> List[str]:
 
 
 def render_live_markdown(run: Dict[str, Any] | None, outcomes: Iterable["TrajectoryOutcome"]) -> List[str]:
-    """Markdown lines for the pins block and the per-model tables; empty when the report has no live outcome."""
+    """Markdown lines for the pins block and the per-model tables; only the pins when the report has no live outcome."""
     models = per_model(outcomes)
     if not models:
-        return []
+        return _pin_lines(run)  # a run that examined nothing still states the conditions it ran under
     return [*_pin_lines(run), "", *_model_rows(models), "", *_task_rows(models)]

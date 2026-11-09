@@ -80,3 +80,15 @@ def test_every_shipped_golden_declares_tool_match_allowed_tools_and_two_criteria
         assert raw.get("tool_match") in ("exact", "subsequence"), path.name
         assert isinstance(raw.get("allowed_tools"), list), path.name
         assert len(raw.get("success_criteria") or []) >= 2, path.name
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [{}, {"pattern": ""}, {"pattern": 5}, {"pattern": "(unclosed"}],
+    ids=["missing", "empty", "not-a-string", "invalid-regex"],
+)
+def test_an_output_pattern_criterion_with_a_missing_or_invalid_pattern_fails_the_load(parameters):
+    with pytest.raises(ValueError, match="output_pattern"):
+        GoldenTrajectory.from_fixture(
+            _fixture(fixture_version="2", success_criteria=[{"type": "output_pattern", "parameters": parameters}])
+        )

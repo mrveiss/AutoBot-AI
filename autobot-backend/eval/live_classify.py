@@ -24,8 +24,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-from autobot_shared.env_registry import env
+from autobot_shared.env_utils import env_registered
 from chat_workflow import limits
+from chat_workflow.tool_call_grammar import TOOL_CALL_OPENING_RE, TOOL_CALL_PATTERN
 from chat_workflow.tool_call_loop import _LOOP_ABORT_THRESHOLD
 from chat_workflow.tool_handler import ToolHandlerMixin
 
@@ -41,7 +42,7 @@ CATEGORIES = (MALFORMED_TOOL_CALL, UNKNOWN_TOOL, LOOP_STALL, FALSE_DONE, UNSUPPO
 #: Task classes whose answers must rest on retrieved knowledge (the grounding signal applies to them only).
 GROUNDED_TASK_CLASSES = frozenset({"knowledge_qa", "troubleshooting"})
 #: An answer shorter than this many words is not a claim worth grounding (a refusal, an acknowledgement).
-SUBSTANTIVE_MIN_WORDS = int(env("AUTOBOT_EVAL_SUBSTANTIVE_MIN_WORDS"))
+SUBSTANTIVE_MIN_WORDS = env_registered("AUTOBOT_EVAL_SUBSTANTIVE_MIN_WORDS")
 
 _PARSER = ToolHandlerMixin()  # the detectors read no instance state; the chat handler stays the only parser
 
@@ -75,14 +76,22 @@ class LiveRunRecord:
     tokens: int | None = None
 
 
+def _unterminated(text: str) -> bool:
+    """True when the text opens more tool-call tags than the handler's grammar finds complete calls in it."""
+    return len(TOOL_CALL_OPENING_RE.findall(text)) > sum(1 for _ in TOOL_CALL_PATTERN.finditer(text))
+
+
 def _malformed(texts: List[str]) -> bool:
-    """True when a response announces a tool call the handler's own extractor cannot fully parse."""
+    """True when a response announces a tool call the handler's own extractor cannot fully parse.
+
+    That covers an unparseable call and an unterminated one following valid calls.
+    """
     for text in texts:
         announced, _ = _PARSER._detect_tool_call_markers(text or "")
         if not announced:
             continue
         calls, matches = _PARSER._extract_tool_calls_from_text(text)
-        if not calls or len(calls) < matches:
+        if not calls or len(calls) < matches or _unterminated(text):
             return True
     return False
 
@@ -110,7 +119,7 @@ def _false_done(record: LiveRunRecord) -> bool:
 
 
 def _unsupported(record: LiveRunRecord) -> bool:
-    if record.judge_unsupported:
+    if record.judge_unsupported or record.grounding_ok is False:
         return True
     if not record.grounding_required or len(record.final_text.split()) < SUBSTANTIVE_MIN_WORDS:
         return False

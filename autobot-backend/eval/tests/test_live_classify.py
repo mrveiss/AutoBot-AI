@@ -135,3 +135,18 @@ def test_several_categories_are_reported_together_in_catalogue_order():
     found = classify_failures(record)
     assert found == [MALFORMED_TOOL_CALL, LOOP_STALL, FALSE_DONE, UNSUPPORTED_CLAIM]
     assert found == [c for c in CATEGORIES if c in found]
+
+
+def test_an_unterminated_call_after_a_valid_one_is_malformed():
+    text = f'{_GOOD_CALL}\n<TOOL_CALL name="web_search" params=\'{{"query": "y"}}\'>never closed'
+    assert MALFORMED_TOOL_CALL in classify_failures(_clean(raw_responses=[text]))
+
+
+def test_two_complete_calls_are_not_malformed():
+    assert MALFORMED_TOOL_CALL not in classify_failures(_clean(raw_responses=[_GOOD_CALL + _GOOD_CALL]))
+
+
+def test_a_declared_grounding_criterion_that_fails_is_an_unsupported_claim_even_for_a_short_answer():
+    record = _clean(grounding_required=True, grounding_ok=False)
+    assert UNSUPPORTED_CLAIM in classify_failures(record)
+    assert UNSUPPORTED_CLAIM not in classify_failures(_clean(grounding_required=True, grounding_ok=True))
