@@ -9,24 +9,30 @@ One check, reached by every route that can take the last admin away: demotion
 SLM person-copy push that flips ``is_active`` directly. It answers 409 with the
 stable code :data:`LAST_PLATFORM_ADMIN_CODE`, which a screen maps to its own text.
 
-Race safety: the check locks EVERY active-admin row (``SELECT ... FOR UPDATE``, in
-id order so two checks cannot deadlock) and decides on the rows it got back. Two
-concurrent changes to the last two admins queue on the same rows; the second one
-re-evaluates the predicate after the first commits, no longer sees the first admin
-as active, and is refused. The locks are held until the caller commits.
+Race safety: lock order is ONE everywhere. The check reads the target cheaply first and returns
+without a lock when it is not an active admin. Otherwise it locks, in one ``SELECT ... FOR UPDATE``
+ordered by id, EVERY active-admin row plus the target row, and decides on the rows it got back. Every
+caller takes this lock before it locks the target on its own, so two concurrent changes to the last two
+admins queue on the same rows in the same order and cannot deadlock; the second re-evaluates after the
+first commits, no longer sees the first admin as active, and is refused. A deadlock or serialization
+failure that still happens is rolled back and answered as the same refusal. Locks are held until commit.
 """
 
 import uuid
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.user_management.user_service_errors import UserServiceError
 
 logger = get_logger(__name__)
+
+#: PostgreSQL deadlock_detected and serialization_failure.
+_RETRYABLE_SQLSTATES = frozenset({"40P01", "40001"})
 
 #: Stable machine-readable code of the 409; the frontend keys its translated message on it.
 LAST_PLATFORM_ADMIN_CODE = "last_platform_admin"
@@ -43,29 +49,59 @@ class LastPlatformAdminError(UserServiceError):
         super().__init__(message)
 
 
-async def lock_active_platform_admin_ids(session: AsyncSession, user_model: Any) -> list[uuid.UUID]:
-    """The ids of the active platform admins, their rows locked until the transaction ends."""
+def _is_active_admin(row: Any) -> bool:
+    return bool(row.is_platform_admin and row.is_active and row.deleted_at is None)
+
+
+async def lock_platform_admin_rows(session: AsyncSession, user_model: Any, user_id: uuid.UUID) -> list[Any]:
+    """The active platform admins plus the target, locked in id order until the transaction ends."""
     query = (
-        select(user_model.id)
+        select(user_model.id, user_model.is_platform_admin, user_model.is_active, user_model.deleted_at)
         .where(
-            user_model.is_platform_admin.is_(True),
-            user_model.is_active.is_(True),
-            user_model.deleted_at.is_(None),
+            or_(
+                user_model.id == user_id,
+                and_(
+                    user_model.is_platform_admin.is_(True),
+                    user_model.is_active.is_(True),
+                    user_model.deleted_at.is_(None),
+                ),
+            )
         )
         .order_by(user_model.id)
         .with_for_update()
     )
-    return list((await session.execute(query)).scalars().all())
+    return list((await session.execute(query)).all())
+
+
+def _is_serialization_failure(exc: DBAPIError) -> bool:
+    state = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
+    return state in _RETRYABLE_SQLSTATES
 
 
 async def ensure_not_last_platform_admin(session: AsyncSession, user_model: Any, user_id: uuid.UUID) -> None:
     """Raise :class:`LastPlatformAdminError` if *user_id* is the only active platform admin.
 
-    A user who is not an active admin (judged on the locked rows, not on a possibly stale
-    in-memory copy) can be demoted, deactivated or deleted freely.
+    A target that is not an active admin is judged on a plain read and locks nothing; one that is
+    gets the id-ordered lock and is judged again on the locked rows (not on a stale copy).
     """
-    admin_ids = await lock_active_platform_admin_ids(session, user_model)
-    if user_id in admin_ids and len(admin_ids) == 1:
+    try:
+        target = (
+            await session.execute(
+                select(user_model.is_platform_admin, user_model.is_active, user_model.deleted_at).where(
+                    user_model.id == user_id
+                )
+            )
+        ).first()
+        if target is None or not _is_active_admin(target):
+            return
+        rows = await lock_platform_admin_rows(session, user_model, user_id)
+    except DBAPIError as exc:
+        if not _is_serialization_failure(exc):
+            raise
+        await session.rollback()  # the transaction is aborted: nothing of it stands, the change is refused
+        raise LastPlatformAdminError() from exc
+    admins = {row.id for row in rows if _is_active_admin(row)}
+    if user_id in admins and len(admins) == 1:
         raise LastPlatformAdminError()
 
 
@@ -78,8 +114,8 @@ async def refuse_last_platform_admin(session: AsyncSession, exc: LastPlatformAdm
     """Commit the refusal's audit row (and release the locks), then return the 409 to raise.
 
     The service wrote the denied audit entry before raising; a route that lets the exception
-    roll the session back would lose it, so the route commits it here. Nothing else is pending:
-    the guard runs before any change.
+    roll the session back would lose it, so the route commits it here. The caller MUST run the
+    guard before it applies any other change in the request, so the audit row is all that commits.
     """
     await session.commit()
     logger.warning("Refused: change would leave no active platform admin")

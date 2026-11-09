@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from testkit.fake_async_session import FakeAsyncSession, FakeResult
 from user_management.services import person_copy_sync as sync
 
@@ -141,3 +143,42 @@ async def test_a_release_error_after_a_good_push_keeps_the_success(caplog) -> No
     assert (pair[0].push_error, pair[0].push_failed_at) == (None, None)
     assert session.rollbacks == 0
     assert any("release" in r.message and "ConnectionError" in r.message for r in caplog.records)
+
+
+def _response(status: int, body):
+    async def json():
+        if isinstance(body, Exception):
+            raise body
+        return body
+
+    return SimpleNamespace(status=status, json=json)
+
+
+async def test_the_slms_last_admin_refusal_is_recognised() -> None:
+    refusal = {"detail": {"code": "last_platform_admin", "message": "m"}}
+    with pytest.raises(sync.PersonCopyRefused):
+        await sync._raise_if_refused(_response(409, refusal))
+
+
+async def test_other_409s_and_other_statuses_are_left_to_raise_for_status() -> None:
+    await sync._raise_if_refused(_response(409, {"detail": {"code": "something_else"}}))
+    await sync._raise_if_refused(_response(409, {"detail": "text"}))
+    await sync._raise_if_refused(_response(409, ValueError("not json")))
+    await sync._raise_if_refused(_response(500, {"detail": {"code": "last_platform_admin"}}))
+
+
+async def test_a_refused_push_is_shown_on_the_link_and_not_retried_by_the_periodic_pass() -> None:
+    pair = _pair()
+    with _no_lock(), patch.object(sync, "_post_copy", AsyncMock(side_effect=sync.PersonCopyRefused("x"))):
+        await sync._push_person(_session_with([pair, pair]), _USER_ID)
+    assert pair[0].push_error == "PersonCopyRefused" and pair[0].push_failed_at is not None
+    sql = str(sync._unrefused_link_ids().compile(compile_kwargs={"literal_binds": True}))
+    assert "push_error IS NULL" in sql and "push_error != 'PersonCopyRefused'" in sql
+
+
+async def test_the_periodic_pass_pushes_only_the_unrefused_links() -> None:
+    session = FakeAsyncSession(results=[FakeResult([_USER_ID])], strict=False)
+    session.execute = AsyncMock(return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: [])))
+    await sync.push_people(session)
+    statement = session.execute.await_args.args[0]
+    assert "push_error" in str(statement)

@@ -16,7 +16,7 @@ import time
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -36,7 +36,7 @@ _SPEC.loader.exec_module(route)
 @pytest.fixture(autouse=True)
 def _not_the_last_admin():
     """These tests are about the push, not the last-admin guard (tested below and in #21018's own file)."""
-    with patch.object(route, "ensure_not_last_platform_admin", AsyncMock()):
+    with patch.object(route, "UserService", MagicMock(return_value=MagicMock(guard_deactivation=AsyncMock()))):
         yield
 
 

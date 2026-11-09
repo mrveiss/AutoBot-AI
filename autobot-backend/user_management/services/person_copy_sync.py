@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from typing import AsyncIterator, Iterable
 
 from aiohttp import ClientTimeout
-from sqlalchemy import event, inspect, select
+from sqlalchemy import event, inspect, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -33,6 +33,7 @@ from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.user_management.last_platform_admin import LAST_PLATFORM_ADMIN_CODE
 from autobot_shared.user_management.login_eligibility import login_refusal
 from user_management.models import User
 from user_management.models.person_link import PersonLink
@@ -54,6 +55,26 @@ _background: set[asyncio.Task] = set()
 _loop_task: asyncio.Task | None = None
 
 
+class PersonCopyRefused(Exception):
+    """The SLM refused the push: it would leave the SLM with no active platform admin (#21018).
+
+    Not a transport failure, so the periodic pass does not repeat it (:func:`_unrefused_link_ids`); the type
+    name is the error shown on the link, which is how an admin sees why the SLM copy is still active.
+    """
+
+
+async def _raise_if_refused(response) -> None:
+    """Turn the SLM's last-platform-admin 409 into :class:`PersonCopyRefused`; other statuses are left alone."""
+    if response.status != 409:
+        return
+    try:
+        detail = (await response.json()).get("detail")
+    except (ValueError, AttributeError):
+        return
+    if isinstance(detail, dict) and detail.get("code") == LAST_PLATFORM_ADMIN_CODE:
+        raise PersonCopyRefused(LAST_PLATFORM_ADMIN_CODE)
+
+
 async def _post_copy(slm_user_id: uuid.UUID, user: User) -> None:
     from services.slm_client import get_slm_client
 
@@ -73,6 +94,7 @@ async def _post_copy(slm_user_id: uuid.UUID, user: User) -> None:
     async with session.post(
         url, json=payload, headers=headers, allow_redirects=False, timeout=ClientTimeout(total=_POST_TIMEOUT_S)
     ) as response:
+        await _raise_if_refused(response)
         response.raise_for_status()
 
 
@@ -139,10 +161,18 @@ async def _push_person(session: AsyncSession, user_id: uuid.UUID) -> None:
         await session.commit()
 
 
+def _unrefused_link_ids():
+    """Linked people whose last push the SLM did not refuse as last-platform-admin: a refusal is not retried
+    every pass, it stands on the link until the person next changes (an explicit push) or an admin clears it."""
+    return select(PersonLink.user_id).where(
+        or_(PersonLink.push_error.is_(None), PersonLink.push_error != PersonCopyRefused.__name__)
+    )
+
+
 async def push_people(session: AsyncSession, user_ids: Iterable[uuid.UUID] | None = None) -> None:
-    """Push the given linked people, or everyone linked."""
+    """Push the given linked people, or everyone linked (but not those the SLM has refused)."""
     if user_ids is None:
-        user_ids = (await session.execute(select(PersonLink.user_id))).scalars().all()
+        user_ids = (await session.execute(_unrefused_link_ids())).scalars().all()
     for user_id in list(user_ids):
         await _push_person(session, user_id)
 

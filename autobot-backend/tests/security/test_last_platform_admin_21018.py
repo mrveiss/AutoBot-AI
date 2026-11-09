@@ -14,6 +14,7 @@ production query cannot drift apart.
 
 import asyncio
 import uuid
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -21,18 +22,20 @@ import pytest_asyncio
 from fastapi import HTTPException
 from sqlalchemy import Boolean, DateTime, String, Uuid, select, update
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from api.schemas_admin_status import AdminStatusRequest
 from api.user_management.admin_status import set_admin_status
+from api.user_management.users import deactivate_user, delete_user
 from autobot_shared.db_session import POST_COMMIT_CALLBACKS
 from autobot_shared.user_management.base_service import TenantContext
 from autobot_shared.user_management.last_platform_admin import (
     LAST_PLATFORM_ADMIN_CODE,
     LastPlatformAdminError,
     ensure_not_last_platform_admin,
-    lock_active_platform_admin_ids,
+    lock_platform_admin_rows,
     refuse_last_platform_admin,
 )
 from autobot_shared.user_management.models.audit import IdentityAuditAction
@@ -132,19 +135,55 @@ def _wire(svc: _Svc) -> _Svc:
     return svc
 
 
-def test_the_production_query_locks_the_active_admin_rows_in_id_order():
+def test_the_production_query_locks_the_target_and_the_active_admins_in_one_id_ordered_statement():
     session = MagicMock()
     captured = []
 
     async def run(statement):
         captured.append(statement)
-        return MagicMock(scalars=lambda: MagicMock(all=lambda: []))
+        return MagicMock(all=lambda: [])
 
     session.execute = run
-    asyncio.run(lock_active_platform_admin_ids(session, _User))
+    asyncio.run(lock_platform_admin_rows(session, _User, uuid.uuid4()))
     sql = str(captured[0].compile(dialect=postgresql.dialect()))
     assert "FOR UPDATE" in sql and "ORDER BY users.id" in sql
-    assert "is_platform_admin IS true" in sql and "deleted_at IS NULL" in sql
+    assert "is_platform_admin IS true" in sql and "deleted_at IS NULL" in sql and "users.id = " in sql
+
+
+@pytest.mark.asyncio
+async def test_a_target_that_is_not_an_active_admin_locks_nothing(maker):
+    _admin, plain = await _seed(maker, 1, 1)
+    async with maker() as session:
+        statements = []
+        real = session.execute
+
+        async def spy(statement, *args, **kwargs):
+            statements.append(statement)
+            return await real(statement, *args, **kwargs)
+
+        session.execute = spy
+        await ensure_not_last_platform_admin(session, _User, plain)
+        await ensure_not_last_platform_admin(session, _User, uuid.uuid4())  # a missing user too
+    assert statements and all(getattr(s, "_for_update_arg", None) is None for s in statements)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("sqlstate", ["40P01", "40001"])
+async def test_a_deadlock_or_serialization_failure_is_the_same_refusal_and_rolls_back(sqlstate):
+    session = MagicMock(rollback=AsyncMock())
+    session.execute = AsyncMock(side_effect=DBAPIError("stmt", {}, SimpleNamespace(sqlstate=sqlstate)))
+    with pytest.raises(LastPlatformAdminError):
+        await ensure_not_last_platform_admin(session, _User, uuid.uuid4())
+    session.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_any_other_database_error_is_not_turned_into_a_refusal():
+    session = MagicMock(rollback=AsyncMock())
+    session.execute = AsyncMock(side_effect=DBAPIError("stmt", {}, SimpleNamespace(sqlstate="23505")))
+    with pytest.raises(DBAPIError):
+        await ensure_not_last_platform_admin(session, _User, uuid.uuid4())
+    session.rollback.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -288,3 +327,21 @@ async def test_refuse_returns_the_409_after_committing(maker):
     error = await refuse_last_platform_admin(session, LastPlatformAdminError())
     assert error.status_code == 409 and error.detail["code"] == LAST_PLATFORM_ADMIN_CODE
     session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("route", "method"),
+    [
+        (lambda svc, uid: deactivate_user(uid, svc), "deactivate_user"),
+        (lambda svc, uid: delete_user(uid, False, None, svc), "delete_user"),
+    ],
+)
+async def test_the_user_routes_answer_409_and_commit_the_refusal(route, method):
+    """Deactivation and deletion by id: the 409 with the stable code, not a 500, and the denied audit row kept."""
+    svc = MagicMock(session=MagicMock(commit=AsyncMock()))
+    setattr(svc, method, AsyncMock(side_effect=LastPlatformAdminError()))
+    with pytest.raises(HTTPException) as caught:
+        await route(svc, uuid.uuid4())
+    assert caught.value.status_code == 409 and caught.value.detail["code"] == LAST_PLATFORM_ADMIN_CODE
+    svc.session.commit.assert_awaited_once()

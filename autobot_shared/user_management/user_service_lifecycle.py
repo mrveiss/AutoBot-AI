@@ -133,7 +133,9 @@ class UserLifecycleMixin(UserServiceBase):
         """Refuse, auditing the refusal, if the change would leave no active platform admin (#21018).
 
         Runs first, before any other effect, so a refusal changes nothing; the caller's route commits the
-        denied audit row (``refuse_last_platform_admin``) and so releases the admin-row locks.
+        denied audit row (``refuse_last_platform_admin``) and so releases the admin-row locks. It is the
+        first lock the request takes (admin rows in id order, the target among them), see
+        :mod:`last_platform_admin`.
         """
         try:
             await ensure_not_last_platform_admin(self.session, self.user_model, user_id)
@@ -144,11 +146,15 @@ class UserLifecycleMixin(UserServiceBase):
             await self.session.flush()
             raise
 
+    async def guard_deactivation(self, user_id: uuid.UUID) -> None:
+        """Refuse a deactivation of the only active admin before a caller applies any other change (#21018)."""
+        await self._guard_last_admin(user_id, IdentityAuditAction.USER_DEACTIVATED, "deactivate")
+
     async def _set_active(self, user_id: uuid.UUID, active: bool) -> bool:
         """Set ``is_active`` and audit it; raises ``UserNotFoundError``."""
         user = await self._require_user(user_id)
         if not active:
-            await self._guard_last_admin(user_id, IdentityAuditAction.USER_DEACTIVATED, "deactivate")
+            await self.guard_deactivation(user_id)
         handover = {} if active else await self.reassign_sessions(user_id)  # before the flip: a refusal changes nothing
         user.is_active = active
         user.updated_at = now_utc()
@@ -196,6 +202,9 @@ class UserLifecycleMixin(UserServiceBase):
         epoch = await get_password_epoch(user.username, in_redis=self.epoch_in_redis)
         return epoch is None or epoch < recorded + _admin_change_lead(is_admin)
 
+    async def _guard_demotion(self, user_id: uuid.UUID) -> None:
+        await self._guard_last_admin(user_id, IdentityAuditAction.PLATFORM_ADMIN_CHANGED, "demote")
+
     async def set_platform_admin(self, user_id: uuid.UUID, is_admin: bool) -> AdminStatusChange:
         """Make *user_id* a platform admin, or not -- the one place that changes it (#20670).
 
@@ -208,6 +217,9 @@ class UserLifecycleMixin(UserServiceBase):
         ``LastPlatformAdminError`` when demoting the only active admin (#21018).
         """
         user = await self._require_user(user_id)
+        guarded = not is_admin and bool(user.is_platform_admin)
+        if guarded:  # admin-row locks come BEFORE the target's own lock: one lock order everywhere (#21018)
+            await self._guard_demotion(user_id)
         await self.session.refresh(user, with_for_update=True)
         transitions = await self._admin_transitions(user)
         latest = self._latest_transition(transitions)
@@ -216,8 +228,8 @@ class UserLifecycleMixin(UserServiceBase):
             if pending:
                 self._queue_admin_change_revocation(user, is_admin)
             return AdminStatusChange(changed=False, sessions_revoked=pending)
-        if not is_admin:
-            await self._guard_last_admin(user.id, IdentityAuditAction.PLATFORM_ADMIN_CHANGED, "demote")
+        if not is_admin and not guarded:  # promoted by a concurrent change since the first read
+            await self._guard_demotion(user_id)
         await self._apply_admin_change(user, is_admin, int((latest or {}).get("revision") or 0) + 1)
         return AdminStatusChange(changed=True, sessions_revoked=True)
 

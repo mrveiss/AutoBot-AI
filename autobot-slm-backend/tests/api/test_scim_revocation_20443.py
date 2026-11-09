@@ -78,20 +78,25 @@ def _client(user, monkeypatch, last_admin=False):
     class Service(UserService):
         user_model = SimpleNamespace()
 
-        async def _guard_last_admin(self, *args, **kwargs):  # the guard has its own tests (#21018)
-            if last_admin:
-                raise LastPlatformAdminError()
+        async def update_user(self, user_id, **changes):  # records what a refused request must not have done
+            session.profile_writes.append(changes)
 
         async def get_user(self, user_id, *, include_deleted=False):
             return None if user.deleted_at and not include_deleted else user
 
         async def _audit_log(self, *args, **kwargs):
-            return None
+            session.audits.append(kwargs.get("outcome") or args[4:])
 
+    async def database_check(_session, _model, _user_id):  # the DB query; the guard, audit and refusal are real
+        if last_admin:
+            raise LastPlatformAdminError()
+
+    # The module whose globals the service's own method reads (the helper may load it under another object).
+    monkeypatch.setitem(UserService._guard_last_admin.__globals__, "ensure_not_last_platform_admin", database_check)
     monkeypatch.setattr(scim, "UserService", Service)
     monkeypatch.setattr(scim, "TenantContext", TenantContext)
     session = FakeAsyncSession()
-    session.info = {}
+    session.info, session.profile_writes, session.audits = {}, [], []
 
     async def db():
         async with async_session_scope(lambda: session) as scoped:
@@ -176,19 +181,37 @@ async def test_delete_answers_503_then_a_repeat_finds_the_soft_deleted_user(stor
     assert "alice" in store.epochs
 
 
+def _put_inactive():
+    return {"userName": "alice", "emails": [{"value": "new@x.io", "primary": True}], "name": {"givenName": "New"},
+            "active": False}  # fmt: skip
+
+
+def _patch_rename_then_inactive():
+    return {"Operations": [
+        {"op": "replace", "path": "displayName", "value": "Renamed"},
+        {"op": "replace", "path": "active", "value": False},
+    ]}  # fmt: skip
+
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize("method", ["PATCH", "DELETE"])
+@pytest.mark.parametrize("method", ["PUT", "PATCH", "DELETE"])
 async def test_deprovisioning_the_last_platform_admin_is_a_scim_409(store, monkeypatch, method):
-    """#21018: the IdP's push is refused with the stable code, and no session is revoked."""
+    """#21018: refused with the stable code and no scimType (RFC 7644 3.12 has none), no session revoked, and
+    NOTHING else of the request applied: the profile changes of the same PUT/PATCH are never written."""
     user = _user()
-    _session, transport = _client(user, monkeypatch, last_admin=True)
-    kwargs = {"json": _patch_inactive()} if method == "PATCH" else {}
+    session, transport = _client(user, monkeypatch, last_admin=True)
+    body = {"PUT": _put_inactive(), "PATCH": _patch_rename_then_inactive(), "DELETE": None}[method]
+    kwargs = {"json": body} if body else {}
 
     response = await _call(transport, method, f"/scim/v2/Users/{user.id}", **kwargs)
 
     assert response.status_code == 409
-    assert LAST_PLATFORM_ADMIN_CODE in response.json()["detail"]["detail"]
+    error = response.json()["detail"]
+    assert LAST_PLATFORM_ADMIN_CODE in error["detail"] and "scimType" not in error and error["status"] == "409"
     assert user.is_active is True and user.deleted_at is None and store.tries == []
+    assert session.profile_writes == [] and (user.email, user.display_name) == ("a@x.io", "A")
+    assert session.audits == ["denied"]  # the refusal is audited, by the real guard
+    assert session.commits == 1  # and committed: only that audit row
 
 
 @pytest.mark.asyncio

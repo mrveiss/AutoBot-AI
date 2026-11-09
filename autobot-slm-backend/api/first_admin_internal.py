@@ -21,12 +21,12 @@ from autobot_shared.auth.internal_api_key import verify_internal_api_key
 from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.user_management.last_platform_admin import (
     LastPlatformAdminError,
-    ensure_not_last_platform_admin,
     refuse_last_platform_admin,
 )
 from autobot_shared.user_management.password_epoch import DEACTIVATION_EPOCH_LEAD_SECONDS, record_password_epoch
 from user_management.database import get_slm_session
 from user_management.models.user import User
+from user_management.services import TenantContext, UserService
 
 router = APIRouter(prefix="/internal", tags=["internal"])
 
@@ -87,8 +87,8 @@ async def update_person_copy(
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such SLM user")
     if user.is_active and not body.is_active:  # #21018: before the epoch write, so a refusal changes nothing
-        try:
-            await ensure_not_last_platform_admin(session, User, body.slm_user_id)
+        try:  # the denied audit row is written by the guard and committed with the refusal
+            await UserService(session, TenantContext(is_platform_admin=True)).guard_deactivation(body.slm_user_id)
         except LastPlatformAdminError as exc:
             raise await refuse_last_platform_admin(session, exc) from exc
     # No hash means the main app holds none. That must not wipe the password this person logs in with.
