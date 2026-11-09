@@ -108,7 +108,19 @@ _RAW_FETCH_SUFFIXES = _SOURCE_SUFFIXES + (".js",)
 # pass by reaching nothing.
 _MIN_SOURCE_FILES = {"autobot-frontend": 500, "autobot-slm-frontend": 100}
 
-_CLIENT_CLASS_RE = re.compile(r"\bclass\s+([A-Za-z]+(?:ApiClient|ApiService|Client))\b")
+# #12363 slice 0: the prefix is optional so a bare `ApiService` / `ApiClient` is a client class too, and the
+# declaration header is captured so a class that `extends ApiClientBase` (the one kit transport; the app's
+# canonical client) is not counted as another client -- only classes that share no base with it are sprawl.
+_CLIENT_CLASS_RE = re.compile(r"\bclass\s+([A-Za-z]*(?:ApiClient|ApiService|Client))\b([^{;]*)\{")
+_EXTENDS_KIT_BASE_RE = re.compile(r"\bextends\s+ApiClientBase\b")
+# Files that pull in the bridge `fetchWithAuth` (retired in #12363 slice 3): static, dynamic or CommonJS `require(`.
+_FETCH_WITH_AUTH_IMPORT_RE = re.compile(
+    r"""(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*)['"][^'"]*\bfetchWithAuth(?:\.[jt]s)?['"]"""
+)
+# A URL assembled by hand from the base helper instead of a typed `apiClient.call(...)` path. The WebSocket
+# URL builder shares the helper and is a different transport, so a line naming `getBackendWsUrl(` is out.
+_HAND_BUILT_URL_RE = re.compile(r"\$\{getApiBase\(\)\}/")
+_COMMENT_LINE_RE = re.compile(r"^\s*(?://|\*|/\*|<!--)")
 # No `\s*` before the paren: prose such as "a failed fetch (#14064)" or a test
 # name like "share ONE voices fetch (no self-aborting race)" matches with it, and
 # three such comments were counted as transport sites on the first pass. A real
@@ -125,7 +137,7 @@ _RESPONSE_INTERFACE_RE = re.compile(r"^\s*(?:export\s+)?interface\s+\w+Response\
 # (#13993). Counted separately from hand-typed interfaces because the fix is
 # different: these become checked by importing the generated contract, which
 # for LLC already exists and simply is not imported.
-_INLINE_GENERIC_RE = re.compile(r"\b\w*[aA]pi\w*\.(?:get|post|put|patch|delete)\s*<")
+_INLINE_GENERIC_RE = re.compile(r"\b\w*[aA]pi\w*\.(?:get|post|put|patch|delete|call)\s*<")
 
 
 def _is_test(path: Path) -> bool:
@@ -158,8 +170,8 @@ def _client_class_names(root: Path) -> set[str]:
     """Every HTTP-client class name, excluding test mocks."""
     names: set[str] = set()
     for path in _source_files(root):
-        for name in _CLIENT_CLASS_RE.findall(_read(path)):
-            if "Mock" not in name:
+        for name, header in _CLIENT_CLASS_RE.findall(_read(path)):
+            if "Mock" not in name and not _EXTENDS_KIT_BASE_RE.search(header):
                 names.add(name)
     return names
 
@@ -188,6 +200,24 @@ def _axios_importers(root: Path, base: Path = _REPO_ROOT) -> list[str]:
     return [path.relative_to(base).as_posix() for path in _source_files(root) if _AXIOS_IMPORT_RE.search(_read(path))]
 
 
+def _fetch_with_auth_importers(root: Path, base: Path = _REPO_ROOT) -> list[str]:
+    return [
+        path.relative_to(base).as_posix()
+        for path in _source_files(root, _RAW_FETCH_SUFFIXES)
+        if _FETCH_WITH_AUTH_IMPORT_RE.search(_read(path))
+    ]
+
+
+def _hand_built_url_count(root: Path) -> int:
+    """Code lines building `${getApiBase()}/...` by hand (comments and WebSocket-URL lines excluded)."""
+    return sum(
+        1
+        for path in _source_files(root, _RAW_FETCH_SUFFIXES)
+        for line in _read(path).splitlines()
+        if _HAND_BUILT_URL_RE.search(line) and not _COMMENT_LINE_RE.match(line) and "getBackendWsUrl(" not in line
+    )
+
+
 def _hand_typed_response_count(root: Path) -> int:
     return sum(len(_RESPONSE_INTERFACE_RE.findall(_read(path))) for path in _source_files(root))
 
@@ -198,7 +228,7 @@ def _inline_generic_count(root: Path) -> int:
 
 
 def _measure(app: str, repo: Path = _REPO_ROOT, exceptions: Collection[str] | None = None) -> dict[str, int]:
-    """The five counts for *app* in the tree rooted at *repo* (the checkout, or an exported base)."""
+    """The counts (see `_DIMENSION_ADVICE`) for *app* in the tree rooted at *repo* (the checkout, or an exported base)."""
     root = repo / app / "src"
     return {
         "clients": len(_client_class_names(root)),
@@ -206,6 +236,8 @@ def _measure(app: str, repo: Path = _REPO_ROOT, exceptions: Collection[str] | No
         "axios": len(_axios_importers(root, repo)),
         "responses": _hand_typed_response_count(root),
         "inline_generics": _inline_generic_count(root),
+        "fetch_with_auth_importers": len(_fetch_with_auth_importers(root, repo)),
+        "hand_built_urls": _hand_built_url_count(root),
     }
 
 
@@ -242,6 +274,8 @@ _DIMENSION_ADVICE = {
     "raw_fetch": "Route the call through that app's transport client; a direct fetch builds its own URL, so no config fix reaches it.",
     "axios": "Use the transport client, not axios directly.",
     "responses": "Import the generated contract at `src/types/generated/api.ts` instead of declaring another response shape by hand.",
+    "fetch_with_auth_importers": "Call `apiClient.call(...)`, not the `fetchWithAuth` bridge slice 3 of #12363 retires.",
+    "hand_built_urls": "Name the path as a typed `apiClient.call('get', '/api/...')` key instead of assembling `${getApiBase()}/...` by hand.",
     "inline_generics": "Type the call from the generated contract rather than asserting a shape inline — `api.get<Shape>` is a claim TypeScript cannot check.",
 }
 
@@ -323,3 +357,82 @@ def test_the_exception_list_separates_listed_from_unlisted_raw_fetch(tmp_path: P
         assert _unlisted_raw_fetch_files(src, tmp_path) == ["src/rogue.ts"]
     finally:
         del _RAW_FETCH_EXCEPTIONS["src/blessed.ts"]
+
+
+def test_a_class_extending_the_kit_base_is_not_counted_but_a_bare_service_is(tmp_path: Path) -> None:
+    """Control strings for the widened client-class detector (#12363 slice 0)."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "canonical.ts").write_text(
+        "export class ApiClient extends ApiClientBase<Opts, paths> {\n}\n", encoding="utf-8"
+    )
+    (src / "slm.ts").write_text("export class SlmApiClient\n  extends ApiClientBase<Opts> {\n}\n", encoding="utf-8")
+    (src / "bare.ts").write_text("class ApiService {\n}\n", encoding="utf-8")
+    (src / "private.ts").write_text("export class FooApiClient {\n}\n", encoding="utf-8")
+    (src / "mock.ts").write_text("class MockApiClient {\n}\n", encoding="utf-8")
+    assert _client_class_names(src) == {"ApiService", "FooApiClient"}
+
+
+def test_the_inline_generic_detector_matches_the_typed_call_but_not_a_plain_call() -> None:
+    assert _INLINE_GENERIC_RE.search("await apiClient.call<Foo>('get', '/api/x')")
+    assert _INLINE_GENERIC_RE.search("await api.get<Foo>('/api/x')")
+    assert not _INLINE_GENERIC_RE.search("await apiClient.call('get', '/api/x')")
+    assert not _INLINE_GENERIC_RE.search("await recall<Foo>(x)")
+
+
+def test_the_fetch_with_auth_importer_detector_matches_static_dynamic_and_require_imports_only(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "static.ts").write_text("import { fetchWithAuth } from '@/utils/fetchWithAuth'\n", encoding="utf-8")
+    (src / "dynamic.js").write_text("const m = await import('../utils/fetchWithAuth')\n", encoding="utf-8")
+    (src / "mention.ts").write_text("// see fetchWithAuth\nconst fetchWithAuthLike = 1\n", encoding="utf-8")
+    (src / "other.ts").write_text("import { x } from '@/utils/fetchWithAuthExtras'\n", encoding="utf-8")
+    (src / "ext.ts").write_text("import { x } from '../utils/fetchWithAuth.ts'\n", encoding="utf-8")
+    (src / "extjs.js").write_text("import { x } from './utils/fetchWithAuth.js'\n", encoding="utf-8")
+    (src / "cjs.js").write_text("const { fetchWithAuth } = require('./utils/fetchWithAuth')\n", encoding="utf-8")
+    (src / "cjsother.js").write_text("const x = require('./utils/fetchWithAuthExtras')\n", encoding="utf-8")  # control
+    (src / "otherext.ts").write_text(
+        "import { x } from './fetchWithAuth.json'\n", encoding="utf-8"
+    )  # control: not the bridge
+    assert _fetch_with_auth_importers(src, tmp_path) == [
+        "src/cjs.js",
+        "src/dynamic.js",
+        "src/ext.ts",
+        "src/extjs.js",
+        "src/static.ts",
+    ]
+
+
+def test_the_hand_built_url_detector_skips_comments_and_websocket_urls(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "a.ts").write_text(
+        "const u = `${getApiBase()}/x`\n"
+        "// was `${getApiBase()}/y`\n"
+        " * `${getApiBase()}/z`\n"
+        "const w = `${getBackendWsUrl()}${getApiBase()}/ws`\n"
+        "const k = apiClient.call('get', '/api/x')\n",
+        encoding="utf-8",
+    )
+    assert _hand_built_url_count(src) == 1
+
+
+def _planted(root: Path, bridge_importers: int, hand_built: int) -> Path:
+    src = root / "autobot-frontend" / "src"
+    src.mkdir(parents=True)
+    for i in range(bridge_importers):
+        (src / f"b{i}.ts").write_text("import { fetchWithAuth } from '@/utils/fetchWithAuth'\n", encoding="utf-8")
+    (src / "u.ts").write_text("const u = `${getApiBase()}/x`\n" * hand_built, encoding="utf-8")
+    return root
+
+
+def test_the_slice_0_dimensions_catch_growth_and_pass_a_shrink(tmp_path: Path) -> None:
+    """Planted control through the real decision: each new dimension grows alone, and a shrink is silent (#12363)."""
+    base = _planted(tmp_path / "base", 1, 1)
+    assert _regressions("autobot-frontend", _planted(tmp_path / "more_bridge", 2, 1), base, frozenset()) == {
+        "fetch_with_auth_importers": (1, 2)
+    }
+    assert _regressions("autobot-frontend", _planted(tmp_path / "more_urls", 1, 2), base, frozenset()) == {
+        "hand_built_urls": (1, 2)
+    }
+    assert _regressions("autobot-frontend", _planted(tmp_path / "less", 0, 0), base, frozenset()) == {}
