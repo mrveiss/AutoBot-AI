@@ -397,7 +397,7 @@ _PYTHON_LIB="$REPO_ROOT/scripts/lib/hook-python.sh"
 [ -r "$_PYTHON_LIB" ] || _PYTHON_LIB="$_HOOK_ROOT/scripts/lib/hook-python.sh"
 # shellcheck source=../../scripts/lib/hook-python.sh
 if ! . "$_PYTHON_LIB"; then
-    echo "[pre-push FAIL] cannot load $_PYTHON_LIB" >&2
+    echo "[pre-push FAIL] cannot load $_PYTHON_LIB -- rebase this branch onto main (it ships scripts/lib/hook-python.sh) or reinstall the hooks (scripts/install-git-hooks.sh)." >&2
     exit 1
 fi
 # The pushing repo declares the floor; a repo without .python-version (a fixture, a foreign
