@@ -40,7 +40,7 @@ _NOT_A_HOOK = {"README.md", "fast_guard_tests.txt"}
 
 # A bare interpreter word at command position: not part of a path, option, variable or filename.
 _BARE = re.compile(r"(?<![\w./$\"'{}=-])(?:python3?(?:\.\d+)?|pytest)(?![\w.\-/])")
-_QUOTED = re.compile(r"""(?:"(?:\\.|\$\([^)]*\)|[^"\\])*"|'[^']*')""")
+_QUOTED = re.compile(r"""(?:"(?:\\.|\$\([^)]*\)|\$(?!\()|[^"\\$])*"|'[^']*')""")
 
 
 # The program text of `bash -c '...'` / `sh -lc "..."`: it executes, so it is judged like a line of its own.
