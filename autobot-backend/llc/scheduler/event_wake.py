@@ -35,7 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, HeartbeatInvocationSource
-from ..services.after_commit import defer_until_commit, within_transaction
+from ..services.after_commit import defer_until_commit
 from .dispatch_gate import as_uuid, resolve_agent
 from .run_status import active_run
 
@@ -119,4 +119,4 @@ def _dispatch_after_commit(session: AsyncSession, agent: Dict[str, Any], run_id:
     )
 
 
-__all__ = ["EVENT_WAKE_SOURCES", "wake_agent", "within_transaction"]
+__all__ = ["EVENT_WAKE_SOURCES", "wake_agent"]

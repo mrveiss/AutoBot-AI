@@ -62,7 +62,7 @@ class TestRecordUnit:
         company_id = _uuid()
         agent_id = _uuid()
 
-        with patch.object(svc, "_publish", AsyncMock()):
+        with patch.object(svc, "_deliver", AsyncMock()) as deliver:
             row = await svc.record(
                 session=session,
                 company_id=company_id,
@@ -77,6 +77,7 @@ class TestRecordUnit:
         assert str(row.actor_agent_id) == agent_id
         assert row.actor_user_id is None
         assert row.actor_type == "agent"
+        deliver.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_record_sets_actor_user_id_for_user_type(self) -> None:
@@ -84,7 +85,7 @@ class TestRecordUnit:
         session = self._mocked_session()
         user_id = _uuid()
 
-        with patch.object(svc, "_publish", AsyncMock()):
+        with patch.object(svc, "_deliver", AsyncMock()) as deliver:
             row = await svc.record(
                 session=session,
                 company_id=_uuid(),
@@ -99,13 +100,14 @@ class TestRecordUnit:
         assert str(row.actor_user_id) == user_id
         assert row.actor_agent_id is None
         assert row.actor_type == "user"
+        deliver.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_record_system_has_no_actor_ids(self) -> None:
         svc = _make_service()
         session = self._mocked_session()
 
-        with patch.object(svc, "_publish", AsyncMock()):
+        with patch.object(svc, "_deliver", AsyncMock()) as deliver:
             row = await svc.record(
                 session=session,
                 company_id=_uuid(),
@@ -120,13 +122,14 @@ class TestRecordUnit:
         assert row.actor_agent_id is None
         assert row.actor_user_id is None
         assert row.actor_type == "system"
+        deliver.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_record_action_stored_as_string(self) -> None:
         svc = _make_service()
         session = self._mocked_session()
 
-        with patch.object(svc, "_publish", AsyncMock()):
+        with patch.object(svc, "_deliver", AsyncMock()) as deliver:
             row = await svc.record(
                 session=session,
                 company_id=_uuid(),
@@ -139,6 +142,8 @@ class TestRecordUnit:
             )
 
         assert row.action == "sprint.started"
+        deliver.assert_awaited_once()
+        assert deliver.call_args[0][1]["action"] == "sprint.started"
 
     @pytest.mark.asyncio
     async def test_record_publishes_to_redis_on_success(self) -> None:
@@ -194,9 +199,13 @@ class TestRecordUnit:
             },
         ]
 
-        with patch.object(svc, "_publish", AsyncMock()):
+        with patch.object(svc, "_deliver", AsyncMock()) as deliver:
             rows = await svc.record_bulk(session=session, entries=entries)
 
+        assert [c.args[1]["action"] for c in deliver.await_args_list] == [
+            "work_item.created",
+            "work_item.status_changed",
+        ]
         assert len(rows) == 2
         assert rows[0].action == "work_item.created"
         assert rows[1].action == "work_item.status_changed"
@@ -208,78 +217,59 @@ class TestRecordUnit:
         assert not hasattr(svc, "delete"), "delete() must not exist on LLCActivityLogService"
         assert not hasattr(svc, "bulk_delete"), "bulk_delete() must not exist on LLCActivityLogService"
 
-    @pytest.mark.asyncio
-    async def test_publish_swallows_redis_errors(self) -> None:
-        svc = _make_service()
-        company_id = _uuid()
-        entry = LLCActivityLog(
-            id=uuid.uuid4(),
-            company_id=uuid.uuid4(),
-            actor_type="agent",
+    async def _record_one(self, svc: LLCActivityLogService, company_id: str) -> None:
+        session = AsyncMock(spec=AsyncSession)
+        session.add = MagicMock()
+        session.flush = AsyncMock()
+        await svc.record(
+            session=session,
+            company_id=company_id,
+            actor_type=ActorType.AGENT,
+            actor_id=_uuid(),
+            event_type=ActivityEventType.WORK_ITEM_CREATED,
             entity_type="work_item",
-            entity_id=uuid.uuid4(),
-            action="work_item.created",
-            after_state={},
-            occurred_at=datetime.now(tz=timezone.utc),
+            entity_id=_uuid(),
+            after={"status": "todo"},
         )
 
+    @pytest.mark.asyncio
+    async def test_record_swallows_redis_errors(self) -> None:
+        svc = _make_service()
         with patch(
             "llc.services.activity_log.get_async_redis_client",
             AsyncMock(side_effect=Exception("Redis down")),
         ):
             # Must not raise
-            await svc._publish(company_id, entry)
+            await self._record_one(svc, _uuid())
 
     @pytest.mark.asyncio
-    async def test_publish_sends_correct_channel(self) -> None:
+    async def test_record_sends_correct_channel(self) -> None:
         svc = _make_service()
         company_id = _uuid()
-        entry = LLCActivityLog(
-            id=uuid.uuid4(),
-            company_id=uuid.UUID(company_id),
-            actor_type="agent",
-            actor_agent_id=uuid.uuid4(),
-            entity_type="work_item",
-            entity_id=uuid.uuid4(),
-            action="work_item.created",
-            after_state={"status": "todo"},
-            occurred_at=datetime.now(tz=timezone.utc),
-        )
-
         mock_redis = AsyncMock()
         mock_redis.publish = AsyncMock()
 
-        with patch(
-            "llc.services.activity_log.get_async_redis_client",
-            AsyncMock(return_value=mock_redis),
+        with (
+            patch("live_event_manager.publish_live_event", AsyncMock()),
+            patch(
+                "llc.services.activity_log.get_async_redis_client",
+                AsyncMock(return_value=mock_redis),
+            ),
         ):
-            await svc._publish(company_id, entry)
+            await self._record_one(svc, company_id)
 
         mock_redis.publish.assert_called_once()
-        channel_arg = mock_redis.publish.call_args[0][0]
-        assert channel_arg == f"llc:activity:{company_id}"
-
+        assert mock_redis.publish.call_args[0][0] == f"llc:activity:{company_id}"
         payload_arg = json.loads(mock_redis.publish.call_args[0][1])
         assert payload_arg["action"] == "work_item.created"
         assert payload_arg["company_id"] == company_id
 
     @pytest.mark.asyncio
-    async def test_publish_emits_live_event(self) -> None:
+    async def test_record_emits_live_event(self) -> None:
         """#11386: activity rows are fanned out to /ws/live via LiveEventManager
         on the valid channel company:{id} so the CompanyDashboard feed updates."""
         svc = _make_service()
         company_id = _uuid()
-        entry = LLCActivityLog(
-            id=uuid.uuid4(),
-            company_id=uuid.UUID(company_id),
-            actor_type="agent",
-            actor_agent_id=uuid.uuid4(),
-            entity_type="work_item",
-            entity_id=uuid.uuid4(),
-            action="work_item.created",
-            after_state={},
-            occurred_at=datetime.now(tz=timezone.utc),
-        )
         mock_pub = AsyncMock()
         with (
             patch("live_event_manager.publish_live_event", mock_pub),
@@ -288,7 +278,7 @@ class TestRecordUnit:
                 AsyncMock(return_value=AsyncMock(publish=AsyncMock())),
             ),
         ):
-            await svc._publish(company_id, entry)
+            await self._record_one(svc, company_id)
 
         mock_pub.assert_awaited_once()
         assert mock_pub.call_args[0][0] == f"company:{company_id}"

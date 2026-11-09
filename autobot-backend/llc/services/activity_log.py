@@ -297,10 +297,6 @@ class LLCActivityLogService:
         if task is not None:
             await task
 
-    async def _publish(self, company_id: str, entry: LLCActivityLog) -> None:
-        """Publish *entry* now: see :meth:`_deliver`."""
-        await self._deliver(company_id, self._event_payload(entry))
-
     async def _deliver(self, company_id: str, payload: dict[str, Any]) -> None:
         """Publish to /ws/live and Redis pub/sub channel llc:activity:{company_id}.
 
