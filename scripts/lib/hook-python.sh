@@ -38,10 +38,7 @@ _AUTOBOT_PYTHON_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _hook_python_floor() {
     local text="" major minor
     [ -r "$1/.python-version" ] && IFS= read -r text < "$1/.python-version"
-    case "$text" in
-        ([0-9]*.[0-9]*) [ -z "${text//[0-9.]/}" ] || return 1 ;;
-        (*) return 1 ;;
-    esac
+    [[ "$text" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || return 1
     IFS=. read -r major minor _ <<< "$text"
     printf '%s %s' "$major" "$minor"
 }
@@ -55,6 +52,14 @@ _hook_python_qualifies() {
     for module in "$@"; do
         "$candidate" -c "import $module" 2>/dev/null || return 1
     done
+}
+
+# One stderr line naming the interpreter a hook will use and its version (#18029 AC3).
+_hook_python_announce() {
+    local path version
+    path="$(command -v "$1" 2>/dev/null || printf '%s' "$1")"
+    version="$("$1" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null)"
+    echo "[hook-python] using $path (Python $version)" >&2
 }
 
 resolve_repo_python() {
@@ -75,17 +80,18 @@ resolve_repo_python() {
     # A worktree has no venv of its own; it lives in the main checkout, the
     # parent of the common git dir.
     local main_root candidate
-    main_root="$(cd "$root" && cd "$(dirname "$(git rev-parse --git-common-dir 2>/dev/null || echo .)")" 2>/dev/null && pwd)" || main_root="$root"
+    main_root="$(cd "$root" && cd "$(dirname "$(env -u GIT_DIR git rev-parse --git-common-dir 2>/dev/null || echo .)")" 2>/dev/null && pwd)" || main_root="$root"
     for candidate in ${VIRTUAL_ENV:+"$VIRTUAL_ENV/bin/python"} \
                      "$root/venv/bin/python" "$root/.venv/bin/python" \
                      "$main_root/venv/bin/python" "$main_root/.venv/bin/python" \
                      "python${major}.${minor}" python3 python; do
-        if _hook_python_qualifies "$candidate" "$major" "$minor" "${modules[@]}"; then
+        if _hook_python_qualifies "$candidate" "$major" "$minor" ${modules[@]+"${modules[@]}"}; then
+            _hook_python_announce "$candidate"
             printf '%s' "$candidate"
             return 0
         fi
     done
-    echo "ERROR: no Python ${major}.${minor}+ interpreter found${modules[*]:+ with: ${modules[*]}}." >&2
+    echo "ERROR: no Python ${major}.${minor}+ interpreter found${modules[@]+ with: ${modules[*]}}." >&2
     echo "  .python-version requires ${major}.${minor}; autobot_shared refuses anything older at import." >&2
     echo "  Install python${major}.${minor}, or create the repo venv (venv/ or .venv/) and re-run." >&2
     echo "  (A system python3 below ${major}.${minor} is deliberately not used.)" >&2
