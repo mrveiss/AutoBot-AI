@@ -76,9 +76,11 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
         "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:634",
         "autobot-backend/tasks/analytics_tasks.py:41",
         "autobot-backend/api/codebase_analytics/chromadb_storage.py:616",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:221",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:281",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:465",
+        # The three stats.py entries were re-recorded when #20493 shifted that
+        # module; the fallbacks themselves are unchanged.
+        "autobot-backend/api/codebase_analytics/endpoints/stats.py:223",
+        "autobot-backend/api/codebase_analytics/endpoints/stats.py:283",
+        "autobot-backend/api/codebase_analytics/endpoints/stats.py:447",
         "autobot-backend/api/codebase_analytics/endpoints/declarations.py:29",
         "autobot-backend/api/codebase_analytics/endpoints/store_state.py:35",
     }
