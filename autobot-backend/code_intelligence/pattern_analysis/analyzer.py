@@ -161,9 +161,9 @@ class CodePatternAnalyzer:
             exclude_dirs,
         )
         self._init_sub_analyzers(cc_threshold, mi_threshold)
-        # Issue #12384: scope tag for chroma metadata written by this instance.
-        self.source_id = source_id
-        self._source_tag = source_id
+        from api.source_scope import require_source_id  # noqa: PLC0415  # #12384 scope tag; malformed ids fail here
+
+        self.source_id = self._source_tag = require_source_id(source_id, "pattern analysis") if source_id else source_id
         # Issue #12407: single reused EmbeddingCache instance (mirrors
         # SemanticAnalysisMixin / CrossLanguagePatternDetector) so repeated
         # calls to ``_generate_embedding`` actually benefit from the cache

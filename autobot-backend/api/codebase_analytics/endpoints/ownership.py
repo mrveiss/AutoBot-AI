@@ -340,6 +340,8 @@ async def get_ownership_analysis(
     days: int = Query(90, description="Days for recency scoring"),
 ):
     """Analyze code ownership (Issue #248). Issue #665: Refactored with helpers."""
+    # Resolve the source first: a source without a checkout is a 404 even when a result is cached.
+    scan_root = str(await resolve_scan_root(source_id))
     cached = await _check_ownership_cache(refresh, source_id=source_id)
     if cached:
         return cached
@@ -351,7 +353,6 @@ async def get_ownership_analysis(
     # source-scoped request. Deterministic, not layout-dependent.
     # Now uses the canonical resolver (#12330), as environment.py, call_graph.py
     # and dependencies.py already do, instead of hand-rolling the lookup.
-    scan_root = str(await resolve_scan_root(source_id))
     if not path:
         path = scan_root
 

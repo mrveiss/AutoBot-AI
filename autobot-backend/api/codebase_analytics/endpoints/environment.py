@@ -407,13 +407,13 @@ async def get_environment_analysis(
     Issue #12330: Scope the scan to the selected source's clone path so one project
     cannot see another's hardcoded-value analysis.
     """
-    # Check cache first (Issue #559: thread-safe, Issue #633: LLM filter bypass)
+    scan_root = await _resolve_env_scan_root(source_id)  # first: no checkout is a 404 even when cached
+    # Check cache (Issue #559: thread-safe, Issue #633: LLM filter bypass)
     cached = await _check_env_analysis_cache(use_llm_filter, refresh, source_id=source_id)
     if cached:
         return cached
 
     # Setup path and validate security (Issue #12330: scoped to the source root)
-    scan_root = await _resolve_env_scan_root(source_id)
     if not path:
         path = scan_root
 

@@ -21,16 +21,15 @@ pointer resolves to. Anti-pattern is the exception: its detector writes
 straight into its own Redis key inside ``analyze()``, so no pointer step is
 needed for it.
 
-Scope note (reported per #12365 Task 5): these background/cached-population
-Celery tasks are NOT source-scoped (only the live, synchronous ``GET``
-endpoints accept ``source_id``, per #12330's partial fix) -- they always
-analyze AutoBot's own project root, exactly as they already do when
-triggered on demand today. Populating per-source caches for a multi-source
-deployment is an open scope question for a follow-up, not decided here.
+Scope (#20513): dependencies, duplicates and import-tree are source-scoped tasks; they are
+dispatched once per registered source that has a checkout, and each result is recorded under that
+source's own task-id prefix. The other three analyse AutoBot's own project root, as on demand.
 """
 
 from datetime import datetime, timezone
+from pathlib import Path
 
+from api.source_scope import source_scoped_prefix
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from celery_app import celery_app
@@ -59,8 +58,11 @@ async def _dispatch(task, args: tuple, prefix: str | None, countdown: int) -> st
     return result.id
 
 
-def _build_modules(project_root: str) -> list[tuple]:
-    """Build the (name, task, args, redis_prefix) tuples for all 6 modules.
+def _build_modules(project_root: str, source_ids: tuple[str, ...] = ()) -> list[tuple]:
+    """Build the (name, task, args, redis_prefix) tuples for all modules.
+
+    The three source-scoped modules (dependencies, duplicates, import_tree) get one entry per id
+    in *source_ids*, named ``<module>:<id>`` and recorded under that source's own prefix (#20513).
 
     Imported lazily inside the task body (not module scope) to avoid a
     heavy-import chain at Celery worker/beat startup, matching the existing
@@ -80,10 +82,16 @@ def _build_modules(project_root: str) -> list[tuple]:
         run_security_analysis,
     )
 
-    return [
-        ("dependencies", run_dependency_analysis, (), _DEP_PREFIX),
-        ("duplicates", run_duplicate_analysis, (), _DUP_PREFIX),
-        ("import_tree", run_import_tree_analysis, (), _IMPORT_PREFIX),
+    scoped = [
+        (f"{name}:{sid}", task, (sid,), source_scoped_prefix(prefix, sid))
+        for name, task, prefix in (
+            ("dependencies", run_dependency_analysis, _DEP_PREFIX),
+            ("duplicates", run_duplicate_analysis, _DUP_PREFIX),
+            ("import_tree", run_import_tree_analysis, _IMPORT_PREFIX),
+        )
+        for sid in source_ids
+    ]
+    return scoped + [
         ("bug_prediction", run_bug_prediction_analysis, (project_root, "*.py", 10000), _BUG_PREFIX),
         ("security_score", run_security_analysis, (project_root,), _SEC_PREFIX),
         # No redis_prefix: AntiPatternDetector.analyze() writes its own cache directly.
@@ -91,7 +99,16 @@ def _build_modules(project_root: str) -> list[tuple]:
     ]
 
 
-async def _populate_all(project_root: str) -> dict:
+async def _sources_with_checkout() -> tuple[str, ...]:
+    """Ids of the registered sources whose checkout directory exists (#20513)."""
+    from api.codebase_analytics.source_storage import list_sources
+
+    return tuple(
+        str(source.id) for source in await list_sources() if source.clone_path and Path(source.clone_path).is_dir()
+    )
+
+
+async def _populate_all(project_root: str, source_ids: tuple[str, ...] = ()) -> dict:
     """Dispatch all 6 modules' background analyze tasks, staggered.
 
     Each module is wrapped independently: one module failing to dispatch does
@@ -99,7 +116,7 @@ async def _populate_all(project_root: str) -> dict:
     task body so it's directly unit-testable with ``asyncio.run`` (no Celery
     eager-mode machinery needed).
     """
-    modules = _build_modules(project_root)
+    modules = _build_modules(project_root, source_ids)
 
     results: dict = {}
     for i, (name, task, args, prefix) in enumerate(modules):
@@ -129,6 +146,6 @@ def populate_all_caches(self) -> dict:
     async def _work():
         from api.codebase_analytics.endpoints.shared import resolve_git_repo_root
 
-        return await _populate_all(resolve_git_repo_root())
+        return await _populate_all(resolve_git_repo_root(), await _sources_with_checkout())
 
     return _wrap(_run_async(_work()), started)

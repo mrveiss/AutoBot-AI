@@ -427,10 +427,12 @@ async def get_pattern_report(
         if format.lower() == "markdown":
             from fastapi.responses import PlainTextResponse
 
-            return PlainTextResponse(
+            text_response = PlainTextResponse(
                 content=report.to_markdown(),
                 media_type="text/markdown",
             )
+            tag_source(text_response, source_id)  # the injected `response` is discarded for a returned Response
+            return text_response
 
         return {**report.to_dict(), "source_id": source_id}
 

@@ -58,13 +58,21 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
   })
 
   it('loadCachedData with nothing cached is empty, not an error', async () => {
-    apiGet.mockImplementation(async (url: string) =>
-      url === CACHED ? { status: 'no_data', has_cached_data: false } : { status: 'success', stats: null },
-    )
+    apiGet.mockImplementation(async () => ({ status: 'no_data', has_cached_data: false }))
+    mockedFetch.mockResolvedValueOnce(new Response(JSON.stringify({ total_patterns: 0 }), { status: 200 }))
     const { loadCachedData, error } = usePatternAnalysis(withSourceId)
 
     expect(await loadCachedData()).toBe(false)
     expect(error.value).toBeNull()
+  })
+
+  it('loadCachedData reports a failed storage-stats read even when the summary succeeds', async () => {
+    apiGet.mockImplementation(async () => ({ status: 'no_data', has_cached_data: false }))
+    mockedFetch.mockRejectedValueOnce(new Error('stats down'))
+    const { loadCachedData, error } = usePatternAnalysis(withSourceId)
+
+    await loadCachedData()
+    expect(error.value).toContain('stats down')
   })
 
   it('clearStorage reports a failed clear', async () => {
@@ -74,6 +82,17 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
 
     expect(await clearStorage()).toBe(false)
     expect(error.value).toContain('clear refused')
+  })
+
+  it('a storage-stats error body is surfaced, not shown as an empty store', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'Collection not available' }), { status: 200 }),
+    )
+    const { getStorageStats, error, storageStats } = usePatternAnalysis(withSourceId)
+
+    await getStorageStats()
+    expect(storageStats.value).toBeNull()
+    expect(error.value).toContain('Collection not available')
   })
 
   it('getReport reports a failed fetch', async () => {
@@ -87,14 +106,14 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
   it('storage stats and clear are requested for the selected source through useFetchEndpoint (#20513)', async () => {
     const json = (body: unknown) =>
       new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
-    mockedFetch.mockResolvedValueOnce(json({ status: 'success', stats: { total_patterns: 3 } }))
+    mockedFetch.mockResolvedValueOnce(json({ total_patterns: 3, pattern_type_distribution: {}, collection_name: 'code_patterns', source_id: 'src-a' }))
     const { getStorageStats, clearStorage, storageStats } = usePatternAnalysis(withSourceId)
 
     await getStorageStats()
     expect(mockedFetch.mock.calls[0]?.[0]).toBe(
       'http://backend.test/api/analytics/codebase/patterns/storage/stats?source_id=src-a',
     )
-    expect(storageStats.value).toEqual({ total_patterns: 3 })
+    expect(storageStats.value).toMatchObject({ total_patterns: 3 })
 
     mockedFetch.mockResolvedValueOnce(json({ message: 'cleared' }))
     expect(await clearStorage()).toBe(true)
@@ -106,16 +125,13 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
 
   it('the report is read for the selected source through useFetchEndpoint, with its path (#20513)', async () => {
     mockedFetch.mockResolvedValueOnce(
-      new Response(JSON.stringify({ status: 'success', report: '# r' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
+      new Response('# r', { status: 200, headers: { 'Content-Type': 'text/markdown' } }),
     )
     const { getReport } = usePatternAnalysis(withSourceId)
 
     expect(await getReport('src/a b')).toBe('# r')
     expect(mockedFetch.mock.calls[0]?.[0]).toBe(
-      'http://backend.test/api/analytics/codebase/patterns/report?source_id=src-a&path=src%2Fa%20b',
+      'http://backend.test/api/analytics/codebase/patterns/report?source_id=src-a&format=markdown&path=src%2Fa%20b',
     )
   })
 

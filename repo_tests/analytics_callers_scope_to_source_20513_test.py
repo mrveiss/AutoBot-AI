@@ -96,8 +96,10 @@ def _call_span(text: str, position: int) -> str:
     return text[start:]
 
 
-def scan_text(text: str, filename: str = "") -> tuple[int, list[str]]:
-    """``(sites examined, violations)`` for one file's text."""
+def scan_text(
+    text: str, filename: str = "", deferred: frozenset[tuple[str, str]] = DEFERRED_CALLERS
+) -> tuple[int, list[str]]:
+    """``(sites examined, violations)`` for one file's text; *deferred* is the exemption set in force."""
     lines = text.splitlines()
     code_text_by_line = {entry.lineno: entry.text for entry in code_lines(text, name=filename or "scan.ts")}
     file_scopes = "withSourceId" in text
@@ -111,7 +113,7 @@ def scan_text(text: str, filename: str = "") -> tuple[int, list[str]]:
         line = code_text_by_line[index + 1]
         for match in LITERAL.finditer(line):
             path = _normalise(match.group(1))
-            if _exempt(path) or (filename, path) in DEFERRED_CALLERS:
+            if _exempt(path) or (filename, path) in deferred:
                 continue
             examined += 1
             statement = _call_span(text, line_offset + match.start())
@@ -146,6 +148,24 @@ def test_every_scoped_analytics_call_sends_its_source():
         failures += [f"{rel}: {v}" for v in violations]
     assert total >= MIN_SITES_EXAMINED, f"only {total} call sites examined; the scan stopped seeing them"
     assert not failures, "analytics calls with no source_id (#20513):\n  " + "\n  ".join(failures)
+
+
+def test_every_deferred_caller_entry_still_needs_its_exemption():
+    """A STALE entry fails as loudly as a missing one: without it the call must still be a violation."""
+    stale = []
+    for rel, route in sorted(DEFERRED_CALLERS):
+        text = (repo_root() / rel).read_text(encoding="utf-8")
+        _, violations = scan_text(text, rel, deferred=frozenset())
+        if not any(v.endswith(f": {route}") for v in violations):
+            stale.append(f"{rel}: {route}")
+    assert not stale, "DEFERRED_CALLERS entries the scan no longer needs (delete them):\n  " + "\n  ".join(stale)
+
+
+def test_control_a_stale_deferred_entry_is_detected():
+    scoped = "await post('/api/analytics/codebase/index', { source_id: id })"
+    assert scan_text(scoped, "f.ts", deferred=frozenset())[1] == []  # needs no exemption: an entry here is stale
+    bare = "await post('/api/analytics/codebase/index', body)"
+    assert scan_text(bare, "f.ts", deferred=frozenset())[1] == ["line 1: index"]
 
 
 def test_the_exempt_paths_are_the_shared_lists():

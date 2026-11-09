@@ -71,12 +71,13 @@ async def _get_or_run_analysis(source_id: str) -> APIEndpointAnalysis:
     the resolved source root so no two projects share results.
     """
     key = _cache_key(source_id)
+    # Resolve first: a source whose checkout is gone is a 404 even when a result is cached.
+    root = await resolve_scan_root(source_id)
     async with _analysis_cache_lock:
         cached = _analysis_cache.get(key)
     if cached is not None:
         return cached
 
-    root = await resolve_scan_root(source_id)
     cancel_token = new_cancel_token()
     checker = _get_checker(root, cancel_token=cancel_token)
     # Issue #14256: default executor (``None``), cancellably -- was a bare

@@ -433,7 +433,7 @@ watch(() => props.rootPath, async (newPath) => {
     sectionsLoaded.regex = false
     sectionsLoaded.complexity = false
     sectionsLoaded.refactoring = false
-    await getSummary(newPath)
+    await getSummary() // not the checkout path: the API takes a relative one
   }
 })
 

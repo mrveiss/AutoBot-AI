@@ -125,7 +125,8 @@ async def resolve_scan_root(source_id: "str | None") -> Path:
         UnresolvedSourceError: ``source_id`` is empty or has no checkout.
     """
     source_root = await resolve_source_root(source_id)
-    if source_root:
+    # A clone_path whose directory is absent is no checkout: a scan of it would report an empty success.
+    if source_root and source_root.is_dir():
         return source_root
     # #17758: whenever `resolve_source_root` returns None -- a deleted source, an
     # empty clone_path -- a background scan has no user to notice that the result
@@ -144,6 +145,25 @@ async def scan_path_in_source(source_id: str, path: str | None) -> str:
     if not path:
         return str(root)
     return str(require_contained_relative_path(path, root))
+
+
+async def confirm_scan_dir_in_source(source_id: str, scan_dir: str) -> str:
+    """Re-check, at execution time, that a queued scan directory still lies inside its source (#20513).
+
+    The route validated ``scan_dir`` when it queued the task; the worker runs later, and a
+    path component may have been swapped for a link since. The worker therefore resolves the
+    directory again, requires the real path to be inside the source's real root, and scans
+    that real path, so a swap after this check cannot redirect which directory is read.
+
+    Raises:
+        UnresolvedSourceError: the source no longer has a checkout.
+        ValueError: ``scan_dir`` now resolves outside the source.
+    """
+    root = (await resolve_scan_root(source_id)).resolve()
+    real = Path(scan_dir).resolve()
+    if real != root and root not in real.parents:
+        raise ValueError("The scan directory is outside the authorised source.")
+    return str(real)
 
 
 def tag_source(response: Response, source_id: str) -> None:

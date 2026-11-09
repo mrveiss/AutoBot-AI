@@ -21,12 +21,12 @@ from tasks.analytics_cache_population import _build_modules, _dispatch, _populat
 
 class TestBuildModules:
     def test_returns_all_six_modules_in_dispatch_order(self):
-        modules = _build_modules("/fake/project/root")
+        modules = _build_modules("/fake/project/root", ("s1",))
         names = [m[0] for m in modules]
         assert names == [
-            "dependencies",
-            "duplicates",
-            "import_tree",
+            "dependencies:s1",
+            "duplicates:s1",
+            "import_tree:s1",
             "bug_prediction",
             "security_score",
             "anti_pattern",
@@ -35,16 +35,16 @@ class TestBuildModules:
     def test_anti_pattern_has_no_redis_prefix(self):
         """AntiPatternDetector.analyze() writes its own cache directly --
         no latest_task_id pointer needed, unlike the other 5 modules."""
-        modules = _build_modules("/fake/project/root")
+        modules = _build_modules("/fake/project/root", ("s1",))
         by_name = {m[0]: m for m in modules}
         assert by_name["anti_pattern"][3] is None
 
     def test_other_five_modules_have_distinct_redis_prefixes(self):
-        modules = _build_modules("/fake/project/root")
+        modules = _build_modules("/fake/project/root", ("s1",))
         by_name = {m[0]: m for m in modules}
         prefixes = {
             by_name[name][3]
-            for name in ("dependencies", "duplicates", "import_tree", "bug_prediction", "security_score")
+            for name in ("dependencies:s1", "duplicates:s1", "import_tree:s1", "bug_prediction", "security_score")
         }
         assert None not in prefixes
         assert len(prefixes) == 5  # all distinct -- no cross-module cache collisions
@@ -53,14 +53,20 @@ class TestBuildModules:
         """bug_prediction, security_score, and anti_pattern take an explicit
         path argument (their Celery tasks have no source/cwd-relative
         default); dependencies/duplicates/import_tree self-resolve internally."""
-        modules = _build_modules("/fake/project/root")
+        modules = _build_modules("/fake/project/root", ("s1",))
         by_name = {m[0]: m for m in modules}
         assert by_name["bug_prediction"][2][0] == "/fake/project/root"
         assert by_name["security_score"][2] == ("/fake/project/root",)
         assert by_name["anti_pattern"][2] == ("/fake/project/root",)
-        assert by_name["dependencies"][2] == ()
-        assert by_name["duplicates"][2] == ()
-        assert by_name["import_tree"][2] == ()
+        # The source-scoped tasks are handed the source, never run unscoped (#20513).
+        assert by_name["dependencies:s1"][2] == ("s1",)
+        assert by_name["duplicates:s1"][2] == ("s1",)
+        assert by_name["import_tree:s1"][2] == ("s1",)
+        assert all(by_name[n][3].endswith(":s1:") or ":s1" in by_name[n][3] for n in by_name if n.endswith(":s1"))
+
+    def test_without_sources_only_the_root_scoped_modules_are_built(self):
+        names = [m[0] for m in _build_modules("/fake/project/root")]
+        assert names == ["bug_prediction", "security_score", "anti_pattern"]
 
 
 class TestDispatch:
@@ -164,7 +170,7 @@ class TestPopulateAll:
             for i, mock_task in enumerate([dep, dup, imp, bug, sec, anti]):
                 mock_task.apply_async.return_value = MagicMock(id=f"id-{i}")
 
-            results = await _populate_all("/fake/root")
+            results = await _populate_all("/fake/root", ("s1",))
 
         assert len(results) == 6
         assert all(r["status"] == "dispatched" for r in results.values())

@@ -1643,6 +1643,9 @@
     },
     "patterns": {
       "title": "Code Pattern Analysis",
+      "storageStatsFailed": "Loading the pattern storage statistics failed",
+      "storageClearFailed": "Clearing the stored patterns failed",
+      "reportFetchFailed": "Report fetch failed",
       "patternsCount": "{count} patterns",
       "analyzing": "Analyzing...",
       "analyzePatterns": "Analyze Patterns",

@@ -276,6 +276,11 @@ def run_dependency_analysis(self, source_id: "str | None" = None) -> dict:
         external_deps: Dict[str, int] = {}
         runtime_rels: List[Dict] = []
 
+        # Resolve the root first: a source without a checkout gets the shared refusal whether or
+        # not the collection is reachable (require_source_id would otherwise raise first).
+        root, refusal = await _scan_root_or_refusal(source_id)
+        if refusal is not None:
+            return refusal
         if code_collection:
             # #17758: the indexed read is scoped too -- the filesystem scan and the
             # ChromaDB query are two separate leaks and fixing one leaves the other.
@@ -286,9 +291,6 @@ def run_dependency_analysis(self, source_id: "str | None" = None) -> dict:
         # established that resolves to the install directory in the deployed
         # layout -- not a repository -- so this task scanned the wrong tree in
         # production independently of any scoping question.
-        root, refusal = await _scan_root_or_refusal(source_id)
-        if refusal is not None:
-            return refusal
         project_root = root
         await _scan_filesystem_imports(project_root, modules, import_relationships, external_deps, runtime_rels)
 
@@ -333,11 +335,14 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
             _progress(self, "Loaded from checkpoint", 100.0, started)
             return saved
 
+        from api.codebase_analytics.endpoints.shared import confirm_scan_dir_in_source
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
         async def _on_progress(step: str, progress: float) -> None:
             _progress(self, step, progress, started)
 
+        # The route validated the directory at queue time; confirm it again now (#20513).
+        scan_dir = await confirm_scan_dir_in_source(request.source_id, request.path)
         analyzer = CodePatternAnalyzer(
             enable_clone_detection=request.enable_clone_detection,
             enable_anti_pattern_detection=request.enable_anti_pattern_detection,
@@ -349,7 +354,7 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
             source_id=request.source_id,
         )
         report = await asyncio.wait_for(
-            analyzer.analyze_directory(request.path, progress_callback=_on_progress),
+            analyzer.analyze_directory(scan_dir, progress_callback=_on_progress),
             timeout=_ANALYSIS_TIMEOUT,
         )
         result = report.to_dict()
