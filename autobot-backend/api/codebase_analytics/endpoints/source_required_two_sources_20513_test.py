@@ -21,6 +21,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.codebase_analytics.endpoints import pattern_analysis, stats
+from autobot_shared.status_enums import Severity
 
 _STORAGE_MODULE_NAME = "code_intelligence.pattern_analysis.storage"
 
@@ -50,8 +51,8 @@ class _PatternCollection:
     def __init__(self):
         self.where_seen: list[dict] = []
         self._rows = {
-            "A": [{"pattern_type": "dup", "severity": "high", "file_path": "a.py", "source_id": "A"}],
-            "B": [{"pattern_type": "regex", "severity": "low", "file_path": "b.py", "source_id": "B"}] * 2,
+            "A": [{"pattern_type": "dup", "severity": Severity.HIGH.value, "file_path": "a.py", "source_id": "A"}],
+            "B": [{"pattern_type": "regex", "severity": Severity.LOW.value, "file_path": "b.py", "source_id": "B"}] * 2,
         }
 
     async def get(self, limit=None, where=None, include=None, offset=None):

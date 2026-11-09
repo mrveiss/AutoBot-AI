@@ -30,6 +30,8 @@ import pytest
 from repo_tests._analytics_routes_20513 import CROSS_SOURCE_PATHS, DEFERRED_CALLERS, DEFERRED_TO_PR2, OPS_SUFFIXES
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 FRONTEND_SRC = "autobot-frontend/src"
 MIN_SITES_EXAMINED = 30
 
@@ -59,11 +61,6 @@ def _exempt(path: str) -> str | None:
     if path.startswith(PATH_PARAM_PREFIXES) or path == "embedding-stats/reset":
         return "source in path / ops"
     return None
-
-
-def _is_comment(line: str) -> bool:
-    stripped = line.lstrip()
-    return stripped.startswith(("//", "*", "/*"))
 
 
 def _call_span(text: str, position: int) -> str:
@@ -102,14 +99,16 @@ def _call_span(text: str, position: int) -> str:
 def scan_text(text: str, filename: str = "") -> tuple[int, list[str]]:
     """``(sites examined, violations)`` for one file's text."""
     lines = text.splitlines()
+    code_text_by_line = {entry.lineno: entry.text for entry in code_lines(text, name=filename or "scan.ts")}
     file_scopes = "withSourceId" in text
     file_has_source = bool(EVIDENCE.search(text))
     examined, violations = 0, []
     offset = 0
     for index, line in enumerate(lines):
         line_offset, offset = offset, offset + len(line) + 1
-        if _is_comment(line):
+        if index + 1 not in code_text_by_line:
             continue
+        line = code_text_by_line[index + 1]
         for match in LITERAL.finditer(line):
             path = _normalise(match.group(1))
             if _exempt(path) or (filename, path) in DEFERRED_CALLERS:
@@ -194,7 +193,9 @@ def test_control_exempt_and_commented_paths_are_not_examined():
             "api.get('/api/analytics/codebase/impact?x=1')",
             "api.post(`/api/analytics/codebase/sources/${id}/sync`)",
             "// api.get('/api/analytics/codebase/stats')",
+            "/**",
             " * GET /api/analytics/codebase/stats",
+            " */",
         ]
     )
     assert scan_text(text) == (0, [])
