@@ -28,6 +28,7 @@ import yaml
 from repo_tests._paths import repo_root
 
 from autobot_shared.isolated_git import isolated_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
 _HOOKS_DIR = "autobot-infrastructure/shared/scripts/hooks"
@@ -64,13 +65,7 @@ def bare_invocations(text: str) -> list[tuple[int, str]]:
 
 
 def _tracked(*pathspecs: str) -> list[str]:
-    done = subprocess.run(  # nosec B603 B607
-        ["git", "-C", str(_ROOT), "ls-files", "-z", "--", *pathspecs],
-        capture_output=True,
-        check=True,
-        env=isolated_git_env(),
-    )
-    return [p for p in done.stdout.decode("utf-8").split("\0") if p]
+    return tracked_paths(_ROOT, *pathspecs)
 
 
 def _is_text_script(path: str) -> bool:
