@@ -58,10 +58,18 @@ DECIDED_MARKER_TTL_SECONDS: int = max(
     env_int("AUTOBOT_APPROVAL_DECIDED_MARKER_TTL_SECONDS", default=30 * 24 * 60 * 60), DECIDED_MARKER_MIN_TTL_SECONDS
 )
 
+#: How long the closed tombstone of a session lives (#21202). It must outlast any worker's cached copy and the
+#: session record itself, so a stale save or a stale decision after a close can never bring the session back.
+#: A configured value below ``DECIDED_MARKER_MIN_TTL_SECONDS`` is raised to it, never honoured.
+CLOSED_TOMBSTONE_TTL_SECONDS: int = max(
+    env_int("AUTOBOT_APPROVAL_CLOSED_TOMBSTONE_TTL_SECONDS", default=30 * 24 * 60 * 60), DECIDED_MARKER_MIN_TTL_SECONDS
+)
+
 #: Take the claim and write the decided marker as one step: both, or neither. An approval whose marker exists was
-#: decided already, even if its claim has lapsed, so it is never granted again.
+#: decided already, even if its claim has lapsed, so it is never granted again. A closed session (KEYS[3]) is
+#: never decided.
 CLAIM_AND_MARK_LUA = """
-if redis.call('EXISTS', KEYS[2]) == 1 then
+if redis.call('EXISTS', KEYS[3]) == 1 or redis.call('EXISTS', KEYS[2]) == 1 then
   return 0
 end
 if redis.call('SET', KEYS[1], ARGV[1], 'NX', 'EX', tonumber(ARGV[2])) then
@@ -84,8 +92,18 @@ end
 return released
 """
 
-#: Write the record only while the stored one is still at the caller's version. Atomic in Redis.
+#: Close a session: the tombstone and the record's removal are one step (#21202).
+CLOSE_SESSION_LUA = """
+redis.call('SET', KEYS[2], '1', 'EX', tonumber(ARGV[1]))
+return redis.call('DEL', KEYS[1])
+"""
+
+#: Write the record only while the stored one is still at the caller's version, and never for a closed session
+#: (KEYS[2]). Atomic in Redis.
 PERSIST_IF_VERSION_LUA = """
+if redis.call('EXISTS', KEYS[2]) == 1 then
+  return 0
+end
 local stored = redis.call('GET', KEYS[1])
 if stored then
   local current = cjson.decode(stored)['version'] or 0
@@ -121,6 +139,11 @@ def pending_decision_id(pending: dict | None) -> str | None:
         return pending["command_id"]
     seed = f"{pending.get('timestamp')}|{pending.get('command')}"
     return "restored-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
+
+
+def closed_key(session_id: str) -> str:
+    """The durable tombstone of a closed session (#21202)."""
+    return f"agent_terminal:closed:{session_id}"
 
 
 def decided_key(decision_id: str | None) -> str:
@@ -180,7 +203,13 @@ async def persist_if_current(redis, session: AgentTerminalSession, ttl: int) -> 
     payload = session.to_persist_dict()
     payload["version"] = expected + 1
     saved = await redis.eval(
-        PERSIST_IF_VERSION_LUA, 1, session_key(session.session_id), expected, ttl, json.dumps(payload)
+        PERSIST_IF_VERSION_LUA,
+        2,
+        session_key(session.session_id),
+        closed_key(session.session_id),
+        expected,
+        ttl,
+        json.dumps(payload),
     )
     if saved:
         session.version = expected + 1
@@ -198,9 +227,10 @@ async def claim_decision(redis, session_id: str, decision_id: str | None) -> str
     try:
         won = await redis.eval(
             CLAIM_AND_MARK_LUA,
-            2,
+            3,
             decision_key(session_id, decision_id),
             decided_key(decision_id),
+            closed_key(session_id),
             token,
             DECISION_TTL_SECONDS,
             DECIDED_MARKER_TTL_SECONDS,
@@ -235,3 +265,20 @@ async def decided_marker_exists(redis, decision_id: str | None) -> bool:
         return bool(await asyncio.wait_for(redis.exists(decided_key(decision_id)), timeout=READ_TIMEOUT_SECONDS))
     except Exception as exc:  # noqa: BLE001 - an unconfirmed marker is a refused rebuild
         raise ApprovalStateUnavailableError(f"could not read decided marker {decision_id}: {exc}") from exc
+
+
+async def close_record(redis, session_id: str) -> None:
+    """Tombstone the session and drop its record in one step, so no worker's older copy can bring it back."""
+    await redis.eval(
+        CLOSE_SESSION_LUA, 2, session_key(session_id), closed_key(session_id), CLOSED_TOMBSTONE_TTL_SECONDS
+    )
+
+
+async def session_is_closed(redis, session_id: str) -> bool:
+    """Whether the session was closed. Fails closed: an unreadable tombstone raises, never reads as open."""
+    if not usable_redis(redis):
+        raise ApprovalStateUnavailableError("no usable Redis client")
+    try:
+        return bool(await asyncio.wait_for(redis.exists(closed_key(session_id)), timeout=READ_TIMEOUT_SECONDS))
+    except Exception as exc:  # noqa: BLE001 - an unconfirmed tombstone is a refused decision
+        raise ApprovalStateUnavailableError(f"could not read closed tombstone {session_id}: {exc}") from exc

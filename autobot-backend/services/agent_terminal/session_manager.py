@@ -27,10 +27,12 @@ from .session_state import (
     APPROVAL_PENDING_SESSION_TTL,
     apply_record,
     claim_decision,
+    close_record,
     pending_decision_id,
     persist_if_current,
     read_record,
     session_from_record,
+    session_is_closed,
     session_key,
 )
 
@@ -374,8 +376,7 @@ class SessionManager:
         # Remove from Redis (outside lock since Redis has its own concurrency control)
         if self.redis_client:
             try:
-                key = f"agent_terminal:session:{session_id}"
-                await self.redis_client.delete(key)
+                await close_record(self.redis_client, session_id)
                 await drop_pending_slot(self.redis_client, session_id)
             except Exception as e:
                 logger.error("Failed to remove session from Redis: %s", e)
@@ -442,6 +443,11 @@ class SessionManager:
 
     async def _refuse_stale_persist(self, session: AgentTerminalSession) -> bool:
         """The record moved on since this copy was read (#20674): keep it, take it as the copy, report no save."""
+        if await session_is_closed(self.redis_client, session.session_id):
+            logger.warning("Session %s was closed on another worker; dropping this copy", session.session_id)
+            async with self._sessions_lock:
+                self.sessions.pop(session.session_id, None)
+            return False
         logger.warning("Session %s changed in Redis since this copy was read; not overwriting it", session.session_id)
         await self._refresh_from_redis(session.session_id, session)
         return False
