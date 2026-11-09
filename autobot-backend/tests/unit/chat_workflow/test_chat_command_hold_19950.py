@@ -38,6 +38,14 @@ from services.command_approval_manager import AgentRole
 
 _ENF = "services.ai_line_enforcement"
 _USER = "11111111-1111-1111-1111-111111111111"
+_WAIT_SECONDS = 10
+
+
+def _queueing_service() -> AgentTerminalService:
+    """A service with what the constructor sets for queueing; no Redis, so nothing is persisted."""
+    service = AgentTerminalService.__new__(AgentTerminalService)
+    service.session_manager = SimpleNamespace(redis_client=None, _persist_session=AsyncMock(return_value=True))
+    return service
 
 
 def _ctx() -> SimpleNamespace:
@@ -289,7 +297,7 @@ async def test_a_turn_that_started_without_a_terminal_session_uses_the_one_the_c
 @pytest.mark.asyncio
 async def test_two_overlapping_commands_cannot_replace_each_others_pending_approval():
     """The check and the write have no await between them, so the second caller is refused and never queued."""
-    service = AgentTerminalService.__new__(AgentTerminalService)
+    service = _queueing_service()
     entered = asyncio.Event()
     release = asyncio.Event()
 
@@ -311,10 +319,10 @@ async def test_two_overlapping_commands_cannot_replace_each_others_pending_appro
         interactive_reasons=[],
     )
     first = asyncio.create_task(queue(command="rm first"))
-    await entered.wait()
+    await asyncio.wait_for(entered.wait(), timeout=_WAIT_SECONDS)
     second = await queue(command="rm second")
     release.set()
-    await first
+    await asyncio.wait_for(first, timeout=_WAIT_SECONDS)
 
     assert session.pending_approval["command"] == "rm first"
     assert second["status"] == "error"
@@ -324,7 +332,7 @@ async def test_two_overlapping_commands_cannot_replace_each_others_pending_appro
 @pytest.mark.asyncio
 async def test_a_turn_cancelled_during_the_queue_write_does_not_strand_the_session():
     """Nothing was queued, so no pending approval may stay behind and refuse every later command."""
-    service = AgentTerminalService.__new__(AgentTerminalService)
+    service = _queueing_service()
     entered = asyncio.Event()
 
     async def add_command(_command):
@@ -346,11 +354,11 @@ async def test_a_turn_cancelled_during_the_queue_write_does_not_strand_the_sessi
             interactive_reasons=[],
         )
     )
-    await entered.wait()
+    await asyncio.wait_for(entered.wait(), timeout=_WAIT_SECONDS)
     assert session.has_pending_approval()
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
-        await task
+        await asyncio.wait_for(task, timeout=_WAIT_SECONDS)
     assert not session.has_pending_approval()
 
 
@@ -405,7 +413,7 @@ async def test_a_cancelled_write_clears_only_its_own_reservation_and_closes_its_
     await started.wait()
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
-        await task
+        await asyncio.wait_for(task, timeout=_WAIT_SECONDS)
     assert session.pending_approval == {"command_id": "someone-else"}
     assert order == []
     finish.set()
