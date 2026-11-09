@@ -44,6 +44,15 @@ export function isHttpError(value: unknown): value is HttpError {
   return value instanceof HttpError
 }
 
+/**
+ * The text to show a user for a failed call: the backend's own `detail` for an HttpError (never the
+ * raw `HTTP <status>` message), the message of any other Error, else the caller's `fallback`.
+ */
+export function httpErrorText(err: unknown, fallback: string): string {
+  if (isHttpError(err)) return err.detail || fallback
+  return err instanceof Error && err.message ? err.message : fallback
+}
+
 /** A 4xx HttpError: the request itself was wrong, so retrying it cannot succeed. */
 export function isHttpClientError(value: unknown): value is HttpError {
   return isHttpError(value) && value.status >= 400 && value.status < 500
