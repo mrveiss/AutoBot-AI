@@ -33,7 +33,7 @@ class FakeKB:
         self.vectors.pop(fact_id, None)
         return {"status": "success"}
 
-    def add(self, fact_id):
+    def store(self, fact_id):
         self.rows[fact_id] = {"ingest_route": replacement.SYNC_INGEST_ROUTE}
         self.vectors[fact_id] = [0.0]
 
@@ -67,7 +67,7 @@ def _store_new(sync, kb, outcome):
         if isinstance(outcome, Exception):
             raise outcome
         for fid in outcome:
-            kb.add(fid)
+            kb.store(fid)
         return _meta(path, outcome)
 
     sync._process_file_with_gpu_chunking = process
