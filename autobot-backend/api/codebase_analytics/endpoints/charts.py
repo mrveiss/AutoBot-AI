@@ -14,7 +14,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from api.codebase_analytics.problem_severity import PROBLEM_SEVERITY_ORDER
-from api.codebase_analytics.source_scope import SourceIdQuery, require_source_id
+from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated

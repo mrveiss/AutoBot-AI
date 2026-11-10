@@ -101,7 +101,7 @@ class TestBusyIsNotATimeout:
         monkeypatch.setattr(dup_mod, "resolve_scan_root", _root)
         dup_mod._take_scan_lock()
         response = await dup_mod.get_duplicate_code(
-            refresh=True, min_similarity=0.5, use_semantic=False, source_id=None
+            refresh=True, min_similarity=0.5, use_semantic=False, source_id="src1"
         )
         body = response.body.decode("utf-8")
         assert '"status":"busy"' in body.replace(" ", "")

@@ -36,6 +36,7 @@ export function useCodeSmellProblems(withSourceId: (url: string) => string) {
     {
       path: '/api/analytics/codebase/problems',
       scopeToSource: true,
+      requireSource: true,
       label: 'Code smells endpoint',
       pickData: (raw) => (raw.status === 'no_data' ? [] : raw.problems ?? []),
       onSuccess: (d) => { smellProblems.value = d; loadedCategory.value = requestedCategory },
