@@ -36,6 +36,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.testfile_names import is_test_filename
+
 _SLM_ROOT = Path(__file__).resolve().parent.parent
 
 # Static (hand-authored / operator-edited) inventories are explicitly exempt --
@@ -46,8 +48,7 @@ _EXCLUDE_DIR_PARTS = frozenset({"ansible", "tests", "__pycache__", "node_modules
 
 
 def _is_test_file(path: Path) -> bool:
-    stem = path.stem
-    return stem.startswith("test_") or stem.endswith("_test") or stem.endswith("_tests")
+    return is_test_filename(path.name, include_js=False, include_conftest=False) or path.stem.endswith("_tests")
 
 
 def _files_to_scan(root: Path) -> list[Path]:
