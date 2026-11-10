@@ -8626,6 +8626,7 @@
       "monthlyTokenLimit": "Monthly Token Limit",
       "tokenLimitPlaceholder": "e.g. 1000000",
       "tokenLimitHint": "Recommended: 1M–5M for subscription plans, 100K for free tier",
+      "tokenLimitMin": "The token limit must be at least {min}. An empty field leaves the stored token limit unchanged; it does not remove it.",
       "alertThreshold": "Alert Threshold: {pct}%",
       "cancel": "Cancel",
       "save": "Save",
