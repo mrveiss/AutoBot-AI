@@ -21187,7 +21187,7 @@ export interface paths {
          * Index Codebase
          * @description Start background indexing of a codebase path (Issue #398: refactored, #1133: queued).
          *
-         *     Accepts optional source_id (code source registry) or root_path.
+         *     Requires exactly one of source_id (code source registry) or root_path (#20513).
          *     Returns immediately with a task_id. If another job is running, queues the request.
          */
         post: operations["index_codebase_api_analytics_codebase_index_post"];
@@ -21394,9 +21394,7 @@ export interface paths {
         };
         /**
          * Get Codebase Problems
-         * @description Get real code problems detected during analysis (#1710: per-source).
-         *
-         *     ``file_category`` (#20493) narrows to one category, e.g. ``code`` or ``test``.
+         * @description Real code problems per source (#1710); ``file_category`` (#20493) narrows to e.g. ``code``/``test``.
          */
         get: operations["get_codebase_problems_api_analytics_codebase_problems_get"];
         put?: never;
@@ -21910,8 +21908,7 @@ export interface paths {
          *         quick: If True, skip expensive analyses for faster export
          *         use_semantic: Enable LLM-based semantic analysis for bug prediction (Issue #554)
          *         source_id: Scope the report and every sub-analysis to this code source
-         *             (Issue #12372). Falls back to the most recently indexed source, or
-         *             AutoBot's own root only when no source is resolvable.
+         *             (Issue #12372). Required (#20513): there is no default source.
          *
          *     Returns:
          *         Markdown formatted report as plain text
@@ -22828,8 +22825,8 @@ export interface paths {
          *
          *     Issue #208: Fast loading of already indexed patterns without re-analysis.
          *     Issue #665: Refactored to use extracted helpers.
-         *     Issue #12384: Always scopes the query to source_id (default sentinel when
-         *     None) so one source's cached patterns never include another source's.
+         *     Issue #12384: Always scopes the query to source_id (required, #20513), so one
+         *     source's cached patterns never include another source's.
          *     Issue #12365: A store-read failure degrades to a graceful no_data 200
          *     instead of a 500, matching the sibling analytics /cached endpoints.
          *     Supports filtering by pattern_type and severity, with pagination.
@@ -22856,10 +22853,8 @@ export interface paths {
          * Clear Pattern Storage
          * @description Clear stored patterns for a single source from ChromaDB.
          *
-         *     Issue #12408: Always scopes the clear to source_id (default sentinel
-         *     when None, matching every other ``/patterns/*`` endpoint's convention --
-         *     e.g. ``get_pattern_storage_stats``, ``search_similar_patterns_endpoint``)
-         *     so clearing one source's patterns can never delete another source's (or
+         *     Issue #12408: Always scopes the clear to source_id (required, #20513), so
+         *     clearing one source's patterns can never delete another source's (or
          *     AutoBot's own) stored patterns.
          *
          *     WARNING: This is destructive and cannot be undone for the scoped source.
@@ -22884,9 +22879,8 @@ export interface paths {
          *
          *     This endpoint uses ChromaDB to find patterns similar to the provided code.
          *
-         *     Issue #12384: Always scopes the query to source_id (default sentinel when
-         *     None) so a similarity search for one source never surfaces another
-         *     source's stored patterns.
+         *     Issue #12384: Always scopes the query to source_id (required, #20513) so a
+         *     similarity search for one source never surfaces another source's patterns.
          */
         get: operations["search_similar_patterns_endpoint_api_analytics_codebase_patterns_similar_get"];
         put?: never;
@@ -23170,6 +23164,14 @@ export interface paths {
         /**
          * Analyze Impact
          * @description Return what transitively calls *node_id*.
+         *
+         *     CROSS-SOURCE (#20513): the code-graph collection is not tagged with a code
+         *     source. ``CodeIndexer`` writes ``source``/``source_path``/``node_name`` and, on
+         *     edges, a ``source_id`` that is the *caller node's* id, not a registry source;
+         *     ``POST /api/knowledge_base/index/code`` takes a directory, not a source. So
+         *     this walk cannot be filtered to one source, and node ids are path-based, so the
+         *     same id in two sources is one node here. Every response says so
+         *     (``source_scope``) instead of implying a scoped answer.
          *
          *     A 200 with ``indexed: false`` rather than a 404 when the graph is missing:
          *     "the code graph has not been built" is a different answer from "that node
@@ -80844,12 +80846,12 @@ export interface components {
         IndexCodebaseRequest: {
             /**
              * Root Path
-             * @description Path to index. Defaults to PROJECT_ROOT if not provided.
+             * @description Dev mode (#20513): a path under an allowed project root. Exclusive with source_id.
              */
             root_path?: string | null;
             /**
              * Source Id
-             * @description Code source registry ID (#1133). Resolves to the source's clone_path.
+             * @description Code source registry ID (#1133). Resolves to the source's clone_path. Exclusive with root_path.
              */
             source_id?: string | null;
         } & {
@@ -90604,14 +90606,14 @@ export interface components {
         PatternAnalysisRequest: {
             /**
              * Path
-             * @description Path to analyze (defaults to project root)
+             * @description Optional sub-path to analyze, relative to the source root (default: the whole source)
              */
-            path?: string;
+            path?: string | null;
             /**
              * Source Id
-             * @description #1772: source_id for API consistency
+             * @description Required (#20513): the code source to analyze
              */
-            source_id?: string | null;
+            source_id: string;
             /**
              * Enable Clone Detection
              * @description Enable clone/duplicate detection
@@ -136579,9 +136581,9 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
-                "application/json": components["schemas"]["IndexCodebaseRequest"] | null;
+                "application/json": components["schemas"]["IndexCodebaseRequest"];
             };
         };
         responses: {
@@ -136678,8 +136680,9 @@ export interface operations {
     };
     get_codebase_stats_api_analytics_codebase_stats_get: {
         parameters: {
-            query?: {
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -136709,9 +136712,10 @@ export interface operations {
     };
     get_hardcoded_values_api_analytics_codebase_hardcodes_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 hardcode_type?: string | null;
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -136781,9 +136785,10 @@ export interface operations {
     };
     get_codebase_problems_api_analytics_codebase_problems_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 problem_type?: string | null;
-                source_id?: string | null;
                 file_category?: components["schemas"]["ProblemCategory"] | null;
             };
             header?: never;
@@ -136846,9 +136851,9 @@ export interface operations {
     };
     get_dependencies_api_analytics_codebase_analytics_dependencies_get: {
         parameters: {
-            query?: {
-                /** @description #12330: scope dependency scan to the selected code source */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -137005,9 +137010,9 @@ export interface operations {
     };
     get_import_tree_api_analytics_codebase_analytics_import_tree_get: {
         parameters: {
-            query?: {
-                /** @description #12330: scope import tree to the selected code source */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -137164,11 +137169,11 @@ export interface operations {
     };
     get_call_graph_api_analytics_codebase_analytics_call_graph_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Force refresh, bypass cache */
                 refresh?: boolean;
-                /** @description #12330: scope call graph to the selected code source */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -137198,9 +137203,10 @@ export interface operations {
     };
     get_code_declarations_api_analytics_codebase_declarations_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 declaration_type?: string | null;
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -137230,15 +137236,15 @@ export interface operations {
     };
     get_duplicate_code_api_analytics_codebase_duplicates_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Force fresh analysis instead of cache */
                 refresh?: boolean;
                 /** @description Minimum similarity threshold (0.0-1.0) */
                 min_similarity?: number;
                 /** @description Enable LLM-based semantic analysis (Issue #554) */
                 use_semantic?: boolean;
-                /** @description #1772: source_id for per-project scoping */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -137268,11 +137274,11 @@ export interface operations {
     };
     detect_config_duplicates_endpoint_api_analytics_codebase_config_duplicates_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Enable LLM-based semantic analysis (Issue #554) */
                 use_semantic?: boolean;
-                /** @description #3685: source_id for per-project scoping */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -137430,7 +137436,7 @@ export interface operations {
     clear_codebase_cache_api_analytics_codebase_cache_delete: {
         parameters: {
             query: {
-                /** @description Required (#17758): the source whose cache to clear */
+                /** @description Required (#17758): the code source this result belongs to */
                 source_id: string;
             };
             header?: never;
@@ -137461,7 +137467,9 @@ export interface operations {
     };
     generate_analysis_report_api_analytics_codebase_report_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 format?: string;
                 include_api_analysis?: boolean;
                 include_duplicate_analysis?: boolean;
@@ -137470,7 +137478,6 @@ export interface operations {
                 include_pattern_analysis?: boolean;
                 quick?: boolean;
                 use_semantic?: boolean;
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -137500,9 +137507,9 @@ export interface operations {
     };
     get_api_endpoints_api_analytics_codebase_api_endpoints_get: {
         parameters: {
-            query?: {
-                /** @description #12330: scope to the selected code source */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -137532,9 +137539,9 @@ export interface operations {
     };
     get_frontend_api_calls_api_analytics_codebase_api_calls_get: {
         parameters: {
-            query?: {
-                /** @description #12330: scope to the selected code source */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -137564,9 +137571,9 @@ export interface operations {
     };
     get_endpoint_coverage_api_analytics_codebase_endpoint_coverage_get: {
         parameters: {
-            query?: {
-                /** @description #12330: scope coverage to the selected code source */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -137596,9 +137603,9 @@ export interface operations {
     };
     get_endpoint_analysis_full_api_analytics_codebase_endpoint_analysis_get: {
         parameters: {
-            query?: {
-                /** @description #12330: scope analysis to the selected code source */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -137628,9 +137635,9 @@ export interface operations {
     };
     get_orphaned_endpoints_api_analytics_codebase_orphaned_endpoints_get: {
         parameters: {
-            query?: {
-                /** @description #12330: scope to the selected code source */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -137660,9 +137667,9 @@ export interface operations {
     };
     get_missing_endpoints_api_analytics_codebase_missing_endpoints_get: {
         parameters: {
-            query?: {
-                /** @description #12330: scope to the selected code source */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -137692,9 +137699,9 @@ export interface operations {
     };
     get_used_endpoints_api_analytics_codebase_used_endpoints_get: {
         parameters: {
-            query?: {
-                /** @description #12330: scope to the selected code source */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -137724,9 +137731,9 @@ export interface operations {
     };
     refresh_endpoint_cache_api_analytics_codebase_refresh_endpoint_cache_post: {
         parameters: {
-            query?: {
-                /** @description #12330: refresh the selected source's cache entry */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -137756,7 +137763,9 @@ export interface operations {
     };
     get_environment_analysis_api_analytics_codebase_env_analysis_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Root path to analyze (defaults to project root) */
                 path?: string;
                 /** @description Force fresh analysis instead of cache */
@@ -137769,8 +137778,6 @@ export interface operations {
                 llm_model?: string;
                 /** @description Priority level to filter: 'high', 'medium', 'low', or 'all' */
                 filter_priority?: string;
-                /** @description #12330: scope analysis to the selected code source */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -137800,11 +137807,11 @@ export interface operations {
     };
     get_env_recommendations_api_analytics_codebase_env_recommendations_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Root path to analyze (defaults to project root) */
                 path?: string;
-                /** @description #12330: scope recommendations to the selected code source */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -137834,7 +137841,9 @@ export interface operations {
     };
     export_env_analysis_api_analytics_codebase_env_analysis_export_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Filter by category (e.g., 'security', 'port', 'hostname') */
                 category?: string;
                 /** @description Filter by severity ('high', 'medium', 'low') */
@@ -137843,8 +137852,6 @@ export interface operations {
                 limit?: number;
                 /** @description Include recommendations in export */
                 include_recommendations?: boolean;
-                /** @description #12330: export the selected code source's analysis */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -137896,11 +137903,11 @@ export interface operations {
     };
     run_cross_language_analysis_api_analytics_codebase_cross_language_analyze_post: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 use_llm?: boolean;
                 use_cache?: boolean;
-                /** @description #12356: scope analysis to the selected code source */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -137930,9 +137937,9 @@ export interface operations {
     };
     get_cross_language_summary_api_analytics_codebase_cross_language_summary_get: {
         parameters: {
-            query?: {
-                /** @description #12356: scope to the selected code source */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -137962,9 +137969,9 @@ export interface operations {
     };
     get_dto_mismatches_api_analytics_codebase_cross_language_dto_mismatches_get: {
         parameters: {
-            query?: {
-                /** @description #12356: scope to the selected code source */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -137994,9 +138001,9 @@ export interface operations {
     };
     get_validation_duplications_api_analytics_codebase_cross_language_validation_duplications_get: {
         parameters: {
-            query?: {
-                /** @description #12356: scope to the selected code source */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -138026,9 +138033,9 @@ export interface operations {
     };
     get_api_contract_mismatches_api_analytics_codebase_cross_language_api_mismatches_get: {
         parameters: {
-            query?: {
-                /** @description #12356: scope to the selected code source */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -138058,11 +138065,11 @@ export interface operations {
     };
     get_semantic_matches_api_analytics_codebase_cross_language_semantic_matches_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 min_similarity?: number;
                 limit?: number;
-                /** @description #12356: scope to the selected code source */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -138092,12 +138099,12 @@ export interface operations {
     };
     get_patterns_by_category_api_analytics_codebase_cross_language_patterns_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 category?: string | null;
                 severity?: string | null;
                 limit?: number;
-                /** @description #12356: scope to the selected code source */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -138127,9 +138134,9 @@ export interface operations {
     };
     clear_cross_language_cache_api_analytics_codebase_cross_language_clear_cache_post: {
         parameters: {
-            query?: {
-                /** @description #12356: clear only this source's cache entry */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -138367,9 +138374,11 @@ export interface operations {
     };
     get_pattern_summary_api_analytics_codebase_patterns_summary_get: {
         parameters: {
-            query?: {
-                /** @description Path to analyze */
-                path?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+                /** @description Sub-path to analyze, relative to the source root */
+                path?: string | null;
             };
             header?: never;
             path?: never;
@@ -138399,9 +138408,11 @@ export interface operations {
     };
     start_pattern_summary_analysis_api_analytics_codebase_patterns_summary_analyze_post: {
         parameters: {
-            query?: {
-                /** @description Path to analyze */
-                path?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+                /** @description Sub-path to analyze, relative to the source root */
+                path?: string | null;
             };
             header?: never;
             path?: never;
@@ -138494,9 +138505,11 @@ export interface operations {
     };
     get_duplicate_patterns_api_analytics_codebase_patterns_duplicates_get: {
         parameters: {
-            query?: {
-                /** @description Path to analyze */
-                path?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+                /** @description Sub-path to analyze, relative to the source root */
+                path?: string | null;
                 /** @description Maximum results */
                 limit?: number;
             };
@@ -138530,9 +138543,11 @@ export interface operations {
     };
     get_regex_opportunities_api_analytics_codebase_patterns_regex_opportunities_get: {
         parameters: {
-            query?: {
-                /** @description Path to analyze */
-                path?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+                /** @description Sub-path to analyze, relative to the source root */
+                path?: string | null;
                 /** @description Maximum results */
                 limit?: number;
             };
@@ -138566,9 +138581,11 @@ export interface operations {
     };
     get_complexity_hotspots_api_analytics_codebase_patterns_complexity_hotspots_get: {
         parameters: {
-            query?: {
-                /** @description Path to analyze */
-                path?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+                /** @description Sub-path to analyze, relative to the source root */
+                path?: string | null;
                 /** @description Maximum results */
                 limit?: number;
                 /** @description Minimum cyclomatic complexity */
@@ -138604,9 +138621,11 @@ export interface operations {
     };
     get_refactoring_suggestions_api_analytics_codebase_patterns_refactoring_suggestions_get: {
         parameters: {
-            query?: {
-                /** @description Path to analyze */
-                path?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+                /** @description Sub-path to analyze, relative to the source root */
+                path?: string | null;
                 /** @description Maximum results */
                 limit?: number;
             };
@@ -138640,9 +138659,11 @@ export interface operations {
     };
     get_pattern_report_api_analytics_codebase_patterns_report_get: {
         parameters: {
-            query?: {
-                /** @description Path to analyze */
-                path?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+                /** @description Sub-path to analyze, relative to the source root */
+                path?: string | null;
                 /** @description Output format: json or markdown */
                 format?: string;
             };
@@ -138674,9 +138695,9 @@ export interface operations {
     };
     get_pattern_storage_stats_api_analytics_codebase_patterns_storage_stats_get: {
         parameters: {
-            query?: {
-                /** @description Code source to scope stats to (Issue #12384) */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -138708,9 +138729,9 @@ export interface operations {
     };
     get_cached_pattern_summary_api_analytics_codebase_patterns_cached_summary_get: {
         parameters: {
-            query?: {
-                /** @description Code source to scope the summary to (Issue #12384) */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -138742,13 +138763,13 @@ export interface operations {
     };
     get_cached_patterns_api_analytics_codebase_patterns_cached_patterns_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Filter by pattern type */
                 pattern_type?: string | null;
                 /** @description Filter by severity */
                 severity?: string | null;
-                /** @description Code source to scope results to (Issue #12384) */
-                source_id?: string | null;
                 /** @description Maximum results */
                 limit?: number;
                 /** @description Offset for pagination */
@@ -138784,9 +138805,9 @@ export interface operations {
     };
     clear_pattern_storage_api_analytics_codebase_patterns_storage_clear_post: {
         parameters: {
-            query?: {
-                /** @description Code source to scope the clear to (Issue #12408) */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -138819,12 +138840,12 @@ export interface operations {
     search_similar_patterns_endpoint_api_analytics_codebase_patterns_similar_get: {
         parameters: {
             query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Code snippet to find similar patterns for */
                 code: string;
                 /** @description Filter by pattern type */
                 pattern_type?: string | null;
-                /** @description Code source to scope results to (Issue #12384) */
-                source_id?: string | null;
                 /** @description Maximum results */
                 limit?: number;
             };
@@ -138858,7 +138879,9 @@ export interface operations {
     };
     get_ownership_analysis_api_analytics_codebase_ownership_analysis_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Root path to analyze */
                 path?: string;
                 /** @description Force fresh analysis */
@@ -138867,8 +138890,6 @@ export interface operations {
                 patterns?: string;
                 /** @description Days for recency scoring */
                 days?: number;
-                /** @description #1772: source_id for API consistency */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -138898,11 +138919,11 @@ export interface operations {
     };
     get_expertise_scores_api_analytics_codebase_ownership_expertise_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Root path to analyze */
                 path?: string;
-                /** @description #1772: source_id for API consistency */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -138932,13 +138953,13 @@ export interface operations {
     };
     get_knowledge_gaps_api_analytics_codebase_ownership_knowledge_gaps_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Root path to analyze */
                 path?: string;
                 /** @description Filter by risk level (critical, high, medium, low) */
                 risk_level?: string;
-                /** @description #1772: source_id for API consistency */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;

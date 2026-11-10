@@ -19,6 +19,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from api.source_scope import CROSS_SOURCE_OPENAPI
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
@@ -228,7 +229,7 @@ async def _trigger_indexing(source: CodeSource) -> None:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/sources")
+@router.get("/sources", openapi_extra=CROSS_SOURCE_OPENAPI)
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -311,7 +312,7 @@ async def _auto_index_local_source(source: CodeSource) -> None:
     await _trigger_indexing(source)
 
 
-@router.get("/sources/summary")
+@router.get("/sources/summary", openapi_extra=CROSS_SOURCE_OPENAPI)
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
