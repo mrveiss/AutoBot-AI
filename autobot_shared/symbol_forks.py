@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Callable
 
 from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.testfile_names import is_test_filename
 
 #: Top-level directories of AutoBot's own tree that the ratchet counts.
 FORK_ROOTS = (
@@ -97,8 +98,7 @@ class ForkScan:
 
 def fork_is_test_file(path: Path) -> bool:
     """Tests legitimately redefine names: fixtures, fakes, back-compat shims."""
-    name = path.name
-    return name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py" or "tests" in path.parts
+    return is_test_filename(path.name, include_js=False) or "tests" in path.parts
 
 
 def fork_in_population(path: Path) -> bool:
