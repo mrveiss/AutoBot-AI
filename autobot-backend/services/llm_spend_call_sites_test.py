@@ -31,6 +31,8 @@ import importlib.util
 from collections import Counter
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
+
 _REPO = Path(__file__).resolve().parents[2]
 _PROVIDER_METHODS = frozenset({"stream_completion", "chat_completion", "stream_chat"})
 _NOT_SCANNED = ("docs",)
@@ -145,8 +147,7 @@ def _tracked_python_files() -> tuple[str, ...]:
 
 
 def _is_test(rel: str) -> bool:
-    name = rel.rsplit("/", 1)[-1]
-    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py" or "/tests/" in f"/{rel}"
+    return is_test_filename(rel, include_js=False) or "/tests/" in f"/{rel}"
 
 
 @functools.lru_cache(maxsize=1)

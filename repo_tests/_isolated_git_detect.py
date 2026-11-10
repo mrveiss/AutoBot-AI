@@ -26,6 +26,7 @@ import ast
 import re
 from pathlib import PurePosixPath
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 
 HELPER_MODULE = "autobot_shared.isolated_git"
@@ -36,8 +37,7 @@ _SKIP_PARTS = frozenset({"node_modules", ".git", ".worktrees", "__pycache__"})
 
 def is_test_file(rel: str) -> bool:
     """A test module or conftest, by repo-relative name."""
-    name = PurePosixPath(rel).name
-    return name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py"
+    return is_test_filename(rel, include_js=False)
 
 
 def is_skipped(rel: str) -> bool:
