@@ -118064,6 +118064,7 @@ export interface operations {
                 offset?: number;
                 /** @description Resume the facts scan (see GraphRequest) */
                 cursor?: string | null;
+                include_buckets?: boolean;
             };
             header?: never;
             path?: never;
