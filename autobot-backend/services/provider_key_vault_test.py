@@ -148,6 +148,9 @@ async def test_a_transient_vault_failure_then_success_ends_with_the_key_loaded(m
     monkeypatch.setattr(vault, "_hydrated_keys", {})
     monkeypatch.setattr(vault, "_unreadable_keys", set())
     monkeypatch.setattr(vault, "_vault_state", vault.VAULT_NOT_HYDRATED)
+    # resolve_provider_key retries an unreachable vault through the process-init hook; this test drives
+    # the retry itself, so the hook must not hydrate behind it.
+    monkeypatch.setattr("services.provider_key_process_init.hydrate_this_process", lambda: [])
 
     assert await vault.hydrate_at_startup(lambda: _flaky_factory) == []
     assert vault._vault_state == vault.VAULT_UNREACHABLE and len(attempts) == 1

@@ -61,7 +61,7 @@ async def test_an_outage_refuses_every_key_even_with_env_present(monkeypatch, ca
             pkv.resolve_provider_key(_NAME, _ENV_VALUE)
     assert pkv._vault_state == pkv.VAULT_UNREACHABLE
     assert "could not be reached" in str(exc.value)
-    assert "vault unreachable (ConnectionRefusedError)" in caplog.text
+    assert "vault unreachable (stage: open session, ConnectionRefusedError)" in caplog.text
     assert any(r.levelno == logging.ERROR for r in caplog.records)
     assert _ENV_VALUE not in caplog.text and _ENV_VALUE not in str(exc.value)
 
