@@ -31,8 +31,12 @@ import api.code_sync as code_sync  # noqa: E402
 _fake_db = types.ModuleType("services.database")
 _fake_db.db_service = None
 with patch.dict(sys.modules, {"services.database": _fake_db}):
-    (_executor,) = import_modules_with_real_orm(
-        (), path_loaded={"services.schedule_executor": SLM_ROOT / "services" / "schedule_executor.py"}
+    _events, _executor = import_modules_with_real_orm(
+        (),
+        path_loaded={
+            "services.node_events": SLM_ROOT / "services" / "node_events.py",
+            "services.schedule_executor": SLM_ROOT / "services" / "schedule_executor.py",
+        },
     )
 
 _db = REAL_MODULES["models.database"]
