@@ -31,10 +31,10 @@ from api.codebase_analytics.source_storage import RegistryUnavailable
 
 @pytest.mark.asyncio
 async def test_a_named_source_that_is_absent_refuses():
-    """`strict=True` is the whole point: a scan has no user watching it."""
+    """A scan has no user watching it, so an absent source refuses (#20513: always, no flag)."""
     with patch("api.codebase_analytics.source_storage.get_source", return_value=None):
         with pytest.raises(UnresolvedSourceError):
-            await resolve_scan_root("ghost-source", strict=True)
+            await resolve_scan_root("ghost-source")
 
 
 @pytest.mark.asyncio
@@ -49,7 +49,7 @@ async def test_a_lookup_that_raises_is_a_fault_not_an_unknown_id():
     """
     with patch("api.codebase_analytics.source_storage.get_source", side_effect=RuntimeError("db down")):
         with pytest.raises(RegistryUnavailable) as caught:
-            await resolve_scan_root("some-source", strict=True)
+            await resolve_scan_root("some-source")
     assert not isinstance(caught.value, UnresolvedSourceError)
     assert isinstance(caught.value.__cause__, RuntimeError), "the real cause must stay on the chain"
 
@@ -62,43 +62,13 @@ async def test_an_unreachable_registry_propagates_instead_of_reading_as_no_such_
     with patch.object(source_storage, "get_async_redis_client", return_value=None):
         with pytest.raises(RegistryUnavailable):
             await source_storage.get_source("any-id")
-        with pytest.raises(RegistryUnavailable):
-            await source_storage.get_default_source_id()
 
 
 @pytest.mark.asyncio
-async def test_naming_no_source_still_falls_back():
-    """The contrast, and the reason `strict` is not simply "always raise".
-
-    "You did not say which project" and "you named one that is not there" are
-    different questions, and only the second is a mistake. Without this, the
-    fix above could be a blanket raise and both tests would still pass.
-    """
-    with patch("api.codebase_analytics.source_storage.get_default_source_id", return_value=None):
-        assert await resolve_scan_root(None, strict=bool(None)) is not None
-
-
-@pytest.mark.asyncio
-async def test_an_unresolvable_DEFAULT_source_still_falls_back(monkeypatch):
-    """The case the test above could not see (CodeRabbit).
-
-    `resolve_scan_root` assigns the DEFAULT id before the strict check, so with
-    `strict=True` a default that exists and does not resolve raises -- 404 for
-    a caller who named nothing. The test above passed only because the default
-    resolved in the environment it ran in, which is the kind of pass that
-    proves the environment rather than the code.
-
-    The call sites now pass `strict=bool(source_id)`, so strictness follows
-    what the CALLER supplied, not what the default lookup found.
-    """
-    import api.codebase_analytics.source_storage as storage
-
-    async def _default_id():
-        return "a-default-that-does-not-resolve"
-
-    monkeypatch.setattr(storage, "get_default_source_id", _default_id, raising=False)
-    with patch("api.codebase_analytics.source_storage.get_source", return_value=None):
-        assert await resolve_scan_root(None, strict=bool(None)) is not None
+async def test_naming_no_source_refuses_too():
+    """#20513: "you did not say which project" no longer falls back to AutoBot's tree."""
+    with pytest.raises(UnresolvedSourceError):
+        await resolve_scan_root(None)
 
 
 def test_duplicates_has_no_private_source_resolution_left():
@@ -115,7 +85,7 @@ def test_duplicates_has_no_private_source_resolution_left():
     source = inspect.getsource(duplicates)
     assert "Could not resolve clone_path" not in source, (
         "the private resolution block is back in duplicates.py -- use "
-        "shared.resolve_scan_root(source_id, strict=True) (#17982, #2760)"
+        "shared.resolve_scan_root(source_id) (#17982, #2760)"
     )
     assert "resolve_scan_root" in source, "duplicates.py no longer calls the canonical resolver"
 
@@ -133,7 +103,7 @@ def _swallowing_lookups() -> list[str]:
     """
     import ast
 
-    lookups = {"get_source", "get_default_source_id", "resolve_source_root", "resolve_scan_root"}
+    lookups = {"get_source", "resolve_source_root", "resolve_scan_root"}
     root = Path(__file__).resolve().parents[1]
     found = []
     for path in sorted(root.rglob("*.py")):

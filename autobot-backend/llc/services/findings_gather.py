@@ -81,7 +81,10 @@ async def gather_findings(project, min_severity: str, session) -> list[dict]:
     # file-existence filter (#2724) drops findings referencing files that no
     # longer exist in THIS source — matching the /problems endpoint.
     clone_path = getattr(source, "clone_path", None)
-    source_root = Path(clone_path) if clone_path else None
+    if not clone_path:
+        # #20513: no checkout means no file-existence root; AutoBot's own tree is not a stand-in.
+        raise ValueError(f"CodeSource {code_source_id!r} has no checkout yet")
+    source_root = Path(clone_path)
     raw = await _fetch_all_problems(code_source_id, source_root)
     keep = set(_at_or_above(min_severity))
     filtered = [f for f in raw if f.get("severity", "").lower() in keep]
@@ -104,7 +107,7 @@ async def _get_source(code_source_id: str):
     return await get_source(code_source_id)
 
 
-async def _fetch_all_problems(source_id: str, source_root: Path | None) -> list[dict]:
+async def _fetch_all_problems(source_id: str, source_root: Path) -> list[dict]:
     """Lazy-import ChromaDB helpers and return all problems for *source_id*.
 
     Mirrors the /problems endpoint (stats.py):
