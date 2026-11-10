@@ -236,7 +236,10 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
     // per-source query. `sourceIdQuery` is the accessor the other #1710 calls
     // already use; it yields `{}` when no source is selected, so the
     // root_path-only mode the endpoint supports is unchanged.
-    body: () => ({ root_path: rootPath.value, ...sourceIdQuery.value }),
+    // #20513: the endpoint takes EXACTLY ONE of source_id and root_path, so a
+    // selected source sends its id alone and the dev root_path mode only
+    // applies with no source selected.
+    body: () => (sourceIdQuery.value.source_id ? { ...sourceIdQuery.value } : { root_path: rootPath.value }),
     pickData: () => true, // endpoint returns status; presence = success
     onSuccess: () => {
       showKnowledgeBaseOptIn.value = false

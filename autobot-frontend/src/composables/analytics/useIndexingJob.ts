@@ -112,6 +112,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     {
       path: '/api/analytics/codebase/problems',
       scopeToSource: true,
+      requireSource: true,
       pickData: (r) => r.problems ?? [],
       onSuccess: (list) => {
         deps.problemsReport.value = list
@@ -127,6 +128,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     {
       path: '/api/analytics/codebase/stats',
       scopeToSource: true,
+      requireSource: true,
       pickData: (r) => r.stats ?? null,
       onSuccess: (stats) => {
         deps.codebaseStats.value = stats
