@@ -27,6 +27,7 @@ import types
 import pytest
 
 from autobot_shared.slm_credential_actions import CredentialAction
+from autobot_shared.testfile_names import is_test_filename
 from services.approval_execution import registered_action_proposers
 
 _BACKEND = pathlib.Path(__file__).resolve().parent.parent
@@ -37,8 +38,7 @@ _SKIP_DIRS = {"__pycache__", "node_modules", ".venv", "venv", ".git"}
 
 
 def _is_test(path: pathlib.Path) -> bool:
-    name = path.name
-    return name.endswith("_test.py") or name.startswith("test_") or "tests" in path.parts
+    return is_test_filename(path.name, include_js=False) or "tests" in path.parts
 
 
 def _production_registration_sites() -> list[pathlib.Path]:
