@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from tasks.pattern_checkpoint import (
     checkpoint_options,
     load_path_checkpoint,
@@ -15,7 +16,12 @@ from tasks.pattern_checkpoint import (
     save_path_checkpoint,
 )
 
-_FLAGS = ("enable_clone_detection", "enable_anti_pattern_detection", "enable_regex_detection", "enable_complexity_analysis")
+_FLAGS = (
+    "enable_clone_detection",
+    "enable_anti_pattern_detection",
+    "enable_regex_detection",
+    "enable_complexity_analysis",
+)
 
 
 def _request(**overrides):
