@@ -71,6 +71,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._raw_aiohttp_session import Site, client_session_sites, scan_paths
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
@@ -158,8 +159,7 @@ def _is_test_or_archive(path: str) -> bool:
     for part in path.split("/")[:-1]:
         if part in _sibling().EXCLUDED_DIR_NAMES or _sibling().EXCLUDED_DIR_SUBSTRING in part:
             return True
-    name = path.rsplit("/", 1)[-1]
-    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
+    return is_test_filename(path, include_js=False)
 
 
 _SIBLING_MODULE = None
