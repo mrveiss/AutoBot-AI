@@ -18,7 +18,7 @@ from autobot_shared.logging_manager import get_logger
 from llc.config import DEFAULT_BUDGET_LIMIT
 from llc.deps import assert_company_access, load_authorized
 from llc.exceptions import BudgetExhausted, UnpricedModel
-from llc.models.budget import TOKEN_LIMIT_MAX, TOKEN_LIMIT_MIN, LLCAgentBudget
+from llc.models.budget import TOKEN_LIMIT_MAX, TOKEN_LIMIT_MIN, LLCAgentBudget, token_limit_blocks
 from llc.services.accessors import get_budget_service
 from llc.services.approval import ApprovalService
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
@@ -110,7 +110,7 @@ def _derive_status(row: LLCAgentBudget) -> tuple:
 
     if budget_mode == "tokens" and token_limit is not None:
         remaining = Decimal(str(token_limit - tokens_spent))
-        is_over = tokens_spent > token_limit
+        is_over = token_limit_blocks(tokens_spent, token_limit)
         alert = token_limit > 0 and tokens_spent / token_limit >= threshold
     else:
         remaining = limit - spent
