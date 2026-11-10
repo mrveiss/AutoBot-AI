@@ -5,7 +5,7 @@
 # Core Web Framework
 fastapi  # version from constraints/shared.txt (#18060); SECURITY UPDATE - requires starlette >=0.52.1 (#15661)
 uvicorn[standard]>=0.54.0
-pydantic>=2.14.2
+pydantic>=2.14.3
 
 # Async HTTP Client
 aiohttp>=3.14.5  # GH#8323 + #17304: 3.14.3 is the patched floor every sibling manifest already uses
@@ -51,7 +51,7 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
                           # siblings now that #15298 aligned this file's transformers pin with
                           # theirs -- the old 0.15.0 floor existed only to avoid narrowing the
                           # range for this file's formerly older, independent transformers>=4.36.0.
-sentencepiece>=0.2.2
+sentencepiece>=0.2.3
 sentence-transformers>=6.2.0
 einops>=0.8.2
 
