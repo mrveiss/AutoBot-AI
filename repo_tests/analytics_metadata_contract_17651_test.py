@@ -31,6 +31,8 @@ from repo_tests._analytics_metadata_detect import (
 )
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
+
 _ANALYTICS = repo_root() / "autobot-backend" / "api" / "codebase_analytics"
 
 
@@ -42,7 +44,7 @@ def _is_test_module(path) -> bool:
     filter in such a module escapes -- a guard that silently checks less,
     which is the failure both sweeps exist to catch.
     """
-    return path.name.endswith("_test.py") or path.name.startswith("test_") or "/tests/" in str(path)
+    return is_test_filename(path.name, include_js=False, include_conftest=False) or "/tests/" in str(path)
 
 
 #: The writer is no longer one file: #18055 split problem storage out of
