@@ -172,27 +172,18 @@ class TestClearPatternsSourceScoping:
         remaining = await collection.get(include=["metadatas"])
         assert all(m["source_id"] == "B" for m in remaining["metadatas"])
 
-    async def test_clear_missing_source_id_does_not_wipe_all_sources(self, pa):
-        """Issue #12408: omitting source_id must resolve to the "default"
-        sentinel scope (matching build_source_scoped_where / every other
-        /patterns/* endpoint) -- it must NEVER wipe every source."""
+    async def test_clear_missing_source_id_refuses_and_wipes_nothing(self, pa):
+        """#20513: a clear with no source_id is refused, not resolved to a
+        "default" scope -- and it must NEVER wipe any source."""
         collection = _FakeChromaCollection()
         await _seed_two_sources(collection)
-        # Patterns tagged "default" (e.g. a caller that never set a source).
-        await collection.add(
-            ids=["d1"],
-            embeddings=[[0.4]],
-            documents=["d1 doc"],
-            metadatas=[{"pattern_type": "duplicate", "source_id": "default"}],
-        )
-        assert await collection.count() == 4
+        assert await collection.count() == 3
 
-        success = await pa.storage.clear_patterns(collection=collection)  # no source_id
+        with pytest.raises(ValueError):
+            await pa.storage.clear_patterns(collection=collection, source_id="")
 
-        assert success is True
-        # Only the "default"-scoped pattern is gone; A and B are untouched.
         assert set(collection.ids) == {"a1", "a2", "b1"}
-        assert collection.last_delete_where == {"source_id": "default"}
+        assert collection.last_delete_where is None
 
     async def test_clear_uses_where_delete_not_unscoped_ids(self, pa):
         """The fix must call collection.delete(where=...) scoped by
