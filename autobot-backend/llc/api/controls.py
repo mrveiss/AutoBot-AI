@@ -38,6 +38,7 @@ from ..scheduler.schedule_entry import schedule_heartbeat
 from ..services.company import CompanyNotFoundError
 from ..services.controls_service import (
     AgentNotFoundError,
+    AgentNotPausableError,
     AgentNotSchedulableError,
     ControlsService,
     SprintNotFoundError,
@@ -121,6 +122,8 @@ async def pause_agent(
         return result
     except AgentNotFoundError:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+    except AgentNotPausableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @router.post("/companies/{company_id}/controls/agents/{agent_id}/resume")
