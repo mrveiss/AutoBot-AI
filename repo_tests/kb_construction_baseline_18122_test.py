@@ -36,6 +36,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -88,9 +89,7 @@ BASELINE: dict[str, tuple[int, str]] = {
 def _is_test_path(rel: str) -> bool:
     """Decided on REPO-RELATIVE parts only (#18972: absolute paths blind worktrees)."""
     *dirs, name = rel.split("/")
-    return (
-        name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py" or bool(_TEST_DIRS & set(dirs))
-    )
+    return is_test_filename(name, include_js=False) or bool(_TEST_DIRS & set(dirs))
 
 
 def _from_source(module: str | None) -> bool:

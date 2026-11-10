@@ -144,6 +144,17 @@ REGISTRY: list[ScheduledJob] = [
         default_enabled=False,
     ),
     ScheduledJob(
+        name="MeshReembedConsumer",
+        interval_seconds=30,
+        owner_file="services/mesh_brain/reembed_consumer.py",
+        runtime="leader_elected",
+        description=(
+            "Drains mesh:reembed_queue into the document re-index queue under a LeaderLease; "
+            "retries, then dead-letters to mesh:reembed_dead. Interval: AUTOBOT_MESH_REEMBED_INTERVAL_S."
+        ),
+        startup_marker="initialization/lifespan.py::start_mesh_reembed_consumer",
+    ),
+    ScheduledJob(
         name="SkillHealthScheduler",
         interval_seconds=300,
         owner_file="services/skill_management/skill_health_scheduler.py",

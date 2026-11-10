@@ -53,6 +53,8 @@ on:
       # #20168: the cost event foreign key test
       - 'autobot-backend/llc/services/budget.py'
       - 'autobot-backend/llc/exceptions.py'
+      # #21056: the two-session pause test
+      - 'autobot-backend/llc/services/controls_service.py'
       # #19582: the concurrent-claim test
       - 'autobot-backend/llc/scheduler/run_status.py'
       # #20115: the two-session plan convert lock test
@@ -168,6 +170,8 @@ jobs:
           # #20168: the cost event foreign key test
           - 'autobot-backend/llc/services/budget.py'
           - 'autobot-backend/llc/exceptions.py'
+          # #21056: the two-session pause test
+          - 'autobot-backend/llc/services/controls_service.py'
           # #19582: the concurrent-claim test
           - 'autobot-backend/llc/scheduler/run_status.py'
           # #20115: the two-session plan convert lock test
