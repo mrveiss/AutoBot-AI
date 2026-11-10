@@ -10,7 +10,7 @@ This class has been closed four times in three files and came back each time:
   filesystem-scanning analytics endpoints accepted a ``source_id`` 'for API
   consistency' but ignored it, scanning AutoBot's own project root regardless of
   the selected code source -- cross-project data leakage."*
-* **#12384** added ``_path_checkpoint_key(path, source_id)``.
+* **#12384** added ``path_checkpoint_key(path, source_id)``.
 * **#8436** scoped ``code_intelligence.py``'s task-result prefix.
 * **#12393** swapped a root resolver that was wrong for deployed layouts.
 
@@ -78,7 +78,7 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
 #: ``Name`` test; adding the inverted ``if not source_id`` form and the
 #: ``source_id or "default"`` form surfaced eleven sites that were always there
 #: and always invisible -- ten of them the ``or`` spelling, including #12384's
-#: own fix, ``_path_checkpoint_key``. A raised pin normally means somebody
+#: own fix, ``path_checkpoint_key``. A raised pin normally means somebody
 #: parked a leak; this one means somebody could finally see them. Any future
 #: rise needs the same distinction stated, or it is the former.
 #:

@@ -96,6 +96,25 @@ def _call_span(text: str, position: int) -> str:
     return text[start:]
 
 
+def _code_by_line(text: str, filename: str) -> dict[int, str]:
+    """Line number -> code text. Comments, whole-line and trailing, are not code: neither a call in one nor a source named in one counts."""
+    return {entry.lineno: entry.text for entry in code_lines(text, name=filename or "scan.ts", strip_trailing=True)}
+
+
+def _deferred_entry(deferred, filename: str, path: str, statement: str):
+    """The exemption entry covering this call (same file and route, anchor inside its statement), or ``None``."""
+    return next((e for e in deferred if e[:2] == (filename, path) and e[2] in statement), None)
+
+
+def _has_scope_evidence(statement: str, preceding: str, file_scopes: bool, file_has_source: bool) -> bool:
+    """Whether the call's own statement (or, for a task factory, its file) shows the source being sent."""
+    if EVIDENCE.search(statement):
+        return True
+    if SCOPE_FLAG.search(statement) and REQUIRE_FLAG.search(statement) and file_scopes:
+        return True
+    return bool(TASK_FACTORY.search(preceding)) and file_has_source
+
+
 def scan_text(
     text: str,
     filename: str = "",
@@ -108,15 +127,10 @@ def scan_text(
     own statement holds *anchor*; the entries it consumed are added to *used*.
     """
     lines = text.splitlines()
-    # Comments, whole-line and trailing, are not code: neither a call in one nor a source named in one counts.
-    code_text_by_line = {
-        entry.lineno: entry.text for entry in code_lines(text, name=filename or "scan.ts", strip_trailing=True)
-    }
+    code_text_by_line = _code_by_line(text, filename)
     code = "\n".join(code_text_by_line.values())
-    file_scopes = "withSourceId" in code
-    file_has_source = bool(EVIDENCE.search(code))
-    examined, violations = 0, []
-    offset = 0
+    file_scopes, file_has_source = "withSourceId" in code, bool(EVIDENCE.search(code))
+    examined, violations, offset = 0, [], 0
     for index, line in enumerate(lines):
         line_offset, offset = offset, offset + len(line) + 1
         if index + 1 not in code_text_by_line:
@@ -127,11 +141,9 @@ def scan_text(
             if _exempt(path):
                 continue
             statement = _call_span(text, line_offset + match.start())
-            ok = bool(EVIDENCE.search(statement))
-            ok = ok or (bool(SCOPE_FLAG.search(statement)) and bool(REQUIRE_FLAG.search(statement)) and file_scopes)
-            factory = TASK_FACTORY.search("\n".join(lines[max(0, index - 2) : index + 1]))
-            ok = ok or (bool(factory) and file_has_source)
-            entry = next((e for e in deferred if e[:2] == (filename, path) and e[2] in statement), None)
+            preceding = "\n".join(lines[max(0, index - 2) : index + 1])
+            ok = _has_scope_evidence(statement, preceding, file_scopes, file_has_source)
+            entry = _deferred_entry(deferred, filename, path, statement)
             if not ok and entry:
                 if used is not None:
                     used.add(entry)

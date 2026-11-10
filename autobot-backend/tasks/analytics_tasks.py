@@ -22,7 +22,7 @@ from pathlib import Path
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
-from tasks.pattern_checkpoint import _checkpoint_options, _load_path_checkpoint, _save_path_checkpoint
+from tasks.pattern_checkpoint import checkpoint_options, load_path_checkpoint, save_path_checkpoint
 
 logger = get_logger(__name__)
 
@@ -314,7 +314,7 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
             return refusal
 
         # Resume from checkpoint if analysis for this path was recently completed.
-        saved = await _load_path_checkpoint(scan_dir, request.source_id, _checkpoint_options(request))
+        saved = await load_path_checkpoint(scan_dir, request.source_id, checkpoint_options(request))
         if saved:
             logger.info("run_pattern_analysis: resuming from checkpoint for path %s", scan_dir)
             _progress(self, "Loaded from checkpoint", 100.0, started)
@@ -345,7 +345,7 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
         analyzer.enable_embedding_storage = True
         await analyzer._store_patterns(report)
         result = report.to_dict()
-        await _save_path_checkpoint(scan_dir, result, request.source_id, _checkpoint_options(request))
+        await save_path_checkpoint(scan_dir, result, request.source_id, checkpoint_options(request))
         return result
 
     return _wrap(_run_async(_work()), started)

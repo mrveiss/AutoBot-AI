@@ -98,7 +98,7 @@ def test_a_cached_result_is_not_served_when_the_directory_now_leaves_the_source(
     root, outside = source_tree
     cached = AsyncMock(return_value={"cached": True})
     request = {"source_id": "s1", "path": str(root / "pkg")}
-    with patch.object(at, "_load_path_checkpoint", cached):
+    with patch.object(at, "load_path_checkpoint", cached):
         assert _run_task(at.run_pattern_analysis, request).failed() is False
         assert cached.await_count == 1
         _swap_for_link(root, outside)
@@ -113,7 +113,7 @@ def test_the_checkpoint_is_keyed_on_the_confirmed_real_path(source_tree):
 
     root, _ = source_tree
     cached = AsyncMock(return_value={"cached": True})
-    with patch.object(at, "_load_path_checkpoint", cached):
+    with patch.object(at, "load_path_checkpoint", cached):
         _run_task(at.run_pattern_analysis, {"source_id": "s1", "path": str(root / "pkg" / ".." / "pkg")})
     assert cached.await_args.args[0] == str((root / "pkg").resolve())
 
@@ -124,7 +124,7 @@ def test_a_missing_source_checkout_refuses_the_task_before_the_cache(tmp_path):
     cached = AsyncMock(return_value={"cached": True})
     with (
         patch.object(shared, "resolve_source_root", AsyncMock(return_value=tmp_path / "gone")),
-        patch.object(at, "_load_path_checkpoint", cached),
+        patch.object(at, "load_path_checkpoint", cached),
     ):
         outcome = _run_task(at.run_pattern_analysis, {"source_id": "s1", "path": str(tmp_path / "gone" / "pkg")})
     assert _refused(outcome)
@@ -158,8 +158,8 @@ def test_a_directory_swapped_during_the_scan_discards_the_result_and_the_checkpo
     save = AsyncMock()
     with (
         patch("code_intelligence.pattern_analysis.CodePatternAnalyzer", analyzer),
-        patch.object(at, "_load_path_checkpoint", AsyncMock(return_value=None)),
-        patch.object(at, "_save_path_checkpoint", save),
+        patch.object(at, "load_path_checkpoint", AsyncMock(return_value=None)),
+        patch.object(at, "save_path_checkpoint", save),
     ):
         outcome = _run_task(at.run_pattern_analysis, {"source_id": "s1", "path": str(root / "pkg")})
     assert _refused(outcome)
@@ -192,8 +192,8 @@ def test_findings_are_written_only_after_the_post_scan_check_passes(source_tree)
     analyzer = _patching_analyzer(report)
     with (
         patch("code_intelligence.pattern_analysis.CodePatternAnalyzer", analyzer),
-        patch.object(at, "_load_path_checkpoint", AsyncMock(return_value=None)),
-        patch.object(at, "_save_path_checkpoint", AsyncMock()),
+        patch.object(at, "load_path_checkpoint", AsyncMock(return_value=None)),
+        patch.object(at, "save_path_checkpoint", AsyncMock()),
     ):
         outcome = _run_task(at.run_pattern_analysis, {"source_id": "s1", "path": str(root / "pkg")})
     assert not _refused(outcome)
@@ -208,8 +208,8 @@ def test_a_failed_post_scan_check_writes_no_embeddings(source_tree):
     analyzer = _patching_analyzer(MagicMock(), before_return=lambda: _swap_for_link(root, outside))
     with (
         patch("code_intelligence.pattern_analysis.CodePatternAnalyzer", analyzer),
-        patch.object(at, "_load_path_checkpoint", AsyncMock(return_value=None)),
-        patch.object(at, "_save_path_checkpoint", AsyncMock()),
+        patch.object(at, "load_path_checkpoint", AsyncMock(return_value=None)),
+        patch.object(at, "save_path_checkpoint", AsyncMock()),
     ):
         outcome = _run_task(at.run_pattern_analysis, {"source_id": "s1", "path": str(root / "pkg")})
     assert _refused(outcome)

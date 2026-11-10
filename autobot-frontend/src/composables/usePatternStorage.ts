@@ -34,12 +34,11 @@ export function usePatternStorage(deps: PatternStorageDeps) {
   // The source the displayed statistics belong to. A clear is bound to it (#20513).
   const currentSource = (): string | null => sourceIdInUrl(withSourceId('/'))
   let statsSource: string | null = null
-  let requestedSource: string | null = null
 
   const t = (key: string): string => i18n.global.t(key) as string
 
   // The route answers the statistics at the top level; an unavailable store comes back as `{ error }`.
-  const statsEndpoint = useFetchEndpoint<Partial<PatternStorageStats> & { error?: string }, PatternStorageStats>(
+  const statsEndpoint = useFetchEndpoint<Partial<PatternStorageStats> & { error?: string }, PatternStorageStats, string | null>(
     {
       path: '/api/analytics/codebase/patterns/storage/stats',
       scopeToSource: true,
@@ -48,11 +47,16 @@ export function usePatternStorage(deps: PatternStorageDeps) {
         if (raw.error) throw new Error(raw.error)
         return typeof raw.total_patterns === 'number' ? (raw as PatternStorageStats) : null
       },
-      onSuccess: (stats) => {
+      onSuccess: (stats, _raw, requestedSource) => {
         // A late answer for a source that is no longer selected must not restore its statistics.
         if (requestedSource !== currentSource()) return
         statsSource = requestedSource
         storageStats.value = stats
+      },
+      // A non-numeric total_patterns is "no data": drop statistics that may belong to an earlier answer.
+      onNoData: () => {
+        storageStats.value = null
+        statsSource = null
       },
       // A failed stats read stays distinguishable from "nothing stored" (#17651).
       onError: (message) => {
@@ -90,8 +94,8 @@ export function usePatternStorage(deps: PatternStorageDeps) {
    * Get pattern storage stats
    */
   const getStorageStats = async (): Promise<void> => {
-    requestedSource = currentSource()
-    await wrap(() => statsEndpoint.load()).catch((e: unknown) => {
+    const requestedSource = currentSource()
+    await wrap(() => statsEndpoint.load(undefined, requestedSource)).catch((e: unknown) => {
       logger.error('Storage stats fetch failed:', e)
     })
   }
