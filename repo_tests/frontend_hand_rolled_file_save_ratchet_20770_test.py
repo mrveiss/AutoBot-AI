@@ -40,26 +40,48 @@ _ASSIGNMENT = re.compile(
     r"|\[\s*['\"`]download['\"`]\s*\]\s*=(?!=)"
     r"|Object\.assign\(\s*(?P<assign_receiver>[^,()]+?)\s*,[^{}()]*?\{\s*"
     r"(?:[^{}]*?,\s*)?(?:download\b\s*[:,}]|['\"`]download['\"`]\s*:)"
-    r"|(?:(?P<attr_receiver>[A-Za-z_$][\w$.]*)\s*\??\.)?"
+    r"|(?:(?P<attr_receiver>[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*)\s*\??\.)?"
     r"setAttribute\(\s*['\"`]download['\"`]"
 )
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 #: A receiver segment that reads as an anchor (#21195): a bare `a`, or a name carrying
 #: `anchor` / `link` (`anchorEl`, `linkRef`). `settings` and friends carry neither.
 _ANCHOR_RECEIVER = re.compile(r"a|(?:\w*(?:anchor|link)\w*)", re.I)
+#: A same-file `const` / `let` / `var` binding, read for receivers the name cannot
+#: place: `const el = document.querySelector('a')` binds an anchor, `el` alone does not.
+_BINDING = re.compile(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([^;\n]+)")
+#: Evidence, in a binding's initializer, that the variable holds an anchor element:
+#: the tag-a lookups. An id or selector of unknown target is not evidence (#21195).
+_ANCHOR_SOURCE = re.compile(
+    r"querySelector\s*\(\s*['\"`]a['\"`]"
+    r"|createElement\s*\(\s*['\"`]a['\"`]"
+    r"|getElementsByTagName\s*\(\s*['\"`]a['\"`]",
+    re.I,
+)
 
 PIN = 6
 
 
-def _is_anchor(receiver: str | None) -> bool:
+def _is_anchor(receiver: str | None, bindings: dict[str, str] | None = None) -> bool:
     """Whether the receiver of an `Object.assign` / `setAttribute` form is an anchor (#21195).
 
     A receiver the pattern cannot name (`x().setAttribute(…)`) is not evidence of a
-    non-anchor and keeps the pre-#21195 treatment: it counts.
+    non-anchor and keeps the pre-#21195 treatment: it counts. A named receiver that
+    reads as an anchor counts across optional chains (`anchorRef?.current`), and a name
+    that says nothing (`el`) is resolved against the file's own `const`/`let`/`var`
+    bindings: bound to an anchor element it counts, bound elsewhere or not bound at all
+    the name decides (`settings` stays out — counting unknowns again is the over-count
+    #21195 asked to remove).
     """
     if receiver is None:
         return True
-    return any(_ANCHOR_RECEIVER.fullmatch(segment) for segment in receiver.split("."))
+    segments = receiver.replace("?.", ".").split(".")
+    if any(_ANCHOR_RECEIVER.fullmatch(segment) for segment in segments):
+        return True
+    init = (bindings or {}).get(segments[0])
+    if init is None:
+        return False
+    return bool(_ANCHOR_SOURCE.search(init)) or bool(_ANCHOR_RECEIVER.fullmatch(init.strip()))
 
 
 def _sources(root: Path) -> list[Path]:
@@ -79,9 +101,10 @@ def count(paths: list[Path]) -> int:
     total = 0
     for path in paths:
         text = _COMMENT_LINE.sub("", path.read_text(encoding="utf-8"))
+        bindings = dict(_BINDING.findall(text))
         for match in _ASSIGNMENT.finditer(text):
             receiver = match.group("assign_receiver") or match.group("attr_receiver")
-            if _is_anchor(receiver):
+            if _is_anchor(receiver, bindings):
                 total += 1
     return total
 
@@ -135,6 +158,35 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
             _w(tmp_path, "a/N2.ts", "Object.assign(prefs, { download })\n"),
             _w(tmp_path, "a/N3.vue", "settings.setAttribute('download', value)\n"),
             _w(tmp_path, "a/N4.vue", "settings?.setAttribute('download', value)\n"),
+        ]
+        assert count(paths) == 0
+
+    def test_a_set_attribute_counts_across_an_optional_chain(self, tmp_path: Path) -> None:
+        paths = [
+            _w(tmp_path, "a/C1.vue", "anchorRef?.current?.setAttribute('download', name)\n"),
+            _w(tmp_path, "a/C2.vue", "linkEl.current.setAttribute(`download`, name)\n"),
+        ]
+        assert count(paths) == 2
+
+    def test_a_receiver_named_by_a_binding_reads_its_initializer(self, tmp_path: Path) -> None:
+        paths = [
+            _w(tmp_path, "a/B1.vue", "const el = document.querySelector('a')\nel?.setAttribute('download', name)\n"),
+            _w(tmp_path, "a/B2.ts", "const node = document.createElement('a')\nnode.setAttribute('download', name)\n"),
+        ]
+        assert count(paths) == 2
+
+    def test_a_binding_that_is_not_an_anchor_does_not_make_the_receiver_one(self, tmp_path: Path) -> None:
+        paths = [
+            _w(
+                tmp_path,
+                "a/N5.vue",
+                "const el = document.querySelector('#share')\nel?.setAttribute('download', name)\n",
+            ),
+            _w(
+                tmp_path,
+                "a/N6.ts",
+                "const box = document.querySelector('.toolbar')\nbox.setAttribute('download', name)\n",
+            ),
         ]
         assert count(paths) == 0
 
