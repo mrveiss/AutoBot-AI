@@ -28,8 +28,8 @@ def source_tree(tmp_path):
         yield root, outside
 
 
-async def _enqueue(path):
-    delay = MagicMock()
+async def _enqueue(path, delay=None):
+    delay = delay if delay is not None else MagicMock()
     delay.return_value.id = "task-1"
     request = pa.PatternAnalysisRequest(source_id="s1", path=path)
     with (
@@ -52,7 +52,7 @@ async def test_a_subdirectory_of_the_source_is_queued_by_its_real_path(source_tr
 async def test_a_path_outside_the_source_is_refused_and_nothing_is_queued(source_tree, bad):
     delay = MagicMock()
     with pytest.raises(HTTPException) as exc:
-        delay = await _enqueue(bad)
+        await _enqueue(bad, delay)
     assert exc.value.status_code == 400
     delay.assert_not_called()
 

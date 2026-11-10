@@ -55,10 +55,12 @@ DEFERRED_TO_PR2: frozenset[str] = frozenset({"/index/current", "/index/cancel"})
 EXACTLY_ONE_BODY: frozenset[tuple[str, str]] = frozenset({("POST", "/index")})
 
 #: Callers whose source travels in a value built OUTSIDE the call that names the route, so the
-#: statement holds no evidence. ``(file, route)``: a tracked gap with its reason, not a hole.
-DEFERRED_CALLERS: frozenset[tuple[str, str]] = frozenset(
+#: statement holds no evidence. ``(file, route, anchor)``: a tracked gap with its reason, not a hole.
+#: *anchor* is text that must sit inside that one call's statement (its callee), so the entry covers
+#: that call and no other.
+DEFERRED_CALLERS: frozenset[tuple[str, str, str]] = frozenset(
     {
         # Owned by #20513 itself (its second PR, with /index/current and /index/cancel in DEFERRED_TO_PR2).
-        ("autobot-frontend/src/composables/analytics/useIndexingJob.ts", "index"),
+        ("autobot-frontend/src/composables/analytics/useIndexingJob.ts", "index", "_sendIndexRequest("),
     }
 )

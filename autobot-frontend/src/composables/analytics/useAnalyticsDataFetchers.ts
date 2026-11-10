@@ -298,8 +298,8 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   const cachedDuplicatesEndpoint = useFetchEndpoint<unknown, unknown>(
     { path: '/api/analytics/codebase/duplicates/cached', scopeToSource: true, requireSource: true,
-      label: 'Cached duplicates endpoint', pickData: (raw) => raw,
-      onSuccess: applyDuplicates, onError: failDuplicates },
+      label: 'Cached duplicates endpoint', pickData: (raw) => raw, onSuccess: applyDuplicates, onError: failDuplicates,
+      onNoData: () => { duplicateAnalysis.value = []; duplicateScanState.value = 'not_scanned' } },
     { withSourceId },
   )
 
@@ -315,7 +315,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
         raw.status === 'success' && raw.dependency_data
           ? (raw.dependency_data as DependencyGraph)
           : null,
-      onSuccess: (d) => { dependencyData.value = d },
+      onSuccess: (d) => { dependencyData.value = d }, onNoData: () => { dependencyData.value = null },
     },
     { withSourceId },
   )
@@ -332,7 +332,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
         raw.status === 'success' && raw.import_tree
           ? (raw.import_tree as ImportTreeNode[])
           : null,
-      onSuccess: (d) => { importTreeData.value = d },
+      onSuccess: (d) => { importTreeData.value = d }, onNoData: () => { importTreeData.value = null },
     },
     { withSourceId },
   )

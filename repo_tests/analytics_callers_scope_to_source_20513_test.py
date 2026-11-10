@@ -97,9 +97,16 @@ def _call_span(text: str, position: int) -> str:
 
 
 def scan_text(
-    text: str, filename: str = "", deferred: frozenset[tuple[str, str]] = DEFERRED_CALLERS
+    text: str,
+    filename: str = "",
+    deferred: frozenset[tuple[str, str, str]] = DEFERRED_CALLERS,
+    used: set[tuple[str, str, str]] | None = None,
 ) -> tuple[int, list[str]]:
-    """``(sites examined, violations)`` for one file's text; *deferred* is the exemption set in force."""
+    """``(sites examined, violations)`` for one file's text; *deferred* is the exemption set in force.
+
+    An entry is ``(file, route, anchor)`` and covers only a call that would otherwise FAIL and whose
+    own statement holds *anchor*; the entries it consumed are added to *used*.
+    """
     lines = text.splitlines()
     # Comments, whole-line and trailing, are not code: neither a call in one nor a source named in one counts.
     code_text_by_line = {
@@ -108,7 +115,7 @@ def scan_text(
     code = "\n".join(code_text_by_line.values())
     file_scopes = "withSourceId" in code
     file_has_source = bool(EVIDENCE.search(code))
-    examined, violations, exempted = 0, [], set()
+    examined, violations = 0, []
     offset = 0
     for index, line in enumerate(lines):
         line_offset, offset = offset, offset + len(line) + 1
@@ -119,15 +126,17 @@ def scan_text(
             path = _normalise(match.group(1))
             if _exempt(path):
                 continue
-            if (filename, path) in deferred and (filename, path) not in exempted:
-                exempted.add((filename, path))  # an entry covers ONE call; a second bare call is a new finding
-                continue
-            examined += 1
             statement = _call_span(text, line_offset + match.start())
             ok = bool(EVIDENCE.search(statement))
             ok = ok or (bool(SCOPE_FLAG.search(statement)) and bool(REQUIRE_FLAG.search(statement)) and file_scopes)
             factory = TASK_FACTORY.search("\n".join(lines[max(0, index - 2) : index + 1]))
             ok = ok or (bool(factory) and file_has_source)
+            entry = next((e for e in deferred if e[:2] == (filename, path) and e[2] in statement), None)
+            if not ok and entry:
+                if used is not None:
+                    used.add(entry)
+                continue
+            examined += 1
             if not ok:
                 violations.append(f"line {index + 1}: {path}")
     return examined, violations
@@ -160,17 +169,31 @@ def test_every_scoped_analytics_call_sends_its_source():
 def test_every_deferred_caller_entry_still_needs_its_exemption():
     """A STALE entry fails as loudly as a missing one: without it the call must still be a violation."""
     stale = []
-    for rel, route in sorted(DEFERRED_CALLERS):
+    for entry in sorted(DEFERRED_CALLERS):
+        rel, route, anchor = entry
         text = (repo_root() / rel).read_text(encoding="utf-8")
-        _, violations = scan_text(text, rel, deferred=frozenset())
-        if not any(v.endswith(f": {route}") for v in violations):
-            stale.append(f"{rel}: {route}")
+        used: set[tuple[str, str, str]] = set()
+        scan_text(text, rel, deferred=frozenset({entry}), used=used)
+        if entry not in used:  # no call holding the anchor still fails without scope evidence
+            stale.append(f"{rel}: {route} ({anchor})")
     assert not stale, "DEFERRED_CALLERS entries the scan no longer needs (delete them):\n  " + "\n  ".join(stale)
 
 
-def test_control_a_deferred_entry_covers_one_call_not_the_file():
-    two = "await post('/api/analytics/codebase/index', a)\nawait post('/api/analytics/codebase/index', b)"
-    assert scan_text(two, "f.ts", deferred=frozenset({("f.ts", "index")}))[1] == ["line 2: index"]
+def test_control_a_deferred_entry_covers_its_own_call_not_a_bare_one_before_it():
+    entry = ("f.ts", "index", "_send(")
+    bare = "await post('/api/analytics/codebase/index', a)\n"
+    deferred_call = "await _send('/api/analytics/codebase/index', body)"
+    used: set = set()
+    assert scan_text(bare + deferred_call, "f.ts", deferred=frozenset({entry}), used=used)[1] == ["line 1: index"]
+    assert used == {entry}
+
+
+def test_control_a_deferred_call_that_gained_scope_leaves_its_entry_stale():
+    entry = ("f.ts", "index", "_send(")
+    text = "await post('/api/analytics/codebase/index', a)\nawait _send('/api/analytics/codebase/index', { source_id: id })"
+    used: set = set()
+    assert scan_text(text, "f.ts", deferred=frozenset({entry}), used=used)[1] == ["line 1: index"]
+    assert used == set()  # the entry is unused, so the stale-entry test reports it
 
 
 def test_control_a_trailing_comment_is_not_a_call():

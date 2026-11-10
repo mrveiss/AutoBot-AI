@@ -16,57 +16,15 @@ Async workers are wrapped via ``_run_async`` (the persistent worker loop, #20887
 import asyncio
 import contextvars
 import functools
-import hashlib
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
+from tasks.pattern_checkpoint import _checkpoint_options, _load_path_checkpoint, _save_path_checkpoint
 
 logger = get_logger(__name__)
-
-_PATTERN_CHECKPOINT_PREFIX = "pattern_complete_checkpoint:"
-_CHECKPOINT_TTL = 3600  # 1 h — recent-enough to resume from
-
-
-def _path_checkpoint_key(path: str, source_id: str | None = None) -> str:
-    """Issue #12384: fold source_id into the checkpoint key. Without this, two
-    different sources resolving to the same scan path (e.g. both default to
-    AutoBot's own PATH.PROJECT_ROOT) would return each other's cached
-    analysis result -- bypassing the ChromaDB source_id tag entirely on a
-    checkpoint-hit retry.
-    """
-    tag = source_id or "default"
-    return f"{_PATTERN_CHECKPOINT_PREFIX}{hashlib.sha256(f'{tag}:{path}'.encode()).hexdigest()[:16]}"
-
-
-async def _load_path_checkpoint(path: str, source_id: str | None = None) -> dict | None:
-    """Return a previously-saved completed analysis result for *path*/*source_id*, or None (GH#8439)."""
-    try:
-        from autobot_shared.redis_client import get_async_redis_client
-
-        redis = await get_async_redis_client(database="analytics")
-        if not redis:
-            return None
-        raw = await redis.get(_path_checkpoint_key(path, source_id))
-        return json.loads(raw) if raw else None
-    except Exception:
-        return None
-
-
-async def _save_path_checkpoint(path: str, result: dict, source_id: str | None = None) -> None:
-    """Persist *result* as the checkpoint for *path*/*source_id* (GH#8439)."""
-    try:
-        from autobot_shared.redis_client import get_async_redis_client
-
-        redis = await get_async_redis_client(database="analytics")
-        if redis:
-            await redis.set(_path_checkpoint_key(path, source_id), json.dumps(result, default=str), ex=_CHECKPOINT_TTL)
-    except Exception:
-        pass
-
 
 # One fresh token per ``_drain_after`` call. A task spawned while the coroutine runs inherits it, so the
 # drain waits only for its own run's tasks; the worker loop is shared and persistent, and other runs'
@@ -356,7 +314,7 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
             return refusal
 
         # Resume from checkpoint if analysis for this path was recently completed.
-        saved = await _load_path_checkpoint(scan_dir, request.source_id)
+        saved = await _load_path_checkpoint(scan_dir, request.source_id, _checkpoint_options(request))
         if saved:
             logger.info("run_pattern_analysis: resuming from checkpoint for path %s", scan_dir)
             _progress(self, "Loaded from checkpoint", 100.0, started)
@@ -387,7 +345,7 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
         analyzer.enable_embedding_storage = True
         await analyzer._store_patterns(report)
         result = report.to_dict()
-        await _save_path_checkpoint(scan_dir, result, request.source_id)
+        await _save_path_checkpoint(scan_dir, result, request.source_id, _checkpoint_options(request))
         return result
 
     return _wrap(_run_async(_work()), started)

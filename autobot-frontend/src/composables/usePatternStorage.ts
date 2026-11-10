@@ -11,10 +11,11 @@
  * Author: mrveiss
  */
 
-import type { Ref } from 'vue'
+import { watch, type Ref } from 'vue'
 import i18n from '@/i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage, extractResponseErrorDetail } from '@/utils/errorExtract'
+import { sourceIdInUrl } from '@/utils/sourceIdInUrl'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import type { PatternStorageStats } from '@/composables/usePatternAnalysis'
 
@@ -30,6 +31,11 @@ export interface PatternStorageDeps {
 export function usePatternStorage(deps: PatternStorageDeps) {
   const { withSourceId, wrap, error, storageStats } = deps
 
+  // The source the displayed statistics belong to. A clear is bound to it (#20513).
+  const currentSource = (): string | null => sourceIdInUrl(withSourceId('/'))
+  let statsSource: string | null = null
+  let requestedSource: string | null = null
+
   const t = (key: string): string => i18n.global.t(key) as string
 
   // The route answers the statistics at the top level; an unavailable store comes back as `{ error }`.
@@ -43,6 +49,9 @@ export function usePatternStorage(deps: PatternStorageDeps) {
         return typeof raw.total_patterns === 'number' ? (raw as PatternStorageStats) : null
       },
       onSuccess: (stats) => {
+        // A late answer for a source that is no longer selected must not restore its statistics.
+        if (requestedSource !== currentSource()) return
+        statsSource = requestedSource
         storageStats.value = stats
       },
       // A failed stats read stays distinguishable from "nothing stored" (#17651).
@@ -66,6 +75,7 @@ export function usePatternStorage(deps: PatternStorageDeps) {
       onSuccess: () => {
         cleared = true
         storageStats.value = null
+        statsSource = null
       },
       onResponse: async (response) => (await extractResponseErrorDetail(response)) || undefined,
       onError: (_message, err) => {
@@ -80,6 +90,7 @@ export function usePatternStorage(deps: PatternStorageDeps) {
    * Get pattern storage stats
    */
   const getStorageStats = async (): Promise<void> => {
+    requestedSource = currentSource()
     await wrap(() => statsEndpoint.load()).catch((e: unknown) => {
       logger.error('Storage stats fetch failed:', e)
     })
@@ -90,12 +101,26 @@ export function usePatternStorage(deps: PatternStorageDeps) {
    */
   const clearStorage = async (): Promise<boolean> => {
     cleared = false
+    // The statistics on screen are for another source than the one selected now: the request would
+    // delete that other source's patterns. Drop the stale statistics and let the reload show the truth.
+    if (storageStats.value && statsSource !== currentSource()) {
+      storageStats.value = null
+      statsSource = null
+      return false
+    }
     await wrap(() => clearEndpoint.load()).catch((e: unknown) => {
       error.value = extractErrorMessage(e, t('analytics.patterns.storageClearFailed'))
       logger.error('Clear storage failed:', e)
     })
     return cleared
   }
+
+  // A source switch drops the previous source's statistics and reloads them for the new one.
+  watch(currentSource, () => {
+    storageStats.value = null
+    statsSource = null
+    void getStorageStats()
+  })
 
   let reportText: string | null = null
   // The route returns the Markdown report as text when asked for `format=markdown`.
