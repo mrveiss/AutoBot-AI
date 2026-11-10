@@ -35,8 +35,10 @@ def test_ownership_analysis_answers_503_not_500_when_the_registry_is_down():
     down = AsyncMock(side_effect=RegistryUnavailable("secret-host:6379 refused"))
     with (
         patch.object(ownership, "_check_ownership_cache", AsyncMock(return_value=None)),
-        patch("api.codebase_analytics.source_storage.get_default_source_id", down),
+        patch("api.codebase_analytics.source_storage.get_source", down),
     ):
-        response = TestClient(app, raise_server_exceptions=False).get("/ownership/analysis")
+        response = TestClient(app, raise_server_exceptions=False).get(
+            "/ownership/analysis", params={"source_id": "src1"}
+        )
     assert response.status_code == 503, response.text
     assert "secret-host" not in response.text

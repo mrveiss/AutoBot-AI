@@ -133,6 +133,7 @@ celery_app.conf.update(
         # Issue #12365: anti-pattern background analysis + daily cache population
         "analytics.run_anti_pattern_analysis": {"queue": "analytics"},
         "analytics.populate_all_caches": {"queue": "analytics"},
+        "analytics.record_latest_task": {"queue": "analytics"},
         # GH#11262: priority tiers on the shared default queue (audit > maintenance).
         **_PRIORITY_TASK_ROUTES,
     },
