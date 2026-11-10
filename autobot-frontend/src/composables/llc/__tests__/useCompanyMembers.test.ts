@@ -73,3 +73,18 @@ describe('rolesToOffer', () => {
     expect(rolesToOffer(['owner', 'admin'], [], false)).toEqual(['owner', 'admin'])
   })
 })
+
+describe('useCompanyMembers viewerCanManage (#20542)', () => {
+  const withFlag = (flag: boolean | undefined) => [{ ...row('a'), viewer_role: null, viewer_can_manage: flag }]
+
+  it.each([[true, true], [false, false], [undefined, false]])('reads the server flag %s as %s', async (flag, expected) => {
+    const api = setup(vi.fn().mockResolvedValue(withFlag(flag)) as unknown as MembersApi['get'])
+    await api.load()
+    expect(api.viewerCanManage.value).toBe(expected)
+  })
+
+  it('is false before any rows are known', () => {
+    const api = setup(vi.fn() as unknown as MembersApi['get'])
+    expect(api.viewerCanManage.value).toBe(false)
+  })
+})

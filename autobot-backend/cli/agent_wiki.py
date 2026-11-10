@@ -33,14 +33,14 @@ def _get_company_id(args: argparse.Namespace) -> uuid.UUID:
 
 
 async def _list(args: argparse.Namespace) -> None:
-    from autobot_backend.llc.services.agent_wiki_service import AgentWikiService
+    from autobot_backend.llc.services.accessors import get_agent_wiki_service
 
     from user_management.database import get_async_session_factory
 
     company_id = _get_company_id(args)
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = AgentWikiService()
+        svc = get_agent_wiki_service()
         entries = await svc.list_entries(session, args.agent_id, company_id, getattr(args, "namespace", None))
     if not entries:
         print("(no wiki entries)")  # noqa: print  # canonical: ignore py-print-smoke
@@ -52,14 +52,14 @@ async def _list(args: argparse.Namespace) -> None:
 
 
 async def _create(args: argparse.Namespace) -> None:
-    from autobot_backend.llc.services.agent_wiki_service import AgentWikiService
+    from autobot_backend.llc.services.accessors import get_agent_wiki_service
 
     from user_management.database import get_async_session_factory
 
     company_id = _get_company_id(args)
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = AgentWikiService()
+        svc = get_agent_wiki_service()
         entry = await svc.create_entry(
             session,
             agent_id=args.agent_id,
@@ -76,14 +76,14 @@ async def _create(args: argparse.Namespace) -> None:
 
 
 async def _delete(args: argparse.Namespace) -> None:
-    from autobot_backend.llc.services.agent_wiki_service import AgentWikiService
+    from autobot_backend.llc.services.accessors import get_agent_wiki_service
 
     from user_management.database import get_async_session_factory
 
     company_id = _get_company_id(args)
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = AgentWikiService()
+        svc = get_agent_wiki_service()
         entry = await svc.get_entry(session, uuid.UUID(args.id), args.agent_id, company_id)
         if entry is None:
             print("ERROR: entry not found", file=sys.stderr)  # noqa: print  # canonical: ignore py-print-smoke
@@ -94,14 +94,14 @@ async def _delete(args: argparse.Namespace) -> None:
 
 
 async def _context(args: argparse.Namespace) -> None:
-    from autobot_backend.llc.services.agent_wiki_service import AgentWikiService
+    from autobot_backend.llc.services.accessors import get_agent_wiki_service
 
     from user_management.database import get_async_session_factory
 
     company_id = _get_company_id(args)
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = AgentWikiService()
+        svc = get_agent_wiki_service()
         md = await svc.get_wiki_context(session, args.agent_id, company_id)
     print(md if md else "(empty wiki)")  # noqa: print  # canonical: ignore py-print-smoke
 

@@ -22,7 +22,6 @@
  *  - `getContract`, typed by the generated contract (#16292).
  */
 
-import { createLogger } from '@/utils/debugUtils'
 import { getSlmApiBase } from '@/config/ssot-config'
 import { clearSlmSession, readSlmToken } from '@/utils/authStorage'
 import { buildLoginUrl, isLoginPathname } from '@/utils/loginRedirect'
@@ -35,6 +34,7 @@ import {
   type GetPath,
   type GetResponse,
   type TransportRequestOptions,
+  createLogger,
 } from '@autobot/ui'
 import type { paths } from '@/types/generated/api'
 
@@ -56,7 +56,10 @@ export interface GetOptions extends RequestOptions {
   responseType?: 'json' | 'text'
 }
 
-export class SlmApiClient extends ApiClientBase<RequestOptions> {
+/** The contract keys this client can reach: its base is the `/api` mount, so `/` and `/scim/...` are out. */
+export type SlmApiPaths = Pick<paths, Extract<keyof paths, `/api/${string}`>>
+
+export class SlmApiClient extends ApiClientBase<RequestOptions, SlmApiPaths> {
   // Optional host/base override (defaults to getSlmApiBase() when unset).
   private baseUrlOverride: string | null = null
 
@@ -116,14 +119,22 @@ export class SlmApiClient extends ApiClientBase<RequestOptions> {
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
   }
 
-  // GET typed by the generated contract (#16292). The path must be a GET in `paths`, and the
-  // response type comes from its 200 schema. Contract keys carry the `/api` prefix; the
-  // client's base already supplies it (or `/slm/api`).
+  // Contract keys carry the `/api` prefix; this client's base already supplies it (or `/slm/api`),
+  // so `call`/`callRaw` drop it once here (#12363).
+  // The base is the `/api` mount, so a key outside it (`/`, `/scim/v2/...`) has no route through this client.
+  protected contractPath(path: string): string {
+    if (!path.startsWith('/api/')) throw new Error(`${path} is outside the /api mount this client's base points at; it cannot be called through SlmApiClient`)
+    return path.slice('/api'.length)
+  }
+
+  // GET typed by the generated contract (#16292): the path must be a GET in `paths`, and the response
+  // type comes from its 200 schema. A thin typed view over `call`, so the prefix strip exists once.
   async getContract<P extends GetPath<paths>>(
     path: P,
     options: RequestOptions = {}
   ): Promise<GetResponse<paths, P>> {
-    return (await this.get(path.replace(/^\/api(?=\/)/, ''), options)) as GetResponse<paths, P>
+    const { params, ...transport } = options
+    return (await this.call('get' as never, path as never, { ...transport, query: params } as never)) as GetResponse<paths, P>
   }
 }
 

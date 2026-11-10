@@ -17,12 +17,14 @@ import content_reach.health  # noqa: F401 — registers KnownProbes.CONTENT_REAC
 
 # Core router imports - these are required for basic functionality
 from api.adapters import router as adapters_router  # Issue #1403
+from api.admin_cleanup_proposals import router as admin_cleanup_proposals_router  # #20567
 from api.admin_event_logs import router as admin_event_logs_router  # Issue #4461
 from api.admin_oauth_bundle_strip import router as admin_oauth_bundle_strip_router  # #13630
 from api.admin_org_tier_column import router as admin_org_tier_column_router  # #19997
 from api.admin_orphan_repair import router as admin_orphan_repair_router  # #15779, #16927
 from api.admin_orphan_storage import router as admin_orphan_storage_router  # #17038, #17039
 from api.admin_ownerless_chat_sessions import router as admin_ownerless_chat_sessions_router  # #20030
+from api.admin_person_links import router as admin_person_links_router  # #10200
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
 from api.admin_retention_policies import router as admin_retention_policies_router  # MVA-3145, GH#8995
 from api.agent import router as agent_router
@@ -57,6 +59,7 @@ from api.frontend_config import router as frontend_config_router
 from api.git_mcp import router as git_mcp_router
 from api.http_client_mcp import router as http_client_mcp_router
 from api.intelligent_agent import router as intelligent_agent_router
+from api.internal_slm_credential_proposals import router as internal_slm_credential_proposals_router  # #20046
 from api.jwks import auth_router as jwks_auth_router  # #10196
 from api.knowledge import router as knowledge_router
 from api.knowledge_ai_stack import router as knowledge_ai_stack_router
@@ -139,6 +142,7 @@ def _get_system_routers() -> list:
     return [
         (admin_event_logs_router, "", ["admin", "compliance"], "admin_event_logs"),  # Issue #4461
         (admin_pricing_router, "", ["admin", "pricing"], "admin_pricing"),  # GH#6480
+        (admin_person_links_router, "", ["admin", "person-links"], "admin_person_links"),  # #10200
         (admin_orphan_repair_router, "", ["admin", "orphan-repair"], "admin_orphan_repair"),  # #15779
         (admin_orphan_storage_router, "", ["admin", "orphan-storage"], "admin_orphan_storage"),  # #17038, #17039
         (
@@ -538,6 +542,8 @@ def _get_credential_admin_routers() -> list:
     return [
         (admin_oauth_bundle_strip_router, "", ["admin", "oauth-bundle-strip"], "admin_oauth_bundle_strip"),
         (admin_org_tier_column_router, "", ["admin", "org-tier-column"], "admin_org_tier_column"),
+        (internal_slm_credential_proposals_router, "", ["internal", "slm"], "internal_slm_credential_proposals"),
+        (admin_cleanup_proposals_router, "", ["admin", "cleanup-proposals"], "admin_cleanup_proposals"),
         (
             admin_ownerless_chat_sessions_router,
             "",

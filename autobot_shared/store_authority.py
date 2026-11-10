@@ -283,11 +283,15 @@ STORE_AUTHORITY: dict[str, Concept] = {
             # #18293: writes only the chat:conversation:* LLM-context cache, a
             # projection of these messages -- never a durable copy of a turn.
             "autobot-backend/chat_workflow/conversation.py",
+            # #20852: writes only chat:rolling_summary:*, a summary projection of these turns.
+            "autobot-backend/chat_history/rolling_summary.py",
         ),
         rebuilt_by="ChatHistoryCacheMixin repopulates a session's cache entry from its session "
         "file on the next load; the file is written atomically and is the session. The "
         "chat:conversation:* LLM-context cache is re-projected from load_session() on a miss "
-        "(chat_history/turn_projection.project_turn_pairs).",
+        "(chat_history/turn_projection.project_turn_pairs). chat:rolling_summary:* is rebuilt "
+        "from the same messages by the next rolling-summary refresh "
+        "(chat_history/rolling_summary.refresh_summary), which folds the durable turns from the oldest.",
         note="The one system of record for conversation turns (#18293). The per-turn transcript "
         "files that once duplicated them are legacy_conversation_transcripts: read-only.",
     ),
@@ -352,6 +356,18 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "one crashed agent into a permanently blocked project, which is worse than the collision "
         "claims exist to prevent. Every claim carries a TTL and is renewed by its holder, so the "
         "durable record of the work is the a2a Task, never the claim.",
+    ),
+    "terminal_session_state": Concept(
+        name="terminal_session_state",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot-backend/services/agent_terminal/session_state.py",),
+        rebuilt_by="SessionManager.get_session refreshes a worker's copy from the Redis record before use (#20674).",
+        note="Deliberate exception (#20674). A terminal session and its pending approval are live, "
+        "TTL'd hot-path state that only has meaning while the session runs; the durable record of a "
+        "decision is the approvals mirror row. Each worker's in-memory copy is a cache: it is refreshed "
+        "from Redis before a decision, a save is refused when the stored version moved on, and one "
+        "decision per approval is claimed atomically.",
     ),
     "approval": Concept(
         name="approval",

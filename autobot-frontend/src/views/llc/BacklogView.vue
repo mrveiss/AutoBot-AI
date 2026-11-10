@@ -9,7 +9,7 @@
         <span class="item-count">{{ t('llc.backlog.itemCount', { count: filteredItems.length }) }}</span>
       </div>
       <div class="header-actions">
-        <button class="btn-primary" @click="showCreateForm = true">
+        <button class="btn-primary" @click="openCreateForm">
           <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
@@ -34,7 +34,7 @@
       </select>
       <select v-model="filters.type" class="filter-select">
         <option value="">{{ t('llc.backlog.allTypes') }}</option>
-        <option v-for="wt in WORK_ITEM_TYPES" :key="wt.value" :value="wt.value">{{ wt.label }}</option>
+        <option v-for="wt in WORK_ITEM_TYPES" :key="wt.value" :value="wt.value">{{ t(wt.labelKey) }}</option>
       </select>
       <select v-model="filters.status" class="filter-select">
         <option value="">{{ t('llc.backlog.allStatuses') }}</option>
@@ -43,7 +43,7 @@
       </select>
       <select v-model="filters.priority" class="filter-select">
         <option value="">{{ t('llc.backlog.allPriorities') }}</option>
-        <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ p.label }}</option>
+        <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ t(p.labelKey) }}</option>
       </select>
       <input
         v-model="filters.search"
@@ -52,6 +52,20 @@
         type="text"
       />
     </div>
+
+    <BacklogHierarchyPanel :company-id="companyId" />
+
+    <BaseAlert v-if="loadFailed" variant="error" :message="t('llc.backlog.fetchFailed')">
+      <template #actions>
+        <BaseButton size="sm" variant="secondary" data-testid="retry-load" @click="fetchBacklog">{{ t('common.retry') }}</BaseButton>
+      </template>
+    </BaseAlert>
+
+    <BaseAlert v-if="createdRefreshFailed" variant="warning" :message="t('llc.backlog.createdRefreshFailed')">
+      <template #actions>
+        <BaseButton size="sm" variant="secondary" data-testid="retry-refresh" @click="onItemCreated">{{ t('common.retry') }}</BaseButton>
+      </template>
+    </BaseAlert>
 
     <!-- Table -->
     <div class="backlog-table-wrapper">
@@ -114,7 +128,7 @@
               <span v-else class="sprint-empty">—</span>
             </td>
           </tr>
-          <tr v-if="filteredItems.length === 0 && !isLoading">
+          <tr v-if="filteredItems.length === 0 && !isLoading && !loadFailed">
             <td colspan="8" class="empty-state">{{ t('llc.backlog.noMatch') }}</td>
           </tr>
           <tr v-if="isLoading">
@@ -124,116 +138,27 @@
       </table>
     </div>
 
-    <!-- AC Suggester create form -->
-    <BaseModal
+    <BacklogCreateModal
       :model-value="showCreateForm"
-      :title="t('llc.backlog.createTitle')"
-      :close-label="t('ui.modal.closeDialog')"
-      :width="560"
+      :company-id="companyId"
+      :projects="projects"
+      :loading-projects="isLoadingProjects"
+      :projects-failed="projectsFailed"
+      :default-project-id="projectFilterId"
       @close="showCreateForm = false"
-    >
-      <div class="modal-form-body">
-        <div class="form-field">
-          <label>{{ t('llc.backlog.fieldTitle') }}</label>
-          <input v-model="newItem.title" type="text" class="form-input" :placeholder="t('llc.backlog.titlePlaceholder')" />
-        </div>
-        <div class="form-row">
-          <div class="form-field">
-            <label>{{ t('llc.backlog.fieldType') }}</label>
-            <select v-model="newItem.type" class="form-select">
-              <option v-for="wt in WORK_ITEM_TYPES" :key="wt.value" :value="wt.value">{{ wt.label }}</option>
-            </select>
-          </div>
-          <div class="form-field">
-            <label>{{ t('llc.backlog.fieldPriority') }}</label>
-            <select v-model="newItem.priority" class="form-select">
-              <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ p.label }}</option>
-            </select>
-          </div>
-          <div class="form-field">
-            <label>{{ t('llc.backlog.fieldStoryPoints') }}</label>
-            <input v-model.number="newItem.story_points" type="number" class="form-input" min="0" />
-          </div>
-        </div>
-        <div class="form-field">
-          <label>{{ t('llc.backlog.fieldDescription') }}</label>
-          <textarea v-model="newItem.description" class="form-textarea" rows="4" />
-        </div>
+      @retry-projects="loadProjects"
+      @created="onItemCreated"
+    />
 
-        <!-- AC Suggester -->
-        <div class="ac-suggester">
-          <div class="ac-header">
-            <label>{{ t('llc.backlog.acceptanceCriteria') }}</label>
-            <button
-              class="btn-suggest"
-              :disabled="!newItem.title || isSuggestingAC"
-              @click="suggestAC"
-            >
-              <span v-if="isSuggestingAC">{{ t('llc.backlog.suggesting') }}</span>
-              <span v-else>✨ {{ t('llc.backlog.suggestAcs') }}</span>
-            </button>
-          </div>
-          <div v-if="suggestedACs.length > 0" class="suggested-acs">
-            <label
-              v-for="(ac, i) in suggestedACs"
-              :key="i"
-              class="ac-item"
-            >
-              <input type="checkbox" v-model="ac.selected" />
-              {{ ac.text }}
-            </label>
-          </div>
-        </div>
-
-        <p v-if="createError" class="create-error" role="alert">{{ createError }}</p>
-
-      </div>
-
-      <template #actions>
-        <button class="btn-secondary" @click="showCreateForm = false">{{ t('common.cancel') }}</button>
-        <button class="btn-primary" :disabled="!newItem.title || isCreating" @click="createItem">
-          {{ isCreating ? t('llc.backlog.creating') : t('common.create') }}
-        </button>
-      </template>
-    </BaseModal>
-
-    <!-- Bulk sprint assign drawer -->
-    <BaseModal
+    <BacklogBulkAssignModal
       :model-value="showBulkAssign"
-      :title="t('llc.backlog.assignToSprint')"
-      :close-label="t('ui.modal.closeDialog')"
-      :width="560"
+      :company-id="companyId"
+      :work-item-ids="Array.from(selectedIds)"
+      :projects="projects"
+      :loading-projects="isLoadingProjects"
       @close="showBulkAssign = false"
-    >
-      <div class="modal-form-body">
-        <p>{{ t('llc.backlog.itemsSelected', { count: selectedIds.size }) }}</p>
-        <div class="form-field">
-          <label>{{ t('llc.backlog.project') }}</label>
-          <select class="form-input" :value="selectedProjectId" :disabled="isLoadingProjects"
-                  @change="onProjectSelect(($event.target as HTMLSelectElement).value)">
-            <option value="">{{ isLoadingProjects ? t('llc.backlog.loadingProjects') : t('llc.backlog.selectProject') }}</option>
-            <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
-        </div>
-        <div class="form-field">
-          <label>{{ t('llc.backlog.sprint') }}</label>
-          <select v-model="bulkSprintId" class="form-input" :disabled="!selectedProjectId || isLoadingSprints">
-            <option value="">{{ isLoadingSprints ? t('llc.backlog.loadingSprints') : t('llc.backlog.selectSprint') }}</option>
-            <option v-for="s in sprints" :key="s.id" :value="s.id">{{ s.name }}</option>
-          </select>
-          <p v-if="selectedProjectId && !isLoadingSprints && sprints.length === 0" class="form-hint">
-            {{ t('llc.backlog.noSprints') }}
-          </p>
-        </div>
-      </div>
-
-      <template #actions>
-        <button class="btn-secondary" @click="showBulkAssign = false">{{ t('common.cancel') }}</button>
-        <button class="btn-primary" :disabled="!bulkSprintId || isBulkAssigning" @click="bulkAssign">
-          {{ isBulkAssigning ? t('llc.backlog.assigning') : t('llc.backlog.assign') }}
-        </button>
-      </template>
-    </BaseModal>
+      @assigned="onBulkAssigned"
+    />
 
     <WorkItemDetail
       v-if="detailItem"
@@ -250,10 +175,15 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
+import { useAssignableProjects } from '@/composables/llc/useAssignableProjects'
+import { useBacklogItems } from '@/composables/llc/useBacklogItems'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
-import { BaseAvatar, BaseModal } from '@autobot/ui'
+import BacklogCreateModal from '@/components/llc/BacklogCreateModal.vue'
+import BacklogBulkAssignModal from '@/components/llc/BacklogBulkAssignModal.vue'
+import BacklogHierarchyPanel from '@/components/llc/BacklogHierarchyPanel.vue'
+import { BaseAlert, BaseAvatar, BaseButton } from '@autobot/ui'
 
 const logger = createLogger('BacklogView')
 const api = useApiClient()
@@ -262,60 +192,25 @@ const { t } = useI18n()
 
 const companyId = computed(() => route.params.companyId as string)
 
-const WORK_ITEM_TYPES = [
-  { value: 'epic', label: 'Epic' },
-  { value: 'feature', label: 'Feature' },
-  { value: 'pbi', label: 'PBI' },
-  { value: 'task', label: 'Task' },
-  { value: 'bug', label: 'Bug' },
-  { value: 'subtask', label: 'Subtask' },
-  { value: 'spike', label: 'Spike' },
-  { value: 'risk', label: 'Risk' },
-]
+import { WORK_ITEM_TYPES, PRIORITIES, type WorkItem } from './workItemTypes'
 
-const PRIORITIES = [
-  { value: 'critical', label: 'Critical' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-]
-
-import type { WorkItem } from './workItemTypes'
-
-const items = ref<WorkItem[]>([])
-const isLoading = ref(false)
 const detailItem = ref<WorkItem | null>(null)
 const selectedIds = ref<Set<string>>(new Set())
 const draggedItem = ref<WorkItem | null>(null)
 
 const filters = ref({ type: '', status: '', priority: '', search: '' })
 
-// #17680: kept out of `filters` on purpose -- everything in there is applied
-// client-side by `filteredItems`, and this one is applied by the server. A
-// project filter cannot be client-side: the route pages at `limit=50`, so
-// narrowing an already-truncated page returns an arbitrary subset of the
-// project rather than the project.
+// #17680: applied by the server, so kept out of `filters` (those are client-side): a client-side project
+// filter would narrow an already-truncated 50-row page to an arbitrary subset.
 const projectFilterId = ref('')
 
 const showCreateForm = ref(false)
-const isCreating = ref(false)
-const createError = ref('')
-const newItem = ref({ title: '', type: 'pbi', priority: 'medium', story_points: null as number | null, description: '' })
-const isSuggestingAC = ref(false)
-const suggestedACs = ref<{ text: string; selected: boolean }[]>([])
+const createdRefreshFailed = ref(false) // a create worked, the list refresh after it did not (#20930)
 
 const showBulkAssign = ref(false)
-const isBulkAssigning = ref(false)
-const bulkSprintId = ref('')
 
-interface ProjectOpt { id: string; name: string; lifecycle_state: string }
-interface SprintOpt { id: string; name: string; status: string }
-
-const projects = ref<ProjectOpt[]>([])
-const sprints = ref<SprintOpt[]>([])
-const selectedProjectId = ref('')
-const isLoadingProjects = ref(false)
-const isLoadingSprints = ref(false)
+const { projects, isLoadingProjects, projectsFailed, loadProjects } = useAssignableProjects(companyId)
+const { items, isLoading, loadFailed, fetchBacklog } = useBacklogItems(companyId, projectFilterId)
 
 const filteredItems = computed(() => {
   return items.value.filter(item => {
@@ -395,131 +290,28 @@ async function persistBacklogOrder(ordered: WorkItem[], previous: WorkItem[]): P
   }
 }
 
-// Request advisory acceptance criteria for the in-progress new item. Company
-// scope is derived from the org context server-side — never send company_id.
-// Backend: POST /api/llc/work-items/suggest-ac (#9861); empty list on LLM-down.
-async function suggestAC() {
-  if (!newItem.value.title) return
-  isSuggestingAC.value = true
-  try {
-    const res = await api.post<{ suggestions: string[] }>(`/api/llc/work-items/suggest-ac`, {
-      title: newItem.value.title,
-      description: newItem.value.description,
-    })
-    suggestedACs.value = (res.suggestions ?? []).map(text => ({ text, selected: true }))
-  } catch (err) {
-    logger.error('AC suggestion failed', err)
-    suggestedACs.value = []
-  } finally {
-    isSuggestingAC.value = false
-  }
+function openCreateForm() {
+  showCreateForm.value = true
+  if (projects.value.length === 0 && !isLoadingProjects.value) loadProjects()
 }
 
-async function createItem() {
-  if (!newItem.value.title) return
-  isCreating.value = true
-  createError.value = ''
-  try {
-    const ac = suggestedACs.value.filter(a => a.selected).map(a => a.text)
-    const created = await api.post<WorkItem>(`/api/llc/work-items`, {
-      company_id: companyId.value,
-      ...newItem.value,
-      acceptance_criteria: ac,
-    })
-    items.value.unshift(created)
-    showCreateForm.value = false
-    newItem.value = { title: '', type: 'pbi', priority: 'medium', story_points: null, description: '' }
-    suggestedACs.value = []
-  } catch (err) {
-    // Surface the backend reason instead of a silent console-only log (#11411).
-    logger.error('Create work item failed', err)
-    const detail = err instanceof Error ? err.message : ''
-    createError.value = detail
-      ? t('llc.backlog.createErrorDetail', { detail })
-      : t('llc.backlog.createError')
-  } finally {
-    isCreating.value = false
-  }
-}
-
-// Cascade picker for bulk sprint assignment: pick a Project, then a Sprint from
-// that project. Only assignable (non-archived) projects and (open) sprints are
-// offered so a user never needs to paste a raw Sprint UUID (#10853).
-async function loadProjects() {
-  isLoadingProjects.value = true
-  try {
-    const result = await api.get<ProjectOpt[]>(`/api/llc/companies/${companyId.value}/projects`)
-    projects.value = (result ?? []).filter(
-      p => p.lifecycle_state !== 'archived' && p.lifecycle_state !== 'disposed',
-    )
-  } catch (err) {
-    logger.error('Failed to load projects', err)
-  } finally {
-    isLoadingProjects.value = false
-  }
-}
-
-async function onProjectSelect(projectId: string) {
-  selectedProjectId.value = projectId
-  bulkSprintId.value = ''
-  sprints.value = []
-  if (!projectId) return
-  isLoadingSprints.value = true
-  try {
-    const result = await api.get<SprintOpt[]>(`/api/llc/projects/${projectId}/sprints`)
-    sprints.value = (result ?? []).filter(
-      sp => sp.status !== 'closed' && sp.status !== 'archived',
-    )
-  } catch (err) {
-    logger.error('Failed to load sprints', err)
-  } finally {
-    isLoadingSprints.value = false
-  }
+// Refetched, not prepended: the form can pick any project and the list is filtered by the server.
+// Also the Retry of a failed refresh: the form is already closed then. A refresh a newer request superseded
+// answers true (see useBacklogItems), so an earlier one can never set the warning over a newer outcome (#21032).
+async function onItemCreated() {
+  showCreateForm.value = false
+  createdRefreshFailed.value = !(await fetchBacklog())
 }
 
 function openBulkAssign() {
   showBulkAssign.value = true
-  selectedProjectId.value = ''
-  sprints.value = []
-  bulkSprintId.value = ''
   if (projects.value.length === 0) loadProjects()
 }
 
-async function bulkAssign() {
-  if (!bulkSprintId.value) return
-  isBulkAssigning.value = true
-  try {
-    await api.post<unknown>(`/api/llc/backlog/bulk-assign-sprint`, {
-      work_item_ids: Array.from(selectedIds.value),
-      sprint_id: bulkSprintId.value,
-    })
-    selectedIds.value = new Set()
-    showBulkAssign.value = false
-    bulkSprintId.value = ''
-    await fetchBacklog()
-  } catch (err) {
-    logger.error('Bulk assign failed', err)
-  } finally {
-    isBulkAssigning.value = false
-  }
-}
-
-async function fetchBacklog() {
-  isLoading.value = true
-  try {
-    // #17680: `GET /api/llc/backlog` has accepted and honoured `project_id`
-    // since it was written, and this was its only caller -- sending
-    // `company_id` alone. So "the project backlog" was always the whole
-    // company's backlog, for every project.
-    const query = new URLSearchParams({ company_id: companyId.value })
-    if (projectFilterId.value) query.set('project_id', projectFilterId.value)
-    const result = await api.get<{ items: WorkItem[] }>(`/api/llc/backlog?${query.toString()}`)
-    items.value = result.items ?? []
-  } catch (err) {
-    logger.error('Failed to load backlog', err)
-  } finally {
-    isLoading.value = false
-  }
+function onBulkAssigned() {
+  selectedIds.value = new Set()
+  showBulkAssign.value = false
+  fetchBacklog()
 }
 
 // Server-side filter, so a change is a refetch rather than a recompute.
@@ -528,10 +320,18 @@ watch(projectFilterId, () => {
   fetchBacklog()
 })
 
+// Another company has other projects, sprints and items: nothing chosen for the last one may carry over (#20930).
+watch(companyId, () => {
+  const refetchedByFilter = projectFilterId.value !== ''
+  selectedIds.value = new Set()
+  projectFilterId.value = ''
+  createdRefreshFailed.value = false
+  if (!refetchedByFilter) fetchBacklog()
+})
+
 onMounted(() => {
   fetchBacklog()
-  // The filter needs the project list on load; the bulk-assign modal used to
-  // be the only thing that fetched it, so it arrived only after opening that.
+  // The project filter needs the project list on load.
   loadProjects()
 })
 </script>
@@ -663,113 +463,6 @@ onMounted(() => {
 .loading-state {
   text-align: center;
   padding: 2rem;
-  color: var(--text-secondary);
-}
-
-/* #10882: overlay/panel/header/footer chrome now provided by @autobot/ui
-   BaseModal; only the body field stack keeps its 1rem gap here. */
-.modal-form-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.form-field label {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.form-row {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.form-row .form-field {
-  flex: 1;
-}
-
-.form-input,
-.form-select,
-.form-textarea {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  width: 100%;
-}
-
-.form-textarea {
-  resize: vertical;
-}
-
-.ac-suggester {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.ac-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.ac-header label {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.btn-suggest {
-  font-size: 0.8rem;
-  padding: 0.25rem 0.75rem;
-  border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
-  background: var(--bg-elevated);
-  cursor: pointer;
-}
-
-.btn-suggest:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.suggested-acs {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-  padding: 0.5rem;
-  border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
-  background: var(--bg-elevated);
-}
-
-.ac-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.create-error {
-  margin: 0 0 0.5rem;
-  font-size: 0.8125rem;
-  color: var(--color-danger);
-}
-
-.form-hint {
-  margin: 0.25rem 0 0;
-  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 

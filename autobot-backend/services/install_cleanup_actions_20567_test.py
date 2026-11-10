@@ -1,0 +1,268 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+"""#20567: .env.*~ copies and the stale directory go only after approval, by server-computed paths."""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import uuid
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from services import approval_execution
+from services import install_cleanup_actions as acts
+from testkit.fake_async_session import FakeAsyncSession
+
+_ADMIN, _OTHER = uuid.uuid4(), uuid.uuid4()
+_SECRET = "SECRET-VALUE-MUST-NOT-APPEAR"  # pragma: allowlist secret
+
+
+def _session(admins: int = 2) -> FakeAsyncSession:
+    """A session whose active platform admins are the requester, plus a second admin when ``admins`` is 2."""
+    return FakeAsyncSession(default_result=[_ADMIN, _OTHER][:admins])
+
+
+def _approval(action: str, decider=_OTHER, context: dict | None = None) -> SimpleNamespace:
+    approval = SimpleNamespace(
+        id=uuid.uuid4(),
+        decided_by_user="owner",
+        context=context or {"action": action, "node": acts.node_identity()},
+        requested_by_agent=f"cleanup-proposal:{_ADMIN}",
+    )
+    approval_execution.set_verified_decider(approval, decider)
+    return approval
+
+
+def _make_env(root: Path, mtimes: dict[str, int]) -> Path:
+    backend = root / "autobot-backend"
+    backend.mkdir(parents=True)
+    (backend / ".env").write_text(_SECRET, encoding="utf-8")
+    for name, mtime in mtimes.items():
+        path = backend / name
+        path.write_text(_SECRET, encoding="utf-8")
+        os.utime(path, (mtime, mtime))
+    return backend
+
+
+def _names(backend: Path) -> list[str]:
+    return sorted(p.name for p in backend.iterdir())
+
+
+async def _run(handler, approval, root: Path, session=None) -> MagicMock:
+    audit = AsyncMock()
+    with patch.object(acts, "install_root", return_value=root), patch.object(acts, "audit_log", audit):
+        await handler(approval, session or _session())
+    return audit
+
+
+async def test_env_copies_keep_only_the_newest(tmp_path: Path) -> None:
+    backend = await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.3~": 300, ".env.2~": 200})
+    session = _session()
+    audit = await _run(acts.execute_env_copies_cleanup, _approval(acts.ENV_COPIES_ACTION), tmp_path, session)
+    assert await asyncio.to_thread(_names, backend) == [".env", ".env.3~"]
+    details = audit.await_args.kwargs["details"]
+    assert audit.await_args.kwargs["result"] == "success" and details["removed"] == 2
+    assert _SECRET not in repr(audit.await_args_list) and _SECRET not in session.added[-1].body
+    intent = audit.await_args_list[0].kwargs  # a consumer counting completed removals must not count this
+    assert intent["result"] == "attempted" and intent["details"]["phase"] == "intent"
+
+
+async def test_nothing_to_do_removes_nothing(tmp_path: Path) -> None:
+    backend = await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100})
+    session = _session()
+    await _run(acts.execute_env_copies_cleanup, _approval(acts.ENV_COPIES_ACTION), tmp_path, session)
+    assert await asyncio.to_thread(_names, backend) == [".env", ".env.1~"]
+    assert "Nothing to remove" in session.added[-1].body
+
+
+async def test_a_symlinked_copy_refuses_and_removes_nothing(tmp_path: Path) -> None:
+    backend = await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200})
+    outside = tmp_path / "outside.txt"
+    await asyncio.to_thread(outside.write_text, "x", encoding="utf-8")
+    await asyncio.to_thread((backend / ".env.3~").symlink_to, outside)
+    audit = AsyncMock()
+    with patch.object(acts, "install_root", return_value=tmp_path), patch.object(acts, "audit_log", audit):
+        with pytest.raises(ValueError, match="symlink"):
+            await acts.execute_env_copies_cleanup(_approval(acts.ENV_COPIES_ACTION), _session())
+    assert await asyncio.to_thread(_names, backend) == [".env", ".env.1~", ".env.2~", ".env.3~"]
+    assert await asyncio.to_thread(outside.exists)
+    assert audit.await_args.kwargs["result"] == "denied"
+
+
+async def test_a_context_path_is_ignored(tmp_path: Path) -> None:
+    victim = tmp_path / "victim.txt"
+    await asyncio.to_thread(victim.write_text, "x", encoding="utf-8")
+    await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200})
+    approval = _approval(
+        acts.ENV_COPIES_ACTION,
+        context={"action": acts.ENV_COPIES_ACTION, "node": acts.node_identity(), "path": str(victim)},
+    )
+    await _run(acts.execute_env_copies_cleanup, approval, tmp_path)
+    assert await asyncio.to_thread(victim.exists)
+
+
+async def test_without_a_verified_decider_nothing_changes(tmp_path: Path) -> None:
+    backend = await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200})
+    with pytest.raises(ValueError):
+        await _run(acts.execute_env_copies_cleanup, _approval(acts.ENV_COPIES_ACTION, decider=None), tmp_path)
+    assert await asyncio.to_thread(_names, backend) == [".env", ".env.1~", ".env.2~"]
+
+
+async def test_four_eyes_applies(tmp_path: Path) -> None:
+    backend = await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200})
+    with pytest.raises(ValueError, match="different admin"):
+        await _run(
+            acts.execute_env_copies_cleanup,
+            _approval(acts.ENV_COPIES_ACTION, decider=_ADMIN),
+            tmp_path,
+            _session(admins=2),
+        )
+    assert len(await asyncio.to_thread(_names, backend)) == 3
+    await _run(
+        acts.execute_env_copies_cleanup,
+        _approval(acts.ENV_COPIES_ACTION, decider=_ADMIN),
+        tmp_path,
+        _session(admins=1),
+    )
+    assert await asyncio.to_thread(_names, backend) == [".env", ".env.2~"]
+
+
+def test_registration_is_server_only() -> None:
+    acts.register_install_cleanup_actions()
+    assert approval_execution.is_server_only_action(acts.ENV_COPIES_ACTION)
+
+
+async def test_no_audit_entry_means_nothing_is_removed(tmp_path: Path) -> None:
+    """#17038: the paper trail comes first."""
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    before = _names(backend)
+    with (
+        patch.object(acts, "install_root", return_value=tmp_path),
+        patch.object(acts, "audit_log", AsyncMock(return_value=False)),
+        pytest.raises(ValueError),
+    ):
+        await acts.execute_env_copies_cleanup(_approval(acts.ENV_COPIES_ACTION), _session())
+    assert _names(backend) == before
+
+
+def test_a_checkout_as_install_root_refuses(tmp_path: Path) -> None:
+    """On a dev checkout the install root holds `.git`: these are not deployed copies."""
+    (tmp_path / ".git").mkdir()
+    assert "checkout" in acts.plan_env_copies(tmp_path).refused
+
+
+async def test_a_deployed_base_dir_is_the_backend_directory_itself(tmp_path: Path) -> None:
+    """On a host AUTOBOT_BASE_DIR is <install>/autobot-backend; reading one level deeper found nothing."""
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    assert [p.name for p in acts.plan_env_copies(backend).targets] == [".env.1~"]
+    await _run(acts.execute_env_copies_cleanup, _approval(acts.ENV_COPIES_ACTION), backend)
+    assert ".env.1~" not in _names(backend) and ".env.2~" in _names(backend) and ".env" in _names(backend)
+
+
+def test_contrast_an_install_root_still_finds_the_backend_directory(tmp_path: Path) -> None:
+    _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    assert [p.name for p in acts.plan_env_copies(tmp_path).targets] == [".env.1~"]
+
+
+def test_a_backend_directory_inside_a_checkout_refuses(tmp_path: Path) -> None:
+    """AUTOBOT_BASE_DIR=<checkout>/autobot-backend has no `.git` of its own; its parent does."""
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    (tmp_path / ".git").mkdir()
+    assert "checkout" in acts.plan_env_copies(backend).refused
+    assert "checkout" in acts.plan_env_copies(tmp_path).refused
+
+
+def test_a_directory_swapped_for_a_symlink_after_planning_removes_nothing(tmp_path: Path) -> None:
+    """The plan pins the directory: replacing it with a symlink to another one must not redirect the unlinks."""
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    plan = acts.plan_env_copies(tmp_path)
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    (outside / ".env.1~").write_text(_SECRET, encoding="utf-8")
+    backend.rename(tmp_path / "moved")
+    backend.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(OSError):
+        acts._remove_env_copies(plan, tmp_path)
+    assert (outside / ".env.1~").exists()
+
+
+def test_a_different_directory_at_the_same_path_removes_nothing(tmp_path: Path) -> None:
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    plan = acts.plan_env_copies(tmp_path)
+    backend.rename(tmp_path / "moved")
+    _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    with pytest.raises(ValueError, match="changed after"):
+        acts._remove_env_copies(plan, tmp_path)
+    assert ".env.1~" in _names(backend)
+
+
+def test_contrast_the_unchanged_directory_is_removed_from(tmp_path: Path) -> None:
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    assert acts._remove_env_copies(acts.plan_env_copies(tmp_path), tmp_path) == (1, [])
+    assert ".env.1~" not in _names(backend)
+
+
+async def test_an_approval_raised_for_another_node_removes_nothing(tmp_path: Path) -> None:
+    """Shared approval store: approving node A's request on node B must not delete B's copies."""
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    other = _approval(acts.ENV_COPIES_ACTION, context={"action": acts.ENV_COPIES_ACTION, "node": "another-node"})
+    with pytest.raises(ValueError, match="another installation"):
+        await _run(acts.execute_env_copies_cleanup, other, tmp_path)
+    assert ".env.1~" in _names(backend)
+
+
+def test_a_copy_that_vanishes_during_planning_is_skipped_not_a_crash(tmp_path: Path) -> None:
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200, ".env.3~": 300})
+    real_stat = Path.stat
+    seen = {"hit": False}
+
+    def flaky(self: Path, *args, **kwargs):
+        if self.name == ".env.1~" and not seen["hit"] and not args and not kwargs:
+            seen["hit"] = True
+            if self.exists():
+                self.unlink()  # gone between the glob and the ranking
+        return real_stat(self, *args, **kwargs)
+
+    with patch.object(Path, "stat", flaky):
+        plan = acts.plan_env_copies(tmp_path)
+    assert seen["hit"] and plan.refused is None
+    assert [p.name for p in plan.targets] == [".env.2~"] and plan.kept == backend / ".env.3~"
+
+
+async def test_a_target_gone_between_plan_and_act_is_audited_as_already_gone(tmp_path: Path) -> None:
+    backend = await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200, ".env.3~": 300})
+    audit, session = AsyncMock(), _session()
+    real_remove = acts._remove_env_copies
+
+    def vanish_then_remove(plan, root):
+        (backend / ".env.1~").unlink()  # another process removed it after the plan was computed
+        return real_remove(plan, root)
+
+    with (
+        patch.object(acts, "install_root", return_value=tmp_path),
+        patch.object(acts, "audit_log", audit),
+        patch.object(acts, "_remove_env_copies", vanish_then_remove),
+    ):
+        await acts.execute_env_copies_cleanup(_approval(acts.ENV_COPIES_ACTION), session)
+    details = audit.await_args.kwargs["details"]
+    assert audit.await_args.kwargs["result"] == "success"
+    assert details["removed"] == 1 and details["already_gone"] == [".env.1~"]
+    assert "already gone" in session.added[-1].body
+    assert await asyncio.to_thread(_names, backend) == [".env", ".env.3~"]
+
+
+async def test_a_failed_completion_audit_is_reported_not_swallowed(tmp_path: Path) -> None:
+    backend = await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200})
+    audit, session = AsyncMock(side_effect=[True, False]), _session()  # intent written, completion not
+    with (
+        patch.object(acts, "install_root", return_value=tmp_path),
+        patch.object(acts, "audit_log", audit),
+        pytest.raises(ValueError, match="completion audit entry could not be written"),
+    ):
+        await acts.execute_env_copies_cleanup(_approval(acts.ENV_COPIES_ACTION), session)
+    assert await asyncio.to_thread(_names, backend) == [".env", ".env.2~"]  # the removal did happen
+    assert "completion audit entry could not be written" in session.added[-1].body

@@ -5,15 +5,16 @@
 """The apps save a file through the kit's `saveBlob` / `saveTextFile` / `saveUrl`, not their own anchor (#20770).
 
 **The boundary.** The count is every assignment to an anchor's `download` property
-(`a.download = …`, `link.download = …`) in a `.vue` or `.ts` file under `autobot-frontend/src` and
+(`a.download = …`, `a['download'] = …`, `Object.assign(a, { download })`,
+`a.setAttribute('download', …)`) in a `.vue` or `.ts` file under `autobot-frontend/src` and
 `autobot-slm-frontend/src`, excluding tests, specs, stories and comment lines. That assignment is
 what makes a click save a file, so a hand-rolled save cannot avoid it. The kit
 (`libs/autobot-ui/src/utils/saveFile.ts`) holds the one implementation and is not scanned. A
 `download` attribute written in a template (`<a :href download>`) is a link the user clicks, not a
 script-built save, and is not counted.
 
-**What the pin holds.** The saves in files an open PR held when this landed (#20773, #20479,
-#20480, #20478, #20660). The pin goes down as each moves to the kit, and ends at 0.
+**What the pin holds.** The saves in files that open PRs #21122, #21126, #21132 and #21087 still
+touch; each moves to the kit when its PR lands. The pin goes down as each does, and ends at 0.
 
 **One number, not a per-file table**, as in `frontend_local_date_formatter_ratchet_19905_test.py`. The
 pin is down-only against the base (#19283). The reach floor guards the scan itself, since a moved
@@ -31,10 +32,15 @@ from repo_tests._reach import declare
 
 _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src")
 _EXCLUDED = re.compile(r"(\.test\.|\.spec\.|\.stories\.|/__tests__/)")
-_ASSIGNMENT = re.compile(r"\.download\s*=(?!=)")
+_ASSIGNMENT = re.compile(
+    r"\.download\s*=(?!=)"
+    r"|\[\s*['\"`]download['\"`]\s*\]\s*=(?!=)"
+    r"|Object\.assign\([^)]*\{[^}]*\bdownload\s*:"
+    r"|setAttribute\(\s*['\"`]download['\"`]"
+)
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 
-PIN = 11
+PIN = 6
 
 
 def _sources(root: Path) -> list[Path]:
@@ -61,7 +67,7 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "frontend-hand-rolled-file-save-scan",
     discover=_population,
-    floor=1099,  # mid-window: population 1129, window (1069, 1129)
+    floor=1155,  # mid-window: population 1185, window (1125, 1185)
     growth=60,
     what="vue and ts sources in both frontends",
     roots=_ROOTS,
@@ -83,6 +89,15 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
             _w(tmp_path, "a/C.vue", "anchor.download='f.json'; other.download = g\n"),
         ]
         assert count(paths) == 4
+
+    def test_it_counts_a_set_attribute_download(self, tmp_path: Path) -> None:
+        planted = _w(tmp_path, "a/P.vue", "link.setAttribute('download', filename)\n")
+        assert count([planted]) == 1
+
+    def test_it_counts_the_other_spellings_of_the_download_property(self, tmp_path: Path) -> None:
+        assert count([_w(tmp_path, "a/O.vue", "Object.assign(a, { href: u, download: name })\n")]) == 1
+        assert count([_w(tmp_path, "a/I.vue", "a['download'] = name\n")]) == 1
+        assert count([_w(tmp_path, "a/T.vue", "a.setAttribute(`download`, name)\n")]) == 1
 
     def test_a_kit_call_a_comparison_a_comment_and_a_template_attribute_are_not_saves(self, tmp_path: Path) -> None:
         paths = [

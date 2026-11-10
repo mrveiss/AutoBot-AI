@@ -14,11 +14,12 @@ import json
 import uuid
 from typing import Callable, Dict, Optional, Tuple
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketState
 
 from api.ws_security import enforce_ws_origin
 from auth_middleware import authenticate_websocket
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from events.bus import get_event_bus
@@ -618,8 +619,8 @@ async def _websocket_message_receive_loop(websocket: WebSocket, current_user_id:
             # ROOT CAUSE FIX: Replace timeout with natural message receive
             message = await websocket.receive_text()
             # No timeout needed - WebSocketDisconnect will be raised on disconnect
-        except WebSocketDisconnect as e:
-            logger.info(f"WebSocket disconnected during receive: code={e.code}, reason='{e.reason or 'no reason'}'")
+        except PEER_CLOSED_ERRORS as e:
+            log_client_disconnect(logger, e, "_websocket_message_receive_loop")
             break
         except Exception as e:
             logger.error("Error receiving message: %s", e)
@@ -704,14 +705,13 @@ async def websocket_test_endpoint(websocket: WebSocket):
         logger.info("Test WebSocket connected successfully")
         await websocket.send_json({"type": "connected", "message": "Test connection successful"})
 
-        # ROOT CAUSE FIX: Replace timeout-based handling with event-driven pattern
         while websocket.client_state == WebSocketState.CONNECTED:
             try:
                 # No timeout - WebSocketDisconnect will be raised on disconnect
                 message = await websocket.receive_text()
                 await websocket.send_json({"type": "echo", "message": message})
-            except WebSocketDisconnect:
-                logger.info("Test WebSocket client disconnected")
+            except PEER_CLOSED_ERRORS as disconnect:
+                log_client_disconnect(logger, disconnect, "websocket_test_endpoint")
                 break
             except Exception as e:
                 logger.error("Error in test WebSocket: %s", e)
@@ -838,8 +838,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         await _websocket_message_receive_loop(websocket, current_user_id, user)
-    except WebSocketDisconnect:
-        logger.info("WebSocket disconnected normally")
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "websocket_endpoint")
     except Exception as e:
         logger.error("WebSocket error: %s", e, exc_info=True)
     finally:
@@ -1017,8 +1017,8 @@ async def _npu_message_receive_loop(websocket: WebSocket) -> None:
             message = await websocket.receive_text()
             await _handle_npu_websocket_message(websocket, message)
 
-        except WebSocketDisconnect:
-            logger.info("NPU Worker WebSocket client disconnected")
+        except PEER_CLOSED_ERRORS as disconnect:
+            log_client_disconnect(logger, disconnect, "_npu_message_receive_loop")
             break
         except Exception as e:
             logger.error("Error in NPU worker WebSocket: %s", e)

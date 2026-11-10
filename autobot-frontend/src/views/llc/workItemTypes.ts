@@ -103,3 +103,22 @@ export interface WorkItem {
   acceptance_criteria_done?: boolean[]
   linked_pr_urls?: string[]
 }
+
+/** Options for the type and priority pickers (backlog filters and the create form); labels are `llc.enums` keys. */
+export const WORK_ITEM_TYPES: { value: WorkItemType; labelKey: string }[] = [
+  { value: 'epic', labelKey: 'llc.enums.workItemType.epic' },
+  { value: 'feature', labelKey: 'llc.enums.workItemType.feature' },
+  { value: 'pbi', labelKey: 'llc.enums.workItemType.pbi' },
+  { value: 'task', labelKey: 'llc.enums.workItemType.task' },
+  { value: 'bug', labelKey: 'llc.enums.workItemType.bug' },
+  { value: 'subtask', labelKey: 'llc.enums.workItemType.subtask' },
+  { value: 'spike', labelKey: 'llc.enums.workItemType.spike' },
+  { value: 'risk', labelKey: 'llc.enums.workItemType.risk' },
+]
+
+export const PRIORITIES: { value: WorkItemPriority; labelKey: string }[] = [
+  { value: 'critical', labelKey: 'llc.enums.priority.critical' },
+  { value: 'high', labelKey: 'llc.enums.priority.high' },
+  { value: 'medium', labelKey: 'llc.enums.priority.medium' },
+  { value: 'low', labelKey: 'llc.enums.priority.low' },
+]

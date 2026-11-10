@@ -283,34 +283,61 @@ push_marker_set() {
 # and a queued push never times out, and it prints to the terminal rather than a stage's log. Holders
 # run at lower priority, so the install always wins. A dead holder's lock goes with it; each slot file
 # names its holder, so a stuck one can be seen. CI has its own runners.
+# #21098: sets MACHINE_SLOT_LOAD_MSG and returns 0 while the 1-minute load is at or above the ceiling. An
+# unreadable source never blocks; it warns once per push instead.
+machine_slot_load_high() {
+  local max="${AUTOBOT_MACHINE_SLOT_MAX_LOAD:-14}" src="${AUTOBOT_MACHINE_SLOT_LOADAVG:-/proc/loadavg}" load
+  load=$(awk '{print $1; exit}' "$src" 2>/dev/null)
+  if [ -z "$load" ]; then
+    [ -n "${MACHINE_SLOT_LOAD_WARNED:-}" ] || warn "the load average is unreadable ($src): this push does not wait for load"
+    MACHINE_SLOT_LOAD_WARNED=1
+    return 1
+  fi
+  awk -v l="$load" -v m="$max" 'BEGIN { exit !(l < m) }' && return 1
+  MACHINE_SLOT_LOAD_MSG="load $load is at or above $max (AUTOBOT_MACHINE_SLOT_MAX_LOAD), waiting for it to fall"
+}
+# Takes the first free slot under $1 (the default size lives here, #21098) and returns 0, or returns 1.
+machine_slot_take() {
+  local i
+  for ((i = 1; i <= ${AUTOBOT_MACHINE_SLOTS:-2}; i++)); do
+    exec 9>>"$1/slot-$i"  # Appending: opening with > would wipe a holder's name.
+    if flock -n 9; then
+      export AUTOBOT_MACHINE_SLOT_HELD=1
+      : > "$1/slot-$i"
+      printf '%s pre-push %s\n' "$$" "${branch_name:-}" >&9
+      renice -n 10 -p "$BASHPID" >/dev/null 2>&1
+      ionice -c 3 -p "$BASHPID" >/dev/null 2>&1
+      return 0
+    fi
+  done
+  exec 9>&-
+  return 1
+}
 machine_slot_wait() {
   [ -z "${CI:-}" ] && [ -z "${AUTOBOT_MACHINE_SLOT_HELD:-}" ] || return 0
   command -v flock >/dev/null 2>&1 || { warn "flock is missing: this push did not queue for a machine slot"; return 0; }
   local dir="${AUTOBOT_MACHINE_SLOT_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/autobot-machine-slots-$(id -u)}"
-  local i start=$SECONDS next=$SECONDS every="${AUTOBOT_MACHINE_SLOT_REPORT:-60}"
+  local start=$SECONDS next=$SECONDS every="${AUTOBOT_MACHINE_SLOT_REPORT:-60}" why waited=0
   mkdir -p "$dir"
   while :; do
-    for ((i = 1; i <= ${AUTOBOT_MACHINE_SLOTS:-4}; i++)); do
-      exec 9>>"$dir/slot-$i"  # Appending: opening with > would wipe a holder's name.
-      if flock -n 9; then
-        export AUTOBOT_MACHINE_SLOT_HELD=1
-        : > "$dir/slot-$i"
-        printf '%s pre-push %s\n' "$$" "${branch_name:-}" >&9
-        renice -n 10 -p "$BASHPID" >/dev/null 2>&1
-        ionice -c 3 -p "$BASHPID" >/dev/null 2>&1
-        if [ "$SECONDS" != "$start" ]; then
-          log "waited $((SECONDS - start))s for a machine slot"
-          # #20260: the queue has no time limit, so the marker set before it may be about to expire.
-          [ -z "${branch_name:-}" ] || push_marker_set "$branch_name" "${remote_sha:-$ZERO}"
-        fi
-        return 0
-      fi
-    done
-    exec 9>&-
+    # A slot is taken only while the 1-minute load is under the ceiling.
+    if machine_slot_load_high; then
+      why="$MACHINE_SLOT_LOAD_MSG"
+    elif machine_slot_take "$dir"; then
+      # #21225: a wait is an iteration of this loop; SECONDS is an integer clock and also ticks across a first-attempt take.
+      [ "$waited" = 1 ] || return 0
+      log "waited $((SECONDS - start))s for a machine slot"
+      # #20260: the queue has no time limit, so the marker set before it may be about to expire.
+      [ -z "${branch_name:-}" ] || push_marker_set "$branch_name" "${remote_sha:-$ZERO}"
+      return 0
+    else
+      why="waiting for a machine slot, held by: $(cat "$dir"/slot-* 2>/dev/null | tr '\n' ';')"
+    fi
     if [ "$SECONDS" -ge "$next" ]; then
-      log "queued $((SECONDS - start))s for a machine slot, held by: $(cat "$dir"/slot-* 2>/dev/null | tr '\n' ';')"
+      log "queued $((SECONDS - start))s: $why"
       next=$((SECONDS + every))
     fi
+    waited=1
     sleep "${AUTOBOT_MACHINE_SLOT_POLL:-5}"
   done
 }
@@ -355,10 +382,11 @@ stage_record() {
 }
 
 # ---------------------------------------------------------------------------
-# #18058: run pytest on an interpreter that meets the platform's 3.11 floor.
+# #18058/#20903: run pytest on an interpreter that meets the platform floor,
+# read from .python-version (the SSOT) rather than restated here.
 #
 # Bare `python3` is whatever the machine happens to ship.  Where that is below
-# 3.11, every selected group dies at COLLECT time on a 3.11-only name
+# the floor, every selected group dies at COLLECT time on a newer-only name
 # (enum.StrEnum, asyncio.Task.cancelling) and the push is blocked by the
 # interpreter rather than by anything in the changeset.  Classifying that
 # after the fact only names the problem; choosing a conforming interpreter
@@ -378,15 +406,23 @@ pick_python() {
     # Version alone is not enough: a bare /usr/bin/python3.14 with no pytest
     # fails with "No module named pytest", which is the same push-blocking
     # non-failure in different words.
-    local candidate main_root
+    local candidate main_root floor_text="" floor_major floor_minor
+    local floor_fallback="3.14"  # only if .python-version is unreadable; swept by the drift guard
+    # The floor is the repo's .python-version (initialised above: this hook runs under set -u).
+    [ -r "$REPO_ROOT/.python-version" ] && IFS= read -r floor_text < "$REPO_ROOT/.python-version"
+    case "$floor_text" in
+        ([0-9]*.[0-9]*) [ -z "${floor_text//[0-9.]/}" ] || floor_text="$floor_fallback" ;;
+        (*) floor_text="$floor_fallback" ;;
+    esac
+    IFS=. read -r floor_major floor_minor _ <<< "$floor_text"
     # In a worktree $PWD is the worktree, which has no venv; the venv lives in
     # the main checkout, whose path is the parent of the common git dir.
     main_root="$(dirname "$(git rev-parse --git-common-dir 2>/dev/null || echo .)")"
     for candidate in "$REPO_ROOT/venv/bin/python" "$REPO_ROOT/.venv/bin/python" \
                      "$main_root/venv/bin/python" "$main_root/.venv/bin/python" \
-                     python3 python3.14 python3.13 python3.12 python3.11; do
+                     python3 python3.14 python3.15 python3.16; do
         command -v "$candidate" >/dev/null 2>&1 || [ -x "$candidate" ] || continue
-        if "$candidate" -c 'import sys; sys.exit(1) if sys.version_info < (3, 11) else __import__("pytest")' 2>/dev/null; then
+        if "$candidate" -c 'import sys; sys.exit(1) if sys.version_info[:2] < ('"$floor_major"', '"$floor_minor"') else __import__("pytest")' 2>/dev/null; then
             printf '%s' "$candidate"
             return 0
         fi
@@ -720,7 +756,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     if [ "$gh_view_exit" = "0" ]; then
       pr_number="$gh_view_output"
       log "PR #$pr_number exists for $branch_name — checking its body (#16859)"
-      body_check_output=$(python3 "$REPO_ROOT/scripts/validate_pr_body.py" --pr "$branch_name" 2>&1)
+      body_check_output=$("$PYTEST_PYTHON" "$REPO_ROOT/scripts/validate_pr_body.py" --pr "$branch_name" 2>&1)
       body_check_exit=$?
       if [ "$body_check_exit" != "0" ]; then
         fail "PR body fails the template-sections and/or batching gate (#16859):"
@@ -1243,7 +1279,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
             floor_symptom="enum.StrEnum is 3.11+"
           fi
           if [ -n "$floor_symptom" ]; then
-            pytest_unrunnable="the interpreter floor: $("$PYTEST_PYTHON" -V 2>&1) is below the 3.11+ the platform requires ($floor_symptom; CI is 3.14)"
+            pytest_unrunnable="the interpreter floor: $("$PYTEST_PYTHON" -V 2>&1) is below the floor declared in .python-version ($floor_symptom)"
           else
             pytest_failed=1
             fail "pytest failures (#5142):"

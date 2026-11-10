@@ -68,6 +68,7 @@ from chat_history.message_schema import llm_role, message_text, message_type
 
 # Import context overflow protection (#9043)
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
+from chat_history.session_merge import dropped_keys
 from chat_workflow.session_work_item import SessionWorkItemService
 from constants.threshold_constants import TimingConstants
 
@@ -1161,7 +1162,7 @@ async def set_session_work_item(
     caller name another company's work item and have its goal titles rendered
     into their own prompt.
     """
-    from llc.services.work_item_service import WorkItemService
+    from llc.services.accessors import get_work_item_service
     from user_management.database import get_async_session_factory
 
     await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
@@ -1178,7 +1179,7 @@ async def set_session_work_item(
     async with factory() as db:
         # SECURITY: company-scoped fetch — a work item owned by another company
         # is indistinguishable from one that does not exist.
-        item = await WorkItemService().get(db, work_item_id, company_id=str(ctx.org_id))
+        item = await get_work_item_service().get(db, work_item_id, company_id=str(ctx.org_id))
         if item is None:
             raise HTTPException(status_code=404, detail="Work item not found")
 
@@ -1644,50 +1645,47 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
 
 async def _merge_chat_messages(
     chat_history_manager, chat_id: str, new_messages: List[Dict], request_id: str
-) -> List[Dict]:
+) -> tuple[List[Dict], frozenset]:
     """Merge new messages with existing to preserve backend-added ones (Issue #398: extracted).
+
+    Returns the merged list and the keys of the stored messages it dropped (#20862).
 
     Issue #1797: Granular exception mapping for session load failures.
     """
     try:
         existing_messages = await chat_history_manager.load_session(chat_id)
         merged_messages = await merge_messages(existing_messages, new_messages)
-        logger.info(
-            "[%s] Merged %d existing + %d new = %d total messages",
-            request_id,
-            len(existing_messages),
-            len(new_messages),
-            len(merged_messages),
-        )
-        return merged_messages
+        counts = (len(existing_messages), len(new_messages), len(merged_messages))
+        logger.info("[%s] Merged %d existing + %d new = %d total messages", request_id, *counts)
+        return merged_messages, dropped_keys(existing_messages, merged_messages)
     except FileNotFoundError:
         logger.warning(
             "[%s] Session file not found for %s, using new messages",
             request_id,
             chat_id,
         )
-        return new_messages
+        return new_messages, frozenset()
     except PermissionError:
         logger.warning(
             "[%s] Unable to access chat session %s, using new messages",
             request_id,
             chat_id,
         )
-        return new_messages
+        return new_messages, frozenset()
     except ValueError:
         logger.warning(
             "[%s] Chat session data is corrupted for %s, using new messages",
             request_id,
             chat_id,
         )
-        return new_messages
+        return new_messages, frozenset()
     except Exception as merge_error:
         logger.warning(
             "[%s] Message merge failed, using new messages only: %s",
             request_id,
             merge_error,
         )
-        return new_messages
+        return new_messages, frozenset()
 
 
 async def _durable_owner_metadata(chat_history_manager, session_id: str, ownership: "dict | None") -> dict | None:
@@ -1745,7 +1743,7 @@ async def save_chat_by_id(
         )
 
     save_data = request_data.get("data", {})
-    merged_messages = await _merge_chat_messages(
+    merged_messages, discard = await _merge_chat_messages(
         chat_history_manager, chat_id, save_data.get("messages", []), request_id
     )
 
@@ -1754,6 +1752,7 @@ async def save_chat_by_id(
         messages=merged_messages,
         name=save_data.get("name", ""),
         metadata=await _durable_owner_metadata(chat_history_manager, chat_id, ownership),
+        discard=discard,
     )
 
     return JSONResponse(
@@ -2594,38 +2593,20 @@ async def summarize_conversation(
     if not messages_to_summarize:
         raise HTTPException(status_code=404, detail="No messages found with the provided IDs")
 
-    # Build prompt for summarization
-    conversation_text = "\n\n".join(
-        [f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}" for msg in messages_to_summarize]
-    )
-
-    summarization_prompt = f"""Summarize the following conversation segment concisely.
-Preserve key context, decisions, and technical details that would be needed to continue the conversation naturally.
-
-Target length: approximately {body.target_length or 500} tokens.
-
-Conversation:
-{conversation_text}
-
-Summary:"""
-
-    # Get LLM service and generate summary
-    llm_service = get_llm_service()
+    # #20852: the one summariser every caller uses, on the configured model.
+    from chat_history.context_overflow import ConversationSummarizer
+    from chat_history.summarization_prompt import SUMMARIZER_DEFAULT_MAX_TOKENS
 
     try:
-        summary_response = await llm_service.generate_response(
-            messages=[{"role": "user", "content": summarization_prompt}],
-            model="gpt-4o-mini",  # Fast, cheap model for summarization
-            max_tokens=body.target_length or 500,
-            temperature=0.3,  # Lower temperature for focused summarization
+        summary = await ConversationSummarizer().summarize_with_usage(
+            messages_to_summarize,
+            provide_config_manager().get_selected_model(),
+            max_tokens=body.target_length or SUMMARIZER_DEFAULT_MAX_TOKENS,
         )
-
-        summary_text = summary_response.get("content", "")
-        summary_tokens = summary_response.get("usage", {}).get("total_tokens", 0)
-
     except Exception as e:
         logger.exception("[%s] Failed to generate summary", request_id)
         raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
+    summary_text, summary_tokens = summary.text, summary.total_tokens  # provider usage when reported
 
     result_data = ConversationSummarizeData(
         summary=summary_text,

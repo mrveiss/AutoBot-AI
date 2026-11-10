@@ -14,6 +14,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.approval_gates_approver import require_action_approver_role
 from api.schemas_approvals import (
     ApprovalAddCommentRequest,
     ApprovalCommentResponse,
@@ -37,11 +38,15 @@ from services.ai_line_change_action import register_ai_line_change_action
 from services.approval_execution import context_change_violation, is_registered_action, is_server_only_action
 from services.approval_gate_service import ApprovalGateService
 from services.knowledge.collection_space_stamp_action import register_stamp_action
+from services.project_backfill_action import register_project_backfill_action
+from services.workflow_automation.step_approval_gate import register_workflow_step_resume
 
 logger = get_logger(__name__)
 router = APIRouter()
 register_stamp_action()  # registered with the router so the handler exists before any approve()
 register_ai_line_change_action()  # #18430: a person's approval is what changes an AI line
+register_project_backfill_action()  # #18978: a person's approval is what back-fills work item projects
+register_workflow_step_resume()  # #20917: a person's approval is what releases a waiting workflow step
 
 
 # -- Helpers -----------------------------------------------------------
@@ -179,7 +184,7 @@ def _guard_resubmit(approval, new_context: dict | None, current_user: dict) -> N
         )
 
 
-async def _require_visible(svc: ApprovalGateService, approval_id: uuid.UUID, current_user: dict) -> None:
+async def _require_visible(svc: ApprovalGateService, approval_id: uuid.UUID, current_user: dict):
     """404 an approval the caller may not see, exactly as a missing one, before any write (#18413, #17161).
 
     Same rule as the reads: an admin, the row's ``owner_user``, or a legacy unsourced unowned row. Nothing
@@ -190,6 +195,7 @@ async def _require_visible(svc: ApprovalGateService, approval_id: uuid.UUID, cur
     )
     if visible is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Approval {approval_id} not found")
+    return visible
 
 
 # -- Endpoints ---------------------------------------------------------
@@ -337,7 +343,8 @@ async def approve(
     """Approve a pending approval gate (#1402); only a person may (#17042)."""
     require_interactive_human(current_user, "approval gate approve")
     svc = ApprovalGateService(session)
-    await _require_visible(svc, approval_id, current_user)
+    visible = await _require_visible(svc, approval_id, current_user)
+    await require_action_approver_role(visible, current_user)
     username = current_user.get("username", "unknown")
     try:
         approval = await svc.approve(

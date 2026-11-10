@@ -29,6 +29,9 @@ from autobot_shared.env_utils import env_int
 #: literal cannot be changed without a deploy, and this one is a safety limit.
 MAX_CONTINUATION_ITERATIONS: int = env_int("AUTOBOT_MAX_CONTINUATION_ITERATIONS", default=5)
 
+#: Seconds the chat planner may take to write a plan (#21023). Past it the turn runs with no plan, never blocked.
+PLANNER_TIMEOUT_SECONDS: int = env_int("AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS", default=30)
+
 #: Files attached to one chat message that are read into the prompt (#20195). Env-backed: a bound written as a
 #: bare literal cannot be changed without a deploy. Files past the count are reported to the user, not dropped.
 ATTACHMENT_MAX_FILES: int = env_int("AUTOBOT_CHAT_ATTACHMENT_MAX_FILES", default=5)
