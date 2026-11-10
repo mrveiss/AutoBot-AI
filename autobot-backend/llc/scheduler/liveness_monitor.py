@@ -20,6 +20,7 @@ run alone and is logged; the other runs in the scan, and the transaction they sh
 
 import json
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -219,9 +220,8 @@ class LivenessMonitor(PollLoopScheduler):
                 goal_id=str(work_item.goal_id) if work_item and work_item.goal_id else None,
             )
         except HierarchyViolation as exc:
-            await _note_unfiled_recovery(
-                session, svc, work_item, company_id, f"{title}. {description}", exc, run, agent_id, self._activity_log
-            )
+            recovery = _UnfiledRecovery(company_id, f"{title}. {description}", exc, run, agent_id)
+            await _note_unfiled_recovery(session, svc, work_item, recovery, self._activity_log)
 
     async def _resolve_manager(self, session: AsyncSession, company_id: str, agent_id: str) -> Optional[str]:
         """Best-effort lookup for the agent's manager agent_id."""
@@ -275,27 +275,31 @@ async def _recovery_project(session: AsyncSession, work_item: Optional[LLCWorkIt
     return str(found) if found else None
 
 
+@dataclass(frozen=True)
+class _UnfiledRecovery:
+    """What a refused recovery Bug was about: the company, the Bug's text, why it was refused, and the run/agent."""
+
+    company_id: str
+    text: str
+    exc: Exception
+    run: LLCHeartbeatRun
+    agent_id: str
+
+
 async def _note_unfiled_recovery(
-    session,
-    svc,
-    work_item,
-    company_id: str,
-    text_: str,
-    exc: Exception,
-    run: LLCHeartbeatRun,
-    agent_id: str,
-    log: LLCActivityLogService,
+    session, svc, work_item, recovery: _UnfiledRecovery, log: LLCActivityLogService
 ) -> None:
     """The recovery Bug was refused (a stuck item from before the every-item-has-a-project rule may have no
     project, #18978): record it on the stuck item itself so the recovery is not lost. A run with no work item has
     nowhere to comment, so the company is told instead (#20687, #20930): an activity-feed entry, which is what
     company users see, and the notification router's live event; nothing is created for it."""
-    logger.error("Recovery item not created (%s); noting it on the stuck work item", exc)
+    r = recovery
+    logger.error("Recovery item not created (%s); noting it on the stuck work item", r.exc)
     if work_item is not None:
-        await svc.add_comment(session, str(work_item.id), company_id, f"{text_} ({exc})")
+        await svc.add_comment(session, str(work_item.id), r.company_id, f"{r.text} ({r.exc})")
         return
-    await _log_unfiled_recovery(log, session, company_id, agent_id, run, exc)
-    await _notify_admins_unfiled_recovery(company_id, agent_id, run, exc)
+    await _log_unfiled_recovery(log, session, r.company_id, r.agent_id, r.run, r.exc)
+    await _notify_admins_unfiled_recovery(r.company_id, r.agent_id, r.run, r.exc)
 
 
 async def _log_unfiled_recovery(
