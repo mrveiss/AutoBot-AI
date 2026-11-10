@@ -19,6 +19,7 @@ from typing import Dict, List, Set
 from api.codebase_analytics.comment_blanking import blank_comments
 from autobot_shared.api_routing import router_prefixes as _routing
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.testfile_names import is_test_filename
 
 from .endpoints.shared import resolve_git_repo_root
 from .models import (
@@ -150,10 +151,9 @@ def _is_test_file(path: Path) -> bool:
     something that does not exist), and as a scanned path absent from
     ``app.openapi()``.
 
-    Matches the repo's two conventions (``x_test.py`` and ``test_x.py``) plus
-    anything under a ``tests`` directory.
+    Matches the canonical test-file names plus anything under a ``tests`` directory.
     """
-    return path.name.endswith("_test.py") or path.name.startswith("test_") or "tests" in path.parts
+    return is_test_filename(path.name, include_js=False, include_conftest=False) or "tests" in path.parts
 
 
 def find_backend_dir(project_root: Path) -> Path:
@@ -1006,7 +1006,7 @@ class FrontendAPICallScanner:
                 if file.name.endswith(".d.ts"):
                     continue
                 # Skip test files - they contain mock data, not real API calls
-                if "__tests__" in str(file) or ".test." in file.name or ".spec." in file.name:
+                if "__tests__" in str(file) or is_test_filename(file.name):
                     continue
 
                 try:
