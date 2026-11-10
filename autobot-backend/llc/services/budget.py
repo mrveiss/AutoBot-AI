@@ -25,7 +25,7 @@ from autobot_shared.local_models import is_local_model
 from autobot_shared.redis_client import get_async_redis_client
 from llc.config import DEFAULT_BUDGET_LIMIT
 from llc.exceptions import BudgetExhausted, UnpricedModel, WorkItemNotInCompany
-from llc.models.budget import LLCAgentBudget
+from llc.models.budget import LLCAgentBudget, token_limit_blocks
 from llc.models.company_os_cost import CompanyOsCostEvent
 from llc.models.work_item import LLCWorkItem
 from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_price
@@ -312,7 +312,7 @@ class BudgetService(LLCServiceBase):
 
         # Enforce budget based on mode (GH#8997)
         if budget_mode == "tokens" and token_limit is not None:
-            if tokens_spent > token_limit:
+            if token_limit_blocks(tokens_spent, token_limit):
                 await _persist_then_stop(
                     session, BudgetExhausted(agent_id=agent_id, spent=tokens_spent, limit=token_limit)
                 )
@@ -360,7 +360,7 @@ class BudgetService(LLCServiceBase):
         # Calculate based on budget mode (GH#8997)
         if budget_mode == "tokens" and token_limit is not None:
             remaining = Decimal(str(token_limit - tokens_spent))
-            is_over_limit = tokens_spent > token_limit
+            is_over_limit = token_limit_blocks(tokens_spent, token_limit)
             alert_triggered = token_limit > 0 and tokens_spent / token_limit >= threshold
         else:
             remaining = limit - spent
