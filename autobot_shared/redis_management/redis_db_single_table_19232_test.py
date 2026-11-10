@@ -39,6 +39,7 @@ from pathlib import Path
 
 from autobot_shared.redis_management.database_overrides import LEGACY_ENV_NAMES, env_var_name
 from autobot_shared.redis_management.types import _ALIASES, _FALLBACK_MAPPING
+from autobot_shared.testfile_names import is_test_filename
 
 _REPO = Path(__file__).resolve().parents[2]
 _ROOTS = ("autobot_shared", "autobot-backend", "autobot-slm-backend", "autobot-slm-agent", "autobot-infrastructure")
@@ -224,9 +225,7 @@ def _production_sources() -> list[Path]:
         for dirpath, dirnames, filenames in os.walk(_REPO / root):
             dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
             paths += [
-                Path(dirpath) / f
-                for f in filenames
-                if f.endswith(".py") and not f.endswith("_test.py") and not f.startswith("test_") and f != "conftest.py"
+                Path(dirpath) / f for f in filenames if f.endswith(".py") and not is_test_filename(f, include_js=False)
             ]
     return paths
 
