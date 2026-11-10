@@ -72,6 +72,7 @@ export function useEnvironmentAnalysis(
     {
       path: '/api/analytics/codebase/env-analysis',
       scopeToSource: true,
+      requireSource: true,
       pickData: (raw) => {
         if (raw.status === 'no_data') {
           logger.debug(
