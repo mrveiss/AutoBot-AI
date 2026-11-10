@@ -40,7 +40,7 @@ _ASSIGNMENT = re.compile(
     r"|\[\s*['\"`]download['\"`]\s*\]\s*=(?!=)"
     r"|Object\.assign\(\s*(?P<assign_receiver>[^,()]+?)\s*,[^{}()]*?\{\s*"
     r"(?:[^{}]*?,\s*)?(?:download\b\s*[:,}]|['\"`]download['\"`]\s*:)"
-    r"|(?:(?P<attr_receiver>[A-Za-z_$][\w$.]*)\s*\.)?"
+    r"|(?:(?P<attr_receiver>[A-Za-z_$][\w$.]*)\s*\??\.)?"
     r"setAttribute\(\s*['\"`]download['\"`]"
 )
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
@@ -134,6 +134,7 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
             _w(tmp_path, "a/N.vue", "Object.assign(settings, { download: value })\n"),
             _w(tmp_path, "a/N2.ts", "Object.assign(prefs, { download })\n"),
             _w(tmp_path, "a/N3.vue", "settings.setAttribute('download', value)\n"),
+            _w(tmp_path, "a/N4.vue", "settings?.setAttribute('download', value)\n"),
         ]
         assert count(paths) == 0
 
