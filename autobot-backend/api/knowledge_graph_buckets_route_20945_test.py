@@ -11,7 +11,7 @@ import pytest
 from api.knowledge_search_aggregator import get_multi_source_graph, get_multi_source_graph_simple
 from api.schemas_knowledge import KnowledgeMultiSourceGraphResponse
 from api.schemas_knowledge_graph import GraphRequest
-from knowledge.graph_buckets_fakes_20945 import ALICE, TENANT_A, ListingKB, client_with, fact
+from tests.fixtures.graph_buckets_fakes_20945 import ALICE, TENANT_A, ListingKB, client_with, fact
 
 _RECORDS = {
     "trajectories": [

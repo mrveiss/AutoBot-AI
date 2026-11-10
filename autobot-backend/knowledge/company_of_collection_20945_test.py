@@ -10,8 +10,8 @@ import pytest
 
 from knowledge.backends.async_chromadb_adapter import _chroma_safe_name
 from knowledge.graph_bucket_visibility import Viewer, collection_in_scope, company_of_collection
-from knowledge.graph_buckets_fakes_20945 import ALICE
 from llc.kb.collections import KbCollectionManager, company_collection
+from tests.fixtures.graph_buckets_fakes_20945 import ALICE
 
 CID = str(uuid.uuid4())
 SUFFIXES = (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX)

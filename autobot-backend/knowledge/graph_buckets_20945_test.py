@@ -18,9 +18,9 @@ from knowledge.graph_buckets import (
     is_accounted_for,
     section_for,
 )
-from knowledge.graph_buckets_fakes_20945 import client_with, manager, viewer
-from knowledge.graph_collection_source import backend_collection_names, names_in_source
 from knowledge.index_embedding_space import ACCELERATOR_COLLECTIONS, CODE_INDEX, PATTERN_INDEXES
+from tests.fixtures.graph_buckets_fakes_20945 import client_with, manager, viewer
+from tests.fixtures.graph_collection_source import backend_collection_names, names_in_source
 
 BACKEND = Path(__file__).resolve().parent.parent
 # What the backend source names today (derived, never hand-kept): the guard fails on any new collection.

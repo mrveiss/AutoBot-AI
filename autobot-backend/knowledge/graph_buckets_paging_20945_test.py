@@ -10,8 +10,8 @@ from pydantic import ValidationError
 from api.knowledge_graph_facts import visible_facts_page
 from api.schemas_knowledge_graph import GraphRequest
 from knowledge.graph_buckets import build_bucket_sections
-from knowledge.graph_buckets_fakes_20945 import ALICE, ListingKB, client_with, fact, manager, viewer
 from knowledge.graph_limits import GRAPH_MAX_OFFSET
+from tests.fixtures.graph_buckets_fakes_20945 import ALICE, ListingKB, client_with, fact, manager, viewer
 
 _MINE = {"owner_id": ALICE}
 

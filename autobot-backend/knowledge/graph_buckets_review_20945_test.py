@@ -12,9 +12,18 @@ from fastapi import HTTPException
 from api.knowledge_graph_facts import visible_facts_page
 from knowledge.graph_bucket_visibility import collection_in_scope
 from knowledge.graph_buckets import build_bucket_sections, section_for
-from knowledge.graph_buckets_fakes_20945 import ALICE, TENANT_A, TENANT_B, ListingKB, client_with, fact, manager, viewer
 from knowledge.graph_limits import SCAN_BATCH
 from knowledge.root_read import AdminReadLedger
+from tests.fixtures.graph_buckets_fakes_20945 import (
+    ALICE,
+    TENANT_A,
+    TENANT_B,
+    ListingKB,
+    client_with,
+    fact,
+    manager,
+    viewer,
+)
 
 
 def _tenant_fact(fact_id, owner, tenant):

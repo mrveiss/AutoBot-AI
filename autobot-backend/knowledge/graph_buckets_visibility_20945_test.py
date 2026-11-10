@@ -10,7 +10,7 @@ import pytest
 
 from knowledge.graph_bucket_visibility import record_page
 from knowledge.graph_buckets import build_bucket_sections
-from knowledge.graph_buckets_fakes_20945 import ALICE, TENANT_A, TENANT_B, client_with, manager, viewer
+from tests.fixtures.graph_buckets_fakes_20945 import ALICE, TENANT_A, TENANT_B, client_with, manager, viewer
 
 BOB = "bob"
 _MINE = {"user_id": ALICE, "tenant_id": TENANT_A}
