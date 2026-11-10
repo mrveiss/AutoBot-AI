@@ -150,7 +150,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/analytics/charts',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Chart data endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.chart_data ? raw.chart_data : null,
@@ -200,7 +200,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/analytics/call-graph',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Call graph endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.call_graph
@@ -232,7 +232,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/declarations',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Declarations endpoint',
       pickData: (raw) => (raw.status === 'success' || raw.status === 'no_data' ? raw.declarations ?? [] : null),
       onSuccess: (d) => { declarationAnalysis.value = d },
@@ -246,7 +246,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/hardcodes',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Hardcodes endpoint',
       pickData: (raw) => (raw.status === 'success' || raw.status === 'no_data' ? raw.hardcodes ?? [] : null),
       onSuccess: (d) => { hardcodeAnalysis.value = d },
@@ -255,7 +255,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   )
 
   const duplicatesSilent = useFetchEndpoint<unknown, unknown>(
-    { path: '/api/analytics/codebase/duplicates', scopeToSource: true, label: 'Duplicates endpoint',
+    { path: '/api/analytics/codebase/duplicates', scopeToSource: true, requireSource: true, label: 'Duplicates endpoint',
       pickData: (raw) => raw, onSuccess: applyDuplicates, onError: failDuplicates },
     { withSourceId },
   )
@@ -266,7 +266,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/stats',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Stats endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.stats ? raw.stats : null,
@@ -285,7 +285,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/problems',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Problems endpoint',
       pickData: (raw) => (raw.status === 'no_data' ? [] : raw.problems ?? []),
       onSuccess: (d) => { problemsReport.value = d },
@@ -297,9 +297,9 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const smells = useCodeSmellProblems(withSourceId)
 
   const cachedDuplicatesEndpoint = useFetchEndpoint<unknown, unknown>(
-    { path: '/api/analytics/codebase/duplicates/cached', scopeToSource: true,
-      label: 'Cached duplicates endpoint', pickData: (raw) => raw,
-      onSuccess: applyDuplicates, onError: failDuplicates },
+    { path: '/api/analytics/codebase/duplicates/cached', scopeToSource: true, requireSource: true,
+      label: 'Cached duplicates endpoint', pickData: (raw) => raw, onSuccess: applyDuplicates, onError: failDuplicates,
+      onNoData: () => { duplicateAnalysis.value = []; duplicateScanState.value = 'not_scanned' } },
     { withSourceId },
   )
 
@@ -309,13 +309,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/analytics/dependencies/cached',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Cached dependencies endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.dependency_data
           ? (raw.dependency_data as DependencyGraph)
           : null,
-      onSuccess: (d) => { dependencyData.value = d },
+      onSuccess: (d) => { dependencyData.value = d }, onNoData: () => { dependencyData.value = null },
     },
     { withSourceId },
   )
@@ -326,13 +326,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/analytics/import-tree/cached',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Cached import tree endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.import_tree
           ? (raw.import_tree as ImportTreeNode[])
           : null,
-      onSuccess: (d) => { importTreeData.value = d },
+      onSuccess: (d) => { importTreeData.value = d }, onNoData: () => { importTreeData.value = null },
     },
     { withSourceId },
   )
