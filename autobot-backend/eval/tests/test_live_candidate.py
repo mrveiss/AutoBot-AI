@@ -5,10 +5,12 @@
 """LiveChatCandidate (#20843): pass/fail from the injected turn, criteria, judge, workspace, timeout, wiring."""
 
 import asyncio
+import threading
 from pathlib import Path
 
 import pytest
 
+from autobot_shared.eventually import eventually
 from eval.candidates import live_replay_candidate
 from eval.live import LiveChatCandidate, LiveRunRecord, build_record
 from eval.runner import RecordingUnusable, TrajectoryReplayer
@@ -188,9 +190,12 @@ async def test_a_cancelled_workspace_allocation_is_still_removed(monkeypatch):
     made = []
     real = live._make_workspace
 
+    entered = threading.Event()
+
     def slow_make(root):
         import time
 
+        entered.set()
         time.sleep(0.2)
         path = real(root)
         made.append(path)
@@ -198,11 +203,11 @@ async def test_a_cancelled_workspace_allocation_is_still_removed(monkeypatch):
 
     monkeypatch.setattr(live, "_make_workspace", slow_make)
     task = asyncio.ensure_future(live._allocate_workspace(""))
-    await asyncio.sleep(0.05)
+    await eventually(lambda: entered.is_set())
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
-    await asyncio.sleep(0.5)
+    await eventually(lambda: made and not Path(made[0]).exists())
     assert made and not Path(made[0]).exists()
 
 
