@@ -11,7 +11,10 @@
 what makes a click save a file, so a hand-rolled save cannot avoid it. The kit
 (`libs/autobot-ui/src/utils/saveFile.ts`) holds the one implementation and is not scanned. A
 `download` attribute written in a template (`<a :href download>`) is a link the user clicks, not a
-script-built save, and is not counted.
+script-built save, and is not counted. Where a form carries a receiver, the receiver is read too
+(#21195): `Object.assign(settings, { download: value })` and a `download` attribute on a
+non-anchor receiver are not saves, and the shorthand `Object.assign(a, { download })` counts like
+the `download: name` spelling does (#21195).
 
 **What the pin holds.** The saves in files that open PRs #21122, #21126, #21132 and #21087 still
 touch; each moves to the kit when its PR lands. The pin goes down as each does, and ends at 0.
@@ -35,12 +38,28 @@ _EXCLUDED = re.compile(r"(\.test\.|\.spec\.|\.stories\.|/__tests__/)")
 _ASSIGNMENT = re.compile(
     r"\.download\s*=(?!=)"
     r"|\[\s*['\"`]download['\"`]\s*\]\s*=(?!=)"
-    r"|Object\.assign\([^)]*\{[^}]*\bdownload\s*:"
-    r"|setAttribute\(\s*['\"`]download['\"`]"
+    r"|Object\.assign\(\s*(?P<assign_receiver>[^,()]+?)\s*,[^{}()]*?\{\s*"
+    r"(?:[^{}]*?,\s*)?(?:download\b\s*[:,}]|['\"`]download['\"`]\s*:)"
+    r"|(?:(?P<attr_receiver>[A-Za-z_$][\w$.]*)\s*\.)?"
+    r"setAttribute\(\s*['\"`]download['\"`]"
 )
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
+#: A receiver segment that reads as an anchor (#21195): a bare `a`, or a name carrying
+#: `anchor` / `link` (`anchorEl`, `linkRef`). `settings` and friends carry neither.
+_ANCHOR_RECEIVER = re.compile(r"a|(?:\w*(?:anchor|link)\w*)", re.I)
 
 PIN = 6
+
+
+def _is_anchor(receiver: str | None) -> bool:
+    """Whether the receiver of an `Object.assign` / `setAttribute` form is an anchor (#21195).
+
+    A receiver the pattern cannot name (`x().setAttribute(…)`) is not evidence of a
+    non-anchor and keeps the pre-#21195 treatment: it counts.
+    """
+    if receiver is None:
+        return True
+    return any(_ANCHOR_RECEIVER.fullmatch(segment) for segment in receiver.split("."))
 
 
 def _sources(root: Path) -> list[Path]:
@@ -57,7 +76,14 @@ def _sources(root: Path) -> list[Path]:
 
 def count(paths: list[Path]) -> int:
     """Anchor `download` assignments over *paths*, comment lines removed."""
-    return sum(len(_ASSIGNMENT.findall(_COMMENT_LINE.sub("", p.read_text(encoding="utf-8")))) for p in paths)
+    total = 0
+    for path in paths:
+        text = _COMMENT_LINE.sub("", path.read_text(encoding="utf-8"))
+        for match in _ASSIGNMENT.finditer(text):
+            receiver = match.group("assign_receiver") or match.group("attr_receiver")
+            if _is_anchor(receiver):
+                total += 1
+    return total
 
 
 def _population(root: Path) -> list[str]:
@@ -98,6 +124,18 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         assert count([_w(tmp_path, "a/O.vue", "Object.assign(a, { href: u, download: name })\n")]) == 1
         assert count([_w(tmp_path, "a/I.vue", "a['download'] = name\n")]) == 1
         assert count([_w(tmp_path, "a/T.vue", "a.setAttribute(`download`, name)\n")]) == 1
+
+    def test_it_counts_a_shorthand_download_property(self, tmp_path: Path) -> None:
+        assert count([_w(tmp_path, "a/S.vue", "Object.assign(a, { href: u, download })\n")]) == 1
+        assert count([_w(tmp_path, "a/S2.vue", "Object.assign(link, { download })\n")]) == 1
+
+    def test_a_download_on_a_non_anchor_receiver_is_not_a_save(self, tmp_path: Path) -> None:
+        paths = [
+            _w(tmp_path, "a/N.vue", "Object.assign(settings, { download: value })\n"),
+            _w(tmp_path, "a/N2.ts", "Object.assign(prefs, { download })\n"),
+            _w(tmp_path, "a/N3.vue", "settings.setAttribute('download', value)\n"),
+        ]
+        assert count(paths) == 0
 
     def test_a_kit_call_a_comparison_a_comment_and_a_template_attribute_are_not_saves(self, tmp_path: Path) -> None:
         paths = [
