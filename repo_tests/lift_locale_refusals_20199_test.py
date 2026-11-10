@@ -71,7 +71,12 @@ def test_refusals_no_longer_list_a_mapped_key(monkeypatch) -> None:
     monkeypatch.setattr(lift, "KEY_MAPPINGS", {"unit.sec": "w.sec"})
     app, by_text, de, src_en = _fixture()
     flat = {"unit.sec": "s", "unit.other": "s"}
-    assert lift.collect_refusals(flat, by_text, de, src_en)["short"] == ["unit.other"]
+    assert lift.collect_refusals(flat, by_text, de, src_en) == {
+        "short": ["unit.other"],
+        "no-source": [],
+        "no-translation": [],
+        "tie": [],
+    }
 
 
 def test_shipped_mappings_point_at_real_matching_keys() -> None:
@@ -81,3 +86,15 @@ def test_shipped_mappings_point_at_real_matching_keys() -> None:
     main = flatten(json.loads((repo_root() / "autobot-frontend/src/i18n/locales/en.json").read_text(encoding="utf-8")))
     for app_key, main_key in lift.KEY_MAPPINGS.items():
         assert slm[app_key] == main[main_key]
+
+
+def test_shipped_arabic_duration_labels_stay_translated() -> None:
+    """A removed or English source label must not be retained silently (#21192)."""
+    from autobot_shared.locale_tree import flatten
+
+    base = repo_root() / "autobot-slm-frontend" / "src" / "locales"
+    en = flatten(json.loads((base / "en.json").read_text(encoding="utf-8")))
+    ar = flatten(json.loads((base / "ar.json").read_text(encoding="utf-8")))
+    for app_key in lift.KEY_MAPPINGS:
+        assert isinstance(ar.get(app_key), str) and ar[app_key].strip(), app_key
+        assert ar[app_key] != en[app_key], f"{app_key} fell back to English in ar"
