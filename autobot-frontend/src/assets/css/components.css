@@ -1066,3 +1066,43 @@ html[data-ui="minimal"] .adv {
 html[data-ui="minimal"] .only-min {
   display: flex;
 }
+
+/* Issue #1133: Knowledge Base opt-in banner (KnowledgeBaseOptIn.vue; moved from CodebaseAnalytics.vue, #20513) */
+.kb-optin-banner {
+  position: fixed;
+  bottom: var(--spacing-6);
+  right: var(--spacing-6);
+  z-index: var(--z-modal-backdrop);
+  max-width: 480px;
+  width: 100%;
+}
+
+.kb-optin-content {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  background: var(--bg-card);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-4) var(--spacing-5);
+  box-shadow: var(--shadow-lg);
+}
+
+.kb-optin-content > i {
+  font-size: var(--text-xl);
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+
+.kb-optin-text {
+  flex: 1;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  min-width: 0;
+}
+
+.kb-optin-text strong {
+  display: block;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-0-5);
+}
