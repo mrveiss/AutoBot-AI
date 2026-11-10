@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from api.codebase_analytics.source_scope import source_scoped_prefix
+from api.source_scope import source_scoped_prefix
 
 _CACHED = {
     "dependencies": ("api.codebase_analytics.endpoints.dependencies", "get_cached_dependency_result"),
