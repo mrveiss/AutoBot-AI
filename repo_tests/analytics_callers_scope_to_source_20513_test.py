@@ -314,4 +314,6 @@ def test_control_a_body_evidence_in_the_same_call_passes_and_one_outside_it_does
     assert scan_text(outside)[1] == ["line 2: index"]
     deferred = outside.replace("fetchWithAuth(", "_sendIndexRequest(")
     assert scan_text(deferred, "autobot-frontend/src/composables/analytics/useIndexingJob.ts") == (0, [])
-    assert scan_text(outside, "autobot-frontend/src/composables/analytics/useIndexingJob.ts")[1], "the exemption covers only the anchored call"
+    assert scan_text(outside, "autobot-frontend/src/composables/analytics/useIndexingJob.ts")[
+        1
+    ], "the exemption covers only the anchored call"
