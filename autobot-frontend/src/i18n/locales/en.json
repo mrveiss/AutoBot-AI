@@ -1430,7 +1430,8 @@
         "indexingComplete": "Indexing complete!",
         "addDescription": "Would you like to add these code analysis results to the Knowledge Base for AI-assisted queries?",
         "adding": "Adding...",
-        "addToKnowledgeBase": "Add to Knowledge Base"
+        "addToKnowledgeBase": "Add to Knowledge Base",
+        "needsSource": "Select a code source first: indexing without one would index AutoBot's own files."
       },
       "errors": {
         "unknown": "Unknown error",
@@ -1528,6 +1529,7 @@
         "npuStatus": "NPU: {status} ({workers} workers, {time}ms)",
         "npuFailed": "NPU failed: {error} ({time}ms)",
         "apiTestResults": "API Tests: {passed}/{total} passed",
+        "apiTestSkippedNoSource": "{name}: skipped (no source selected)",
         "apiTestsFailed": "API tests failed: {error}",
         "codeIntelLocalPathRequired": "Code intelligence analysis requires a local path. Code sources are stored on the SLM server — use a custom path on the analysis backend.",
         "codeSmellsFound": "Found {count} code smells in {files} files ({time}ms)",
@@ -1642,6 +1644,9 @@
     },
     "patterns": {
       "title": "Code Pattern Analysis",
+      "storageStatsFailed": "Loading the pattern storage statistics failed",
+      "storageClearFailed": "Clearing the stored patterns failed",
+      "reportFetchFailed": "Report fetch failed",
       "patternsCount": "{count} patterns",
       "analyzing": "Analyzing...",
       "analyzePatterns": "Analyze Patterns",
@@ -8620,6 +8625,7 @@
       "monthlyTokenLimit": "Monthly Token Limit",
       "tokenLimitPlaceholder": "e.g. 1000000",
       "tokenLimitHint": "Recommended: 1M–5M for subscription plans, 100K for free tier",
+      "tokenLimitMin": "The token limit must be at least {min}. An empty field leaves the stored token limit unchanged; it does not remove it.",
       "alertThreshold": "Alert Threshold: {pct}%",
       "cancel": "Cancel",
       "save": "Save",

@@ -41,7 +41,7 @@ from llm_shared.run_credentials import llm_principal_scope_for
 from services.tool_output_filter import cap_unmatched_output, get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
-from .attachment_context import apply_attachments, attachment_notice_messages
+from .attachment_context import apply_attachments, take_notices
 from .budget_refusal import budget_refusal_message
 from .conversation import ConversationHandlerMixin
 from .kb_sources import _kb_sources_from_citations
@@ -3432,7 +3432,7 @@ before summarizing.
             yield progress.to_workflow_message()
 
         llm_params = await self._prepare_llm_workflow_params(session, message, context)
-        for notice in attachment_notice_messages(llm_params):  # #20195: say why an attached file was not used
+        for notice in await take_notices(session_id, llm_params):  # #20195/#21006: say why a file was not used
             yield notice
 
         ctx = self._create_llm_iteration_context(
