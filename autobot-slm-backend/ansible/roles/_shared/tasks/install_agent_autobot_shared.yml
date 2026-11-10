@@ -89,6 +89,15 @@
         group: "{{ slm_agent_group | default('autobot') }}"
         extra_opts:
           - --strip-components=1
+
+    # #20942: the floor python_floor.py reads, from the same tree as the archive above.
+    - name: Stage .python-version for the agent's Python floor (#20942)
+      ansible.builtin.copy:
+        src: "{{ shared_parent }}/.python-version"
+        dest: "{{ autobot.base_dir }}/.python-version"
+        owner: "{{ slm_agent_user | default('autobot') }}"
+        group: "{{ slm_agent_group | default('autobot') }}"
+        mode: "0644"
   always:
     - name: Remove the controller temp archive
       ansible.builtin.file:
