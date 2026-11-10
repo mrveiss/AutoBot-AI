@@ -10,7 +10,7 @@ This class has been closed four times in three files and came back each time:
   filesystem-scanning analytics endpoints accepted a ``source_id`` 'for API
   consistency' but ignored it, scanning AutoBot's own project root regardless of
   the selected code source -- cross-project data leakage."*
-* **#12384** added ``_path_checkpoint_key(path, source_id)``.
+* **#12384** added ``path_checkpoint_key(path, source_id)``.
 * **#8436** scoped ``code_intelligence.py``'s task-result prefix.
 * **#12393** swapped a root resolver that was wrong for deployed layouts.
 
@@ -44,6 +44,7 @@ _SCOPED_TREES = (
     "autobot-backend/api/codebase_analytics",
     "autobot-backend/api/code_intelligence.py",
     "autobot-backend/tasks/analytics_tasks.py",
+    "autobot-backend/tasks/pattern_checkpoint.py",
     "autobot-backend/utils/celery_task_status.py",
 )
 
@@ -65,25 +66,8 @@ _ACCEPTS_WITHOUT_READING: frozenset[str] = frozenset()
 #: and a verdict is not something this guard can supply.
 _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
     {
-        "autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:47",
-        "autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:43",
-        "autobot-backend/api/codebase_analytics/endpoints/duplicates.py:230",
-        "autobot-backend/api/codebase_analytics/endpoints/duplicates.py:285",
-        "autobot-backend/api/codebase_analytics/endpoints/environment.py:46",
-        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:312",
-        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:329",
-        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:423",
-        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:479",
-        "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:634",
-        "autobot-backend/tasks/analytics_tasks.py:41",
+        "autobot-backend/tasks/pattern_checkpoint.py:22",
         "autobot-backend/api/codebase_analytics/chromadb_storage.py:616",
-        # The three stats.py entries were re-recorded when #20493 shifted that
-        # module; the fallbacks themselves are unchanged.
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:223",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:283",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:447",
-        "autobot-backend/api/codebase_analytics/endpoints/declarations.py:29",
-        "autobot-backend/api/codebase_analytics/endpoints/store_state.py:35",
     }
 )
 
@@ -95,14 +79,18 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
 #: ``Name`` test; adding the inverted ``if not source_id`` form and the
 #: ``source_id or "default"`` form surfaced eleven sites that were always there
 #: and always invisible -- ten of them the ``or`` spelling, including #12384's
-#: own fix, ``_path_checkpoint_key``. A raised pin normally means somebody
+#: own fix, ``path_checkpoint_key``. A raised pin normally means somebody
 #: parked a leak; this one means somebody could finally see them. Any future
 #: rise needs the same distinction stated, or it is the former.
 #:
 #: 15 -> 17, under #17651: `declarations.py` moved an existing unscoped read into this spelling, so the
 #: detector can see it. `store_state.py` is a new read, but it returns only whether any row exists, no
 #: row content. The verdict on both stays on #17761.
-_MAX_KNOWN_UNSCOPED_FALLBACKS = 17
+#:
+#: 17 -> 2, under #20513: the other fifteen are routes and route helpers, and the routes now REQUIRE their
+#: source (`SourceIdQuery`) while the helpers go through `require_source_id`. What is left is the scheduler
+#: task wrapper and the indexing-side document tag, which #20513 defers.
+_MAX_KNOWN_UNSCOPED_FALLBACKS = 2
 
 
 #: Scan entry points must resolve their root through the source-aware resolver.
@@ -398,7 +386,7 @@ def test_every_inline_source_id_pattern_matches_the_canonical_one():
     """
     import re as _re
 
-    canonical_src = (_REPO / "autobot-backend/api/codebase_analytics/source_scope.py").read_text(encoding="utf-8")
+    canonical_src = (_REPO / "autobot-backend/api/source_scope.py").read_text(encoding="utf-8")
     canonical = _re.search(r'_SOURCE_ID_SHAPE = re\.compile\(r"([^"]+)"\)', canonical_src)
     assert canonical, "source_scope._SOURCE_ID_SHAPE is gone or reshaped; this pin needs rewriting"
 
