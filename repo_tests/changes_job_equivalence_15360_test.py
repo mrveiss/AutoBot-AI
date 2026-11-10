@@ -92,11 +92,12 @@ ISSUE_17822_ENTRIES = tuple(
 # `services/ai_line_change_proposal.py` + `autobot_shared/ai_lines.py` (imported by `plan_convert_lines.py`, which that test runs, #20086),
 # `autobot_shared/db_session.py` + `autobot_shared/user_management/models/audit.py` (the secrets API test's canonical
 # audit store on its database, #20557), and the seven `autobot_shared/user_management/` modules and its package
-# `__init__` the admin-status two-user test imports (#20670), and `llc/services/controls_service.py` (the
-# two-session pause test, #21056).
+# `__init__` the admin-status two-user test imports (#20670), `llc/services/controls_service.py` (the
+# two-session pause test, #21056), and `autobot_shared/user_management/last_platform_admin.py`
+# (the last-admin race test's guard, #21018).
 assert (
-    len(ISSUE_17822_ENTRIES) == 38
-), "the pinned migration-gate set is 38 entries; an emptied fixture would pin nothing"
+    len(ISSUE_17822_ENTRIES) == 39
+), "the pinned migration-gate set is 39 entries; an emptied fixture would pin nothing"
 ISSUE_17822_WORKFLOW = "migration-gate"
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared
