@@ -50,7 +50,6 @@ _SKIPPED = {
     **{n: "failed" for n in _FAILED},
     "n-pending": "pending",
     "n-enrolling": "pending",
-    "n-never-heartbeat": "pending",
     "n-degraded": "degraded",
 }
 #: node_id -> its events in order as (event_type, message).
@@ -85,11 +84,7 @@ async def maker():
             status = {"n-degraded": "degraded", "n-pending": "pending", "n-enrolling": "enrolling"}.get(
                 node_id, "online"
             )
-            beat = (
-                None
-                if node_id in ("n-degraded", "n-never-heartbeat", "n-pending", "n-enrolling")
-                else datetime.now(timezone.utc)
-            )
+            beat = None if node_id == "n-never-heartbeat" else datetime.now(timezone.utc)
             db.add(
                 _db.Node(
                     node_id=node_id,
@@ -199,3 +194,48 @@ async def test_scheduled_specific_selection_also_skips_unenrolled_nodes(maker):
     async with maker() as db:
         picked = {n.node_id for n in await _executor.get_schedule_target_nodes(db, schedule)}
     assert picked == {"n-completed"}
+
+
+async def test_a_never_heartbeated_online_node_is_not_skipped(maker):
+    async with maker() as db:
+        targets, skipped = await _events.split_enrollment_failed(db, ["n-never-heartbeat"])
+    assert (targets, skipped) == (["n-never-heartbeat"], [])
+
+
+async def test_collect_outdated_never_drops_the_slm_self_node(maker, monkeypatch):
+    class _Svc:
+        def session(self):
+            return maker()
+
+    async def _no_deps(_component):
+        return False
+
+    async with maker() as db:
+        db.add(
+            _db.Node(
+                node_id="n-slm-self",
+                hostname="n-slm-self",
+                ip_address="slm.example.test",
+                status="pending",
+                last_heartbeat=datetime.now(timezone.utc),
+                code_status="outdated",
+            )
+        )
+        await db.commit()
+    monkeypatch.setattr(code_sync.settings, "external_url", "http://slm.example.test:8000", raising=False)
+    monkeypatch.setattr(code_sync, "select", select)
+    monkeypatch.setattr(code_sync, "Node", _db.Node)
+    monkeypatch.setattr(code_sync, "split_enrollment_failed", _events.split_enrollment_failed)
+    monkeypatch.setattr(code_sync, "_compute_deps_changed", _no_deps)
+    job = code_sync.UpdateAllJob(
+        job_id="j-21036-self",
+        stages=[
+            code_sync.UpdateAllStage(name=n)
+            for n in ("github_fetch", "code_source_pull", "slm_self_update", "fleet_nodes")
+        ],
+    )
+
+    ids = await code_sync._collect_outdated_node_ids(job, "a" * 40, _Svc())
+
+    assert "n-slm-self" in ids
+    assert "n-slm-self" not in {s.node_id for s in job.enrollment_skipped_nodes}

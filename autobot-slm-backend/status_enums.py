@@ -46,6 +46,12 @@ class NodeStatus(str, enum.Enum):
     DECOMMISSIONED = "decommissioned"
 
 
+#: The ONE "not fully enrolled" set (#21036, owner ruling 2026-11-10): failed, pending (incl. enrolling) or degraded.
+#: Failed enrollment is event evidence, not a NodeStatus, so only pending/enrolling/degraded are listed here.
+#: Other sets (``_NON_OPERATIONAL_STATUSES``, ``_NODE_NOT_COUNTED_STATUSES``) answer different questions.
+NOT_FULLY_ENROLLED_STATUSES = frozenset({NodeStatus.PENDING, NodeStatus.ENROLLING, NodeStatus.DEGRADED})
+
+
 class DeploymentStatus(str, enum.Enum):
     """Deployment status enumeration."""
 
