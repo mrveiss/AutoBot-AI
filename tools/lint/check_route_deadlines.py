@@ -33,6 +33,9 @@ import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.testfile_names import is_test_filename  # noqa: E402
 
 # Coverage is deliberately narrow to start: the surface where #13602's hang
 # actually lived. Widening it is adding a path here — and the moment one is
@@ -193,7 +196,7 @@ def main() -> int:
             _err(f"[route-deadlines] covered package missing: {package}")
             return 1
         for source in sorted(root.rglob("*.py")):
-            if source.name.endswith("_test.py") or source.name.startswith("test_"):
+            if is_test_filename(source.name, include_js=False, include_conftest=False):
                 continue
             try:
                 ceiling = _module_timeout_ceiling(ast.parse(source.read_text(encoding="utf-8")))

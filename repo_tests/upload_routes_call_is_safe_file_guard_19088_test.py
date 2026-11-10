@@ -19,6 +19,7 @@ from functools import lru_cache
 
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 
 _REPO_ROOT = repo_root()
@@ -35,8 +36,7 @@ _UPLOAD_ROUTE_FLOOR = 17
 
 
 def _is_test(path: str) -> bool:
-    name = path.rsplit("/", 1)[-1]
-    return "/tests/" in path or name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py"
+    return "/tests/" in path or is_test_filename(path, include_js=False)
 
 
 def _is_route(node: ast.AST) -> bool:
