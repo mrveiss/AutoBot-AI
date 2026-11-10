@@ -23,6 +23,8 @@ from autobot_shared.time_utils import parse_utc_iso
 from utils.chromadb_client import get_all_paginated
 
 from ..analyzers import normalize_hardcode_record
+from ..problem_dedup import dedupe_same_location_problems
+from ..problem_query import ProblemCategory, problem_where, select_category
 from ..scanner import _tasks_sync_lock, indexing_tasks
 from ..storage import get_code_collection, get_redis_connection
 from .shared import (
@@ -423,25 +425,20 @@ def _fetch_problems_from_chromadb(
     problem_type: str | None,
     source_id: str,
     source_root: Path,
+    file_category: str | None = None,
 ) -> list:
     """Fetch problems from ChromaDB. (Issue #315, #1710: per-source filter)
 
     Issue #2724: File paths are validated against source_root before returning.
-    Findings that reference non-existent paths are dropped to prevent
-    hallucinated results from reaching the issue tracker.
+    ``file_category`` narrows by category (#20493, see ``problem_query``).
     """
-    conditions = [{"type": "problem"}, {"source_id": require_source_id(source_id, "problems query")}]
-    if problem_type:
-        conditions.append({"problem_type": problem_type})
-    where_filter = {"$and": conditions}
-
+    where_filter = problem_where(require_source_id(source_id, "problems query"), problem_type, file_category)
     results = get_all_paginated(code_collection, where=where_filter, include=["metadatas"])
     problems = [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
 
     # Issue #2724: Validate file paths against the indexed repository root.
     # #20513: the source's own root, never AutoBot's tree as a stand-in.
-    root = source_root
-    return filter_problems_by_file_existence(problems, root)
+    return select_category(filter_problems_by_file_existence(problems, source_root), file_category)
 
 
 async def _fetch_problems_from_redis(problem_type: str | None, source_id: str) -> tuple:
@@ -598,10 +595,10 @@ async def reset_embedding_stats_endpoint() -> JSONResponse:
 async def get_codebase_problems(
     source_id: SourceIdQuery,
     problem_type: str | None = None,
+    file_category: ProblemCategory | None = None,
 ):
-    """Get real code problems detected during analysis (#1710: per-source)."""
-    # Issue #2724 / #2760: Resolve source root via shared helper so _fetch_problems_from_chromadb
-    # can validate file paths without needing to do async I/O in a sync context.
+    """Real code problems per source (#1710); ``file_category`` (#20493) narrows to e.g. ``code``/``test``."""
+    # Issue #2724 / #2760: resolve the source root here (async) so the sync fetch can validate paths.
     source_root = await resolve_scan_root(source_id)
 
     code_collection = await asyncio.to_thread(get_code_collection)
@@ -620,7 +617,9 @@ async def get_codebase_problems(
             problem_type,
             source_id=source_id,
             source_root=source_root,
+            file_category=file_category.value if file_category else None,
         )
+        all_problems = dedupe_same_location_problems(all_problems)  # #20493, route only
         state = await asyncio.to_thread(index_state, code_collection, source_id, bool(all_problems))
     except Exception as store_error:
         logger.error("problems: the code index store read failed: %s", store_error)

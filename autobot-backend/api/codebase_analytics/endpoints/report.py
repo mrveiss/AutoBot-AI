@@ -56,6 +56,7 @@ from ..duplicate_detector import (  # noqa: F401
     DuplicateCodeDetector,
 )
 from ..models import APIEndpointAnalysis
+from ..problem_dedup import dedupe_same_location_problems
 from ..storage import get_code_collection
 from .duplicates import _run_standard_analysis
 from .scan_responses import ScanUnavailable
@@ -1281,8 +1282,7 @@ def _fetch_problems_from_chromadb(
         # Issue #2724: Validate file paths — drop findings that reference
         # files not present in the indexed repository.
         # #20513: the source's own root, never AutoBot's tree as a stand-in.
-        problems = filter_problems_by_file_existence(problems, source_root)
-
+        problems = dedupe_same_location_problems(filter_problems_by_file_existence(problems, source_root))  # #20493
         logger.info("Returning %s validated problems for report", len(problems))
     except Exception as e:
         logger.error("Failed to fetch problems from ChromaDB: %s", e)

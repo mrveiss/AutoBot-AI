@@ -32,9 +32,9 @@ import { getApiBase } from '@/config/ssot-config'
 import type { ToastType } from '@/composables/useToast'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { readDuplicatePayload, type DuplicateScanState } from './duplicatePayload'
+import { useCodeSmellProblems } from './useCodeSmellProblems'
 import { runTimed } from '@/composables/api/useTimedNotify'
 import {
-  CODE_SMELL_TYPES,
   type Problem,
   type DuplicateCode,
   type Declaration,
@@ -293,6 +293,9 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { withSourceId },
   )
 
+  // #20493: the code-smell panel and its export share this one load.
+  const smells = useCodeSmellProblems(withSourceId)
+
   const cachedDuplicatesEndpoint = useFetchEndpoint<unknown, unknown>(
     { path: '/api/analytics/codebase/duplicates/cached', scopeToSource: true, requireSource: true,
       label: 'Cached duplicates endpoint', pickData: (raw) => raw,
@@ -497,25 +500,6 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     }))
   })
 
-  const codeSmellsFromProblems = computed(() =>
-    !problemsReport.value || problemsReport.value.length === 0
-      ? []
-      : problemsReport.value.filter(
-          (p) => p.type && CODE_SMELL_TYPES.has(p.type),
-        ),
-  )
-
-  const codeSmellsForPanel = computed(() =>
-    codeSmellsFromProblems.value.map((p) => ({
-      severity: p.severity,
-      description: p.description || p.message,
-      file_path: p.file_path,
-      line_number: p.line_number ?? p.line,
-      suggestion: p.suggestion,
-      smell_type: p.type,
-    })),
-  )
-
   const declarationsForPanel = computed(() =>
     declarationAnalysis.value.map((d) => ({
       name: d.name,
@@ -552,6 +536,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const buildScanList = (useFullScans: boolean) => [
     { id: 'stats', label: t('analytics.codebase.scans.stats'), run: getCodebaseStats },
     { id: 'problems', label: t('analytics.codebase.scans.problems'), run: getProblemsReport },
+    { id: 'smells', label: t('analytics.codebase.scans.smells'), run: smells.loadSmellProblems },
     { id: 'declarations', label: t('analytics.codebase.scans.declarations'), run: loadDeclarations },
     {
       id: 'duplicates',
@@ -670,8 +655,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     // Computed
     hasAnyResults,
     availableCategories,
-    codeSmellsFromProblems,
-    codeSmellsForPanel,
+    ...smells,
     declarationsForPanel,
     // Data loaders
     loadChartData,

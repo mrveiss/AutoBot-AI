@@ -158,8 +158,8 @@
 
       <!-- Code Intelligence: Anti-Pattern / Code Smells Report (#1469, #184) -->
       <CodeSmellsSection
-        :smells="codeSmellsForPanel" :error="problemsError"
-        :code-health-score="codeHealthScore"
+        :smells="smellsForPanel" :error="smellsError" :loading="smellsLoading" :code-health-score="codeHealthScore"
+        :category="smellCategory" @update:category="selectSmellCategory"
         @export="(fmt: string) => exportSection('code-smells', fmt as 'md' | 'json')"
       />
 
@@ -590,7 +590,7 @@ const {
   progressStatus,
   hasAnyResults,
   availableCategories,
-  codeSmellsForPanel,
+  smellsForPanel, smellsExport, smellsError, smellsLoading, smellCategory, selectSmellCategory, loadSmellProblems, resetSmells,
   declarationsForPanel,
   loadChartData,
   loadUnifiedReport,
@@ -637,7 +637,6 @@ const {
   codeIntelGetAnalysisHistory,
   runCodeIntelligenceAnalysis,
   handleFileScan,
-  codeSmellsReport,
   codeHealthScore,
   analyzingCodeSmells,
   codeSmellsProgressTitle,
@@ -732,7 +731,7 @@ const {
   additionalRefreshCallbacks: () => [
     getCodebaseStats(),
     getProblemsReport(),
-    loadDeclarations(),
+    loadDeclarations(), loadSmellProblems(),
   ],
 })
 
@@ -802,7 +801,7 @@ const {
 const { exportReport, exportSection } = useCodebaseExport({
   sectionData: {
     'bug-prediction': bugPredictionAnalysis as Ref<unknown>,
-    'code-smells': codeSmellsReport as Ref<unknown>,
+    'code-smells': smellsExport as Ref<unknown>,
     'problems': problemsReport as Ref<unknown>,
     'duplicates': duplicateAnalysis as Ref<unknown>,
     'declarations': declarationAnalysis as Ref<unknown>,
@@ -878,7 +877,7 @@ const clearCache = () =>
     declarationAnalysis.value = []
     duplicateAnalysis.value = []
     hardcodeAnalysis.value = []
-    chartData.value = null
+    chartData.value = null; resetSmells()
     progressStatus.value = t('analytics.codebase.status.cacheCleared')
   })
 
