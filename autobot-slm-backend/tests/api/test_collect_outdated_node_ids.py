@@ -78,6 +78,16 @@ SLM_IP = "10.0.1.10"
 OTHER_IP = "10.0.1.20"
 
 
+@pytest.fixture(autouse=True)
+def _no_enrollment_failures(monkeypatch):
+    """services.node_events is stubbed here; the enrollment skip (#21036) has its own real-ORM test."""
+
+    async def _passthrough(_db, node_ids):
+        return list(node_ids), []
+
+    monkeypatch.setattr("api.code_sync.split_enrollment_failed", _passthrough)
+
+
 def _job() -> UpdateAllJob:
     return UpdateAllJob(
         job_id="test-job",
