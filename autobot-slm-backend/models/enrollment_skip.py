@@ -5,7 +5,8 @@
 """A fleet node left out of an update because it is not fully enrolled (#21036).
 
 Its own module, free of ORM imports, so the API job model and the node-event service share one type. The
-definition of "fully enrolled" lives in ``services.node_events``.
+definition of "fully enrolled" is ``status_enums.NOT_FULLY_ENROLLED_STATUSES`` plus the latest
+enrollment event (``services.node_events``).
 """
 
 from pydantic import BaseModel

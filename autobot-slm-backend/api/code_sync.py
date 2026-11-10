@@ -117,7 +117,7 @@ from services.drift_checker import (
 )
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
-from services.node_events import split_enrollment_failed
+from services.node_events import get_slm_self_node_id, split_enrollment_failed
 from services.playbook_executor import get_playbook_executor
 from services.schedule_executor import get_schedule_target_nodes
 from services.single_flight_cache import SingleFlightCache
@@ -5163,7 +5163,7 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
                     outdated_node_ids.append(slm_node.node_id)
 
             outdated_node_ids, job.enrollment_skipped_nodes = await split_enrollment_failed(
-                db, outdated_node_ids, exempt={slm_node.node_id} if slm_own_ip and slm_node else set()
+                db, outdated_node_ids, {await get_slm_self_node_id(db, settings.external_url)}
             )
 
         stage_fleet = _get_stage(job, "fleet_nodes")

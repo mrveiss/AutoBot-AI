@@ -239,3 +239,28 @@ async def test_collect_outdated_never_drops_the_slm_self_node(maker, monkeypatch
 
     assert "n-slm-self" in ids
     assert "n-slm-self" not in {s.node_id for s in job.enrollment_skipped_nodes}
+
+
+async def test_scheduled_run_never_drops_the_slm_self_node(maker, monkeypatch):
+    async with maker() as db:
+        db.add(
+            _db.Node(
+                node_id="n-slm-self",
+                hostname="n-slm-self",
+                ip_address="slm.example.test",
+                status="pending",
+                code_status="outdated",
+            )
+        )
+        await db.commit()
+    monkeypatch.setattr(_executor.settings, "external_url", "http://slm.example.test:8000", raising=False)
+    monkeypatch.setattr(_executor, "select", select)
+    monkeypatch.setattr(_executor, "Node", _db.Node)
+    schedule = types.SimpleNamespace(target_type="all", target_nodes=[])
+
+    async with maker() as db:
+        nodes = await _executor.get_schedule_target_nodes(db, schedule)
+
+    ids = {n.node_id for n in nodes}
+    assert "n-slm-self" in ids
+    assert "n-pending" not in ids

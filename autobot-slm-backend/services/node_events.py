@@ -8,8 +8,8 @@
 """
 
 import uuid
-from datetime import datetime
 from typing import Dict, Iterable, List, Optional, Set, Tuple
+from urllib.parse import urlparse
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,7 +83,7 @@ async def get_enrollment_failed_node_ids(db: AsyncSession, node_ids: Iterable[st
 #: "Fully enrolled" = latest enrollment not failed (event evidence, ``get_enrollment_failed_node_ids``) and the
 #: NodeStatus not in ``status_enums.NOT_FULLY_ENROLLED_STATUSES`` (owner ruling 2026-11-10). A node that never
 #: heartbeated is NOT skipped for that reason.
-def unenrolled_state(status: str, last_heartbeat: Optional[datetime] = None) -> Optional[str]:
+def unenrolled_state(status: str) -> Optional[str]:
     """The not-fully-enrolled state a node's row shows, or None when the row shows a fully enrolled node."""
     if status not in {s.value for s in NOT_FULLY_ENROLLED_STATUSES}:
         return None
@@ -99,12 +99,20 @@ async def get_unenrolled_nodes(db: AsyncSession, node_ids: Iterable[str]) -> Dic
     if not ids:
         return {}
     states = {n: STATE_FAILED for n in await get_enrollment_failed_node_ids(db, ids)}
-    rows = await db.execute(select(Node.node_id, Node.status, Node.last_heartbeat).where(Node.node_id.in_(ids)))
-    for node_id, status, last_heartbeat in rows.all():
-        state = unenrolled_state(status, last_heartbeat)
+    rows = await db.execute(select(Node.node_id, Node.status).where(Node.node_id.in_(ids)))
+    for node_id, status in rows.all():
+        state = unenrolled_state(status)
         if state and node_id not in states:
             states[node_id] = state
     return states
+
+
+async def get_slm_self_node_id(db: AsyncSession, external_url: str) -> Optional[str]:
+    """node_id of the co-located SLM host (the node at the external URL's host), or None; never skipped (#21036)."""
+    own_ip = urlparse(external_url).hostname or ""
+    if not own_ip:
+        return None
+    return (await db.execute(select(Node.node_id).where(Node.ip_address == own_ip))).scalar_one_or_none()
 
 
 async def split_enrollment_failed(
