@@ -1,20 +1,81 @@
 import asyncio
 import sys
 from pathlib import Path
+from types import ModuleType
+from typing import Iterator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-APP_DIR = Path(__file__).parents[1] / "app"
-sys.path.insert(0, str(APP_DIR))
+APP_DIR = Path(__file__).resolve().parents[2] / "autobot-npu-worker" / "resources" / "windows-npu-worker" / "app"
+_APP_DIR = str(APP_DIR)
+# The standalone worker and backend both publish a top-level ``utils`` package.
+_WORKER_MODULE_NAMES = {path.stem for path in APP_DIR.glob("*.py")}
 
-from api_schemas import NPUTaskRequest
-from worker_inference import WorkerInferenceMixin
-from worker_routes import WorkerRoutesMixin
-from worker_state import LRUCache, ThreadSafeStats
-from worker_startup import WorkerStartupMixin
+
+def _utils_modules() -> dict[str, ModuleType | None]:
+    return {name: module for name, module in sys.modules.items() if name == "utils" or name.startswith("utils.")}
+
+
+def _clear_utils_modules() -> None:
+    for name in tuple(sys.modules):
+        if name == "utils" or name.startswith("utils."):
+            sys.modules.pop(name)
+
+
+_backend_worker_modules = {name: sys.modules[name] for name in _WORKER_MODULE_NAMES if name in sys.modules}
+_backend_utils_modules = _utils_modules()
+_inserted_app_dir = _APP_DIR not in sys.path
+if _inserted_app_dir:
+    sys.path.insert(0, _APP_DIR)
+
+try:
+    for name in _WORKER_MODULE_NAMES:
+        sys.modules.pop(name, None)
+    _clear_utils_modules()
+
+    import worker_startup as _worker_startup
+    from api_schemas import NPUTaskRequest
+    from worker_inference import WorkerInferenceMixin
+    from worker_routes import WorkerRoutesMixin
+    from worker_startup import WorkerStartupMixin
+    from worker_state import LRUCache, ThreadSafeStats
+
+    _worker_modules = {name: sys.modules[name] for name in _WORKER_MODULE_NAMES if name in sys.modules}
+    _worker_utils_modules = _utils_modules()
+finally:
+    for name in _WORKER_MODULE_NAMES:
+        sys.modules.pop(name, None)
+    _clear_utils_modules()
+    sys.modules.update(_backend_worker_modules)
+    sys.modules.update(_backend_utils_modules)
+    if _inserted_app_dir:
+        sys.path.remove(_APP_DIR)
+
+
+@pytest.fixture(autouse=True)
+def _worker_import_namespace(request: pytest.FixtureRequest) -> Iterator[None]:
+    for fixture_name in ("empty_reachable_provider_key_vault", "fake_session_lease", "reset_feature_flags_singleton"):
+        if fixture_name in request.fixturenames:
+            request.getfixturevalue(fixture_name)
+
+    backend_worker_modules = {name: sys.modules[name] for name in _WORKER_MODULE_NAMES if name in sys.modules}
+    backend_utils_modules = _utils_modules()
+    for name in _WORKER_MODULE_NAMES:
+        sys.modules.pop(name, None)
+    _clear_utils_modules()
+    sys.modules.update(_worker_modules)
+    sys.modules.update(_worker_utils_modules)
+    try:
+        yield
+    finally:
+        for name in _WORKER_MODULE_NAMES:
+            sys.modules.pop(name, None)
+        _clear_utils_modules()
+        sys.modules.update(backend_worker_modules)
+        sys.modules.update(backend_utils_modules)
 
 
 class FailingModelManager:
@@ -139,8 +200,6 @@ def test_mixed_batch_marks_cached_mock_and_new_real_embedding():
 
 
 def test_failed_preload_is_unhealthy_until_a_model_loads(monkeypatch):
-    import worker_startup
-
     class Worker(WorkerStartupMixin, WorkerRoutesMixin):
         def __init__(self):
             self.app = FastAPI()
@@ -160,7 +219,7 @@ def test_failed_preload_is_unhealthy_until_a_model_loads(monkeypatch):
         async def load_and_optimize_model(self, name, optimization_level):
             raise RuntimeError("load failed")
 
-    monkeypatch.setattr(worker_startup, "config", {"models": {"chat": {"preload": True, "name": "model"}}})
+    monkeypatch.setattr(_worker_startup, "config", {"models": {"chat": {"preload": True, "name": "model"}}})
     worker = Worker()
     client = TestClient(worker.app)
     assert client.get("/health").status_code == 200
@@ -174,8 +233,6 @@ def test_failed_preload_is_unhealthy_until_a_model_loads(monkeypatch):
 
 @pytest.mark.parametrize("manager_available", [False, True])
 def test_failed_embedding_preload_aborts_startup(monkeypatch, manager_available):
-    import worker_startup
-
     class Worker(WorkerStartupMixin):
         def __init__(self):
             self.worker_id = None
@@ -189,7 +246,7 @@ def test_failed_embedding_preload_aborts_startup(monkeypatch, manager_available)
             self._model_manager = MagicMock(load_model=AsyncMock(return_value=False)) if manager_available else None
             self._allow_mock_inference = False
 
-    monkeypatch.setattr(worker_startup, "config", {"models": {"embedding": {"preload": True, "name": "model"}}})
+    monkeypatch.setattr(_worker_startup, "config", {"models": {"embedding": {"preload": True, "name": "model"}}})
     worker = Worker()
     with pytest.raises(RuntimeError, match="Real inference is unavailable for model"):
         asyncio.run(worker.initialize())
