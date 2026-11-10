@@ -174,7 +174,10 @@
       loop:
         - { name: slm-backend, path: autobot-slm-backend/ }
         - { name: slm-frontend, path: autobot-slm-frontend/ }
-        - { name: shared, path: autobot_shared/ }
+        # #20942: .python-version rides in the SAME archive as autobot_shared, so the Python
+        # floor python_floor.py reads comes from the deploy_ref checkout that supplied the
+        # code, lands on every node that unpacks it, and precedes every backend restart.
+        - { name: shared, path: "autobot_shared/ .python-version" }
         # #15462: both frontends declare `file:` dependencies on these two
         # (@autobot/ui, @autobot/terminal, @autobot/vnc). npm installs them as
         # symlinks INTO the deployed tree, so a frontend build resolves them
