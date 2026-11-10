@@ -406,6 +406,26 @@ async def test_update_limit_accepts_token_limit_in_tokens_mode(client: httpx.Asy
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("bad", [0, -1])
+async def test_update_limit_refuses_a_token_limit_below_one(client: httpx.AsyncClient, session_factory, bad) -> None:
+    """PATCH /limit refuses 0 and -1 with 422 and leaves the row untouched (#20930)."""
+    agent_id = await _seed_budget(session_factory, mode="dollars")
+    resp = await client.patch(f"/api/llc/budget/{agent_id}/limit", json={"budget_mode": "tokens", "token_limit": bad})
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_limit_accepts_a_token_limit_of_one(client: httpx.AsyncClient, session_factory) -> None:
+    """The floor itself is accepted (#20930)."""
+    agent_id = await _seed_budget(session_factory, mode="dollars")
+    with patch("llc.services.budget._tracker.get_state", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = None
+        resp = await client.patch(f"/api/llc/budget/{agent_id}/limit", json={"budget_mode": "tokens", "token_limit": 1})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["token_limit"] == 1
+
+
+@pytest.mark.asyncio
 async def test_update_limit_accepts_budget_limit_in_dollars_mode(client: httpx.AsyncClient, session_factory) -> None:
     """PATCH /limit accepts budget_limit when budget_mode is 'dollars' (GH#8997)."""
     agent_id = await _seed_budget(session_factory, mode="dollars")
