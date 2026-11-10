@@ -27,7 +27,7 @@ from services.agent_org_service import AgentOrgService
 from services.approval_execution import review_decision
 
 from ..models.activity import ActorType
-from ..models.budget import TOKEN_LIMIT_MAX, LLCAgentBudget
+from ..models.budget import TOKEN_LIMIT_MAX, TOKEN_LIMIT_MIN, LLCAgentBudget
 from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType
 from .activity_log import LLCActivityLogService
 from .agent_hire_service import HirePayload, insert_hired_agent, schedule_hired_agent
@@ -51,7 +51,7 @@ class BudgetOverridePayload(BaseModel):
 
     agent_id: str = Field(min_length=1, max_length=255)
     budget_limit: Optional[Decimal] = Field(None, gt=0, lt=Decimal("1000000000"))
-    token_limit: Optional[int] = Field(None, gt=0, le=TOKEN_LIMIT_MAX)
+    token_limit: Optional[int] = Field(None, ge=TOKEN_LIMIT_MIN, le=TOKEN_LIMIT_MAX)
     budget_mode: Optional[Literal["dollars", "tokens"]] = None
     alert_threshold: Optional[float] = None
     reason: Optional[str] = None

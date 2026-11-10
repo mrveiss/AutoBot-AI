@@ -32,7 +32,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_workflow import limits
 from chat_workflow.approval_binding import ai_line_calls_shown, bind_decision
-from chat_workflow.attachment_context import attachment_prompt, stream_notices, without_block
+from chat_workflow.attachment_context import attachment_prompt, deliver_notices, without_block
 from chat_workflow.checkpointer_connection import describe_connection, describe_error, get_checkpointer_connection
 from chat_workflow.graph_hooks import (
     _emit_agent_execute_hook,
@@ -261,7 +261,7 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     session = await manager.get_or_create_session(state["session_id"])
     updated_context = dict(state.get("context", {}) or {})  # #20195: the seam stamps INTO this; the node returns it
     llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], updated_context)
-    stream_notices(llm_params, config["configurable"].get("stream_callback"))  # #20195: streamed, not persisted
+    await deliver_notices(state["session_id"], llm_params, config["configurable"].get("stream_callback"))  # #21006
     ctx = manager._create_llm_iteration_context(
         llm_params,
         state["session_id"],
