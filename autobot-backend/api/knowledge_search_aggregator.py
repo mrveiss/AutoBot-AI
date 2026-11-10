@@ -826,7 +826,6 @@ async def get_multi_source_graph(req: Request, body: GraphRequest, current_user:
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
     async with admin_read_audit(current_user, user_id, "kb.multi_source_graph") as is_admin:  # #19860
-
         nodes: List[Dict[str, Any]] = []
         edges: List[Dict[str, Any]] = []
 
@@ -841,6 +840,7 @@ async def get_multi_source_graph(req: Request, body: GraphRequest, current_user:
                 page = await visible_facts_page(*scope, is_admin, is_superadmin_user(current_user), body.cursor)
             except Exception as e:
                 logger.warning("Failed to get facts: %s", e)
+                page = FactsPage(cursor=body.cursor)
         facts = page.facts
 
         # If no category nodes from tree, create them dynamically from facts
@@ -886,6 +886,7 @@ async def get_multi_source_graph_simple(
     include_categories: bool = Query(True, description="Include category nodes"),
     offset: int = Query(0, ge=0, le=GRAPH_MAX_OFFSET, description="Facts and bucket records to skip"),
     cursor: str | None = Query(None, pattern=CURSOR_PATTERN, description="Resume the facts scan (see GraphRequest)"),
+    include_buckets: bool = Query(True),
     current_user: Dict = Depends(get_current_user),
 ):
     """
@@ -895,4 +896,5 @@ async def get_multi_source_graph_simple(
     For more control, use POST /multi-source/graph with GraphRequest body.
     """
     body = GraphRequest(max_facts=max_facts, include_categories=include_categories, offset=offset, cursor=cursor)
+    body.include_buckets = include_buckets
     return await get_multi_source_graph(req, body, current_user)
