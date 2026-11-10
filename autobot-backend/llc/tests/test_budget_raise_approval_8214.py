@@ -221,9 +221,13 @@ def test_a_token_limit_the_column_cannot_store_is_refused_at_the_request() -> No
     assert BudgetOverridePayload(agent_id="a1", token_limit=TOKEN_LIMIT_MAX).token_limit == TOKEN_LIMIT_MAX
 
 
-def test_a_token_limit_below_the_signed_64_bit_minimum_is_refused_at_the_request() -> None:
-    """The BigInteger floor is a literal here, so the pin holds even if the constants are edited together (#20930)."""
-    assert TOKEN_LIMIT_MIN == -9223372036854775808
-    with pytest.raises(ValidationError):
-        UpdateLimitRequest(token_limit=-9223372036854775809)
-    assert UpdateLimitRequest(token_limit=-9223372036854775808).token_limit == -9223372036854775808
+def test_a_token_limit_below_one_is_refused_at_the_request() -> None:
+    """The floor is a literal here, so the pin holds even if the constant is edited (#20930)."""
+    assert TOKEN_LIMIT_MIN == 1
+    for bad in (0, -1, -9223372036854775808):
+        with pytest.raises(ValidationError):
+            UpdateLimitRequest(token_limit=bad)
+        with pytest.raises(ValidationError):
+            BudgetOverridePayload(agent_id="a1", token_limit=bad)
+    assert UpdateLimitRequest(token_limit=1).token_limit == 1
+    assert BudgetOverridePayload(agent_id="a1", token_limit=1).token_limit == 1
