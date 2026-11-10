@@ -13,9 +13,19 @@ from sqlalchemy.orm import Mapped, mapped_column
 from llc.models.enums import BudgetMode
 from user_management.models.base import Base
 
-#: The most and the least ``LLCAgentBudget.token_limit`` (a signed BigInteger) can store.
+#: The most ``LLCAgentBudget.token_limit`` (a signed BigInteger) can store.
 TOKEN_LIMIT_MAX = 2**63 - 1
-TOKEN_LIMIT_MIN = -(2**63)
+#: The least a token limit may be on a NEW write (#20930). NULL means no token limit. A legacy STORED 0 means
+#: BLOCKED (owner decision): every enforcement path reads it through ``token_limit_blocks``. New writes must be
+#: >= 1; block a new agent by pausing it. No data rewrite.
+TOKEN_LIMIT_MIN = 1
+
+
+def token_limit_blocks(spent: int, limit: int | None) -> bool:
+    """Whether a token limit stops an agent: NULL never, a stored ``<= 0`` always, otherwise once over it."""
+    if limit is None:
+        return False
+    return limit <= 0 or spent > limit
 
 
 class LLCAgentBudget(Base):
