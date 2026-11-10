@@ -13,11 +13,16 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import aiofiles
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-from api.codebase_analytics.source_scope import SourceIdQuery, cached_task_result, source_scoped_prefix
 from api.codebase_analytics.task_routes import add_clear_stuck_route
+from api.source_scope import (
+    SourceIdQuery,
+    cached_task_result,
+    require_source_id,
+    source_scoped_prefix,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -159,7 +164,7 @@ def _deduplicate_imports(imports: List[Dict]) -> List[Dict]:
 
 
 async def _load_import_tree_from_index(
-    source_id: str | None,
+    source_id: str,
 ) -> Tuple[Dict[str, List[Dict]], Dict[str, List[Dict]]] | None:
     """Build the bidirectional import tree from indexed ChromaDB "import" docs.
 
@@ -172,13 +177,8 @@ async def _load_import_tree_from_index(
     if not code_collection:
         return None
 
-    # #17758: no unscoped branch -- see dependencies.py for the reasoning. None
-    # here means "no indexed data for this request", which this function's own
-    # contract already covers and which the caller answers with the filesystem
-    # walk. The old conditional queried every registered source instead.
-    if not source_id:
-        logger.debug("import-tree index read skipped: no source_id to scope the query (#17758)")
-        return None
+    # #17758/#20513: no unscoped branch; a missing source is an error, not "no data".
+    source_id = require_source_id(source_id, "import-tree index query")
     where = {"$and": [{"type": "import"}, {"source_id": source_id}]}
     results = await asyncio.to_thread(get_all_paginated, code_collection, where=where, include=["metadatas"])
     metadatas = results.get("metadatas", [])
@@ -209,7 +209,7 @@ async def _load_import_tree_from_index(
     return file_imports, file_imported_by
 
 
-async def _scan_import_tree_live(source_id: str | None) -> Tuple[Dict[str, List[Dict]], Dict[str, List[Dict]]]:
+async def _scan_import_tree_live(source_id: str) -> Tuple[Dict[str, List[Dict]], Dict[str, List[Dict]]]:
     """Live filesystem walk (fallback path, #12364).
 
     Used only when the indexed store has no import data yet for this
@@ -240,7 +240,7 @@ async def _scan_import_tree_live(source_id: str | None) -> Tuple[Dict[str, List[
     error_code_prefix="CODEBASE",
 )
 async def get_import_tree(
-    source_id: str | None = Query(None, description="#12330: scope import tree to the selected code source"),
+    source_id: SourceIdQuery,
 ):
     """
     Get bidirectional file import relationships for tree visualization.
@@ -257,23 +257,17 @@ async def get_import_tree(
     sub-second); falls back to the live filesystem walk -- and kicks off a
     background index job -- only when the index has no data for this source.
     """
-    effective_source_id = source_id
-    if not effective_source_id:
-        from api.codebase_analytics.endpoints.shared import default_source_id
-
-        effective_source_id = await default_source_id()
-
-    indexed = await _load_import_tree_from_index(effective_source_id)
+    indexed = await _load_import_tree_from_index(source_id)
     if indexed is not None:
         file_imports, file_imported_by = indexed
         storage_type = "chromadb"
     else:
         logger.info(
             "Import-tree index empty for source %s -- falling back to live walk (#12364)",
-            effective_source_id,
+            source_id,
         )
-        await trigger_auto_index_if_unindexed(effective_source_id)
-        file_imports, file_imported_by = await _scan_import_tree_live(effective_source_id)
+        await trigger_auto_index_if_unindexed(source_id)
+        file_imports, file_imported_by = await _scan_import_tree_live(source_id)
         storage_type = "live_walk"
 
     # Build result with bidirectional relationships
@@ -282,6 +276,7 @@ async def get_import_tree(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "import_tree": import_tree,
             "summary": _build_summary(import_tree),
             "storage_type": storage_type,
