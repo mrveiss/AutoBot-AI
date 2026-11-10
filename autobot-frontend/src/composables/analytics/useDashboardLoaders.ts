@@ -86,6 +86,7 @@ export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
     {
       path: '/api/analytics/codebase/duplicates/cached', // #20491: page open reads, never scans
       scopeToSource: true,
+      requireSource: true,
       pickData: (r) => r,
       label: 'Codebase duplicates',
     },
