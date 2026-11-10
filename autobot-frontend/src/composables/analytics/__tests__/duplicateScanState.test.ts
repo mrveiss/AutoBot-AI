@@ -59,7 +59,7 @@ describe('duplicates fetchers given a 200 {"status":"error"} (#17983)', () => {
     useAnalyticsDataFetchers({
       rootPath: ref('/repo'),
       sourceIdQuery: computed(() => ''),
-      withSourceId: (url: string) => url,
+      withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=s1`,
       t: (key: string) => key,
       showToast: vi.fn(),
       notify,
@@ -106,7 +106,7 @@ describe('duplicates fetchers given an HTTP error (#17983)', () => {
     useAnalyticsDataFetchers({
       rootPath: ref('/repo'),
       sourceIdQuery: computed(() => ''),
-      withSourceId: (url: string) => url,
+      withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=s1`,
       t: (key: string) => key,
       showToast: vi.fn(),
       notify,
@@ -167,7 +167,7 @@ describe('the dupTask path clears stale rows too (#17983)', () => {
     useAnalyticsDataFetchers({
       rootPath: ref('/repo'),
       sourceIdQuery: computed(() => ''),
-      withSourceId: (url: string) => url,
+      withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=s1`,
       t: (key: string) => key,
       showToast: vi.fn(),
       notify,
