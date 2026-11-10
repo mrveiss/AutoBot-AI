@@ -850,7 +850,9 @@
          else '127.0.0.1' }}
     # #18663: install.sh passes slm_api_url -- the base its own login and register_local_node
     # just used -- so mark-synced reaches the SLM on exactly that URL; the fleet run derives it.
-    _slm_api_base: "{{ slm_api_url | default('https://' ~ (_slm_api_host | trim) ~ '/slm') }}"
+    # An if-expression, not default(): default() evaluates its argument eagerly, and _slm_api_host
+    # fails on the install inventory (a hostvars entry without ansible_host).
+    _slm_api_base: "{{ slm_api_url if (slm_api_url | default('') | length > 0) else 'https://' ~ (_slm_api_host | trim) ~ '/slm' }}"
 
   tasks:
     - name: "Mark-synced | Get deployed commit (once on controller)"

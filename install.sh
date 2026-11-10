@@ -715,7 +715,7 @@ EOF
 
     cd "${ansible_dir}"
     local vars_file="${INSTALL_TMP}/ansible-vars.json"  # #19236: never argv; the EXIT trap removes INSTALL_TMP. deploy_ref: Play 0 resyncs code_source to the installed branch, not main (#18663)
-    (umask 077 && PW="${ADMIN_PASSWORD}" REF="${GIT_BRANCH}" jq -n '{slm_admin_password: env.PW, deploy_ref: env.REF}' > "${vars_file}"); set +o pipefail
+    (umask 077 && PW="${ADMIN_PASSWORD}" REF="${GIT_BRANCH:-}" jq -n '{slm_admin_password: env.PW} + (if (env.REF // "") != "" then {deploy_ref: env.REF} else {} end)' > "${vars_file}"); set +o pipefail
     ansible-playbook \
         -i "${inventory}" \
         playbooks/deploy-slm-manager.yml \
@@ -886,7 +886,7 @@ register_local_node() {
 
     case "${cs_code:-000}" in
         200) success "Code source assigned: ${CODE_SOURCE} (branch: ${GIT_BRANCH})"
-             bash "${CODE_SOURCE}/scripts/deployment/mark_local_node_synced.sh" "${CODE_SOURCE}" "${SLM_NODE_ID}" "${api_url}" "${INSTALL_TMP}/ansible-vars.json" "${LOG_FILE}" || warn "Step 'mark synced' did not complete. Check the node's status in Code Sync. See ${LOG_FILE}" ;;
+             bash "${CODE_SOURCE}/scripts/deployment/mark_local_node_synced.sh" "${CODE_SOURCE}" "${SLM_NODE_ID}" "${api_url}" "${INSTALL_TMP:-}/ansible-vars.json" "${LOG_FILE:-}" || warn "Step 'mark synced' did not complete. Check the node's status in Code Sync. See ${LOG_FILE}" ;;
         *)   warn "Optional step 'code source' returned HTTP ${cs_code:-000}, so mark-synced was skipped (#18663) — assign it in SLM UI > Code Sync" ;;
     esac
 }

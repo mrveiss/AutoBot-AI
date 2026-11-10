@@ -127,6 +127,7 @@ def _run_helper(tmp_path, stub_body: str) -> subprocess.CompletedProcess:
             str(repo_root() / _SCRIPT),
             str(code_source),
             "00-SLM-Manager",
+            "https://127.0.0.1",
             str(tmp_path / "vars.json"),
             str(tmp_path / "log"),
         ],
@@ -150,6 +151,7 @@ def test_helper_invokes_the_tagged_playbook_for_the_registered_node(tmp_path) ->
     assert "playbooks/provision-fleet-roles.yml" in argv
     assert "--tags mark-synced" in argv
     assert "slm_node_id=00-SLM-Manager" in argv
+    assert "slm_api_url=https://127.0.0.1" in argv
     assert "--limit localhost" in argv
 
 
