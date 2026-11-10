@@ -16,57 +16,15 @@ Async workers are wrapped via ``_run_async`` (the persistent worker loop, #20887
 import asyncio
 import contextvars
 import functools
-import hashlib
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
+from tasks.pattern_checkpoint import checkpoint_options, load_path_checkpoint, save_path_checkpoint
 
 logger = get_logger(__name__)
-
-_PATTERN_CHECKPOINT_PREFIX = "pattern_complete_checkpoint:"
-_CHECKPOINT_TTL = 3600  # 1 h — recent-enough to resume from
-
-
-def _path_checkpoint_key(path: str, source_id: str | None = None) -> str:
-    """Issue #12384: fold source_id into the checkpoint key. Without this, two
-    different sources resolving to the same scan path (e.g. both default to
-    AutoBot's own PATH.PROJECT_ROOT) would return each other's cached
-    analysis result -- bypassing the ChromaDB source_id tag entirely on a
-    checkpoint-hit retry.
-    """
-    tag = source_id or "default"
-    return f"{_PATTERN_CHECKPOINT_PREFIX}{hashlib.sha256(f'{tag}:{path}'.encode()).hexdigest()[:16]}"
-
-
-async def _load_path_checkpoint(path: str, source_id: str | None = None) -> dict | None:
-    """Return a previously-saved completed analysis result for *path*/*source_id*, or None (GH#8439)."""
-    try:
-        from autobot_shared.redis_client import get_async_redis_client
-
-        redis = await get_async_redis_client(database="analytics")
-        if not redis:
-            return None
-        raw = await redis.get(_path_checkpoint_key(path, source_id))
-        return json.loads(raw) if raw else None
-    except Exception:
-        return None
-
-
-async def _save_path_checkpoint(path: str, result: dict, source_id: str | None = None) -> None:
-    """Persist *result* as the checkpoint for *path*/*source_id* (GH#8439)."""
-    try:
-        from autobot_shared.redis_client import get_async_redis_client
-
-        redis = await get_async_redis_client(database="analytics")
-        if redis:
-            await redis.set(_path_checkpoint_key(path, source_id), json.dumps(result, default=str), ex=_CHECKPOINT_TTL)
-    except Exception:
-        pass
-
 
 # One fresh token per ``_drain_after`` call. A task spawned while the coroutine runs inherits it, so the
 # drain waits only for its own run's tasks; the worker loop is shared and persistent, and other runs'
@@ -142,9 +100,9 @@ def _wrap(result: object, started: str) -> dict:
 async def _scan_root_or_refusal(source_id: "str | None") -> "tuple[Path | None, dict | None]":
     """The scan root for *source_id*, or the dict a task should return instead (#17758).
 
-    ``strict=True``, so a **named** source that does not resolve raises rather
-    than silently resolving to AutoBot's own repository -- ``use_default=False``
-    would not do that, it gates only the default-source lookup.
+    A source that does not resolve to a checkout -- named but gone, or not named at
+    all, as the scheduler dispatches it -- is a refusal, never AutoBot's own
+    repository scanned under another project's key (#20513).
 
     One definition because three tasks need it, and three copies of a scoping
     decision is precisely how #17758 happened: the same shape in three places,
@@ -154,9 +112,28 @@ async def _scan_root_or_refusal(source_id: "str | None") -> "tuple[Path | None, 
     from api.codebase_analytics.endpoints.shared import UnresolvedSourceError, resolve_scan_root
 
     try:
-        return await resolve_scan_root(source_id, strict=True), None
+        return await resolve_scan_root(source_id), None
     except UnresolvedSourceError as exc:
-        return None, {"status": "error", "message": f"{exc}; nothing scanned"}
+        return None, {"status": "error", "message": f"{exc.detail}; nothing scanned"}
+
+
+async def _confirmed_dir_or_refusal(
+    source_id: str, path: str, expect: "str | None" = None
+) -> "tuple[str | None, dict | None]":
+    """The real directory *path* now is inside *source_id*, or the refusal dict a task should return (#20513).
+
+    With *expect*, also refuses when the real directory is no longer that one -- the post-scan check
+    that keeps a result produced from a directory swapped mid-scan from being returned or cached.
+    """
+    from api.codebase_analytics.endpoints.shared import UnresolvedSourceError, confirm_scan_dir_in_source
+
+    try:
+        real = await confirm_scan_dir_in_source(source_id, path)
+    except (UnresolvedSourceError, ValueError) as exc:
+        return None, {"status": "error", "message": f"{getattr(exc, 'detail', exc)}; nothing scanned"}
+    if expect is not None and real != expect:
+        return None, {"status": "error", "message": "The scan directory changed during the scan; result discarded"}
+    return real, None
 
 
 @celery_app.task(bind=True, name="analytics.run_import_tree_analysis")
@@ -276,6 +253,11 @@ def run_dependency_analysis(self, source_id: "str | None" = None) -> dict:
         external_deps: Dict[str, int] = {}
         runtime_rels: List[Dict] = []
 
+        # Resolve the root first: a source without a checkout gets the shared refusal whether or
+        # not the collection is reachable (require_source_id would otherwise raise first).
+        root, refusal = await _scan_root_or_refusal(source_id)
+        if refusal is not None:
+            return refusal
         if code_collection:
             # #17758: the indexed read is scoped too -- the filesystem scan and the
             # ChromaDB query are two separate leaks and fixing one leaves the other.
@@ -286,9 +268,6 @@ def run_dependency_analysis(self, source_id: "str | None" = None) -> dict:
         # established that resolves to the install directory in the deployed
         # layout -- not a repository -- so this task scanned the wrong tree in
         # production independently of any scoping question.
-        root, refusal = await _scan_root_or_refusal(source_id)
-        if refusal is not None:
-            return refusal
         project_root = root
         await _scan_filesystem_imports(project_root, modules, import_relationships, external_deps, runtime_rels)
 
@@ -326,14 +305,20 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
     _progress(self, "Initializing", 0.0, started)
 
     async def _work():
+        from code_intelligence.pattern_analysis import CodePatternAnalyzer
+
+        # The route validated the directory at queue time; confirm it again now, before anything
+        # (including a cached result) is served, and key the checkpoint on the confirmed path (#20513).
+        scan_dir, refusal = await _confirmed_dir_or_refusal(request.source_id, request.path)
+        if refusal is not None:
+            return refusal
+
         # Resume from checkpoint if analysis for this path was recently completed.
-        saved = await _load_path_checkpoint(request.path, request.source_id)
+        saved = await load_path_checkpoint(scan_dir, request.source_id, checkpoint_options(request))
         if saved:
-            logger.info("run_pattern_analysis: resuming from checkpoint for path %s", request.path)
+            logger.info("run_pattern_analysis: resuming from checkpoint for path %s", scan_dir)
             _progress(self, "Loaded from checkpoint", 100.0, started)
             return saved
-
-        from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
         async def _on_progress(step: str, progress: float) -> None:
             _progress(self, step, progress, started)
@@ -347,13 +332,20 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
             # Issue #12384: tag every stored pattern with the requester's
             # source_id so the read-side endpoints can scope queries to it.
             source_id=request.source_id,
+            # Findings are written only after the post-scan containment check below passes (#20513).
+            enable_embedding_storage=False,
         )
         report = await asyncio.wait_for(
-            analyzer.analyze_directory(request.path, progress_callback=_on_progress),
+            analyzer.analyze_directory(scan_dir, progress_callback=_on_progress),
             timeout=_ANALYSIS_TIMEOUT,
         )
+        _, moved = await _confirmed_dir_or_refusal(request.source_id, scan_dir, expect=scan_dir)
+        if moved is not None:
+            return moved
+        analyzer.enable_embedding_storage = True
+        await analyzer._store_patterns(report)
         result = report.to_dict()
-        await _save_path_checkpoint(request.path, result, request.source_id)
+        await save_path_checkpoint(scan_dir, result, request.source_id, checkpoint_options(request))
         return result
 
     return _wrap(_run_async(_work()), started)
@@ -514,8 +506,12 @@ def run_dashboard_analysis(self) -> dict:
 
 @celery_app.task(bind=True, name="analytics.run_pattern_summary_analysis")
 @_binds_task_id
-def run_pattern_summary_analysis(self, path: str) -> dict:
-    """Celery wrapper for pattern summary background job (#6505)."""
+def run_pattern_summary_analysis(self, path: str, source_id: str) -> dict:
+    """Celery wrapper for pattern summary background job (#6505).
+
+    ``source_id`` is the source *path* belongs to; the directory is confirmed inside it again
+    when the task runs (#20513).
+    """
     from api.codebase_analytics.endpoints.pattern_analysis import _ANALYSIS_TIMEOUT
 
     started = datetime.now(tz=timezone.utc).isoformat()
@@ -524,6 +520,9 @@ def run_pattern_summary_analysis(self, path: str) -> dict:
     async def _work():
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
+        scan_dir, refusal = await _confirmed_dir_or_refusal(source_id, path)
+        if refusal is not None:
+            return refusal
         analyzer = CodePatternAnalyzer(enable_embedding_storage=False)
 
         async def _on_progress(step: str, progress: float) -> None:
@@ -531,9 +530,12 @@ def run_pattern_summary_analysis(self, path: str) -> dict:
             _progress(self, step, scaled, started)
 
         report = await asyncio.wait_for(
-            analyzer.analyze_directory(path, progress_callback=_on_progress),
+            analyzer.analyze_directory(scan_dir, progress_callback=_on_progress),
             timeout=_ANALYSIS_TIMEOUT,
         )
+        _, moved = await _confirmed_dir_or_refusal(source_id, scan_dir, expect=scan_dir)
+        if moved is not None:
+            return moved
         _progress(self, "Building summary", 80.0, started)
         return {
             "total_patterns": report.total_patterns,

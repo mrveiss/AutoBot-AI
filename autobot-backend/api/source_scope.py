@@ -87,6 +87,14 @@ SourceIdQuery = Annotated[
 ]
 
 
+#: ``openapi_extra`` for the routes whose result is not about one source: the source
+#: list, the shared indexing queue, process-wide embedding counters. A route either
+#: requires a source or carries this marker; the route guard
+#: (``routes_require_source_20513_test.py``) fails on one that does neither, so
+#: "does not need a source" is a stated decision and not an omission (#20513).
+CROSS_SOURCE_OPENAPI = {"x-source-scope": "cross-source"}
+
+
 def scoped_prefix(prefix: str, scope: "str | None", scope_name: str = "source_id") -> str:
     """A task-result prefix for ONE value of whatever dimension scopes it (#17758).
 
