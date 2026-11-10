@@ -15,7 +15,7 @@
  * authentication, retries, and error serialisation are handled centrally.
  */
 
-import { ref, readonly, type Ref } from 'vue'
+import { computed, ref, readonly, type Ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { useLoadingState } from '@/composables/useLoadingState'
@@ -108,6 +108,13 @@ export interface UseKnowledgeGraphEntitiesReturn {
    * created entity (or null if the response shape is unexpected).
    */
   createGraphEntity: (payload: NewEntityPayload) => Promise<GraphEntity | null>
+  /** True while the facts scan has a cursor to continue from (more readable facts may exist). */
+  hasMoreFacts: Readonly<Ref<boolean>>
+  /**
+   * Read the next page of facts from the server's scan cursor and merge it into
+   * `entities`/`relations`. Does not reject; a failure is reported in `errorMessage`.
+   */
+  loadMoreFacts: () => Promise<void>
 }
 
 export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
@@ -115,6 +122,8 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
   const relations = ref<GraphRelation[]>([])
   const errorMessage = ref('')
   const sources = ref<GraphSourceOutcome[]>([])
+  /** The facts section's `cursor` of the last response (#20945); null once the listing is exhausted. */
+  const factsCursor = ref<string | null>(null)
   const { isLoading, wrap } = useLoadingState()
 
   // --------------------------------------------------------------------------
@@ -203,6 +212,34 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
     )
   }
 
+  /** The facts section's continuation cursor in a graph response, or null. */
+  function _factsCursorOf(payload: unknown): string | null {
+    const stats = (payload as { stats?: { sections?: Array<{ key: string; cursor?: string | null }> } } | undefined)
+      ?.stats
+    return stats?.sections?.find((section) => section.key === 'facts')?.cursor ?? null
+  }
+
+  async function loadMoreFacts(): Promise<void> {
+    if (!factsCursor.value) return
+    await wrap(async () => {
+      try {
+        const page: Record<string, unknown> = await apiClient.get(
+          `${getApiBase()}/knowledge_base/multi-source/graph?max_facts=100&include_buckets=false`
+          + `&cursor=${encodeURIComponent(factsCursor.value as string)}`,
+        )
+        const known = new Set(entities.value.map((entity) => entity.id))
+        entities.value = [...entities.value, ..._entitiesOf(page).filter((entity) => entity.id && !known.has(entity.id))]
+        const body = (page as Record<string, unknown>)?.data as Record<string, unknown> | undefined
+        const added = (body?.relations as GraphRelation[] | undefined) ?? []
+        relations.value = [...relations.value, ...added]
+        factsCursor.value = _factsCursorOf(page)
+      } catch (error) {
+        errorMessage.value = _reason(error)
+        logger.error('Loading more facts failed:', errorMessage.value)
+      }
+    })
+  }
+
   async function fetchGraphData(): Promise<void> {
     errorMessage.value = ''
     await wrap(async () => {
@@ -219,6 +256,7 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
         apiClient.get<Record<string, unknown>>(`${getApiBase()}/memory/entities/all`),
       ])
 
+      factsCursor.value = unified.status === 'fulfilled' ? _factsCursorOf(unified.value) : null
       const unifiedEntities = unified.status === 'fulfilled' ? _entitiesOf(unified.value) : []
       const memoryEntities = memory.status === 'fulfilled' ? _entitiesOf(memory.value) : []
 
@@ -322,5 +360,7 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
     sources: readonly(sources) as Readonly<Ref<GraphSourceOutcome[]>>,
     fetchGraphData,
     createGraphEntity,
+    hasMoreFacts: computed(() => factsCursor.value !== null),
+    loadMoreFacts,
   }
 }

@@ -262,6 +262,10 @@ appears outside the known overlays.
 | `AUTOBOT_KB_EMBED_WINDOW_CHARS` | knowledge | int | `4000` | Characters per window when a fact is too long for the embedding model (#20066). Range: 200–100000. |
 | `AUTOBOT_KB_EVENT_FETCH_CAP` | knowledge | int | `2500` | Most events fetched per request by those routes; api/knowledge_graph_routes.py (#16665). Range: 1–100000. |
 | `AUTOBOT_KB_EVENT_OVERFETCH_FACTOR` | knowledge | int | `5` | How many times the requested page the event routes fetch before filtering by what the caller may see, so a filtered page can still fill; api/knowledge_graph_routes.py (#16665). Range: 1–100. |
+| `AUTOBOT_KB_GRAPH_MAX_OFFSET` | knowledge | int | `100000` | Upper bound of the knowledge-graph offset parameter (facts and bucket records to skip). Range: 0–10000000. |
+| `AUTOBOT_KB_GRAPH_PREVIEW_CHARS` | knowledge | int | `160` | Characters of a bucket record shown as its knowledge-graph node name. Range: 20–1000. |
+| `AUTOBOT_KB_GRAPH_SCAN_LIMIT` | knowledge | int | `5000` | Records scanned per fact listing or bucket collection to count and page what the caller may see. Range: 100–100000. |
+| `AUTOBOT_KB_GRAPH_SECTION_SAMPLE_LIMIT` | knowledge | int | `25` | Records sampled per knowledge-graph section; the response reports total vs returned. Range: 1–500. |
 | `AUTOBOT_KB_INGEST_RECORD_TTL_SECONDS` | knowledge | int | `2592000` | Seconds a per-document ingest status record (success/partial/timeout) is kept so a retry can resume after the last stored chunk; read by knowledge/document_ingest.py (#17986). |
 | `AUTOBOT_KB_KEYWORD_SEARCH_MAX_SCAN` | knowledge | int | `10000` | Facts one keyword search reads at most; a warning says when it cut one short (#19726). Range: 100–1000000. |
 | `AUTOBOT_KB_METRICS_COUNT_REFRESH_SECONDS` | knowledge | float | `300.0` | Minimum seconds between the doc:* and kb_cache:* keyspace walks that feed the kb_vector_count / kb_cache_entries gauges; the cached count is served in between; read by utils/system_metrics.py (#18999). Range: 1.0–86400.0. |

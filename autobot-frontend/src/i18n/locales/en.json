@@ -3293,6 +3293,8 @@
       "description": "Visualize entities and their relationships",
       "refresh": "Refresh",
       "refreshGraphData": "Refresh graph data",
+      "loadMoreFacts": "Load more facts",
+      "moreFactsAvailable": "More facts you can read are not shown yet.",
       "grid": "Grid",
       "force": "Force",
       "toggleLayout": "Toggle layout",

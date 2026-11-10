@@ -40,6 +40,23 @@ async def _source_map(kb, document_ids: List[str]) -> Dict[str, Dict[str, Any] |
     return dict(zip(ids, await asyncio.gather(*(one(i) for i in ids))))
 
 
+async def resolve_sources(
+    items: List[dict], kb, document_id_of: Callable[[dict], Any], *, withhold_quarantined_source: bool = False
+) -> List[tuple]:
+    """``(item, source fact metadata)`` for each item whose source fact resolves; the rest are dropped (#16665).
+
+    Fails closed: an unresolvable source drops the item. *withhold_quarantined_source* also drops items whose
+    source fact is research-quarantined.
+    """
+    doc_ids = [str(document_id_of(item) or "") for item in items]
+    sources = await _source_map(kb, doc_ids)
+    return [
+        (item, sources[d])
+        for item, d in zip(items, doc_ids)
+        if sources[d] and not (withhold_quarantined_source and is_quarantined({"metadata": sources[d]}))
+    ]
+
+
 async def visible_by_source(
     items: List[dict],
     kb,
@@ -52,13 +69,8 @@ async def visible_by_source(
 
     *withhold_quarantined_source* also drops items whose source fact is research-quarantined, for an admin too.
     """
-    doc_ids = [str(document_id_of(item) or "") for item in items]
-    sources = await _source_map(kb, doc_ids)
-    candidates = []
-    for item, document_id in zip(items, doc_ids):
-        meta = sources[document_id]
-        if meta and not (withhold_quarantined_source and is_quarantined({"metadata": meta})):
-            candidates.append({"id": item.get("id", ""), "metadata": meta, "item": item})
+    resolved = await resolve_sources(items, kb, document_id_of, withhold_quarantined_source=withhold_quarantined_source)
+    candidates = [{"id": item.get("id", ""), "metadata": meta, "item": item} for item, meta in resolved]
     kept = await filter_for_user_id(candidates, kb, reader)
     return [c["item"] for c in kept]
 
