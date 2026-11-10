@@ -42,3 +42,24 @@ export function attachmentNoticeText(metadata: AttachmentNoticeMetadata | undefi
 export function showAttachmentNotice(metadata: AttachmentNoticeMetadata | undefined): void {
   useToast().showToast(attachmentNoticeText(metadata), 'warning')
 }
+
+interface StoredMessage {
+  text?: string
+  content?: string
+  messageType?: string
+  type?: string
+  metadata?: Record<string, unknown>
+  rawData?: Record<string, unknown>
+}
+
+/**
+ * The text a stored chat message shows (#21006). A stored attachment notice is rendered from its code
+ * through the same `chat.attachmentNotice.<code>` path as the live stream, in the reader's language; the
+ * backend's English fallback text is only for clients that do not know the key.
+ */
+export function storedMessageText(msg: StoredMessage): string {
+  if ((msg.messageType || msg.type) === 'attachment_notice') {
+    return attachmentNoticeText((msg.metadata || msg.rawData) as AttachmentNoticeMetadata | undefined)
+  }
+  return msg.text || msg.content || ''
+}
