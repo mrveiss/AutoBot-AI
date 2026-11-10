@@ -110,9 +110,8 @@ async def test_declarations_three_answers_are_distinct():
 async def _problems(collection, **kwargs):
     with (
         patch.object(stats_mod, "get_code_collection", return_value=collection),
-        patch.object(stats_mod, "resolve_source_root", new=AsyncMock(return_value=None)),
+        patch.object(stats_mod, "resolve_scan_root", new=AsyncMock(return_value=Path("."))),
         patch.object(stats_mod, "filter_problems_by_file_existence", side_effect=lambda p, _r: p),
-        patch.object(stats_mod, "resolve_git_repo_root", return_value="."),
     ):
         return await stats_mod.get_codebase_problems(source_id="s1", **kwargs)
 
