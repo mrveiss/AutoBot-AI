@@ -95,6 +95,7 @@ export function useCodeIntelAnalysis(
         path: '/api/analytics/codebase/cache',
         method: 'DELETE',
         scopeToSource: true,
+        requireSource: true,
         pickData: (raw) => raw.deleted_keys ?? 0,
         onSuccess: (count) => {
           localStateResetFn()
