@@ -26,6 +26,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -196,13 +197,7 @@ def direct_constructions(source: str) -> list[int]:
 
 def _is_test_path(rel: str) -> bool:
     base = rel.rsplit("/", 1)[-1]
-    return (
-        base.startswith("test_")
-        or base.endswith("_test.py")
-        or "test_support" in base
-        or base == "conftest.py"
-        or "/tests/" in f"/{rel}"
-    )
+    return is_test_filename(base, include_js=False) or "test_support" in base or "/tests/" in f"/{rel}"
 
 
 def test_control_strings_are_detected():
