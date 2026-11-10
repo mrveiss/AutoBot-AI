@@ -28,6 +28,7 @@ import asyncio
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from api.source_scope import CROSS_SOURCE_OPENAPI
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.knowledge.impact_analysis import find_impact
@@ -38,8 +39,11 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
+#: The stated scope of every ``/impact`` answer (#20513): all indexed code, not one source.
+SOURCE_SCOPE = "cross-source"
 
-@router.get("/impact")
+
+@router.get("/impact", openapi_extra=CROSS_SOURCE_OPENAPI)
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -57,6 +61,14 @@ async def analyze_impact(
 ):
     """Return what transitively calls *node_id*.
 
+    CROSS-SOURCE (#20513): the code-graph collection is not tagged with a code
+    source. ``CodeIndexer`` writes ``source``/``source_path``/``node_name`` and, on
+    edges, a ``source_id`` that is the *caller node's* id, not a registry source;
+    ``POST /api/knowledge_base/index/code`` takes a directory, not a source. So
+    this walk cannot be filtered to one source, and node ids are path-based, so the
+    same id in two sources is one node here. Every response says so
+    (``source_scope``) instead of implying a scoped answer.
+
     A 200 with ``indexed: false`` rather than a 404 when the graph is missing:
     "the code graph has not been built" is a different answer from "that node
     does not exist", and collapsing them would send an operator hunting for a
@@ -71,6 +83,7 @@ async def analyze_impact(
             status_code=200,
             content={
                 "indexed": False,
+                "source_scope": SOURCE_SCOPE,
                 "node_id": node_id,
                 "message": "The code graph collection is not available — run an index first.",
             },
@@ -88,6 +101,7 @@ async def analyze_impact(
             status_code=200,
             content={
                 "indexed": False,
+                "source_scope": SOURCE_SCOPE,
                 "node_id": node_id,
                 "message": (
                     "The code graph collection exists but is empty — run POST "
@@ -111,6 +125,7 @@ async def analyze_impact(
         status_code=200,
         content={
             "indexed": True,
+            "source_scope": SOURCE_SCOPE,
             "root_id": result.root_id,
             "seed_ids": result.seed_ids,
             "reached": result.reached,
