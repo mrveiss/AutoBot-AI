@@ -312,4 +312,6 @@ def test_control_a_body_evidence_in_the_same_call_passes_and_one_outside_it_does
     outside = "const body = JSON.stringify({ source_id: id })\nfetchWithAuth('/api/analytics/codebase/index', { body })"
     assert scan_text(inside)[1] == []
     assert scan_text(outside)[1] == ["line 2: index"]
-    assert scan_text(outside, "autobot-frontend/src/composables/analytics/useIndexingJob.ts") == (0, [])
+    deferred = outside.replace("fetchWithAuth(", "_sendIndexRequest(")
+    assert scan_text(deferred, "autobot-frontend/src/composables/analytics/useIndexingJob.ts") == (0, [])
+    assert scan_text(outside, "autobot-frontend/src/composables/analytics/useIndexingJob.ts")[1], "the exemption covers only the anchored call"

@@ -44,6 +44,7 @@ _SCOPED_TREES = (
     "autobot-backend/api/codebase_analytics",
     "autobot-backend/api/code_intelligence.py",
     "autobot-backend/tasks/analytics_tasks.py",
+    "autobot-backend/tasks/pattern_checkpoint.py",
     "autobot-backend/utils/celery_task_status.py",
 )
 
@@ -65,7 +66,7 @@ _ACCEPTS_WITHOUT_READING: frozenset[str] = frozenset()
 #: and a verdict is not something this guard can supply.
 _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
     {
-        "autobot-backend/tasks/analytics_tasks.py:41",
+        "autobot-backend/tasks/pattern_checkpoint.py:22",
         "autobot-backend/api/codebase_analytics/chromadb_storage.py:616",
     }
 )
