@@ -315,6 +315,32 @@ export function formatISOString(value: DateInput): string {
   return toValidDate(value)?.toLocaleString() ?? ''
 }
 
+/**
+ * The UTC calendar day of a moment as `YYYY-MM-DD` (default: now), for file names, API date
+ * parameters and day buckets (#19905). A missing or unparseable value is `''`.
+ */
+export function isoDateStamp(input: DateInput = new Date()): string {
+  return toValidDate(input)?.toISOString().slice(0, 10) ?? ''
+}
+
+/**
+ * The UTC second of a moment as the filename-safe `YYYY-MM-DDTHH-MM-SS` (default: now), for export
+ * file names (#19905). A missing or unparseable value is `''`.
+ */
+export function isoTimestampStamp(input: DateInput = new Date()): string {
+  return toValidDate(input)?.toISOString().replace(/[:.]/g, '-').slice(0, 19) ?? ''
+}
+
+/**
+ * A moment as the `YYYY-MM-DDTHH:mm` value of an `<input type="datetime-local">`, in the browser's
+ * own timezone (the input reads and writes local time, #19905). A missing or unparseable value is `''`.
+ */
+export function toDateTimeLocalValue(input: DateInput): string {
+  const date = toValidDate(input)
+  if (!date) return ''
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+}
+
 /** Units of {@link formatRelativeTime}, largest first, with their size in seconds. */
 const RELATIVE_UNITS: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, number]> = [
   ['year', 31536000],

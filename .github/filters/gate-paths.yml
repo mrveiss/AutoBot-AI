@@ -84,6 +84,7 @@ types:
   - 'autobot-frontend/package.json'
   - 'autobot-frontend/package-lock.json'
   - 'scripts/audit_api_wiring.py'
+  - 'scripts/audit_api_wiring_args.py'
   - '**/requirements*.txt'
 
 # ci.yml generated-types job for autobot-slm-frontend (not a required context).
@@ -94,6 +95,7 @@ slm_types:
   - 'autobot-slm-frontend/package.json'
   - 'autobot-slm-frontend/package-lock.json'
   - 'scripts/audit_api_wiring.py'
+  - 'scripts/audit_api_wiring_args.py'
   - '**/requirements*.txt'
 
 # ci.yml security scans. Formerly security.yml's `on.pull_request.paths`: the exact

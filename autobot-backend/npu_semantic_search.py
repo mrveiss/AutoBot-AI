@@ -345,8 +345,8 @@ class NPUSemanticSearch:
             return await self._search_with_llamaindex(query, similarity_top_k, filters), "knowledge_base"
 
         logger.warning("Vector store not available, using basic search fallback")
-        basic_results = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, mode="text")
-        return self._convert_basic_results(basic_results, "cpu_fallback"), "cpu_fallback"
+        hits = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, hardware_backend="cpu")
+        return self._convert_basic_results(hits, "cpu_fallback"), "cpu_fallback"  # KB.search gated it (#19144)
 
     def _hybrid_populated(self) -> bool:
         """True when the hybrid FAISS index holds vectors, so a search would be in its space. #18185."""
@@ -392,8 +392,8 @@ class NPUSemanticSearch:
     ) -> Tuple[List[NpuSearchResult], SearchMetrics]:
         """Handle search error with fallback."""
         logger.error("❌ Enhanced search failed: %s", error)
-        basic_results = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, mode="auto")
-        fallback_results = self._convert_basic_results(basic_results, "fallback")
+        hits = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, hardware_backend="cpu")
+        fallback_results = self._convert_basic_results(hits, "fallback")  # KB.search gated it (#19144)
         total_time = (time.time() - start_time) * 1000
 
         fallback_metrics = SearchMetrics(
