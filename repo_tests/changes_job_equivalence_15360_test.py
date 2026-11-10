@@ -96,8 +96,8 @@ ISSUE_17822_ENTRIES = tuple(
 # (the last-admin race test's guard, #21018).
 # Also `llc/services/controls_service.py` (the two-session pause test, #21056).
 assert (
-    len(ISSUE_17822_ENTRIES) == 38
-), "the pinned migration-gate set is 38 entries; an emptied fixture would pin nothing"
+    len(ISSUE_17822_ENTRIES) == 39
+), "the pinned migration-gate set is 39 entries; an emptied fixture would pin nothing"
 ISSUE_17822_WORKFLOW = "migration-gate"
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared
