@@ -33,11 +33,13 @@ def load_real_model_schemas() -> None:
     sys.modules["models.schemas_secrets"] = _ss_mod
     setattr(sys.modules["models"], "schemas_secrets", _ss_mod)
 
+    # #21036: models/enrollment_skip.py (imported by api/code_sync.py) imports only
+    # pydantic, so it joins this loop.
     # #16281: models/npu_schemas.py and models/gpu_schemas.py are REAL for the same
     # reason -- services/node_gpu.py builds pydantic responses from them, and a
     # MagicMock model validates nothing. Both import only pydantic; gpu_schemas also
     # imports npu_schemas, hence the order and the sys.modules entry before exec.
-    for _schema in ("npu_schemas", "gpu_schemas", "post_sync_schemas", "rollback_schemas"):
+    for _schema in ("npu_schemas", "gpu_schemas", "post_sync_schemas", "rollback_schemas", "enrollment_skip"):
         _schema_path = _SLM_ROOT / "models" / f"{_schema}.py"
         _schema_spec = _ss_importlib_util.spec_from_file_location(f"models.{_schema}", _schema_path)
         _schema_mod = _ss_importlib_util.module_from_spec(_schema_spec)
