@@ -6,6 +6,7 @@
  */
 import { ref, type Ref } from 'vue'
 import type { ConversationFilePreview } from '@/utils/conversationFilePreview'
+import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useLatestRequest } from './useLatestRequest'
 
@@ -52,7 +53,6 @@ export interface PreviewDeps {
     get: <T>(url: string) => Promise<T>
     rawRequest: (url: string, init: { method: string }) => Promise<Response>
   }
-  conversationApi: () => string
   currentSessionId: () => string
   files: Ref<PreviewFile[]>
   error: Ref<string | null>
@@ -68,7 +68,7 @@ export interface PreviewDeps {
 async function openAuthenticatedPreview(deps: PreviewDeps, fileId: string, shownType: string): Promise<void> {
   const tab = window.open('', '_blank')
   try {
-    const response = await deps.api.rawRequest(`${deps.conversationApi()}/download/${fileId}`, { method: 'GET' })
+    const response = await deps.api.rawRequest(`${getApiBase()}/conversation-files/conversation/${deps.currentSessionId()}/download/${fileId}`, { method: 'GET' })
     const blob = new Blob([await response.blob()], { type: shownType })
     const url = window.URL.createObjectURL(blob)
     if (tab) tab.location.href = url
@@ -92,7 +92,7 @@ async function openBytesPreview(deps: PreviewDeps, file: PreviewFile): Promise<v
 /** Fetch the preview body; typed from the generated contract, a failure is logged and means "no pane" (#20906). */
 async function fetchPreview(deps: PreviewDeps, fileId: string): Promise<ConversationFilePreview | null> {
   try {
-    const data: ConversationFilePreview | null = await deps.api.get(`${deps.conversationApi()}/preview/${fileId}`)
+    const data: ConversationFilePreview | null = await deps.api.get(`${getApiBase()}/conversation-files/conversation/${deps.currentSessionId()}/preview/${fileId}`)
     return data
   } catch (err: unknown) {
     logger.warn('Preview route failed, falling back to the bytes:', err)
