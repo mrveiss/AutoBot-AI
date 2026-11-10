@@ -61,9 +61,7 @@ def env(name: str, default: Any = None) -> Any:
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
-from autobot_shared import env_registry_llc  # noqa: E402,F401
-from autobot_shared import env_registry_logging  # noqa: E402,F401
-from autobot_shared import env_registry_memory  # noqa: E402,F401
+from autobot_shared import env_registry_knowledge  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
     env_registry_agent_tools,
     env_registry_ai,
@@ -75,8 +73,11 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_chat_lease,
     env_registry_gateway,
     env_registry_kb_graph,
-    env_registry_knowledge,
     env_registry_ledger,
+    env_registry_llc,
+    env_registry_logging,
+    env_registry_memory,
+    env_registry_mesh_reembed,
     env_registry_npu,
     env_registry_postgres,
     env_registry_rag,
@@ -437,8 +438,7 @@ register_env_var(
     )
 )
 
-# --- tls: env_registry_tls.py ------------------------------------------
-# --- network: env_registry_tls.py (#18765, to make room for a sibling import) ---
+# --- tls, network: env_registry_tls.py (#18765; one line to make room for the mesh sibling import) ---
 
 # --- voice / speech-to-text -------------------------------------------------
 

@@ -736,13 +736,8 @@ class LLCHeartbeatScheduler:
                     )
                 )
                 if company_id:
-                    await ControlsService().pause_agent(
-                        session,
-                        company_id,
-                        agent_id,
-                        actor_user_id=None,
-                        reason=f"subscription quota exhausted (run {run_id})",
-                        actor_type="system",
+                    await ControlsService().auto_pause_agent(
+                        session, company_id, agent_id, f"subscription quota exhausted (run {run_id})"
                     )
                 else:
                     logger.warning("Agent %s quota-exhausted but has no company_id — not auto-paused", agent_id)
