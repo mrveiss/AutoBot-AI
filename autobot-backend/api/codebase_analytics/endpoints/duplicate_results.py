@@ -12,6 +12,7 @@ belongs next to the scan, not to the formatting.
 import asyncio
 from pathlib import Path
 
+from api.source_scope import require_source_id
 from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
 
@@ -71,7 +72,7 @@ def _make_relative_path(path: str, project_root: str) -> str:
         return path
 
 
-def _get_chromadb_fallback(error_msg: str, source_id: str | None = None) -> dict | None:
+def _get_chromadb_fallback(error_msg: str, source_id: str) -> dict | None:
     """
     Get cached duplicates from ChromaDB as fallback.
 
@@ -79,25 +80,18 @@ def _get_chromadb_fallback(error_msg: str, source_id: str | None = None) -> dict
 
     Args:
         error_msg: Error message to include in warning
-        source_id: Optional source ID for per-project scoping
+        source_id: the source whose cached duplicates are read (#20513: required)
 
     Returns:
         Fallback result dict or None if unavailable
     """
+    source_id = require_source_id(source_id, "duplicate fallback query")
     code_collection = get_code_collection()
     if not code_collection:
         return None
 
     try:
-        if source_id:
-            where_filter = {
-                "$and": [
-                    {"type": "duplicate"},
-                    {"source_id": source_id},
-                ]
-            }
-        else:
-            where_filter = {"type": "duplicate"}
+        where_filter = {"$and": [{"type": "duplicate"}, {"source_id": source_id}]}
         results = get_all_paginated(code_collection, where=where_filter, include=["metadatas"])
 
         all_duplicates = []
@@ -114,6 +108,7 @@ def _get_chromadb_fallback(error_msg: str, source_id: str | None = None) -> dict
 
         return {
             "status": "success",
+            "source_id": source_id,
             "duplicates": all_duplicates,
             "total_count": len(all_duplicates),
             "storage_type": "chromadb_fallback",
