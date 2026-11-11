@@ -103,7 +103,9 @@ jobs:
         if: matrix.mode == 'tty'
         run: |
           set -euo pipefail
-          sudo apt-get install -y -qq expect >/dev/null
+          # #21325: the repo's one apt policy and backoff wrapper (the installer under test carries its own copies).
+          sudo install -m 0644 docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
+          sudo sh docker/apt/apt-retry apt-get install -y -qq expect >/dev/null
           typed="${RUNNER_TEMP}/typed-at-prompt"
           # #19236 AC2: spaces and both quote kinds, so a green login proves the exact string round-trips.
           python3 -c 'import secrets; print(secrets.token_urlsafe(12) + " with " + chr(34) + "dq" + chr(34) + " and " + chr(39) + "sq" + chr(39))' > "${typed}"

@@ -1,0 +1,34 @@
+#!/bin/sh
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# apt-retry COMMAND [ARG...] -- run COMMAND, retrying with exponential backoff (#21325).
+#
+# The one retry wrapper for every network-bound apt step in the install and image
+# builds (docker/*/Dockerfile, the Clean install workflow). apt's own
+# `Acquire::Retries` (docker/apt/80-autobot-resilience) retries a fetch three times
+# back to back; a resolver outage ("Temporary failure resolving", "Could not
+# resolve") outlasts that, so the whole command is retried here with a growing wait.
+# After the last attempt the command's own exit status is returned, and its apt error
+# is already on stderr from the final attempt.
+#
+# APT_RETRY_ATTEMPTS (default 5) and APT_RETRY_DELAY_S (default 5, doubling after each
+# failure) are declared here and nowhere else.
+
+attempts="${APT_RETRY_ATTEMPTS:-5}"
+delay="${APT_RETRY_DELAY_S:-5}"
+n=1
+while :; do
+    "$@" && exit 0
+    rc=$?
+    if [ "$n" -ge "$attempts" ]; then
+        echo "apt-retry: giving up after ${n} attempts (last exit ${rc}): $*" >&2
+        exit "$rc"
+    fi
+    echo "apt-retry: attempt ${n}/${attempts} failed (exit ${rc}): $*; retrying in ${delay}s" >&2
+    sleep "$delay"
+    delay=$((delay * 2))
+    n=$((n + 1))
+done
