@@ -19,7 +19,7 @@ import pytest
 from eval.candidates import baseline_candidate
 from eval.report import RegressionReport, TrajectoryOutcome
 from eval.runner import CandidateResult, TrajectoryReplayer
-from eval.store import GoldenTrajectory, load_golden_set
+from eval.store import TOOL_MATCH_MODES, GoldenTrajectory, load_golden_set
 from rlm.evaluator import ResponseQualityEvaluator
 
 
@@ -52,7 +52,9 @@ def test_seed_golden_set_loads():
     goldens = load_golden_set()
     assert len(goldens) >= 2
     assert all(g.task_class for g in goldens)
-    assert all(g.expected_tools for g in goldens)
+    # Every golden declares its match mode and at least two criteria (#20843); the raw-file checks for
+    # allowed_tools are in test_live_fixture_schema.
+    assert all(g.tool_match in TOOL_MATCH_MODES and len(g.success_criteria) >= 2 for g in goldens)
     assert {g.task_class for g in goldens} >= {"code_fix", "knowledge_qa"}
 
 
