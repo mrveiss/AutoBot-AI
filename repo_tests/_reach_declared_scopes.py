@@ -375,4 +375,5 @@ DECLARED_SCOPES = {
         "autobot-backend/code_analysis",
         "install.sh",
     ),
+    "ansible-secret-renders-20941": ("autobot-slm-backend/ansible",),
 }
