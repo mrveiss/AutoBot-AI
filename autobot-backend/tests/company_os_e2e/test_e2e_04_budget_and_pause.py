@@ -15,7 +15,7 @@ from decimal import Decimal
 import pytest
 
 from autobot_shared.logging_manager import get_logger
-from llc.scheduler.dispatch_gate import BUDGET_EXHAUSTED
+from llc.models.enums import ActivityEventType
 from tests.company_os_e2e._helpers import (
     CONTROL_TASKS,
     agent_is_active,
@@ -64,6 +64,19 @@ def _exhaust(api, agent_id: str) -> None:
     assert over.status_code == 402, f"a further event on an exhausted budget answered {over.status_code}"
 
 
+def _refusal_rows(scenario, node_id: str) -> list[dict]:  # noqa: ANN001
+    """Activity rows of the budget refusal for this agent's node, written after the budget was exhausted."""
+    api, since = scenario.api, datetime.fromisoformat(scenario.ids["t_budget"])
+    body = api.call("GET", api.company("/activity?page=1&page_size=200"))
+    return [
+        r
+        for r in body["items"]
+        if r["entity_id"] == node_id
+        and r["action"] == ActivityEventType.BUDGET_DISPATCH_REFUSED.value
+        and datetime.fromisoformat(r["occurred_at"]) >= since
+    ]
+
+
 def test_step_6_exhausted_budget_is_not_dispatched(scenario):  # noqa: ANN001
     scenario.require(2, 4)
     a, b = scenario.agent("a"), scenario.agent("b")
@@ -91,13 +104,9 @@ def test_step_6_exhausted_budget_is_not_dispatched(scenario):  # noqa: ANN001
 
         control, subject = observe_silence(scenario, b["agent_id"], a["agent_id"], arrange)
         assert not subject, f"the exhausted agent was dispatched {subject} time(s) beside the control's {control}"
-        # Positive signal: the scheduler's only record of a budget refusal is this log line (heartbeat_scheduler.py
-        # "Heartbeat skipped for agent %s: %s" with dispatch_gate.BUDGET_EXHAUSTED); no run or activity row is written.
-        refused = wait_for(
-            lambda: scenario.server_log_has(f"Heartbeat skipped for agent {a['agent_id']}: {BUDGET_EXHAUSTED}"),
-            WAKE_WINDOW_SECONDS,
-        )
-        assert refused, f"the scheduler never recorded a budget refusal for agent {a['agent_id']}"
+        # Positive signal: the dispatch gate records the refusal as a budget.dispatch_refused activity row (#21212).
+        refused = wait_for(lambda: _refusal_rows(scenario, a["node_id"]), WAKE_WINDOW_SECONDS)
+        assert refused, f"no {ActivityEventType.BUDGET_DISPATCH_REFUSED.value} activity row for agent {a['agent_id']}"
         scenario.done.add(6)
 
 
