@@ -50,10 +50,10 @@
     }
   },
   "devDependencies": {
-    "@storybook/addon-docs": "^10.6.5",
-    "@storybook/vue3": "^10.6.5",
-    "@storybook/vue3-vite": "^10.6.5",
-    "@tailwindcss/postcss": "^4.3.4",
+    "@storybook/addon-docs": "^10.6.6",
+    "@storybook/vue3": "^10.6.6",
+    "@storybook/vue3-vite": "^10.6.6",
+    "@tailwindcss/postcss": "^4.3.5",
     "@types/node": "^26.6.6",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/test-utils": "^2.5.0",
@@ -65,7 +65,7 @@
     "postcss": "^8.5.32",
     "postcss-html": "^2.0.0",
     "storybook": "^10.4.6",
-    "stylelint": "^17.16.0",
+    "stylelint": "^18.0.0",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.1",
