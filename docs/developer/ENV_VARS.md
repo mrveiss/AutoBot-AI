@@ -350,6 +350,11 @@ appears outside the known overlays.
 | `AUTOBOT_MEMORY_SESSION_LIST_MAX_SCAN` | memory | int | `5000` | Most of the caller's chunks one memory.session_list call scans when grouping them into sessions (memory/verbatim_sessions.py, #11137). Range: 1–1000000. |
 | `AUTOBOT_MEMORY_SESSION_READ_MAX_BYTES` | memory | int | `262144` | Most text bytes one memory.session_read call returns after redaction; over it the result carries truncated=true (memory/verbatim_sessions.py, #11137). |
 | `AUTOBOT_MEMORY_SESSION_READ_MAX_CHUNKS` | memory | int | `500` | Most chunks one memory.session_read call returns for a single session (memory/verbatim_sessions.py, #11137). Range: 1–100000. |
+| `AUTOBOT_MESH_REEMBED_BATCH` | mesh | int | `100` | Maximum items taken from mesh:reembed_queue in one drain pass. Range: 1–10000. |
+| `AUTOBOT_MESH_REEMBED_ENABLED` | mesh | bool | true | Run the consumer that drains mesh:reembed_queue into the document re-index queue. Turning it off lets the queue grow unread (services/mesh_brain/reembed_consumer.py). |
+| `AUTOBOT_MESH_REEMBED_INTERVAL_S` | mesh | int | `30` | Seconds between drain passes of mesh:reembed_queue by the lease-holding worker. Range: 1–3600. |
+| `AUTOBOT_MESH_REEMBED_LEASE_TTL_MS` | mesh | int | `120000` | Lifetime of the mesh re-embed leader lease; must exceed the drain interval plus the time one item takes, since the drain refreshes it per item. Unset: four drain intervals. Range: 1000–3600000. |
+| `AUTOBOT_MESH_REEMBED_MAX_ATTEMPTS` | mesh | int | `3` | Attempts per mesh:reembed_queue item before it is moved to the mesh:reembed_dead dead-letter list. Range: 1–20. |
 | `AUTOBOT_MIGRATION_BACKFILL_BATCH_SIZE` | backend | int | `1000` | Rows per statement when a migration backfills a column in chunks. An unbounded UPDATE holds locks for its whole duration and can exceed the bind-parameter limit, stopping a rolling update mid-flight (migrations/templates/chunked_backfill.py, #15776). |
 | `AUTOBOT_MIGRATION_CONNECT_TIMEOUT_SECONDS` | postgres | int | `10` | Seconds the SLM migration runner waits to connect to PostgreSQL before it reports failure (#18056). |
 | `AUTOBOT_MODEL_PULL_TIMEOUT_SECONDS` | analytics | float | `1800.0` | Seconds one `ollama pull` may run in the model optimizer before it is reported timed out (#18056). |
