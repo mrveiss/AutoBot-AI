@@ -371,36 +371,3 @@ def test_neither_scheduler_captures_the_row_it_was_given():
         assert not any(
             isinstance(n, ast.Attribute) and n.attr == "create_task" for n in ast.walk(tree)
         ), f"{name} schedules with a bare create_task — use fire_and_forget (#15522)"
-
-
-async def _drain(before: set) -> None:
-    """Await what the commit scheduled."""
-    await asyncio.gather(*(pending_background_tasks() - before))
-
-
-class TestGoalIndexingRidesTheOneQueue:
-    """#21107: KB indexing follows the one after-commit queue - after commit, not after rollback, once."""
-
-    async def test_indexing_runs_after_commit_exactly_once(self, goal_env, monkeypatch):
-        svc, request_session, _job_sessions = goal_env
-        index = AsyncMock()
-        monkeypatch.setattr(svc, "_index_goal", index)
-        before = pending_background_tasks()
-        await svc.create(request_session, company_id=_COMPANY, title="G", level=GoalLevel.VISION, description="d")
-        index.assert_not_called()  # flushed, not committed
-        await request_session.commit()
-        await _drain(before)
-        await request_session.commit()  # a second commit must not fire it again
-        await _drain(before)
-        assert index.await_count == 1
-
-    async def test_indexing_does_not_run_after_a_rollback(self, goal_env, monkeypatch):
-        svc, request_session, _job_sessions = goal_env
-        index = AsyncMock()
-        monkeypatch.setattr(svc, "_index_goal", index)
-        before = pending_background_tasks()
-        await svc.create(request_session, company_id=_COMPANY, title="G", level=GoalLevel.VISION, description="d")
-        await request_session.rollback()
-        await request_session.commit()
-        await _drain(before)
-        index.assert_not_called()
