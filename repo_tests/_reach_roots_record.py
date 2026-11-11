@@ -159,11 +159,6 @@ REACH_ROOTS = {
     ),
     "repo_tests/icon_rule_sets_font_size_only_19875_test.py": ("autobot-frontend/src",),
     "repo_tests/infra_scripts_no_backend_imports_18288_test.py": ("autobot-infrastructure",),
-    "repo_tests/internal_paths_denied_at_edge_20046_test.py": (
-        "autobot-infrastructure",
-        "autobot-slm-backend",
-        "docker",
-    ),
     "repo_tests/inline_lazy_singleton_20889_test.py": (
         ".claude",
         "autobot-backend",
@@ -177,6 +172,11 @@ REACH_ROOTS = {
         "repo_tests",
         "scripts",
         "tools",
+    ),
+    "repo_tests/internal_paths_denied_at_edge_20046_test.py": (
+        "autobot-infrastructure",
+        "autobot-slm-backend",
+        "docker",
     ),
     "repo_tests/kb_admin_read_bypass_guard_test.py": ("autobot-backend/", "autobot_shared/"),
     "repo_tests/kb_construction_baseline_18122_test.py": (
@@ -416,6 +416,19 @@ REACH_ROOTS = {
     "repo_tests/slm_node_enum_members_exist_test.py": ("autobot-slm-backend",),
     "repo_tests/ssot_rehardcode_19730_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/store_fact_chokepoint_guard_test.py": ("autobot-backend/", "autobot_shared/"),
+    "repo_tests/test_name_predicate_single_home_21078_test.py": (
+        "autobot-backend",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "libs",
+        "pipeline-scripts",
+        "plugins",
+        "repo_tests",
+        "scripts",
+        "tools",
+    ),
     "repo_tests/timeout_message_from_constant_18056_test.py": (
         "autobot-backend",
         "autobot-infrastructure",
