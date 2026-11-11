@@ -86,7 +86,7 @@ python:
   - 'autobot-monitoring/grafana/provisioning/datasources/prometheus.yml'
   - 'autobot-backend/config/llm_models.yaml'
   - 'autobot-infrastructure/shared/config/permission_rules.yaml'
-  # The guard scans the whole repo by basename (pathspec *<name>), so an unallowed copy can
+  # #18556: the guard scans the whole repo by basename (pathspec *<name>), so an unallowed copy can
   # land anywhere: one glob per guarded basename, not just the listed trees.
   - '**/error_messages.yaml'
   - '**/prometheus.yml'
@@ -99,8 +99,8 @@ python:
   # to frontend-test.yml's push paths, so its verdict depends on the content --
   # a real dependency, covered here rather than recorded as a bypass.
   - '.github/filters/frontend-paths.yml'
-  # #19527: changes_job_equivalence_15360_test.py declares the smoke-action entries
-  # of this filter and checks the file holds exactly them on top of its frozen content.
+  # #19527: changes_job_equivalence_15360_test.py reads this filter and checks it keeps
+  # its frozen entries and cites an issue beside every one it gained (#21205).
   - '.github/filters/docker-paths.yml'
   # #17885: scripts/frontend_file_size_known_large.py names 184
   # frontend files BY CONCRETE LITERAL and the ratchet reads each one to
