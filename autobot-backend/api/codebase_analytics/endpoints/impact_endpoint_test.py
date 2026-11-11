@@ -52,7 +52,7 @@ def _call(node_id="pkg.mod.Thing", max_depth=None, collection=_DEFAULT, result=N
         return result
 
     with (
-        patch.object(impact_service, "get_code_graph_collection", return_value=collection),
+        patch.object(impact_service, "get_existing_code_graph_collection", return_value=collection),
         patch.object(impact_service, "find_impact", _fake_find_impact),
     ):
         response = asyncio.run(impact.analyze_impact(node_id=node_id, max_depth=max_depth))
@@ -195,7 +195,7 @@ def test_max_depth_override_reaches_the_engine(depth):
         return _Result()
 
     with (
-        patch.object(impact_service, "get_code_graph_collection", return_value=_PopulatedCollection()),
+        patch.object(impact_service, "get_existing_code_graph_collection", return_value=_PopulatedCollection()),
         patch.object(impact_service, "find_impact", _capture),
     ):
         asyncio.run(impact.analyze_impact(node_id="x", max_depth=depth))

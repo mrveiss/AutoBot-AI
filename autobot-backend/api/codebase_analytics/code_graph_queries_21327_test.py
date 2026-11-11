@@ -11,7 +11,8 @@ construction: ``top -> caller -> target`` is the only call chain, and ``helper``
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException, Response
@@ -25,7 +26,7 @@ from testkit.fake_graph_collection import DEFAULT_COMMIT, FakeGraphCollection, s
 @pytest.fixture
 def graph():
     collection = FakeGraphCollection()
-    with patch.object(cgq, "get_code_graph_collection", return_value=collection):
+    with patch.object(cgq, "get_existing_code_graph_collection", return_value=collection):
         yield collection
 
 
@@ -84,7 +85,7 @@ async def test_an_unknown_symbol_is_not_found_not_an_empty_success(graph):
 @pytest.mark.asyncio
 async def test_candidates_are_cut_and_flagged_past_the_limit():
     many = [(f"m{i}.dup", {"record_type": "node", "node_name": "dup", "node_kind": "function"}) for i in range(60)]
-    with patch.object(cgq, "get_code_graph_collection", return_value=FakeGraphCollection(many)):
+    with patch.object(cgq, "get_existing_code_graph_collection", return_value=FakeGraphCollection(many)):
         answer = await cgq.resolve_symbol("dup")
     assert len(answer["candidates"]) == cgq.RESOLVE_MAX_CANDIDATES
     assert answer["candidate_count"] == 60 and answer["truncated"] is True
@@ -92,10 +93,25 @@ async def test_candidates_are_cut_and_flagged_past_the_limit():
 
 @pytest.mark.asyncio
 async def test_an_empty_or_missing_graph_is_unindexed_not_not_found():
-    with patch.object(cgq, "get_code_graph_collection", return_value=FakeGraphCollection([])):
+    with patch.object(cgq, "get_existing_code_graph_collection", return_value=FakeGraphCollection([])):
         assert (await cgq.resolve_symbol("target"))["indexed"] is False
-    with patch.object(cgq, "get_code_graph_collection", return_value=None):
+    with patch.object(cgq, "get_existing_code_graph_collection", return_value=None):
         assert (await cgq.query_impact("pkg.a.target"))["indexed"] is False
+
+
+def test_the_read_accessor_never_creates_the_collection():
+    """A read of a graph that was never built must leave it never built, not create an empty one."""
+    from api.codebase_analytics import storage
+
+    client = SimpleNamespace(
+        get_collection=MagicMock(side_effect=ValueError("does not exist")), get_or_create_collection=MagicMock()
+    )
+    with (
+        patch.object(storage, "get_default_client", return_value=client),
+        patch.object(storage, "chromadb_data_dir", return_value="unused"),
+    ):
+        assert storage.get_existing_code_graph_collection() is None
+    client.get_or_create_collection.assert_not_called()
 
 
 # --- impact and provenance -----------------------------------------------------------------------
@@ -146,7 +162,7 @@ async def test_no_expectation_is_unchecked_never_current(graph):
 @pytest.mark.asyncio
 async def test_a_graph_without_a_provenance_record_is_unknown_never_current():
     collection = FakeGraphCollection(sample_records(commit=None))
-    with patch.object(cgq, "get_code_graph_collection", return_value=collection):
+    with patch.object(cgq, "get_existing_code_graph_collection", return_value=collection):
         answer = await cgq.query_impact("pkg.a.target", expected_commit=DEFAULT_COMMIT)
     assert (answer["indexed_at_commit"], answer["stale"], answer["freshness"]) == (None, None, "unknown")
 
@@ -225,7 +241,7 @@ async def test_the_service_entry_point_refuses_neither_and_both():
 
 def test_the_impact_module_holds_no_second_implementation_of_the_walk():
     """The route imports the service functions; it does not import the engine or the graph store itself."""
-    for name in ("find_impact", "get_code_graph_collection", "load_graph_provenance", "find_callers"):
+    for name in ("find_impact", "get_existing_code_graph_collection", "load_graph_provenance", "find_callers"):
         assert not hasattr(impact, name), f"endpoints/impact.py re-implements the query via {name}"
     assert impact.query_affected is cgq.query_affected
 

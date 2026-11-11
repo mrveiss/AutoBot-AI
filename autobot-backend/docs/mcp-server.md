@@ -47,7 +47,7 @@ not a credential; the secret is.
 > For HTTP clients, prefer admin-minted tokens from the MCP token API over this
 > long-lived shared secret.
 
-Available scopes: `kb`, `memory`, `agents`, `code`. `code` is opt-in (it is not in the default stdio scopes): it reads the cross-source code graph, as the admin-only `/api/analytics/codebase/impact` route does.
+Available scopes: `kb`, `memory`, `agents`, `code`. `code` is opt-in (it is not in the default stdio scopes): it reads the code graph across ALL indexed sources (the graph is not tagged by source), so the scope is admin-equivalent, like the admin-only `/api/analytics/codebase/impact` route. `code.similar` reads unowned, public and shared sources and refuses another owner's private source.
 
 Pass the full `<secret>:<scopes>` token as `Authorization: Bearer <token>` for HTTP.
 For stdio, set `AUTOBOT_MCP_TOKEN` (secret) and optionally `AUTOBOT_MCP_STDIO_SCOPES`.
@@ -70,7 +70,7 @@ For stdio, set `AUTOBOT_MCP_TOKEN` (secret) and optionally `AUTOBOT_MCP_STDIO_SC
 | `code.affected` | `code` | Who transitively calls a symbol (by name or node id), with the commit the graph was built at and a `stale` flag against `expected_commit` |
 | `code.similar` | `code` | Stored code patterns of one source similar to a snippet |
 
-The `code.*` tools are read-only and call the same functions as the HTTP routes (`GET /api/analytics/codebase/impact` with `node_id` or `symbol`, and `/patterns/similar`). Each list in a response is capped at 200 entries; an `omitted` field says how many were left out. `freshness` is `current`, `stale`, `unknown` (the index records no commit) or `unchecked` (no `expected_commit` given); only `current` means the index matches.
+The `code.*` tools are read-only and call the same functions as the HTTP routes (`GET /api/analytics/codebase/impact` with `node_id` or `symbol`, and `/patterns/similar`). Each list in a response is capped at 200 entries by default (`AUTOBOT_CODE_TOOL_MAX_ITEMS`); an `omitted` field says how many were left out. `freshness` is `current`, `stale`, `unknown` (the index records no commit) or `unchecked` (no `expected_commit` given); only `current` means the index matches.
 
 ## Claude Code / Cline configuration
 

@@ -23,7 +23,7 @@ from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import QueryDefaults
 from services.knowledge.impact_analysis import find_impact
 
-from .storage import get_code_graph_collection
+from .storage import get_existing_code_graph_collection
 
 if TYPE_CHECKING:
     from services.knowledge.code_indexer import GraphProvenance
@@ -36,7 +36,7 @@ SOURCE_SCOPE = "cross-source"
 #: Candidates returned for one symbol before the list is cut and flagged ``truncated``.
 RESOLVE_MAX_CANDIDATES = 50
 
-_NOT_BUILT = "The code graph collection is not available — run an index first."
+_NOT_BUILT = "The code graph collection is not available — run an index first."  # missing; reading never creates it
 _EMPTY = "The code graph collection exists but is empty — run POST /api/knowledge_base/index/code and retry."
 
 
@@ -62,10 +62,12 @@ async def load_provenance(collection: Any) -> "GraphProvenance | None":
 async def open_graph(extra: dict[str, Any]) -> tuple[Any, dict[str, Any] | None]:
     """The graph collection, or ``(None, not-indexed answer)`` when it is missing or empty.
 
+    Opens the collection read-only: a missing one is reported as not indexed, never created.
+
     "The graph has not been built" is a different answer from "that node does not exist"
     (#17254), so it is returned as its own ``indexed: false`` answer rather than an empty hit.
     """
-    collection = await asyncio.to_thread(get_code_graph_collection)
+    collection = await asyncio.to_thread(get_existing_code_graph_collection)
     if collection is None:
         return None, {"indexed": False, "source_scope": SOURCE_SCOPE, **extra, "message": _NOT_BUILT}
     if not await asyncio.to_thread(collection.count):

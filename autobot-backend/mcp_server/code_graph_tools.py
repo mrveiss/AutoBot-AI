@@ -27,11 +27,12 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from autobot_shared.code_graph.commit_freshness import COMMIT_PATTERN
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import DEFAULT_ROUTE_DEADLINE_SECONDS
 from constants.threshold_constants import QueryDefaults
 
 #: Entries kept per list in one tool response, so a large subgraph cannot flood a caller's context.
-CODE_TOOL_MAX_ITEMS = 200
+CODE_TOOL_MAX_ITEMS = env_int_clamped("AUTOBOT_CODE_TOOL_MAX_ITEMS", 200, min_v=1, max_v=10_000)
 
 #: Source authorisation identity for MCP callers: truthy, no id, not the service principal, so
 #: ``_caller_owner_id`` fails closed and another owner's PRIVATE source stays invisible.

@@ -33,7 +33,7 @@ def _graph():
     collection = FakeGraphCollection()
     with (
         patch.object(config.misc, "mcp_token", SECRET),
-        patch.object(cgq, "get_code_graph_collection", return_value=collection),
+        patch.object(cgq, "get_existing_code_graph_collection", return_value=collection),
     ):
         yield collection
 
@@ -186,6 +186,7 @@ def test_the_tool_surface_is_exactly_the_three_read_tools_and_takes_no_target_to
 
 
 def test_no_code_path_reachable_from_a_tool_names_a_mutating_operation():
+    """Secondary, structural: the end-to-end test below is the one that fails on a real write."""
     handlers = [getattr(code_graph_tools.CodeGraphToolsMixin, "_" + n.replace(".", "_")) for n in EXPECTED_TOOLS]
     queries = [
         getattr(cgq, n) for n in ("resolve_symbol", "query_impact", "query_impact_by_symbol", "find_similar_code")
@@ -203,11 +204,29 @@ def test_the_modules_import_no_indexer_or_deleter():
 
 
 @pytest.mark.asyncio
-async def test_running_every_read_tool_never_writes_to_the_graph(_graph):
-    for name, arguments in (
-        ("code.resolve_symbol", {"symbol": "helper"}),
-        ("code.affected", {"symbol": "target"}),
-        ("code.affected", {"node_id": "pkg.a.target"}),
+@pytest.mark.parametrize("method", ["add", "upsert", "update", "delete", "modify"])
+async def test_the_fake_graph_refuses_every_write(method):
+    with pytest.raises(AssertionError, match="attempted a write"):
+        getattr(FakeGraphCollection(), method)(ids=["x"])
+
+
+@pytest.mark.asyncio
+async def test_running_every_read_tool_end_to_end_never_writes_to_the_graph(_graph):
+    """Each tool runs against a graph whose every write raises; a write would surface as an error response."""
+    pattern_search = AsyncMock(return_value=[{"pattern_id": "p1"}])
+    with (
+        patch("api.codebase_analytics.source_storage.get_source", AsyncMock(return_value=_source(None))),
+        patch("code_intelligence.pattern_analysis.CodePatternAnalyzer") as analyzer,
+        patch("code_intelligence.pattern_analysis.storage.search_similar_patterns", pattern_search),
     ):
-        assert "result" in await _call(name, arguments)
-    assert _graph.reads > 0
+        analyzer.return_value._generate_embedding = AsyncMock(return_value=[0.0])
+        for name, arguments in (
+            ("code.resolve_symbol", {"symbol": "helper"}),
+            ("code.affected", {"symbol": "target"}),
+            ("code.affected", {"node_id": "pkg.a.target"}),
+            ("code.similar", {"code": "def f(): pass", "source_id": "src-a"}),
+        ):
+            response = await _call(name, arguments)
+            assert "result" in response, (name, response)
+            assert "attempted a write" not in json.dumps(response)
+    assert _graph.reads > 0 and pattern_search.await_count == 1

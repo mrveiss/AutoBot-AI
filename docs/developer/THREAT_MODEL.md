@@ -132,6 +132,15 @@ refused `1008` before any RFB byte. Full reasoning is in that function's docstri
 - A relation needs BOTH ends readable: [`queries.py`](../../autobot-backend/autobot_memory_graph/queries.py) `_readable_relation_ends` (:254) drops the edge, or its id and type leak.
 - No admin bypass (`is_platform_admin` ignored); cross-user reads are `UNSCOPED_ALL_USERS`, system callers only. Ownerless entities are invisible, never rewritten (#17038).
 
+## 7. MCP `code` scope (code graph)
+
+**Boundary:** an MCP token holding the `code` scope vs. the code graph. The graph is not tagged by source, so the scope reads symbols, callers and paths from ALL indexed sources; it is admin-equivalent, like the admin-gated `/api/analytics/codebase/impact` route. Tokens are admin-minted and the scope is opt-in.
+**Canonical enforcement:** `_check_scope` in the MCP dispatch gates `code.*`; a token records no minting principal, so there is no call-time admin re-check.
+
+**Invariants**
+- `code.similar` authorizes as an ownerless principal: unowned, public and shared sources are readable; another owner's private source is refused.
+- Per-source filtering needs source-tagged graph nodes (tracked in #21010).
+
 ## Cross-cutting
 
 - **Egress:** any new outbound HTTP goes through the guarded fetch —
