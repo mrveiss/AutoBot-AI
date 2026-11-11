@@ -57,13 +57,14 @@ EXPECTED: tuple[Expected, ...] = (
         "5", "heartbeat.started", "system", "agent:a", AUDIT, "none (liveness_monitor writes heartbeat.failed only)"
     ),
     Expected("5", "heartbeat.completed", "system", "agent:a", AUDIT, "none"),
+    # The dispatch gate, not a person, refuses the exhausted agent's next run (#21212).
     Expected(
         "6",
-        None,
-        "user",
+        "budget.dispatch_refused",
+        "system",
         "agent:a",
-        AUDIT,
-        "no budget event type exists",
+        None,
+        "dispatch_gate (budget.dispatch_refused)",
         after="t_budget",
         except_prefix="control.",
     ),
