@@ -76,7 +76,8 @@ async def lock_platform_admin_rows(session: AsyncSession, user_model: Any, user_
 
     Whether an admin is *active* is the one login rule (``login_eligibility.login_refusal``, applied by
     ``_is_active_admin``), not a second ``is_active`` filter here (#18820); a deactivated admin is locked
-    along with the rest and then not counted.
+    along with the rest and then not counted. ``populate_existing`` refreshes rows the session already holds, so
+    the verdict reads the committed, locked values; every caller runs this before it mutates the target.
     """
     query = (
         select(user_model)
@@ -88,6 +89,9 @@ async def lock_platform_admin_rows(session: AsyncSession, user_model: Any, user_
         )
         .order_by(user_model.id)
         .with_for_update()
+        # The caller has already loaded the target (and a request's auth layer may have loaded another admin); the
+        # identity map would hand those copies back with their old flags. The decision is made on the locked rows.
+        .execution_options(populate_existing=True)
     )
     return list((await session.execute(query)).scalars().all())
 

@@ -153,6 +153,7 @@ def test_the_production_query_locks_the_target_and_the_active_admins_in_one_id_o
     asyncio.run(lock_platform_admin_rows(session, _User, uuid.uuid4()))
     sql = str(captured[0].compile(dialect=postgresql.dialect()))
     assert "FOR UPDATE" in sql and "ORDER BY users.id" in sql
+    assert captured[0].get_execution_options().get("populate_existing") is True
     assert "is_platform_admin IS true" in sql and "deleted_at IS NULL" in sql and "users.id = " in sql
 
 
@@ -424,3 +425,16 @@ async def test_a_concurrent_promotion_is_guarded_before_the_target_is_locked_on_
         with pytest.raises(LastPlatformAdminError):
             await svc.set_platform_admin(admin, False)
     assert order == ["guard"]  # the only admin is refused before the target was ever locked alone
+
+
+@pytest.mark.asyncio
+async def test_an_admin_row_the_session_already_loaded_is_refreshed_from_the_locked_row(maker):
+    """Another admin demoted and committed after this session loaded it: the guard must judge the committed row."""
+    target, other = await _seed(maker, 2)
+    async with maker() as session, maker() as rival:
+        assert (await session.get(_User, other)).is_platform_admin is True  # now in the identity map
+        assert (await session.get(_User, target)).is_platform_admin is True
+        await rival.execute(update(_User).where(_User.id == other).values(is_platform_admin=False))
+        await rival.commit()
+        with pytest.raises(LastPlatformAdminError):
+            await ensure_not_last_platform_admin(session, _User, target)
