@@ -38,7 +38,7 @@ _WORKFLOWS = [
     for name in ("clean-install.yml", "docker-smoke-test.yml", "hardened-smoke-test.yml")
 ]
 _APT = re.compile(
-    r"\b(?:apt-get\s+(?:update|install|upgrade|dist-upgrade|download|source|build-dep|remove|purge)\b|apt-add-repository\s|add-apt-repository\s)"
+    r"\b(?:apt-get\s+(?:-[oct]\s+\S+\s+|-\S+\s+)*(?:update|install|upgrade|dist-upgrade|download|source|build-dep|remove|purge)\b|apt-add-repository\s|add-apt-repository\s)"
 )
 _SEGMENT_BREAK = re.compile(r"&&|\|\||;|\||\bthen\b|\bdo\b|\belse\b")
 _WRAPPED = re.compile(r"(?:^|[\s/])apt[-_]retry(?:\s|$)")
@@ -81,6 +81,9 @@ def _dockerfiles() -> list[Path]:
         "        apt-get update -qq",
         "sudo apt-get install -y -qq expect",
         "        apt-add-repository -y ppa:x/y",
+        "RUN apt-get -qq update",
+        "RUN apt-retry apt-get update && apt-get -y install curl",
+        "    apt-get -o Dpkg::Options::=--force-confold install -y curl",
         "        env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git",
     ],
 )
@@ -94,6 +97,8 @@ def test_the_detector_flags_an_unwrapped_apt_call(line: str) -> None:
         "RUN apt-retry apt-get update && apt-retry apt-get install -y curl",
         "        apt_retry env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git",
         "sudo sh docker/apt/apt-retry apt-get install -y -qq expect",
+        "RUN apt-retry apt-get -qq update",
+        "    apt_retry apt-get -o Dpkg::Options::=--force-confold install -y curl",
         "# apt-get update is described here",
         "// apt-get update is described here",
         "    for cmd in curl apt-get openssl; do",
@@ -118,26 +123,77 @@ def test_every_apt_call_is_wrapped(path: Path) -> None:
     assert not bare, f"{path.relative_to(_ROOT)}: apt call(s) outside apt-retry: {bare}"
 
 
-@pytest.mark.parametrize("path", _dockerfiles(), ids=lambda p: p.name)
-def test_each_dockerfile_stage_has_the_policy_and_wrapper_before_its_first_apt_call(path: Path) -> None:
-    stages = re.split(r"^FROM\b", path.read_text(encoding="utf-8"), flags=re.M)[1:]
+def _stage_problems(text: str) -> tuple[int, list[str]]:
+    """(stages swept, one message per stage that runs apt before COPYing the policy and the wrapper)."""
+    stages = re.split(r"^FROM\b", text, flags=re.M)[1:]
+    problems = []
     for stage in stages:
         copied = ""
         for line in stage.splitlines():
             if line.lstrip().startswith("#"):
                 continue
             if _APT.search(line):
-                for src in ("docker/apt/80-autobot-resilience", "docker/apt/apt-retry"):
-                    assert f"COPY {src} " in copied, f"{path.name}: a stage runs apt before COPY {src}"
+                problems += [
+                    f"apt before COPY {src}"
+                    for src in ("docker/apt/80-autobot-resilience", "docker/apt/apt-retry")
+                    if f"COPY {src} " not in copied
+                ]
                 break
             if line.startswith("COPY "):
                 copied += line + "\n"
+    return len(stages), problems
 
 
-def test_the_policy_sets_the_options_the_mechanism_relies_on() -> None:
-    conf = _CONF.read_text(encoding="utf-8")
-    for key in ("Acquire::Retries", "Acquire::http::Timeout", "Acquire::https::Timeout", "APT::Update::Error-Mode"):
-        assert re.search(rf'^{re.escape(key)}\s+"', conf, re.M), f"{key} is no longer set"
+_GOOD_STAGE = (
+    "FROM x\nCOPY docker/apt/80-autobot-resilience /e\nCOPY docker/apt/apt-retry /b\nRUN apt-retry apt-get update\n"
+)
+
+
+def test_the_stage_sweep_flags_a_stage_without_the_policy_and_accepts_one_with_it() -> None:
+    assert _stage_problems(_GOOD_STAGE) == (1, [])
+    count, problems = _stage_problems("FROM x\nCOPY docker/apt/apt-retry /b\nRUN apt-retry apt-get update\n")
+    assert (count, problems) == (1, ["apt before COPY docker/apt/80-autobot-resilience"])
+    assert _stage_problems("RUN apt-get update\n") == (
+        0,
+        [],
+    ), "no FROM: the sweep reaches nothing, which the real-file test must reject"
+
+
+@pytest.mark.parametrize("path", _dockerfiles(), ids=lambda p: p.name)
+def test_each_dockerfile_stage_has_the_policy_and_wrapper_before_its_first_apt_call(path: Path) -> None:
+    count, problems = _stage_problems(path.read_text(encoding="utf-8"))
+    assert count > 0, f"{path.name}: the stage sweep found no FROM stage, so it checked nothing"
+    assert not problems, f"{path.name}: {problems}"
+
+
+_POLICY_VALUES = {
+    "Acquire::Retries": (1, None),
+    "Acquire::http::Timeout": (1, None),
+    "Acquire::https::Timeout": (1, None),
+    "APT::Update::Error-Mode": None,
+}
+
+
+def _policy_problems(conf: str) -> list[str]:
+    problems = []
+    for key, bounds in _POLICY_VALUES.items():
+        m = re.search(rf'^{re.escape(key)}\s+"([^"]*)"\s*;', conf, re.M)
+        if m is None:
+            problems.append(f"{key} is not set")
+        elif bounds is None and m.group(1) != "any":
+            problems.append(f"{key} is {m.group(1)!r}, not 'any'")
+        elif bounds is not None and not (m.group(1).isdigit() and int(m.group(1)) >= bounds[0]):
+            problems.append(f"{key} is {m.group(1)!r}, not a positive number")
+    return problems
+
+
+def test_the_policy_check_flags_a_weakened_value_and_accepts_the_real_policy() -> None:
+    weak = 'Acquire::Retries "3";\nAcquire::http::Timeout "0";\nAcquire::https::Timeout "30";\nAPT::Update::Error-Mode "none";\n'
+    assert _policy_problems(weak) == [
+        "Acquire::http::Timeout is '0', not a positive number",
+        "APT::Update::Error-Mode is 'none', not 'any'",
+    ]
+    assert _policy_problems(_CONF.read_text(encoding="utf-8")) == []
 
 
 def test_the_wrapper_is_executable_in_git() -> None:
@@ -380,7 +436,24 @@ def test_a_daemon_holding_the_output_does_not_hang_the_wrapper(tmp_path: Path) -
         [sh, str(_HELPER), "apt-get", "install", "x"], env=env, capture_output=True, text=True, timeout=15, check=False
     )
     assert done.returncode == 0 and "started" in done.stdout, done.stderr
-    assert time.monotonic() - start < 10, "the wrapper waited for the daemon"
+    elapsed = time.monotonic() - start
+    assert 0.9 <= elapsed < 10, f"the wrapper should wait out the 1 s grace, no longer ({elapsed:.1f} s)"
+
+
+def test_a_prompt_capture_costs_none_of_the_grace(tmp_path: Path) -> None:
+    sh = shutil.which("sh")
+    if sh is None:
+        pytest.skip("sh unavailable")
+    stub = tmp_path / "apt-get"
+    stub.write_text("#!/bin/sh\necho started\nexit 0\n", encoding="utf-8")
+    stub.chmod(0o755)
+    env = {"PATH": f"{tmp_path}:/usr/bin:/bin", "APT_RETRY_TEE_GRACE_S": "30"}
+    start = time.monotonic()
+    done = subprocess.run(
+        [sh, str(_HELPER), "apt-get", "install", "x"], env=env, capture_output=True, text=True, timeout=20, check=False
+    )
+    assert done.returncode == 0 and "started" in done.stdout, done.stderr
+    assert time.monotonic() - start < 10, "the wrapper waited out the grace although tee had exited"
 
 
 def test_the_backoff_is_capped_and_spans_minutes() -> None:

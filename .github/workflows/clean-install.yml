@@ -73,7 +73,7 @@ jobs:
       # in a later step can be read against it. Informational: it never fails the job.
       - name: Resolver diagnostics
         run: |
-          echo "== /etc/resolv.conf"; cat /etc/resolv.conf
+          echo "== /etc/resolv.conf"; cat /etc/resolv.conf || echo "(no /etc/resolv.conf)"
           echo "== resolvectl status"; resolvectl status 2>&1 | head -n 40
           echo "== hosts in the apt mirror list"
           for host in $(sed -nE 's#^[a-z+]*://([^/:[:space:]]+).*#\1#p' /etc/apt/apt-mirrors.txt 2>/dev/null | sort -u | head -n 5); do
@@ -140,7 +140,7 @@ jobs:
         run: |
           set -euo pipefail
           # #21325: the repo's one apt backoff wrapper.
-          sudo sh docker/apt/apt-retry apt-get install -y -qq expect >/dev/null
+          sudo sh docker/apt/apt-retry apt-get install -y -qq expect
           typed="${RUNNER_TEMP}/typed-at-prompt"
           # #19236 AC2: spaces and both quote kinds, so a green login proves the exact string round-trips.
           python3 -c 'import secrets; print(secrets.token_urlsafe(12) + " with " + chr(34) + "dq" + chr(34) + " and " + chr(39) + "sq" + chr(39))' > "${typed}"
