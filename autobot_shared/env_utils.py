@@ -142,6 +142,22 @@ def _clamped(name: str, value, min_v, max_v):
     return clamped
 
 
+def within_range(name: str, value, bounds: tuple | None) -> bool:
+    """True when numeric *value* lies in inclusive ``(min, max)`` *bounds* (``None`` = open end).
+
+    Out of range warns naming the variable and the range only; the value is
+    omitted because a registry spec carries no secret marker (#20722).
+    Non-numeric values and ``bounds=None`` are never checked.
+    """
+    if bounds is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return True
+    min_v, max_v = bounds
+    if (min_v is None or value >= min_v) and (max_v is None or value <= max_v):
+        return True
+    logger.warning("%s is outside [%s, %s]; using the default", name, min_v, max_v)
+    return False
+
+
 def env_float_clamped(
     name: str,
     default: float,
