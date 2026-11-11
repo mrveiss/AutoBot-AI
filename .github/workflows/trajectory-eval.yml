@@ -17,6 +17,10 @@
 # log. The step stays green because the gap belongs to this repository's eval
 # setup rather than to the pull request being tested.
 #
+# The live mode (`python -m eval.run --live`, #20843) is NOT run here: it needs the stack and a local model, so
+# it is run on the host and its report attached to the PR it supports (docs/developer/EVAL_HARNESS.md). CI keeps
+# only the fake-model tests of that path.
+#
 # Promotion to a gate needs three things, not one: recorded runs so the
 # comparison has two sides (#16157), trigger paths that include the behaviour
 # being asserted rather than only this harness (#16158), and a corpus
