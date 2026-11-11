@@ -100,6 +100,26 @@ class _Stub:
         self.initialized = bool(type(self).outcome)
         return type(self).outcome
 
+    # `@invalidating_writes` (#20958) wraps every WRITE_ENTRY_POINTS method of the composed class and
+    # fails loudly on a missing one, so the stand-in base must define them as the real mixins do.
+    async def store_fact(self):
+        return None
+
+    async def update_fact(self):
+        return None
+
+    async def delete_fact(self):
+        return None
+
+    async def delete_facts_by_session(self):
+        return None
+
+    async def delete_collection(self):
+        return None
+
+    async def bulk_delete_collection_facts(self):
+        return None
+
 
 @pytest.fixture
 def composed(monkeypatch):
