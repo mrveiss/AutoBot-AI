@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .portability import TemplateImportError
-from .work_item_import import import_template_work
+from .work_item_import import KIND_LIBRARY, import_template_work
 
 
 async def import_template_entities(
@@ -22,11 +22,12 @@ async def import_template_entities(
     raises ``TemplateImportError``, as ``PortabilityService.execute_import`` does. Returns the skipped items.
     """
     created: Dict[str, Any] = {"projects": [], "work_items": []}
+    template_json = {"export_kind": KIND_LIBRARY, **template_json}  # a stored kind, if any, stays
     sp = await session.begin_nested()
     try:
         skipped_items = await import_template_work(session, template_json, company_id, created, {"work_items": []}, [])
         await sp.commit()
-    except Exception as exc:
+    except ValueError as exc:  # an invalid enum value in the template; a programming error propagates
         await sp.rollback()
         raise TemplateImportError(f"Import rolled back: {exc}") from exc
     counts.update({key: len(ids) for key, ids in created.items()})

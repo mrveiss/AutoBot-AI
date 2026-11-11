@@ -27,6 +27,10 @@ REASON_PARENT_NOT_IMPORTED = "parent_not_imported"
 REASON_PARENT_CYCLE = "parent_cycle"
 REASON_HIERARCHY = "hierarchy_violation"
 
+KIND_SNAPSHOT = "snapshot"  # ``PortabilityService.export_snapshot``: the whole company
+KIND_LIBRARY = "library"  # a library or built-in template: every item is part of it
+FULL_IMPORT_KINDS = (KIND_SNAPSHOT, KIND_LIBRARY)
+
 DEFAULT_PROJECT_NAME = "Imported Project"
 DEFAULT_TYPE = "epic"
 DEFAULT_PROJECT_STATUS = "backlog"  # the column default; "planning" is not a project status
@@ -52,11 +56,15 @@ def template_name(template: Dict[str, Any]) -> str:
 
 
 def select_items(template: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """The items to import. A template *export* carries seeds, so only ``is_seed`` ones; any other source all."""
+    """The items to import: every item of a snapshot or library template, only the seeds of anything else.
+
+    A payload with no ``export_kind`` (hand-built) or an unknown one is read as a template export, the
+    narrower reading, so it never creates more than a template export would.
+    """
     items = [*template.get("seed_work_items", []), *template.get("work_items", [])]
-    if template.get("export_kind") == "template":
-        return [i for i in items if i.get("is_seed")]
-    return items
+    if template.get("export_kind") in FULL_IMPORT_KINDS:
+        return items
+    return [i for i in items if i.get("is_seed")]
 
 
 def _skip(report: Dict[str, Any], item: Dict[str, Any], reason: str, detail: str = "") -> None:
