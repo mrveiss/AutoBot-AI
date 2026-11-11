@@ -89,7 +89,24 @@ def _parse_args() -> argparse.Namespace:
             "having examined it and found a regression (#16157)."
         ),
     )
+    _add_live_args(parser)
     return parser.parse_args()
+
+
+def _add_live_args(parser: argparse.ArgumentParser) -> None:
+    """The flags of the live mode (#20843); none of them has any effect without ``--live``."""
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Run the goldens through the real chat graph against local model(s) (host-run; needs the stack).",
+    )
+    parser.add_argument(
+        "--model", action="append", default=[], help="Model to pin (repeatable). Default: the SSOT default."
+    )
+    parser.add_argument("--provider", default="", help="Provider label to guard and stamp. Default: the SSOT provider.")
+    parser.add_argument("--repeat", type=int, default=1, help="Runs per model per golden (default 1).")
+    parser.add_argument("--label", default="", help="Free-text label stamped in the report (e.g. 'before-change').")
+    parser.add_argument("--judge-model", default="", help="Pin a model for the optional unsupported-claim judge.")
 
 
 def resolve_candidate(recorded_dir: Path) -> tuple[CandidateRunner, bool]:
@@ -144,8 +161,46 @@ def _emit(report: RegressionReport, json_path: str) -> None:
         logger.info("Wrote JSON report to %s", resolved)
 
 
+def _live_report(args: argparse.Namespace) -> RegressionReport | None:
+    """Run the live eval; None when the local-only guard refused it (nothing was sent anywhere)."""
+    from autobot_shared.ssot_config import config
+    from eval.live_guard import RemoteProviderRefused
+    from eval.live_run import run_live_eval
+
+    try:
+        return run_or_schedule(
+            run_live_eval(
+                models=args.model or [config.default_llm_model],
+                provider=args.provider,
+                repeat=args.repeat,
+                label=args.label,
+                judge_model=args.judge_model,
+            )
+        )
+    except RemoteProviderRefused as exc:
+        logger.error("UNMEASURED: %s", exc)
+        return None
+
+
+def _run_live(args: argparse.Namespace) -> int:
+    """The live mode: refused or entirely not-run is exit 2 (nothing examined); otherwise the gated exit code."""
+    report = _live_report(args)
+    if report is None:
+        return 2  # refused: nothing was examined, so no claim about the corpus
+    _emit(report, args.json)
+    if not report.outcomes:
+        logger.error("UNMEASURED: the golden set is empty, so nothing was examined.")
+        return 2
+    if report.total_unmeasured == len(report.outcomes):
+        logger.error("UNMEASURED: no live turn produced an answer, so nothing was examined.")
+        return 2
+    return _gated_exit(args, report)
+
+
 def _run(args: argparse.Namespace) -> int:
     """Resolve a candidate, replay, emit, and pick the exit code."""
+    if args.live:
+        return _run_live(args)
     recorded_dir = Path(args.recorded_dir) if args.recorded_dir else Path(__file__).parent / "recorded"
     candidate, is_real = resolve_candidate(recorded_dir)
     report = run_or_schedule(run_eval(candidate=candidate, epsilon=args.epsilon))
@@ -169,6 +224,11 @@ def _run(args: argparse.Namespace) -> int:
             # committed in the code removing it.
             return 2
 
+    return _gated_exit(args, report)
+
+
+def _gated_exit(args: argparse.Namespace, report: RegressionReport) -> int:
+    """The exit code for an examined report: 1 regression, 2 unjudgeable (gated modes only), else 0."""
     if args.fail_on_regression and report.has_regressions:
         logger.error("Regressions detected — failing (gated mode).")
         return 1
