@@ -280,6 +280,10 @@ class FallbackChainManager:
 
         return None
 
+    def operator_chains(self) -> List[FallbackChain]:
+        """The chains an operator wrote (``AUTOBOT_FALLBACK_CHAIN_*``), without the built-in defaults."""
+        return [chain for chain in self._chains.values() if chain.operator_configured]
+
     def list_chains(self) -> Dict[str, List[str]]:
         """List all registered fallback chains."""
         return {primary: chain.fallback_models for primary, chain in self._chains.items()}
