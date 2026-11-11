@@ -114,7 +114,7 @@ def test_every_pattern_a_changes_job_read_is_still_read(case):
 #: separate from the regenerable pre-#15360 fixture, so removing an entry from gate-paths.yml still
 #: fails here. It was held by changes_job_equivalence_15360_test.py until #18208 retired that test.
 ISSUE_17822_FIXTURE = Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json"
-#: 30 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
+#: 38 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
 #: `llc/services/workspace_lease.py` (#17996), and `llc/services/company.py` + `company_ceo.py` (#15907's
 #: concurrent-move test), which the migration tests import, plus `company_move_lock.py`, `authz.py`,
 #: `membership_service.py`, `scheduler/run_status.py` and `autobot_shared/db_errors.py` (#19634's move tests).
@@ -124,8 +124,8 @@ ISSUE_17822_FIXTURE = Path(__file__).parent / "fixtures" / "issue_17822_migratio
 #: are imported by the `plan_convert_lines.py` it runs (#20086), `autobot_shared/db_session.py` and
 #: `user_management/models/audit.py` are the secrets API test's canonical audit store (#20557), and the seven
 #: `autobot_shared/user_management/` modules plus its package `__init__` are what the admin-status two-user test
-#: imports (#20670).
-ISSUE_17822_COUNT = 37
+#: imports (#20670), and `llc/services/controls_service.py` is the two-session pause test's import (#21056).
+ISSUE_17822_COUNT = 38
 
 
 def test_the_issue_17822_migration_entries_are_still_read():
