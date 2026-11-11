@@ -145,6 +145,54 @@ def test_the_wrapper_is_executable_in_git() -> None:
     ), "COPY keeps the mode: a non-executable apt-retry fails every image build"
 
 
+# -- the runner mirror fallback (#19308) runs first in Clean install, from one definition -----------
+
+_ACTION = _ROOT / ".github/actions/setup-python-suite/action.yml"
+_FALLBACK = "scripts/ci/apt_fallback_mirror.sh"
+_INSTALL_STEPS = ('- name: "Step: install (no tty)"', '- name: "Step: install (tty)"')
+
+
+def _mirror_default(action_text: str) -> str:
+    m = re.search(r"^  apt-fallback-mirror:\n(?:    .*\n)*?    default:\s*(\S+)", action_text, re.M)
+    assert m, "no apt-fallback-mirror input default found"
+    return m.group(1)
+
+
+def _fallback_before_installs(workflow: str) -> bool:
+    """True when the fallback script is called before the first apt use and before either install step."""
+    call = workflow.find(_FALLBACK)
+    first = [i for i in (workflow.find(s) for s in _INSTALL_STEPS) if i >= 0]
+    apt = _APT.search("\n".join(l for l in workflow.splitlines() if not l.lstrip().startswith("#")))
+    firsts = first + ([workflow.find(apt.group(0))] if apt else [])
+    return call >= 0 and bool(firsts) and call < min(firsts)
+
+
+def test_the_fallback_mirror_has_exactly_one_definition() -> None:
+    mirror = _mirror_default(_ACTION.read_text(encoding="utf-8"))
+    hits = [
+        p.relative_to(_ROOT).as_posix()
+        for p in (_ACTION, _ROOT / _FALLBACK, *_WORKFLOWS)
+        if mirror in p.read_text(encoding="utf-8")
+    ]
+    assert hits == [".github/actions/setup-python-suite/action.yml"], hits
+
+
+def test_clean_install_repoints_the_mirror_before_any_apt_use() -> None:
+    text = (_ROOT / ".github/workflows/clean-install.yml").read_text(encoding="utf-8")
+    assert _fallback_before_installs(text)
+    assert "apt-fallback-mirror" in text and "action.yml" in text, "the mirror is not read from the action's default"
+
+
+def test_the_fallback_ordering_check_fires_on_a_fixture() -> None:
+    good = f"steps:\n  - run: sudo bash {_FALLBACK}\n  {_INSTALL_STEPS[0]}\n"
+    late = f"steps:\n  {_INSTALL_STEPS[0]}\n  - run: sudo bash {_FALLBACK}\n"
+    apt_first = f"steps:\n  - run: sudo apt-get install -y x\n  - run: sudo bash {_FALLBACK}\n  {_INSTALL_STEPS[1]}\n"
+    assert _fallback_before_installs(good)
+    assert not _fallback_before_installs(late)
+    assert not _fallback_before_installs(apt_first)
+    assert not _fallback_before_installs(f"steps:\n  {_INSTALL_STEPS[0]}\n")
+
+
 # -- the wrapper's behaviour: stubbed apt-get / getent, no network ----------------------------------
 
 _ERR = "W: Failed to fetch http://mirror.invalid/dists/noble/InRelease  Temporary failure resolving 'mirror.invalid'"

@@ -53,6 +53,22 @@ jobs:
         with:
           persist-credentials: false
 
+      # #21325: the runner's mirror host stopped resolving for whole jobs, and the installer's own
+      # apt calls cannot be wrapped here. Repoint the runner's mirror list BEFORE any apt use, with the
+      # script and the one mirror definition (the apt-fallback-mirror input default) that the Python
+      # suite's provisioning fallback already uses (#19308). Exit 3 = nothing to repoint, said out loud.
+      - name: Use the fallback apt mirror
+        run: |
+          set -euo pipefail
+          mirror=$(awk '/^  apt-fallback-mirror:/ {f=1} f && /^    default:/ {print $2; exit}' .github/actions/setup-python-suite/action.yml)
+          [ -n "${mirror}" ] || { echo "::error::no apt-fallback-mirror default found in the setup-python-suite action"; exit 1; }
+          rc=0; n=$(sudo bash scripts/ci/apt_fallback_mirror.sh /etc/apt "${mirror}") || rc=$?
+          case "${rc}" in
+            0) echo "apt: fallback mirror applied to ${n} apt file(s) (#19308)" ;;
+            3) echo "::warning title=apt fallback mirror not applied::no Ubuntu archive entry found to repoint" ;;
+            *) echo "::error title=apt fallback mirror script failed::exit ${rc}"; exit 1 ;;
+          esac
+
       # #20903: the repo scripts import autobot_shared, which refuses an interpreter
       # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
       - name: Set up Python from .python-version
@@ -103,8 +119,7 @@ jobs:
         if: matrix.mode == 'tty'
         run: |
           set -euo pipefail
-          # #21325: the repo's one apt policy and backoff wrapper (the installer under test carries its own copies).
-          sudo install -m 0644 docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
+          # #21325: the repo's one apt backoff wrapper.
           sudo sh docker/apt/apt-retry apt-get install -y -qq expect >/dev/null
           typed="${RUNNER_TEMP}/typed-at-prompt"
           # #19236 AC2: spaces and both quote kinds, so a green login proves the exact string round-trips.

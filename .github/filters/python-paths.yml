@@ -76,6 +76,8 @@ python:
   - 'docker/apt/*'
   - '.github/workflows/clean-install.yml'
   - '.github/workflows/hardened-smoke-test.yml'
+  - '.github/actions/setup-python-suite/action.yml'
+  - 'scripts/ci/apt_fallback_mirror.sh'
   # #17500, #18729: compose_exposure_and_credentials_17500_test.py and docker_admin_seed_18729_test.py read the secrets generator.
   - 'docker/generate-secrets.sh'
   - 'docker/write-redis-acl.sh'
