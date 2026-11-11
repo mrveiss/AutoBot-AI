@@ -54,7 +54,6 @@ from api.database_mcp import router as database_mcp_router
 from api.developer import router as developer_router
 from api.execution_snapshots import router as execution_snapshots_router  # GH#4458, MVA-2227
 from api.files import router as files_router
-from api.files_admin_raw import router as files_admin_raw_router  # #21029
 from api.filesystem_mcp import router as filesystem_mcp_router
 from api.frontend_config import router as frontend_config_router
 from api.git_mcp import router as git_mcp_router
@@ -506,7 +505,6 @@ def _get_agent_routers() -> list:
         (issue_claims_credential_router, "/coordination", ["coordination"], "issue_claims_credential"),
         (coordination_issue_claims_router, "/coordination", ["coordination"], "coordination_issue_claims"),
         (files_router, "/files", ["files"], "files"),
-        (files_admin_raw_router, "/files", ["files"], "files_admin_raw"),  # #21029
         (developer_router, "/developer", ["developer"], "developer"),
         (memory_router, "/memory", ["memory"], "memory"),
         (
