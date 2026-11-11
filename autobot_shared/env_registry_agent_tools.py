@@ -105,9 +105,7 @@ register_env_var(
         default="stop",
         description=(
             "What the chat graph does when a turn stalls: stop halts the turn, "
-            "ask escalates to the human (#21022, #20846); any other value fails config load. "
-            "Known gap: a pending question is not re-shown after a page reload (restoring pending graph "
-            "interrupts is tracked in #21237), so enable ask only where users stay on the page."
+            "ask escalates to the human (#21022, #20846); any other value fails config load."
         ),
         component="chat_workflow",
     )
