@@ -14,9 +14,16 @@ import { useRoute } from 'vue-router'
 import LlcSidebar from '@/components/llc/LlcSidebar.vue'
 import PlanFirstProcessCard from '@/components/llc/workflowPlanner/PlanFirstProcessCard.vue'
 import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
+import { useLlcCompanyNotices } from '@/composables/useLlcCompanyNotices'
 
 const companyStore = useLlcCompanyStore()
 const route = useRoute()
+// Toast company notices (#21045); re-subscribes when the selected company changes.
+const noticeCompanyId = computed(() => {
+  const raw = route.params.companyId
+  return (Array.isArray(raw) ? raw[0] : raw) ?? companyStore.selectedCompanyId
+})
+useLlcCompanyNotices(noticeCompanyId)
 // The creation wizard lands here with ?welcome=plan (#19938 E2).
 const showPlanCard = computed(() => route.query.welcome === 'plan')
 

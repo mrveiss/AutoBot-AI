@@ -44,15 +44,15 @@ import aiohttp
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
+from autobot_shared.store_authority import system_of_record
 from constants.ttl_constants import TTL_7_DAYS
 from services.gateway.egress_governor import egress_governor
 from services.notification_types import NotificationChannel, NotificationEvent  # noqa: F401 -- #19334
 
 logger = get_logger(__name__)
 
-# ---------------------------------------------------------------------------
-# Enums
-# ---------------------------------------------------------------------------
+# #21045: Redis, deliberately ephemeral -- see autobot_shared/store_authority.py.
+SYSTEM_OF_RECORD = system_of_record("workflow_inapp_notifications")
 
 _NOTIFICATIONS_REDIS_DB = "main"
 _NOTIFICATION_TTL_SECONDS = TTL_7_DAYS
