@@ -29,7 +29,7 @@ from typing import Any, Optional
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
-from .dispatch_gate import agent_ref_block_reason
+from .dispatch_gate import agent_ref_block_reason, record_budget_refusal
 from .schedule_members import routine_due_members
 
 logger = get_logger(__name__)
@@ -181,8 +181,10 @@ class RoutineScheduler:
                 reason = await agent_ref_block_reason(session, agent_id, company_id)
                 if reason is not None:
                     logger.info("RoutineScheduler: skipping %s — %s (FR-GOV-05)", routine_id_str, reason)
+                    skip_cron = routine.cron_schedule  # read before the refusal record may roll the session back
+                    await record_budget_refusal(session, company_id, agent_id, reason)
                     # Re-queue at next fire time so the routine resumes automatically when unpaused
-                    next_ts_skip: float = croniter(routine.cron_schedule, datetime.now(tz=timezone.utc)).get_next(float)
+                    next_ts_skip: float = croniter(skip_cron, datetime.now(tz=timezone.utc)).get_next(float)
                     redis = await get_async_redis_client()
                     if redis is None:
                         raise RuntimeError(f"Redis unavailable — cannot re-queue paused routine {routine_id_str}")
