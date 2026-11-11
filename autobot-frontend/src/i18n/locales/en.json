@@ -118,7 +118,17 @@
     "conversationFiles": {
       "createFailed": "Failed to create file",
       "saveFailed": "Save failed",
-      "copyFailed": "Copy failed"
+      "copyFailed": "Copy failed",
+      "noSession": "No session ID provided",
+      "noFilesSelected": "No files selected",
+      "missingParameters": "Missing session ID or file ID",
+      "loadFailed": "Failed to load files",
+      "deleteFailed": "Failed to delete file",
+      "downloadFailed": "Download failed",
+      "fileNotFound": "File not found",
+      "previewFailed": "Preview failed",
+      "renameFailed": "Rename failed",
+      "readFailed": "Failed to read file"
     },
     "contextWindow": {
       "ariaLabel": "{used} of {max} tokens used",
@@ -203,6 +213,11 @@
       "loadingFiles": "Loading files...",
       "aiGenerated": "AI Generated",
       "preview": "Preview",
+      "previewEmpty": "This file is empty",
+      "closePreview": "Close preview",
+      "previewLoading": "Loading preview...",
+      "previewTruncated": "Showing the start of this file. Download it to see the rest.",
+      "previewContentLabel": "Contents of {name}",
       "download": "Download",
       "rename": "Rename",
       "duplicate": "Duplicate",
@@ -8513,6 +8528,21 @@
     }
   },
   "llc": {
+    "notices": {
+      "generic": "A company update arrived",
+      "heartbeatMissed": "Agent {agent} missed its heartbeat",
+      "heartbeatRecoveryUnfiled": "Agent {agent} timed out and no recovery item could be filed",
+      "heartbeatMissedNoAgent": "An agent missed its heartbeat",
+      "heartbeatRecoveryUnfiledNoAgent": "An agent timed out and no recovery item could be filed",
+      "budgetSoftAlert": "Budget warning: agent {agent} is nearing its budget",
+      "budgetSoftAlertNoAgent": "Budget warning: the budget is nearly used up",
+      "budgetHardStop": "Budget exhausted: agent {agent} is stopped until the budget is raised",
+      "budgetHardStopNoAgent": "Budget exhausted: agents are stopped until the budget is raised",
+      "handoff": "Agent {agent} handed over a work item",
+      "handoffNoAgent": "A work item was handed over",
+      "approval": "An approval was updated",
+      "sprint": "A sprint was updated"
+    },
     "agent": {
       "cannotRun": "Cannot run"
     },
