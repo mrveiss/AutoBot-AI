@@ -196,9 +196,18 @@ def test_the_fallback_ordering_check_fires_on_a_fixture() -> None:
 # -- the wrapper's behaviour: stubbed apt-get / getent, no network ----------------------------------
 
 _ERR = "W: Failed to fetch http://mirror.invalid/dists/noble/InRelease  Temporary failure resolving 'mirror.invalid'"
+_PERMANENT = "E: Unable to locate package nonesuch"
 
 
-def _run_wrapper(tmp_path: Path, fail_times: int, attempts: int, args=("apt-get", "update"), extra_env=None):
+def _run_wrapper(
+    tmp_path: Path,
+    fail_times: int,
+    attempts: int,
+    args=("apt-get", "update"),
+    extra_env=None,
+    message=_ERR,
+    exit_code=100,
+):
     sh = shutil.which("sh")
     if sh is None:
         pytest.skip("sh unavailable")
@@ -207,8 +216,7 @@ def _run_wrapper(tmp_path: Path, fail_times: int, attempts: int, args=("apt-get"
     stub = tmp_path / "apt-get"
     stub.write_text(
         f'#!/bin/sh\necho "$*" >> "{log}"\nn=$(wc -l < "{log}")\n'
-        f'if [ "$1" != update ] && [ "$n" -le {fail_times} ]; then echo "{_ERR}" >&2; exit 100; fi\n'
-        f'if [ "$1" = update ] && [ "$n" -le {fail_times} ]; then echo "{_ERR}" >&2; exit 100; fi\n',
+        f'if [ "$n" -le {fail_times} ]; then echo "{message}"; exit {exit_code}; fi\n',
         encoding="utf-8",
     )
     getent = tmp_path / "getent"
@@ -225,8 +233,7 @@ def _run_wrapper(tmp_path: Path, fail_times: int, attempts: int, args=("apt-get"
         **(extra_env or {}),
     }
     done = subprocess.run([sh, str(_HELPER), *args], env=env, capture_output=True, text=True, timeout=60, check=False)
-    calls = log.read_text(encoding="utf-8").splitlines()
-    return done, calls
+    return done, log.read_text(encoding="utf-8").splitlines()
 
 
 def test_a_first_attempt_failure_passes_on_the_second(tmp_path: Path) -> None:
@@ -234,10 +241,66 @@ def test_a_first_attempt_failure_passes_on_the_second(tmp_path: Path) -> None:
     assert (done.returncode, calls) == (0, ["update", "update"]), done.stderr
 
 
-def test_an_install_retry_reruns_update_first(tmp_path: Path) -> None:
-    done, calls = _run_wrapper(tmp_path, fail_times=1, attempts=3, args=("apt-get", "install", "-y", "curl"))
+def test_a_permanent_failure_is_not_retried_and_keeps_its_exit_code_and_output(tmp_path: Path) -> None:
+    done, calls = _run_wrapper(
+        tmp_path, fail_times=99, attempts=5, args=("apt-get", "install", "nonesuch"), message=_PERMANENT, exit_code=100
+    )
+    assert (done.returncode, calls) == (100, ["install nonesuch"]), done.stderr
+    assert _PERMANENT in done.stdout and "not retrying" in done.stderr
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Err:1 http://m/ubuntu noble InRelease  Connection timed out",
+        "E: Failed to fetch http://m/pool/x.deb  503  Service Unavailable [IP: 192.0.2.1 80]",
+        "E: Failed to fetch http://m/Packages.gz  Hash Sum mismatch",
+        "Could not connect to m:80 (192.0.2.1). - connect (111: Connection refused)",
+    ],
+)
+def test_other_transient_signatures_are_retried(tmp_path: Path, message: str) -> None:
+    done, calls = _run_wrapper(tmp_path, fail_times=1, attempts=3, message=message)
+    assert (done.returncode, len(calls)) == (0, 2), done.stderr
+
+
+def test_a_404_is_not_transient(tmp_path: Path) -> None:
+    _, calls = _run_wrapper(
+        tmp_path,
+        fail_times=99,
+        attempts=3,
+        message="E: Failed to fetch http://m/x.deb  404  Not Found [IP: 192.0.2.1 80]",
+    )
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        {"APT_RETRY_ATTEMPTS": "many"},
+        {"APT_RETRY_ATTEMPTS": "0"},
+        {"APT_RETRY_DELAY_S": "soon"},
+        {"APT_RETRY_MAX_DELAY_S": "-1"},
+    ],
+)
+def test_an_invalid_setting_fails_before_anything_runs(tmp_path: Path, env: dict) -> None:
+    done, calls = _run_wrapper(tmp_path, fail_times=0, attempts=3, extra_env=env)
+    assert done.returncode == 2 and calls == [], (done.stderr, calls)
+    assert "must be an integer" in done.stderr
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("apt-get", "install", "-y", "curl"),
+        ("apt-get", "-y", "install", "curl"),
+        ("apt-get", "-o", "Dpkg::Options::=--force-confold", "install", "curl"),
+        ("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "-qq", "dist-upgrade"),
+    ],
+)
+def test_an_install_retry_reruns_update_first_wherever_the_subcommand_sits(tmp_path: Path, args: tuple) -> None:
+    done, calls = _run_wrapper(tmp_path, fail_times=1, attempts=3, args=args)
     assert done.returncode == 0, done.stderr
-    assert calls == ["install -y curl", "update", "install -y curl"], calls
+    assert [c.split()[-1] if c.split()[0] == "update" else "cmd" for c in calls] == ["cmd", "update", "cmd"], calls
 
 
 def test_an_update_retry_does_not_run_a_second_update(tmp_path: Path) -> None:
@@ -248,7 +311,7 @@ def test_an_update_retry_does_not_run_a_second_update(tmp_path: Path) -> None:
 def test_exhausted_attempts_fail_loudly_with_the_apt_error_and_resolver_diagnostics(tmp_path: Path) -> None:
     done, calls = _run_wrapper(tmp_path, fail_times=99, attempts=3)
     assert done.returncode == 100 and len(calls) == 3
-    assert "Temporary failure resolving 'mirror.invalid'" in done.stderr
+    assert "Temporary failure resolving 'mirror.invalid'" in done.stdout
     assert "giving up after 3 attempts" in done.stderr
     assert "--- getent hosts mirror.invalid" in done.stderr
     assert "http://mirror.invalid/ubuntu/" in done.stderr, "apt-mirrors.txt contents are missing"

@@ -12,32 +12,73 @@
 # resolving", "Could not resolve") can last a whole CI job, so the whole command is
 # retried here over minutes.
 #
+# - Only a TRANSIENT network failure is retried: the command's output must match TRANSIENT
+#   below (apt's own message texts: resolver failure, connection refused/reset/timed out, a
+#   slow or dropped read, a hash-sum mismatch from a mirror mid-sync, a 5xx from a mirror). Any
+#   other failure (unknown package, dpkg error, unmet dependencies, a 404) fails at once with
+#   the command's exit status and output. Output streams to the log as the command writes it.
 # - Window: APT_RETRY_ATTEMPTS (default 8) tries, APT_RETRY_DELAY_S (default 10) doubling
 #   after each failure up to APT_RETRY_MAX_DELAY_S (default 120): 10+20+40+80+120+120+120
-#   = 510 s between the first and last try. Declared here and nowhere else; a caller that
-#   wants a shorter window sets the variables in its environment.
-# - Before retrying an `apt-get install`/`upgrade`/`dist-upgrade`, `apt-get update` is re-run:
-#   a failed update leaves stale or missing lists, which is why the install then fails.
-# - On final failure the command's own exit status is returned, its last apt error is on
-#   stderr, and resolver diagnostics follow: the host(s) apt named, `getent hosts` for each,
-#   `resolvectl status` when present and APT_RETRY_MIRRORS_FILE (default
-#   /etc/apt/apt-mirrors.txt) when it exists. Each is bounded to a few dozen lines.
+#   = 510 s of sleeping at most, plus up to 7 `apt-get update` refreshes, per command. Declared
+#   here and nowhere else; a caller that wants a shorter window sets the variables in its
+#   environment. ATTEMPTS must be a positive integer, the delays non-negative integers; anything
+#   else is an error before the command runs.
+# - Before retrying an `apt-get install`/`upgrade`/`dist-upgrade` (the subcommand is found past
+#   any options, e.g. `apt-get -y -o X=Y install`), `apt-get update` is re-run: a failed
+#   update leaves stale or missing lists, which is why the install then fails.
+# - On final failure of a transient error the command's own exit status is returned, its last
+#   apt error is in the log, and resolver diagnostics follow: the host(s) apt named,
+#   `getent hosts` for each, `resolvectl status` when present and APT_RETRY_MIRRORS_FILE
+#   (default /etc/apt/apt-mirrors.txt) when it exists. Each is bounded to a few dozen lines.
 
 attempts="${APT_RETRY_ATTEMPTS:-8}"
 delay="${APT_RETRY_DELAY_S:-10}"
 max_delay="${APT_RETRY_MAX_DELAY_S:-120}"
 mirrors="${APT_RETRY_MIRRORS_FILE:-/etc/apt/apt-mirrors.txt}"
-err="$(mktemp)" || exit 1
-trap 'rm -f "$err"' EXIT
 
+# The one list of transient signatures (extended regex, case-insensitive).
+TRANSIENT='Temporary failure resolving|Could not resolve|Could not connect|Cannot initiate the connection|Connection (failed|refused|reset|timed out)|Operation too slow|Timeout was reached|Reading from server failed|Hash Sum mismatch|Undetermined Error|(Failed to fetch|Err:[0-9]+) .* 5[0-9][0-9] '
+
+for spec in "APT_RETRY_ATTEMPTS=$attempts=1" "APT_RETRY_DELAY_S=$delay=0" "APT_RETRY_MAX_DELAY_S=$max_delay=0"; do
+    min="${spec##*=}"
+    rest="${spec%=*}"
+    value="${rest#*=}"
+    case "$value" in
+        '' | *[!0-9]*) echo "apt-retry: ${rest%%=*} must be an integer >= ${min}, got '${value}'" >&2; exit 2 ;;
+    esac
+    [ "$value" -ge "$min" ] || { echo "apt-retry: ${rest%%=*} must be an integer >= ${min}, got '${value}'" >&2; exit 2; }
+done
+
+tmp="$(mktemp -d)" || exit 1
+trap 'rm -rf "$tmp"' EXIT
+out="$tmp/out"
+fifo="$tmp/fifo"
+mkfifo "$fifo" || exit 1
+
+subcommand=""
+seen=0
+skip=0
+for arg in "$@"; do
+    if [ "$seen" -eq 0 ]; then
+        case "$arg" in apt-get | */apt-get) seen=1 ;; esac
+        continue
+    fi
+    if [ "$skip" -eq 1 ]; then
+        skip=0
+        continue
+    fi
+    case "$arg" in
+        -o | -c | -t) skip=1 ;;
+        -*) ;;
+        *) subcommand="$arg"; break ;;
+    esac
+done
 refresh=0
-case " $* " in
-    *" apt-get install "* | *" apt-get upgrade "* | *" apt-get dist-upgrade "*) refresh=1 ;;
-esac
+case "$subcommand" in install | upgrade | dist-upgrade) refresh=1 ;; esac
 
 diagnostics() {
     echo "apt-retry: resolver diagnostics" >&2
-    hosts="$(sed -n "s/.*\(resolving\|resolve\) '\([^']*\)'.*/\2/p" "$err" | sort -u | head -n 5)"
+    hosts="$(sed -n "s/.*\(resolving\|resolve\) '\([^']*\)'.*/\2/p" "$out" | sort -u | head -n 5)"
     for host in $hosts; do
         echo "--- getent hosts ${host}" >&2
         getent hosts "$host" >&2 || echo "(no answer, exit $?)" >&2
@@ -55,19 +96,25 @@ diagnostics() {
 
 n=1
 while :; do
-    "$@" 2>"$err"
+    tee "$out" <"$fifo" &
+    tee_pid=$!
+    "$@" >"$fifo" 2>&1
     rc=$?
-    cat "$err" >&2
+    wait "$tee_pid"
     [ "$rc" -eq 0 ] && exit 0
+    if ! grep -E -i -q "$TRANSIENT" "$out"; then
+        echo "apt-retry: not retrying (exit ${rc}, no transient network failure in the output): $*" >&2
+        exit "$rc"
+    fi
     if [ "$n" -ge "$attempts" ]; then
         echo "apt-retry: giving up after ${n} attempts (last exit ${rc}): $*" >&2
         diagnostics
         exit "$rc"
     fi
-    echo "apt-retry: attempt ${n}/${attempts} failed (exit ${rc}): $*; retrying in ${delay}s" >&2
+    echo "apt-retry: attempt ${n}/${attempts} failed transiently (exit ${rc}): $*; retrying in ${delay}s" >&2
     sleep "$delay"
     if [ "$refresh" -eq 1 ]; then
-        apt-get update >&2 || echo "apt-retry: apt-get update failed (exit $?); retrying the command anyway" >&2
+        apt-get update || echo "apt-retry: apt-get update failed (exit $?); retrying the command anyway" >&2
     fi
     delay=$((delay * 2))
     [ "$delay" -le "$max_delay" ] || delay="$max_delay"
