@@ -57,6 +57,10 @@ class _User(_Base):
     deleted_at: Mapped[object] = mapped_column(DateTime, nullable=True)
 
 
+#: A harness lock held by a failed session must fail the test, not hang it.
+_ROW_LOCK_TIMEOUT_SECONDS = 10
+
+
 def _with_row_lock(session: AsyncSession, row_lock: asyncio.Lock) -> AsyncSession:
     """Give *session* the FOR UPDATE contract: a locking read waits for the previous holder to commit."""
     held = False
@@ -65,7 +69,7 @@ def _with_row_lock(session: AsyncSession, row_lock: asyncio.Lock) -> AsyncSessio
     async def execute(statement, *args, **kwargs):
         nonlocal held
         if getattr(statement, "_for_update_arg", None) is not None and not held:
-            await row_lock.acquire()
+            await asyncio.wait_for(row_lock.acquire(), timeout=_ROW_LOCK_TIMEOUT_SECONDS)
             held = True
         return await real_execute(statement, *args, **kwargs)
 

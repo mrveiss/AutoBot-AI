@@ -8,7 +8,7 @@ The guard locks the active-admin rows (and the target) in one id-ordered ``SELEC
 any lock on the target alone, so the two requests queue on the same rows instead of each holding one and
 waiting for the other. SQLite has no row locks and a mocked session no deadlock detector, so this runs on
 the real Postgres of the migration gate (``AUTOBOT_MIGRATION_TEST_ADMIN_URL``). The wait is proved by a
-waiting lock in ``pg_locks``, not by a sleep.
+waiting lock in ``pg_stat_activity``, not by a sleep.
 """
 
 import asyncio
@@ -34,7 +34,7 @@ from tests.migrations.conftest import create_all_schema, requires_postgres
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.migration_gate, requires_postgres]
 
-#: Upper bound on polling ``pg_locks`` for the waiting backend (a safety net, not the proof).
+#: Upper bound on polling ``pg_stat_activity`` for the waiting backend (a safety net, not the proof).
 _POLL_ATTEMPTS = 200
 _POLL_INTERVAL_SECONDS = 0.05
 _RACE_ROUNDS = 5
@@ -100,10 +100,17 @@ async def _demote(maker, user_id: uuid.UUID) -> int:
 
 
 async def _wait_until_blocked(maker, task):  # noqa: ANN001
-    """Return once a backend waits for a lock (``pg_locks.granted`` false); fail if the task ends first."""
+    """Return once a backend of this database waits on a lock; fail if the task ends first."""
     for _ in range(_POLL_ATTEMPTS):
         async with maker() as probe:
-            waiting = (await probe.execute(text("SELECT count(*) FROM pg_locks WHERE NOT granted"))).scalar_one()
+            waiting = (
+                await probe.execute(
+                    text(
+                        "SELECT count(*) FROM pg_stat_activity "
+                        "WHERE datname = current_database() AND wait_event_type = 'Lock'"
+                    )
+                )
+            ).scalar_one()
         if waiting:
             return
         assert not task.done(), "the statement finished without ever waiting for the row lock"
