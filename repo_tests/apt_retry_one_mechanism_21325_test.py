@@ -24,6 +24,7 @@ import re
 import shutil
 import stat
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -316,6 +317,54 @@ def test_exhausted_attempts_fail_loudly_with_the_apt_error_and_resolver_diagnost
     assert "--- getent hosts mirror.invalid" in done.stderr
     assert "http://mirror.invalid/ubuntu/" in done.stderr, "apt-mirrors.txt contents are missing"
     assert (tmp_path / "calls.getent").read_text(encoding="utf-8").strip() == "getent hosts mirror.invalid"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "E: Failed to fetch http://m/x.deb  File has unexpected size (1 != 2). Mirror sync in progress?",
+        "E: Writing more data than expected (1 > 0)",
+    ],
+)
+def test_mirror_mid_sync_wordings_are_transient(tmp_path: Path, message: str) -> None:
+    done, calls = _run_wrapper(tmp_path, fail_times=1, attempts=3, message=message)
+    assert (done.returncode, len(calls)) == (0, 2), done.stderr
+
+
+def test_no_arguments_is_a_usage_error() -> None:
+    sh = shutil.which("sh")
+    if sh is None:
+        pytest.skip("sh unavailable")
+    done = subprocess.run([sh, str(_HELPER)], capture_output=True, text=True, timeout=30, check=False)
+    assert done.returncode == 2 and "usage: apt-retry" in done.stderr
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        {"APT_RETRY_DELAY_S": "08", "APT_RETRY_MAX_DELAY_S": "00"},
+        {"APT_RETRY_DELAY_S": "100", "APT_RETRY_MAX_DELAY_S": "0"},
+    ],
+)
+def test_leading_zeros_are_decimal_and_the_first_delay_is_capped(tmp_path: Path, env: dict) -> None:
+    done, calls = _run_wrapper(tmp_path, fail_times=2, attempts=4, extra_env=env)
+    assert (done.returncode, len(calls)) == (0, 3), done.stderr
+
+
+def test_a_daemon_holding_the_output_does_not_hang_the_wrapper(tmp_path: Path) -> None:
+    sh = shutil.which("sh")
+    if sh is None:
+        pytest.skip("sh unavailable")
+    stub = tmp_path / "apt-get"
+    stub.write_text("#!/bin/sh\necho started\nsleep 20 &\nexit 0\n", encoding="utf-8")
+    stub.chmod(0o755)
+    env = {"PATH": f"{tmp_path}:/usr/bin:/bin", "APT_RETRY_TEE_GRACE_S": "1"}
+    start = time.monotonic()
+    done = subprocess.run(
+        [sh, str(_HELPER), "apt-get", "install", "x"], env=env, capture_output=True, text=True, timeout=15, check=False
+    )
+    assert done.returncode == 0 and "started" in done.stdout, done.stderr
+    assert time.monotonic() - start < 10, "the wrapper waited for the daemon"
 
 
 def test_the_backoff_is_capped_and_spans_minutes() -> None:

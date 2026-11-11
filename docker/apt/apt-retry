@@ -30,16 +30,25 @@
 #   apt error is in the log, and resolver diagnostics follow: the host(s) apt named,
 #   `getent hosts` for each, `resolvectl status` when present and APT_RETRY_MIRRORS_FILE
 #   (default /etc/apt/apt-mirrors.txt) when it exists. Each is bounded to a few dozen lines.
+# - A daemon left running by the command can hold the output pipe open; once the command has
+#   exited, the capture is given APT_RETRY_TEE_GRACE_S (default 5) seconds to flush and is then
+#   stopped, so the wrapper never hangs on it. INT/TERM/HUP clean up and exit 130/143/129.
+
+if [ "$#" -eq 0 ]; then
+    echo "usage: apt-retry COMMAND [ARG...]" >&2
+    exit 2
+fi
 
 attempts="${APT_RETRY_ATTEMPTS:-8}"
 delay="${APT_RETRY_DELAY_S:-10}"
 max_delay="${APT_RETRY_MAX_DELAY_S:-120}"
 mirrors="${APT_RETRY_MIRRORS_FILE:-/etc/apt/apt-mirrors.txt}"
+tee_grace_s="${APT_RETRY_TEE_GRACE_S:-5}"
 
 # The one list of transient signatures (extended regex, case-insensitive).
-TRANSIENT='Temporary failure resolving|Could not resolve|Could not connect|Cannot initiate the connection|Connection (failed|refused|reset|timed out)|Operation too slow|Timeout was reached|Reading from server failed|Hash Sum mismatch|Undetermined Error|(Failed to fetch|Err:[0-9]+) .* 5[0-9][0-9] '
+TRANSIENT='Temporary failure resolving|Could not resolve|Could not connect|Cannot initiate the connection|Connection (failed|refused|reset|timed out)|Operation too slow|Timeout was reached|Reading from server failed|Hash Sum mismatch|File has unexpected size|Writing more data than expected|Undetermined Error|(Failed to fetch|Err:[0-9]+) .* 5[0-9][0-9] '
 
-for spec in "APT_RETRY_ATTEMPTS=$attempts=1" "APT_RETRY_DELAY_S=$delay=0" "APT_RETRY_MAX_DELAY_S=$max_delay=0"; do
+for spec in "APT_RETRY_ATTEMPTS=$attempts=1" "APT_RETRY_DELAY_S=$delay=0" "APT_RETRY_MAX_DELAY_S=$max_delay=0" "APT_RETRY_TEE_GRACE_S=$tee_grace_s=0"; do
     min="${spec##*=}"
     rest="${spec%=*}"
     value="${rest#*=}"
@@ -49,8 +58,27 @@ for spec in "APT_RETRY_ATTEMPTS=$attempts=1" "APT_RETRY_DELAY_S=$delay=0" "APT_R
     [ "$value" -ge "$min" ] || { echo "apt-retry: ${rest%%=*} must be an integer >= ${min}, got '${value}'" >&2; exit 2; }
 done
 
+# Strip leading zeros so shell arithmetic never reads `08` as octal, then cap the first delay too.
+norm() {
+    stripped="${1#"${1%%[!0]*}"}"
+    echo "${stripped:-0}"
+}
+attempts="$(norm "$attempts")"
+delay="$(norm "$delay")"
+max_delay="$(norm "$max_delay")"
+tee_grace_s="$(norm "$tee_grace_s")"
+[ "$delay" -le "$max_delay" ] || delay="$max_delay"
+
 tmp="$(mktemp -d)" || exit 1
-trap 'rm -rf "$tmp"' EXIT
+tee_pid=""
+cleanup() {
+    [ -z "$tee_pid" ] || kill "$tee_pid" 2>/dev/null
+    rm -rf "$tmp"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 out="$tmp/out"
 fifo="$tmp/fifo"
 mkfifo "$fifo" || exit 1
@@ -100,7 +128,16 @@ while :; do
     tee_pid=$!
     "$@" >"$fifo" 2>&1
     rc=$?
-    wait "$tee_pid"
+    # A daemon the command left running can hold the fifo open, so tee never sees EOF: give it a
+    # short grace to flush, then stop it. The output captured so far is already in $out.
+    ticks=$((tee_grace_s * 10))
+    while kill -0 "$tee_pid" 2>/dev/null && [ "$ticks" -gt 0 ]; do
+        sleep 0.1
+        ticks=$((ticks - 1))
+    done
+    kill "$tee_pid" 2>/dev/null
+    wait "$tee_pid" 2>/dev/null
+    tee_pid=""
     [ "$rc" -eq 0 ] && exit 0
     if ! grep -E -i -q "$TRANSIENT" "$out"; then
         echo "apt-retry: not retrying (exit ${rc}, no transient network failure in the output): $*" >&2
