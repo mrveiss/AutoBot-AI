@@ -35,6 +35,7 @@
     owner: "{{ service_user }}"
     group: "{{ service_group }}"
     mode: '0640'
+  diff: false  # the file carries secrets (#20941)
 
 - name: Verify policies configuration
   stat:

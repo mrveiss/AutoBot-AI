@@ -56,7 +56,6 @@ DECLARED_SCOPES = {
         "autobot-slm-backend",
         "docs",
         "install.sh",
-        "scripts/deployment",
     ),
     "ci-requirements-one-install-workflows": (".github/workflows",),
     "no_partial_key_mask_18221.sources": ("autobot_shared", "autobot-backend", "autobot-slm-backend"),
@@ -376,4 +375,5 @@ DECLARED_SCOPES = {
         "autobot-backend/code_analysis",
         "install.sh",
     ),
+    "ansible-secret-renders-20941": ("autobot-slm-backend/ansible",),
 }
