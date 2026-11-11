@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autobot_shared.testfile_names import is_test_filename
 from knowledge.acl_epoch import ACL_EPOCH_KEY
 from knowledge.retrieval_invalidation import (
     COMPOSED,
@@ -182,7 +183,7 @@ def _mixin_defines(method: str) -> bool:
     return any(
         isinstance(n, ast.AsyncFunctionDef) and n.name == method and n.body and not _raises_not_implemented(n)
         for p in (BACKEND / "knowledge").glob("*.py")
-        if not p.name.endswith("_test.py")
+        if not is_test_filename(p.name)
         for n in ast.walk(ast.parse(p.read_text(encoding="utf-8")))
     )
 
@@ -211,7 +212,7 @@ def _decorated_functions() -> set[tuple[str, str]]:
     found = set()
     for sub in ("knowledge", "services", "api"):
         for path in (BACKEND / sub).rglob("*.py"):
-            if path.name.endswith("_test.py") or path.name.startswith("test_") or "tests" in path.parts:
+            if is_test_filename(path.name) or "tests" in path.parts:
                 continue
             text = path.read_text(encoding="utf-8")
             if DECORATOR not in text:
@@ -280,7 +281,7 @@ def _vector_write_sites() -> set[tuple[str, str]]:
     roots = [BACKEND / "knowledge", BACKEND / "services/knowledge", BACKEND / "api/knowledge_vectorization.py"]
     for root in roots:
         for path in [root] if root.is_file() else root.rglob("*.py"):
-            if path.name.endswith("_test.py") or path.name.startswith("test_") or "tests" in path.parts:
+            if is_test_filename(path.name) or "tests" in path.parts:
                 continue
             walk(ast.parse(path.read_text(encoding="utf-8")), "<module>", str(path.relative_to(BACKEND)))
     return sites
