@@ -13,13 +13,14 @@
 import { reactive } from 'vue';
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import i18n from '@/i18n';
+import { getEnvPositiveInt } from '@autobot/ui';
 
 const inFlight = reactive(new Set<string>());
 type DecidedEntry = { unconfirmed: boolean; after: number; reads?: number };
 /** A decided step: `after` is the refresh sequence when its send settled; `unconfirmed` means the server's receipt is unknown. */
 const decided = reactive(new Map<string, DecidedEntry>());
 /** Status reads that may show a retry-refused step still waiting before its lock is released (env-backed, never unbounded). */
-const RECONCILE_READS = Math.max(1, Number(import.meta.env.VITE_STEP_ANSWER_RECONCILE_READS) || 3);
+const RECONCILE_READS = getEnvPositiveInt(import.meta.env, 'VITE_STEP_ANSWER_RECONCILE_READS', 3);
 /** `reads` is set only for a retry the server refused: it counts reads that still show the step waiting, bounding the lock. */
 /** Steps whose unconfirmed answer was released while still waiting: the first request may yet execute, so a refusal on the retry is not a plain refusal. */
 const retryAfterTimeout = reactive(new Set<string>());
