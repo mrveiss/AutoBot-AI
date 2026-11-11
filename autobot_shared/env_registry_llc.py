@@ -108,6 +108,20 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_BUDGET_REFUSAL_DEDUP_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "How long the de-duplication mark of a budget-refused dispatch is kept in Redis (#21212). "
+            "One budget.dispatch_refused activity row is written per exhaustion episode; a long episode "
+            "is restated after this many seconds. Minimum 1."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_LLC_SCHEDULE_RECONCILE_INTERVAL_SECONDS",
         type=float,
         default=60.0,
