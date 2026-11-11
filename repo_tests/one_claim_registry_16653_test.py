@@ -130,6 +130,11 @@ _ALLOWED: dict[str, tuple[int, str]] = {
         "#21202 -- the per-command interpretation compare-and-set (absent -> turn:<token> -> done): a state "
         "transition, no holder renews it and its TTL is garbage collection only. Not a work claim.",
     ),
+    "autobot-backend/llc/scheduler/dispatch_gate.py": (
+        1,
+        "#21212 -- budget-refusal dedup marker (idempotency, not a lease): SET NX EX records a refused "
+        "dispatch once. No holder, no renewal, its TTL is garbage collection only.",
+    ),
     "autobot_shared/membership_epoch.py": (
         1,
         "#19630 -- a token mint, not a lock: SETNX fills a missing epoch key so concurrent workers "
