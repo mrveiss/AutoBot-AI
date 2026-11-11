@@ -18,8 +18,7 @@ import pytest
 from cachetools import TTLCache
 
 from autobot_shared import membership_epoch
-from autobot_shared.after_commit import defer_until_commit
-from autobot_shared.db_session import POST_COMMIT_CALLBACKS, NoCommitScopeError
+from autobot_shared.db_session import POST_COMMIT_CALLBACKS, NoCommitScopeError, run_after_commit
 from autobot_shared.user_management.base_service import TenantContext
 from autobot_shared.user_management.team_service import TeamService
 from knowledge import acl_epoch, tenant_groups
@@ -206,9 +205,9 @@ async def test_a_revocation_with_no_commit_scope_raises_instead_of_bumping_befor
     assert redis_db.counters == {}
 
 
-def test_scoped_defer_until_commit_refuses_a_session_without_a_callback_list():
+def test_run_after_commit_refuses_a_session_without_a_callback_list():
     with pytest.raises(NoCommitScopeError):
-        defer_until_commit(_session(with_commit_scope=False), membership_epoch.MembershipEpochBump(ORG_1), scope=True)
+        run_after_commit(_session(with_commit_scope=False), membership_epoch.MembershipEpochBump(ORG_1))
 
 
 @pytest.mark.asyncio

@@ -32,7 +32,7 @@ from typing import ClassVar, List
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.after_commit import defer_until_commit
+from autobot_shared.db_session import run_after_commit
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.membership_epoch import MembershipEpochBump
 from autobot_shared.slug import url_slug
@@ -331,7 +331,7 @@ class OrganizationService(BaseService):
         revocation = await queue_member_token_revocation(self.session, self.user_model, org_id)
         if hard_delete:
             await self.session.delete(org)  # cascades the org's teams, users and memberships
-            defer_until_commit(self.session, MembershipEpochBump(org_id), scope=True)  # #19670
+            run_after_commit(self.session, MembershipEpochBump(org_id))  # #19670
         else:
             org.deleted_at = org.deleted_at or now_utc()
             org.is_active = False

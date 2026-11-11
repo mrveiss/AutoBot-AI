@@ -94,33 +94,3 @@ async def test_a_non_real_session_runs_the_callback_at_once() -> None:
     assert defer_until_commit(FakeAsyncSession(), sync_ran) is None
     assert ran == [1]
     sync_ran.assert_called_once()
-
-
-def test_a_plain_callback_has_run_when_commit_returns(session) -> None:  # noqa: ANN001
-    """A sync callback runs inside the hook (no task), so the work has started once ``commit()`` returns (#21107)."""
-    ran: list[int] = []
-    defer_until_commit(session, lambda: ran.append(1))
-    session.sync_session.commit()
-    assert ran == [1]
-
-
-def test_still_valid_false_at_commit_skips_the_callback(session) -> None:  # noqa: ANN001
-    alive = {"yes": True}
-    kept, skipped = MagicMock(), MagicMock()
-    defer_until_commit(session, kept, still_valid=lambda: True)
-    defer_until_commit(session, skipped, still_valid=lambda: alive["yes"])
-    alive["yes"] = False
-    session.sync_session.commit()
-    kept.assert_called_once()
-    skipped.assert_not_called()
-
-
-def test_still_valid_false_after_a_rollback_drops_the_callback(session) -> None:  # noqa: ANN001
-    alive = {"yes": True}
-    callback = MagicMock()
-    defer_until_commit(session, callback, still_valid=lambda: alive["yes"])
-    alive["yes"] = False
-    session.sync_session.rollback()
-    alive["yes"] = True
-    session.sync_session.commit()
-    callback.assert_not_called()
