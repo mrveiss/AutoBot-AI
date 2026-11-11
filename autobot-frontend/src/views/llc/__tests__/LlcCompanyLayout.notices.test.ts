@@ -43,6 +43,22 @@ function mountHost() {
 
 const callback = (n = 0): Cb => subscribe.mock.calls[n][1] as Cb
 
+/** Real wire shape: the publisher's envelope is the live event's `payload` (publisher.py). */
+function wire(event_type: string, fields: Record<string, unknown> = {}) {
+  return {
+    event_type,
+    payload: {
+      event_type,
+      company_id: 'c1',
+      entity_type: 'agent',
+      entity_id: 'e1',
+      payload: fields,
+      actor_id: null,
+      ts: '2026-01-01T00:00:00Z',
+    },
+  }
+}
+
 describe('LlcCompanyLayout company notices (#21045)', () => {
   afterEach(() => vi.useRealTimers())
 
@@ -62,22 +78,33 @@ describe('LlcCompanyLayout company notices (#21045)', () => {
   it('warns with the dedicated string for an unfiled recovery', () => {
     mountHost()
     expect(subscribe).toHaveBeenCalledWith('company:c1', expect.any(Function))
-    callback()({ event_type: 'heartbeat_missed', payload: { agent_id: 'a7', reason: 'recovery_unfiled' } })
+    callback()(wire('heartbeat_missed', { agent_id: 'a7', reason: 'recovery_unfiled' }))
     expect(notifyWarning).toHaveBeenCalledWith(
       'Agent a7 timed out and no recovery item could be filed',
     )
   })
 
+  it('does not dedupe alerts for different agents, but does for the same agent and reason', () => {
+    mountHost()
+    const fields = (agent_id: string) => ({ agent_id, reason: 'recovery_unfiled' })
+    callback()(wire('heartbeat_missed', fields('a1')))
+    callback()(wire('heartbeat_missed', fields('a2')))
+    callback()(wire('heartbeat_missed', fields('a1')))
+    expect(notifyWarning).toHaveBeenCalledTimes(2)
+    expect(notifyWarning).toHaveBeenCalledWith('Agent a1 timed out and no recovery item could be filed')
+    expect(notifyWarning).toHaveBeenCalledWith('Agent a2 timed out and no recovery item could be filed')
+  })
+
   it('uses the generic key for an unknown type', () => {
     mountHost()
-    callback()({ event_type: 'mystery_thing', payload: {} })
+    callback()(wire('mystery_thing'))
     expect(notifyInfo).toHaveBeenCalledWith('A company update arrived')
   })
 
   it('ignores heartbeat_ok and activity events', () => {
     mountHost()
-    callback()({ event_type: 'heartbeat_ok', payload: {} })
-    callback()({ event_type: 'llc:activity_created', payload: {} })
+    callback()(wire('heartbeat_ok'))
+    callback()(wire('llc:activity_created'))
     expect(notifyInfo).not.toHaveBeenCalled()
     expect(notifyWarning).not.toHaveBeenCalled()
     expect(notifyError).not.toHaveBeenCalled()
@@ -85,7 +112,7 @@ describe('LlcCompanyLayout company notices (#21045)', () => {
 
   it('maps budget.hard_stop to a sticky error', () => {
     mountHost()
-    callback()({ event_type: 'budget.hard_stop', payload: {} })
+    callback()(wire('budget.hard_stop'))
     expect(notifyError).toHaveBeenCalledTimes(1)
   })
 
@@ -101,16 +128,16 @@ describe('LlcCompanyLayout company notices (#21045)', () => {
 
   it('renders agent-less text and does not throw when agent_id is missing', () => {
     mountHost()
-    expect(() => callback()({ event_type: 'work_item.handoff', payload: {} })).not.toThrow()
+    expect(() => callback()(wire('work_item.handoff'))).not.toThrow()
     expect(notifyInfo).toHaveBeenCalledWith('A work item was handed over')
-    callback()({ event_type: 'heartbeat_missed', payload: { agent_id: 'a' } })
+    callback()(wire('heartbeat_missed', { agent_id: 'a' }))
     expect(notifyWarning).toHaveBeenCalledWith('Agent a missed its heartbeat')
   })
 
   it('does not leak the raw type for approval_* and sprint_* events', () => {
     mountHost()
-    callback()({ event_type: 'approval_requested', payload: {} })
-    callback()({ event_type: 'sprint_closed', payload: {} })
+    callback()(wire('approval_requested'))
+    callback()(wire('sprint_closed'))
     expect(notifyInfo).toHaveBeenCalledWith('An approval was updated')
     expect(notifyInfo).toHaveBeenCalledWith('A sprint was updated')
   })
@@ -118,9 +145,9 @@ describe('LlcCompanyLayout company notices (#21045)', () => {
   it('collapses a burst of identical events into one toast, then toasts again after the window', () => {
     mountHost()
     const windowMs = LLC_NOTICE_DEDUPE_MS
-    const ev = { event_type: 'budget.hard_stop', payload: { agent_id: 'a1' } }
+    const ev = wire('budget.hard_stop', { agent_id: 'a1' })
     for (let i = 0; i < 10; i++) callback()(ev)
-    callback()({ event_type: 'budget.hard_stop', payload: { agent_id: 'a2' } })
+    callback()(wire('budget.hard_stop', { agent_id: 'a2' }))
     expect(notifyError).toHaveBeenCalledTimes(2)
     vi.advanceTimersByTime(windowMs + 1)
     callback()(ev)
@@ -136,7 +163,7 @@ describe('LlcCompanyLayout company notices (#21045)', () => {
     ['work_item.handoff', 'info'],
   ])('%s renders at %s level', (type, level) => {
     mountHost()
-    callback()({ event_type: type, payload: { agent_id: 'a1' } })
+    callback()(wire(type, { agent_id: 'a1' }))
     const fns = { info: notifyInfo, warning: notifyWarning, error: notifyError }
     expect(fns[level as keyof typeof fns]).toHaveBeenCalledTimes(1)
     const msg = String(fns[level as keyof typeof fns].mock.calls[0][0])
@@ -145,7 +172,7 @@ describe('LlcCompanyLayout company notices (#21045)', () => {
 
   it('shows one sticky error for repeated company hard stops', () => {
     mountHost()
-    for (let i = 0; i < 5; i++) callback()({ event_type: 'budget.company_hard_stop', payload: {} })
+    for (let i = 0; i < 5; i++) callback()(wire('budget.company_hard_stop'))
     expect(notifyError).toHaveBeenCalledTimes(1)
     expect(notifyError).toHaveBeenCalledWith(
       'Budget exhausted: agents are stopped until the budget is raised',
