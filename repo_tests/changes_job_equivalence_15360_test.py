@@ -186,6 +186,12 @@ ALLOWED_ADDITIONS = {
             "INSTALL.md",
             "docker-compose.yml",
             "docker/frontend/Dockerfile",
+            # #21325: apt_retry_one_mechanism_21325_test reads the apt policy and wrapper, three workflows and the mirror fallback.
+            "docker/apt/*",
+            f"{WORKFLOWS}/clean-install.yml",
+            f"{WORKFLOWS}/hardened-smoke-test.yml",
+            ".github/actions/setup-python-suite/action.yml",
+            "scripts/ci/apt_fallback_mirror.sh",
             # #19868: proxy_upload_cap_one_home_19868_test.py reads it
             "docker/nginx/nginx-common.conf",
             "docker/nginx/nginx-locations.conf",
