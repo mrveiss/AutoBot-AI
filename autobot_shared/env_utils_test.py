@@ -322,3 +322,16 @@ def test_a_typo_is_announced(monkeypatch, caplog):
     with caplog.at_level(logging.WARNING):
         env_flag(_VAR, True)
     assert "Invalid" in caplog.text
+
+
+def test_env_registered_enforces_the_registered_range(monkeypatch):
+    from autobot_shared.env_utils import env_registered
+
+    name = "AUTOBOT_EVAL_LIVE_TIMEOUT_S"  # registered: default 300.0, range (10.0, 3600.0)
+    monkeypatch.delenv(name, raising=False)
+    assert env_registered(name, positive_finite=True) == 300.0
+    for raw, expected in (("5", 10.0), ("99999", 3600.0), ("120", 120.0), ("nan", 300.0), ("0", 300.0), ("x", 300.0)):
+        monkeypatch.setenv(name, raw)
+        assert env_registered(name, positive_finite=True) == expected, raw
+    monkeypatch.setenv("AUTOBOT_EVAL_SUBSTANTIVE_MIN_WORDS", "100000")
+    assert env_registered("AUTOBOT_EVAL_SUBSTANTIVE_MIN_WORDS") == 500

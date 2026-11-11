@@ -39,7 +39,7 @@ from knowledge.chunk_identity import carry_store_id, stamp_chunk_id
 from knowledge.platform_docs import PLATFORM_DOCS_GRANT, PLATFORM_DOCS_GRANT_VERSION
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from services.knowledge import doc_index_store_guard as store_guard
-from services.knowledge.doc_index_orphans import chunk_base_id, drop_collection, reindex_file
+from services.knowledge.doc_index_orphans import chunk_base_id, reindex_file
 from services.knowledge.doc_markdown_chunks import (
     _chunk_markdown,
     _extract_tags,
@@ -982,7 +982,7 @@ class DocIndexerService:
         if not self._initialized:
             if not await self.initialize():
                 return IndexResult(errors=["Failed to initialize"])
-        await drop_collection(self._client, self.COLLECTION_NAME)
+        self._client.delete_collection(self.COLLECTION_NAME)
         self._initialized = False
         self._collection = None
         return await self.index_all(force=True)

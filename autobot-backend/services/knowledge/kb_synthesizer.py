@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any, List
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.platform_docs import PLATFORM_DOCS_GRANT
-from knowledge.retrieval_invalidation import invalidates_retrieval_caches
 
 if TYPE_CHECKING:
     from services.knowledge.synthesis_schema_loader import CollectionConfig
@@ -107,7 +106,6 @@ class KBSynthesizer:
             )
         return self._named_collections[name]
 
-    @invalidates_retrieval_caches("synthesis_indexed")
     async def _index_documents(self, docs: List[Any], collection_name: str | None = None) -> None:
         """Persist synthesized SummaryPage dicts into ChromaDB.
 

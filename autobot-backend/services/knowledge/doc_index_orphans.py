@@ -15,7 +15,6 @@ from typing import Any, Callable, Iterable, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.chunk_identity import DOC_ID_LENGTH, doc_chunk_id
-from knowledge.retrieval_invalidation import invalidates_retrieval_caches
 
 logger = get_logger(__name__)
 
@@ -49,13 +48,6 @@ async def drop_stale_chunks(
     return len(stale)
 
 
-@invalidates_retrieval_caches("docs_collection_dropped")
-async def drop_collection(client: Any, name: str) -> None:
-    """Delete the docs collection; cached retrievals of its chunks are invalidated even if this raises (#20958)."""
-    await asyncio.to_thread(client.delete_collection, name)
-
-
-@invalidates_retrieval_caches("doc_indexed")
 async def reindex_file(
     collection: Any,
     index_chunk: Callable[..., bool],
