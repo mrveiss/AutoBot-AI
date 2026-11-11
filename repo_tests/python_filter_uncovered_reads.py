@@ -143,6 +143,7 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: uninstall guard (a fake /opt/autobot tree), a new bypass and not a real read.
 #: LOWERED 40 -> 39 by the train-81 CodeRabbit round: the filter now covers
 #: `docker/generate-secrets.sh`, which two guards really read (#17500, #18729).
+#: LOWERED 34 -> 32 by #21325 (the filter now covers the setup-python-suite action and hardened-smoke-test.yml).
 #: LOWERED 39 -> 38 by #19523: the filter now covers `.github/dependabot.yml`, which the
 #: dependabot coverage guards read; deleting a block's directory touches no .py file.
 MAX_UNCOVERED_READS = 32
