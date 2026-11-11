@@ -118,8 +118,11 @@ if [ "$MODE" = "--commit-msg" ]; then
   # Resolved beside the subject rule, which is already an absolute path.
   WORDING_PY="$(dirname "$SUBJECT_ERE_FILE")/outward_wording.py"
   [ -r "$WORDING_PY" ] || die "cannot read the wording check at lib/outward_wording.py"
-  command -v python3 >/dev/null 2>&1 || die "python3 not found -- cannot run lib/outward_wording.py"
-  python3 "$WORDING_PY" subject "$SUBJECT" || exit 1
+  # #21163: the one hook interpreter resolver, not whichever python3 is on PATH.
+  # shellcheck source=lib/hook-python.sh
+  . "$(dirname "$SUBJECT_ERE_FILE")/hook-python.sh" || die "cannot load the hook interpreter resolver at lib/hook-python.sh"
+  HOOK_PYTHON="$(resolve_repo_python)" || die "no supported Python -- cannot run lib/outward_wording.py"
+  "$HOOK_PYTHON" "$WORDING_PY" subject "$SUBJECT" || exit 1
   echo "lint-conventions: subject ok"; exit 0
 fi
 
