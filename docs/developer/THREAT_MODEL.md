@@ -134,12 +134,8 @@ refused `1008` before any RFB byte. Full reasoning is in that function's docstri
 
 ## 7. MCP `code` scope (code graph)
 
-**Boundary:** an MCP token holding the `code` scope vs. the code graph. The graph is not tagged by source, so the scope reads symbols, callers and paths from ALL indexed sources; it is admin-equivalent, like the admin-gated `/api/analytics/codebase/impact` route. Tokens are admin-minted and the scope is opt-in.
-**Canonical enforcement:** `_check_scope` in the MCP dispatch gates `code.*`; a token records no minting principal, so there is no call-time admin re-check.
-
-**Invariants**
-- `code.similar` authorizes as an ownerless principal: unowned, public and shared sources are readable; another owner's private source is refused.
-- Per-source filtering needs source-tagged graph nodes (tracked in #21010).
+**Boundary:** a token with the `code` scope vs. the code graph, which is not tagged by source: the scope reads symbols and callers from ALL indexed sources, like the admin-gated `/impact` route (#21010). Tokens record no minting principal, so there is no call-time admin re-check.
+**Invariant:** `code.similar` authorizes as an ownerless principal: unowned, public and shared sources are readable; another owner's private source is refused.
 
 ## Cross-cutting
 

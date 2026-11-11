@@ -70,6 +70,10 @@ def sample_records(commit: str | None = DEFAULT_COMMIT) -> list[tuple[str, dict]
     return records + ([provenance(commit)] if commit else [])
 
 
+#: Collection methods that mutate; touching one on the fake fails the test.
+_WRITE_METHODS = frozenset({"add", "upsert", "update", "delete", "modify"})
+
+
 def _matches(meta: dict, where: dict | None) -> bool:
     if not where:
         return True
@@ -93,7 +97,8 @@ class FakeGraphCollection:
         hits = [(i, m) for i, m in self._records if (ids is None or i in ids) and _matches(m, where)]
         return {"ids": [i for i, _ in hits], "metadatas": [m for _, m in hits]}
 
-    def _refuse_write(self, *_args: Any, **_kwargs: Any) -> None:
-        raise AssertionError("the code-graph read path attempted a write")
-
-    upsert = add = update = delete = modify = _refuse_write
+    def __getattr__(self, name: str) -> Any:
+        """Only reached for names the class does not define: a write method refuses, anything else is absent."""
+        if name in _WRITE_METHODS:
+            raise AssertionError("the code-graph read path attempted a write")
+        raise AttributeError(name)
