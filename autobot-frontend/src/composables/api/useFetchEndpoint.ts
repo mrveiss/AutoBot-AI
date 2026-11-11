@@ -35,6 +35,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 import { useApiResource } from '@/composables/useApiResource'
+import { hasSourceIdInUrl } from '@/utils/sourceIdInUrl'
 
 const logger = createLogger('useFetchEndpoint')
 
@@ -60,6 +61,15 @@ export interface UseFetchEndpointOptions<TRaw, TOut, Ctx = undefined> {
    * known recurring bug class there (#5111).
    */
   scopeToSource?: boolean
+  /**
+   * The route REQUIRES a `source_id` and answers 422 without one (#20513): with no
+   * source in the scoped URL, make no request and take the no-data path.
+   *
+   * Opt-in, and only meaningful with `scopeToSource: true`. Routes whose backend
+   * still accepts an optional source (`/api/quality/*`, `/api/code-generation/*`,
+   * `/api/reporting/*`, ...) leave it unset and are requested as before.
+   */
+  requireSource?: boolean
   /**
    * Reducer from raw JSON to the target data type.
    * Return `null` to indicate "no data" (leaves `data` as null without error).
@@ -227,6 +237,16 @@ export function useFetchEndpoint<TRaw, TOut, Ctx = undefined>(
       url = withSourceId(url)
     }
     url = appendQueryExtras(url, queryExtras)
+
+    // #20513: a route that requires `source_id` answers 422 without it. A call
+    // that declared so (`requireSource`) with no source selected has nothing to
+    // ask for, so it takes the no-data path instead of sending a request that is
+    // certain to fail. Every other scoped caller is requested as before.
+    if (scopeToSource && opts.requireSource && !hasSourceIdInUrl(url)) {
+      logger.debug(`No source selected; skipping ${label}`)
+      opts.onNoData?.(ctx)
+      return null
+    }
 
     const init: RequestInit = {
       method,

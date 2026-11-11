@@ -380,6 +380,7 @@ export function useCodebaseExport(deps: {
     {
       path: '/api/analytics/codebase/report',
       scopeToSource: true,
+      requireSource: true,
       parseResponse: async (r) => await r.text(),
       pickData: (raw) => raw,
       onSuccess: (content, _raw, ctx) => {
@@ -451,6 +452,7 @@ export function useCodebaseExport(deps: {
       {
         path: '/api/analytics/codebase/env-analysis/export',
         scopeToSource: true,
+        requireSource: true,
         pickData: (raw) => raw,
         onSuccess: (data) => {
           logger.info('Environment export: fetched full data', {

@@ -67,7 +67,7 @@ class TestWhereDedupRuns:
         rows = [_row("long_function"), _row("code_smell_long_method", HIGH)]
         p1, p2 = _patched(rows)
         with p1, p2:
-            out = stats_mod._fetch_problems_from_chromadb(_Collection(rows), None, source_root=Path("."))
+            out = stats_mod._fetch_problems_from_chromadb(_Collection(rows), None, source_id="s", source_root=Path("."))
         assert len(out) == 2
 
     @pytest.mark.asyncio
@@ -78,8 +78,7 @@ class TestWhereDedupRuns:
             p1,
             p2,
             patch.object(stats_mod, "get_code_collection", return_value=_Collection(rows)),
-            patch.object(stats_mod, "resolve_source_root", new=AsyncMock(return_value=None)),
-            patch.object(stats_mod, "resolve_git_repo_root", return_value="."),
+            patch.object(stats_mod, "resolve_scan_root", new=AsyncMock(return_value=Path("."))),
             patch.object(stats_mod, "index_state", return_value={"status": "success", "indexed": True}),
         ):
             body = json.loads(

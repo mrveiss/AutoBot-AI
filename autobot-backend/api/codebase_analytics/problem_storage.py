@@ -13,7 +13,7 @@ path, three call sites.
 would be a second name for one implementation.  Callers import them from here.
 """
 
-from api.codebase_analytics.source_scope import require_source_id
+from api.source_scope import require_source_id
 from autobot_shared.logging_manager import get_logger
 from utils.file_categorization import FILE_CATEGORY_CODE
 

@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Every caller of the source registry handles `RegistryUnavailable` on purpose (#17982).
 
-`get_source` / `get_default_source_id` used to return None when the registry
+`get_source` used to return None when the registry
 could not be read, which each caller read as "no such source". They raise now, so
 each caller either fails loudly with a clear status or degrades deliberately.
 """
@@ -17,7 +17,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from api.codebase_analytics.endpoints.shared import authorize_source_access, default_source_id
+from api.codebase_analytics.endpoints.shared import authorize_source_access
 from api.codebase_analytics.source_storage import RegistryUnavailable
 
 _DOWN = AsyncMock(side_effect=RegistryUnavailable("down"))
@@ -32,16 +32,6 @@ async def test_authorization_answers_503_for_a_fault_and_404_for_an_unknown_id()
         with pytest.raises(HTTPException) as unknown:
             await authorize_source_access("some-id", {"username": "u"})
     assert fault.value.status_code == 503 and unknown.value.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_a_handler_cannot_mistake_a_dead_registry_for_no_default_source():
-    with patch("api.codebase_analytics.source_storage.get_default_source_id", _DOWN):
-        with pytest.raises(HTTPException) as caught:
-            await default_source_id()
-    assert caught.value.status_code == 503
-    with patch("api.codebase_analytics.source_storage.get_default_source_id", AsyncMock(return_value=None)):
-        assert await default_source_id() is None, "a genuinely empty registry is still 'no default'"
 
 
 def test_the_app_level_handler_turns_an_unhandled_fault_into_503():
