@@ -19,7 +19,7 @@ import aiofiles
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
-from api.conversation_file_upload import validate_and_read_upload_file
+from api.conversation_file_upload import read_upload_file
 from api.files import get_security_layer
 from api.schemas_chat import (
     ConvFileInfoData,
@@ -142,14 +142,14 @@ async def upload_conversation_file(
     try:
         user_data = await _authorize_file_operation(request, session_id, "upload", existing_only=True)
         file_manager = _get_required_file_manager(request)
-        content = await validate_and_read_upload_file(file, file_manager, user_data.get("username"))
-
+        content, file_hash = await read_upload_file(file, file_manager, user_data.get("username"), session_id)
         file_info_dict = await file_manager.upload_file(
             session_id=session_id,
             filename=file.filename,
             content=content,
             user_id=user_data.get("username"),
             description=description,
+            file_hash=file_hash,
         )
         file_info = ConversationFileInfo(**file_info_dict)
 
