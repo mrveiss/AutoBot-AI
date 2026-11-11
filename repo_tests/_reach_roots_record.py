@@ -224,6 +224,7 @@ REACH_ROOTS = {
     "repo_tests/one_actor_id_15754_test.py": ("autobot-backend/llc",),
     "repo_tests/one_admin_gate_16333_test.py": ("autobot-backend",),
     "repo_tests/one_aead_core_17981_test.py": ("autobot_shared",),
+    "repo_tests/one_after_commit_queue_21107_test.py": ("autobot-backend", "autobot_shared"),
     "repo_tests/one_anthropic_message_split_16815_test.py": ("autobot-backend/llm_shared/providers",),
     "repo_tests/one_backoff_formula_15402_test.py": (
         "autobot-frontend/src",

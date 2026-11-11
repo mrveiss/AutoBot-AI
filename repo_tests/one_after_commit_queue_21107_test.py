@@ -23,15 +23,16 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint import _parse_cache as parse_cache
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 HOME = "autobot_shared/after_commit.py"
 #: A listener registration that names the after_commit event, on one line or the next two.
 _LISTENER = re.compile(r"""(?:event\.listen|listens_for)\(\s*[^)]*?["']after_commit["']""", re.S)
 _TEST_MARKERS = ("_test.py", "/tests/", "/test_", "conftest.py")
-#: Floor on files examined: a pathspec that stops matching must not read as a clean tree.
-_MIN_EXAMINED = 500
+_ROOTS = ("autobot-backend", "autobot_shared")
 
 FROZEN: dict[str, str] = {
     "autobot-backend/user_management/services/person_copy_sync.py": "waits on #21260 (process-wide listener on the Session class, not a per-session queue)",
@@ -88,7 +89,7 @@ def _names_event(arg: ast.expr, consts: dict[str, str]) -> bool:
 
 def listeners_in(text: str) -> int:
     try:
-        tree = ast.parse(text)
+        tree = parse_cache.parse(text)
     except SyntaxError:
         return len(_LISTENER.findall(text))
     modules, funcs, consts = _aliases(tree)
@@ -110,9 +111,25 @@ def sweep(root: Path, paths: list[str]) -> dict[str, int]:
     return found
 
 
-def _backend_sources() -> list[str]:
-    paths = tracked_paths(repo_root(), "autobot-backend/*.py") + tracked_paths(repo_root(), "autobot_shared/*.py")
+def _backend_sources(root: Path) -> list[str]:
+    try:
+        paths = tracked_paths(root, *(f"{prefix}/*.py" for prefix in _ROOTS))
+    except EmptyEnumeration:
+        return []
     return [p for p in paths if not _is_test(p)]
+
+
+#: Non-test backend and shared modules. Pinned: the declaration is new, so there is no base to compute from (#19676).
+#: 3,303 on 2026-11-11; floor sits mid-window (3,303 - 300 // 2). growth=300 follows the sibling backend-wide sweeps: ordinary
+#: backend work adds files with most commits (RATCHET_BASELINES, "does normal work move this number?").
+REACH = declare(
+    "one-after-commit-queue-21107",
+    discover=_backend_sources,
+    what="non-test backend and shared modules",
+    roots=_ROOTS,
+    floor=3153,
+    growth=300,
+)
 
 
 def test_control_string_is_caught() -> None:
@@ -148,14 +165,13 @@ def test_control_planted_site_fails(tmp_path: Path) -> None:
     assert sweep(tmp_path, ["planted.py"]) == {"planted.py": 1}
 
 
-def test_sweep_examined_the_backend() -> None:
-    assert len(_backend_sources()) >= _MIN_EXAMINED
-
-
 def test_home_registers_the_hook() -> None:
     assert HOME in sweep(repo_root(), [HOME])
 
 
 def test_no_second_after_commit_queue() -> None:
-    found = set(sweep(repo_root(), _backend_sources())) - {HOME}
+    root = repo_root()
+    files = REACH.examined(root)
+    found = set(sweep(root, files)) - {HOME}
+    REACH.completed(files)
     assert found == set(FROZEN), f"after_commit listeners outside {HOME}: {sorted(found ^ set(FROZEN))}"
