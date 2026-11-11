@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.user_management.login_eligibility import login_refusal
 from autobot_shared.user_management.user_service_errors import UserServiceError
 
 logger = get_logger(__name__)
@@ -67,27 +68,28 @@ class LastPlatformAdminRetry(LastPlatformAdminError):
 
 
 def _is_active_admin(row: Any) -> bool:
-    return bool(row.is_platform_admin and row.is_active and row.deleted_at is None)
+    return bool(row.is_platform_admin and login_refusal(row) is None)
 
 
 async def lock_platform_admin_rows(session: AsyncSession, user_model: Any, user_id: uuid.UUID) -> list[Any]:
-    """The active platform admins plus the target, locked in id order until the transaction ends."""
+    """The undeleted platform admins plus the target, locked in id order until the transaction ends.
+
+    Whether an admin is *active* is the one login rule (``login_eligibility.login_refusal``, applied by
+    ``_is_active_admin``), not a second ``is_active`` filter here (#18820); a deactivated admin is locked
+    along with the rest and then not counted.
+    """
     query = (
-        select(user_model.id, user_model.is_platform_admin, user_model.is_active, user_model.deleted_at)
+        select(user_model)
         .where(
             or_(
                 user_model.id == user_id,
-                and_(
-                    user_model.is_platform_admin.is_(True),
-                    user_model.is_active.is_(True),
-                    user_model.deleted_at.is_(None),
-                ),
+                and_(user_model.is_platform_admin.is_(True), user_model.deleted_at.is_(None)),
             )
         )
         .order_by(user_model.id)
         .with_for_update()
     )
-    return list((await session.execute(query)).all())
+    return list((await session.execute(query)).scalars().all())
 
 
 def _is_serialization_failure(exc: DBAPIError) -> bool:

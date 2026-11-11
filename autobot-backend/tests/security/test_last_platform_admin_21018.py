@@ -143,7 +143,7 @@ def test_the_production_query_locks_the_target_and_the_active_admins_in_one_id_o
 
     async def run(statement):
         captured.append(statement)
-        return MagicMock(all=lambda: [])
+        return MagicMock(scalars=lambda: MagicMock(all=lambda: []))
 
     session.execute = run
     asyncio.run(lock_platform_admin_rows(session, _User, uuid.uuid4()))
