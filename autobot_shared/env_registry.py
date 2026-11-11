@@ -39,23 +39,20 @@ def register_env_var(spec: EnvVarSpec) -> None:
 
 
 def env(name: str, default: Any = None) -> Any:
-    """Type-safe env var accessor that enforces registry membership.
-
-    Raises KeyError if *name* is not in REGISTRY — this is intentional:
-    unregistered vars are not allowed in production code.
-    """
+    """Type-safe env var accessor; KeyError if *name* is unregistered (intentional); enforces ``range``."""
     spec = REGISTRY.get(name)
     if spec is None:
         raise KeyError(f"Unregistered env var: {name}. " f"Add it to autobot_shared/env_registry.py before use.")
-    raw = os.getenv(name)
+    raw, fallback = os.getenv(name), spec.default if default is None else default
     if raw is None:
-        return spec.default if default is None else default
+        return fallback
     try:
-        if spec.type is bool:
-            return raw.lower() in ("1", "true", "yes", "on")
-        return spec.type(raw)
+        value = raw.lower() in ("1", "true", "yes", "on") if spec.type is bool else spec.type(raw)
     except (ValueError, TypeError):
-        return spec.default if default is None else default
+        return fallback
+    from autobot_shared.env_utils import within_range  # lazy: import block untouched (#20722)
+
+    return value if within_range(name, value, spec.range) else fallback
 
 
 # Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
