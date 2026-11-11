@@ -4,31 +4,72 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 #
-# apt-retry COMMAND [ARG...] -- run COMMAND, retrying with exponential backoff (#21325).
+# apt-retry COMMAND [ARG...] -- run COMMAND, retrying with capped exponential backoff (#21325).
 #
-# The one retry wrapper for every network-bound apt step in the install and image
-# builds (docker/*/Dockerfile, the Clean install workflow). apt's own
-# `Acquire::Retries` (docker/apt/80-autobot-resilience) retries a fetch three times
-# back to back; a resolver outage ("Temporary failure resolving", "Could not
-# resolve") outlasts that, so the whole command is retried here with a growing wait.
-# After the last attempt the command's own exit status is returned, and its apt error
-# is already on stderr from the final attempt.
+# The one retry wrapper for every network-bound apt step in the image builds and the
+# Clean install workflow. apt's own `Acquire::Retries` (docker/apt/80-autobot-resilience)
+# retries a fetch three times back to back; a resolver outage ("Temporary failure
+# resolving", "Could not resolve") can last a whole CI job, so the whole command is
+# retried here over minutes.
 #
-# APT_RETRY_ATTEMPTS (default 5) and APT_RETRY_DELAY_S (default 5, doubling after each
-# failure) are declared here and nowhere else.
+# - Window: APT_RETRY_ATTEMPTS (default 8) tries, APT_RETRY_DELAY_S (default 10) doubling
+#   after each failure up to APT_RETRY_MAX_DELAY_S (default 120): 10+20+40+80+120+120+120
+#   = 510 s between the first and last try. Declared here and nowhere else; a caller that
+#   wants a shorter window sets the variables in its environment.
+# - Before retrying an `apt-get install`/`upgrade`/`dist-upgrade`, `apt-get update` is re-run:
+#   a failed update leaves stale or missing lists, which is why the install then fails.
+# - On final failure the command's own exit status is returned, its last apt error is on
+#   stderr, and resolver diagnostics follow: the host(s) apt named, `getent hosts` for each,
+#   `resolvectl status` when present and APT_RETRY_MIRRORS_FILE (default
+#   /etc/apt/apt-mirrors.txt) when it exists. Each is bounded to a few dozen lines.
 
-attempts="${APT_RETRY_ATTEMPTS:-5}"
-delay="${APT_RETRY_DELAY_S:-5}"
+attempts="${APT_RETRY_ATTEMPTS:-8}"
+delay="${APT_RETRY_DELAY_S:-10}"
+max_delay="${APT_RETRY_MAX_DELAY_S:-120}"
+mirrors="${APT_RETRY_MIRRORS_FILE:-/etc/apt/apt-mirrors.txt}"
+err="$(mktemp)" || exit 1
+trap 'rm -f "$err"' EXIT
+
+refresh=0
+case " $* " in
+    *" apt-get install "* | *" apt-get upgrade "* | *" apt-get dist-upgrade "*) refresh=1 ;;
+esac
+
+diagnostics() {
+    echo "apt-retry: resolver diagnostics" >&2
+    hosts="$(sed -n "s/.*\(resolving\|resolve\) '\([^']*\)'.*/\2/p" "$err" | sort -u | head -n 5)"
+    for host in $hosts; do
+        echo "--- getent hosts ${host}" >&2
+        getent hosts "$host" >&2 || echo "(no answer, exit $?)" >&2
+    done
+    [ -n "$hosts" ] || echo "(apt named no host to resolve)" >&2
+    if command -v resolvectl >/dev/null 2>&1; then
+        echo "--- resolvectl status" >&2
+        resolvectl status 2>&1 | head -n 40 >&2
+    fi
+    if [ -f "$mirrors" ]; then
+        echo "--- ${mirrors}" >&2
+        head -n 20 "$mirrors" >&2
+    fi
+}
+
 n=1
 while :; do
-    "$@" && exit 0
+    "$@" 2>"$err"
     rc=$?
+    cat "$err" >&2
+    [ "$rc" -eq 0 ] && exit 0
     if [ "$n" -ge "$attempts" ]; then
         echo "apt-retry: giving up after ${n} attempts (last exit ${rc}): $*" >&2
+        diagnostics
         exit "$rc"
     fi
     echo "apt-retry: attempt ${n}/${attempts} failed (exit ${rc}): $*; retrying in ${delay}s" >&2
     sleep "$delay"
+    if [ "$refresh" -eq 1 ]; then
+        apt-get update >&2 || echo "apt-retry: apt-get update failed (exit $?); retrying the command anyway" >&2
+    fi
     delay=$((delay * 2))
+    [ "$delay" -le "$max_delay" ] || delay="$max_delay"
     n=$((n + 1))
 done

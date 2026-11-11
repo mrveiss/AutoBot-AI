@@ -145,35 +145,73 @@ def test_the_wrapper_is_executable_in_git() -> None:
     ), "COPY keeps the mode: a non-executable apt-retry fails every image build"
 
 
-# -- the wrapper's behaviour: a first-attempt resolver failure is survived ---------------------------
+# -- the wrapper's behaviour: stubbed apt-get / getent, no network ----------------------------------
+
+_ERR = "W: Failed to fetch http://mirror.invalid/dists/noble/InRelease  Temporary failure resolving 'mirror.invalid'"
 
 
-def _run_wrapper(tmp_path: Path, fail_times: int, attempts: int) -> tuple[subprocess.CompletedProcess, int]:
+def _run_wrapper(tmp_path: Path, fail_times: int, attempts: int, args=("apt-get", "update"), extra_env=None):
     sh = shutil.which("sh")
     if sh is None:
         pytest.skip("sh unavailable")
-    count = tmp_path / "count"
-    count.write_text("0", encoding="utf-8")
+    log = tmp_path / "calls"
+    log.write_text("", encoding="utf-8")
     stub = tmp_path / "apt-get"
     stub.write_text(
-        f'#!/bin/sh\nn=$(($(cat "{count}") + 1)); echo $n > "{count}"\n'
-        f'if [ "$n" -le {fail_times} ]; then echo "W: Temporary failure resolving mirror" >&2; exit 100; fi\n',
+        f'#!/bin/sh\necho "$*" >> "{log}"\nn=$(wc -l < "{log}")\n'
+        f'if [ "$1" != update ] && [ "$n" -le {fail_times} ]; then echo "{_ERR}" >&2; exit 100; fi\n'
+        f'if [ "$1" = update ] && [ "$n" -le {fail_times} ]; then echo "{_ERR}" >&2; exit 100; fi\n',
         encoding="utf-8",
     )
-    stub.chmod(0o755)
-    env = {"PATH": f"{tmp_path}:/usr/bin:/bin", "APT_RETRY_ATTEMPTS": str(attempts), "APT_RETRY_DELAY_S": "0"}
-    done = subprocess.run(
-        [sh, str(_HELPER), "apt-get", "update"], env=env, capture_output=True, text=True, timeout=60, check=False
-    )
-    return done, int(count.read_text(encoding="utf-8"))
+    getent = tmp_path / "getent"
+    getent.write_text(f'#!/bin/sh\necho "getent $*" >> "{log}.getent"\nexit 2\n', encoding="utf-8")
+    for s in (stub, getent):
+        s.chmod(0o755)
+    mirrors = tmp_path / "mirrors.txt"
+    mirrors.write_text("http://mirror.invalid/ubuntu/\tpriority:1\n", encoding="utf-8")
+    env = {
+        "PATH": f"{tmp_path}:/usr/bin:/bin",
+        "APT_RETRY_ATTEMPTS": str(attempts),
+        "APT_RETRY_DELAY_S": "0",
+        "APT_RETRY_MIRRORS_FILE": str(mirrors),
+        **(extra_env or {}),
+    }
+    done = subprocess.run([sh, str(_HELPER), *args], env=env, capture_output=True, text=True, timeout=60, check=False)
+    calls = log.read_text(encoding="utf-8").splitlines()
+    return done, calls
 
 
 def test_a_first_attempt_failure_passes_on_the_second(tmp_path: Path) -> None:
     done, calls = _run_wrapper(tmp_path, fail_times=1, attempts=3)
-    assert (done.returncode, calls) == (0, 2), done.stderr
+    assert (done.returncode, calls) == (0, ["update", "update"]), done.stderr
 
 
-def test_exhausted_attempts_fail_loudly_with_the_apt_error(tmp_path: Path) -> None:
+def test_an_install_retry_reruns_update_first(tmp_path: Path) -> None:
+    done, calls = _run_wrapper(tmp_path, fail_times=1, attempts=3, args=("apt-get", "install", "-y", "curl"))
+    assert done.returncode == 0, done.stderr
+    assert calls == ["install -y curl", "update", "install -y curl"], calls
+
+
+def test_an_update_retry_does_not_run_a_second_update(tmp_path: Path) -> None:
+    _, calls = _run_wrapper(tmp_path, fail_times=2, attempts=3)
+    assert calls == ["update"] * 3, calls
+
+
+def test_exhausted_attempts_fail_loudly_with_the_apt_error_and_resolver_diagnostics(tmp_path: Path) -> None:
     done, calls = _run_wrapper(tmp_path, fail_times=99, attempts=3)
-    assert (done.returncode, calls) == (100, 3)
-    assert "Temporary failure resolving mirror" in done.stderr and "giving up after 3 attempts" in done.stderr
+    assert done.returncode == 100 and len(calls) == 3
+    assert "Temporary failure resolving 'mirror.invalid'" in done.stderr
+    assert "giving up after 3 attempts" in done.stderr
+    assert "--- getent hosts mirror.invalid" in done.stderr
+    assert "http://mirror.invalid/ubuntu/" in done.stderr, "apt-mirrors.txt contents are missing"
+    assert (tmp_path / "calls.getent").read_text(encoding="utf-8").strip() == "getent hosts mirror.invalid"
+
+
+def test_the_backoff_is_capped_and_spans_minutes() -> None:
+    text = _HELPER.read_text(encoding="utf-8")
+    d = {k: int(v) for k, v in re.findall(r'(attempts|delay|max_delay)="\$\{APT_RETRY_\w+:-(\d+)\}"', text)}
+    total, delay = 0, d["delay"]
+    for _ in range(d["attempts"] - 1):
+        total += delay
+        delay = min(delay * 2, d["max_delay"])
+    assert total >= 300, f"the default window is {total}s; a CI resolver outage lasted a whole job"
