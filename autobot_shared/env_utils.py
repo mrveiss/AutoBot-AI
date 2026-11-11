@@ -142,6 +142,22 @@ def _clamped(name: str, value, min_v, max_v):
     return clamped
 
 
+def within_range(name: str, value, bounds: tuple | None) -> bool:
+    """True when numeric *value* lies in inclusive ``(min, max)`` *bounds* (``None`` = open end).
+
+    Out of range warns naming the variable and the range only; the value is
+    omitted because a registry spec carries no secret marker (#20722).
+    Non-numeric values and ``bounds=None`` are never checked.
+    """
+    if bounds is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return True
+    min_v, max_v = bounds
+    if (min_v is None or value >= min_v) and (max_v is None or value <= max_v):
+        return True
+    logger.warning("%s is outside [%s, %s]; using the default", name, min_v, max_v)
+    return False
+
+
 def env_float_clamped(
     name: str,
     default: float,
@@ -176,6 +192,22 @@ def env_float_clamped(
             logger.warning("%s=%r must be a positive finite number; using %s", name, raw, default)
             value = default
     return _clamped(name, value, min_v, max_v)
+
+
+def env_registered(name: str, *, positive_finite: bool = False):
+    """A registered numeric env var, read within the range its registry entry declares.
+
+    The default and the ``(min, max)`` come from ``REGISTRY``, so the registered range is the one enforced; a
+    malformed value falls back to the default and an out-of-range one is clamped, each with a warning.
+    ``positive_finite`` (floats only) also rejects NaN, infinity and non-positive values.
+    """
+    from autobot_shared.env_registry import REGISTRY
+
+    spec = REGISTRY[name]
+    low, high = spec.range or (None, None)
+    if spec.type is int:
+        return env_int_clamped(name, spec.default, low, high)
+    return env_float_clamped(name, spec.default, low, high, positive_finite=positive_finite)
 
 
 # Canonical truthy set for boolean env flags. Single source of truth so guards
