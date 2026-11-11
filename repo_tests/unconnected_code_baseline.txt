@@ -148,7 +148,6 @@ table:ssh_keys	#10603
 table:system_events	#10603
 table:validation_results	#10603
 route:autobot-backend/api/admin_ownerless_chat_sessions.py:POST /ownerless-chat-sessions/requests	#20904
-route:autobot-backend/api/conversation_files.py:GET /conversation/{session_id}/preview/{file_id}	#20906
 route:autobot-backend/api/knowledge_chunked_upload.py:DELETE /expired/{upload_id}	#20905
 route:autobot-backend/api/monitoring.py:GET /alerts/check	#19484
 route:autobot-backend/api/monitoring.py:GET /hardware/gpu	#19484

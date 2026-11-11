@@ -71,6 +71,7 @@
         mode: "0600"
         owner: autobot
         group: autobot
+      diff: false  # the file carries secrets (#20941)
       when:
         - this_service_id != 'unknown'
         - _pre_key_file.stat.exists | default(false)
