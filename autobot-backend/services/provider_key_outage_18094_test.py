@@ -62,7 +62,7 @@ async def test_an_outage_refuses_every_key_even_with_env_present(monkeypatch, ca
             pkv.resolve_provider_key(_NAME, _ENV_VALUE)
     assert pkv._vault_state == pkv.VAULT_UNREACHABLE
     assert "could not be reached" in str(exc.value)
-    assert "vault unreachable (ConnectionRefusedError)" in caplog.text
+    assert "vault unreachable (stage: open session, ConnectionRefusedError)" in caplog.text
     assert any(r.levelno == logging.ERROR for r in caplog.records)
     assert _ENV_VALUE not in caplog.text and _ENV_VALUE not in str(exc.value)
 
@@ -320,3 +320,23 @@ def test_tilde_reports_the_refusal_instead_of_using_env(monkeypatch) -> None:
 
     with pytest.raises(ProviderUnavailable, match="vault unavailable"):
         asyncio.run(provider.transcribe("/nonexistent.wav"))
+
+
+def test_the_retry_backoff_never_exceeds_its_registered_cap(monkeypatch) -> None:
+    """#21089 AC2: the delay between retries is bounded by REHYDRATE_BACKOFF_S * 20 however many fail."""
+    clock = [1000.0]
+    monkeypatch.setattr(init.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(pkv, "_vault_state", pkv.VAULT_UNREACHABLE)
+
+    def _always_down(vault):
+        vault._vault_state = vault.VAULT_UNREACHABLE
+        return []
+
+    monkeypatch.setattr(init, "_run_bounded", _always_down)
+    cap = init.REHYDRATE_BACKOFF_S * 20
+    for _ in range(12):
+        clock[0] = init._next_retry_at  # jump to the moment the retry is due
+        _REAL_HYDRATE()
+        assert init._backoff_s <= cap
+        assert init._next_retry_at - clock[0] <= cap
+    assert init._backoff_s == cap
