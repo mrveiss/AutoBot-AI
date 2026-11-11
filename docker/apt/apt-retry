@@ -108,7 +108,8 @@ case "$subcommand" in install | upgrade | dist-upgrade) refresh=1 ;; esac
 
 diagnostics() {
     echo "apt-retry: resolver diagnostics" >&2
-    hosts="$(sed -n -e "s/.*\(resolving\|resolve\) '\([^']*\)'.*/\2/p" -e 's/.*Unable to find the server at \([^ :]*\).*/\1/p' "$out" | sort -u | head -n 5)"
+    # Host names only: a traceback quotes source such as "Unable to find the server at %s", which is no host.
+    hosts="$(sed -n -e "s/.*\(resolving\|resolve\) '\([A-Za-z0-9][A-Za-z0-9.-]*\)'.*/\2/p" -e 's/.*Unable to find the server at \([A-Za-z0-9][A-Za-z0-9.-]*\)\([^A-Za-z0-9.-]\|$\).*/\1/p' "$out" | sort -u | head -n 5)"
     for host in $hosts; do
         echo "--- getent hosts ${host}" >&2
         getent hosts "$host" >&2 || echo "(no answer, exit $?)" >&2

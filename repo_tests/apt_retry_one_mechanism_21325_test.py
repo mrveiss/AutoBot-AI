@@ -456,6 +456,15 @@ def test_a_prompt_capture_costs_none_of_the_grace(tmp_path: Path) -> None:
     assert time.monotonic() - start < 10, "the wrapper waited out the grace although tee had exited"
 
 
+def test_diagnostics_name_only_real_hosts_never_a_quoted_format_string(tmp_path: Path) -> None:
+    """A traceback quotes `raise ...("Unable to find the server at %s" % host)`; that is not a host (CI run 43059667699)."""
+    msg = 'raise ServerNotFoundError(\\"Unable to find the server at %s\\" % conn.host)\\nhttplib2.error.ServerNotFoundError: Unable to find the server at api.example.invalid'
+    done, _ = _run_wrapper(tmp_path, fail_times=99, attempts=1, message=msg)
+    assert "--- getent hosts api.example.invalid" in done.stderr, done.stderr
+    assert "%s" not in done.stderr and "getent hosts %" not in done.stderr, done.stderr
+    assert (tmp_path / "calls.getent").read_text(encoding="utf-8").strip() == "getent hosts api.example.invalid"
+
+
 def test_the_backoff_is_capped_and_spans_minutes() -> None:
     text = _HELPER.read_text(encoding="utf-8")
     d = {k: int(v) for k, v in re.findall(r'(attempts|delay|max_delay)="\$\{APT_RETRY_\w+:-(\d+)\}"', text)}
