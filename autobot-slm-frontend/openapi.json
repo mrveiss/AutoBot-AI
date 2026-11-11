@@ -4462,20 +4462,20 @@
         "type": "object"
       },
       "EnrollmentSkip": {
-        "description": "One skipped node and why (the reason names the state).",
+        "description": "One skipped node and why.",
         "properties": {
           "node_id": {
             "title": "Node Id",
             "type": "string"
           },
           "reason": {
+            "default": "skipped: enrollment incomplete (last enrollment failed)",
             "title": "Reason",
             "type": "string"
           }
         },
         "required": [
-          "node_id",
-          "reason"
+          "node_id"
         ],
         "title": "EnrollmentSkip",
         "type": "object"
