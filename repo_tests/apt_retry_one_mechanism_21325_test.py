@@ -184,6 +184,22 @@ def test_clean_install_repoints_the_mirror_before_any_apt_use() -> None:
     assert "apt-fallback-mirror" in text and "action.yml" in text, "the mirror is not read from the action's default"
 
 
+def test_the_pre_added_ppa_is_the_one_the_installer_adds_and_comes_before_the_install_steps() -> None:
+    workflow = (_ROOT / ".github/workflows/clean-install.yml").read_text(encoding="utf-8")
+    installer = (_ROOT / "install.sh").read_text(encoding="utf-8")
+    ppas = re.findall(r"add_ppa_if_missing \"(ppa:[^\"]+)\"", installer)
+    preadded = re.findall(r"apt-retry add-apt-repository -y (ppa:\S+)", workflow)
+    assert preadded and set(preadded) <= set(ppas), (preadded, ppas)
+    first = workflow.index("apt-retry add-apt-repository")
+    assert workflow.index(_FALLBACK) < first < min(workflow.index(s) for s in _INSTALL_STEPS)
+
+
+def test_a_launchpad_lookup_failure_is_transient_and_its_host_is_reported(tmp_path: Path) -> None:
+    msg = "httplib2.error.ServerNotFoundError: Unable to find the server at api.example.invalid"
+    done, calls = _run_wrapper(tmp_path, fail_times=99, attempts=2, message=msg)
+    assert len(calls) == 2 and "--- getent hosts api.example.invalid" in done.stderr, done.stderr
+
+
 def test_the_fallback_ordering_check_fires_on_a_fixture() -> None:
     good = f"steps:\n  - run: sudo bash {_FALLBACK}\n  {_INSTALL_STEPS[0]}\n"
     late = f"steps:\n  {_INSTALL_STEPS[0]}\n  - run: sudo bash {_FALLBACK}\n"

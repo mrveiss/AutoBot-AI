@@ -46,7 +46,7 @@ mirrors="${APT_RETRY_MIRRORS_FILE:-/etc/apt/apt-mirrors.txt}"
 tee_grace_s="${APT_RETRY_TEE_GRACE_S:-5}"
 
 # The one list of transient signatures (extended regex, case-insensitive).
-TRANSIENT='Temporary failure resolving|Could not resolve|Could not connect|Cannot initiate the connection|Connection (failed|refused|reset|timed out)|Operation too slow|Timeout was reached|Reading from server failed|Hash Sum mismatch|File has unexpected size|Writing more data than expected|Undetermined Error|(Failed to fetch|Err:[0-9]+) .* 5[0-9][0-9] '
+TRANSIENT='Temporary failure resolving|Could not resolve|Could not connect|Cannot initiate the connection|Connection (failed|refused|reset|timed out)|Operation too slow|Timeout was reached|Reading from server failed|Unable to find the server|Hash Sum mismatch|File has unexpected size|Writing more data than expected|Undetermined Error|(Failed to fetch|Err:[0-9]+) .* 5[0-9][0-9] '
 
 for spec in "APT_RETRY_ATTEMPTS=$attempts=1" "APT_RETRY_DELAY_S=$delay=0" "APT_RETRY_MAX_DELAY_S=$max_delay=0" "APT_RETRY_TEE_GRACE_S=$tee_grace_s=0"; do
     min="${spec##*=}"
@@ -106,7 +106,7 @@ case "$subcommand" in install | upgrade | dist-upgrade) refresh=1 ;; esac
 
 diagnostics() {
     echo "apt-retry: resolver diagnostics" >&2
-    hosts="$(sed -n "s/.*\(resolving\|resolve\) '\([^']*\)'.*/\2/p" "$out" | sort -u | head -n 5)"
+    hosts="$(sed -n -e "s/.*\(resolving\|resolve\) '\([^']*\)'.*/\2/p" -e 's/.*Unable to find the server at \([^ :]*\).*/\1/p' "$out" | sort -u | head -n 5)"
     for host in $hosts; do
         echo "--- getent hosts ${host}" >&2
         getent hosts "$host" >&2 || echo "(no answer, exit $?)" >&2
