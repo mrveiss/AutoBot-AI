@@ -120,4 +120,59 @@ describe('useLoadingState', () => {
     await p
     expect(isLoading.value).toBe(false)
   })
+
+  describe('reset (#21159)', () => {
+    it('clears isLoading immediately while wraps are in flight', async () => {
+      const { isLoading, wrap, reset } = useLoadingState()
+      const d = deferred<number>()
+      const p = wrap(() => d.promise)
+      await nextTick()
+      expect(isLoading.value).toBe(true)
+      reset()
+      expect(isLoading.value).toBe(false)
+      d.resolve(1)
+      await expect(p).resolves.toBe(1)
+      expect(isLoading.value).toBe(false)
+    })
+
+    it('a pre-reset wrap does not decrement a post-reset wrap', async () => {
+      const { isLoading, wrap, reset } = useLoadingState()
+      const old = deferred<number>()
+      const oldP = wrap(() => old.promise)
+      reset()
+      const fresh = deferred<number>()
+      const freshP = wrap(() => fresh.promise)
+      await nextTick()
+      expect(isLoading.value).toBe(true)
+      old.resolve(1)
+      await oldP
+      expect(isLoading.value).toBe(true)
+      fresh.resolve(2)
+      await freshP
+      expect(isLoading.value).toBe(false)
+    })
+
+    it('a pre-reset wrap that rejects still propagates and leaves state untouched', async () => {
+      const { isLoading, wrap, reset } = useLoadingState()
+      const old = deferred<number>()
+      const oldP = wrap(() => old.promise)
+      reset()
+      const fresh = deferred<number>()
+      const freshP = wrap(() => fresh.promise)
+      old.reject(new Error('boom'))
+      await expect(oldP).rejects.toThrow('boom')
+      expect(isLoading.value).toBe(true)
+      fresh.resolve(1)
+      await freshP
+      expect(isLoading.value).toBe(false)
+    })
+
+    it('is a no-op when idle and keeps later wraps working', async () => {
+      const { isLoading, wrap, reset } = useLoadingState()
+      reset()
+      expect(isLoading.value).toBe(false)
+      await wrap(() => Promise.resolve(1))
+      expect(isLoading.value).toBe(false)
+    })
+  })
 })
