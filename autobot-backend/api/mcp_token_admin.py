@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/mcp", tags=["mcp", "admin", "mcp-tokens"])
 
-_VALID_SCOPES = {"kb", "memory", "agents"}
+_VALID_SCOPES = {"kb", "memory", "agents", "code"}
 _SECRET_BYTES = 32  # 256-bit entropy
 
 

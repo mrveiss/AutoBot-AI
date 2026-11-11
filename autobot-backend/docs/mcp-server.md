@@ -47,7 +47,7 @@ not a credential; the secret is.
 > For HTTP clients, prefer admin-minted tokens from the MCP token API over this
 > long-lived shared secret.
 
-Available scopes: `kb`, `memory`, `agents`.
+Available scopes: `kb`, `memory`, `agents`, `code`. `code` is opt-in (it is not in the default stdio scopes): it reads the cross-source code graph, as the admin-only `/api/analytics/codebase/impact` route does.
 
 Pass the full `<secret>:<scopes>` token as `Authorization: Bearer <token>` for HTTP.
 For stdio, set `AUTOBOT_MCP_TOKEN` (secret) and optionally `AUTOBOT_MCP_STDIO_SCOPES`.
@@ -66,6 +66,11 @@ For stdio, set `AUTOBOT_MCP_TOKEN` (secret) and optionally `AUTOBOT_MCP_STDIO_SC
 | `memory.verbatim_search` | `memory` | Search verbatim conversation chunks |
 | `agents.list` | `agents` | List all known agent IDs and descriptions |
 | `agents.diary_summary` | `agents` | Recent diary entries for an agent |
+| `code.resolve_symbol` | `code` | Symbol name (bare, `Class.method`, node id) to graph node ids; ambiguous names return every candidate |
+| `code.affected` | `code` | Who transitively calls a symbol (by name or node id), with the commit the graph was built at and a `stale` flag against `expected_commit` |
+| `code.similar` | `code` | Stored code patterns of one source similar to a snippet |
+
+The `code.*` tools are read-only and call the same functions as the HTTP routes (`GET /api/analytics/codebase/impact` with `node_id` or `symbol`, and `/patterns/similar`). Each list in a response is capped at 200 entries; an `omitted` field says how many were left out. `freshness` is `current`, `stale`, `unknown` (the index records no commit) or `unchecked` (no `expected_commit` given); only `current` means the index matches.
 
 ## Claude Code / Cline configuration
 
