@@ -19,7 +19,6 @@ from status_enums import NodeStatus, RoleStatus
 
 _ASSIGNED_STATUSES = ["active", "installed", "not_installed"]
 _NODE_DOWN_STATUSES = {NodeStatus.OFFLINE.value, NodeStatus.ERROR.value}
-# Role-counting set, not enrollment (see status_enums.NOT_FULLY_ENROLLED_STATUSES): adds maintenance/decommissioned.
 # Not serving and not failed: on its way in, planned downtime, or retired.
 _NODE_NOT_COUNTED_STATUSES = {
     NodeStatus.PENDING.value,

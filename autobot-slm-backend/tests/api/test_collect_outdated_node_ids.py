@@ -78,32 +78,14 @@ SLM_IP = "10.0.1.10"
 OTHER_IP = "10.0.1.20"
 
 
-SELF_NODE_ID = "slm-node"
-
-
 @pytest.fixture(autouse=True)
-def enrollment(monkeypatch):
-    """Stand-ins for the services.node_events helpers (stubbed in this unit env; the
-    real-ORM behaviour has its own test, #21036).
+def _no_enrollment_failures(monkeypatch):
+    """services.node_events is stubbed here; the enrollment skip (#21036) has its own real-ORM test."""
 
-    ``skip_ids`` are nodes whose enrollment state would skip them, unless exempt, like the
-    real split_enrollment_failed(db, node_ids, exempt). ``exempt_calls`` records the exempt
-    set the code under test passes. ``self_id`` is what get_slm_self_node_id resolves to.
-    """
-    state = types.SimpleNamespace(skip_ids=set(), exempt_calls=[], self_id=SELF_NODE_ID)
+    async def _passthrough(_db, node_ids):
+        return list(node_ids), []
 
-    async def _split(_db, node_ids, exempt=()):
-        exempt = set(exempt)
-        state.exempt_calls.append(exempt)
-        targets = [n for n in node_ids if n in exempt or n not in state.skip_ids]
-        return targets, [n for n in node_ids if n not in targets]
-
-    async def _self_id(_db, _external_url):
-        return state.self_id
-
-    monkeypatch.setattr("api.code_sync.split_enrollment_failed", _split)
-    monkeypatch.setattr("api.code_sync.get_slm_self_node_id", _self_id)
-    return state
+    monkeypatch.setattr("api.code_sync.split_enrollment_failed", _passthrough)
 
 
 def _job() -> UpdateAllJob:
@@ -313,55 +295,3 @@ async def test_a_and_b_mixed_fleet():
     assert "worker-stale" in result
     assert "slm-node" in result
     assert result.count("slm-node") == 1
-
-
-# ---------------------------------------------------------------------------
-# #21036: enrollment skip, self-node exemption
-# ---------------------------------------------------------------------------
-
-
-async def _collect(query_results: List[Any], slm_node: Any | None = None):
-    job = _job()
-    with (
-        patch("api.code_sync.settings") as mock_settings,
-        patch("api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)),
-    ):
-        mock_settings.external_url = f"http://{SLM_IP}"
-        db_svc = _db_service_mock(query_results=query_results, slm_node=slm_node)
-        return job, await _collect_outdated_node_ids(job, REMOTE_COMMIT, db_svc)
-
-
-@pytest.mark.asyncio
-async def test_self_node_is_exempt_and_collected_despite_enrollment_skip(enrollment):
-    """The self-node id is passed as exempt, so it is kept even when its state would skip it."""
-    self_node = _node(SELF_NODE_ID, SLM_IP, "oldsha", CodeStatus.OUTDATED.value)
-    worker = _node("worker-pending", OTHER_IP, "oldsha", CodeStatus.OUTDATED.value)
-    enrollment.skip_ids = {SELF_NODE_ID, "worker-pending"}
-
-    _job_, result = await _collect([worker, self_node], slm_node=self_node)
-
-    assert enrollment.exempt_calls == [{SELF_NODE_ID}]
-    assert SELF_NODE_ID in result
-    assert "worker-pending" not in result
-
-
-@pytest.mark.asyncio
-async def test_never_heartbeated_node_is_collected():
-    """A node that has never sent a heartbeat is not skipped (owner ruling, #21036)."""
-    never = _node("worker-new", OTHER_IP, None, CodeStatus.UNKNOWN.value)
-    never.last_heartbeat = None
-
-    _job_, result = await _collect([never])
-
-    assert "worker-new" in result
-
-
-@pytest.mark.asyncio
-async def test_enrollment_skipped_nodes_are_recorded_on_the_job(enrollment):
-    worker = _node("worker-failed", OTHER_IP, "oldsha", CodeStatus.OUTDATED.value)
-    enrollment.skip_ids = {"worker-failed"}
-
-    job, result = await _collect([worker])
-
-    assert result == []
-    assert job.enrollment_skipped_nodes == ["worker-failed"]
