@@ -32,6 +32,7 @@ from constants.ttl_constants import TIMEOUT_TASK_ANALYSIS, TTL_24_HOURS
 from tasks.analytics_tasks import run_pattern_analysis, run_pattern_summary_analysis
 from utils.celery_task_status import celery_result_to_status, store_latest_task_id
 
+from ..code_graph_queries import find_similar_code
 from .shared import scan_path_in_source, tag_source
 
 logger = get_logger(__name__)
@@ -787,24 +788,7 @@ async def search_similar_patterns_endpoint(
     """
     tag_source(response, source_id)
     try:
-        # Generate embedding for query code
-        # (Using the analyzer's embedding method)
-        from code_intelligence.pattern_analysis import CodePatternAnalyzer
-        from code_intelligence.pattern_analysis.storage import search_similar_patterns
-
-        analyzer = CodePatternAnalyzer()
-        query_embedding = await analyzer._generate_embedding(code)
-
-        # Search for similar patterns
-        results = await search_similar_patterns(
-            query_embedding=query_embedding,
-            pattern_type=pattern_type,
-            n_results=limit,
-            source_id=source_id,
-        )
-
-        return results
-
+        return await find_similar_code(code, source_id, pattern_type, limit)
     except Exception as e:
         logger.error("Similar pattern search failed: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
