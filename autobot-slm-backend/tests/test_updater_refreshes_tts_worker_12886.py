@@ -200,12 +200,18 @@ def test_tts_service_is_restarted_explicitly() -> None:
             if isinstance(inc, dict) and inc.get("name") == "tts-worker":
                 tts_idx = i
             svc = task.get("systemd") or task.get("ansible.builtin.systemd") or {}
+            shared = (task.get("vars") or {}) if "restart_unit.yml" in str(task) else {}  # #20772
             if (
-                isinstance(svc, dict)
-                and svc.get("name") == "autobot-tts-worker"
-                and svc.get("state") == "restarted"
-                and tts_idx is not None
+                tts_idx is not None
                 and restart_idx is None
+                and (
+                    (
+                        isinstance(svc, dict)
+                        and svc.get("name") == "autobot-tts-worker"
+                        and svc.get("state") == "restarted"
+                    )
+                    or shared.get("restart_unit_name") == "autobot-tts-worker"
+                )
             ):
                 restart_idx = i
         if tts_idx is None:
@@ -235,8 +241,11 @@ def test_tts_restart_does_not_fail_open() -> None:
 
     for task in _iter_mappings(playbook):
         svc = task.get("systemd") or task.get("ansible.builtin.systemd") or {}
-        if isinstance(svc, dict) and svc.get("name") == "autobot-tts-worker":
-            assert task.get("failed_when") is not False, (
+        shared = (task.get("vars") or {}) if "restart_unit.yml" in str(task) else {}  # #20772
+        if shared.get("restart_unit_name") == "autobot-tts-worker" or (
+            isinstance(svc, dict) and svc.get("name") == "autobot-tts-worker"
+        ):
+            assert task.get("failed_when") is not False and not shared.get("restart_unit_tolerate_failure"), (
                 "the TTS restart must not fail open — a swallowed restart failure "
                 "leaves the worker serving stale code with the update green"
             )

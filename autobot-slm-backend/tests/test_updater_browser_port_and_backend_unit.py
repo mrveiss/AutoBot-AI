@@ -92,11 +92,10 @@ def test_backend_unit_is_rendered_before_the_restart() -> None:
                 if inc.get("tasks_from") == "unit_only":
                     render_idx = i
             svc = task.get("systemd") or task.get("ansible.builtin.systemd") or {}
-            if (
-                isinstance(svc, dict)
-                and svc.get("name") == "autobot-backend"
-                and svc.get("state") == "restarted"
-                and restart_idx is None
+            shared = (task.get("vars") or {}) if "restart_unit.yml" in str(task) else {}  # #20772
+            if restart_idx is None and (
+                (isinstance(svc, dict) and svc.get("name") == "autobot-backend" and svc.get("state") == "restarted")
+                or shared.get("restart_unit_name") == "autobot-backend"
             ):
                 restart_idx = i
         if render_idx is None and restart_idx is None:
