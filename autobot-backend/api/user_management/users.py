@@ -40,6 +40,7 @@ from api.user_management.dependencies import (
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
+from autobot_shared.user_management.last_platform_admin import LastPlatformAdminError, refuse_last_platform_admin
 from autobot_shared.user_management.revocation_outcome import RENAME_REVOCATION_INCOMPLETE_MESSAGE, commit_or_503
 from autobot_shared.user_management.user_service_errors import (
     DuplicateUserError,
@@ -318,6 +319,8 @@ async def delete_user(
         )
     except SessionReassignError as exc:  # #20029: refused, so no session is left without an owner
         raise HTTPException(status_code=exc.status_code, detail=str(exc))
+    except LastPlatformAdminError as exc:  # #21018
+        raise await refuse_last_platform_admin(user_service.session, exc)
 
 
 # -------------------------------------------------------------------------
@@ -380,6 +383,8 @@ async def deactivate_user(
         )
     except SessionReassignError as exc:  # #20029
         raise HTTPException(status_code=exc.status_code, detail=str(exc))
+    except LastPlatformAdminError as exc:  # #21018
+        raise await refuse_last_platform_admin(user_service.session, exc)
 
 
 # Password Management: split into api/user_management/password_change.py (#15743) --
