@@ -7,7 +7,8 @@ import { ref } from 'vue'
 const rawRequest = vi.fn()
 const get = vi.fn()
 const del = vi.fn()
-vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ rawRequest, get, delete: del, put: vi.fn() }) }))
+const call = vi.fn()
+vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ rawRequest, get, delete: del, call, put: vi.fn() }) }))
 vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api' }))
 vi.mock('@/i18n', () => ({
   default: { global: { t: (key: string, params: Record<string, unknown> = {}) => `${key}|${JSON.stringify(params)}` } },
@@ -108,7 +109,7 @@ describe('preview races (#21337)', () => {
 })
 
 describe('bulk delete (#21337)', () => {
-  beforeEach(() => { get.mockReset(); del.mockReset() })
+  beforeEach(() => { get.mockReset(); del.mockReset(); call.mockReset() })
 
   it('sends every id to the session that asked, even after a switch mid-loop', async () => {
     const session = ref('s1')
@@ -116,11 +117,12 @@ describe('bulk delete (#21337)', () => {
     const f = useConversationFiles(session)
     await f.loadFiles()
     f.toggleFileSelection('a'); f.toggleFileSelection('b')
-    del.mockImplementation(async () => { session.value = 's2' })
+    call.mockImplementation(async () => { session.value = 's2' })
     await f.deleteSelectedFiles()
-    expect(del.mock.calls.map(([u]) => u)).toEqual([
-      '/api/conversation-files/conversation/s1/files/a',
-      '/api/conversation-files/conversation/s1/files/b',
+    const route = '/api/conversation-files/conversation/{session_id}/files/{file_id}'
+    expect(call.mock.calls).toEqual([
+      ['delete', route, { path: { session_id: 's1', file_id: 'a' } }],
+      ['delete', route, { path: { session_id: 's1', file_id: 'b' } }],
     ])
   })
 
@@ -129,7 +131,7 @@ describe('bulk delete (#21337)', () => {
     const f = useConversationFiles('s1')
     await f.loadFiles()
     f.toggleFileSelection('a'); f.toggleFileSelection('b')
-    del.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'not yours' } } }).mockResolvedValueOnce({})
+    call.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'not yours' } } }).mockResolvedValueOnce({})
     expect(await f.deleteSelectedFiles()).toBe(false)
     expect(f.error.value).toBe('not yours')
     expect(Array.from(f.selectedFileIds.value)).toEqual(['a'])

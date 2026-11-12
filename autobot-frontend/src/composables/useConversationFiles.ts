@@ -416,7 +416,7 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
     let failure: unknown = null
     for (const fid of ids) {
       try {
-        await api.delete<unknown>(`${getApiBase()}/conversation-files/conversation/${session}/files/${fid}`)
+        await api.call('delete', '/api/conversation-files/conversation/{session_id}/files/{file_id}', { path: { session_id: session, file_id: fid } })
         deleted.push(fid)
       } catch (err: unknown) {
         failure ??= err
