@@ -163,7 +163,7 @@ async def test_collect_outdated_drops_unenrolled_nodes_and_counts_them(maker, mo
     monkeypatch.setattr(code_sync, "select", select)
     monkeypatch.setattr(code_sync, "Node", _db.Node)
     monkeypatch.setattr(code_sync, "split_enrollment_failed", _events.split_enrollment_failed)
-    monkeypatch.setattr(code_sync, "get_slm_self_node_id", _events.get_slm_self_node_id)
+    monkeypatch.setattr(code_sync, "get_slm_self_node", _events.get_slm_self_node)
     monkeypatch.setattr(code_sync, "_compute_deps_changed", _no_deps)
     job = code_sync.UpdateAllJob(
         job_id="j-21036",
@@ -234,7 +234,7 @@ async def test_collect_outdated_never_drops_the_slm_self_node(maker, monkeypatch
     monkeypatch.setattr(code_sync, "select", select)
     monkeypatch.setattr(code_sync, "Node", _db.Node)
     monkeypatch.setattr(code_sync, "split_enrollment_failed", _events.split_enrollment_failed)
-    monkeypatch.setattr(code_sync, "get_slm_self_node_id", _events.get_slm_self_node_id)
+    monkeypatch.setattr(code_sync, "get_slm_self_node", _events.get_slm_self_node)
     monkeypatch.setattr(code_sync, "_compute_deps_changed", _no_deps)
     job = code_sync.UpdateAllJob(
         job_id="j-21036-self",
@@ -273,3 +273,101 @@ async def test_scheduled_run_never_drops_the_slm_self_node(maker, monkeypatch):
     ids = {n.node_id for n in nodes}
     assert "n-slm-self" in ids
     assert "n-pending" not in ids
+
+
+@pytest.mark.parametrize(
+    "external_url", ["", "no-host-here", "http://absent.example.test:8000"], ids=["empty", "hostless", "unmatched"]
+)
+async def test_slm_self_node_id_is_none_without_a_usable_or_matching_host(maker, external_url):
+    """Breaks if the helper raises (or returns a row) for an empty, hostless or unmatched URL."""
+    async with maker() as db:
+        assert await _events.get_slm_self_node_id(db, external_url) is None
+
+
+async def test_scheduled_run_with_no_identifiable_self_node_still_filters_unenrolled(maker, monkeypatch):
+    """Breaks if the scheduled path raises, or exempts every node, when the self-node lookup returns None."""
+    monkeypatch.setattr(_executor.settings, "external_url", "http://absent.example.test:8000", raising=False)
+    monkeypatch.setattr(_executor, "select", select)
+    monkeypatch.setattr(_executor, "Node", _db.Node)
+    schedule = types.SimpleNamespace(target_type="all", target_nodes=None)
+
+    async with maker() as db:
+        picked = {n.node_id for n in await _executor.get_schedule_target_nodes(db, schedule)}
+
+    assert picked == set(_EVENTS) - set(_SKIPPED)
+
+
+async def _add_nodes_sharing_an_address(maker, rows):
+    """Add (node_id, roles) rows that share one address, in order, so ``id`` follows the list."""
+    async with maker() as db:
+        for node_id, roles in rows:
+            db.add(
+                _db.Node(
+                    node_id=node_id,
+                    hostname=node_id,
+                    ip_address="shared.example.test",
+                    roles=roles,
+                    status="pending",
+                    last_heartbeat=datetime.now(timezone.utc),
+                    code_status="outdated",
+                )
+            )
+        await db.commit()
+
+
+@pytest.mark.parametrize(
+    "rows,expected",
+    [
+        ([("n-dup-first", []), ("n-dup-manager", ["slm-backend"])], "n-dup-manager"),
+        ([("n-dup-first", ["slm-frontend"]), ("n-dup-second", [])], "n-dup-first"),
+    ],
+    ids=["manager-role-wins", "lowest-id-fallback"],
+)
+async def test_slm_self_node_is_deterministic_when_rows_share_the_address(maker, rows, expected):
+    """Breaks if the lookup raises on duplicates (single-row assertion) or picks by anything but role then id."""
+    await _add_nodes_sharing_an_address(maker, rows)
+    async with maker() as db:
+        node = await _events.get_slm_self_node(db, "http://shared.example.test:8000")
+        assert node.node_id == expected
+        assert await _events.get_slm_self_node_id(db, "http://shared.example.test:8000") == expected
+
+
+async def test_scheduled_path_does_not_raise_when_rows_share_the_slm_address(maker, monkeypatch):
+    """Breaks if the scheduled path raises on duplicate-address rows or stops exempting the chosen self node."""
+    await _add_nodes_sharing_an_address(maker, [("n-dup-first", []), ("n-dup-manager", ["slm-backend"])])
+    monkeypatch.setattr(_executor.settings, "external_url", "http://shared.example.test:8000", raising=False)
+    monkeypatch.setattr(_executor, "select", select)
+    monkeypatch.setattr(_executor, "Node", _db.Node)
+    schedule = types.SimpleNamespace(target_type="all", target_nodes=None)
+
+    async with maker() as db:
+        picked = {n.node_id for n in await _executor.get_schedule_target_nodes(db, schedule)}
+
+    assert "n-dup-manager" in picked
+    assert "n-dup-first" not in picked
+
+
+async def test_update_all_path_keeps_the_chosen_self_node_when_rows_share_the_slm_address(maker, monkeypatch):
+    """Breaks if update-all drops the chosen self node (a raise there reads as nothing to update, #21334)."""
+    await _add_nodes_sharing_an_address(maker, [("n-dup-first", []), ("n-dup-manager", ["slm-backend"])])
+
+    class _Svc:
+        def session(self):
+            return maker()
+
+    async def _no_deps(_component):
+        return False
+
+    monkeypatch.setattr(code_sync.settings, "external_url", "http://shared.example.test:8000", raising=False)
+    monkeypatch.setattr(code_sync, "select", select)
+    monkeypatch.setattr(code_sync, "Node", _db.Node)
+    monkeypatch.setattr(code_sync, "split_enrollment_failed", _events.split_enrollment_failed)
+    monkeypatch.setattr(code_sync, "get_slm_self_node", _events.get_slm_self_node)
+    monkeypatch.setattr(code_sync, "_compute_deps_changed", _no_deps)
+    stages = [code_sync.UpdateAllStage(name=n) for n in ("github_fetch", "code_source_pull", "slm_self_update")]
+    job = code_sync.UpdateAllJob(job_id="j-21036-dup", stages=[*stages, code_sync.UpdateAllStage(name="fleet_nodes")])
+
+    ids = await code_sync._collect_outdated_node_ids(job, "a" * 40, _Svc())
+
+    assert "n-dup-manager" in ids
+    assert "n-dup-first" not in ids
