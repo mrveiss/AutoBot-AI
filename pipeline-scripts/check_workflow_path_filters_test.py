@@ -20,7 +20,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 GUARD = REPO_ROOT / "pipeline-scripts" / "check_workflow_path_filters.py"
 CANONICAL = Path(".github/filters/backend-python-paths.yml")
 CODE_QUALITY = Path(".github/filters/code-quality-paths.yml")
-CODE_QUALITY_WORKFLOW = Path(".github/workflows/code-quality.yml")
+GATE_PATHS = ".github/filters/gate-paths.yml"
+CI = ".github/workflows/ci.yml"
 
 
 def _sandbox(tmp_path: Path) -> Path:
@@ -50,20 +51,20 @@ def test_the_real_tree_passes(tmp_path: Path) -> None:
     # Presence, not absence-of-failure: a guard that scanned nothing is silent
     # in exactly the same way as a guard that scanned a clean tree.
     assert "inline path list(s) match their canonical set" in result.stdout
-    assert result.stdout.count("  OK     ") >= 7
+    assert result.stdout.count("  OK     ") >= 6
 
 
 def test_dropping_a_canonical_path_from_an_inline_copy_fails(tmp_path: Path) -> None:
     root = _sandbox(tmp_path)
-    _edit(root / ".github/workflows/api-wiring.yml", "      - 'autobot_shared/**/*.py'\n", "")
+    _edit(root / ".github/workflows/phase_validation.yml", "      - 'autobot_shared/**/*.py'\n", "")
     result = _run(root)
     assert result.returncode == 1, result.stdout
-    assert "api-wiring.yml" in result.stdout
+    assert "phase_validation.yml" in result.stdout
     assert "autobot_shared/**/*.py" in result.stdout
 
 
-def test_adding_to_the_canonical_set_reds_every_inline_consumer(tmp_path: Path) -> None:
-    """ "Adding a path in one place demonstrably affects all consumers"."""
+def test_adding_to_the_canonical_set_reds_every_copy(tmp_path: Path) -> None:
+    """ "Adding a path in one place demonstrably affects all consumers": two triggers and one filter key."""
     root = _sandbox(tmp_path)
     _edit(
         root / CANONICAL,
@@ -72,16 +73,31 @@ def test_adding_to_the_canonical_set_reds_every_inline_consumer(tmp_path: Path) 
     )
     result = _run(root)
     assert result.returncode == 1, result.stdout
-    assert result.stdout.count("  FAIL   ") == 6, result.stdout
+    assert result.stdout.count("  FAIL   ") == 3, result.stdout
+    assert "security_scope" in result.stdout
 
 
-def test_reintroducing_api_wiring_pull_request_paths_fails(tmp_path: Path) -> None:
+def test_dropping_a_canonical_path_from_the_security_scope_key_fails(tmp_path: Path) -> None:
+    """security.yml's `on.pull_request.paths` became a filter key; it must still carry the whole set."""
+    root = _sandbox(tmp_path)
+    text = (root / GATE_PATHS).read_text(encoding="utf-8")
+    head, _, tail = text.partition("security_scope:\n")
+    assert "  - 'autobot_shared/**/*.py'\n" in tail
+    (root / GATE_PATHS).write_text(
+        head + "security_scope:\n" + tail.replace("  - 'autobot_shared/**/*.py'\n", "", 1), encoding="utf-8"
+    )
+    result = _run(root)
+    assert result.returncode == 1, result.stdout
+    assert "filter 'security_scope' is missing" in result.stdout
+
+
+def test_reintroducing_ci_pull_request_paths_fails(tmp_path: Path) -> None:
     """#12934's deliberate asymmetry must not be tidied back into a deadlock."""
     root = _sandbox(tmp_path)
     _edit(
-        root / ".github/workflows/api-wiring.yml",
-        "    branches: [ release, main ]\n\nconcurrency:",
-        "    paths:\n      - 'autobot-backend/**/*.py'\n    branches: [ release, main ]\n\nconcurrency:",
+        root / CI,
+        "    types: [opened, synchronize, reopened, ready_for_review]\n",
+        "    types: [opened, synchronize, reopened, ready_for_review]\n    paths:\n      - 'autobot-backend/**/*.py'\n",
     )
     result = _run(root)
     assert result.returncode == 1, result.stdout
@@ -91,10 +107,18 @@ def test_reintroducing_api_wiring_pull_request_paths_fails(tmp_path: Path) -> No
 def test_a_stale_declaration_fails_rather_than_exempting_silently(tmp_path: Path) -> None:
     """An allowlist entry naming a moved file exempts nothing, silently."""
     root = _sandbox(tmp_path)
-    (root / ".github/workflows/api-wiring.yml").rename(root / ".github/workflows/api-wiring-renamed.yml")
+    (root / ".github/workflows/phase_validation.yml").rename(root / ".github/workflows/phase_validation_renamed.yml")
     result = _run(root)
     assert result.returncode == 1, result.stdout
     assert "the table is stale" in result.stdout
+
+
+def test_a_stale_filter_file_declaration_fails(tmp_path: Path) -> None:
+    root = _sandbox(tmp_path)
+    (root / GATE_PATHS).rename(root / ".github/filters/gate-paths-renamed.yml")
+    result = _run(root)
+    assert result.returncode == 1, result.stdout
+    assert "gate-paths.yml: declared in this guard's table but does not exist" in result.stdout
 
 
 def test_an_undeclared_consumer_of_the_filter_file_fails(tmp_path: Path) -> None:
@@ -135,21 +159,8 @@ def test_an_empty_canonical_set_is_fatal_not_a_pass(tmp_path: Path) -> None:
 
 # ── the second canonical set: `code-quality`'s path list (#15608) ────────────
 #
-# `code-quality` is the most heavily relied-upon required context in the repo,
-# and its list moved out of an inline `filters: |` block so the complement shim
-# publishing the same context could read it by reference. The `on.push.paths`
-# copy is the one GitHub gives no include mechanism for, so it is the one that
-# can still drift — silently, by shrinking the gate's coverage.
-
-
-def test_dropping_a_code_quality_path_from_the_push_trigger_fails(tmp_path: Path) -> None:
-    """The second registration must be REACHED, not merely declared."""
-    root = _sandbox(tmp_path)
-    _edit(root / CODE_QUALITY_WORKFLOW, "      - 'docs/**'\n", "")
-    result = _run(root)
-    assert result.returncode == 1, result.stdout
-    assert "code-quality.yml" in result.stdout
-    assert "docs/**" in result.stdout
+# Its `on.push.paths` copy went away with code-quality.yml (#18208), so what is left to police
+# is that the file stays a non-empty list and that a new consumer cannot arrive undeclared.
 
 
 def test_an_empty_code_quality_set_is_fatal_not_a_pass(tmp_path: Path) -> None:
@@ -184,17 +195,7 @@ def test_an_undeclared_consumer_of_the_code_quality_filter_fails(tmp_path: Path)
     assert "is not declared in INLINE_CONSUMERS" in result.stdout
 
 
-@pytest.mark.parametrize(
-    "workflow",
-    [
-        "phase_validation.yml",
-        "security.yml",
-        "ai-security-review.yml",
-        "startup-import-smoke.yml",
-        "api-wiring.yml",
-        "auto-fix-generated-types.yml",
-    ],
-)
+@pytest.mark.parametrize("workflow", ["phase_validation.yml", "auto-fix-generated-types.yml"])
 def test_every_declared_consumer_is_actually_reached(tmp_path: Path, workflow: str) -> None:
     """Each declared consumer must be one the guard really inspects.
 
@@ -214,86 +215,40 @@ def test_every_declared_consumer_is_actually_reached(tmp_path: Path, workflow: s
 # `verify-generated-types` is a required context whose real work self-skipped on
 # an autobot_shared-only change, while both generated api.ts files depend on
 # that tree. It keeps a per-product filter split the canonical set would erase,
-# so it is policed by SHARED_TREE_WATCHERS rather than by the superset check —
+# so it is policed by SHARED_TREE_WATCHERS rather than by the superset check --
 # and a second table is a second thing that can go quietly vacuous.
 
-VGT = ".github/workflows/verify-generated-types.yml"
 SHARED = "autobot_shared/**/*.py"
 
 
 @pytest.mark.parametrize("marker", ["types", "slm_types"])
-def test_dropping_the_shared_tree_from_a_dorny_filter_fails(tmp_path: Path, marker: str) -> None:
+def test_dropping_the_shared_tree_from_a_filter_key_fails(tmp_path: Path, marker: str) -> None:
     """Each per-product filter is reached individually, not as a pair."""
     root = _sandbox(tmp_path)
-    _edit(
-        root / VGT,
-        f"        {marker}:\n          - 'autobot",
-        f"        {marker}:\n          - 'REMOVED-MARKER-{marker}'\n          - 'autobot",
-    )
-    # Now delete only this filter's shared entry, leaving the sibling's intact.
-    text = (root / VGT).read_text(encoding="utf-8")
-    head, _, tail = text.partition(f"'REMOVED-MARKER-{marker}'\n")
-    tail = tail.replace(f"          - '{SHARED}'\n", "", 1)
-    (root / VGT).write_text(head + tail, encoding="utf-8")
+    text = (root / GATE_PATHS).read_text(encoding="utf-8")
+    head, _, tail = text.partition(f"\n{marker}:\n")
+    assert f"  - '{SHARED}'\n" in tail
+    (root / GATE_PATHS).write_text(head + f"\n{marker}:\n" + tail.replace(f"  - '{SHARED}'\n", "", 1), encoding="utf-8")
     result = _run(root)
     assert result.returncode == 1, result.stdout
-    assert f"dorny filter '{marker}' is missing" in result.stdout
+    assert f"filter '{marker}' is missing" in result.stdout
     assert SHARED in result.stdout
 
 
-def test_dropping_the_shared_tree_from_the_push_trigger_fails(tmp_path: Path) -> None:
-    root = _sandbox(tmp_path)
-    _edit(root / VGT, f"      - '{SHARED}'\n", "")
-    result = _run(root)
-    assert result.returncode == 1, result.stdout
-    assert "on.push.paths` is missing" in result.stdout
-
-
-def test_a_renamed_dorny_filter_key_fails_rather_than_exempting_silently(tmp_path: Path) -> None:
+def test_a_renamed_filter_key_fails_rather_than_exempting_silently(tmp_path: Path) -> None:
     """A restructure must strand the declaration loudly, not skip past it."""
     root = _sandbox(tmp_path)
-    _edit(root / VGT, "        slm_types:\n", "        slm_types_v2:\n")
+    _edit(root / GATE_PATHS, "\nslm_types:\n", "\nslm_types_v2:\n")
     result = _run(root)
     assert result.returncode == 1, result.stdout
     assert "the table is stale" in result.stdout
-
-
-def test_a_workflow_with_no_filter_source_is_fatal_not_a_pass(tmp_path: Path) -> None:
-    """ "Could not find the filters" and "the filters were fine" are opposite facts.
-
-    Neither shape is present: the `changes` job calls some other workflow, so
-    the registered file has no dorny step and no `_changes.yml` call (#15360).
-    """
-    root = _sandbox(tmp_path)
-    _edit(root / VGT, "uses: ./.github/workflows/_changes.yml", "uses: ./.github/workflows/other.yml")
-    result = _run(root)
-    assert result.returncode != 0
-    assert "has no path-filter source" in (result.stdout + result.stderr)
-
-
-def test_an_inline_dorny_step_is_still_a_filter_source(tmp_path: Path) -> None:
-    """The pre-#15360 shape keeps resolving, so the helper reads BOTH shapes."""
-    root = _sandbox(tmp_path)
-    text = (root / VGT).read_text(encoding="utf-8")
-    head, _, rest = text.partition("  changes:\n")
-    block, _, tail = rest.partition("\n  verify-types-run:")
-    filters = block.partition("      filters: |\n")[2]
-    inline = (
-        "    runs-on: ubuntu-latest\n    steps:\n"
-        "      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d\n"
-        "        with:\n          filters: |\n" + "".join("    " + ln + "\n" for ln in filters.splitlines())
-    )
-    (root / VGT).write_text(head + "  changes:\n" + inline + "\n  verify-types-run:" + tail, encoding="utf-8")
-    result = _run(root)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "filter 'types' watches the shared tree" in result.stdout
 
 
 def test_a_canonical_set_naming_no_shared_tree_is_fatal_not_a_pass(tmp_path: Path) -> None:
     """The derivation must die rather than assert nothing.
 
     Removing the shared tree from the canonical set leaves every inline copy a
-    superset, so the check above stays green — and every shared-tree assertion
+    superset, so the check above stays green -- and every shared-tree assertion
     would pass over an empty list. That is the exact "empty result reads as a
     clean result" shape, one table over.
     """
@@ -304,60 +259,28 @@ def test_a_canonical_set_naming_no_shared_tree_is_fatal_not_a_pass(tmp_path: Pat
     assert "would assert nothing" in (result.stdout + result.stderr)
 
 
-def test_two_dorny_steps_are_fatal_not_a_guess(tmp_path: Path) -> None:
-    """Returning the first of several blocks would silently check the wrong one."""
-    root = _sandbox(tmp_path)
-    text = (root / VGT).read_text(encoding="utf-8")
-    marker = "uses: ./.github/workflows/_changes.yml"
-    assert marker in text
-    extra = (
-        "  second-filter-job:\n"
-        "    runs-on: ubuntu-latest\n"
-        "    steps:\n"
-        "      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d\n"
-        "        with:\n"
-        "          filters: |\n"
-        "            other:\n"
-        "              - 'x/**'\n"
-        "  third-filter-job:\n"
-        "    uses: ./.github/workflows/_changes.yml\n"
-        "    with:\n"
-        "      filters: |\n"
-        "        other:\n"
-        "          - 'y/**'\n"
-    )
-    (root / VGT).write_text(text.replace("jobs:\n", "jobs:\n" + extra, 1), encoding="utf-8")
-    result = _run(root)
-    assert result.returncode != 0
-    assert "path-filter sources" in (result.stdout + result.stderr)
-
-
-def test_a_watcher_entry_with_empty_tuples_fails(tmp_path: Path) -> None:
+def test_a_watcher_entry_with_no_keys_fails(tmp_path: Path) -> None:
     """An entry that validates nothing must not ride on the other entries' totals.
 
     The global "zero checked" fallback only fires when the whole table is inert.
-    A single entry declared with empty tuples contributes nothing while the
-    others keep the totals non-zero, so the run would report success over a
-    workflow this table claims to police. Nothing a `.github/` mutation can
-    produce reaches that state, so the table itself is patched in a copy of the
-    guard — the same seam the library stub uses in the baseline guard's tests.
+    A single entry declared with no keys contributes nothing while the others keep
+    the totals non-zero, so the run would report success over a file this table
+    claims to police. Nothing a `.github/` mutation can produce reaches that
+    state, so the table itself is patched in a copy of the guard.
     """
     root = _sandbox(tmp_path)
     src = GUARD.read_text(encoding="utf-8")
-    old = '"verify-generated-types.yml": (("push",), ("types", "slm_types")),'
-    assert old in src, "SHARED_TREE_WATCHERS entry not found — the patch target moved"
+    old = '"gate-paths.yml": ("types", "slm_types"),'
+    assert old in src, "SHARED_TREE_WATCHERS entry not found -- the patch target moved"
     # A SECOND, valid entry is essential: with only the inert one, the global
     # "zero checked" fallback fires and the mutation would look killed for the
-    # wrong reason. The copy is byte-identical, so its filters really do pass.
-    shutil.copy(root / VGT, root / ".github/workflows/zz-vgt-copy.yml")
+    # wrong reason. The copy is byte-identical, so its keys really do pass.
+    shutil.copy(root / GATE_PATHS, root / ".github/filters/zz-gate-copy.yml")
     patched = root / "patched_guard.py"
     patched.write_text(
-        src.replace(
-            old,
-            '"verify-generated-types.yml": ((), ()),\n' '    "zz-vgt-copy.yml": (("push",), ("types", "slm_types")),',
-        ),
+        src.replace(old, '"gate-paths.yml": (),\n    "zz-gate-copy.yml": ("types", "slm_types"),'),
         encoding="utf-8",
     )
     result = subprocess.run([sys.executable, str(patched)], cwd=root, capture_output=True, text=True)
     assert result.returncode == 1, result.stdout + result.stderr
-    assert "would assert nothing about this workflow" in result.stdout
+    assert "would assert nothing about this file" in result.stdout
