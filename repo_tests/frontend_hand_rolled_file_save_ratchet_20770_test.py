@@ -49,7 +49,9 @@ _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 _ANCHOR_RECEIVER = re.compile(r"a|(?:\w*(?:anchor|link)\w*)", re.I)
 #: A same-file `const` / `let` / `var` binding, read for receivers the name cannot
 #: place: `const el = document.querySelector('a')` binds an anchor, `el` alone does not.
-_BINDING = re.compile(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([^;\n]+)")
+#: An optional type annotation between the name and `=` is skipped, so a typed
+#: declaration (`const el: HTMLAnchorElement = …`) still binds its initializer.
+_BINDING = re.compile(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;\n]*)?=\s*([^;\n]+)")
 #: Evidence, in a binding's initializer, that the variable holds an anchor element:
 #: the tag-a lookups. An id or selector of unknown target is not evidence (#21195).
 _ANCHOR_SOURCE = re.compile(
@@ -84,6 +86,21 @@ def _is_anchor(receiver: str | None, bindings: dict[str, str] | None = None) -> 
     return bool(_ANCHOR_SOURCE.search(init)) or bool(_ANCHOR_RECEIVER.fullmatch(init.strip()))
 
 
+def _binding_in_force(
+    declarations: list[tuple[int, str, str]], receiver: str | None, pos: int
+) -> dict[str, str] | None:
+    """The declaration of the receiver's root name that applies at `pos`: the nearest one before it.
+
+    A later redeclaration must not stand in for the value the use actually sees —
+    two functions each binding `el` read their own (#21195).
+    """
+    if receiver is None:
+        return None
+    name = receiver.replace("?.", ".").split(".")[0]
+    applicable = [init for start, decl, init in declarations if decl == name and start < pos]
+    return {name: applicable[-1]} if applicable else None
+
+
 def _sources(root: Path) -> list[Path]:
     """Every in-boundary `.vue` and `.ts` source of both apps."""
     found = []
@@ -101,10 +118,10 @@ def count(paths: list[Path]) -> int:
     total = 0
     for path in paths:
         text = _COMMENT_LINE.sub("", path.read_text(encoding="utf-8"))
-        bindings = dict(_BINDING.findall(text))
+        declarations = [(m.start(), m.group(1), m.group(2)) for m in _BINDING.finditer(text)]
         for match in _ASSIGNMENT.finditer(text):
             receiver = match.group("assign_receiver") or match.group("attr_receiver")
-            if _is_anchor(receiver, bindings):
+            if _is_anchor(receiver, _binding_in_force(declarations, receiver, match.start())):
                 total += 1
     return total
 
@@ -189,6 +206,27 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
             ),
         ]
         assert count(paths) == 0
+
+    def test_a_typed_binding_still_reads_its_initializer(self, tmp_path: Path) -> None:
+        paths = [
+            _w(
+                tmp_path,
+                "a/T1.ts",
+                "const el: HTMLAnchorElement = document.createElement('a')\nel.setAttribute('download', name)\n",
+            ),
+        ]
+        assert count(paths) == 1
+
+    def test_each_use_resolves_the_declaration_in_force_at_that_point(self, tmp_path: Path) -> None:
+        paths = [
+            _w(
+                tmp_path,
+                "a/R.ts",
+                "function save() { const el = document.createElement('a'); el.setAttribute('download', name) }\n"
+                "function other() { const el = document.createElement('div'); el.setAttribute('download', name) }\n",
+            ),
+        ]
+        assert count(paths) == 1
 
     def test_a_kit_call_a_comparison_a_comment_and_a_template_attribute_are_not_saves(self, tmp_path: Path) -> None:
         paths = [
