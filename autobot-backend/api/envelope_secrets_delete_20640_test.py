@@ -25,6 +25,7 @@ from fastapi.testclient import TestClient
 
 from api import envelope_secrets
 from api import secrets_audit_store_18648_test as base
+from api.secrets_guarded_delete import dependents_digest
 from services.envelope_secrets_service import SecretAccessError, SecretNotFoundError
 from testkit.fake_async_session import FakeAsyncSession
 
@@ -34,6 +35,7 @@ _USER = uuid.UUID("55555555-5555-4555-8555-555555555555")
 _SECRET = "11111111-1111-4111-8111-111111111111"
 _DEPENDENTS = [SimpleNamespace(dependent_kind="service", dependent_id="scheduler")]
 _LISTED = [{"dependent_kind": "service", "dependent_id": "scheduler"}]
+_DIGEST = dependents_digest(_DEPENDENTS)
 
 
 class _Coordinator:
@@ -108,6 +110,7 @@ def test_a_delete_with_dependents_is_refused_with_the_main_routes_409(route, sto
         "code": "secret_has_dependents",
         "message": "Dependents use this secret",
         "dependents": _LISTED,
+        "dependents_digest": _DIGEST,
     }
     assert coordinator.vault == {_SECRET}, "the secret must still be stored"
     assert client.session.commits == 0
@@ -125,7 +128,7 @@ def test_a_user_can_confirm_past_dependents_but_a_service_cannot(route, store) -
     kind, url = route
     coordinator = _Coordinator(_DEPENDENTS)
 
-    response, _ = _run(coordinator, url, store, "?confirm_dependents=true")
+    response, _ = _run(coordinator, url, store, f"?dependents_digest={_DIGEST}")
 
     if kind == "user":
         assert response.status_code == 204

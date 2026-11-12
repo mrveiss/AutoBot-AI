@@ -47,7 +47,10 @@ describe('HandoffModal (GH#10531)', () => {
         return Promise.resolve({ nodes: [{ node_id: 'agent-pk-1', name: 'Builder', is_human: false }] })
       }
       if (url.includes('/members')) {
-        return Promise.resolve([{ user_id: 'human-1', display_name: 'Reviewer Rita', role: 'member' }])
+        return Promise.resolve({
+          members: [{ user_id: 'human-1', display_name: 'Reviewer Rita', role: 'member' }],
+          viewer_can_manage: true, viewer_role: 'owner', viewer_grantable_roles: [],
+        })
       }
       return Promise.resolve([])
     })
