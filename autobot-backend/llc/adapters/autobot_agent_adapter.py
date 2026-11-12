@@ -176,9 +176,12 @@ class AutoBotAgentAdapter:
         Args:
             agent_config: Config dict with ``agent_class`` (required) and
                 ``agent_kwargs`` (optional, default ``{}``).
-            budget_session_factory: Zero-argument async callable that returns
-                an ``AsyncSession`` for ``BudgetService``.  When ``None``,
-                cost forwarding is skipped.
+            budget_session_factory: Zero-argument callable returning an async
+                context manager that yields an ``AsyncSession`` for
+                ``BudgetService`` and COMMITS on clean exit (#20883): the
+                service itself commits only on its hard-stop path.  The
+                heartbeat scheduler always passes one; when ``None`` (tests,
+                ad-hoc use) cost forwarding is skipped.
             run_log_store: Object with an ``async write(run_id, text)`` method.
                 When ``None``, captured log output is discarded after logging.
         """

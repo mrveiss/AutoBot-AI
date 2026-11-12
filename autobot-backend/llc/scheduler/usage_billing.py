@@ -12,11 +12,13 @@ can. A run whose billing is API, or unknown, is charged and keeps the hard stop 
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, AsyncContextManager
 
+from autobot_shared.db_session import async_session_scope
 from autobot_shared.logging_manager import get_logger
 from llc.adapters.base import BILLING_SUBSCRIPTION, AdapterRunStatus
 from llc.exceptions import BudgetExhausted
+from user_management.database import get_async_session_factory
 
 logger = get_logger(__name__)
 
@@ -39,3 +41,15 @@ async def ingest_run_cost(
         if not subscription:
             raise
         logger.warning("agent %s: subscription run crossed its token limit (%s); next dispatch is gated", agent_id, exc)
+
+
+def budget_session_scope() -> AsyncContextManager[Any]:
+    """The session a native AutoBot-agent run's cost is ingested in: commits on success (#20883).
+
+    ``AutoBotAgentAdapter`` forwards a run's usage itself and has no commit of its own;
+    ``BudgetService.ingest_cost_event`` commits only on its hard-stop path, so without this
+    scope the spend of a run that stays under its limit was rolled back on exit. A registry
+    run is charged by the scheduler's ``_ingest_adapter_usage`` instead; a run takes exactly
+    one of the two, so nothing is charged twice.
+    """
+    return async_session_scope(get_async_session_factory())

@@ -74,7 +74,7 @@ from .run_key import revoke_run_key as _revoke_run_key
 from .run_status import RunSuperseded, latest_run_in, mark_running
 from .run_workspace import acquire_run_workspace, release_run_workspace, release_workspace_best_effort
 from .schedule_members import agent_due_members, drop_unschedulable_member, reschedule_after_start
-from .usage_billing import ingest_run_cost
+from .usage_billing import budget_session_scope, ingest_run_cost
 
 logger = get_logger(__name__)
 
@@ -842,7 +842,7 @@ async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]
     # GH#8502: use run_blocking() so ProviderRateLimited propagates to _run_adapter
     # and triggers exponential-backoff recovery.  _run_adapter is already a
     # background task, so blocking here does not stall the poll loop.
-    adapter = AutoBotAgentAdapter(agent_config=adapter_config)
+    adapter = AutoBotAgentAdapter(agent_config=adapter_config, budget_session_factory=budget_session_scope)
     scoped = dict(context, agent_id=agent["agent_id"], company_id=str(agent.get("company_id") or ""))
     await adapter.run_blocking(scoped)
 
