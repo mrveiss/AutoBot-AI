@@ -30,6 +30,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.status_enums import TaskStatus
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
+from services.agent_metrics_model import AgentMetrics
 
 logger = get_logger(__name__)
 
@@ -101,83 +102,6 @@ class AgentTaskRecord:
             error_message=data.get("error_message"),
             metadata=data.get("metadata", {}),
         )
-
-
-@dataclass
-class AgentMetrics:
-    """Aggregated metrics for an agent"""
-
-    agent_id: str
-    agent_type: str
-    total_tasks: int = 0
-    completed_tasks: int = 0
-    failed_tasks: int = 0
-    cancelled_tasks: int = 0
-    timeout_tasks: int = 0
-    avg_duration_ms: float = 0
-    min_duration_ms: float = 0
-    max_duration_ms: float = 0
-    total_tokens_used: int = 0
-    error_rate: float = 0
-    success_rate: float = 0
-    last_activity: str | None = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary"""
-        return {
-            "agent_id": self.agent_id,
-            "agent_type": self.agent_type,
-            "total_tasks": self.total_tasks,
-            "completed_tasks": self.completed_tasks,
-            "failed_tasks": self.failed_tasks,
-            "cancelled_tasks": self.cancelled_tasks,
-            "timeout_tasks": self.timeout_tasks,
-            "avg_duration_ms": round(self.avg_duration_ms, 2),
-            "min_duration_ms": round(self.min_duration_ms, 2),
-            "max_duration_ms": round(self.max_duration_ms, 2),
-            "total_tokens_used": self.total_tokens_used,
-            "error_rate": round(self.error_rate, 2),
-            "success_rate": round(self.success_rate, 2),
-            "last_activity": self.last_activity,
-        }
-
-    # === Issue #372: Feature Envy Reduction Methods ===
-
-    def get_prometheus_labels(self) -> str:
-        """Get Prometheus label string for this agent (Issue #372 - reduces feature envy)."""
-        return f'agent_id="{self.agent_id}",agent_type="{self.agent_type}"'
-
-    def to_prometheus_tasks_line(self) -> str:
-        """Generate Prometheus line for total tasks (Issue #372 - reduces feature envy)."""
-        return f"autobot_agent_tasks_total{{{self.get_prometheus_labels()}}} {self.total_tasks}"
-
-    def to_prometheus_success_rate_line(self) -> str:
-        """Generate Prometheus line for success rate (Issue #372 - reduces feature envy)."""
-        return f"autobot_agent_success_rate{{{self.get_prometheus_labels()}}} {self.success_rate}"
-
-    def to_prometheus_error_rate_line(self) -> str:
-        """Generate Prometheus line for error rate (Issue #372 - reduces feature envy)."""
-        return f"autobot_agent_error_rate{{{self.get_prometheus_labels()}}} {self.error_rate}"
-
-    def to_prometheus_duration_line(self) -> str:
-        """Generate Prometheus line for avg duration (Issue #372 - reduces feature envy)."""
-        return f"autobot_agent_avg_duration_ms{{{self.get_prometheus_labels()}}} {self.avg_duration_ms}"
-
-    def to_csv_row(self) -> List[Any]:
-        """Generate CSV row for export (Issue #372 - reduces feature envy)."""
-        return [
-            self.agent_id,
-            self.agent_type,
-            self.total_tasks,
-            self.completed_tasks,
-            self.failed_tasks,
-            self.timeout_tasks,
-            self.success_rate,
-            self.error_rate,
-            self.avg_duration_ms,
-            self.total_tokens_used,
-            self.last_activity or "",
-        ]
 
 
 class AgentAnalytics(AsyncRedisClientMixin):
@@ -493,24 +417,47 @@ class AgentAnalytics(AsyncRedisClientMixin):
             logger.error("Failed to get all agents metrics: %s", e)
             return []
 
+    async def read_agent_histories(
+        self, agent_ids: List[str], limit: int = 100
+    ) -> Dict[str, List[Dict[str, Any]]] | None:
+        """Strict history read: agent_id -> records in ONE pipelined round trip.
+
+        ``None`` only when the store cannot be read; an unparsable record is logged and skipped.
+        """
+        redis = await self.get_redis()
+        if redis is None or not agent_ids:
+            return None if redis is None else {}
+        pipe = redis.pipeline()
+        for agent_id in agent_ids:
+            pipe.lrange(f"{self.AGENT_HISTORY_KEY}:{agent_id}", 0, limit - 1)
+        return {a: self._parse_history(a, raw) for a, raw in zip(agent_ids, await pipe.execute())}
+
+    @staticmethod
+    def _parse_history(agent_id: str, raw: List[Any]) -> List[Dict[str, Any]]:
+        records = []
+        for item in raw:
+            try:
+                records.append(json.loads(item))
+            except (TypeError, ValueError) as exc:
+                logger.warning("Skipping unparsable history record for %s: %s", agent_id, exc)
+        return records
+
+    async def read_agent_history(self, agent_id: str, limit: int = 100) -> List[Dict[str, Any]] | None:
+        """Strict single-agent history: ``None`` when the store cannot be read."""
+        histories = await self.read_agent_histories([agent_id], limit)
+        return None if histories is None else histories[agent_id]
+
     async def get_agent_history(self, agent_id: str, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get task history for an agent"""
+        """Get task history for an agent (``[]`` when the store cannot be read)."""
         try:
-            redis = await self.get_redis()
-            if redis is None:
-                logger.error(
-                    "Redis unavailable: agent history for %s degraded to empty (not genuinely no data)",
-                    agent_id,
-                )
-                return []
-            agent_key = f"{self.AGENT_HISTORY_KEY}:{agent_id}"
-            records = await redis.lrange(agent_key, 0, limit - 1)
-
-            return [json.loads(r) for r in records]
-
+            records = await self.read_agent_history(agent_id, limit)
         except Exception as e:
             logger.error("Failed to get agent history: %s", e)
             return []
+        if records is None:
+            logger.error("Redis unavailable: agent history for %s degraded to empty", agent_id)
+            return []
+        return records
 
     async def get_recent_tasks(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Get recent tasks across all agents"""
