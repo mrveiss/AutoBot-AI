@@ -193,3 +193,16 @@ def test_every_infrastructure_host_entry_uses_the_guarded_group_idiom() -> None:
     assert templated, "expected templated host entries"
     bad = [k for k, v in templated.items() if not pattern.match(str(v))]
     assert not bad, f"host entries not using the guarded group idiom: {bad}"
+
+
+def test_the_backend_vars_load_runs_for_every_tag_selection_that_reads_it() -> None:
+    """A consumer under a tag the include_vars lacks reads an undefined variable under `--tags <that tag>`."""
+    tasks = _play2_tasks()
+    load = _named(tasks, "Load shared backend env vars")
+    file = _ANSIBLE / "playbooks" / load["ansible.builtin.include_vars"]["file"]
+    keys = set(yaml.safe_load(file.read_text(encoding="utf-8")))
+    covered = set(load.get("tags", []))
+    consumers = [t for t in tasks if t is not load and any(re.search(rf"\{{\{{[^}}]*\b{k}\b", _dump(t)) for k in keys)]
+    assert consumers, "expected tasks that read the vars file's variables"
+    uncovered = [t["name"] for t in consumers if "always" not in covered and not set(t.get("tags", [])) <= covered]
+    assert not uncovered, f"tasks whose tags the vars load does not carry: {uncovered}"

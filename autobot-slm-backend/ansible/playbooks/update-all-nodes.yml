@@ -1191,12 +1191,13 @@
 
     # #21343: loaded BEFORE the key proposal below (it was after the DB-credential reads): `backend_port`
     # is the one the backend's unit and env render from, so the proposal's URL cannot disagree with the
-    # port the service listens on, and it exists on the registry-built inventory, which sets none.
+    # port the service listens on, and it exists on the registry-built inventory, which sets none. Its tags
+    # cover every task that reads it (the health probe and the key check run under `restart`).
     - name: "[PLAY 2] Backend | Load shared backend env vars (#2727)"
       ansible.builtin.include_vars:
         file: vars/backend-env.yml
       when: "'backend' in group_names"
-      tags: [backend, env]
+      tags: [backend, env, restart]
 
     # #20750: a mismatch is proposed for approval; an approved realign is claimed here and applied by
     # this run's render, restart and the verify step after "Wait for API to be ready".
@@ -1483,13 +1484,13 @@
 
     - name: "[PLAY 2] Backend | Wait for API to be ready"
       uri:
-        # uvicorn binds plain HTTP on localhost:8001 (backend_port); nginx holds
+        # uvicorn binds plain HTTP on localhost:<backend_port>; nginx holds
         # TLS on 443. There is NO 8443 listener (#957/#10378). Probe the direct
         # backend on the loopback — it does not depend on nginx (deployed after
         # this task) and needs no cert validation (#10650).
         #
         # #11455: run ON the backend node (no delegate_to) so 127.0.0.1 is the
-        # node's own loopback. 8001 is bound to localhost, so it is unreachable
+        # node's own loopback. backend_port is bound to localhost, so it is unreachable
         # from the controller — delegating to localhost only worked for a
         # co-located single-node backend and spun 42×10s against the wrong host
         # for any remote backend, aborting the rollout via any_errors_fatal.
