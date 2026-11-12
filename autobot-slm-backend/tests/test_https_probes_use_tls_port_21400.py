@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from autobot_shared.ssot_config import config
-from services.inventory_builder import _build_hostvars, build_registry_inventory
+from services.inventory_builder import build_registry_inventory
 
 _ANSIBLE = Path(__file__).resolve().parents[1] / "ansible"
 _PORT = re.compile(r"\bbackend_port\b")
@@ -51,8 +51,16 @@ def test_no_port_is_carried_per_node_so_the_all_vars_never_shadow_a_node_value()
     node-level value the ``all`` vars could override. If a per-node backend port is ever added, it lands in
     host vars and wins by precedence; this test then fails and must be updated with it.
     """
+    # The stand-in carries every attribute the builder reads for a node (node_id, ip_address, ssh_user,
+    # ssh_port, roles, detected_roles), the way tests/services/test_inventory_builder_node_roles.py builds one.
     node = SimpleNamespace(
-        node_id="n1", ip_address="192.0.2.10", ssh_user="autobot", ssh_port=22, roles=["backend"], detected_roles=[]
+        node_id="n1",
+        ip_address="192.0.2.10",
+        ssh_user="autobot",
+        ssh_port=22,
+        roles=["backend"],
+        detected_roles=[],
     )
-    hostvars = _build_hostvars(node, lambda _ip: False)
+    hostvars = build_registry_inventory([node], lambda _ip: False)["all"]["hosts"]["n1"]
+    assert hostvars["ansible_host"] == "192.0.2.10"
     assert not {k for k in hostvars if "port" in k} - {"ansible_port"}
