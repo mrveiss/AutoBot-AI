@@ -1,4 +1,4 @@
-// apt settings for every image build (#16291)
+// apt settings for every image build (#16291, #21325)
 //
 // AutoBot - AI-Powered Automation Platform
 // Copyright 2025-2026 mrveiss
@@ -6,7 +6,9 @@
 //
 // Each Dockerfile stage that runs apt COPYs this into /etc/apt/apt.conf.d/
 // before its first `apt-get update`, so the setting is defined once, here,
-// rather than on six command lines.
+// rather than on six command lines. apt has no delay between its own retries:
+// the backoff lives in
+// docker/apt/apt-retry, which wraps the apt command lines themselves.
 //
 // Without it, `apt-get update` exits 0 when an index fails to download ("Some
 // index files failed to download. They have been ignored"). The build then
@@ -15,6 +17,12 @@
 
 // Retry a failed fetch before giving up on it.
 Acquire::Retries "3";
+
+// Give up on a stalled connection instead of waiting out the default (120 s per
+// attempt), so a dead mirror costs seconds and the retries below get used (#21325).
+// Both keys exist in apt 2.x on jammy, noble and bookworm (apt.conf(5)).
+Acquire::http::Timeout "30";
+Acquire::https::Timeout "30";
 
 // Then make the failure fatal at `apt-get update`, naming the URL. This is the
 // key `apt-get update --error-on=any` sets (apt-get(8), jammy and bookworm).

@@ -34,7 +34,13 @@
     <p v-if="!companyId" class="members-state">{{ t('llcMembers.noCompany') }}</p>
 
     <template v-else>
-      <BaseAlert variant="error" v-if="errorMessage" :message="errorMessage" class="members-error" dismissible :dismiss-label="t('common.dismiss')" />
+      <BaseAlert variant="error" v-if="errorMessage" :message="errorMessage" class="members-error" dismissible :dismiss-label="t('common.dismiss')">
+        <template v-if="!standingKnown" #actions>
+          <BaseButton variant="secondary" size="sm" data-testid="members-retry" @click="fetchMembers()">{{ t('common.retry') }}</BaseButton>
+        </template>
+      </BaseAlert>
+
+      <p v-if="members.length > 0 && !standingKnown && !isLoading" class="members-hint" data-testid="members-stale">{{ t('llcMembers.staleRows') }}</p>
 
       <p v-if="isLoading" class="members-state">{{ t('llcMembers.loading') }}</p>
 
@@ -78,7 +84,7 @@
             variant="error"
             size="sm"
             :loading="pendingUserId === row.user_id"
-            :disabled="pendingUserId !== null"
+            :disabled="pendingUserId !== null || !standingKnown"
             @click="confirmRemove(row as unknown as Member)"
           >
             {{ t('llcMembers.remove') }}
@@ -94,7 +100,11 @@
       :title="t('llcMembers.addModalTitle')"
       size="md"
     >
-      <BaseAlert variant="error" v-if="addError" :message="addError" class="members-error" dismissible :dismiss-label="t('common.dismiss')" />
+      <BaseAlert variant="error" v-if="addError" :message="addError" class="members-error" dismissible :dismiss-label="t('common.dismiss')">
+        <template v-if="!standingKnown" #actions>
+          <BaseButton variant="secondary" size="sm" data-testid="members-retry" @click="fetchMembers()">{{ t('common.retry') }}</BaseButton>
+        </template>
+      </BaseAlert>
 
       <div class="members-form">
         <div class="members-field">
@@ -127,7 +137,10 @@
               {{ roleLabel(role) }}
             </option>
           </select>
-          <p v-if="!canAdd" class="members-hint">{{ t('llcMembers.addNotAllowed') }}</p>
+          <p v-if="!canAdd" class="members-hint">
+            {{ standingKnown ? t('llcMembers.addNotAllowed') : t('llcMembers.accessUnconfirmed') }}
+            <BaseButton v-if="!standingKnown" variant="secondary" size="sm" data-testid="members-add-retry" @click="fetchMembers()">{{ t('common.retry') }}</BaseButton>
+          </p>
         </div>
       </div>
 
@@ -266,6 +279,7 @@ async function submitAdd(): Promise<void> {
 }
 
 async function confirmRemove(member: Member): Promise<void> {
+  if (!standingKnown.value) return
   if (!window.confirm(t('llcMembers.confirmRemove', { name: member.display_name }))) return
   await removeMember(member)
 }

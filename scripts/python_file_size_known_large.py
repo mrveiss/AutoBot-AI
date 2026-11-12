@@ -82,7 +82,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1119,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 744,
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 695,  # #13602: sanitised traversal log
-    "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
+    "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 794,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 647,
     "autobot-backend/api/conversation_files.py": 916,
@@ -126,7 +126,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3257,
     "autobot-backend/api/schemas_knowledge.py": 5113,
-    "autobot-backend/api/schemas_system.py": 4175,  # #18734 4345 -> 4176; #17731 -> 4175
+    "autobot-backend/api/schemas_system.py": 4117,  # #18734 -> 4176; #17731 -> 4175; #21136 -> 4117
     "autobot-backend/api/schemas_workflows.py": 2823,
     "autobot-backend/api/secrets.py": 1142,  # #20557 (was 1145); #19476; vault writes: secrets_system_vault.py
     "autobot-backend/api/security_assessment.py": 913,
@@ -255,7 +255,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llm_shared/optimization/layer_inference_test.py": 715,
     "autobot-backend/llm_shared/tests/test_provider_auth.py": 1145,
     "autobot-backend/markdown_reference_system.py": 707,
-    "autobot-backend/mcp_server/autobot_server.py": 778,
+    "autobot-backend/mcp_server/autobot_server.py": 756,
     "autobot-backend/mcp_server/mcp_security_test.py": 812,
     "autobot-backend/media/link/pipeline_test.py": 963,
     "autobot-backend/memory/manager.py": 979,

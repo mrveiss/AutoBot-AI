@@ -19,7 +19,7 @@ import { ref } from 'vue'
 import en from '@/i18n/locales/en.json'
 
 // #20682: the attach/detach controls show only to an owner/admin, whom the members list reports.
-const ADMIN_MEMBERS = [{ user_id: 'u1', display_name: 'Ada', role: 'owner', viewer_can_manage: true }]
+const ADMIN_MEMBERS = { members: [{ user_id: 'u1', display_name: 'Ada', role: 'owner' }], viewer_can_manage: true }
 
 const get = vi.fn()
 const post = vi.fn()

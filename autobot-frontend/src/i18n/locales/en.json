@@ -118,7 +118,17 @@
     "conversationFiles": {
       "createFailed": "Failed to create file",
       "saveFailed": "Save failed",
-      "copyFailed": "Copy failed"
+      "copyFailed": "Copy failed",
+      "noSession": "No session ID provided",
+      "noFilesSelected": "No files selected",
+      "missingParameters": "Missing session ID or file ID",
+      "loadFailed": "Failed to load files",
+      "deleteFailed": "Failed to delete file",
+      "downloadFailed": "Download failed",
+      "fileNotFound": "File not found",
+      "previewFailed": "Preview failed",
+      "renameFailed": "Rename failed",
+      "readFailed": "Failed to read file"
     },
     "contextWindow": {
       "ariaLabel": "{used} of {max} tokens used",
@@ -203,6 +213,11 @@
       "loadingFiles": "Loading files...",
       "aiGenerated": "AI Generated",
       "preview": "Preview",
+      "previewEmpty": "This file is empty",
+      "closePreview": "Close preview",
+      "previewLoading": "Loading preview...",
+      "previewTruncated": "Showing the start of this file. Download it to see the rest.",
+      "previewContentLabel": "Contents of {name}",
       "download": "Download",
       "rename": "Rename",
       "duplicate": "Duplicate",
@@ -425,6 +440,18 @@
       "statusFailed": "Failed to send",
       "confirmDelete": "Delete this message? This action cannot be undone.",
       "thinkingUsed": "Thinking used"
+    },
+    "stallQuestion": {
+      "title": "The assistant needs your input",
+      "answerLabel": "Your answer",
+      "placeholder": "Tell the assistant how to proceed",
+      "send": "Send answer",
+      "stop": "Stop here",
+      "answered": "You answered: {answer}",
+      "stopped": "You chose to stop here.",
+      "failed": "Your answer could not be sent. Please try again.",
+      "blocked": "Your answer was blocked by the content policy. Please reword it and try again.",
+      "stale": "This question is no longer waiting for an answer. Reload the chat to see its current state."
     },
     "approval": {
       "autoApproved": "Auto-Approved",
@@ -1205,6 +1232,7 @@
         "testCoverage": "Test Coverage",
         "codeDuplicates": "Code Duplicates",
         "technicalDebt": "Technical Debt",
+        "notAvailable": "Not available",
         "noMetrics": "No code quality metrics available."
       },
       "performance": {
@@ -2451,6 +2479,7 @@
       "testCoverage": "Test Coverage",
       "codeDuplicates": "Code Duplicates",
       "technicalDebt": "Technical Debt",
+      "notAvailable": "Not available",
       "noQualityMetrics": "No quality metrics available",
       "performanceMetrics": "Performance Metrics",
       "efficiency": "Efficiency",
@@ -4735,6 +4764,8 @@
       "stepApprovalSkip": "Skip step",
       "stepApproveFailed": "Could not confirm the step was approved; check the workflow status before trying again",
       "stepStatusRefreshFailed": "Your answer was sent, but the step status could not be refreshed; it will update when the connection recovers",
+      "stepRetryStillWaiting": "The server refused your retry and the step is still waiting for approval; it stays locked while the status is re-checked",
+      "stepLockReleased": "The step is still waiting for approval after the refused retry; you can answer it again",
       "stepSkipFailed": "Could not confirm the step was skipped; check the workflow status before trying again",
       "stepRejectedByJudge": "Step refused before it ran: {reason}",
       "controlRefused": "Refused: only an administrator or the workflow's owner may control it",
@@ -4919,6 +4950,7 @@
   },
   "agent": {
     "title": "Agents",
+    "systemActor": "System",
     "status": "Agent Status",
     "config": "Agent Configuration",
     "orchestrator": "Orchestrator",
@@ -7459,6 +7491,7 @@
       "uptime": "Uptime",
       "success": "Success",
       "recentTasks": "Recent Tasks",
+      "noRecentTasks": "No recent tasks",
       "detailsBtn": "Details",
       "pauseBtn": "Pause",
       "liveActivityFeed": "Live Activity Feed",
@@ -8313,6 +8346,7 @@
     "llcUnassigned": "Unassigned",
     "llcAssign": "Assign",
     "llcHumans": "People",
+    "llcPeopleLoadFailed": "The company's agents and people could not be loaded, so nobody can be chosen right now.",
     "llcAgents": "Agents",
     "llcPortfolios": "Portfolios",
     "llcTimeline": "Timeline",
@@ -8369,6 +8403,7 @@
       "criticalTitle": "Backend unreachable",
       "criticalMessage": "AutoBot cannot reach its backend. Changes may not be saved until it is back."
     },
+    "llcHandbook": "Handbook",
     "llcSettings": "Settings",
     "adminConversations": "Conversation Review"
   },
@@ -8462,6 +8497,7 @@
     "confirmAdd": "Add",
     "confirmRemove": "Remove {name} from this company?",
     "loadError": "Failed to load members.",
+    "staleRows": "These rows may be out of date, and changes are unavailable until your access is confirmed again.",
     "addError": "Failed to add member.",
     "removeError": "Failed to remove member.",
     "colChangeRole": "Change role",
@@ -8471,6 +8507,7 @@
     "roleChangeError": "Failed to change the role.",
     "roleNotGrantable": "Your role in this company does not allow changing this role.",
     "addNotAllowed": "Your role in this company does not allow adding members.",
+    "accessUnconfirmed": "Couldn't confirm your access. Retry to load your role.",
     "usersLoadError": "Failed to load users.",
     "role": {
       "owner": "Owner",
@@ -8512,6 +8549,21 @@
     }
   },
   "llc": {
+    "notices": {
+      "generic": "A company update arrived",
+      "heartbeatMissed": "Agent {agent} missed its heartbeat",
+      "heartbeatRecoveryUnfiled": "Agent {agent} timed out and no recovery item could be filed",
+      "heartbeatMissedNoAgent": "An agent missed its heartbeat",
+      "heartbeatRecoveryUnfiledNoAgent": "An agent timed out and no recovery item could be filed",
+      "budgetSoftAlert": "Budget warning: agent {agent} is nearing its budget",
+      "budgetSoftAlertNoAgent": "Budget warning: the budget is nearly used up",
+      "budgetHardStop": "Budget exhausted: agent {agent} is stopped until the budget is raised",
+      "budgetHardStopNoAgent": "Budget exhausted: agents are stopped until the budget is raised",
+      "handoff": "Agent {agent} handed over a work item",
+      "handoffNoAgent": "A work item was handed over",
+      "approval": "An approval was updated",
+      "sprint": "A sprint was updated"
+    },
     "agent": {
       "cannotRun": "Cannot run"
     },
@@ -9577,6 +9629,100 @@
         "approveDetail": "Server detail: {detail}",
         "convertFailed": "Could not create the workflows.",
         "retryFailed": "Could not retry the AI line proposals."
+      }
+    },
+    "handbook": {
+      "title": "Handbook",
+      "subtitle": "A page for every role, workflow, process and meta skill, read from the company model each time it opens.",
+      "noCompany": "Choose a company to read its handbook.",
+      "loading": "Reading the company model...",
+      "loadingPage": "Reading this page...",
+      "sourceFailed": "Part of the company model could not be read: {reason}",
+      "emptyTitle": "No pages yet",
+      "emptyBody": "This company has no roles, workflows or processes. A page appears here as soon as one is added.",
+      "search": "Search the handbook",
+      "searchPlaceholder": "Search page titles",
+      "filterAria": "Kind of page",
+      "filterAll": "All pages",
+      "noMatch": "No page matches. Try a shorter word, or clear the search and the filter.",
+      "pickPage": "Pick a page to read it.",
+      "noDescription": "The company model records no description for this page.",
+      "ownedBy": "Owned by {role}",
+      "partsFailed": "Could not read: {parts}",
+      "part": {
+        "holders": "holders",
+        "workflows": "workflows",
+        "tools": "tools",
+        "skills": "skills",
+        "graph": "steps"
+      },
+      "kind": {
+        "role": "Role",
+        "workflow": "Workflow",
+        "process": "Process",
+        "metaSkill": "Meta skill"
+      },
+      "kindPlural": {
+        "role": "Roles",
+        "workflow": "Workflows",
+        "process": "Processes",
+        "metaSkill": "Meta skills"
+      },
+      "holders": "Who holds it",
+      "noHolders": "Nobody holds this role right now.",
+      "workflowsItPerforms": "Workflows it performs",
+      "noWorkflows": "This role performs no workflows yet.",
+      "processesItOwns": "Processes it owns",
+      "noProcesses": "This role owns no processes yet.",
+      "skills": "Skills it holds",
+      "noSkills": "This role holds no skills.",
+      "tools": "Tools",
+      "noTools": "This role has no tools.",
+      "requiredSkills": "Skills it needs",
+      "noSkillsNeeded": "None needed.",
+      "trigger": "Trigger",
+      "triggerKind": {
+        "manual": "Started by hand",
+        "schedule": "Runs on a schedule",
+        "email_received": "Starts when an email arrives",
+        "work_item_status": "Starts when a work item changes status",
+        "webhook": "Starts when a webhook is called",
+        "folder_file_added": "Starts when a file is added to a folder",
+        "process_result": "Starts from the result of a process"
+      },
+      "steps": "Steps, in plain words",
+      "noSteps": "This graph has no steps yet.",
+      "step": {
+        "start": "Start",
+        "metaSkill": "Run the meta skill {name}",
+        "end": {
+          "done": "Finished: done",
+          "failed": "Finished: failed"
+        },
+        "success": "Then: {target}",
+        "else": "Otherwise: {target}",
+        "if": "If {condition}: {target}",
+        "failure": "If it fails: {target}",
+        "failureRetry": "If it fails: retry {n} times, then {target}",
+        "timeout": "If nothing happens within {seconds} seconds: {target}",
+        "handoff": "Hands off to the workflow {workflow}"
+      },
+      "coverage": {
+        "title": "Coverage",
+        "body": "Every role, workflow, process and meta skill has a page automatically.",
+        "missing": "Roles and processes without a recorded description ({n})",
+        "unread": "could not be read",
+        "partial": "This list is incomplete: a source above could not be read."
+      },
+      "unavailable": {
+        "title": "Not available yet",
+        "body": "These parts of the handbook need a backend that does not exist yet. They are not shown with stand-in content.",
+        "chapters": "Company chapters, with owner role, version and scope",
+        "explanations": "Owner-written explanations, suggested edits and their approval",
+        "onboarding": "Onboarding paths and read confirmations",
+        "scoping": "Need-to-know scoping on the server and the View whole handbook permission",
+        "search": "Search of the handbook in Knowledge and chat",
+        "handoffs": "Which roles a role works with"
       }
     }
   },

@@ -52,6 +52,7 @@ python:
   - 'docker-compose.override.example.yml'
   - 'docker/mcp-bridges.yml'
   - 'docker/frontend/Dockerfile'
+  # #18208: the reusable gate bodies, the gate-verdict action and the gate path sets that guards under repo_tests read.
   - '.github/workflows/_gate-*.yml'
   - '.github/actions/gate-verdict/**'
   - '.github/filters/gate-paths.yml'
@@ -60,6 +61,14 @@ python:
   - 'docker/nginx/nginx-locations.conf'
   - 'docker/nginx/nginx-slm-locations.conf'
   - '.github/workflows/co-located-smoke.yml'
+  # #21325: apt_retry_one_mechanism_21325_test.py reads the apt policy and wrapper, and the three workflows it guards.
+  - 'docker/apt/*'
+  - '.github/workflows/clean-install.yml'
+  - '.github/workflows/hardened-smoke-test.yml'
+  - '.github/actions/setup-python-suite/action.yml'
+  - 'scripts/ci/apt_fallback_mirror.sh'
+  - 'scripts/ci/apt_network_config.sh'
+  - 'scripts/ci/clean_install_tty.exp'
   # #17500, #18729: compose_exposure_and_credentials_17500_test.py and docker_admin_seed_18729_test.py read the secrets generator.
   - 'docker/generate-secrets.sh'
   - 'docker/write-redis-acl.sh'
@@ -74,7 +83,7 @@ python:
   - 'autobot-monitoring/grafana/provisioning/datasources/prometheus.yml'
   - 'autobot-backend/config/llm_models.yaml'
   - 'autobot-infrastructure/shared/config/permission_rules.yaml'
-  # The guard scans the whole repo by basename (pathspec *<name>), so an unallowed copy can
+  # #18556: the guard scans the whole repo by basename (pathspec *<name>), so an unallowed copy can
   # land anywhere: one glob per guarded basename, not just the listed trees.
   - '**/error_messages.yaml'
   - '**/prometheus.yml'
@@ -330,6 +339,9 @@ python:
   # change that skips the suite guarding it -- the guard would be bypassable by
   # touching the one file it exists to watch. #15900's coverage checker caught it.
   - 'constraints/ansible-core.txt'
+  # #18060: the constraint-drift tests and several repo_tests read the shared pins; a PR that edits only
+  # this file must still run the suite that guards it.
+  - 'constraints/shared.txt'
   # #16275: `no_tracked_key_material_test.py` asserts every entry in the
   # detect-secrets baseline carries an audited verdict and that its version
   # matches the hook and the CI install. Without an entry here, a change confined
@@ -391,6 +403,11 @@ python:
   - '.github/actions/generated-types-autofix/action.yml'
   - '.github/actions/install-ci-requirements/action.yml'
   - '.github/workflows/dispatch-generated-types.yml'
+  # #21359: `preboard_guard_lane_21359_test.py` reads the pre-board guard lane workflow by concrete literal.
+  - '.github/workflows/dispatch-preboard-guards.yml'
+  # #21359: the lane's guard reads `pytest.ini` (testpaths must equal the lane's roots plus the roots it
+  # leaves to the suite) and `.test_durations` (covered below); a change confined to either must run it.
+  - 'pytest.ini'
   # #16568: workflow_types_gate_16568_test.py reads the required gate body (called by ci.yml) by concrete literal.
   - '.github/workflows/_gate-generated-types.yml'
   # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`
@@ -494,3 +511,14 @@ python:
   # image's dimensions and size. A change confined to the image -- replacing it
   # with one of the wrong shape -- is exactly what the guard exists to catch.
   - 'docs/assets/social-preview.png'
+
+# Retired with #18208: these workflow files no longer exist (their gates are `_gate-*.yml` bodies called by
+# ci.yml, whose `self` filter in gate-paths.yml forces every gate when one changes), so no change can touch them.
+# retired #18208: '.github/workflows/docker-smoke-test.yml'
+# retired #18208: '.github/workflows/security.yml'
+# retired #18208: '.github/workflows/codeql.yml'
+# retired #18208: '.github/workflows/python-required-context.yml'
+# retired #18208: '.github/workflows/_changes.yml'
+# retired #18208: '.github/workflows/migration-gate.yml'
+# retired #18208: '.github/workflows/ai-security-review.yml'
+# retired #18208: '.github/workflows/verify-generated-types.yml'

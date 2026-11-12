@@ -19,67 +19,24 @@ from __future__ import annotations
 
 import sys
 import types
-import warnings
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from repo_tests import sys_modules_leak_guard as guard_module
-from repo_tests.sys_modules_leak_guard import _DISK_CACHE, _Baseline, _LeakGuard, _load_baseline
+from repo_tests._sys_modules_leak_guard_support import LLC_CONFTEST as _LLC_CONFTEST
+from repo_tests._sys_modules_leak_guard_support import OTHER_MODULE as _OTHER_MODULE
+from repo_tests._sys_modules_leak_guard_support import ROOT as _ROOT
+from repo_tests._sys_modules_leak_guard_support import fresh_guard, guard_factory
+from repo_tests._sys_modules_leak_guard_support import install_module as _install
+from repo_tests._sys_modules_leak_guard_support import leaks_for as _leaks_for
+from repo_tests.sys_modules_leak_guard import _Baseline, _LeakGuard, _load_baseline
 
-_ROOT = Path("/repo")
-_LLC_CONFTEST = _ROOT / "backend" / "llc" / "tests" / "conftest.py"
-_OTHER_MODULE = _ROOT / "backend" / "initialization" / "lifespan_test.py"
+make_guard = pytest.fixture(guard_factory, name="make_guard")
+guard = pytest.fixture(fresh_guard, name="guard")
 
 # The same conftest as the guard displays it: repo-relative, the form a
 # baseline line holds.
 _LLC_OWNER = "backend/llc/tests/conftest.py"
-
-
-@pytest.fixture
-def make_guard(monkeypatch):
-    """Build guards over an isolated ``sys.modules`` copy.
-
-    ``_DISK_CACHE`` is pre-seeded so the tests never depend on what happens to
-    be installed on the machine running them.
-    """
-    monkeypatch.setattr(sys, "modules", dict(sys.modules))
-    monkeypatch.setattr(
-        "repo_tests.sys_modules_leak_guard._DISK_CACHE",
-        dict(
-            _DISK_CACHE,
-            agents=True,
-            autobot_shared=True,
-            celery=True,
-            knowledge=True,
-            _sodium=False,
-        ),
-    )
-
-    def build(removal_candidates: frozenset[str] = frozenset()) -> _LeakGuard:
-        instance = _LeakGuard(_ROOT, removal_candidates)
-        instance.snapshot()
-        return instance
-
-    return build
-
-
-@pytest.fixture
-def guard(make_guard):
-    """A guard with an empty baseline: nothing is listed, every leak is new."""
-    return make_guard()
-
-
-def _install(name: str, module: object) -> None:
-    sys.modules[name] = module  # type: ignore[assignment]
-
-
-def _leaks_for(guard: _LeakGuard, path: Path) -> list[str]:
-    """Run a check with warnings suppressed and return the leaked keys."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        guard.check(path, f"the import of {path.name}")
-    return [leak.mutation.key for leak in guard.leaks]
 
 
 # ---------------------------------------------------------------------------
