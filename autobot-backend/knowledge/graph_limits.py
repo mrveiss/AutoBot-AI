@@ -15,5 +15,6 @@ GRAPH_MAX_OFFSET = env_int_clamped("AUTOBOT_KB_GRAPH_MAX_OFFSET", 100000, min_v=
 GRAPH_SCAN_LIMIT = env_int_clamped("AUTOBOT_KB_GRAPH_SCAN_LIMIT", 5000, min_v=100, max_v=100000)
 SCAN_BATCH = 500
 # Raw records one bucket collection read scans per request while looking for readable ones (the cap above counts
-# readable records); a scan that reaches it with the collection still going reports the budget exhausted.
+# readable records), and the deepest facts cursor position a request resumes; a scan that reaches it with the
+# collection still going reports the budget exhausted.
 GRAPH_RAW_SCAN_BUDGET = env_int_clamped("AUTOBOT_KB_GRAPH_RAW_SCAN_BUDGET", 50000, min_v=100, max_v=10000000)

@@ -13,12 +13,12 @@ and a short page means the end, not a filtered-out page.
 """
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List
 
 from constants.threshold_constants import CategoryDefaults
 from knowledge.graph_bucket_visibility import within_admin_tenant
-from knowledge.graph_limits import GRAPH_SCAN_LIMIT, SCAN_BATCH
+from knowledge.graph_limits import GRAPH_RAW_SCAN_BUDGET, GRAPH_SCAN_LIMIT, SCAN_BATCH
 from knowledge.root_read import AdminReadLedger
 from knowledge.search_filters import filter_search_results_by_permission
 
@@ -33,6 +33,7 @@ class FactsPage:
     cursor: str | None = None  # first raw position not yet returned (``position:skip``); None on the last page
     by_cursor: bool = False  # the page was read from a cursor, so no visible total exists (O(batch) per page)
     failed: bool = False  # the read raised: the listing is unknown, not empty (reported on the section)
+    budget_exhausted: bool = False  # the cursor lies past the per-request skip budget: the page was not read
 
 
 def decode_fact_metadata(raw_fact: Dict[str, Any]) -> Dict[str, Any]:
@@ -116,7 +117,24 @@ def _cursor(position: int, skip: int) -> str:
     return f"{position}:{skip}"
 
 
+# A cursor position is read by skipping every eligible fact before it (the listing is a Redis SCAN, which has no
+# token to resume from), so a request costs O(position). Bound it with the scan budget the buckets use; a first
+# page never reaches past GRAPH_SCAN_LIMIT, which the bound always covers.
+RESUME_POSITION_LIMIT = max(GRAPH_RAW_SCAN_BUDGET, GRAPH_SCAN_LIMIT)
+
+
 async def _page_from_cursor(kb: Any, category_filter: str | None, max_facts: int, who: tuple, cursor: str) -> FactsPage:
+    """:func:`_scan_from_cursor` within the skip budget: a cursor past ``RESUME_POSITION_LIMIT`` reads nothing and
+    reports ``budget_exhausted``, and a page whose continuation would start past it ends with the flag, not a cursor."""
+    if parse_cursor(cursor)[0] > RESUME_POSITION_LIMIT:
+        return FactsPage(by_cursor=True, budget_exhausted=True)
+    page = await _scan_from_cursor(kb, category_filter, max_facts, who, cursor)
+    if page.cursor and parse_cursor(page.cursor)[0] > RESUME_POSITION_LIMIT:
+        return replace(page, cursor=None, budget_exhausted=True)
+    return page
+
+
+async def _scan_from_cursor(kb: Any, category_filter: str | None, max_facts: int, who: tuple, cursor: str) -> FactsPage:
     """The next ``max_facts`` readable facts from *cursor*, scanning at most ``GRAPH_SCAN_LIMIT`` raw records.
 
     Resumes at the batch the previous page ended in and skips the readable facts it already returned, so no
