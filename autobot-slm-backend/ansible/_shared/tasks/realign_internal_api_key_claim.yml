@@ -35,64 +35,95 @@
          and ((['all', 'backend'] | intersect(ansible_run_tags | default(['all'])) | length > 0)
               or (['env', 'restart'] | difference(ansible_run_tags | default([])) | length == 0)) }}
 
-- name: "Internal key | Propose re-aligning the backend's key to the SLM's (#20750)"
-  ansible.builtin.uri:
-    url: "{{ internal_api_key_backend_url }}/api/internal/slm/credential-proposals"
-    method: POST
-    headers:
-      X-Internal-API-Key: "{{ internal_api_key_by_file[internal_api_key_loaded_file] }}"
-    body_format: json
-    body:
-      action: slm_backend_internal_key_realign
-      node_id: "{{ slm_node_id | default(inventory_hostname) }}"
-    status_code: [201]
-  register: _internal_key_realign_proposal
-  failed_when: false
-  no_log: true  # the request carries a key
-  when:
-    - internal_api_key_mismatch is defined
-    - internal_api_key_mismatch | bool
-    - internal_api_key_loaded_file in internal_api_key_by_file
+# #21343: this unit only PROPOSES (or claims) a credential change for a person to approve; a failure
+# here must never stop the node's update. `failed_when: false` absorbs only a module result. The task still
+# failed fatally on every update (the failure line carried no HTTP answer, so it never reached a module
+# result), and the fatal ended the play: the backend and every service after it never restarted. block/rescue absorbs ANY failure of the unit.
+# The rescue records a fixed-shape, key-free line (HTTP status, result field names, the error text only
+# when it holds neither key) as `internal_api_key_realign_report`, which the update summary prints.
+- name: "Internal key | Propose or claim the realign without ever failing the update (#21343)"
+  block:
+    - name: "Internal key | Propose re-aligning the backend's key to the SLM's (#20750)"
+      ansible.builtin.uri:
+        url: "{{ internal_api_key_backend_url }}/api/internal/slm/credential-proposals"
+        method: POST
+        headers:
+          X-Internal-API-Key: "{{ internal_api_key_by_file[internal_api_key_loaded_file] }}"
+        body_format: json
+        body:
+          action: slm_backend_internal_key_realign
+          node_id: "{{ slm_node_id | default(inventory_hostname) }}"
+        status_code: [201]
+      register: _internal_key_realign_proposal
+      failed_when: false
+      no_log: true  # the request carries a key
+      when:
+        - internal_api_key_mismatch is defined
+        - internal_api_key_mismatch | bool
+        - internal_api_key_loaded_file in internal_api_key_by_file
 
-- name: "Internal key | Say where the realign stands (#20750)"
-  ansible.builtin.debug:
-    msg: >-
-      FINDING #20750: re-aligning this node's backend key to the SLM's is
-      {{ 'awaiting a decision in the Approvals inbox (approval ' ~ _internal_key_realign_proposal.json.approval_id ~ ')'
-         if _internal_key_realign_proposal.json.status | default('') == 'pending'
-         else ('approved; applying it in this run' if _internal_key_realign_proposal.json.status | default('') == 'approved'
-         else 'NOT recorded: the backend did not take the proposal (HTTP ' ~ (_internal_key_realign_proposal.status | default('?')) ~ ')') }}.
-  when: _internal_key_realign_proposal.status is defined
+    - name: "Internal key | Record where the realign stands (#20750, #21343)"
+      ansible.builtin.set_fact:
+        internal_api_key_realign_report: >-
+          FINDING #20750: re-aligning this node's backend key to the SLM's is
+          {{ 'awaiting a decision in the Approvals inbox (approval ' ~ _internal_key_realign_proposal.json.approval_id ~ ')'
+             if _internal_key_realign_proposal.json.status | default('') == 'pending'
+             else ('approved; applying it in this run' if _internal_key_realign_proposal.json.status | default('') == 'approved'
+             else 'NOT recorded: the backend did not take the proposal (HTTP ' ~ (_internal_key_realign_proposal.status | default('?')) ~ ')') }}.
+      when: _internal_key_realign_proposal.status is defined
 
-- name: "Internal key | Claim the approved realign (#20750)"
-  ansible.builtin.uri:
-    url: "{{ internal_api_key_backend_url }}/api/internal/slm/credential-approvals/{{ _internal_key_realign_proposal.json.approval_id }}/claim"
-    method: POST
-    headers:
-      X-Internal-API-Key: "{{ internal_api_key_by_file[internal_api_key_loaded_file] }}"
-    body_format: json
-    body:
-      action: slm_backend_internal_key_realign
-      node_id: "{{ slm_node_id | default(inventory_hostname) }}"
-    status_code: [200]
-  register: _internal_key_realign_claim
-  failed_when: false
-  no_log: true
-  when:
-    - _internal_key_realign_proposal.json.status | default('') == 'approved'
-    # The new key only takes effect on restart, and only a verified one is reported: see the unit above.
-    - internal_api_key_realign_can_apply | bool
-    # Never an empty credential: with no SLM key to render, the approval is not spent.
-    - internal_api_key_canonical | length > 0
+    - name: "Internal key | Say where the realign stands (#20750)"
+      ansible.builtin.debug:
+        msg: "{{ internal_api_key_realign_report }}"
+      when: internal_api_key_realign_report is defined
 
-- name: "Internal key | WARNING: the approved realign could not be claimed, so nothing changes (#20750)"
-  ansible.builtin.debug:
-    msg: >-
-      FINDING #20750: the approved realign of this node's backend key was refused at claim
-      (HTTP {{ _internal_key_realign_claim.status | default('?') }}), so this run keeps each file's key.
-  when:
-    - _internal_key_realign_claim.status is defined
-    - _internal_key_realign_claim.status != 200
+    - name: "Internal key | Claim the approved realign (#20750)"
+      ansible.builtin.uri:
+        url: "{{ internal_api_key_backend_url }}/api/internal/slm/credential-approvals/{{ _internal_key_realign_proposal.json.approval_id }}/claim"
+        method: POST
+        headers:
+          X-Internal-API-Key: "{{ internal_api_key_by_file[internal_api_key_loaded_file] }}"
+        body_format: json
+        body:
+          action: slm_backend_internal_key_realign
+          node_id: "{{ slm_node_id | default(inventory_hostname) }}"
+        status_code: [200]
+      register: _internal_key_realign_claim
+      failed_when: false
+      no_log: true
+      when:
+        - _internal_key_realign_proposal.json.status | default('') == 'approved'
+        # The new key only takes effect on restart, and only a verified one is reported: see the unit above.
+        - internal_api_key_realign_can_apply | bool
+        # Never an empty credential: with no SLM key to render, the approval is not spent.
+        - internal_api_key_canonical | length > 0
+
+    - name: "Internal key | WARNING: the approved realign could not be claimed, so nothing changes (#20750)"
+      ansible.builtin.debug:
+        msg: >-
+          FINDING #20750: the approved realign of this node's backend key was refused at claim
+          (HTTP {{ _internal_key_realign_claim.status | default('?') }}), so this run keeps each file's key.
+      when:
+        - _internal_key_realign_claim.status is defined
+        - _internal_key_realign_claim.status != 200
+
+  rescue:
+    - name: "Internal key | WARNING: the realign could not be proposed or claimed; the update continues (#21343)"
+      ansible.builtin.set_fact:
+        internal_api_key_realign_report: >-
+          {% set _msg = ansible_failed_result.msg | default('') | string %}
+          {% set _keys = (internal_api_key_by_file | default({})).values() | list + [internal_api_key_canonical | default('')] %}
+          FINDING #21343: re-aligning this node's backend key to the SLM's was NOT recorded: the proposal step failed
+          (HTTP {{ ansible_failed_result.status | default('none') }};
+          result fields: {{ ansible_failed_result.keys() | list | sort | join(',') }};
+          error: {{ _msg | truncate(160, True, '') if (_keys | select | select('in', _msg) | list | length == 0) else '(withheld: could name a key)' }}).
+          No key was rewritten; the update continues. A person must raise the credential approval from the
+          admin UI (#20750).
+      no_log: true  # reads the keys to keep them out of the line
+
+    - name: "Internal key | Say that the realign could not be recorded (#21343)"
+      ansible.builtin.debug:
+        msg: "{{ internal_api_key_realign_report }}"
 
 - name: "Internal key | Apply the claimed realign: every env file renders the SLM's key (#20750)"
   ansible.builtin.set_fact:

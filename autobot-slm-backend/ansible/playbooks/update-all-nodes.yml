@@ -2566,6 +2566,14 @@
         fleet_nodes_before.json is defined and
         (fleet_nodes_before.json.database != 'healthy' or fleet_nodes_health.json.database | default('') != 'healthy')
 
+    # #21343: where the credential re-alignment stands, from each node that reported it; the proposal
+    # step records it and never fails the update.
+    - name: "Collect the credential re-alignment reports (#21343)"
+      ansible.builtin.set_fact:
+        internal_key_realign_lines: >-
+          {{ groups['infrastructure'] | default([]) | map('extract', hostvars, 'internal_api_key_realign_report')
+             | select('defined') | list }}
+
     - name: Display update summary
       debug:
         msg:
@@ -2580,4 +2588,6 @@
           - ""
           - "  SLM Admin:     https://{{ slm_host | default('(not-deployed)') }}/"
           - "  User Frontend: https://{{ frontend_host | default('(not-deployed)') }}/"
+          - ""
+          - "  Credential re-alignment: {{ internal_key_realign_lines | default([]) | join(' | ') or 'nothing pending' }}"
           - ""
