@@ -11,6 +11,7 @@ import type { ChatMessage, ChatMessageDisplayType } from '@/types/api'
 import { requestQueue } from '@/composables/useRequestQueue'
 import { stripBracketTags, stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
 import { showAttachmentNotice } from '@/utils/attachmentNotice'
+import { keepUnansweredQuestions } from './stallQuestions'
 
 const logger = createLogger('ChatController')
 
@@ -325,7 +326,9 @@ export class ChatController {
     }, ChatController.PREVIEW_THROTTLE_MS)
   }
 
-  async handleStreamingResponse(response: Response): Promise<void> {
+  /** Consume an SSE reply; resolves true when it carried an `error` event (HTTP 200 is not success, #21022). */
+  async handleStreamingResponse(response: Response): Promise<boolean> {
+    const streamState = { reportedError: false } // per stream: overlapping streams must not share it
     const reader = response.body?.getReader()
     if (!reader) {
       throw new Error('No response stream available')
@@ -359,7 +362,7 @@ export class ChatController {
         for (const line of lines) {
           if (!line.trim()) continue
           if (line.startsWith('data: ')) {
-            fallbackMessageId = this._processStreamLine(line, messageIdMap, fallbackMessageId)
+            fallbackMessageId = this._processStreamLine(line, messageIdMap, fallbackMessageId, streamState)
           }
         }
       }
@@ -378,12 +381,14 @@ export class ChatController {
     } finally {
       reader.releaseLock()
     }
+    return streamState.reportedError
   }
 
   private _processStreamLine(
     line: string,
     messageIdMap: Map<string, string>,
-    fallbackMessageId: string | null
+    fallbackMessageId: string | null,
+    streamState: { reportedError: boolean } = { reportedError: false }
   ): string | null {
     try {
       const jsonStr = line.slice(6).trim()
@@ -412,6 +417,7 @@ export class ChatController {
 
       if (data.type === 'error') {
         logger.error('Stream error:', data.content)
+        streamState.reportedError = true
         const errorMsgId = fallbackMessageId || this.chatStore.addMessage({
           content: '',
           sender: 'assistant'
@@ -590,11 +596,11 @@ export class ChatController {
   private mapMessageType(
     backendType?: string,
     metadataType?: string
-  ): 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | undefined {
+  ): 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | 'human_question' | undefined {
     const type = backendType || metadataType
     if (!type) return 'response'
 
-    // Map backend types to frontend types
+    if (type === 'human_question') return type // #21022
     if (type === 'thought' || type.includes('thought')) return 'thought'
     if (type.includes('planning')) return 'planning'
     if (type.includes('debug')) return 'debug'
@@ -710,15 +716,12 @@ export class ChatController {
       logger.error('Failed to load chat sessions:', error)
       // Don't throw error, allow app to continue with local sessions
       this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.loadSessionsFailed', { error: extractErrorMessage(error, 'Unknown error') }))
-    } finally {
     }
   }
 
   async loadChatMessages(sessionId: string): Promise<void> {
     try {
-      // Issue #680: Skip loading while streaming or pending approval to prevent race conditions
-      // During SSE streaming, messages are added in real-time and should not be overwritten
-      // by polling which may have stale data from backend
+      // Issue #680: skip while streaming or pending approval (polling data may be stale)
       if (this.chatStore.isTyping) {
         logger.debug(`Skipping message load - streaming in progress (isTyping=true)`)
         return
@@ -730,11 +733,11 @@ export class ChatController {
 
       logger.debug(`Loading messages for session: ${sessionId}`)
 
-      const messages = await chatRepository.getChatMessages(sessionId)
-      logger.debug(`Received ${messages.length} messages from repository`)
-
       // Update session with loaded messages
       const session = this.chatStore.sessions.find(s => s.id === sessionId)
+      const loaded = await chatRepository.getChatMessages(sessionId)
+      // #21022: a poll never replaces a question the person has not answered yet
+      const messages = session ? keepUnansweredQuestions(session.messages, loaded) : loaded
       if (session) {
         // Issue #1371: Never replace local messages with empty/fewer backend
         // messages. The poller can get [] on transient API errors or stale
@@ -773,7 +776,6 @@ export class ChatController {
     } catch (error: unknown) {
       logger.error('Failed to load messages:', error)
       this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.loadMessagesFailed', { error: extractErrorMessage(error, 'Unknown error') }))
-    } finally {
     }
   }
 
@@ -973,7 +975,6 @@ export class ChatController {
     } catch (error: unknown) {
       this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.clearFailed', { error: extractErrorMessage(error, 'Unknown error') }))
       throw error
-    } finally {
     }
   }
 
@@ -1056,7 +1057,6 @@ export class ChatController {
     } catch (error) {
       logger.error('Connection test failed:', error)
       return false
-    } finally {
     }
   }
 
