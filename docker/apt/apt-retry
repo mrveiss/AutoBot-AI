@@ -30,6 +30,8 @@
 #   apt error is in the log, and resolver diagnostics follow: the host(s) apt named,
 #   `getent hosts` for each, `resolvectl status` when present and APT_RETRY_MIRRORS_FILE
 #   (default /etc/apt/apt-mirrors.txt) when it exists. Each is bounded to a few dozen lines.
+# - The watchdog that enforces the grace is always stopped with KILL (see the loop below), so a prompt capture
+#   never costs any of it.
 # - A daemon left running by the command can hold the output pipe open; once the command has
 #   exited, the capture is given APT_RETRY_TEE_GRACE_S (default 5) seconds to flush and is then
 #   stopped (a daemon still writing then gets SIGPIPE), so the wrapper never hangs on it. INT/TERM/HUP
@@ -102,7 +104,7 @@ tee_pid=""
 watchdog_pid=""
 cleanup() {
     [ -z "$tee_pid" ] || kill "$tee_pid" 2>/dev/null
-    [ -z "$watchdog_pid" ] || { kill "$watchdog_pid" 2>/dev/null; wait "$watchdog_pid" 2>/dev/null; }
+    [ -z "$watchdog_pid" ] || { kill -s KILL "$watchdog_pid" 2>/dev/null; wait "$watchdog_pid" 2>/dev/null; }
     rm -rf "$tmp"
 }
 trap cleanup EXIT
@@ -171,7 +173,10 @@ while :; do
     ) &
     watchdog_pid=$!
     wait "$tee_pid" 2>/dev/null
-    kill "$watchdog_pid" 2>/dev/null
+    # KILL, never TERM: a TERM sent to a subshell just forked is lost while it still carries this shell's
+    # TERM handler (dash and busybox ash), and a TERM ignored on entry cannot be reset; either leaves the
+    # watchdog asleep and the `wait` below blocking for the whole grace. KILL is uncatchable and undeferrable.
+    kill -s KILL "$watchdog_pid" 2>/dev/null
     wait "$watchdog_pid" 2>/dev/null
     tee_pid=""
     watchdog_pid=""
