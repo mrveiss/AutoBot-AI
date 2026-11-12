@@ -178,10 +178,12 @@ async def _previews(client: Any, picked: List[Tuple[str, str]]) -> Dict[Tuple[st
 SUMMARY_COLLECTION = "knowledge_summaries"
 
 
-async def _readable_rows(section: BucketSection, name: str, scanned: list, viewer: Viewer, manager, kb) -> list:
+async def _readable_rows(
+    section: BucketSection, name: str, scanned: list, viewer: Viewer, manager, kb, decided: Dict[str, bool]
+) -> list:
     """The scanned rows the viewer may read. A summary derives from its source fact and is judged by that fact."""
     if name != SUMMARY_COLLECTION:
-        return await visible_records(section.access, name, scanned, viewer, manager)
+        return await visible_records(section.access, name, scanned, viewer, manager, decided)
     if kb is None:
         return []  # no way to resolve the source fact: fail closed
     resolved = await resolve_sources(
@@ -189,7 +191,7 @@ async def _readable_rows(section: BucketSection, name: str, scanned: list, viewe
     )
     by_id = {row["id"]: row for row, _ in resolved}
     judged = [{"id": row["id"], "metadata": source} for row, source in resolved]
-    seen = await visible_records(section.access, name, judged, viewer, manager)
+    seen = await visible_records(section.access, name, judged, viewer, manager, decided)
     return [by_id[r["id"]] for r in seen]
 
 
@@ -212,8 +214,10 @@ async def _section_rows(
         if not collection_in_scope(section.access, name, viewer):
             continue
 
-        async def readable(window: list, name: str = name) -> list:
-            return await _readable_rows(section, name, window, viewer, manager, kb)
+        decided: Dict[str, bool] = {}  # code-source decisions of this scan, shared by its windows
+
+        async def readable(window: list, name: str = name, decided: Dict[str, bool] = decided) -> list:
+            return await _readable_rows(section, name, window, viewer, manager, kb, decided)
 
         try:
             seen, cut, spent = await _scan_collection(client, name, readable)

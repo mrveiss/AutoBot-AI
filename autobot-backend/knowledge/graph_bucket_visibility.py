@@ -153,20 +153,38 @@ async def _may_read_source(source_id: str, viewer: Viewer) -> bool:
     return True
 
 
-async def _readable_public(collection: str, rows: List[Dict[str, Any]], viewer: Viewer) -> List[Dict[str, Any]]:
+async def _readable_sources(named: set, viewer: Viewer, decided: Dict[str, bool]) -> set:
+    """The sources of *named* the viewer may read; each is asked once into *decided* (a registry read per source)."""
+    for sid in named - decided.keys():
+        decided[sid] = await _may_read_source(sid, viewer)  # a fault propagates and is never cached
+    return {sid for sid in named if decided[sid]}
+
+
+async def _readable_public(
+    collection: str, rows: List[Dict[str, Any]], viewer: Viewer, decided: Dict[str, bool]
+) -> List[Dict[str, Any]]:
     """Public rows minus quarantined ones, and minus those of a code source the viewer may not read."""
     rows = [r for r in rows if not_quarantined(as_fact(collection, r["id"], r.get("metadata") or {}))]
     named = {(r.get("metadata") or {}).get("source_id") for r in rows} - {None, "", UNSCOPED_SOURCE}
-    allowed = {sid for sid in named if await _may_read_source(sid, viewer)}
+    allowed = await _readable_sources(named, viewer, decided)
     return [r for r in rows if (r.get("metadata") or {}).get("source_id") in allowed | {None, "", UNSCOPED_SOURCE}]
 
 
 async def visible_records(
-    kind: str, collection: str, rows: List[Dict[str, Any]], viewer: Viewer, ownership_manager
+    kind: str,
+    collection: str,
+    rows: List[Dict[str, Any]],
+    viewer: Viewer,
+    ownership_manager,
+    decided_sources: Dict[str, bool] | None = None,
 ) -> List[Dict[str, Any]]:
-    """The *rows* (``id``, ``metadata``) the viewer may read; an admin's are recorded in the ledger."""
+    """The *rows* (``id``, ``metadata``) the viewer may read; an admin's are recorded in the ledger.
+
+    *decided_sources* carries the code-source decisions of one viewer across the windows of one scan, so a source
+    is authorised once per scan, not once per window; the row filter itself still runs on every row.
+    """
     if kind == PUBLIC:
-        return await _readable_public(collection, rows, viewer)
+        return await _readable_public(collection, rows, viewer, {} if decided_sources is None else decided_sources)
     facts = [as_fact(collection, r["id"], r.get("metadata") or {}) for r in rows]
     facts = [f for f in facts if not_quarantined(f) and _within_tenant(kind, collection, f, viewer)]
     kept = await filter_search_results_by_permission(
