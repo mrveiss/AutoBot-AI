@@ -167,6 +167,22 @@ async def test_initialize_reads_the_knowledge_database_never_main(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_initialize_aborts_before_ingesting_when_the_knowledge_redis_is_unavailable(monkeypatch, caplog):
+    """A ``None`` client (Redis disabled or unreachable) stops the run early with a clear error, before any ingest."""
+    built = []
+
+    async def fake_kb():
+        built.append("kb")
+        return FakeKnowledgeBase()
+
+    monkeypatch.setattr(fresh_kb_setup, "get_redis_client", lambda database="main", **_: None)
+    monkeypatch.setitem(sys.modules, "knowledge_factory", types.SimpleNamespace(get_knowledge_base_async=fake_kb))
+    with caplog.at_level("ERROR", logger=fresh_kb_setup.logger.name):
+        assert await fresh_kb_setup.fresh_setup(initialize=True) is False
+    assert built == [] and "unavailable" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_smoke_test_inspects_the_kb_index_not_the_first_one_listed(caplog):
     """#21121: FT.INFO runs on ``kb.redis_index_name``; a different first index is not a pass."""
 

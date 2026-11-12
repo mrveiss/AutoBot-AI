@@ -7,6 +7,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _SCRIPT = "fresh_kb_setup"
@@ -40,7 +41,7 @@ REACH = declare(
 def _referencing(files: list[str], root) -> list[str]:
     found = []
     for rel in files:
-        if rel.startswith(_NOT_CALLERS) or rel.startswith(_OWN_DIR) or rel.endswith(("_test.py", ".md")):
+        if rel.startswith(_NOT_CALLERS) or rel.startswith(_OWN_DIR) or rel.endswith(".md") or is_test_filename(rel):
             continue
         try:
             text = (root / rel).read_text(encoding="utf-8")
@@ -65,3 +66,18 @@ def test_contrast_a_planted_caller_is_found(tmp_path):
     (tmp_path / "roles").mkdir()
     (tmp_path / "roles" / "main.yml").write_text(f"- command: python {_SCRIPT}.py\n", encoding="utf-8")
     assert _referencing(["roles/main.yml"], tmp_path) == ["roles/main.yml"]
+
+
+def _plant(root: Path, rel: str) -> None:
+    (root / rel).parent.mkdir(parents=True, exist_ok=True)
+    (root / rel).write_text(f"mentions {_SCRIPT}\n", encoding="utf-8")
+
+
+def test_contrast_non_callers_are_ignored_and_real_callers_are_flagged_in_the_same_tree(tmp_path):
+    """The detector can fire (two real callers) and can stay quiet (every excluded location), in one tree."""
+    callers = ["roles/main.yml", "scripts/run.sh"]
+    non_callers = ["docs/run.txt", "repo_tests/x.py", f"{_OWN_DIR}other.py", "pkg/thing_test.py", "README.md"]
+    for rel in callers + non_callers:
+        _plant(tmp_path, rel)
+    assert _referencing(non_callers, tmp_path) == []
+    assert _referencing(callers + non_callers, tmp_path) == callers

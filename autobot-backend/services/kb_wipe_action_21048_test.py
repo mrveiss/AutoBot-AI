@@ -397,10 +397,10 @@ async def test_another_admin_deciding_is_not_a_self_approval_and_an_unnamed_requ
 async def test_a_non_user_requester_on_the_api_channel_fails_closed():
     approval = _approval(channel=action.CHANNEL_API)  # requested_by_agent "kb-wipe:operator" names no user id
     set_verified_decider(approval, uuid.uuid4())
+    session = _admins()
     with pytest.raises(ValueError):
-        await action._review_kb_wipe(approval, _admins())
-    fleet_untouched = _admins()
-    fleet_untouched.execute.assert_not_awaited()
+        await action._review_kb_wipe(approval, session)
+    session.execute.assert_not_awaited()  # the same session that was passed: it refused before any admin query
 
 
 @pytest.mark.asyncio

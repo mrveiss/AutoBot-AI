@@ -156,23 +156,13 @@ async def _request_wipe(dry_run: bool) -> bool:
     return True
 
 
-async def fresh_setup(dry_run: bool = False, initialize: bool = False):
-    """Request (or preview) a knowledge-base wipe; with ``initialize``, set up a fresh knowledge base.
-
-    The wipe itself runs in the backend only after a human approves the request (#21048, #17038). This
-    script never deletes data and offers no full wipe.
-    """
-
-    logger.info("=== Fresh Knowledge Base Setup ===")
-
-    if not initialize:
-        logger.info(
-            "\n1. Knowledge base wipe (knowledge database, its search indexes and its Chroma collections only)..."
-        )
-        return await _request_wipe(dry_run)
-
+async def _initialize_knowledge_base() -> bool:
+    """Create the knowledge base and run the smoke test against the Redis database it keeps its index in."""
     # #21121: the KB creates its search index in the knowledge database, so the smoke test reads that one.
     r = get_redis_client(database=_KB_DATABASE)
+    if r is None:
+        logger.error(f"   Redis database {_KB_DATABASE!r} is unavailable; initialization aborted")
+        return False
 
     logger.info("\n2. Initializing fresh knowledge base...")
 
@@ -192,6 +182,24 @@ async def fresh_setup(dry_run: bool = False, initialize: bool = False):
     logger.info("   Knowledge base initialized!")
 
     return await _test_knowledge_base(kb, r)
+
+
+async def fresh_setup(dry_run: bool = False, initialize: bool = False):
+    """Request (or preview) a knowledge-base wipe; with ``initialize``, set up a fresh knowledge base.
+
+    The wipe itself runs in the backend only after a human approves the request (#21048, #17038). This
+    script never deletes data and offers no full wipe.
+    """
+
+    logger.info("=== Fresh Knowledge Base Setup ===")
+
+    if not initialize:
+        logger.info(
+            "\n1. Knowledge base wipe (knowledge database, its search indexes and its Chroma collections only)..."
+        )
+        return await _request_wipe(dry_run)
+
+    return await _initialize_knowledge_base()
 
 
 def _parse_args(argv=None) -> argparse.Namespace:
