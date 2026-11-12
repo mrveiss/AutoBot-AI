@@ -254,6 +254,7 @@ async def _emit_section(
 ):
     """``(nodes, edges, report)`` of one section: its page of record nodes, the section node and its totals."""
     rows = scan.rows
+    total = None if scan.failed else len(rows)  # one value for the node and the report
     page = rows[offset : offset + max(limit, 0)]
     record_page(viewer, section.access, page)
     previews = await _previews(client, [(n, i) for n, i, _ in page]) if page else {}
@@ -264,10 +265,9 @@ async def _emit_section(
             "name": section.label,
             "type": "section",
             "section": section.key,
-            "metadata": {"total": len(rows)},
+            "metadata": {"total": total},
         }
     )
-    total = None if scan.failed else len(rows)
     entry = section_report(
         section.key, section.label, total, len(page), offset, scan.truncated, scan.exhausted, scan.failed
     )

@@ -84,3 +84,37 @@ async def test_a_failed_bucket_build_is_a_failed_section_not_an_empty_list():
         kb = type("KB", (), {"_async_chroma_client": object(), "ownership_manager": None})()
         sections = await bucket_sections_for_graph(kb, GraphRequest(), [], [], object(), None)
     assert [(s["key"], s["failed"], s["total"], s["limited"]) for s in sections] == [("buckets", True, None, True)]
+
+
+@pytest.mark.asyncio
+async def test_a_code_source_is_authorised_once_per_scan_not_once_per_window(monkeypatch):
+    monkeypatch.setattr("knowledge.graph_buckets.SCAN_BATCH", 2)
+    asked: list = []
+
+    async def may_read(source_id, _viewer):
+        asked.append(source_id)
+        return source_id == "open"
+
+    monkeypatch.setattr("knowledge.graph_bucket_visibility._may_read_source", may_read)
+    rows = [(f"o{i}", {"source_id": "open"}) for i in range(4)] + [(f"c{i}", {"source_id": "closed"}) for i in range(4)]
+    built = await build_bucket_sections(await client_with({"autobot_docs": rows}), viewer(), manager(), limit=10)
+    assert _ids(built) == ["o0", "o1", "o2", "o3"], "the per-row filter still drops the closed source's rows"
+    assert sorted(asked) == ["closed", "open"], "one registry read per source across all four windows"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_section_node_carries_no_total_like_its_report():
+    client = await client_with({"trajectories": [("t", _MINE)], "security_findings": [("s", _MINE)]})
+    real = client.get_collection
+
+    async def get_collection(name, *args, **kwargs):
+        if name == "security_findings":
+            raise RuntimeError("store down")
+        return await real(name, *args, **kwargs)
+
+    client.get_collection = get_collection
+    built = await build_bucket_sections(client, viewer(), manager())
+    (section,) = [s for s in built["sections"] if s["key"] == "research"]
+    node = next(n for n in built["nodes"] if n["id"] == "section:research")
+    assert section["total"] is None
+    assert node["metadata"]["total"] == section["total"], "the node and the report share one value"
