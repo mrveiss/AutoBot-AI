@@ -47,6 +47,7 @@ appears outside the known overlays.
 | Name | Component | Type | Default | Description |
 |---|---|---|---|---|
 | `AUTOBOT_A2A_CAPABILITY_TTL` | a2a | int | `300` | How long a fetched remote A2A capability descriptor is cached before the next check re-fetches it. Raising it reduces repeated cross-agent capability lookups; lowering it makes a capability change on the remote side (e.g. a tool removed) visible sooner (a2a/capability_verifier.py). |
+| `AUTOBOT_ADMIN_RAW_CHUNK_BYTES` | slm | int | `65536` | Read size per chunk when the admin raw download streams a file. Range: 1024–16777216. |
 | `AUTOBOT_AGENT_COMMAND_TIMEOUT_S` | agents | int | `30` | Seconds an agent-terminal command may run before it is cancelled and reported as timed out (#17074). A command that finishes sooner returns as soon as its exit code appears, so this bounds only long or stuck commands. Raising it lets long builds finish; lowering it cancels them sooner (services/agent_terminal/command_executor.py). Range: 1–3600. |
 | `AUTOBOT_AGENT_COMM_INBOX_MAX_LENGTH` | agents | int | `1000` | Most messages an agent's Redis peer inbox holds, and most inbound messages waiting in memory for a handler slot. Beyond it the oldest (inbox) or newest (in memory) are dropped and logged, so a flood cannot grow either without bound (protocols/agent_channels.py, #16986). |
 | `AUTOBOT_AGENT_COMM_INBOX_TTL_SECONDS` | agents | int | `3600` | Seconds an agent's Redis peer inbox survives after its last write, so an inbox whose owner never returns is reclaimed (protocols/agent_channels.py, #16986). |
