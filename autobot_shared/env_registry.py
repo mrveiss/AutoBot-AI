@@ -70,7 +70,6 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_chat_attachments,
     env_registry_chat_history,
     env_registry_chat_lease,
-    env_registry_code_index,
     env_registry_gateway,
     env_registry_ledger,
     env_registry_llc,
