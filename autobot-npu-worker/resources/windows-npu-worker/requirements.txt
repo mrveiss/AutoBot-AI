@@ -4,11 +4,11 @@
 
 # Core Web Framework
 fastapi  # version from constraints/shared.txt (#18060); SECURITY UPDATE - requires starlette >=0.52.1 (#15661)
-uvicorn[standard]>=0.54.0
-pydantic>=2.14.2
+uvicorn[standard]
+pydantic
 
 # Async HTTP Client
-aiohttp>=3.14.5  # GH#8323 + #17304: 3.14.3 is the patched floor every sibling manifest already uses
+aiohttp  # GH#8323 + #17304: 3.14.3 is the patched floor every sibling manifest already uses
 
 # Redis Client
 redis>=8.1.0
@@ -52,7 +52,7 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
                           # theirs -- the old 0.15.0 floor existed only to avoid narrowing the
                           # range for this file's formerly older, independent transformers>=4.36.0.
 sentencepiece>=0.2.2
-sentence-transformers>=6.2.0
+sentence-transformers
 einops>=0.8.2
 
 # ONNX model format and export
@@ -73,20 +73,20 @@ torch  # version from constraints/shared.txt (#19330); its pin is above the GH#8
 # =============================================================================
 -c ../../../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
-scikit-learn>=1.9.1
+scikit-learn
 
 # Structured Logging
-structlog>=26.1.0
+structlog
 
 # Configuration Management
-pyyaml>=6.0.3
-python-dotenv>=1.2.4
+pyyaml
+python-dotenv
 
 # Additional Dependencies
-typing-extensions>=4.16.0
+typing-extensions
 
 # Network Interface Detection
-netifaces>=0.11.0
+netifaces
 
 # GUI Dependencies (for standalone GUI application)
-PySide6>=6.12.0
+PySide6

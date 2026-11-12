@@ -13,7 +13,13 @@ import type { useApiClient } from '@/plugins/api'
 type Client = ReturnType<typeof useApiClient>
 type Verb = 'get' | 'post' | 'put' | 'patch' | 'delete'
 
-export type PlanPath = Extract<keyof paths, `/api/llc/company-os/workflow-plans${string}`>
+/** The Workflow Planner routes plus the path-scoped company workflow and role-workflow routes (#21240). */
+export type PlanPath = Extract<
+  keyof paths,
+  | `/api/llc/company-os/workflow-plans${string}`
+  | `/api/llc/workflows/${string}`
+  | `/api/llc/roles/${string}/workflows${string}`
+>
 
 type JsonBody<O> = O extends { content: { 'application/json': infer J } } ? J : void
 type OkBody<R> = R extends { 200: infer O } ? JsonBody<O> : R extends { 201: infer O } ? JsonBody<O> : void

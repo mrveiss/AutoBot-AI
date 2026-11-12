@@ -161,7 +161,8 @@ def test_the_protobuf_cap_matches_what_opentelemetry_proto_declares():
     raised protobuf the next day, the note was updated neither time), so the
     two lines are asserted together here.
     """
-    root = checker.parse_direct_requirements(REPO_ROOT / "requirements.txt")
+    # #18060: both lines moved out of requirements.txt into the shared constraints, their one home.
+    root = checker.parse_direct_requirements(REPO_ROOT / "constraints" / "shared.txt")
     assert root["opentelemetry-proto"] == "==1.45.2", (
         "opentelemetry-proto moved. Re-read its Requires-Dist for protobuf and "
         "update BOTH the protobuf constraint and its rationale (#15070)."

@@ -57,3 +57,19 @@ export function buildSmellsExport<T extends CountableSmell>(smells: readonly T[]
     smells: [...smells],
   }
 }
+
+/** One finding as the panel shows it and the export carries it. */
+export interface ExportedSmell extends CountableSmell {
+  description?: string
+  file_path?: string
+  line_number?: number
+  suggestion?: string
+}
+
+/** The code-smells export document (`buildSmellsExport`'s result). */
+export interface SmellsExport {
+  file_category: string
+  summary: { total_smells: number }
+  smells_by_severity: Record<SmellSeverity, number>
+  smells: ExportedSmell[]
+}
