@@ -144,3 +144,18 @@ def test_an_installed_subclass_naming_a_missing_file_is_still_a_stub_15169(guard
     stub.__file__ = str(tmp_path / "site-packages" / "elsewhere" / "__init__.py")
 
     assert _report_new(guard, stub) == ["knowledge"]
+
+
+def test_a_repo_subclass_borrowing_an_installed_function_is_still_a_stub_15169(make_guard, tmp_path):
+    """A function assigned into the class keeps the donor's ``__module__`` (and its own qualname), so it is not the class's.
+
+    Fails on the code-filename-only rule, which accepted a class whose every function is installed code.
+    """
+    repo = tmp_path / "repo"
+    donor = _installed_class(tmp_path, "donor_15169").__dir__
+    cls = _lazy_class(repo / "stubs" / "lazy_stub.py", "knowledge")
+    cls.__dir__ = donor
+    stub = cls("knowledge")
+    stub.__file__ = _file_in(tmp_path / "site-packages")
+
+    assert _report_new(make_guard(root=repo), stub) == ["knowledge"]

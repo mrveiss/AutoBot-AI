@@ -11,16 +11,21 @@ although nothing in this repository made it.  A hand-built stub is a plain ``Mod
 so a file on disk alone proves nothing.  Three things hold for the kombu shape and cost a stub
 more than assigning a string:
 
-* the class is a ``ModuleType`` subclass whose functions all have code in a real installed
-  file (``__code__.co_filename``, which a class cannot reassign the way it can ``__module__``);
+* the class is a ``ModuleType`` subclass whose functions are its own (``__qualname__`` under the
+  class, ``__module__`` equal to the class's) and all have code in a real installed file
+  (``__code__.co_filename``, which a class cannot reassign the way it can ``__module__``);
 * the lazy instance is its own defining module: ``type(m).__module__ == m.__name__ == key``;
 * the instance's own ``__file__`` is a real installed file.
 
-Residual, accepted as out of reach of a static rule: a test that makes the REAL installed
-package import itself and then registers a copy of its genuine class under the SAME name is
-indistinguishable from the package.  Instantiating that class for another name is rejected by
-the identity above.  The third-party test is path based (a file outside the repository root):
-a virtualenv inside the root makes the package look first-party, and it is reported as before.
+Residuals, accepted as deliberate forgeries no static rule here distinguishes:
+
+* (a) a function compiled with a forged filename (``compile(src, "<real installed path>", "exec")``);
+* (b) a test that makes the REAL installed package import itself and registers a copy of its
+  genuine class under the SAME name.  Instantiating that class for another name is rejected by the
+  identity above.
+
+The third-party test is path based (a file outside the repository root): a virtualenv inside the
+root makes the package look first-party, and it is reported as before.
 """
 
 from __future__ import annotations
@@ -46,10 +51,20 @@ def _functions_of(cls: type) -> Iterator[object]:
             yield inner
 
 
+def _is_own(cls: type, fn: types.FunctionType) -> bool:
+    """True when *fn* was defined in the body of *cls*, not assigned from elsewhere."""
+    return fn.__qualname__.startswith(f"{cls.__qualname__}.") and fn.__module__ == cls.__module__
+
+
 def _code_is_installed(cls: type, is_third_party: Predicate, has_real_file: Predicate) -> bool:
-    """True when *cls* defines at least one function and every one of them lives in an installed file."""
-    files = [_At(fn.__code__.co_filename) for fn in _functions_of(cls)]
-    return bool(files) and all(is_third_party(f) and has_real_file(f) for f in files)
+    """True when *cls* defines at least one function, each its own and each in an installed file."""
+    functions = list(_functions_of(cls))
+    files = [_At(fn.__code__.co_filename) for fn in functions]
+    return (
+        bool(functions)
+        and all(_is_own(cls, fn) for fn in functions)
+        and all(is_third_party(f) and has_real_file(f) for f in files)
+    )
 
 
 def is_installed_lazy_module(name: str, module: object, is_third_party: Predicate, has_real_file: Predicate) -> bool:
