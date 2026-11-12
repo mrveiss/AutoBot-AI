@@ -13,7 +13,7 @@ the python suite's own shards (ci.yml prints it) -- run 43181148822 on the head 
 by comparing the lane's setup with the suite's (both call ``./.github/actions/setup-python-suite``,
 both start the same Redis service; the lane checks out the full history, the suite two commits):
 
-* ``covered-by-suite-only`` -- the lane skips it, the train's suite RUNS it (a tool or a session only the
+* ``covered-by-suite-only`` -- the lane skips it, the train's suite RUNS it (a tool only the
   suite has). Removed by #21360, which moves that setup into a composite action both workflows call.
 * ``equivalent-to-suite`` -- the suite skips it identically on the same runner image and the lane's
   environment is the same for that test, so the train exercises nothing more than the lane. It is either
@@ -77,11 +77,11 @@ def _by_design(file: str, reason_prefix: str, source_marker: str, why: str) -> A
     return AllowedSkip(file, reason_prefix, source_marker, EQUIVALENT_TO_SUITE, BY_DESIGN + why, why)
 
 
-#: ``covered-by-suite-only`` -- the check needs a service or a binary the suite's python-shard job
-#: provides and this workflow does not. The suite's own ``-rs`` shows NO promtool skip (it installs the
-#: binary and sets AUTOBOT_REQUIRE_PROMTOOL=1); for the two ChromaDB modules it shows the "stubbed" skip
-#: in the shared session of all eight shards AND a dedicated session (ci.yml, shard 1) that runs both
-#: files and fails if one is skipped -- so the suite runs them, and they stay in this class.
+#: ``covered-by-suite-only`` -- the check needs a binary the suite's python-shard job provides and this
+#: workflow does not. The suite's own ``-rs`` shows NO promtool skip (it installs the binary and sets
+#: AUTOBOT_REQUIRE_PROMTOOL=1). The two real-ChromaDB modules are NOT listed: the lane loads no backend
+#: conftest and nothing under its roots stubs the library, so they run here against the real one, and a
+#: skip of either (a dependency change dropping chromadb) is an off-list skip, hence red.
 _COVERED = (
     # Reason derived from the test source: the suite never skips it.
     _covered(
@@ -89,32 +89,6 @@ _COVERED = (
         "promtool not found at",
         "promtool not found at",
         "promtool is installed by ci.yml's python-shard job only",
-    ),
-    # Observed in the suite's shared session (all eight shards).
-    _covered(
-        "repo_tests/backup_embeddings_on_real_chroma_19647_test.py",
-        "chromadb is stubbed, not the real library",
-        "chromadb is stubbed, not the real library",
-        "the suite runs it in its own session",
-    ),
-    _covered(
-        "repo_tests/chromadb_missing_key_serving_where_18820_test.py",
-        "chromadb is stubbed, not the real library",
-        "chromadb is stubbed, not the real library",
-        "the suite runs it in its own session",
-    ),
-    # Reason derived from the test source (importorskip): the suite's runner has the library.
-    _covered(
-        "repo_tests/backup_embeddings_on_real_chroma_19647_test.py",
-        "could not import 'chromadb'",
-        'importorskip("chromadb")',
-        "the suite runs it in its own session",
-    ),
-    _covered(
-        "repo_tests/chromadb_missing_key_serving_where_18820_test.py",
-        "could not import 'chromadb'",
-        'importorskip("chromadb")',
-        "the suite runs it in its own session",
     ),
 )
 

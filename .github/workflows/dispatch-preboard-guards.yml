@@ -37,12 +37,13 @@
 #     plugins/core-plugins), the frontend tests, and the interaction of two members
 #   - the dependency-floor check, the hardcoded-value baseline audit (ssot-coverage.yml), Semgrep
 #     at ERROR severity (security.yml)
-#   - promtool (AUTOBOT_REQUIRE_PROMTOOL) and the real-ChromaDB session (ci.yml): their tests skip
-#     here and are accepted only through the skip allowlist in preboard_guard_lane_skips.py
+#   - promtool (AUTOBOT_REQUIRE_PROMTOOL, ci.yml): its tests skip here and are accepted only through
+#     the skip allowlist in preboard_guard_lane_skips.py. The two real-ChromaDB modules RUN here against
+#     the real library (no backend conftest stubs it); a skip of either is off-list, so red
 #   - source-reading guard tests that live inside the product trees (for example under
 #     autobot-backend/): they are not run here
 # The skip rule: a skipped test is accepted only when it is on the allowlist in
-# preboard_guard_lane_skips.py (28 entries), by file AND reason prefix, in one of two classes, so that a skip the
+# preboard_guard_lane_skips.py (24 entries), by file AND reason prefix, in one of two classes, so that a skip the
 # train's suite shares never turns the lane red but is always listed. covered-by-suite-only: the lane
 # skips it and the suite RUNS it (the suite provides the tool or session). equivalent-to-suite: the
 # suite skips it the same way on the same runner image, so the train is no stricter than the lane; of

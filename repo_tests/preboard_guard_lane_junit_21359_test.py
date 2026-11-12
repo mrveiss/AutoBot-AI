@@ -85,14 +85,14 @@ def _skip(nodeid: str, reason: str) -> dict[str, str]:
 def test_a_module_skipped_by_importorskip_keeps_its_reason_from_the_element_text(lane, tmp_path) -> None:
     parsed = _parse(lane, tmp_path, _collection_skip(_CHROMA_A, _importorskip_text(_CHROMA_A)))
     assert parsed["skipped"] == [_skip(_CHROMA_A, _IMPORT_REASON)] and parsed["executed"] == 0
-    assert lane.report.is_allowed_skip(_CHROMA_A, _IMPORT_REASON)
+    assert not lane.report.is_allowed_skip(_CHROMA_A, _IMPORT_REASON)
 
 
 def test_a_module_skipped_by_pytest_skip_at_module_level_keeps_its_reason(lane, tmp_path) -> None:
     text = _module_skip_text(_CHROMA_B, _STUB_REASON)
     parsed = _parse(lane, tmp_path, _collection_skip(_CHROMA_B, text))
     assert parsed["skipped"] == [_skip(_CHROMA_B, _STUB_REASON)]
-    assert lane.report.is_allowed_skip(_CHROMA_B, _STUB_REASON)
+    assert not lane.report.is_allowed_skip(_CHROMA_B, _STUB_REASON)
 
 
 def test_a_multi_line_collection_reason_is_cut_at_its_first_line(lane, tmp_path) -> None:
@@ -133,7 +133,7 @@ def test_xunit2_has_no_file_attribute_so_the_dotted_module_names_the_file(lane, 
     case = _collection_skip(_CHROMA_A, _importorskip_text(_CHROMA_A), family="xunit2")
     parsed = _parse(lane, tmp_path, case)
     assert parsed["skipped"] == [_skip(_module_name(_CHROMA_A), _IMPORT_REASON)]
-    assert lane.report.is_allowed_skip(_module_name(_CHROMA_A), _IMPORT_REASON)
+    assert not lane.report.is_allowed_skip(_module_name(_CHROMA_A), _IMPORT_REASON)
 
 
 # ------------------------------------------------------------------ what RAN, in every shape pytest writes
@@ -167,20 +167,20 @@ def _real_shard(*cases: str, **meta):
     return item
 
 
-def test_both_real_chromadb_modules_skipping_at_collection_are_green_with_skips(lane, tmp_path) -> None:
+def test_both_real_chromadb_modules_skipping_at_collection_are_red(lane, tmp_path) -> None:
     cases = (
         _collection_skip(_CHROMA_A, _importorskip_text(_CHROMA_A)),
         _collection_skip(_CHROMA_B, _module_skip_text(_CHROMA_B, _STUB_REASON)),
     )
     item = _real_shard(*cases, required_files=[_M, _CHROMA_A, _CHROMA_B])
     result = support.verdict(lane, tmp_path, [item])
-    assert result["overall"] == "green_with_skips", result["checks"]["guards"]["problems"]
+    assert result["overall"] == "red"
     assert result["checks"]["guards"]["skip_classes"] == {
-        "covered-by-suite-only": 2,
+        "covered-by-suite-only": 0,
         "equivalent-to-suite": 0,
-        "unreviewed": 0,
+        "unreviewed": 2,
     }
-    assert {s["skip_class"] for s in result["skipped_tests"]} == {"covered-by-suite-only"}
+    assert [s["allowed"] for s in result["skipped_tests"]] == [False, False]
 
 
 def test_a_module_skipped_for_an_unreviewed_reason_is_red(lane, tmp_path) -> None:
@@ -209,8 +209,8 @@ def test_a_green_run_is_a_notice_with_overall_skips_and_behind_base(lane, tmp_pa
 
 
 def test_a_run_with_skips_is_a_warning_naming_the_skip_classes(lane, tmp_path) -> None:
-    case = _collection_skip(_CHROMA_A, _importorskip_text(_CHROMA_A))
-    lines = lane.report.workflow_commands(_result(lane, tmp_path, case, required_files=[_M, _CHROMA_A]))
+    case = support.skipped("repo_tests/promtool_rules_test.py", "test_a", "promtool not found at /x: install it")
+    lines = lane.report.workflow_commands(_result(lane, tmp_path, case, required_files=[_M]))
     assert lines[0].startswith("::warning title=Pre-board guard lane::overall=green_with_skips;")
     assert "covered-by-suite-only=1" in lines[0] and "unreviewed=0" in lines[0]
 

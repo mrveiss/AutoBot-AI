@@ -14,6 +14,8 @@ Held here:
 
 * every skip the lane can see and the suite also has is reviewed, so "exactly the skips the suite has
   today" is ``green_with_skips``, never ``red`` and never ``green``;
+* a skip of either real-ChromaDB module is NOT listed: the lane runs both against the real library, so
+  a skip (stubbed, or the library gone) is ``red``, where the suite's dedicated session would fail it;
 * one skip nobody listed turns that same run ``red``;
 * the suite skips that the lane does NOT list are ``red`` in the lane, on purpose: they read git
   history, which the suite's shallow checkout lacks and the lane's full one has, so the lane never
@@ -37,8 +39,6 @@ _MODULE_LEVEL = "chromadb is stubbed, not the real library"
 
 #: The skips the lane lists, as the suite printed them.
 _OBSERVED = """
-SKIPPED [1] repo_tests/backup_embeddings_on_real_chroma_19647_test.py:27: chromadb is stubbed, not the real library
-SKIPPED [1] repo_tests/chromadb_missing_key_serving_where_18820_test.py:27: chromadb is stubbed, not the real library
 SKIPPED [1] autobot_shared/editable_install_layout_test.py:84: autobot_shared has no pip distribution metadata in this interpreter (a bare checkout on pythonpath/PYTHONPATH, not a real `pip install -e`)
 SKIPPED [1] autobot_shared/python_floor_test.py:47: python3.10 not installed
 SKIPPED [1] repo_tests/ansible_free_form_args_20693_test.py:28: could not import 'ansible.parsing.splitter': No module named 'ansible.parsing'
@@ -55,8 +55,14 @@ SKIPPED [1] repo_tests/pytest_testpaths_cover_every_test_dir_15183_test.py:202: 
 SKIPPED [1] repo_tests/import_hermeticity_test.py:373: the sweep runs in CI; set AUTOBOT_IMPORT_HERMETICITY_SWEEP=1 to run it locally, one interpreter per module
 """
 
-#: Suite skips the lane does not list, each because the lane's environment differs from the suite's.
+#: Skips the lane does not list: the suite's git-history reads (its checkout is shallow, the lane's is
+#: not), and the two real-ChromaDB modules (the lane runs them against the real library, so any skip of
+#: them, as the suite printed it or as the library going missing would print it, is a finding).
 _NOT_LISTED = """
+SKIPPED [1] repo_tests/backup_embeddings_on_real_chroma_19647_test.py:27: chromadb is stubbed, not the real library
+SKIPPED [1] repo_tests/chromadb_missing_key_serving_where_18820_test.py:27: chromadb is stubbed, not the real library
+SKIPPED [1] repo_tests/backup_embeddings_on_real_chroma_19647_test.py:27: could not import 'chromadb': No module named 'chromadb'
+SKIPPED [1] repo_tests/chromadb_missing_key_serving_where_18820_test.py:27: could not import 'chromadb': No module named 'chromadb'
 SKIPPED [1] scripts/lint_conventions_test.py:379: shallow checkout: the object store cannot answer whether these commits exist
 SKIPPED [1] repo_tests/one_serving_predicate_18820_test.py:344: CI shards are shallow and never fetch origin/main; the <=-main check on its baseline is enforced at pre-push by its co-located test
 SKIPPED [1] repo_tests/python_filter_covers_its_guards_test.py:384: cannot compare against the base revision, so direction is UNCHECKED: none of ['origin/main', 'main'] resolves in this clone (shallow or detached?)
@@ -95,7 +101,7 @@ def test_exactly_the_skips_the_suite_has_today_are_green_with_skips(lane, tmp_pa
     assert result["overall"] == "green_with_skips", result["checks"]["guards"]["problems"]
     assert [s["allowed"] for s in result["skipped_tests"]] == [True] * len(observed)
     classes = result["checks"]["guards"]["skip_classes"]
-    assert classes == {"covered-by-suite-only": 2, "equivalent-to-suite": len(observed) - 2, "unreviewed": 0}
+    assert classes == {"covered-by-suite-only": 0, "equivalent-to-suite": len(observed), "unreviewed": 0}
 
 
 def test_one_unlisted_skip_makes_that_same_run_red(lane, tmp_path) -> None:
@@ -116,3 +122,11 @@ def test_a_listed_file_skipping_for_a_new_reason_is_red(lane, tmp_path) -> None:
 @pytest.mark.parametrize(("file", "reason"), _parsed(_NOT_LISTED), ids=lambda v: v[:40])
 def test_a_suite_skip_the_lane_does_not_list_is_red_in_the_lane(lane, tmp_path, file, reason) -> None:
     assert _verdict(lane, tmp_path, [(file, reason)])["overall"] == "red"
+
+
+def test_a_skip_of_a_real_chromadb_module_makes_the_lane_red(lane, tmp_path) -> None:
+    chroma = [(f, r) for f, r in _parsed(_NOT_LISTED) if "chroma" in f]
+    assert len(chroma) == 4
+    result = _verdict(lane, tmp_path, [*_parsed(_OBSERVED), *chroma])
+    assert result["overall"] == "red" and result["checks"]["guards"]["skip_classes"]["unreviewed"] == 4
+    assert {s["nodeid"].split("::")[0] for s in result["skipped_tests"] if not s["allowed"]} == {f for f, _ in chroma}
