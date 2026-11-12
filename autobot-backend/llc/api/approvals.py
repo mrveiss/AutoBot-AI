@@ -255,11 +255,12 @@ def _recorded_requester(ctx: TenantContext) -> uuid.UUID:
     """Who the approval records as having asked: the verified caller, for every type (#20521, #8214).
 
     A requester the body could name would let the one who asked also approve with a second admin present, and
-    would let any caller put another person's name on a request. A credential with no user id is refused: the
-    agent keys are accepted only on the agent API, so this route has no agent identity it could record.
+    would let any caller put another person's name on a request. A credential with no user id is refused the
+    way ``_common.actor_id`` refuses it on every other route that records the caller (401): the agent keys are
+    accepted only on the agent API, so this route has no agent identity it could record.
     """
     if ctx.user_id is None:
-        raise HTTPException(status_code=403, detail="The request cannot be attributed to a verified user")
+        raise HTTPException(status_code=401, detail="Not authenticated")
     return ctx.user_id
 
 

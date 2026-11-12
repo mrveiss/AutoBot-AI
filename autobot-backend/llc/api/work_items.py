@@ -71,7 +71,7 @@ from ..services.work_item_service import (
     WorkItemService,
     resolve_actor_role,
 )
-from ._common import FenceSafeAgentId, acting_user_id
+from ._common import FenceSafeAgentId
 from ._common import actor_id as verified_user_id
 from ._common import own_task_actor, refused_transition, write_refusal
 from ._handoff_identity import handing_off_agent, member_reviewer
@@ -792,7 +792,7 @@ async def add_comment(
         company_id=str(ctx.org_id),
         body=body.body,
         author_agent_id=None,
-        author_user_id=acting_user_id(_current_user),  # the session's, never the body (#20521)
+        author_user_id=str(verified_user_id(_current_user)),  # the session's, never the body (#20521)
     )
     # GH#9624/#19582: add_comment queued the comment and @mention wakes; they dispatch on this commit.
     await session.commit()
@@ -1169,7 +1169,7 @@ async def upload_attachment(
             filename=require_safe_upload(file.filename),  # #19088: gate before the body is read
             content_type=file.content_type or "application/octet-stream",
             content=await file.read(),
-            uploaded_by_user_id=acting_user_id(_current_user),  # the session's, never the query (#20521)
+            uploaded_by_user_id=str(verified_user_id(_current_user)),  # the session's, never the query (#20521)
         )
     except (AttachmentTooLarge, ValueError) as exc:  # #17302: ValueError was an uncaught 500
         logger.warning("Attachment upload refused for %s: %s", work_item_id, exc)

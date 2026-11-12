@@ -39,7 +39,7 @@ from ..services.label_service import (
     WorkItemNotFound,
     _label_to_dict,
 )
-from ._common import acting_user_id, require_work_item_id
+from ._common import acting_user_id, actor_id, require_work_item_id
 
 router = APIRouter(
     prefix="/companies/{company_id}/labels", tags=["llc-labels"], dependencies=[Depends(require_work_item_id)]
@@ -123,7 +123,7 @@ async def create_label(
             name=body.name,
             color=body.color,
             description=body.description,
-            created_by=acting_user_id(_current_user),  # the session's, never the body (#20521)
+            created_by=str(actor_id(_current_user)),  # the session's, never the body (#20521)
         )
         await session.commit()
         return _label_to_dict(label)
@@ -208,7 +208,7 @@ async def assign_labels(
             session,
             work_item_id=work_item_id,
             label_ids=body.label_ids,
-            assigned_by=acting_user_id(_current_user),
+            assigned_by=str(actor_id(_current_user)),
             actor_user_id=acting_user_id(_current_user),
         )
         await session.commit()

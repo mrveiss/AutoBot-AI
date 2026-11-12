@@ -83,7 +83,7 @@ async def test_a_credential_with_no_user_cannot_name_a_requester() -> None:
     with pytest.raises(HTTPException) as refused:
         await approvals_api.request_approval(body, _session(), svc, {"auth_method": "run_jwt"}, _ctx(None))
 
-    assert refused.value.status_code == 403
+    assert refused.value.status_code == 401
     svc.request_approval.assert_not_awaited()
 
 
@@ -169,15 +169,17 @@ async def test_a_label_is_created_and_assigned_by_the_session_user_not_the_body(
 
 
 @pytest.mark.asyncio
-async def test_a_credential_that_is_not_a_person_records_no_label_creator() -> None:
+async def test_a_credential_that_is_not_a_person_is_refused_like_every_other_attributed_write() -> None:
     svc = MagicMock(create=AsyncMock(return_value=SimpleNamespace()))
 
     with (
         patch.object(labels_api, "_service", return_value=svc),
         patch.object(labels_api, "_label_to_dict", return_value={}),
+        pytest.raises(HTTPException) as refused,
     ):
         await labels_api.create_label(
             str(_ORG), labels_api.LabelCreate(name="n", created_by=_FORGED), _session(), {"username": "svc"}, _ctx(None)
         )
 
-    assert svc.create.await_args.kwargs["created_by"] is None
+    assert refused.value.status_code == 401
+    svc.create.assert_not_awaited()
