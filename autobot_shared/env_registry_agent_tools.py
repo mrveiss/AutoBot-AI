@@ -113,6 +113,18 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_CHAT_STALL_ANSWER_MAX_CHARS",
+        type=int,
+        default=2000,
+        description=(
+            "Longest answer to a chat stall question that is passed to the model; longer text is truncated " "(#21022)."
+        ),
+        component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PLAN_TTL_SECONDS",
         type=int,
         default=86400,
