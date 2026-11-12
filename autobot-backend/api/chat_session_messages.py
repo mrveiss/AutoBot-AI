@@ -65,6 +65,13 @@ async def _fetch_or_raise(chat_history_manager, session_id: str, limit: int, off
 
 
 async def fetch_session_messages(request, chat_history_manager, session_id: str, limit: int, offset: int = 0) -> List:
-    """The session's stored messages (see ``_fetch_or_raise``) plus the open stall question's card, if any."""
+    """The session's stored messages (see ``_fetch_or_raise``) plus the open stall question's card, if any.
+
+    The card belongs to the tail of history, where the stalled turn is: only the newest page (``offset == 0``, since
+    offset counts back from the newest) carries it. It is outside the pagination count, so older pages and the
+    page size are unaffected by it.
+    """
     messages = await _fetch_or_raise(chat_history_manager, session_id, limit, offset)
+    if offset > 0:
+        return messages
     return await with_pending_question(request, session_id, messages)
