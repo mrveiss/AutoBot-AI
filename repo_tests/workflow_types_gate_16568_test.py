@@ -36,10 +36,11 @@ _WORKFLOW_TS = "autobot-frontend/src/types/_generated/workflow.ts"
 # (called by ci.yml); its path filters live in .github/filters/gate-paths.yml.
 _VERIFY = _ROOT / ".github" / "workflows" / "_gate-generated-types.yml"
 _FILTERS = _ROOT / ".github" / "filters" / "gate-paths.yml"
-_AUTOFIX = _ROOT / ".github" / "workflows" / "auto-fix-generated-types.yml"
+_CI = _ROOT / ".github" / "workflows" / "ci.yml"
 _ACTION = _ROOT / ".github" / "actions" / "generated-types-autofix" / "action.yml"
 _GEN_SCRIPT_REL = "autobot-infrastructure/shared/scripts/gen_frontend_types.py"
-_REQUIRED_PATHS = ("autobot-frontend/src/types/_generated/**", _GEN_SCRIPT_REL)
+_WORKFLOW_TS_GLOB = "autobot-frontend/src/types/_generated/**"
+_REQUIRED_PATHS = (_WORKFLOW_TS_GLOB, _GEN_SCRIPT_REL)
 
 
 def _load_generator():
@@ -125,10 +126,37 @@ def test_the_generators_python_sources_are_under_watched_trees():
     assert unwatched == set(), f"generator sources that cannot trigger the required gate: {unwatched}"
 
 
+def _autofix_follows_the_types_gate(jobs: dict, filters: dict, path: str) -> bool:
+    """True when `path` runs the types gate (a `types` match) and a failed gate runs the auto-fix."""
+    gen, fix = jobs["run-generated-types"], jobs["run-auto-fix-types"]
+    outputs = jobs["changes"]["outputs"]["run_types"]
+    return (
+        path in filters["types"]
+        and "steps.gp.outputs.types" in outputs
+        and "needs.changes.outputs.run_types == 'true'" in gen["if"]
+        and "run-generated-types" in _as_list(fix["needs"])
+        and "needs.run-generated-types.result == 'failure'" in fix["if"]
+        and fix["uses"].endswith("/auto-fix-generated-types.yml")
+    )
+
+
+def _as_list(value) -> list:
+    return [value] if isinstance(value, str) else list(value)
+
+
 def test_the_autofix_regenerates_and_reports_workflow_ts():
-    paths = yaml.safe_load(_AUTOFIX.read_text(encoding="utf-8"))[True]["pull_request"]["paths"]
+    """#20552: the auto-fix no longer has its own `pull_request.paths`; verify's paths are its trigger.
+
+    The chain: a `types` filter match sets `run_types`, `run-generated-types` runs on it, and
+    `run-auto-fix-types` runs when that job FAILED. Then the action's steps regenerate, then report.
+    """
+    filters = yaml.safe_load(_FILTERS.read_text(encoding="utf-8"))
+    jobs = yaml.safe_load(_CI.read_text(encoding="utf-8"))["jobs"]
     for path in _REQUIRED_PATHS:
-        assert path in paths, f"auto-fix trigger paths lack {path}"
+        assert _autofix_follows_the_types_gate(jobs, filters, path), f"{path} cannot reach the auto-fix"
+    assert not _autofix_follows_the_types_gate(jobs, filters, "README.md"), "control: an unwatched path reaches it"
+    always = {**jobs["run-auto-fix-types"], "if": "${{ always() }}"}
+    assert not _autofix_follows_the_types_gate({**jobs, "run-auto-fix-types": always}, filters, _WORKFLOW_TS_GLOB)
     steps = yaml.safe_load(_ACTION.read_text(encoding="utf-8"))["runs"]["steps"]
     regen = next(i for i, s in enumerate(steps) if _GEN_SCRIPT_REL in s.get("run", ""))
     report = next(i for i, s in enumerate(steps) if "GENERATED=" in s.get("run", ""))
