@@ -271,16 +271,8 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
                 else:
                     skipped["goals"].append(goal.get("title", ""))
 
-            # projects
-            project_ids: Dict[str, str] = {}
-            for project in template.get("projects", []):
-                project_id = await self._import_project(project, company_id)
-                if project_id:
-                    created_entities["projects"].append(str(project_id))
-                    project_ids[str(project.get("id"))] = str(project_id)
-
-            # seed work items
-            await self._import_seed_items(template, company_id, project_ids, created_entities, skipped, warnings)
+            # projects, then work items (parents first)
+            skipped_items = await self._import_work(template, company_id, created_entities, skipped, warnings)
 
             await sp.commit()
         except Exception as exc:
@@ -292,6 +284,7 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
             "created_entities": created_entities,
             "skipped": skipped,
             "dropped_reporting_lines": dropped_links,
+            "skipped_work_items": skipped_items,
             "warnings": warnings,
         }
 
