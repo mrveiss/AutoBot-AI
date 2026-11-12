@@ -10,13 +10,18 @@
 #   gh run download <run id> -n preboard-guards-result
 #
 # A member boards a train only with a completed (not cancelled) result at its approved head whose
-# `overall` is "green" or "green_with_skips" and whose `behind_base` is 0. The lane runs outside
+# `overall` is "green" or "green_with_skips" and whose `base_sha` still equals the tip of the base
+# branch at boarding time (every landing moves it; an older result is stale, dispatch again). The lane runs outside
 # the train CI slots: it is dispatch-only, so it never starts on its own, and its concurrency
 # group is its own (one run per dispatched ref; a newer dispatch on the same ref supersedes the
 # older one and nothing else).
 #
 # What it runs
-#   merge   The head MERGED with the current tip of `base`, as a local commit that is never pushed:
+#   pin     The tip of `base`, resolved ONCE (the only place the branch is read). Its output `base_sha`
+#           is the commit every other job merges, fetched by id: the base advancing during the run
+#           cannot give two jobs two trees. The result job still checks that every shard and the
+#           types job recorded that same commit.
+#   merge   The head MERGED with the pinned base commit, as a local commit that is never pushed:
 #           the state a pull request's merge ref gives the suite. A head that conflicts with the
 #           base tests nothing and the lane is red.
 #   guards  Every test the python suite collects from the guard roots (all of pytest.ini's
@@ -55,8 +60,8 @@
 #   schema        2; bumped when a field below is renamed or removed
 #   run_id        the workflow run
 #   ref, sha      the dispatched branch and its head commit
-#   base_ref      the `base` input; base_sha the tip of it that was merged; behind_base the commits
-#                 the head lacked from it; merged true when the merge succeeded (false: conflict)
+#   base_ref      the `base` input; base_sha the base commit the pin job resolved and every job merged;
+#                 behind_base the commits the head lacked from it; merged true when the merge succeeded (false: conflict)
 #   overall       "green" | "green_with_skips" | "red" | "cancelled". green: every check succeeded
 #                 and nothing was skipped. green_with_skips: the same, and every skip is on the
 #                 reviewed allowlist (see the skip rule above). A skip off the allowlist, a failure, a missing shard or
@@ -64,8 +69,10 @@
 #   roots         the guard roots that ran
 #   checks.guards status, executed, floor, failed, skipped, unreviewed_skips, skip_classes, shards, problems
 #                 (the reasons the run was not a complete one: a shard missing or unreadable, an
-#                 unexpected exit code, a recorded test file that produced no test, a conflict)
-#   checks.types  status (the types job result)
+#                 unexpected exit code, a recorded test file that produced no test, a conflict, a shard
+#                 or the types job that merged a base other than `base_sha`, a missing types record)
+#   checks.types  status (the types job result); the base it merged is recorded in types-meta.json
+#                 (artifact preboard-types-record) and compared with base_sha in checks.guards.problems
 #   failed_tests  [{nodeid, kind: "failure" | "error", message: first line}]
 #   skip_classes  {covered-by-suite-only, equivalent-to-suite, unreviewed}: how many skips are in each
 #                 class, so an operator sees which skips the train will still exercise
@@ -98,13 +105,36 @@ permissions:
   packages: read  # pull the ghcr CI image mirror (#18160)
 
 jobs:
+  # The base is resolved HERE and nowhere else. Every other job merges this exact commit, so the base
+  # advancing while the lane runs cannot give two jobs two different merged trees.
+  pin:
+    name: pin base
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BASE_REF: ${{ inputs.base }}
+    outputs:
+      base_sha: ${{ steps.pin.outputs.base_sha }}
+    steps:
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Resolve the tip of the base branch once
+        id: pin
+        run: python3 pipeline-scripts/preboard_guard_lane.py resolve --base-ref "$BASE_REF" >> "$GITHUB_OUTPUT"
+
   guards:
     name: guards shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    needs: [pin]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       PYTEST_FAULTHANDLER_TIMEOUT_S: 600
-      BASE_REF: ${{ inputs.base }}
+      PINNED_BASE_SHA: ${{ needs.pin.outputs.base_sha }}
     strategy:
       fail-fast: false
       matrix:
@@ -138,9 +168,9 @@ jobs:
           python-version-file: '.python-version'
 
       # Before the environment is built, so the install sees the merged requirements.
-      - name: Merge the base into the head (local commit, never pushed)
+      - name: Merge the pinned base into the head (local commit, never pushed)
         id: base
-        run: python3 pipeline-scripts/preboard_guard_lane.py merge --base-ref "$BASE_REF" >> "$GITHUB_OUTPUT"
+        run: python3 pipeline-scripts/preboard_guard_lane.py merge --base-sha "$PINNED_BASE_SHA" >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/setup-python-suite
 
@@ -204,10 +234,11 @@ jobs:
 
   types:
     name: types
+    needs: [pin]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      BASE_REF: ${{ inputs.base }}
+      PINNED_BASE_SHA: ${{ needs.pin.outputs.base_sha }}
     steps:
       # The dispatched branch itself: the default ref, no PR- or input-derived value.
       - name: Checkout the dispatched branch
@@ -219,9 +250,27 @@ jobs:
         with:
           python-version-file: '.python-version'
 
-      - name: Merge the base into the head (local commit, never pushed)
+      - name: Merge the pinned base into the head (local commit, never pushed)
         id: base
-        run: python3 pipeline-scripts/preboard_guard_lane.py merge --base-ref "$BASE_REF" >> "$GITHUB_OUTPUT"
+        run: python3 pipeline-scripts/preboard_guard_lane.py merge --base-sha "$PINNED_BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      # Written before the stop below, so a conflicting head still leaves its record.
+      - name: Record the base this job tested
+        env:
+          MERGED: ${{ steps.base.outputs.merged }}
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/preboard-types"
+          python3 pipeline-scripts/preboard_guard_lane.py types-meta --out "$RUNNER_TEMP/preboard-types/types-meta.json"
+
+      - name: Upload the types job's base record
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: preboard-types-record
+          path: ${{ runner.temp }}/preboard-types
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Stop on a head that conflicts with the base
         if: steps.base.outputs.merged != 'true'
@@ -234,7 +283,7 @@ jobs:
 
   result:
     name: result
-    needs: [guards, types]
+    needs: [pin, guards, types]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -253,6 +302,13 @@ jobs:
           pattern: preboard-shard-*
           path: ${{ runner.temp }}/shards
 
+      - name: Download the types job's base record
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: preboard-types-record
+          path: ${{ runner.temp }}/types
+
       # Exits non-zero only for a red or cancelled lane; green and green_with_skips are boardable.
       - name: Summarize
         env:
@@ -261,12 +317,13 @@ jobs:
           REF: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
           BASE_REF: ${{ inputs.base }}
+          PINNED_BASE_SHA: ${{ needs.pin.outputs.base_sha }}
           OUT_DIR: ${{ runner.temp }}/result
         run: |
-          mkdir -p "$OUT_DIR" "$RUNNER_TEMP/shards"
+          mkdir -p "$OUT_DIR" "$RUNNER_TEMP/shards" "$RUNNER_TEMP/types"
           rc=0
           python3 pipeline-scripts/preboard_guard_lane.py summarize \
-            --shards "$RUNNER_TEMP/shards" \
+            --shards "$RUNNER_TEMP/shards" --types "$RUNNER_TEMP/types" \
             --out "$OUT_DIR/result.json" --markdown "$OUT_DIR/summary.md" || rc=$?
           cat "$OUT_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
           exit "$rc"

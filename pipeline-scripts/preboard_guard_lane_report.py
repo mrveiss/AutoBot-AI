@@ -137,6 +137,33 @@ def shard_problems(metas: list[dict[str, Any]]) -> list[str]:
     return problems
 
 
+def read_types_records(directory: Path) -> tuple[list[dict[str, Any]], list[str]]:
+    """What the types job recorded (one ``types-meta.json``), and what could not be read."""
+    records, problems = [], []
+    for path in sorted(directory.rglob("types-meta.json")) if directory.is_dir() else []:
+        try:
+            records.append(json.loads(path.read_text(encoding="utf-8")))
+        except ValueError as err:
+            problems.append(f"types-meta.json is unreadable ({err})")
+    return records, problems
+
+
+def base_problems(pinned: str, metas: list[dict[str, Any]], records: list[dict[str, Any]]) -> list[str]:
+    """Every job must have merged the one base commit the first job pinned; a record that is missing is a problem."""
+    if not pinned:
+        return ["no pinned base commit was handed to the result job; dispatch the lane again"]
+    found = [
+        f"shard {m.get('shard')} tested base {str(m.get('base_sha'))[:12]}, not the pinned {pinned[:12]}"
+        for m in metas
+        if m.get("base_sha") != pinned
+    ]
+    if len(records) != 1:
+        return found + [f"the types job recorded {len(records)} base commits (types-meta.json), expected exactly 1"]
+    if records[0].get("base_sha") != pinned:
+        found.append(f"the types job tested base {str(records[0].get('base_sha'))[:12]}, not the pinned {pinned[:12]}")
+    return found
+
+
 def file_problems(required: list[str], produced: set[str]) -> list[str]:
     """Recorded test files that produced no executed or allowlisted-skipped test."""
     return [
@@ -185,10 +212,12 @@ def skip_class_counts(skipped: list[dict[str, Any]]) -> dict[str, int]:
     return {name: sum(1 for s in skipped if s["skip_class"] == name) for name in (*SKIP_CLASSES, UNREVIEWED)}
 
 
-def guards_check(needs: dict[str, Any], metas: list[dict[str, Any]], total: dict[str, Any], read: list[str]) -> dict:
-    """The ``checks.guards`` object."""
+def guards_check(
+    needs: dict[str, Any], metas: list[dict[str, Any]], total: dict[str, Any], read: list[str], base: list[str] = ()
+) -> dict:
+    """The ``checks.guards`` object. *base* holds the pinned-base problems of the shards and the types job."""
     facts = lane_facts(metas)
-    problems = read + shard_problems(metas) + file_problems(facts["required"], total["produced"])
+    problems = read + list(base) + shard_problems(metas) + file_problems(facts["required"], total["produced"])
     unreviewed = [s for s in total["skipped"] if not s["allowed"]]
     if unreviewed:
         problems.append(f"{len(unreviewed)} skipped test(s) are not on the reviewed skip allowlist; see skipped_tests")
@@ -208,11 +237,13 @@ def guards_check(needs: dict[str, Any], metas: list[dict[str, Any]], total: dict
     }
 
 
-def build_result(env: dict[str, str], shard_dir: Path) -> dict[str, Any]:
+def build_result(env: dict[str, str], shard_dir: Path, types_dir: Path) -> dict[str, Any]:
     """The result document. Field names are the contract documented in the workflow header."""
     metas, total, read = read_shards(shard_dir)
+    records, types_read = read_types_records(types_dir)
+    pinned = env.get("PINNED_BASE_SHA", "")
     needs, facts = json.loads(env["NEEDS_JSON"]), lane_facts(metas)
-    guards = guards_check(needs, metas, total, read)
+    guards = guards_check(needs, metas, total, read + types_read, base_problems(pinned, metas, records))
     types = needs["types"]["result"]
     return {
         "schema": SCHEMA_VERSION,
@@ -220,7 +251,7 @@ def build_result(env: dict[str, str], shard_dir: Path) -> dict[str, Any]:
         "ref": env.get("REF", ""),
         "sha": env.get("SHA", ""),
         "base_ref": env.get("BASE_REF", ""),
-        "base_sha": facts["base_sha"],
+        "base_sha": pinned,
         "behind_base": facts["behind_base"],
         "merged": facts["merged"],
         "overall": lane_verdict(guards["status"], types),

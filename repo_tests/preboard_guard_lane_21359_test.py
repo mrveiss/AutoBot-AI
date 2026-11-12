@@ -181,7 +181,7 @@ def test_the_types_check_is_the_one_composite_action(workflow) -> None:
 
 def test_the_result_is_uploaded_whatever_the_outcome(workflow) -> None:
     result = workflow["jobs"]["result"]
-    assert result["needs"] == ["guards", "types"] and "always()" in result["if"]
+    assert result["needs"] == ["pin", "guards", "types"] and "always()" in result["if"]
     upload = next(s for s in result["steps"] if s.get("with", {}).get("name") == "preboard-guards-result")
     assert upload["uses"].startswith("actions/upload-artifact@") and upload["if"] == "always()"
     assert upload["with"]["if-no-files-found"] == "error"
@@ -199,6 +199,48 @@ def test_every_action_pin_is_one_the_suite_already_uses(workflow) -> None:
         if "uses" in step
     }
     assert external and external <= known, f"pins no other workflow uses: {sorted(external - known)}"
+
+
+# ------------------------------------------------------------------ one base for every job
+
+_PINNED = "${{ needs.pin.outputs.base_sha }}"
+
+
+def _runs(workflow: dict[str, Any], job: str) -> list[str]:
+    return [s["run"] for s in workflow["jobs"][job]["steps"] if "run" in s]
+
+
+def test_the_base_is_resolved_in_exactly_one_job_and_exposed_as_its_output(workflow) -> None:
+    resolving = [j for j in workflow["jobs"] if any("preboard_guard_lane.py resolve" in r for r in _runs(workflow, j))]
+    assert resolving == ["pin"], f"the base branch tip must be resolved by one job, found {resolving}"
+    assert workflow["jobs"]["pin"]["outputs"] == {"base_sha": "${{ steps.pin.outputs.base_sha }}"}
+    assert workflow["jobs"]["pin"]["steps"][-1]["id"] == "pin" and "needs" not in workflow["jobs"]["pin"]
+
+
+@pytest.mark.parametrize("job", ["guards", "types"])
+def test_guards_and_types_merge_the_pinned_commit_and_never_the_branch_tip(workflow, job) -> None:
+    body = workflow["jobs"][job]
+    assert body["needs"] == ["pin"] and body["env"]["PINNED_BASE_SHA"] == _PINNED
+    merge = [r for r in _runs(workflow, job) if "preboard_guard_lane.py merge" in r]
+    assert len(merge) == 1 and '--base-sha "$PINNED_BASE_SHA"' in merge[0] and "--base-ref" not in merge[0]
+    assert "inputs.base" not in str(body) and "BASE_REF" not in str(body), f"{job} re-reads the base branch"
+
+
+def test_the_result_job_is_handed_the_pinned_commit_and_the_types_jobs_record(workflow) -> None:
+    summarize = _step(workflow, "result", "Summarize")
+    assert summarize["env"]["PINNED_BASE_SHA"] == _PINNED
+    assert '--types "$RUNNER_TEMP/types"' in summarize["run"]
+    record = [s for s in workflow["jobs"]["types"]["steps"] if "preboard_guard_lane.py types-meta" in s.get("run", "")]
+    assert len(record) == 1 and record[0]["env"]["BASE_SHA"] == "${{ steps.base.outputs.base_sha }}"
+    uploads = [s["with"]["name"] for s in workflow["jobs"]["types"]["steps"] if "upload-artifact" in s.get("uses", "")]
+    result_steps = workflow["jobs"]["result"]["steps"]
+    downloads = [s["with"]["name"] for s in result_steps if "download" in s.get("uses", "") and "name" in s["with"]]
+    assert uploads == downloads == ["preboard-types-record"]
+
+
+def test_workflow_inputs_reach_run_blocks_only_through_env(workflow) -> None:
+    inline = [r for job in workflow["jobs"] for r in _runs(workflow, job) if "${{" in r]
+    assert not inline, f"expressions inlined in run blocks: {inline}"
 
 
 # ------------------------------------------------------------------ equivalence with the suite

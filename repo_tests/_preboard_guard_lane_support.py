@@ -42,6 +42,7 @@ def load_lane() -> Iterator[Any]:
 def env(**over: str) -> dict[str, str]:
     needs = {"guards": {"result": "success"}, "types": {"result": "success"}}
     base = {"NEEDS_JSON": json.dumps(needs), "RUN_ID": "1", "REF": "b", "SHA": "s", "BASE_REF": "main"}
+    base["PINNED_BASE_SHA"] = BASE_SHA
     return {**base, **over}
 
 
@@ -93,5 +94,18 @@ def write_shards(tmp_path: Path, shards: list[dict[str, Any]]) -> Path:
     return tmp_path
 
 
-def verdict(lane: Any, tmp_path: Path, shards: list[dict[str, Any]], **environment: str) -> dict[str, Any]:
-    return lane.report.build_result(env(**environment), write_shards(tmp_path, shards))
+def write_types(directory: Path, base_sha: str = BASE_SHA) -> Path:
+    """The types job's record, as ``types-meta`` writes it."""
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "types-meta.json").write_text(json.dumps({"merged": True, "base_sha": base_sha}), encoding="utf-8")
+    return directory
+
+
+def verdict(
+    lane: Any, tmp_path: Path, shards: list[dict[str, Any]], types_base: str | None = BASE_SHA, **environment: str
+) -> dict[str, Any]:
+    """The result for *shards* and a types record of *types_base* (``None``: the types job recorded nothing)."""
+    types_dir = tmp_path / "preboard-types-record"
+    if types_base is not None:
+        write_types(types_dir, types_base)
+    return lane.report.build_result(env(**environment), write_shards(tmp_path, shards), types_dir)
