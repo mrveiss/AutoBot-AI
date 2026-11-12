@@ -292,14 +292,19 @@ def test_an_explicit_code_source_dir_wins_and_a_missing_source_fails_clearly() -
 def _anchor_holds(playbook_dir: str) -> bool:
     """Evaluate the derived-tree anchor (#20509) for a playbook directory, as Ansible would.
 
-    The anchor stats the path the locate task renders; the assert passes when that file exists.
+    The anchor stats a path under ``shared_parent`` (rendered from the block's own vars, the tree the
+    archive is built from); the assert passes when that file exists.
     """
     import jinja2
 
-    locate = next(t for t in _shared_block()["block"] if "Find this task file" in t["name"])
+    tasks = _shared_block()
+    locate = next(t for t in tasks["block"] if "Find this task file" in t["name"])
     env = jinja2.Environment()
     env.filters["dirname"] = os.path.dirname
-    path = env.from_string(locate["ansible.builtin.stat"]["path"]).render(playbook_dir=playbook_dir)
+    parent = env.from_string(tasks["vars"]["shared_parent"]).render(playbook_dir=playbook_dir)
+    path = env.from_string(locate["ansible.builtin.stat"]["path"]).render(
+        playbook_dir=playbook_dir, shared_parent=parent
+    )
     return Path(path).is_file()
 
 
@@ -313,13 +318,17 @@ def test_the_anchor_holds_for_both_callers_fails_at_another_depth_and_skips_an_e
     assert _anchor_holds(str(_PLAYBOOK.parent)) and _anchor_holds(str(_DEPLOY_PLAYBOOK.parent))
     assert not _anchor_holds(str(_PLAYBOOK.parent / "nested"))
     assert not _anchor_holds(str(_ANSIBLE))
+    path = locate["ansible.builtin.stat"]["path"]
+    assert path.startswith("{{ shared_parent }}/") and "playbook_dir" not in path
+    assert locate["delegate_to"] == "localhost" and locate["run_once"] is True
 
 
 def test_the_anchor_does_not_depend_on_the_checkout_directory_name(tmp_path: Path) -> None:
-    """A tree whose repository and backend folders are named differently still anchors."""
-    tree = tmp_path / "renamed-checkout" / "backend-renamed" / "ansible"
+    """A checkout whose root folder is named differently still anchors; a tree without the file does not."""
+    tree = tmp_path / "renamed-checkout" / "autobot-slm-backend" / "ansible"
     (tree / "playbooks").mkdir(parents=True)
     (tree / "roles" / "_shared" / "tasks").mkdir(parents=True)
+    assert not _anchor_holds(str(tree / "playbooks"))
     (tree / "roles" / "_shared" / "tasks" / "install_agent_autobot_shared.yml").write_text("---\n", encoding="utf-8")
     assert _anchor_holds(str(tree / "playbooks"))
 
