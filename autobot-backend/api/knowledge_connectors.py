@@ -36,14 +36,15 @@ from redis.exceptions import RedisError
 
 from api._connector_auth_validation import validated_connector_auth
 from api._connector_keys import (
-    _HISTORY_KEY_SUFFIX,
     _REDIS_KEY_PREFIX,
     _connector_key,
     _delete_connector_keys,
     _history_key,
 )
+from api._connector_keys import is_config_key as _is_config_key
 from api._connector_sync_claim import claim_or_refuse, run_claimed_sync
 from api._connector_sync_result import record_last_sync
+from api.admin_connector_credentials import router as _credentials_router
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -51,7 +52,6 @@ from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from constants.error_constants import ERR_CONNECTOR_NOT_FOUND
 from knowledge.connectors.credential_store import get_credential_store
-from knowledge.connectors.job_state import JOB_KEY_SUFFIX as _JOB_KEY_SUFFIX
 from knowledge.connectors.job_state import read_job_state
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
@@ -79,6 +79,7 @@ router = APIRouter(
     tags=["knowledge-connectors"],
     dependencies=[Depends(check_admin_permission)],
 )
+router.include_router(_credentials_router)
 
 _SUPPORTED_TYPES = [
     "file_server",
@@ -107,8 +108,6 @@ _OAUTH_AUTH_TYPE = "OAuthRefreshAuth"
 # --- Redis helpers ---
 
 _MAX_HISTORY = 50
-# Suffixes / infixes that mark non-config Redis keys under connector: namespace.
-_NON_CONFIG_INFIXES = (_HISTORY_KEY_SUFFIX, _JOB_KEY_SUFFIX, ":schedule:", "scheduler:")
 
 
 # Config keys that hold an operator-configured *instance host* (#13625). These
@@ -230,10 +229,6 @@ async def _list_connector_ids() -> List[str]:
     pattern = "%s*" % _REDIS_KEY_PREFIX
     ids: List[str] = []
     async_scan = hasattr(redis, "scan_iter") and asyncio.iscoroutinefunction(getattr(redis, "scan_iter", None))
-
-    def _is_config_key(key_str: str) -> bool:
-        stripped = key_str[len(_REDIS_KEY_PREFIX) :]
-        return not any(infix in stripped for infix in _NON_CONFIG_INFIXES)
 
     if async_scan:
         async for key in redis.scan_iter(match=pattern):
