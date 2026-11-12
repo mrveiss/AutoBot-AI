@@ -624,15 +624,11 @@ def _load_built_in_template(template_key: str) -> Dict[str, Any]:
             f"numbers, hyphens, and underscores"
         )
 
-    template_path = _BUILT_IN_TEMPLATES_DIR / f"{template_key}.json"
-
-    # Verify resolved path is within the built-in templates directory
-    resolved_path = template_path.resolve()
-    base_path = _BUILT_IN_TEMPLATES_DIR.resolve()
-    if base_path not in resolved_path.parents and resolved_path != base_path:
-        raise BuiltInTemplateNotFoundError(f"Template path outside allowed directory: {template_key}")
-
-    if not resolved_path.exists():
+    # The key selects among files that exist in the templates directory; it is never joined into a path,
+    # so no caller-supplied text reaches the filesystem call (the regex above stays as the early reject).
+    known = {path.stem: path for path in _BUILT_IN_TEMPLATES_DIR.glob("*.json")}
+    resolved_path = known.get(template_key)
+    if resolved_path is None:
         raise BuiltInTemplateNotFoundError(f"Built-in template '{template_key}' not found")
 
     try:
