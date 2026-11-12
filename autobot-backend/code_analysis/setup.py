@@ -59,8 +59,8 @@ setup(
     install_requires=requirements,
     extras_require={
         "dev": [
-            "pytest>=7.0.0",
-            "pytest-asyncio>=0.21.0",
+            f"pytest{_ssot_floor('pytest')}",  # #18060: floors for constrained packages come from the SSOT
+            f"pytest-asyncio{_ssot_floor('pytest-asyncio')}",
             "black>=22.0.0",
             "flake8>=4.0.0",
             "isort>=5.10.0",
@@ -71,9 +71,9 @@ setup(
             "onnxruntime>=1.12.0",
         ],
         "web": [
-            "fastapi>=0.95.0",
-            "uvicorn>=0.20.0",
-            "jinja2>=3.1.0",
+            f"fastapi{_ssot_floor('fastapi')}",
+            f"uvicorn{_ssot_floor('uvicorn')}",
+            f"jinja2{_ssot_floor('jinja2')}",
         ],
     },
     entry_points={

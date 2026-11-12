@@ -22,10 +22,19 @@ floors. Either may repeat a constrained package ONLY when its version satisfies 
 PEP 440 (so ``2.0rc1`` is below ``>=2.0``); one below a shared floor or past a cap is a violation. Converting
 those floors to exact pins needs a resolver run against the whole CI set and is not done here.
 
-Not covered (stated gap): a second declaration inside ``pyproject.toml`` (autobot_shared) is not seen,
-because this guard reads requirements files only. That manifest has no ``-c`` and no dependabot block
-reaches ``constraints/shared.txt`` from it, so ``repo_tests/autobot_shared_restates_no_constrained_floor_20092_test.py``
-guards it instead.
+Packaging manifests (``pyproject.toml``, ``setup.py``) are read too (#18060): a quoted requirement for a
+constrained package whose floor does not satisfy the shared specifier is a violation. A standalone
+distribution (``libs/autobot-sdk-python``, ``knowledge-base-mcp``) may keep a declared range, because a user
+installing it outside this repo cannot read ``constraints/shared.txt``; it must still not sit below the
+shared floor. An in-repo app lists the package bare or reads the floor from the SSOT (``code_analysis/setup.py``
+``_ssot_floor``).
+
+Not covered (stated gaps): ``setup.cfg`` (none exists today); a manifest requirement built by an f-string
+or other code (``setup.py`` ``_ssot_floor`` reads the SSOT itself, so there is nothing to compare);
+``[project.optional-dependencies]`` and ``dependencies`` are not told apart, both are read; package names
+inside ansible ``pip: name:`` lists and Dockerfile / shell ``pip install`` lines (their parity is
+``repo_tests/ansible_requirements_parity_test.py``'s job); and ``autobot_shared/pyproject.toml`` is
+additionally guarded by ``repo_tests/autobot_shared_restates_no_constrained_floor_20092_test.py``.
 
 Run from the repo root:  python3 scripts/check_constraint_drift.py
 """
@@ -57,7 +66,13 @@ EXEMPT = {
     "redis": "declared >=8.1 in six manifests but the backend has no spec and a transitive redisvl "
     "(via langgraph-checkpoint-redis) that requires redis<8.0 -- a shared >=8.1 would major-bump the backend",
 }
-_EXCLUDE_DIRS = ("node_modules", ".worktrees", ".git", "__pycache__")
+_EXCLUDE_DIRS = ("node_modules", ".worktrees", ".git", "__pycache__", "venv", ".venv", "site-packages")
+MANIFESTS = ("pyproject.toml", "setup.py")
+# A quoted requirement carrying a version: ``"httpx>=0.27"``; the specifier runs to the closing quote.
+_QUOTED_REQ = re.compile(
+    r"""["']\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*((?:===|==|>=|~=|<=|!=|>|<)[^"';]*)["';]"""
+)
+_FLOOR = re.compile(r"(?:===|==|>=|~=)\s*([0-9][^\s,;]*)")
 
 
 def _norm(name: str) -> str:
@@ -92,6 +107,27 @@ def requirement_files() -> list[pathlib.Path]:
             seen.add(p)
             files.append(p)
     return sorted(files)
+
+
+def manifest_files() -> list[pathlib.Path]:
+    """Every ``pyproject.toml`` / ``setup.py`` outside vendored and generated trees."""
+    found = []
+    for name in MANIFESTS:
+        found += [p for p in pathlib.Path(".").rglob(name) if not any(part in _EXCLUDE_DIRS for part in p.parts)]
+    return sorted(found)
+
+
+def manifest_violations(files: list[pathlib.Path], specs: dict[str, str]) -> list[str]:
+    """Quoted requirements in packaging manifests whose floor is outside the shared specifier."""
+    out = []
+    for f in files:
+        for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            for m in _QUOTED_REQ.finditer(line):
+                pkg, spec = _norm(m.group(1)), m.group(2).strip()
+                floor = _FLOOR.search(spec)
+                if pkg in specs and not (floor and _satisfies(floor.group(1), specs[pkg])):
+                    out.append(f"{f}:{n}: '{m.group(1)}{spec}' restates a constrained package outside {CONSTRAINTS}")
+    return out
 
 
 def _declarations(files: list[pathlib.Path]) -> dict[str, list[tuple[pathlib.Path, int, str, bool]]]:
@@ -174,7 +210,9 @@ def main() -> int:
         print(f"ERROR: {CONSTRAINTS} pins no packages — nothing to guard.", file=sys.stderr)
         return 2
 
-    violations = find_violations(_declarations(requirement_files()), pinned, constraint_specs())
+    specs = constraint_specs()
+    violations = find_violations(_declarations(requirement_files()), pinned, specs)
+    violations += manifest_violations(manifest_files(), specs)
     if violations:
         print("Constraint drift — these versions belong ONLY in constraints/shared.txt:\n", file=sys.stderr)
         for v in violations:

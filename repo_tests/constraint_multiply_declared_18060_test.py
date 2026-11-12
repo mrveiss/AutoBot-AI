@@ -136,3 +136,39 @@ def test_a_ci_prerelease_below_the_shared_floor_is_named(guard):
     found = _ci_site(guard, "planted-pkg==2.0rc1", {"planted-pkg": ">=2.0,<3.0"})
     assert any("re-pins a constrained package" in v for v in found), found
     assert _ci_site(guard, "planted-pkg==2.0", {"planted-pkg": ">=2.0,<3.0"}) == []
+
+
+def _manifest(guard, tmp_path: Path, name: str, body: str, specs: dict[str, str]) -> list[str]:
+    path = tmp_path / name
+    path.write_text(body, encoding="utf-8")
+    return guard.manifest_violations([path], specs)
+
+
+@pytest.mark.parametrize(
+    ("name", "body"),
+    [
+        ("pyproject.toml", 'dependencies = [\n    "planted-pkg>=1.0",\n]\n'),
+        ("pyproject.toml", 'dev = ["planted-pkg[extra]>=1.0", "other>=1"]\n'),
+        ("setup.py", '    install_requires=["planted-pkg>=1.0"],\n'),
+    ],
+    ids=["pyproject-dependencies", "pyproject-extras-inline", "setup-py"],
+)
+def test_a_manifest_restating_a_constrained_package_below_the_shared_floor_is_named(guard, tmp_path, name, body):
+    found = _manifest(guard, tmp_path, name, body, {"planted-pkg": ">=2.0"})
+    assert any("planted-pkg" in v and "restates a constrained package" in v for v in found), found
+
+
+def test_a_manifest_floor_that_meets_the_shared_specifier_or_names_it_bare_is_clean(guard, tmp_path):
+    body = 'dependencies = ["planted-pkg>=2.1", "other>=1"]\nextras = ["planted-pkg"]\n'
+    assert _manifest(guard, tmp_path, "pyproject.toml", body, {"planted-pkg": ">=2.0"}) == []
+
+
+def test_the_guard_reads_the_real_packaging_manifests(guard):
+    cwd = Path.cwd()
+    os.chdir(_ROOT)
+    try:
+        files = {str(f) for f in guard.manifest_files()}
+    finally:
+        os.chdir(cwd)
+    assert "libs/autobot-sdk-python/pyproject.toml" in files
+    assert "autobot-backend/code_analysis/setup.py" in files
