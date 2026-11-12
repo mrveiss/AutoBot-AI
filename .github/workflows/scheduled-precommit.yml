@@ -1,0 +1,22 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Nightly and manual whole-tree pre-commit sweep (#15358, #18208). On a pull request the hooks
+# run against the diff only; whole-tree drift is caught here, off the critical path. The job is
+# the reusable body `_gate-precommit.yml` that ci.yml also calls, with its default `sweep: 'true'`.
+
+name: Scheduled Pre-commit Sweep
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  precommit-sweep:
+    uses: ./.github/workflows/_gate-precommit.yml
+    permissions:
+      contents: read
