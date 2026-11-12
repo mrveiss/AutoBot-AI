@@ -51,7 +51,17 @@ class _Pending:
     still_valid: Optional[StillValid] = None
 
     def wanted(self) -> bool:
-        return self.still_valid is None or self.still_valid()
+        """Ask *still_valid*. A predicate that raises is logged and treated as wanted: the commit stands and the
+        remaining callbacks still run, so a broken check can neither abort ``commit()`` nor silently drop work."""
+        if self.still_valid is None:
+            return True
+        try:
+            return bool(self.still_valid())
+        except Exception:
+            logger.warning(
+                "After-commit still_valid check for %s failed; treating it as wanted", self.description, exc_info=True
+            )
+            return True
 
 
 def within_transaction(txn: Optional[SessionTransaction], ancestor: SessionTransaction) -> bool:
@@ -99,10 +109,21 @@ def _run_committed(sync: Session) -> None:
             _run(pending.callback, pending.description)
 
 
+def _undone_by(pending: _Pending, previous_transaction: SessionTransaction) -> bool:
+    """True when rolling back *previous_transaction* undid the work *pending* was queued for.
+
+    A callback queued before the session began a transaction has none recorded: it belongs to the next root
+    transaction, so only a root rollback (not a SAVEPOINT) undoes it.
+    """
+    if pending.transaction is None:
+        return previous_transaction.parent is None
+    return within_transaction(pending.transaction, previous_transaction)
+
+
 def _drop_undone(sync: Session, previous_transaction: SessionTransaction) -> None:
     """``after_soft_rollback``: drop the callbacks whose transaction this rollback undid."""
     pending = sync.info.get(_PENDING_KEY, [])
-    pending[:] = [p for p in pending if not within_transaction(p.transaction, previous_transaction) and p.wanted()]
+    pending[:] = [p for p in pending if not _undone_by(p, previous_transaction) and p.wanted()]
 
 
 def _queue_on_scope(session: AsyncSession, callback: AfterCommitCallback) -> None:
