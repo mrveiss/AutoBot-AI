@@ -120,3 +120,17 @@ register_env_var(
         component="analytics",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODE_TOOL_MAX_ITEMS",
+        type=int,
+        default=200,
+        description=(
+            "Entries kept per list in one code.* MCP tool response (code_graph_tools.py, #21327); "
+            "the rest are counted in the response's omitted field."
+        ),
+        component="backend",
+        range=(1, 10000),
+    )
+)
