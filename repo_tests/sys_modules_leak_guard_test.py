@@ -289,6 +289,33 @@ def test_a_synthetic_child_of_a_third_party_package_is_not_reported(guard, tmp_p
     assert _leaks_for(guard, _OTHER_MODULE) == []
 
 
+def test_a_spec_less_module_loaded_from_an_installed_file_is_not_a_stub_15169(guard, tmp_path):
+    """``kombu`` replaces itself with a spec-less lazy module; a file outside the repo is not a stub.
+
+    The guard's pre-board lane imports it through backend modules that tests reach with
+    ``importorskip`` and reported it against whichever file ran first (#15169).
+    """
+    installed = tmp_path / "site-packages" / "knowledge" / "__init__.py"
+    installed.parent.mkdir(parents=True)
+    installed.write_text("", encoding="utf-8")
+    lazy = types.ModuleType("knowledge")
+    lazy.__file__ = str(installed)
+    _install("knowledge", lazy)
+    guard.attribute(_LLC_CONFTEST)
+
+    assert _leaks_for(guard, _OTHER_MODULE) == []
+
+
+def test_a_stub_naming_a_file_that_does_not_exist_is_still_a_stub_15169(guard, tmp_path):
+    """Only a file on disk exempts; a hand-built stub with a made-up ``__file__`` is reported."""
+    stub = types.ModuleType("agents")
+    stub.__file__ = str(tmp_path / "site-packages" / "agents" / "__init__.py")
+    _install("agents", stub)
+    guard.attribute(_LLC_CONFTEST)
+
+    assert _leaks_for(guard, _OTHER_MODULE) == ["agents"]
+
+
 def test_a_synthetic_child_is_still_a_stub_when_the_parent_is_stubbed_too(guard):
     """The exemption must not cover a package the session itself replaced (#13450).
 

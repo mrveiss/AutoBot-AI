@@ -561,13 +561,13 @@ class _LeakGuard:
         when the key is new.  It is passed in rather than looked up because
         the caller has already re-baselined by the time this runs.
 
-        The first test is an equivalence, not a new rule: a brand-new key
-        holding a module with a ``__spec__`` is an ordinary import, which the
-        final line already answered ``None`` for.  Answering it up front skips
-        a ``__file__`` probe and a ``sys.path`` walk for the large majority of
-        changed entries, which are exactly that.
+        The first test is an equivalence, not a new rule: a brand-new key holding a
+        module with a ``__spec__`` is an ordinary import, which the final line already
+        answered ``None`` for.  So is one holding a file on disk outside the repository,
+        spec or not: ``kombu`` swaps itself for a spec-less lazy module (#15169).
         """
-        if previous is _MISSING and not _is_synthetic(module):
+        installed = _is_synthetic(module) and self._is_third_party(module) and _has_real_file(module)
+        if previous is _MISSING and (installed or not _is_synthetic(module)):
             return None
         if _is_conftest_module(module):
             return None  # pytest's own bookkeeping, not a stub
