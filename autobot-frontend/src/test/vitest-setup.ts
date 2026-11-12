@@ -25,6 +25,19 @@ import { installMonotonicDateNow } from './utils/monotonicClock'
 // because the `beforeEach` below already made that impossible.
 enableAutoUnmount(afterEach)
 
+// #21245: pre-transform the shared module graph once per worker, outside any test timer. Specs
+// that call `vi.resetModules()` and then `await import(...)` a composable inside a test or
+// `beforeEach` otherwise pay the FIRST fetch/transform of that composable's graph (the
+// `@autobot/ui` barrel, reached through `debugUtils`/`useAnnounce`/`saveTextFile`, plus
+// `vue-i18n`) inside the first test's 10s budget; under a loaded run that first import took 5-9s
+// and timed out. Done here it covers every spec, including ones written later.
+await import('@autobot/ui')
+await import('vue-i18n')
+// Drop the evaluated instances afterwards: a spec's own `vi.mock('reka-ui')` (or any other
+// dependency of the barrel) must still apply to its first import. The fetched and transformed
+// code stays cached, which is the cost being removed.
+vi.resetModules()
+
 // #18254: a wall clock that steps backwards (WSL2 time correction, under load)
 // makes Vue's event invoker drop clicks; see utils/monotonicClock.ts.
 installMonotonicDateNow()
