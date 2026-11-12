@@ -59,6 +59,19 @@ describe('getWorkflowStepDisplay (#21106)', () => {
       expect(getWorkflowStepDisplay({ ...run, status: 'paused' }, { indexBase })).toEqual(reached)
     })
 
+    it('paused wins over a completed marker (completed_at or status completed)', () => {
+      expect(getWorkflowStepDisplay({ ...run, is_paused: true, completed_at: STARTED }, { indexBase })).toEqual(reached)
+      expect(getWorkflowStepDisplay({ ...run, is_paused: true, status: 'completed' }, { indexBase })).toEqual(reached)
+      expect(getWorkflowStepDisplay({ ...run, status: 'paused', completed_at: STARTED }, { indexBase })).toEqual(reached)
+    })
+
+    it('the same completed markers without a pause indicator still read total / total', () => {
+      const done = { current: 5, total: 5, percent: 100 }
+      expect(getWorkflowStepDisplay({ ...run, is_paused: false, completed_at: STARTED }, { indexBase })).toEqual(done)
+      expect(getWorkflowStepDisplay({ ...run, is_paused: false, status: 'completed' }, { indexBase })).toEqual(done)
+      expect(getWorkflowStepDisplay({ ...run, status: 'completed' }, { indexBase })).toEqual(done)
+    })
+
     it('a successful completion still reads total / total, 100%', () => {
       expect(getWorkflowStepDisplay({ ...run, completed_at: STARTED, steps: [{ status: 'completed' }] }, { indexBase })).toEqual({ current: 5, total: 5, percent: 100 })
     })

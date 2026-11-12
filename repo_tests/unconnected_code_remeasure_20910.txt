@@ -569,10 +569,8 @@ route:autobot-backend/llc/api/work_items.py:POST /{work_item_id}/review/approve
 route:autobot-backend/llc/api/work_items.py:POST /{work_item_id}/review/request-changes
 route:autobot-backend/llc/api/work_items.py:POST /{work_item_id}/unclaim
 route:autobot-backend/llc/api/workflows.py:DELETE /{company_id}/{workflow_id}
-route:autobot-backend/llc/api/workflows.py:GET /{company_id}
 route:autobot-backend/llc/api/workflows.py:GET /{company_id}/{workflow_id}
 route:autobot-backend/llc/api/workflows.py:PATCH /{company_id}/{workflow_id}
-route:autobot-backend/llc/api/workflows.py:POST /{company_id}
 route:autobot-backend/routers/code_completion.py:GET /patterns
 route:autobot-backend/routers/code_completion.py:GET /statistics
 route:autobot-backend/routers/code_completion.py:POST /extract
