@@ -35,7 +35,9 @@ def mock_context():
 def user_service(mock_session, mock_context):
     from user_management.services.user_service import UserService
 
-    return UserService(session=mock_session, context=mock_context)
+    service = UserService(session=mock_session, context=mock_context)
+    service._guard_last_admin = AsyncMock()  # about the reassign wiring; the last-admin guard has its own (#21018)
+    return service
 
 
 @pytest.fixture
