@@ -1579,6 +1579,7 @@ export interface paths {
          *     Body:
          *         approved (bool): Whether the command was approved
          *         reason (str, optional): Reason for denial
+         *         answer (str, optional): The answer to a stall question the graph asked (#21022)
          */
         post: operations["resume_chat_graph_api_chats__chat_id__resume_post"];
         delete?: never;

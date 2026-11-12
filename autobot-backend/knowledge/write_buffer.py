@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.retrieval_invalidation import invalidates_retrieval_caches
 
 logger = get_logger(__name__)
 
@@ -205,6 +206,7 @@ def make_chromadb_flush_fn(vector_store: Any) -> Callable[[List[BufferedWrite]],
     chroma normalize_insert_record_set and drop the entire flush batch.
     """
 
+    @invalidates_retrieval_caches("vectors_flushed")
     async def _flush(batch: List[BufferedWrite]) -> None:
         from llama_index.core.schema import TextNode
 
