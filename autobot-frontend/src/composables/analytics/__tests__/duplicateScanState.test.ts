@@ -32,6 +32,19 @@ const reject = (status: number) => ({
   text: async () => '{"detail":"source does not resolve"}',
 })
 
+// ONE place for the deps `useAnalyticsDataFetchers` reads (a new required dep is added here once).
+// The cast hides a missing field from vue-tsc, so every construction goes through this.
+const fetcherDeps = (notify: ReturnType<typeof vi.fn>) =>
+  ({
+    rootPath: ref('/repo'),
+    sourceIdParam: computed(() => 'source_id=s1'),
+    sourceIdQuery: computed(() => ''),
+    withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=s1`,
+    t: (key: string) => key,
+    showToast: vi.fn(),
+    notify,
+  }) as unknown as Parameters<typeof useAnalyticsDataFetchers>[0]
+
 describe('readDuplicatePayload (#17983)', () => {
   it.each([
     [{ status: 'success', duplicates: [] }, 'done', 0],
@@ -55,16 +68,7 @@ describe('readDuplicatePayload (#17983)', () => {
 
 describe('duplicates fetchers given a 200 {"status":"error"} (#17983)', () => {
   const notify = vi.fn()
-  const fetchers = () =>
-    useAnalyticsDataFetchers({
-      rootPath: ref('/repo'),
-      sourceIdParam: computed(() => 'source_id=s1'),
-      sourceIdQuery: computed(() => ''),
-      withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=s1`,
-      t: (key: string) => key,
-      showToast: vi.fn(),
-      notify,
-    } as unknown as Parameters<typeof useAnalyticsDataFetchers>[0])
+  const fetchers = () => useAnalyticsDataFetchers(fetcherDeps(notify))
 
   beforeEach(() => {
     fetchWithAuth.mockReset()
@@ -103,15 +107,7 @@ describe('duplicates fetchers given an HTTP error (#17983)', () => {
   // rather than returning a body -- so `onSuccess` never runs and, before
   // `onError` was wired, the state simply kept whatever it already held.
   const notify = vi.fn()
-  const fetchers = () =>
-    useAnalyticsDataFetchers({
-      rootPath: ref('/repo'),
-      sourceIdQuery: computed(() => ''),
-      withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=s1`,
-      t: (key: string) => key,
-      showToast: vi.fn(),
-      notify,
-    } as unknown as Parameters<typeof useAnalyticsDataFetchers>[0])
+  const fetchers = () => useAnalyticsDataFetchers(fetcherDeps(notify))
 
   beforeEach(() => {
     fetchWithAuth.mockReset()
@@ -164,15 +160,7 @@ describe('the dupTask path clears stale rows too (#17983)', () => {
   // populated list from an earlier scan shows those rows and hides the failure —
   // the same defect, surviving in the one path that was missed.
   const notify = vi.fn()
-  const fetchers = () =>
-    useAnalyticsDataFetchers({
-      rootPath: ref('/repo'),
-      sourceIdQuery: computed(() => ''),
-      withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=s1`,
-      t: (key: string) => key,
-      showToast: vi.fn(),
-      notify,
-    } as unknown as Parameters<typeof useAnalyticsDataFetchers>[0])
+  const fetchers = () => useAnalyticsDataFetchers(fetcherDeps(notify))
 
   beforeEach(() => {
     fetchWithAuth.mockReset()
