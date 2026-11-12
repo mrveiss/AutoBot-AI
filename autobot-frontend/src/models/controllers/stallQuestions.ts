@@ -12,8 +12,9 @@ type Card = { type?: string; metadata?: Record<string, unknown> | undefined }
 
 const QUESTION_TYPE = 'human_question'
 
-function questionId(card: Card): unknown {
-  return card.type === QUESTION_TYPE ? card.metadata?.question_id : undefined
+function questionId(card: Card): string | undefined {
+  const id = card.type === QUESTION_TYPE ? card.metadata?.question_id : undefined
+  return typeof id === 'string' ? id : undefined
 }
 
 /** True for a question card the person has not answered yet. */
