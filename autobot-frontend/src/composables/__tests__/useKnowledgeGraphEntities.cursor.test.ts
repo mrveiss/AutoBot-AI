@@ -20,6 +20,8 @@ vi.mock('@/config/ssot-config', () => ({
   getApiBase: () => '/api',
 }))
 
+vi.mock('@/i18n', () => ({ default: { global: { t: (key: string) => key } } }))
+
 import apiClient from '@/utils/ApiClient'
 import { useKnowledgeGraphEntities } from '../knowledge/useKnowledgeGraphEntities'
 
@@ -66,5 +68,37 @@ describe('facts cursor paging (#20945)', () => {
     expect(graph.entities.value.map((e) => e.id)).toEqual(['a'])
     expect(graph.errorMessage.value).not.toBe('')
     expect(graph.hasMoreFacts.value).toBe(true)
+  })
+
+  it('names a failure that carries no message with the translated fallback, never an empty banner', async () => {
+    vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+      if (url.includes('/memory/entities/all')) return { data: { entities: [] } } as never
+      return page(['a'], '500:0') as never
+    })
+    vi.mocked(apiClient.call).mockRejectedValue(new Error(''))
+    const graph = useKnowledgeGraphEntities()
+    await graph.fetchGraphData()
+    await graph.loadMoreFacts()
+    expect(graph.errorMessage.value).toBe('knowledge.graph.loadFailedNoReason')
+  })
+
+  it('serialises overlapping calls: one request, the page appended once', async () => {
+    vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+      if (url.includes('/memory/entities/all')) return { data: { entities: [] } } as never
+      return page(['a'], '500:0') as never
+    })
+    let release: (value: unknown) => void = () => undefined
+    vi.mocked(apiClient.call).mockImplementation((() => new Promise((resolve) => { release = resolve })) as never)
+    const graph = useKnowledgeGraphEntities()
+    await graph.fetchGraphData()
+    const first = graph.loadMoreFacts()
+    const second = graph.loadMoreFacts()
+    expect(graph.isLoadingMore.value).toBe(true)
+    expect(graph.isLoading.value).toBe(false)
+    release(page(['b'], null))
+    await Promise.all([first, second])
+    expect(apiClient.call).toHaveBeenCalledTimes(1)
+    expect(graph.entities.value.map((e) => e.id)).toEqual(['a', 'b'])
+    expect(graph.isLoadingMore.value).toBe(false)
   })
 })

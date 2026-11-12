@@ -140,7 +140,7 @@
       <button @click="refreshGraph" class="btn-link">{{ $t('knowledge.graph.retry') }}</button>
     </div>
 
-    <KnowledgeGraphMoreFacts v-if="hasMoreFacts && entities.length > 0" @more="loadMoreFacts().then(updateCytoscapeElements)" />
+    <KnowledgeGraphMoreFacts v-if="hasMoreFacts && entities.length > 0" :loading="isLoadingMore" @more="loadMoreFacts().then(updateCytoscapeElements)" />
     <!-- Loading State -->
     <div v-if="isLoading" class="loading-state">
       <div class="spinner">
@@ -498,7 +498,7 @@ const { t, locale } = useI18n()
 const {
   entities,
   relations,
-  isLoading,
+  isLoading, isLoadingMore,
   errorMessage: graphError,
   sources: graphSources,
   fetchGraphData,

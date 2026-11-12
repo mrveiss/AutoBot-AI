@@ -20,6 +20,7 @@ import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { useLoadingState } from '@/composables/useLoadingState'
 import { createLogger } from '@/utils/debugUtils'
+import i18n from '@/i18n'
 
 const logger = createLogger('useKnowledgeGraphEntities')
 
@@ -86,6 +87,8 @@ export interface UseKnowledgeGraphEntitiesReturn {
   relations: Readonly<Ref<GraphRelation[]>>
   /** True while a load or create operation is in-flight. */
   isLoading: Readonly<Ref<boolean>>
+  /** True while the next facts page is loading; the drawn graph stays mounted (unlike `isLoading`). */
+  isLoadingMore: Readonly<Ref<boolean>>
   /** Last error message, or empty string. */
   errorMessage: Ref<string>
   /**
@@ -112,7 +115,8 @@ export interface UseKnowledgeGraphEntitiesReturn {
   hasMoreFacts: Readonly<Ref<boolean>>
   /**
    * Read the next page of facts from the server's scan cursor and merge it into
-   * `entities`/`relations`. Does not reject; a failure is reported in `errorMessage`.
+   * `entities`/`relations`. Does not reject; a failure is reported in `errorMessage`. Calls are
+   * serialised: one made while another is in flight joins it instead of re-reading the same cursor.
    */
   loadMoreFacts: () => Promise<void>
 }
@@ -125,6 +129,10 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
   /** The facts section's `cursor` of the last response (#20945); null once the listing is exhausted. */
   const factsCursor = ref<string | null>(null)
   const { isLoading, wrap } = useLoadingState()
+  // A separate flag: `isLoading` swaps the drawn graph for a spinner, which a next page must not do (#20945).
+  const isLoadingMore = ref(false)
+  let moreInFlight: Promise<void> | null = null
+  let loadEpoch = 0 // a refresh bumps it, so a next page read for the old cursor is dropped
 
   // --------------------------------------------------------------------------
   // Internal helpers
@@ -219,29 +227,45 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
     return stats?.sections?.find((section) => section.key === 'facts')?.cursor ?? null
   }
 
-  async function loadMoreFacts(): Promise<void> {
-    if (!factsCursor.value) return
-    await wrap(async () => {
-      try {
-        // `include_buckets` is a GET query parameter the generated contract does not list yet, so the query is
-        // built as a value, not an inline literal, which would be an excess-property error until api.ts regenerates.
-        const query = { max_facts: 100, include_buckets: false, cursor: factsCursor.value }
-        const page: unknown = await apiClient.call('get', '/api/knowledge_base/multi-source/graph', { query })
-        const known = new Set(entities.value.map((entity) => entity.id))
-        entities.value = [...entities.value, ..._entitiesOf(page).filter((entity) => entity.id && !known.has(entity.id))]
-        const body = (page as Record<string, unknown>)?.data as Record<string, unknown> | undefined
-        const added = (body?.relations as GraphRelation[] | undefined) ?? []
-        relations.value = [...relations.value, ...added]
-        factsCursor.value = _factsCursorOf(page)
-      } catch (error) {
-        errorMessage.value = _reason(error)
-        logger.error('Loading more facts failed:', errorMessage.value)
-      }
+  /** The reason a failure carried, or the translated fallback when it carried none (never an empty banner). */
+  function _reasonOrFallback(error: unknown): string {
+    return _reason(error) || (i18n.global.t('knowledge.graph.loadFailedNoReason') as string)
+  }
+
+  async function _readNextFacts(epoch: number): Promise<void> {
+    try {
+      // `include_buckets` is a GET query parameter the generated contract does not list yet, so the query is
+      // built as a value, not an inline literal, which would be an excess-property error until api.ts regenerates.
+      const query = { max_facts: 100, include_buckets: false, cursor: factsCursor.value }
+      const page: unknown = await apiClient.call('get', '/api/knowledge_base/multi-source/graph', { query })
+      if (epoch !== loadEpoch) return
+      const known = new Set(entities.value.map((entity) => entity.id))
+      entities.value = [...entities.value, ..._entitiesOf(page).filter((entity) => entity.id && !known.has(entity.id))]
+      const body = (page as Record<string, unknown>)?.data as Record<string, unknown> | undefined
+      const added = (body?.relations as GraphRelation[] | undefined) ?? []
+      relations.value = [...relations.value, ...added]
+      factsCursor.value = _factsCursorOf(page)
+    } catch (error) {
+      errorMessage.value = _reasonOrFallback(error)
+      logger.error('Loading more facts failed:', errorMessage.value)
+    }
+  }
+
+  function loadMoreFacts(): Promise<void> {
+    if (moreInFlight) return moreInFlight
+    if (!factsCursor.value) return Promise.resolve()
+    errorMessage.value = ''
+    isLoadingMore.value = true
+    moreInFlight = _readNextFacts(loadEpoch).finally(() => {
+      isLoadingMore.value = false
+      moreInFlight = null
     })
+    return moreInFlight
   }
 
   async function fetchGraphData(): Promise<void> {
     errorMessage.value = ''
+    loadEpoch += 1
     await wrap(async () => {
       // allSettled, not all: the graph is assembled from two independent
       // stores, and `Promise.all` threw away a healthy store's entities
@@ -300,7 +324,9 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
         // Still reported, so the transient banner keeps firing; the durable
         // statement is `sources`, because this message is cleared after five
         // seconds and the screen underneath has to stay true after that.
-        errorMessage.value = failed.map((source) => `${source.key}: ${source.error}`).join('; ')
+        errorMessage.value = failed
+          .map((source) => `${source.key}: ${source.error || _reasonOrFallback(null)}`)
+          .join('; ')
         logger.error('Graph sources failed:', errorMessage.value)
       }
 
@@ -356,6 +382,7 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
     entities: readonly(entities) as Readonly<Ref<GraphEntity[]>>,
     relations: readonly(relations) as Readonly<Ref<GraphRelation[]>>,
     isLoading: readonly(isLoading),
+    isLoadingMore: readonly(isLoadingMore),
     errorMessage,
     sources: readonly(sources) as Readonly<Ref<GraphSourceOutcome[]>>,
     fetchGraphData,

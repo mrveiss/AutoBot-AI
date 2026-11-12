@@ -3329,6 +3329,7 @@
       "refreshGraphData": "Refresh graph data",
       "loadMoreFacts": "Load more facts",
       "moreFactsAvailable": "More facts you can read are not shown yet.",
+      "loadFailedNoReason": "The knowledge graph could not be loaded and the server gave no reason.",
       "grid": "Grid",
       "force": "Force",
       "toggleLayout": "Toggle layout",
