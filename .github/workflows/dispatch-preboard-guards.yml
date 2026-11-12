@@ -39,7 +39,15 @@
 #     at ERROR severity (security.yml)
 #   - promtool (AUTOBOT_REQUIRE_PROMTOOL) and the real-ChromaDB session (ci.yml): their tests skip
 #     here and are accepted only through the skip allowlist in preboard_guard_lane_report.py
-# `green_with_skips` is boardable only because the merge train's full suite covers those skips.
+#   - source-reading guard tests that live inside the product trees (for example under
+#     autobot-backend/): they are not run here
+# The skip rule: a skipped test is accepted only when it is on the allowlist in
+# preboard_guard_lane_report.py, by file AND reason prefix, in one of two classes, so that a skip the
+# train's suite shares never turns the lane red but is always listed. covered-by-suite-only: the lane
+# skips it and the suite RUNS it (the suite provides the tool or session). equivalent-to-suite: the
+# suite skips it the same way on the same runner image, so the train is no stricter than the lane.
+# Any other skip is red. An entry joins with the reason read from the suite's `-rs` summary (ci.yml
+# python-shard step), never from a guess. A skipped test never counts toward the executed floor.
 #
 # Result artifact `preboard-guards-result` holds `result.json` (and `summary.md`), schema 2:
 #   schema        2; bumped when a field below is renamed or removed
@@ -49,15 +57,20 @@
 #                 the head lacked from it; merged true when the merge succeeded (false: conflict)
 #   overall       "green" | "green_with_skips" | "red" | "cancelled". green: every check succeeded
 #                 and nothing was skipped. green_with_skips: the same, and every skip is on the
-#                 reviewed allowlist. A skip off the allowlist, a failure, a missing shard or
+#                 reviewed allowlist (see the skip rule above). A skip off the allowlist, a failure, a missing shard or
 #                 recorded test file, a conflict or a run under the floor is red.
 #   roots         the guard roots that ran
-#   checks.guards status, executed, floor, failed, skipped, unreviewed_skips, shards, problems
+#   checks.guards status, executed, floor, failed, skipped, unreviewed_skips, skip_classes, shards, problems
 #                 (the reasons the run was not a complete one: a shard missing or unreadable, an
 #                 unexpected exit code, a recorded test file that produced no test, a conflict)
 #   checks.types  status (the types job result)
 #   failed_tests  [{nodeid, kind: "failure" | "error", message: first line}]
-#   skipped_tests [{nodeid, reason, allowed}]; every skipped test, reviewed or not
+#   skip_classes  {covered-by-suite-only, equivalent-to-suite, unreviewed}: how many skips are in each
+#                 class, so an operator sees which skips the train will still exercise
+#   skipped_tests [{nodeid, reason, allowed, skip_class}]; every skipped test, reviewed or not
+# The run's page carries the same verdict: a `notice` (green), a `warning` (green_with_skips) or `error`
+# lines (red, cancelled) naming overall, behind_base and the skip counts by class; the summary heading
+# names overall.
 # `executed` (passed, failed, errored; a skipped test is not one) below `floor` makes the guards
 # check a failure. The floor is a share of the node ids .test_durations records under the roots.
 

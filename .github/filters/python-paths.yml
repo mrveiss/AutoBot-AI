@@ -412,6 +412,9 @@ python:
   - '.github/workflows/dispatch-generated-types.yml'
   # #21359: `preboard_guard_lane_21359_test.py` reads the pre-board guard lane workflow by concrete literal.
   - '.github/workflows/dispatch-preboard-guards.yml'
+  # #21359: the lane's guard reads `pytest.ini` (testpaths must equal the lane's roots plus the roots it
+  # leaves to the suite) and `.test_durations` (covered below); a change confined to either must run it.
+  - 'pytest.ini'
   # #16568: workflow_types_gate_16568_test.py reads the required gate workflow by concrete literal.
   - '.github/workflows/verify-generated-types.yml'
   # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`
