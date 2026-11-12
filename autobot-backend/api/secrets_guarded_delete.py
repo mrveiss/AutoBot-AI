@@ -33,7 +33,6 @@ audit record is never written while the row lock is held.
 from __future__ import annotations
 
 import hashlib
-import hmac
 import math
 import uuid
 from collections.abc import Awaitable, Callable
@@ -44,6 +43,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.security.constant_time import secure_compare
 from models.secret import Secret
 
 #: Milliseconds a delete waits for the secret row lock before it gives up with a 503.
@@ -82,7 +82,7 @@ def refuse_unless_confirmed(deps, confirmed_digest: str | None) -> None:
     """Pass when nothing depends on the secret or the caller confirmed exactly this set; else 409."""
     if not deps:
         return
-    if confirmed_digest and hmac.compare_digest(confirmed_digest, dependents_digest(deps)):
+    if secure_compare(confirmed_digest, dependents_digest(deps)):
         return
     refuse_dependents(deps)
 
