@@ -33569,7 +33569,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Secret
-         * @description Delete a secret; 409 with the dependents listed unless ``confirm_dependents`` (#20640).
+         * @description Delete a secret; 409 with the dependents listed unless ``dependents_digest`` confirms that set (#20640).
          */
         delete: operations["delete_secret_api_v2_secrets__secret_id__delete"];
         options?: never;
@@ -61065,6 +61065,50 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AuditEntryResponse
+         * @description One audit row, as ``AuditEntry.to_response_dict`` sends it (#20173).
+         *
+         *     ``timestamp`` is epoch SECONDS; the operation's data is in ``details``.
+         *     ``result`` is the canonical audit event's ``outcome`` (``services/audit/taxonomy.py``),
+         *     an open string: operation rows say success/denied/failed/error/attempted, identity
+         *     rows add verified/backup-code and more. It is never narrowed to a Literal, which
+         *     would turn one off-vocabulary row into a 500 for the whole query.
+         */
+        AuditEntryResponse: {
+            /** Id */
+            id: string;
+            /** Timestamp */
+            timestamp: number;
+            /** Date */
+            date: string;
+            /** Operation */
+            operation: string;
+            /** Result */
+            result: string;
+            /** User Id */
+            user_id?: string | null;
+            /** Ip Address */
+            ip_address?: string | null;
+            /** Session Id */
+            session_id?: string | null;
+            /** User Role */
+            user_role?: string | null;
+            /** Resource */
+            resource?: string | null;
+            /** Vm Source */
+            vm_source?: string | null;
+            /** Vm Name */
+            vm_name?: string | null;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /** Performance Ms */
+            performance_ms?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AuditLogData
          * @description Response data for get_audit_log.
          */
@@ -61119,9 +61163,7 @@ export interface components {
             /** Has More */
             has_more: boolean;
             /** Entries */
-            entries: {
-                [key: string]: unknown;
-            }[];
+            entries: components["schemas"]["AuditEntryResponse"][];
             /** Query */
             query: {
                 [key: string]: unknown;
@@ -67038,6 +67080,44 @@ export interface components {
             parent_org_id?: string | null;
             /** @default onboarding */
             llc_status: components["schemas"]["LLCCompanyStatus"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CompanyMemberRow
+         * @description One person in the members list.
+         */
+        CompanyMemberRow: {
+            /** Id */
+            id: string;
+            /** Company Id */
+            company_id: string;
+            /** User Id */
+            user_id: string;
+            /** Role */
+            role: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Display Name */
+            display_name: string;
+            /** Is Active */
+            is_active: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CompanyMembersResponse
+         * @description The members and the caller's own standing, which does not depend on there being any.
+         */
+        CompanyMembersResponse: {
+            /** Members */
+            members: components["schemas"]["CompanyMemberRow"][];
+            /** Viewer Role */
+            viewer_role?: string | null;
+            /** Viewer Can Manage */
+            viewer_can_manage: boolean;
+            /** Viewer Grantable Roles */
+            viewer_grantable_roles: string[];
         } & {
             [key: string]: unknown;
         };
@@ -153116,7 +153196,7 @@ export interface operations {
         parameters: {
             query?: {
                 chat_id?: string | null;
-                confirm_dependents?: boolean;
+                dependents_digest?: string | null;
             };
             header?: never;
             path: {
@@ -153550,7 +153630,7 @@ export interface operations {
     delete_secret_api_v2_secrets__secret_id__delete: {
         parameters: {
             query?: {
-                confirm_dependents?: boolean;
+                dependents_digest?: string | null;
             };
             header?: never;
             path: {
@@ -177313,9 +177393,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["CompanyMembersResponse"];
                 };
             };
             /** @description Validation Error */
