@@ -118,7 +118,17 @@
     "conversationFiles": {
       "createFailed": "Failed to create file",
       "saveFailed": "Save failed",
-      "copyFailed": "Copy failed"
+      "copyFailed": "Copy failed",
+      "noSession": "No session ID provided",
+      "noFilesSelected": "No files selected",
+      "missingParameters": "Missing session ID or file ID",
+      "loadFailed": "Failed to load files",
+      "deleteFailed": "Failed to delete file",
+      "downloadFailed": "Download failed",
+      "fileNotFound": "File not found",
+      "previewFailed": "Preview failed",
+      "renameFailed": "Rename failed",
+      "readFailed": "Failed to read file"
     },
     "contextWindow": {
       "ariaLabel": "{used} of {max} tokens used",
@@ -204,6 +214,11 @@
       "loadingFiles": "Loading files...",
       "aiGenerated": "AI Generated",
       "preview": "Preview",
+      "previewEmpty": "This file is empty",
+      "closePreview": "Close preview",
+      "previewLoading": "Loading preview...",
+      "previewTruncated": "Showing the start of this file. Download it to see the rest.",
+      "previewContentLabel": "Contents of {name}",
       "download": "Download",
       "rename": "Rename",
       "duplicate": "Duplicate",
@@ -426,6 +441,18 @@
       "statusFailed": "Failed to send",
       "confirmDelete": "Delete this message? This action cannot be undone.",
       "thinkingUsed": "Thinking used"
+    },
+    "stallQuestion": {
+      "title": "The assistant needs your input",
+      "answerLabel": "Your answer",
+      "placeholder": "Tell the assistant how to proceed",
+      "send": "Send answer",
+      "stop": "Stop here",
+      "answered": "You answered: {answer}",
+      "stopped": "You chose to stop here.",
+      "failed": "Your answer could not be sent. Please try again.",
+      "blocked": "Your answer was blocked by the content policy. Please reword it and try again.",
+      "stale": "This question is no longer waiting for an answer. Reload the chat to see its current state."
     },
     "approval": {
       "autoApproved": "Auto-Approved",
@@ -4736,6 +4763,8 @@
       "stepApprovalSkip": "Skip step",
       "stepApproveFailed": "Could not confirm the step was approved; check the workflow status before trying again",
       "stepStatusRefreshFailed": "Your answer was sent, but the step status could not be refreshed; it will update when the connection recovers",
+      "stepRetryStillWaiting": "The server refused your retry and the step is still waiting for approval; it stays locked while the status is re-checked",
+      "stepLockReleased": "The step is still waiting for approval after the refused retry; you can answer it again",
       "stepSkipFailed": "Could not confirm the step was skipped; check the workflow status before trying again",
       "stepRejectedByJudge": "Step refused before it ran: {reason}",
       "controlRefused": "Refused: only an administrator or the workflow's owner may control it",
@@ -8513,6 +8542,21 @@
     }
   },
   "llc": {
+    "notices": {
+      "generic": "A company update arrived",
+      "heartbeatMissed": "Agent {agent} missed its heartbeat",
+      "heartbeatRecoveryUnfiled": "Agent {agent} timed out and no recovery item could be filed",
+      "heartbeatMissedNoAgent": "An agent missed its heartbeat",
+      "heartbeatRecoveryUnfiledNoAgent": "An agent timed out and no recovery item could be filed",
+      "budgetSoftAlert": "Budget warning: agent {agent} is nearing its budget",
+      "budgetSoftAlertNoAgent": "Budget warning: the budget is nearly used up",
+      "budgetHardStop": "Budget exhausted: agent {agent} is stopped until the budget is raised",
+      "budgetHardStopNoAgent": "Budget exhausted: agents are stopped until the budget is raised",
+      "handoff": "Agent {agent} handed over a work item",
+      "handoffNoAgent": "A work item was handed over",
+      "approval": "An approval was updated",
+      "sprint": "A sprint was updated"
+    },
     "agent": {
       "cannotRun": "Cannot run"
     },

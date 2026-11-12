@@ -177,6 +177,7 @@ runs:
         # Relative to this action, not to the workspace (#19345 review): a caller that checks
         # the repo out elsewhere still finds the script that ships beside the action.
         APT_FALLBACK_SCRIPT: ${{ github.action_path }}/../../../scripts/ci/apt_fallback_mirror.sh
+        APT_NETWORK_CONFIG_SCRIPT: ${{ github.action_path }}/../../../scripts/ci/apt_network_config.sh
       run: |
         set -euo pipefail
         if command -v ffmpeg >/dev/null 2>&1 && command -v tesseract >/dev/null 2>&1; then
@@ -193,8 +194,8 @@ runs:
         # Why this is not the timeout-doubling #14550 rejected as guessing: that objection
         # was about an undersized budget being one hypothesis among several, with lock
         # contention the likelier. The exit code now rules the alternatives out. apt is
-        # configured to drop a connection idle for APT_HTTP_IDLE_S and to retry a failed
-        # fetch APT_FETCH_RETRIES times, so a stalled mirror ends an attempt with apt's own
+        # configured (scripts/ci/apt_network_config.sh) to drop a connection idle for 30s and to
+        # retry a failed fetch 3 times, so a stalled mirror ends an attempt with apt's own
         # non-zero status at roughly 120s. What four occurrences on 2026-10-08 actually
         # showed was exit 124 -- coreutils timeout killing it at the full 300s -- on every
         # attempt. A connection that never stalled for 30s was receiving data; it was simply
@@ -213,9 +214,6 @@ runs:
         # so the partial download carries over. Same two tries, same worst-case bound. The
         # mirror and the source rewrite live in scripts/ci/apt_fallback_mirror.sh.
         readonly APT_BACKOFF_S=15         # the sleep after try N is N times this
-        readonly APT_FETCH_RETRIES=3      # apt's own retries of one failed download
-        readonly APT_HTTP_IDLE_S=30       # drop a connection that sends nothing this long
-        readonly APT_LOCK_WAIT_S=120      # wait this long for the dpkg lock
         readonly TIMEOUT_KILLED=124       # coreutils timeout's exit status when it kills
 
         # apt_retry LABEL COMMAND...: up to APT_ATTEMPTS tries (#15515, above).
@@ -281,9 +279,9 @@ runs:
         # builds (#16291) there is no Error-Mode here: the runner image's own
         # sources are outside this repo, and one of them failing must not fail
         # a shard whose packages come from the Ubuntu archive.
-        printf '%s\n' "Acquire::Retries \"${APT_FETCH_RETRIES}\";" "Acquire::http::Timeout \"${APT_HTTP_IDLE_S}\";" \
-          "DPkg::Lock::Timeout \"${APT_LOCK_WAIT_S}\";" \
-          | sudo tee /etc/apt/apt.conf.d/80-ci-provisioning >/dev/null
+        # The settings (retries, connection idle bound, dpkg lock wait) are defined once, in
+        # scripts/ci/apt_network_config.sh, which the Clean install workflow runs too (#21325).
+        sudo "$BASH" "$APT_NETWORK_CONFIG_SCRIPT"
 
         APT_ADVISORY=1 apt_retry "update" timeout "$APT_TIMEOUT_S" sudo apt-get update -qq
 
@@ -330,15 +328,17 @@ runs:
         }
         # #19308: scripts/ci/apt_fallback_mirror.sh edits the runner's mirror list (the
         # archive is `mirror+file:/etc/apt/apt-mirrors.txt` on GitHub's images) and any plain
-        # archive URI, and exits 3 when it changed nothing -- said out loud, since the retry
-        # then hits the same mirror. The update gets ONE try (#19345 review): three would add
-        # up to 15 minutes to a worst case already near the 30-minute provision job limit.
+        # archive URI. It is called here only after the primary failed a real download, so it is
+        # told so (--primary-known-bad: the primary probe is skipped), but it still probes the
+        # fallback and applies it only when that answers (#21325). Exit 3 = not applied; the script
+        # printed why, and the retry then hits the same mirror. The update gets ONE try (#19345
+        # review): three would add up to 15 minutes to a worst case already near the 30-minute provision job limit.
         apt_use_fallback_mirror() {
-          local n=0 rc=0
-          n=$(sudo bash "$APT_FALLBACK_SCRIPT" /etc/apt "$APT_FALLBACK_MIRROR") || rc=$?
+          local rc=0
+          sudo bash "$APT_FALLBACK_SCRIPT" /etc/apt "$APT_FALLBACK_MIRROR" --primary-known-bad >/dev/null || rc=$?
           case "$rc" in
-            0) echo "apt: fallback mirror applied to ${n} apt file(s) (#19308)" >&2 ;;
-            3) echo "::warning title=apt fallback mirror not applied::no Ubuntu archive entry found to repoint; the retry uses the same mirror (#19308)" >&2 ;;
+            0) ;;
+            3) echo "::warning title=apt fallback mirror not applied::see the apt fallback lines above; the retry uses the same mirror (#19308)" >&2 ;;
             *) echo "::warning title=apt fallback mirror script failed::exit ${rc}; the retry uses whatever apt is configured with (#19308)" >&2 ;;
           esac
           APT_TRIES=1 APT_ADVISORY=1 apt_retry "update (fallback mirror)" timeout "$APT_TIMEOUT_S" sudo apt-get update -qq

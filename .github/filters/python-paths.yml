@@ -72,6 +72,14 @@ python:
   - 'docker/nginx/nginx-slm-locations.conf'
   - '.github/workflows/docker-smoke-test.yml'
   - '.github/workflows/co-located-smoke.yml'
+  # #21325: apt_retry_one_mechanism_21325_test.py reads the apt policy and wrapper, and the three workflows it guards.
+  - 'docker/apt/*'
+  - '.github/workflows/clean-install.yml'
+  - '.github/workflows/hardened-smoke-test.yml'
+  - '.github/actions/setup-python-suite/action.yml'
+  - 'scripts/ci/apt_fallback_mirror.sh'
+  - 'scripts/ci/apt_network_config.sh'
+  - 'scripts/ci/clean_install_tty.exp'
   # #17500, #18729: compose_exposure_and_credentials_17500_test.py and docker_admin_seed_18729_test.py read the secrets generator.
   - 'docker/generate-secrets.sh'
   - 'docker/write-redis-acl.sh'
@@ -91,7 +99,7 @@ python:
   - 'docs/developer/CLAUDE_WORKFLOW.md'
   - 'docs/api/USAGE_METERING_API.md'
   - 'autobot-infrastructure/shared/config/permission_rules.yaml'
-  # The guard scans the whole repo by basename (pathspec *<name>), so an unallowed copy can
+  # #18556: the guard scans the whole repo by basename (pathspec *<name>), so an unallowed copy can
   # land anywhere: one glob per guarded basename, not just the listed trees.
   - '**/error_messages.yaml'
   - '**/prometheus.yml'
@@ -104,8 +112,8 @@ python:
   # to frontend-test.yml's push paths, so its verdict depends on the content --
   # a real dependency, covered here rather than recorded as a bypass.
   - '.github/filters/frontend-paths.yml'
-  # #19527: changes_job_equivalence_15360_test.py declares the smoke-action entries
-  # of this filter and checks the file holds exactly them on top of its frozen content.
+  # #19527: changes_job_equivalence_15360_test.py reads this filter and checks it keeps
+  # its frozen entries and cites an issue beside every one it gained (#21205).
   - '.github/filters/docker-paths.yml'
   # #17885: scripts/frontend_file_size_known_large.py names 184
   # frontend files BY CONCRETE LITERAL and the ratchet reads each one to
@@ -415,6 +423,11 @@ python:
   - '.github/actions/generated-types-autofix/action.yml'
   - '.github/actions/install-ci-requirements/action.yml'
   - '.github/workflows/dispatch-generated-types.yml'
+  # #21359: `preboard_guard_lane_21359_test.py` reads the pre-board guard lane workflow by concrete literal.
+  - '.github/workflows/dispatch-preboard-guards.yml'
+  # #21359: the lane's guard reads `pytest.ini` (testpaths must equal the lane's roots plus the roots it
+  # leaves to the suite) and `.test_durations` (covered below); a change confined to either must run it.
+  - 'pytest.ini'
   # #16568: workflow_types_gate_16568_test.py reads the required gate workflow by concrete literal.
   - '.github/workflows/verify-generated-types.yml'
   # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`

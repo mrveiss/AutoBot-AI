@@ -29,33 +29,45 @@ on:
       - 'autobot-backend/tests/migrations/**'
       - 'autobot-backend/user_management/models/**'
       - 'autobot-backend/llc/models/**'
-      - 'autobot-backend/llc/services/workspace_lease.py'
-      - 'autobot-backend/llc/services/company.py'
-      - 'autobot-backend/llc/services/company_ceo.py'
-      - 'autobot-backend/llc/services/company_move_lock.py'
-      - 'autobot-backend/llc/services/authz.py'
-      - 'autobot-backend/llc/services/membership_policy.py'
-      - 'autobot-backend/llc/services/membership_service.py'
-      - 'autobot-backend/llc/services/budget.py'
-      - 'autobot-backend/llc/services/controls_service.py'
-      - 'autobot-backend/llc/exceptions.py'
-      - 'autobot-backend/llc/scheduler/run_status.py'
-      - 'autobot-backend/llc/services/company_os/**'
-      - 'autobot-backend/services/ai_line_change_proposal.py'
-      - 'autobot_shared/ai_lines.py'
-      - 'autobot-backend/llc/services/goal.py'
       - 'autobot-backend/canvas/models.py'
       - 'autobot-backend/models/**'
       - 'autobot-backend/initialization/lifespan.py'
       - 'autobot-slm-backend/ansible/setup-user-backend.yml'
       - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
       - '.github/workflows/migration-gate.yml'
+      # #17996: the migration tests import these services
+      - 'autobot-backend/llc/services/workspace_lease.py'
+      - 'autobot-backend/services/__init__.py'
+      - 'autobot-backend/services/approval_gate_service.py'
+      # #15907: the concurrent-move test
+      - 'autobot-backend/llc/services/company.py'
+      - 'autobot-backend/llc/services/company_ceo.py'
+      # #19593: the move's row locks and their deadlock SQLSTATE
+      - 'autobot-backend/llc/services/company_move_lock.py'
+      - 'autobot_shared/db_errors.py'
+      # #19634: the move's authorization
+      - 'autobot-backend/llc/services/authz.py'
+      - 'autobot-backend/llc/services/membership_service.py'
+      # #19985: the two-session membership-lock test
+      - 'autobot-backend/llc/services/membership_policy.py'
+      # #20168: the cost event foreign key test
+      - 'autobot-backend/llc/services/budget.py'
+      - 'autobot-backend/llc/exceptions.py'
+      # #21056: the two-session pause test
+      - 'autobot-backend/llc/services/controls_service.py'
+      # #19582: the concurrent-claim test
+      - 'autobot-backend/llc/scheduler/run_status.py'
+      # #20115: the two-session plan convert lock test
+      - 'autobot-backend/llc/services/company_os/**'
+      - 'autobot-backend/llc/services/goal.py'
+      # #20086: imported by plan_convert_lines.py, which that test runs
+      - 'autobot-backend/services/ai_line_change_proposal.py'
+      - 'autobot_shared/ai_lines.py'
+      # #17822: the gate listed where its tests live, not the code they import
       - 'autobot-backend/services/*secret*.py'
       - 'autobot-backend/services/credential_*.py'
       - 'autobot-backend/services/orphan_repair*.py'
       - 'autobot-backend/services/provider_key_vault.py'
-      - 'autobot-backend/services/__init__.py'
-      - 'autobot-backend/services/approval_gate_service.py'
       - 'autobot-backend/api/**'
       - 'autobot_shared/secrets_envelope.py'
       - 'autobot_shared/status_enums.py'
@@ -63,15 +75,18 @@ on:
       - 'autobot_shared/auth/device_capabilities.py'
       - 'autobot_shared/secrets_vault.py'
       - 'autobot_shared/legacy_secret_keys.py'
-      - 'autobot_shared/db_errors.py'
+      # #20557: the secrets API test's canonical audit store on its database
       - 'autobot_shared/db_session.py'
+      - 'autobot_shared/user_management/models/audit.py'
+      # #20670: the admin-status two-user test imports these
       - 'autobot_shared/user_management/password_epoch.py'
       - 'autobot_shared/user_management/base_service.py'
-      - 'autobot_shared/user_management/models/audit.py'
       - 'autobot_shared/user_management/models/user.py'
       - 'autobot_shared/user_management/user_service.py'
       - 'autobot_shared/user_management/user_service_lifecycle.py'
       - 'autobot_shared/user_management/revocation_outcome.py'
+      # #21018: the last-admin race test's guard
+      - 'autobot_shared/user_management/last_platform_admin.py'
       - 'autobot_shared/user_management/__init__.py'
       - '.github/workflows/_changes.yml'
   # NOTE (#11346): no pull_request.paths filter — this workflow ALWAYS runs on PRs
@@ -133,33 +148,45 @@ jobs:
           - 'autobot-backend/tests/migrations/**'
           - 'autobot-backend/user_management/models/**'
           - 'autobot-backend/llc/models/**'
-          - 'autobot-backend/llc/services/workspace_lease.py'
-          - 'autobot-backend/llc/services/company.py'
-          - 'autobot-backend/llc/services/company_ceo.py'
-          - 'autobot-backend/llc/services/company_move_lock.py'
-          - 'autobot-backend/llc/services/authz.py'
-          - 'autobot-backend/llc/services/membership_policy.py'
-          - 'autobot-backend/llc/services/membership_service.py'
-          - 'autobot-backend/llc/services/budget.py'
-          - 'autobot-backend/llc/services/controls_service.py'
-          - 'autobot-backend/llc/exceptions.py'
-          - 'autobot-backend/llc/scheduler/run_status.py'
-          - 'autobot-backend/llc/services/company_os/**'
-          - 'autobot-backend/services/ai_line_change_proposal.py'
-          - 'autobot_shared/ai_lines.py'
-          - 'autobot-backend/llc/services/goal.py'
           - 'autobot-backend/canvas/models.py'
           - 'autobot-backend/models/**'
           - 'autobot-backend/initialization/lifespan.py'
           - 'autobot-slm-backend/ansible/setup-user-backend.yml'
           - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
           - '.github/workflows/migration-gate.yml'
+          # #17996: the migration tests import these services
+          - 'autobot-backend/llc/services/workspace_lease.py'
+          - 'autobot-backend/services/__init__.py'
+          - 'autobot-backend/services/approval_gate_service.py'
+          # #15907: the concurrent-move test
+          - 'autobot-backend/llc/services/company.py'
+          - 'autobot-backend/llc/services/company_ceo.py'
+          # #19593: the move's row locks and their deadlock SQLSTATE
+          - 'autobot-backend/llc/services/company_move_lock.py'
+          - 'autobot_shared/db_errors.py'
+          # #19634: the move's authorization
+          - 'autobot-backend/llc/services/authz.py'
+          - 'autobot-backend/llc/services/membership_service.py'
+          # #19985: the two-session membership-lock test
+          - 'autobot-backend/llc/services/membership_policy.py'
+          # #20168: the cost event foreign key test
+          - 'autobot-backend/llc/services/budget.py'
+          - 'autobot-backend/llc/exceptions.py'
+          # #21056: the two-session pause test
+          - 'autobot-backend/llc/services/controls_service.py'
+          # #19582: the concurrent-claim test
+          - 'autobot-backend/llc/scheduler/run_status.py'
+          # #20115: the two-session plan convert lock test
+          - 'autobot-backend/llc/services/company_os/**'
+          - 'autobot-backend/llc/services/goal.py'
+          # #20086: imported by plan_convert_lines.py, which that test runs
+          - 'autobot-backend/services/ai_line_change_proposal.py'
+          - 'autobot_shared/ai_lines.py'
+          # #17822: the gate listed where its tests live, not the code they import
           - 'autobot-backend/services/*secret*.py'
           - 'autobot-backend/services/credential_*.py'
           - 'autobot-backend/services/orphan_repair*.py'
           - 'autobot-backend/services/provider_key_vault.py'
-          - 'autobot-backend/services/__init__.py'
-          - 'autobot-backend/services/approval_gate_service.py'
           - 'autobot-backend/api/**'
           - 'autobot_shared/secrets_envelope.py'
           - 'autobot_shared/status_enums.py'
@@ -167,15 +194,18 @@ jobs:
           - 'autobot_shared/auth/device_capabilities.py'
           - 'autobot_shared/secrets_vault.py'
           - 'autobot_shared/legacy_secret_keys.py'
-          - 'autobot_shared/db_errors.py'
+          # #20557: the secrets API test's canonical audit store on its database
           - 'autobot_shared/db_session.py'
+          - 'autobot_shared/user_management/models/audit.py'
+          # #20670: the admin-status two-user test imports these
           - 'autobot_shared/user_management/password_epoch.py'
           - 'autobot_shared/user_management/base_service.py'
-          - 'autobot_shared/user_management/models/audit.py'
           - 'autobot_shared/user_management/models/user.py'
           - 'autobot_shared/user_management/user_service.py'
           - 'autobot_shared/user_management/user_service_lifecycle.py'
           - 'autobot_shared/user_management/revocation_outcome.py'
+          # #21018: the last-admin race test's guard
+          - 'autobot_shared/user_management/last_platform_admin.py'
           - 'autobot_shared/user_management/__init__.py'
 
   migration-tests:
