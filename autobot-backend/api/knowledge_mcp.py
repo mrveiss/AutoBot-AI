@@ -16,14 +16,12 @@ import asyncio
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.knowledge_mcp_llm import _get_chat_ollama
 from api.schemas_code import (
     SubscribeResourceRequest,
     UnsubscribeResourceRequest,
 )
-from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -52,6 +50,7 @@ from knowledge_base import KnowledgeBase
 from services.kb_wipe_request import request_vector_flush
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
+from user_management.database import get_async_session_factory
 
 MANIFEST = MCPBridgeManifest(
     name="knowledge_mcp",
@@ -933,7 +932,6 @@ _VECTOR_OPERATIONS = {
 async def mcp_redis_vector_operations(
     request: Metadata,
     current_user: dict = Depends(get_current_user),
-    session: AsyncSession = Depends(get_db_session),
 ):
     """MCP tool: Direct Redis vector store operations.
 
@@ -944,7 +942,8 @@ async def mcp_redis_vector_operations(
         operation = request.get("operation")
         params = request.get("params", {})
         if operation == "flush":
-            return await request_vector_flush(current_user, session)
+            async with get_async_session_factory()() as session:  # only this branch needs the database
+                return await request_vector_flush(current_user, session)
 
         kb = get_knowledge_base()
         vectors_client = get_vectors_redis_client()
