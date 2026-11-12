@@ -84,3 +84,20 @@ def test_extracted_edge_persists_every_line_and_reads_back_whole() -> None:
     stored = _build_edge_metadata("pkg.mod.caller", edge, resolved, "pkg/mod.py")
 
     assert decode_edge_metadata(stored)["call_lines"] == [6, 8, 9]
+
+
+def test_two_calls_on_one_line_are_one_site_and_use_no_cap_slot(monkeypatch) -> None:
+    """Pre-fix of the dedupe, the line was stored twice and counted twice against the cap."""
+    source = b"def helper(x):\n    return x\n\n\ndef caller():\n    return helper(1) + helper(2)\n"
+    edges = _edges_to(extract_python("pkg/mod.py", source), "helper")
+    assert [e["lines"] for e in edges] == [[6]]
+
+    monkeypatch.setattr(code_call_sites, "MAX_CALL_SITES_PER_EDGE", 2)
+    edge = {"lines": [1], "dropped_call_sites": 0}
+    for line in (1, 1, 2, 2):
+        add_call_site(edge, line)
+    assert edge == {"lines": [1, 2], "dropped_call_sites": 0}
+
+
+def test_a_bool_in_stored_lines_is_not_a_line_number() -> None:
+    assert decode_edge_metadata({"call_lines": "[true, 4]"})["call_lines"] == [4]

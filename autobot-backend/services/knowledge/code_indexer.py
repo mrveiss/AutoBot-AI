@@ -196,9 +196,18 @@ def _record_call_edge(
     if edge is not None:
         add_call_site(edge, line)  # #21317: one edge per (scope, target), every call-site line
         return
-    edge = {
-        "source": current_scope,
-        "target_name": target_name,
+    edge = _new_call_edge(current_scope, target_name, module_path, source_path, current_class, line)
+    seen[(current_scope, target_name)] = edge
+    edges.append(edge)
+
+
+def _new_call_edge(
+    scope: str, target: str, module_path: str, source_path: str, current_class: str | None, line: int
+) -> dict:
+    """The extracted (not yet resolved) call edge, carrying its first call site."""
+    return {
+        "source": scope,
+        "target_name": target,
         "module_path": module_path,
         "current_class": current_class,
         "kind": "calls",
@@ -206,8 +215,6 @@ def _record_call_edge(
         "lines": [line],
         "dropped_call_sites": 0,
     }
-    seen[(current_scope, target_name)] = edge
-    edges.append(edge)
 
 
 def _py_structural(node: Any, module_path: str, source_path: str, nodes: dict, current_class: str | None) -> None:

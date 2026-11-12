@@ -20,7 +20,12 @@ MAX_CALL_SITES_PER_EDGE = env_int_clamped("AUTOBOT_CODE_INDEX_MAX_CALL_SITES_PER
 
 
 def add_call_site(edge: dict, line: int) -> None:
-    """Append *line* to *edge*'s call sites, or count it as dropped once the cap is reached."""
+    """Append *line* to *edge*'s call sites, or count it as dropped once the cap is reached.
+
+    A line already recorded (``f(a) + f(b)``) is neither appended nor counted: it is the same site.
+    """
+    if line in edge["lines"]:
+        return
     if len(edge["lines"]) < MAX_CALL_SITES_PER_EDGE:
         edge["lines"].append(line)
     else:
@@ -46,9 +51,9 @@ def _decode_lines(meta: dict) -> list[int]:
     except (KeyError, TypeError, ValueError):
         decoded = None
     if isinstance(decoded, list):
-        return [n for n in decoded if isinstance(n, int)]
+        return [n for n in decoded if type(n) is int]
     legacy = meta.get("call_line")  # a record written before call_lines existed carries one site
-    return [legacy] if isinstance(legacy, int) and legacy > 0 else []
+    return [legacy] if type(legacy) is int and legacy > 0 else []
 
 
 def decode_edge_metadata(meta: dict) -> dict[str, Any]:

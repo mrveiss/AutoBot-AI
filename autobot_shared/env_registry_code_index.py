@@ -1,5 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
 """Code-indexer registration (#21317).
 
 A sibling of ``env_registry_backend_services.py``, which has no room left under the 600-line ceiling.
