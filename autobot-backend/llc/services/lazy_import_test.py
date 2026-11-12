@@ -103,7 +103,8 @@ def test_importing_secret_alone_does_not_import_the_other_twelve_services(isolat
 
     imported = {m for m in sys.modules if m.startswith("llc.services.")}
     # llc.services.base (LLCServiceBase), llc.services.activity_log (the log the base builds by default,
-    # #20101) and llc.services.actor (resolve_actor, stdlib and the activity model only) are genuine
+    # #20101) and llc.services.actor (resolve_actor, stdlib and the activity model only) and llc.services.after_commit (activity_log's
+    # commit-time publish, stdlib and SQLAlchemy only) are genuine
     # dependencies; the eagerly-imported set this guards against is everything __init__.py used to pull
     # in regardless of what was actually asked for.
     unexpected = imported - {
@@ -111,6 +112,7 @@ def test_importing_secret_alone_does_not_import_the_other_twelve_services(isolat
         "llc.services.base",
         "llc.services.activity_log",
         "llc.services.actor",
+        "llc.services.after_commit",  # the one after-commit queue activity_log publishes through (#21107)
     }
     assert not unexpected, f"importing llc.services.secret pulled in unrelated modules: {unexpected}"
 
