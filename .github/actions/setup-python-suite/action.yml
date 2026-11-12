@@ -328,15 +328,17 @@ runs:
         }
         # #19308: scripts/ci/apt_fallback_mirror.sh edits the runner's mirror list (the
         # archive is `mirror+file:/etc/apt/apt-mirrors.txt` on GitHub's images) and any plain
-        # archive URI, and exits 3 when it changed nothing -- said out loud, since the retry
-        # then hits the same mirror. The update gets ONE try (#19345 review): three would add
-        # up to 15 minutes to a worst case already near the 30-minute provision job limit.
+        # archive URI. It is called here only after the primary failed a real download, so it is
+        # told so (--primary-known-bad: the primary probe is skipped), but it still probes the
+        # fallback and applies it only when that answers (#21325). Exit 3 = not applied; the script
+        # printed why, and the retry then hits the same mirror. The update gets ONE try (#19345
+        # review): three would add up to 15 minutes to a worst case already near the 30-minute provision job limit.
         apt_use_fallback_mirror() {
-          local n=0 rc=0
-          n=$(sudo bash "$APT_FALLBACK_SCRIPT" /etc/apt "$APT_FALLBACK_MIRROR") || rc=$?
+          local rc=0
+          sudo bash "$APT_FALLBACK_SCRIPT" /etc/apt "$APT_FALLBACK_MIRROR" --primary-known-bad >/dev/null || rc=$?
           case "$rc" in
-            0) echo "apt: fallback mirror applied to ${n} apt file(s) (#19308)" >&2 ;;
-            3) echo "::warning title=apt fallback mirror not applied::no Ubuntu archive entry found to repoint; the retry uses the same mirror (#19308)" >&2 ;;
+            0) ;;
+            3) echo "::warning title=apt fallback mirror not applied::see the apt fallback lines above; the retry uses the same mirror (#19308)" >&2 ;;
             *) echo "::warning title=apt fallback mirror script failed::exit ${rc}; the retry uses whatever apt is configured with (#19308)" >&2 ;;
           esac
           APT_TRIES=1 APT_ADVISORY=1 apt_retry "update (fallback mirror)" timeout "$APT_TIMEOUT_S" sudo apt-get update -qq
