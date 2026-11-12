@@ -19,8 +19,8 @@ and `||` return an *operand*, not a boolean (`'x' && '0'` is ``'0'``, not
 silently pass a mutant that this workflow's own logic depends on: the `'0'`
 string is truthy specifically *because* GitHub does not fold it to a number.
 
-Scope is deliberately the fragment this one workflow needs: string/number
-literals, ``==``, ``>``, ``>=``, ``&&``, ``||``, parentheses, and dotted
+Scope is deliberately the fragment the workflows under test need: string/number
+literals, ``true``/``false``/``null``, ``==``, ``!=``, ``>``, ``>=``, ``&&``, ``||``, parentheses, and dotted
 context lookups where a missing segment is null. Add operators only when a
 real expression needs them -- this is an anchor for one gate, not a GitHub
 Actions expression engine.
@@ -32,13 +32,16 @@ import re
 
 __all__ = ["evaluate", "strip_expression_braces"]
 
+#: The literals a workflow expression may spell without a context lookup.
+_KEYWORDS: dict[str, object] = {"true": True, "false": False, "null": None}
+
 _TOKEN_PATTERN = re.compile(
     r"""
       (?P<ws>\s+)
-    | (?P<op>==|>=|&&|\|\||>|\(|\))
+    | (?P<op>==|!=|>=|&&|\|\||>|\(|\))
     | (?P<string>'(?:[^']|'')*')
     | (?P<number>-?\d+(?:\.\d+)?)
-    | (?P<ident>[A-Za-z_][A-Za-z0-9_.]*)
+    | (?P<ident>[A-Za-z_][A-Za-z0-9_.-]*)
     """,
     re.VERBOSE,
 )
@@ -68,9 +71,7 @@ def _tokenize(expr: str) -> list[tuple[str, str]]:
     pos = 0
     for match in _TOKEN_PATTERN.finditer(expr):
         if match.start() != pos:
-            raise ValueError(
-                f"unrecognized text at {pos} in {expr!r}: {expr[pos : match.start()]!r}"
-            )
+            raise ValueError(f"unrecognized text at {pos} in {expr!r}: {expr[pos : match.start()]!r}")
         pos = match.end()
         if match.lastgroup != "ws":
             tokens.append((match.lastgroup, match.group()))
@@ -108,7 +109,13 @@ def _truthy(value: object) -> bool:
 
 
 def _compare(op: str, left: object, right: object) -> bool:
-    """Evaluate ``==`` / ``>`` / ``>=``. A null operand compares false to anything."""
+    """Evaluate ``==`` / ``!=`` / ``>`` / ``>=``. A null operand compares false, except under ``!=``.
+
+    ``!=`` reads null as the empty string, as GitHub does when it coerces a missing output, so
+    ``needs.job.outputs.ok != 'true'`` holds for a job that was skipped and published nothing.
+    """
+    if op == "!=":
+        return (left if left is not None else "") != (right if right is not None else "")
     if left is None or right is None:
         return False
     if op == "==":
@@ -165,7 +172,7 @@ class _Parser:
 
     def _cmp(self) -> object:
         value = self._primary()
-        if self._peek_op("==", ">", ">="):
+        if self._peek_op("==", "!=", ">", ">="):
             op = self._tokens[self._pos][1]
             self._pos += 1
             value = _compare(op, value, self._primary())
@@ -180,6 +187,8 @@ class _Parser:
             return text[1:-1].replace("''", "'")
         if kind == "number":
             return float(text) if "." in text else int(text)
+        if kind == "ident" and text in _KEYWORDS:
+            return _KEYWORDS[text]
         if kind == "ident":
             return _lookup(self._context, text)
         raise ValueError(f"unexpected token ({kind!r}, {text!r})")
