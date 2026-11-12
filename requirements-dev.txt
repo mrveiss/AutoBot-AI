@@ -3,10 +3,11 @@
 # Issue #3723: security/ and memory/ test packages failed collection with
 # ModuleNotFoundError because these two packages were missing from the venv.
 
+-c constraints/shared.txt  # single source of truth for shared versions (#10524, #18060)
 -r autobot-backend/requirements.txt
 
 # Explicit re-declaration ensures both packages are present in the dev venv
 # even when pip resolves the -r chain in unexpected order.
-structlog>=26.1.0    # service_auth_enforcement, service_auth_logging, service_client
-aiosqlite>=0.22.1   # memory/storage/general_storage, memory/storage/task_storage, utils/async_database_pool
-fakeredis[lua]>=2.38.0    # llm_shared provider-degradation cross-worker tests (#11519); [lua] for evalsha/register_script tests (#11604)
+structlog  # service_auth_enforcement, service_auth_logging, service_client
+aiosqlite  # memory/storage/general_storage, memory/storage/task_storage, utils/async_database_pool
+fakeredis[lua]    # llm_shared provider-degradation cross-worker tests (#11519); [lua] for evalsha/register_script tests (#11604)

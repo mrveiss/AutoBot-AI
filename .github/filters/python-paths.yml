@@ -357,6 +357,9 @@ python:
   # change that skips the suite guarding it -- the guard would be bypassable by
   # touching the one file it exists to watch. #15900's coverage checker caught it.
   - 'constraints/ansible-core.txt'
+  # #18060: the constraint-drift tests and several repo_tests read the shared pins; a PR that edits only
+  # this file must still run the suite that guards it.
+  - 'constraints/shared.txt'
   # #16275: `no_tracked_key_material_test.py` asserts every entry in the
   # detect-secrets baseline carries an audited verdict and that its version
   # matches the hook and the CI install. Without an entry here, a change confined
