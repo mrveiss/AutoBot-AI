@@ -75,7 +75,16 @@ async def maker():
     factory = async_sessionmaker(engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine
     async with factory() as db:
         for node_id, code_status in _NODES.items():
-            db.add(_db.Node(node_id=node_id, hostname=node_id, ip_address="node.example.test", code_status=code_status))
+            # Enrolled fleet nodes are online; the column default is "pending", which #21036 skips as not enrolled.
+            db.add(
+                _db.Node(
+                    node_id=node_id,
+                    hostname=node_id,
+                    ip_address="node.example.test",
+                    status="online",
+                    code_status=code_status,
+                )
+            )
         for sid, (target_type, target_nodes, _) in _CASES.items():
             row = {"id": sid, "name": f"s{sid}", "target_type": target_type, "target_nodes": target_nodes}
             db.add(_db.UpdateSchedule(cron_expression="0 2 * * *", **row))

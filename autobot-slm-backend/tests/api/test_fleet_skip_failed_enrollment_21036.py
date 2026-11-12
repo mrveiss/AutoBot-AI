@@ -373,3 +373,18 @@ async def test_update_all_path_keeps_the_chosen_self_node_when_rows_share_the_sl
 
     assert "n-dup-manager" in ids
     assert "n-dup-first" not in ids
+
+
+async def test_a_legacy_node_with_no_recorded_status_is_still_targeted(maker):
+    """Breaks if an unknown (NULL) status is read as not enrolled: only positively known states are skipped."""
+    async with maker() as db:
+        db.add(_db.Node(node_id="n-legacy", hostname="n-legacy", ip_address="legacy.example.test"))
+        await db.flush()
+        legacy = (await db.execute(select(_db.Node).where(_db.Node.node_id == "n-legacy"))).scalar_one()
+        legacy.status = None
+        await db.commit()
+    async with maker() as db:
+        assert (await db.execute(select(_db.Node.status).where(_db.Node.node_id == "n-legacy"))).scalar_one() is None
+        targets, skipped = await _events.split_enrollment_failed(db, ["n-legacy", "n-pending"])
+    assert targets == ["n-legacy"]
+    assert [(s.node_id, s.reason) for s in skipped] == [("n-pending", _enrollment.enrollment_skip_reason("pending"))]
