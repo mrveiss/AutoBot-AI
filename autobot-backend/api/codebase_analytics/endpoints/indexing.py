@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
-from api.source_scope import require_source_id
+from api.source_scope import SourceIdQuery, require_source_id
 from auth_middleware import get_current_user
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
@@ -69,6 +69,8 @@ from ..scanner import (
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+_NO_JOB_FOR_SOURCE = "No indexing job is currently running for this source"
 
 
 async def _check_existing_task_and_queue(source_id: str | None, root_path_for_queue: str) -> JSONResponse | None:
@@ -332,6 +334,51 @@ async def get_indexing_status(task_id: str):
     return JSONResponse(response)
 
 
+def _idle_job_body(message: str = "No indexing job is currently running") -> dict:
+    return {"has_active_job": False, "task_id": None, "status": "idle", "message": message}
+
+
+async def _finished_job_body(task_id: str, source_id: str) -> dict:
+    """The last job's final state (#1210), or idle when that job belongs to another source (#20513)."""
+    task_data = await _load_task_from_redis(task_id)
+    if not task_data:
+        task_data = dict(indexing_tasks.get(task_id, {}))
+    if task_data.get("source_id") != source_id:
+        return _idle_job_body(_NO_JOB_FOR_SOURCE)
+    return {
+        "has_active_job": False,
+        "task_id": task_id,
+        "source_id": task_data.get("source_id"),
+        "status": task_data.get("status", "unknown"),
+        "result": task_data.get("result"),
+        "error": task_data.get("error"),
+        "message": "Last indexing job has completed",
+    }
+
+
+async def _running_job_body(task_id: str, in_memory: dict, source_id: str) -> dict:
+    """The running job's state, or idle when that job belongs to another source (#20513).
+
+    The subprocess updates Redis, not the parent's in-memory dict, so fresh state
+    comes from Redis for progress to advance (#1210).
+    """
+    task_data = await _load_task_from_redis(task_id) or in_memory
+    if task_data.get("source_id") != source_id:
+        return _idle_job_body(_NO_JOB_FOR_SOURCE)
+    return {
+        "has_active_job": True,
+        "task_id": task_id,
+        "source_id": task_data.get("source_id"),
+        "status": task_data.get("status", "running"),
+        "progress": task_data.get("progress"),
+        "phases": task_data.get("phases"),
+        "batches": task_data.get("batches"),
+        "stats": task_data.get("stats"),
+        "started_at": task_data.get("started_at"),
+        "message": "Indexing job is in progress",
+    }
+
+
 @router.get("/index/current")
 @bounded(60.0)
 @with_error_handling(
@@ -339,74 +386,30 @@ async def get_indexing_status(task_id: str):
     operation="get_current_indexing_job",
     error_code_prefix="CODEBASE",
 )
-async def get_current_indexing_job():
+async def get_current_indexing_job(source_id: SourceIdQuery):
     """
-    Get the status of the currently running indexing job (if any)
+    Get the status of the currently running indexing job, if it belongs to ``source_id``.
+
+    One job runs at a time across all sources (#20491). A job that belongs to another
+    source is not reported: the answer for this source is idle (#20513).
 
     Returns:
-    - has_active_job: Whether an indexing job is currently running
-    - task_id: The current job's task ID (if running)
-    - source_id: The source it indexes: one job runs at a time across all sources (#20491)
+    - has_active_job: Whether an indexing job of this source is currently running
+    - task_id: The current job's task ID (if running or just finished)
+    - source_id: The source it indexes (always the requested one when a job is named)
     - status: Current job status
     - progress: Current progress details
     """
     # All accesses to shared state under lock
     async with _tasks_lock:
-        if _current_indexing_task_id is None:
-            return JSONResponse(
-                {
-                    "has_active_job": False,
-                    "task_id": None,
-                    "status": "idle",
-                    "message": "No indexing job is currently running",
-                }
-            )
-
-        current_task_id = _current_indexing_task_id
-
-        # Check if task is still running
-        existing_task = _active_tasks.get(current_task_id)
+        task_id = _current_indexing_task_id
+        if task_id is None:
+            return JSONResponse(_idle_job_body())
+        existing_task = _active_tasks.get(task_id)
         if existing_task is None or existing_task.done():
-            # Task finished — load final state from Redis (#1210)
-            task_data = await _load_task_from_redis(current_task_id)
-            if not task_data:
-                task_data = dict(indexing_tasks.get(current_task_id, {}))
-            return JSONResponse(
-                {
-                    "has_active_job": False,
-                    "task_id": current_task_id,
-                    "source_id": task_data.get("source_id"),
-                    "status": task_data.get("status", "unknown"),
-                    "result": task_data.get("result"),
-                    "error": task_data.get("error"),
-                    "message": "Last indexing job has completed",
-                }
-            )
-
-        # Task is still running — prefer Redis state (subprocess writes there)
-        # because the subprocess has its own in-memory indexing_tasks (#1210).
-        task_data = dict(indexing_tasks.get(current_task_id, {}))
-
-    # Subprocess updates Redis, not parent's in-memory dict.
-    # Load fresh state from Redis so progress actually advances (#1210).
-    redis_state = await _load_task_from_redis(current_task_id)
-    if redis_state:
-        task_data = redis_state
-
-    return JSONResponse(
-        {
-            "has_active_job": True,
-            "task_id": current_task_id,
-            "source_id": task_data.get("source_id"),
-            "status": task_data.get("status", "running"),
-            "progress": task_data.get("progress"),
-            "phases": task_data.get("phases"),
-            "batches": task_data.get("batches"),
-            "stats": task_data.get("stats"),
-            "started_at": task_data.get("started_at"),
-            "message": "Indexing job is in progress",
-        }
-    )
+            return JSONResponse(await _finished_job_body(task_id, source_id))
+        in_memory = dict(indexing_tasks.get(task_id, {}))
+    return JSONResponse(await _running_job_body(task_id, in_memory, source_id))
 
 
 def _cancel_active_task(task_id: str, existing_task) -> JSONResponse:

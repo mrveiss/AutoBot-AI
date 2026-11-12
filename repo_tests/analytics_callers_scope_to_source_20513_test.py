@@ -229,7 +229,8 @@ def test_control_a_stale_deferred_entry_is_detected():
 def test_the_exempt_paths_are_the_shared_lists():
     assert _exempt("impact") == "cross-source"
     assert _exempt("patterns/tasks") == "cross-source"
-    assert _exempt("index/current") == PR2_REASON
+    assert _exempt("index/cancel") == PR2_REASON
+    assert _exempt("index/current") is None  # scoped now: a caller must send its source
     assert _exempt("patterns/tasks/clear-stuck") == "task or ops route"
     assert _exempt("stats") is None
 
