@@ -1,6 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""Fleet updates skip every node that is not fully enrolled: failed, pending, degraded (#21036).
+"""Fleet updates skip every node that never completed enrollment: failed, pending, degraded-before-enrolled (#21036).
 
 Real sqlite, real ORM. Node ids are fixed so a failure names the node.
 """
@@ -44,7 +44,7 @@ with real_modules_swapped():
 FAILED, COMPLETED = "deployment_failed", "deployment_completed"
 ENROLL_FAILED = ("Enrollment failed for node x: boom", True)
 ENROLL_DONE = ("Enrollment completed for node x", True)
-_FAILED = {"n-failed", "n-completed-then-failed"}
+_FAILED = {"n-failed", "n-completed-then-failed", "n-deg-then-failed"}
 #: node_id -> the state named in its skip reason (owner decision 2026-11-09: every node not fully enrolled).
 _SKIPPED = {
     **{n: "failed" for n in _FAILED},
@@ -52,6 +52,18 @@ _SKIPPED = {
     "n-enrolling": "pending",
     "n-degraded": "degraded",
 }
+#: degraded node_id -> the reason ``node_health_status.degraded_reason`` reads from its row (None: pre-#19292 row).
+_DEGRADED = {
+    "n-degraded": None,
+    "n-deg-pressure": "resource_pressure",
+    "n-deg-service": "service_health",
+    "n-deg-lost-heartbeat": "no_heartbeat",
+    "n-deg-legacy-heartbeat": "no_heartbeat",
+    "n-deg-then-failed": "no_heartbeat",
+}
+_STATUS = {"n-pending": "pending", "n-enrolling": "enrolling"}
+_NO_HEARTBEAT = {"n-never-heartbeat", "n-degraded"}
+_HEALTH_KEY = "slm_health_state"
 #: node_id -> its events in order as (event_type, message).
 _EVENTS = {
     "n-completed": [(COMPLETED, ENROLL_DONE)],
@@ -60,7 +72,16 @@ _EVENTS = {
     "n-completed-then-failed": [(COMPLETED, ENROLL_DONE), (FAILED, ENROLL_FAILED)],
     "n-retried": [(FAILED, ENROLL_FAILED), (COMPLETED, ENROLL_DONE)],
     "n-selfreg": [],
+    # degraded before any agent: no heartbeat ever, no enrollment event -> never enrolled
     "n-degraded": [],
+    # degraded but ENROLLED -> targeted (AC3): heartbeat-derived reasons, a completed enrollment that later lost
+    # its heartbeat, and a legacy node with no enrollment event that did heartbeat once
+    "n-deg-pressure": [],
+    "n-deg-service": [],
+    "n-deg-lost-heartbeat": [(COMPLETED, ENROLL_DONE)],
+    "n-deg-legacy-heartbeat": [],
+    # degraded, heartbeated once, but its latest enrollment FAILED -> failed wins
+    "n-deg-then-failed": [(FAILED, ENROLL_FAILED)],
     "n-never-heartbeat": [],
     "n-pending": [],
     "n-enrolling": [],
@@ -88,16 +109,15 @@ async def maker():
     async with factory() as db:
         n = 0
         for node_id, events in _EVENTS.items():
-            status = {"n-degraded": "degraded", "n-pending": "pending", "n-enrolling": "enrolling"}.get(
-                node_id, "online"
-            )
-            beat = None if node_id == "n-never-heartbeat" else datetime.now(timezone.utc)
+            status = "degraded" if node_id in _DEGRADED else _STATUS.get(node_id, "online")
+            beat = None if node_id in _NO_HEARTBEAT else datetime.now(timezone.utc)
             db.add(
                 _db.Node(
                     node_id=node_id,
                     hostname=node_id,
                     ip_address="node.example.test",
                     status=status,
+                    extra_data={_HEALTH_KEY: {"reason": _DEGRADED[node_id]}} if _DEGRADED.get(node_id) else {},
                     last_heartbeat=beat,
                     code_status="outdated",
                 )
@@ -388,3 +408,28 @@ async def test_a_legacy_node_with_no_recorded_status_is_still_targeted(maker):
         targets, skipped = await _events.split_enrollment_failed(db, ["n-legacy", "n-pending"])
     assert targets == ["n-legacy"]
     assert [(s.node_id, s.reason) for s in skipped] == [("n-pending", _enrollment.enrollment_skip_reason("pending"))]
+
+
+_ENROLLED_DEGRADED = ["n-deg-pressure", "n-deg-service", "n-deg-lost-heartbeat", "n-deg-legacy-heartbeat"]
+
+
+@pytest.mark.parametrize("node_id", _ENROLLED_DEGRADED)
+async def test_a_degraded_node_that_is_enrolled_is_still_targeted(maker, node_id):
+    """AC3: degraded for resource pressure / service health, or enrolled and then silent, is updated."""
+    async with maker() as db:
+        targets, skipped = await _events.split_enrollment_failed(db, [node_id])
+    assert (targets, skipped) == ([node_id], [])
+
+
+async def test_a_degraded_node_with_no_enrollment_evidence_is_skipped_as_degraded(maker):
+    async with maker() as db:
+        targets, skipped = await _events.split_enrollment_failed(db, ["n-degraded"])
+    assert targets == []
+    assert [(s.node_id, s.reason) for s in skipped] == [("n-degraded", _enrollment.enrollment_skip_reason("degraded"))]
+
+
+async def test_every_enrolled_degraded_node_is_targeted_by_the_scheduled_selection(maker):
+    schedule = types.SimpleNamespace(target_type="specific", target_nodes=_ENROLLED_DEGRADED + ["n-degraded"])
+    async with maker() as db:
+        picked = {n.node_id for n in await _executor.get_schedule_target_nodes(db, schedule)}
+    assert picked == set(_ENROLLED_DEGRADED)

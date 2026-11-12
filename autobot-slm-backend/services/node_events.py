@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 from models.database import EventSeverity, Node, NodeEvent, NodeEventType, NodeStatus
 from models.enrollment_skip import STATE_DEGRADED, STATE_FAILED, STATE_PENDING, EnrollmentSkip, enrollment_skip_reason
+from services.node_health_status import REASON_RESOURCE_PRESSURE, REASON_SERVICE_HEALTH, degraded_reason
 from status_enums import NOT_FULLY_ENROLLED_STATUSES
 
 logger = get_logger(__name__)
@@ -55,15 +56,15 @@ def enrollment_details(details: dict = None) -> dict:
     return {**(details or {}), ENROLLMENT_KIND_KEY: ENROLLMENT_KIND}
 
 
-async def get_enrollment_failed_node_ids(db: AsyncSession, node_ids: Iterable[str]) -> Set[str]:
-    """Node ids (among *node_ids*) whose latest enrollment event is DEPLOYMENT_FAILED (#21036).
+async def get_latest_enrollment_events(db: AsyncSession, node_ids: Iterable[str]) -> Dict[str, str]:
+    """node_id -> the event_type of its latest enrollment event (DEPLOYMENT_FAILED or DEPLOYMENT_COMPLETED) (#21036).
 
-    Positive evidence only (events without the marker are not counted): a node with no enrollment event, or with a
-    DEPLOYMENT_COMPLETED after its last failure, is not returned. One query.
+    Positive evidence only (events without the marker are not counted): a node with no enrollment event is absent.
+    One query.
     """
     ids = list(node_ids)
     if not ids:
-        return set()
+        return {}
     enrollment = (
         NodeEvent.node_id.in_(ids),
         NodeEvent.details[ENROLLMENT_KIND_KEY].as_string() == ENROLLMENT_KIND,
@@ -71,23 +72,43 @@ async def get_enrollment_failed_node_ids(db: AsyncSession, node_ids: Iterable[st
     )
     # Latest by autoincrement id, not created_at: timestamps can tie or skew; id is the monotonic insert order.
     latest = select(func.max(NodeEvent.id)).where(*enrollment).group_by(NodeEvent.node_id)
-    rows = await db.execute(
-        select(NodeEvent.node_id).where(
-            NodeEvent.id.in_(latest),
-            NodeEvent.event_type == NodeEventType.DEPLOYMENT_FAILED.value,
-        )
-    )
-    return set(rows.scalars().all())
+    rows = await db.execute(select(NodeEvent.node_id, NodeEvent.event_type).where(NodeEvent.id.in_(latest)))
+    return {node_id: event_type for node_id, event_type in rows.all()}
 
 
-#: "Fully enrolled" = latest enrollment not failed (event evidence, ``get_enrollment_failed_node_ids``) and the
-#: NodeStatus not in ``status_enums.NOT_FULLY_ENROLLED_STATUSES`` (owner ruling 2026-11-10). A node that never
-#: heartbeated is NOT skipped for that reason.
-def unenrolled_state(status: str) -> Optional[str]:
-    """The not-fully-enrolled state a node's row shows, or None when the row shows a fully enrolled node."""
-    if status not in {s.value for s in NOT_FULLY_ENROLLED_STATUSES}:
+async def get_enrollment_failed_node_ids(db: AsyncSession, node_ids: Iterable[str]) -> Set[str]:
+    """Node ids (among *node_ids*) whose latest enrollment event is DEPLOYMENT_FAILED (#21036)."""
+    events = await get_latest_enrollment_events(db, node_ids)
+    return {n for n, event in events.items() if event == NodeEventType.DEPLOYMENT_FAILED.value}
+
+
+#: Reasons only heartbeat processing writes (``reconciler.apply_agent_presence``): the node has an agent.
+_HEARTBEAT_REASONS = (REASON_RESOURCE_PRESSURE, REASON_SERVICE_HEALTH)
+
+
+def _enrollment_evidenced(node: Node, enrollment_event: Optional[str]) -> bool:
+    """Did *node* complete enrollment? Its latest enrollment event decides; with none, a first heartbeat does.
+
+    ``DEPLOYMENT_COMPLETED`` is written only after the enrollment playbook succeeds (``api.nodes``). ``last_heartbeat``
+    is written only when the node's agent reports (``reconciler``), so a row that never enrolled keeps it NULL.
+    """
+    if degraded_reason(node) in _HEARTBEAT_REASONS:
+        return True
+    if enrollment_event is not None:
+        return enrollment_event == NodeEventType.DEPLOYMENT_COMPLETED.value
+    return node.last_heartbeat is not None
+
+
+#: THE definition of "not fully enrolled" (owner ruling 2026-11-10, AC3 of #21036) for every update route: the
+#: latest enrollment failed, or the node is ``pending``/``enrolling``, or it is ``degraded`` with no evidence that
+#: enrollment ever completed. A node degraded for resource pressure or service health is enrolled and is updated.
+def unenrolled_state(node: Node, enrollment_event: Optional[str] = None) -> Optional[str]:
+    """The not-fully-enrolled state *node* shows, or None when it is fully enrolled (and so updated)."""
+    if node.status not in {s.value for s in NOT_FULLY_ENROLLED_STATUSES}:
         return None
-    return STATE_DEGRADED if status == NodeStatus.DEGRADED.value else STATE_PENDING
+    if node.status != NodeStatus.DEGRADED.value:
+        return STATE_PENDING
+    return None if _enrollment_evidenced(node, enrollment_event) else STATE_DEGRADED
 
 
 async def get_unenrolled_nodes(db: AsyncSession, node_ids: Iterable[str]) -> Dict[str, str]:
@@ -98,12 +119,13 @@ async def get_unenrolled_nodes(db: AsyncSession, node_ids: Iterable[str]) -> Dic
     ids = list(node_ids)
     if not ids:
         return {}
-    states = {n: STATE_FAILED for n in await get_enrollment_failed_node_ids(db, ids)}
-    rows = await db.execute(select(Node.node_id, Node.status).where(Node.node_id.in_(ids)))
-    for node_id, status in rows.all():
-        state = unenrolled_state(status)
-        if state and node_id not in states:
-            states[node_id] = state
+    events = await get_latest_enrollment_events(db, ids)
+    states = {n: STATE_FAILED for n, e in events.items() if e == NodeEventType.DEPLOYMENT_FAILED.value}
+    nodes = (await db.execute(select(Node).where(Node.node_id.in_(ids)))).scalars().all()
+    for node in nodes:
+        state = unenrolled_state(node, events.get(node.node_id))
+        if state and node.node_id not in states:
+            states[node.node_id] = state
     return states
 
 
