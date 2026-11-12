@@ -39,6 +39,7 @@ from typing import Any
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from services.knowledge.code_call_sites import decode_edge_metadata
 from services.knowledge.code_indexer import find_callers
 
 logger = get_logger(__name__)
@@ -146,7 +147,7 @@ async def _find_skipped_edges(collection: Any, node_id: str) -> list[dict[str, A
         },
         include=["metadatas"],
     )
-    return list(result.get("metadatas") or [])
+    return [decode_edge_metadata(meta) for meta in result.get("metadatas") or []]
 
 
 async def _expand_frontier(collection: Any, frontier: list[str], visited: set[str], result: ImpactResult) -> list[str]:

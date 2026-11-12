@@ -1232,6 +1232,7 @@
         "testCoverage": "Test Coverage",
         "codeDuplicates": "Code Duplicates",
         "technicalDebt": "Technical Debt",
+        "notAvailable": "Not available",
         "noMetrics": "No code quality metrics available."
       },
       "performance": {
@@ -2478,6 +2479,7 @@
       "testCoverage": "Test Coverage",
       "codeDuplicates": "Code Duplicates",
       "technicalDebt": "Technical Debt",
+      "notAvailable": "Not available",
       "noQualityMetrics": "No quality metrics available",
       "performanceMetrics": "Performance Metrics",
       "efficiency": "Efficiency",
@@ -8401,6 +8403,7 @@
       "criticalTitle": "Backend unreachable",
       "criticalMessage": "AutoBot cannot reach its backend. Changes may not be saved until it is back."
     },
+    "llcHandbook": "Handbook",
     "llcSettings": "Settings",
     "adminConversations": "Conversation Review"
   },
@@ -9626,6 +9629,100 @@
         "approveDetail": "Server detail: {detail}",
         "convertFailed": "Could not create the workflows.",
         "retryFailed": "Could not retry the AI line proposals."
+      }
+    },
+    "handbook": {
+      "title": "Handbook",
+      "subtitle": "A page for every role, workflow, process and meta skill, read from the company model each time it opens.",
+      "noCompany": "Choose a company to read its handbook.",
+      "loading": "Reading the company model...",
+      "loadingPage": "Reading this page...",
+      "sourceFailed": "Part of the company model could not be read: {reason}",
+      "emptyTitle": "No pages yet",
+      "emptyBody": "This company has no roles, workflows or processes. A page appears here as soon as one is added.",
+      "search": "Search the handbook",
+      "searchPlaceholder": "Search page titles",
+      "filterAria": "Kind of page",
+      "filterAll": "All pages",
+      "noMatch": "No page matches. Try a shorter word, or clear the search and the filter.",
+      "pickPage": "Pick a page to read it.",
+      "noDescription": "The company model records no description for this page.",
+      "ownedBy": "Owned by {role}",
+      "partsFailed": "Could not read: {parts}",
+      "part": {
+        "holders": "holders",
+        "workflows": "workflows",
+        "tools": "tools",
+        "skills": "skills",
+        "graph": "steps"
+      },
+      "kind": {
+        "role": "Role",
+        "workflow": "Workflow",
+        "process": "Process",
+        "metaSkill": "Meta skill"
+      },
+      "kindPlural": {
+        "role": "Roles",
+        "workflow": "Workflows",
+        "process": "Processes",
+        "metaSkill": "Meta skills"
+      },
+      "holders": "Who holds it",
+      "noHolders": "Nobody holds this role right now.",
+      "workflowsItPerforms": "Workflows it performs",
+      "noWorkflows": "This role performs no workflows yet.",
+      "processesItOwns": "Processes it owns",
+      "noProcesses": "This role owns no processes yet.",
+      "skills": "Skills it holds",
+      "noSkills": "This role holds no skills.",
+      "tools": "Tools",
+      "noTools": "This role has no tools.",
+      "requiredSkills": "Skills it needs",
+      "noSkillsNeeded": "None needed.",
+      "trigger": "Trigger",
+      "triggerKind": {
+        "manual": "Started by hand",
+        "schedule": "Runs on a schedule",
+        "email_received": "Starts when an email arrives",
+        "work_item_status": "Starts when a work item changes status",
+        "webhook": "Starts when a webhook is called",
+        "folder_file_added": "Starts when a file is added to a folder",
+        "process_result": "Starts from the result of a process"
+      },
+      "steps": "Steps, in plain words",
+      "noSteps": "This graph has no steps yet.",
+      "step": {
+        "start": "Start",
+        "metaSkill": "Run the meta skill {name}",
+        "end": {
+          "done": "Finished: done",
+          "failed": "Finished: failed"
+        },
+        "success": "Then: {target}",
+        "else": "Otherwise: {target}",
+        "if": "If {condition}: {target}",
+        "failure": "If it fails: {target}",
+        "failureRetry": "If it fails: retry {n} times, then {target}",
+        "timeout": "If nothing happens within {seconds} seconds: {target}",
+        "handoff": "Hands off to the workflow {workflow}"
+      },
+      "coverage": {
+        "title": "Coverage",
+        "body": "Every role, workflow, process and meta skill has a page automatically.",
+        "missing": "Roles and processes without a recorded description ({n})",
+        "unread": "could not be read",
+        "partial": "This list is incomplete: a source above could not be read."
+      },
+      "unavailable": {
+        "title": "Not available yet",
+        "body": "These parts of the handbook need a backend that does not exist yet. They are not shown with stand-in content.",
+        "chapters": "Company chapters, with owner role, version and scope",
+        "explanations": "Owner-written explanations, suggested edits and their approval",
+        "onboarding": "Onboarding paths and read confirmations",
+        "scoping": "Need-to-know scoping on the server and the View whole handbook permission",
+        "search": "Search of the handbook in Knowledge and chat",
+        "handoffs": "Which roles a role works with"
       }
     }
   },

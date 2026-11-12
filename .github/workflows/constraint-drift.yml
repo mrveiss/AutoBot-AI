@@ -24,6 +24,8 @@ on:
       - '**/requirements*.txt'
       - 'requirements*/*.txt'
       - 'constraints/shared.txt'
+      - '**/pyproject.toml'
+      - '**/setup.py'
       - 'scripts/check_constraint_drift.py'
       - 'scripts/check_websockets_cap.py'
       - '.github/workflows/constraint-drift.yml'
@@ -33,6 +35,8 @@ on:
       - '**/requirements*.txt'
       - 'requirements*/*.txt'
       - 'constraints/shared.txt'
+      - '**/pyproject.toml'
+      - '**/setup.py'
       - 'scripts/check_constraint_drift.py'
       - 'scripts/check_websockets_cap.py'
 

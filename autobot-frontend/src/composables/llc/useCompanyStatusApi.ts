@@ -18,6 +18,7 @@
  */
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { orgScope } from '@/utils/orgContext'
 
 const logger = createLogger('useCompanyStatusApi')
 
@@ -77,7 +78,7 @@ export function useCompanyStatusApi() {
       return await api.post<CompanyStatusResult>(
         `/api/llc/companies/${companyId}/${action}`,
         body,
-        { headers: { 'X-Organization-Id': companyId } },
+        orgScope(companyId),
       )
     } catch (err) {
       logger.error(`Company ${action} failed for ${companyId}`, err)
