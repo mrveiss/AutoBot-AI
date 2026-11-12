@@ -23,12 +23,16 @@ from llc.scheduler.heartbeat_scheduler import _dispatch_autobot_agent
 from testkit.fake_async_session import FakeAsyncSession
 
 _HBS = "llc.scheduler.heartbeat_scheduler"
-_THIS = __name__
+# A stable dotted path, as `test_adapter_budget_company_scope.py` takes from `_FAKE_AGENT_PATH`:
+# `__name__` differs under `--import-mode=importlib`, and the adapter imports the class by this path.
+_THIS_MODULE = "llc.tests.test_native_agent_cost_charged_20883"
+_USAGE_AGENT_PATH = f"{_THIS_MODULE}.UsageAgent"
+_ZERO_USAGE_AGENT_PATH = f"{_THIS_MODULE}.ZeroUsageAgent"
 _COMPANY = "company-1"
 _AGENT = {
     "agent_id": "agent-xyz",
     "company_id": _COMPANY,
-    "adapter_config": {"agent_class": f"{_THIS}.UsageAgent"},
+    "adapter_config": {"agent_class": _USAGE_AGENT_PATH},
 }
 
 
@@ -61,23 +65,24 @@ def _no_redis(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _sessions() -> tuple[MagicMock, List[FakeAsyncSession]]:
-    """A session maker (for the real `async_session_scope`) and the sessions it handed out."""
+    """A session maker (for the real `async_session_scope`) and the sessions it handed out.
+
+    The fake is its own async context manager (`__aenter__` returns it, `__aexit__` closes it),
+    which is the protocol the scope's ``async with session_maker() as session`` uses.
+    """
     opened: List[FakeAsyncSession] = []
 
-    def _make() -> MagicMock:
+    def _make() -> FakeAsyncSession:
         session = FakeAsyncSession()
         opened.append(session)
-        ctx = MagicMock()
-        ctx.__aenter__ = AsyncMock(return_value=session)
-        ctx.__aexit__ = AsyncMock(return_value=False)
-        return ctx
+        return session
 
     return MagicMock(side_effect=_make), opened
 
 
-async def _dispatch(agent_class: str, service: MagicMock) -> List[FakeAsyncSession]:
+async def _dispatch(agent_path: str, service: MagicMock) -> List[FakeAsyncSession]:
     maker, opened = _sessions()
-    agent = dict(_AGENT, adapter_config={"agent_class": f"{_THIS}.{agent_class}"})
+    agent = dict(_AGENT, adapter_config={"agent_class": agent_path})
     with (
         patch("llc.scheduler.usage_billing.get_async_session_factory", return_value=maker),
         patch("llc.services.accessors.get_budget_service", return_value=service),
@@ -89,19 +94,20 @@ async def _dispatch(agent_class: str, service: MagicMock) -> List[FakeAsyncSessi
 @pytest.mark.asyncio
 async def test_run_with_usage_produces_one_committed_cost_event_for_the_agents_budget() -> None:
     service = MagicMock(ingest_cost_event=AsyncMock())
-    opened = await _dispatch("UsageAgent", service)
+    opened = await _dispatch(_USAGE_AGENT_PATH, service)
 
     service.ingest_cost_event.assert_awaited_once()
     args = service.ingest_cost_event.await_args.args
     assert args[0] is opened[0]
     assert args[1:] == ("agent-xyz", _COMPANY, 10, 5, "test-model")
-    assert len(opened) == 1 and opened[0].commits == 1  # persisted, not rolled back on exit
+    # persisted, not rolled back on exit; the scope closed it
+    assert len(opened) == 1 and (opened[0].commits, opened[0].rollbacks, opened[0].closed) == (1, 0, True)
 
 
 @pytest.mark.asyncio
 async def test_run_with_zero_usage_charges_nothing_and_opens_no_session() -> None:
     service = MagicMock(ingest_cost_event=AsyncMock())
-    opened = await _dispatch("ZeroUsageAgent", service)
+    opened = await _dispatch(_ZERO_USAGE_AGENT_PATH, service)
 
     service.ingest_cost_event.assert_not_awaited()
     assert opened == []
@@ -110,7 +116,7 @@ async def test_run_with_zero_usage_charges_nothing_and_opens_no_session() -> Non
 @pytest.mark.asyncio
 async def test_hard_stop_still_stops_the_run() -> None:
     service = MagicMock(ingest_cost_event=AsyncMock(side_effect=BudgetExhausted("agent-xyz", 12.0, 10.0)))
-    maker, _ = _sessions()
+    maker, opened = _sessions()
     with (
         patch("llc.scheduler.usage_billing.get_async_session_factory", return_value=maker),
         patch("llc.services.accessors.get_budget_service", return_value=service),
@@ -118,6 +124,8 @@ async def test_hard_stop_still_stops_the_run() -> None:
         with pytest.raises(BudgetExhausted):
             await _dispatch_autobot_agent(dict(_AGENT), {"title": "T"})
     service.ingest_cost_event.assert_awaited_once()
+    # The scope rolled back and closed; the service itself commits the hard-stop spend (#20202).
+    assert len(opened) == 1 and (opened[0].commits, opened[0].rollbacks, opened[0].closed) == (0, 1, True)
 
 
 @pytest.mark.asyncio
