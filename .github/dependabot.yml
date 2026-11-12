@@ -714,7 +714,7 @@ updates:
 
   # === #7182 P2: Root-level manifests ===
   # Catches root-level requirements*.txt (requirements.txt, requirements-ci.txt,
-  # requirements-dev.txt) AND root pyproject.toml — used by ci.yml + security.yml.
+  # requirements-dev.txt) AND root pyproject.toml — used by ci.yml + _gate-security.yml.
   # Risk of stale CI tooling without this entry.
   - package-ecosystem: "pip"
     directory: "/"

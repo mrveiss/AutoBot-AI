@@ -4,7 +4,7 @@
 # Author: mrveiss
 """The whole-tree secret gate still fails on a new, unaudited finding (#16353's AC2).
 
-`.github/workflows/security.yml` names a step "detect-secrets over every tracked
+`.github/workflows/_gate-security.yml` names a step "detect-secrets over every tracked
 file, against the audited baseline". Its script carries two inline jq programs:
 one lists every committed baseline entry without an `is_secret: false` verdict
 (`unaudited`), the other lists every rescanned entry whose `(file, type,
@@ -45,7 +45,7 @@ import yaml
 from repo_tests._paths import repo_root
 
 _REPO_ROOT = repo_root()
-_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "security.yml"
+_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "_gate-security.yml"
 _STEP_NAME = "detect-secrets over every tracked file, against the audited baseline"
 
 # Anchored on the literal shell text surrounding each jq invocation, so a
