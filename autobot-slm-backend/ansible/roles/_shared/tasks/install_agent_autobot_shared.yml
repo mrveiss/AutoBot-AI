@@ -17,6 +17,8 @@
 # playbook_dir is the only handle. #20509: the derivation is therefore PROVEN, not trusted --
 # the first task below fails unless the derived tree is the one this playbook sits in, so a playbook
 # moved to another depth stops here instead of shipping some neighbouring tree's autobot_shared.
+# The proof is by content, not by directory name: the playbook's own ansible tree
+# (playbook_dir | dirname) must hold this very file, whatever the checkout is called.
 # It runs only on the derived path: an explicit code_source_dir is the caller's choice and needs no
 # repository layout beyond autobot_shared/ itself, which the next two tasks check.
 #
@@ -40,12 +42,22 @@
       - ".env.*"
       - .envrc
   block:
+    - name: Find this task file under the playbook's own ansible tree (#20509)
+      ansible.builtin.stat:
+        path: "{{ playbook_dir | dirname }}/roles/_shared/tasks/install_agent_autobot_shared.yml"
+      register: shared_anchor
+      delegate_to: localhost
+      run_once: true
+      become: false
+      when: (code_source_dir | default('', true)) == ''
+
     - name: Fail when the derived source tree is not the tree this playbook sits in (#20509)
       ansible.builtin.assert:
-        that: (shared_parent ~ '/autobot-slm-backend/ansible') == (playbook_dir | dirname)
+        that: shared_anchor.stat.exists
         fail_msg: >-
           {{ shared_parent }} (derived from {{ playbook_dir }}) is not the repository this playbook
-          belongs to: the playbook moved to another depth. Fix the derivation, or set code_source_dir.
+          belongs to: {{ playbook_dir | dirname }} holds no roles/_shared/tasks/install_agent_autobot_shared.yml,
+          so the playbook moved to another depth. Fix the derivation, or set code_source_dir.
       when: (code_source_dir | default('', true)) == ''
       run_once: true
 
