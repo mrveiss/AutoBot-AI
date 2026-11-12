@@ -15,10 +15,14 @@ or print `ansible_failed_result` whole, and a test below goes red.
 
 from __future__ import annotations
 
+import ast
 import json
+import re
 
 import pytest
 from repo_tests._paths import repo_root
+
+from tools.lint import _parse_cache as parse_cache
 
 yaml = pytest.importorskip("yaml")
 
@@ -130,28 +134,62 @@ def test_service_restarts_are_inline_after_the_proposal_include_not_handlers() -
     ], "Play 2 restarts are inline tasks; a notify would wait on a handler flush"
 
 
-def test_the_internal_key_url_is_built_from_the_flat_port_not_the_infrastructure_dict() -> None:
-    """Looking up `infrastructure` templates the whole dict, so one bad entry kills any task using it (#21343)."""
+def _include_urls() -> list[str]:
     plays = [p for p in _load(_UPDATER) if isinstance(p, dict)]
-    urls = [
+    return [
         t["vars"]["internal_api_key_backend_url"]
         for p in plays
         for t in p.get("tasks", [])
         if "internal_api_key_backend_url" in (t.get("vars") or {})
     ]
+
+
+def _registry_inventory_globals() -> set[str]:
+    """Keys of `_ALL_VARS` in inventory_builder: the globals the updater's generated inventory carries."""
+    source = (repo_root() / "autobot-slm-backend" / "services" / "inventory_builder.py").read_text(encoding="utf-8")
+    for node in parse_cache.parse(source).body:
+        target = node.target if isinstance(node, ast.AnnAssign) else None
+        if target is not None and getattr(target, "id", "") == "_ALL_VARS":
+            return {k.value for k in node.value.keys if isinstance(k, ast.Constant)}
+    raise AssertionError("_ALL_VARS not found in inventory_builder.py")
+
+
+def test_the_internal_key_url_does_not_template_the_infrastructure_dict() -> None:
+    """Looking up `infrastructure` templates the whole dict, so one bad entry kills any task using it."""
+    urls = _include_urls()
     assert len(urls) == 2, "expected the claim and the verify include"
-    for url in urls:
-        assert "infrastructure." not in url and "{{ backend_port }}" in url, url
+    assert not [u for u in urls if "infrastructure" in u], urls
 
 
-def test_every_groups_index_in_the_infrastructure_dict_is_guarded() -> None:
+def test_the_internal_key_url_only_uses_variables_the_updater_defines_before_it() -> None:
+    """The registry-built inventory sets only `_ALL_VARS`; `backend_port` comes from the vars file loaded earlier."""
+    tasks = _play2_tasks()
+    names = [str(t.get("name", "")) for t in tasks]
+    loaded = next(i for i, n in enumerate(names) if "Load shared backend env vars" in n)
+    include = next(i for i, n in enumerate(names) if "Propose or claim re-aligning the internal key" in n)
+    assert loaded < include, "backend-env.yml must be loaded before the proposal include"
+    vars_file = tasks[loaded]["ansible.builtin.include_vars"]["file"]
+    defined = set(yaml.safe_load((_ANSIBLE / "playbooks" / vars_file).read_text(encoding="utf-8")))
+    defined |= _registry_inventory_globals()
+    for url in _include_urls():
+        unknown = set(re.findall(r"\{\{\s*(\w+)", url)) - defined
+        assert not unknown, f"{url!r} uses {unknown}, which the updater's inventory does not define"
+
+
+def test_the_backend_health_wait_uses_the_same_port_variable() -> None:
+    wait = _named(_play2_tasks(), "Backend | Wait for API to be ready")
+    assert "{{ backend_port }}" in wait["uri"]["url"], "the health probe must not restate the port"
+
+
+def test_every_infrastructure_host_entry_uses_the_guarded_group_idiom() -> None:
+    """The idiom all.yml uses for vnc_nodes: index `hostvars[groups[x][0]]` only when `groups.get(x)` is non-empty."""
     path = _ANSIBLE / "inventory" / "group_vars" / "infrastructure.yml"
-    bad = [
-        ln.strip()
-        for ln in path.read_text(encoding="utf-8").splitlines()
-        if "groups[" in ln and not ln.lstrip().startswith("#")
-    ]
-    assert not bad, f"an unguarded groups[...] index raises for a group the inventory lacks: {bad}"
     hosts = yaml.safe_load(path.read_text(encoding="utf-8"))["infrastructure"]["hosts"]
-    unguarded = [k for k, v in hosts.items() if "{{" in str(v) and "groups.get(" not in str(v)]
-    assert not unguarded, f"host entries that index groups without .get: {unguarded}"
+    pattern = re.compile(
+        r"\{\{ \(hostvars\[groups\['(\w+)'\]\[0\]\]\['ansible_host'\] \| default\('127\.0\.0\.1'\)\) "
+        r"if groups\.get\('\1'\) else '127\.0\.0\.1' \}\}$"
+    )
+    templated = {k: v for k, v in hosts.items() if "{{" in str(v)}
+    assert templated, "expected templated host entries"
+    bad = [k for k, v in templated.items() if not pattern.match(str(v))]
+    assert not bad, f"host entries not using the guarded group idiom: {bad}"
