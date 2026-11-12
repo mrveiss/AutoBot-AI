@@ -6,8 +6,9 @@
 
 Moved out of ``knowledge_search_aggregator`` (which must not grow). The listing is scanned in batches up
 to ``GRAPH_SCAN_LIMIT``, each batch filtered by what the caller may read, and ``offset``/``max_facts``
-page the *visible* set. The reported total is the visible total: it never counts a fact the caller
-cannot see, and a short page means the end, not a filtered-out page.
+page the *visible* set; every page carries a ``cursor`` to the first raw position it did not return.
+The reported total is the visible total: it never counts a fact the caller cannot see,
+and a short page means the end, not a filtered-out page.
 """
 
 import json
@@ -28,7 +29,7 @@ class FactsPage:
     facts: List[Dict[str, Any]] = field(default_factory=list)
     total: int | None = None
     truncated: bool = False
-    cursor: str | None = None  # where the scan resumes (``position:skip``); None at the end of the listing
+    cursor: str | None = None  # first raw position not yet returned (``position:skip``); None on the last page
     by_cursor: bool = False  # the page was read from a cursor, so no visible total exists (O(batch) per page)
 
 
@@ -66,6 +67,8 @@ async def _readable_batch(kb: Any, category_filter: str | None, offset: int, siz
         advance, more = size, bool(result.get("has_more"))  # a deleted fact shortens the batch, not the index
     else:
         # #19727: listed, not a search for "*", which the keyword fallback matches nothing for; quarantine stays out
+        # get_all_facts drops quarantined facts while streaming, BEFORE offset/limit (#20866), so offset counts
+        # listed facts and ``len(raw) < size`` is the real end of the listing, not a filtered-short batch.
         raw = await kb.get_all_facts(limit=size, offset=offset)
         category_of = lambda fact: (fact.get("metadata") or {}).get("category", CategoryDefaults.GENERAL)  # noqa: E731
         facts = [{**fact, "id": fact.get("fact_id"), "category": category_of(fact)} for fact in raw]
@@ -169,18 +172,33 @@ async def visible_facts_page(
     return page
 
 
+def _resume_cursor(windows: List[tuple], end: int, scanned: int, truncated: bool) -> str | None:
+    """Where a continuation starts: the first raw position whose readable fact the page did not return.
+
+    *windows* are ``(raw position, readable facts before it, readable facts in it)`` per scanned batch and *end*
+    is the visible index the page stopped at, so the cursor lands in the batch holding visible fact *end* with
+    the readable facts of that batch the page already returned as the skip. Past the last scanned fact the
+    continuation is the scan cap (``truncated``); None only when the listing really ends.
+    """
+    for position, before, count in windows:
+        if before <= end < before + count:
+            return _cursor(position, end - before)
+    return _cursor(scanned, 0) if truncated else None
+
+
 async def _page_from_start(kb: Any, category_filter: str | None, max_facts: int, offset: int, who: tuple) -> FactsPage:
     visible: List[Dict[str, Any]] = []
+    windows: List[tuple] = []
     scanned, truncated = 0, False
     while scanned < GRAPH_SCAN_LIMIT:
         size = min(SCAN_BATCH, GRAPH_SCAN_LIMIT - scanned)
         advance, more, readable = await _readable_batch(kb, category_filter, scanned, size, who)
+        windows.append((scanned, len(visible), len(readable)))
         scanned += advance
         visible.extend(readable)
         if not more:
             break
         if scanned >= GRAPH_SCAN_LIMIT:
             truncated = await _more_visible(kb, category_filter, scanned, who)
-    return FactsPage(
-        visible[offset : offset + max_facts], len(visible), truncated, _cursor(scanned, 0) if truncated else None
-    )
+    end = offset + max_facts
+    return FactsPage(visible[offset:end], len(visible), truncated, _resume_cursor(windows, end, scanned, truncated))

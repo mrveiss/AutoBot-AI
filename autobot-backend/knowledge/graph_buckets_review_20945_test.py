@@ -202,7 +202,7 @@ async def test_a_cursor_resumes_past_the_scan_cap_where_offset_alone_cannot(monk
     control = await visible_facts_page(kb, None, 50, SCAN_BATCH + 20, ALICE, None, [], False)
     assert control.facts == [] and control.truncated, "offset alone never reaches a fact beyond the scan cap"
     first = await visible_facts_page(kb, None, 50, 0, ALICE, None, [], False)
-    assert first.cursor == f"{SCAN_BATCH}:0", "the capped scan hands back where to resume"
+    assert first.cursor == "0:50", "the cursor points at the first readable fact the page did not return"
     for category in (None, "cat"):
         seen = await _walk_by_cursor(kb, 50, category)
         assert seen == [f"f{i:05d}" for i in range(count)], "every readable fact once, in order, past the cap"
