@@ -182,4 +182,5 @@ def stamp_and_release(
     holder = _checkout_holder(item)
     stamp_status(item, new_status, now, own=own)
     if held and holder is not None and item.checkout_locked_at is None:
-        defer_until_commit(session, lambda: _delete_fence(item.id, holder), f"release checkout fence of {item.id}")
+        item_id = item.id
+        defer_until_commit(session, lambda: _delete_fence(item_id, holder), f"release checkout fence of {item_id}")
