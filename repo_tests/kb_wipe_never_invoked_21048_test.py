@@ -12,6 +12,9 @@ from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _SCRIPT = "fresh_kb_setup"
 _OWN_DIR = "autobot-infrastructure/shared/scripts/setup/knowledge/"
+#: The setup script and its own test are the only files in its directory that may name it; a sibling script that
+#: runs it is a caller like any other.
+_OWN_FILES = (f"{_OWN_DIR}{_SCRIPT}.py", f"{_OWN_DIR}{_SCRIPT}_test.py")
 #: Where an automatic caller would live. Tests, docs and the guards that name the script as data are not callers.
 _NOT_CALLERS = ("repo_tests/", "docs/", ".test_durations", "CHANGELOG.md", "changelog/")
 
@@ -41,7 +44,7 @@ REACH = declare(
 def _referencing(files: list[str], root) -> list[str]:
     found = []
     for rel in files:
-        if rel.startswith(_NOT_CALLERS) or rel.startswith(_OWN_DIR) or rel.endswith(".md") or is_test_filename(rel):
+        if rel.startswith(_NOT_CALLERS) or rel in _OWN_FILES or rel.endswith(".md") or is_test_filename(rel):
             continue
         try:
             text = (root / rel).read_text(encoding="utf-8")
@@ -75,8 +78,8 @@ def _plant(root: Path, rel: str) -> None:
 
 def test_contrast_non_callers_are_ignored_and_real_callers_are_flagged_in_the_same_tree(tmp_path):
     """The detector can fire (two real callers) and can stay quiet (every excluded location), in one tree."""
-    callers = ["roles/main.yml", "scripts/run.sh"]
-    non_callers = ["docs/run.txt", "repo_tests/x.py", f"{_OWN_DIR}other.py", "pkg/thing_test.py", "README.md"]
+    callers = ["roles/main.yml", "scripts/run.sh", f"{_OWN_DIR}other.py"]  # a sibling of the script is a caller
+    non_callers = ["docs/run.txt", "repo_tests/x.py", *_OWN_FILES, "pkg/thing_test.py", "README.md"]
     for rel in callers + non_callers:
         _plant(tmp_path, rel)
     assert _referencing(non_callers, tmp_path) == []
