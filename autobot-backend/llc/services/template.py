@@ -34,6 +34,7 @@ from llc.models.template import (
 
 from .activity_log import ActorType, LLCActivityLogService
 from .base import LLCServiceBase
+from .built_in_template_path import select_built_in_template
 from .template_entity_import import import_template_entities
 
 logger = logging.getLogger(__name__)
@@ -624,10 +625,10 @@ def _load_built_in_template(template_key: str) -> Dict[str, Any]:
             f"numbers, hyphens, and underscores"
         )
 
-    # The key selects among files that exist in the templates directory; it is never joined into a path,
-    # so no caller-supplied text reaches the filesystem call (the regex above stays as the early reject).
-    known = {path.stem: path for path in _BUILT_IN_TEMPLATES_DIR.glob("*.json")}
-    resolved_path = known.get(template_key)
+    try:
+        resolved_path = select_built_in_template(_BUILT_IN_TEMPLATES_DIR, template_key)
+    except ValueError as exc:
+        raise BuiltInTemplateNotFoundError(f"Template path outside allowed directory: {template_key}") from exc
     if resolved_path is None:
         raise BuiltInTemplateNotFoundError(f"Built-in template '{template_key}' not found")
 
