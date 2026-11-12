@@ -1048,7 +1048,6 @@
 2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|60
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|chown --no-dereference -R autobot:autobot
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|https://github.com/mrveiss/AutoBot-AI.git
-1|ssot|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|:8001
 1|other|autobot-slm-backend/ansible/playbooks/update-node.yml|60
 1|ssot|autobot-slm-backend/ansible/playbooks/update-node.yml|:8001
 1|other|autobot-slm-backend/ansible/reboot-node.yml|300
