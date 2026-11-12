@@ -31,7 +31,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from repo_tests._filter_entries import doc_entries, removed_without_tombstone, uncited
+from repo_tests._filter_entries import doc_entries, parse_entries, removed_without_tombstone, uncited
 from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_text
 
@@ -112,47 +112,118 @@ def test_every_pattern_a_changes_job_read_is_still_read(case):
     )
 
 
-#: The Migration Gate's `migrations` list was widened on purpose over time (#17822 and the issues cited
-#: beside each entry in gate-paths.yml): it listed where its tests live, not the code they import. It is
-#: judged by the same rules as every other path filter (#21205, `repo_tests/_filter_entries.py`) -- no
-#: frozen table of additions: the pre-#15360 snapshot stays in order, each entry beyond it cites its issue
-#: where it is written, and no entry the merge base had goes without a `# retired #NNNN: '<entry>'`
-#: tombstone. A snapshot self-reference to a workflow file that no longer exists is not an entry any more.
-MIGRATIONS_KEY = "migrations"
+# --- the filter-entry rules of #21205 for every INLINE filter that moved into gate-paths.yml ---------------
+#: main's changes_job_equivalence_15360_test.py judged every inline `filters:` block (`migrations`, `types`,
+#: `slm_types`, `slm_frontend` and the four npm keys) by the same rules as the filter files (#21205,
+#: `repo_tests/_filter_entries.py`): the pre-#15360 snapshot stays in order, each entry beyond it cites an
+#: issue where it is written, and no entry the base had goes without a `# retired #NNNN: '<entry>'`
+#: tombstone. They are applied here to each key of gate-paths.yml, with no frozen table of additions. The
+#: Migration Gate's `migrations` list, for one, was widened on purpose over time (#17822 and the issues cited
+#: beside each entry). A snapshot self-reference to a workflow file that no longer exists is not an entry.
 GATE_PATHS = ".github/filters/gate-paths.yml"
+_TOP_KEY = r"^[A-Za-z0-9_-]+:"
+_INLINE = [(c[0], c[2], c[3]) for c in _CASES if c[5] == "inline"]  # (workflow, key then, key now)
 
 
-def _migrations_section(text: str) -> str:
-    """The `migrations:` key of gate-paths.yml with its entries and comments, up to the next top-level key."""
-    match = re.search(rf"^{MIGRATIONS_KEY}:.*?(?=^[A-Za-z0-9_-]+:)", text + "\nend:", re.S | re.M)
-    assert match, f"gate-paths.yml has no {MIGRATIONS_KEY!r} key"
-    return match.group(0)
+def _find_section(text: str, key: str) -> str | None:
+    """`key:` with its entries, comments and blank lines, up to the next top-level key (or the end of the text)."""
+    match = re.search(rf"^{re.escape(key)}:.*?(?={_TOP_KEY})", text + "\nend:", re.S | re.M)
+    return match.group(0) if match else None
 
 
-def _migrations_snapshot() -> list[tuple[str, str]]:
-    pre = json.loads(FIXTURE.read_text(encoding="utf-8"))["migration-gate"]["filters"]["inline"]
-    entries = doc_entries({MIGRATIONS_KEY: pre[MIGRATIONS_KEY]})
+def _tip_section(key: str) -> str:
+    section = _find_section((REPO / GATE_PATHS).read_text(encoding="utf-8"), key)
+    assert section is not None, f"{GATE_PATHS} has no {key!r} key"
+    return section
+
+
+def _inline_block(workflow_text: str) -> str:
+    """The dedented body of the workflow's `filters: |` literal."""
+    lines = workflow_text.split("\n")
+    start = next(i for i, line in enumerate(lines) if line.strip() == "filters: |") + 1
+    indent = len(lines[start]) - len(lines[start].lstrip())
+    body = []
+    for line in lines[start:]:
+        if line.strip() and len(line) - len(line.lstrip()) < indent:
+            break
+        body.append(line[indent:])
+    return "\n".join(body)
+
+
+def _base_section(workflow: str, old: str, new: str) -> str | None:
+    """The key's entries at the merge base, under its current name.
+
+    Prefers gate-paths.yml on the base (once #18208 has landed it is where the key lives); until then the
+    base is the inline block of the workflow the key came from, read through the same `base_text`.
+    `BaseUnavailable` is never a pass: it propagates and the test errors.
+    """
+    gate = base_text(REPO, GATE_PATHS)
+    if gate is not None:
+        return _find_section(gate, new)
+    source = base_text(REPO, f".github/workflows/{workflow}.yml")
+    section = None if source is None else _find_section(_inline_block(source), old)
+    return None if section is None else re.sub(rf"^{re.escape(old)}:", f"{new}:", section, count=1)
+
+
+def _inline_snapshot(workflow: str, old: str, new: str) -> list[tuple[str, str]]:
+    pre = json.loads(FIXTURE.read_text(encoding="utf-8"))[workflow]["filters"]["inline"][old]
+    entries = doc_entries({new: pre})
     return [(k, v) for k, v in entries if not (v.startswith(".github/workflows/") and not (REPO / v).exists())]
 
 
-def test_the_migrations_snapshot_is_not_vacuous():
-    assert len(_migrations_snapshot()) >= 9, "an emptied snapshot would judge nothing"
+_IDS = [f"{w}:{new}" for w, _, new in _INLINE]
 
 
-def test_migrations_keeps_its_snapshot_and_cites_every_addition_in_place():
-    text = (REPO / GATE_PATHS).read_text(encoding="utf-8")
-    section = _migrations_section(text)
-    base = base_text(REPO, GATE_PATHS)
-    found = uncited(section, _migrations_snapshot(), None if base is None else _migrations_section(base))
-    assert not found, "; ".join(found)
+def test_every_inline_key_that_moved_is_judged():
+    """The set the rules run over is INLINE_KEY_MOVES, no less: a key dropped from the cases would escape them."""
+    assert {old for _, old, _ in _INLINE} == set(INLINE_KEY_MOVES)
+    assert {new for _, _, new in _INLINE} == set(INLINE_KEY_MOVES.values())
+    assert len(_INLINE) == len(INLINE_KEY_MOVES) == 8
 
 
-def test_no_migrations_entry_the_merge_base_had_is_removed_without_a_tombstone():
-    """`BaseUnavailable` is never a pass: it propagates and the test errors. A base without the file has nothing to lose."""
-    base = base_text(REPO, GATE_PATHS)
-    head = _migrations_section((REPO / GATE_PATHS).read_text(encoding="utf-8"))
-    found = removed_without_tombstone(None if base is None else _migrations_section(base), head)
-    assert not found, "; ".join(found)
+@pytest.mark.parametrize("case", _INLINE, ids=_IDS)
+def test_an_inline_keys_snapshot_and_base_are_not_vacuous(case):
+    workflow, old, new = case
+    assert _inline_snapshot(workflow, old, new), f"{new}: an emptied snapshot would judge nothing"
+    assert _base_section(workflow, old, new) is not None, f"{new}: no base text found, rule 3 would judge nothing"
+    assert len(parse_entries(_tip_section(new))) >= 1, f"{new}: the key has no entries at head"
+
+
+@pytest.mark.parametrize("case", _INLINE, ids=_IDS)
+def test_an_inline_key_keeps_its_snapshot_and_cites_every_addition_in_place(case):
+    workflow, old, new = case
+    found = uncited(_tip_section(new), _inline_snapshot(workflow, old, new), _base_section(workflow, old, new))
+    assert not found, f"{new}: " + "; ".join(found)
+
+
+@pytest.mark.parametrize("case", _INLINE, ids=_IDS)
+def test_no_inline_key_entry_the_base_had_is_removed_without_a_tombstone(case):
+    workflow, old, new = case
+    found = removed_without_tombstone(_base_section(workflow, old, new), _tip_section(new))
+    assert not found, f"{new}: " + "; ".join(found)
+
+
+# --- controls: each rule above can fail ---------------------------------------------------------------------
+_CONTROL_BASE = "k:\n  - 'a'\n  - 'b'\n"
+
+
+def test_control_the_section_reader_takes_the_last_key_and_keys_with_comments_and_blanks():
+    text = "a:\n  - 'x'\n  # note\n\n  - 'y'\n# next\nb:\n  - 'z'\n"
+    assert "'y'" in _find_section(text, "a") and "'z'" not in _find_section(text, "a")
+    assert _find_section(text, "b").rstrip("\n") == "b:\n  - 'z'"
+    assert _find_section(text, "c") is None
+
+
+def test_control_an_uncited_addition_is_reported_and_a_cited_one_is_not():
+    snapshot = [("k", "a")]
+    assert uncited("k:\n  - 'a'\n  - 'new'\n", snapshot), "an uncited addition must be reported"
+    assert uncited("k:\n  - 'new'\n", snapshot), "a dropped snapshot entry must be reported"
+    assert not uncited("k:\n  - 'a'\n  - 'new'  # #12345\n", snapshot)
+
+
+def test_control_a_removed_base_entry_needs_a_tombstone():
+    assert removed_without_tombstone(_CONTROL_BASE, "k:\n  - 'a'\n"), "an unmarked removal must be reported"
+    assert not removed_without_tombstone(_CONTROL_BASE, "k:\n  - 'a'\n  # retired #12345: 'b'\n")
 
 
 # --- the filter-entry rules of #21205 for the filter FILES a converted `changes` job read -----------------

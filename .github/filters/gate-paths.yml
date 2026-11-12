@@ -88,6 +88,7 @@ migrations:
   # #21018: the last-admin race test's guard
   - 'autobot_shared/user_management/last_platform_admin.py'
   - 'autobot_shared/user_management/__init__.py'
+  # retired #18208: '.github/workflows/migration-gate.yml'
 
 # ci.yml `verify-generated-types` gate (autobot-frontend). Run on `!= 'false'`.
 types:
@@ -102,6 +103,7 @@ types:
   - 'scripts/audit_api_wiring.py'
   - 'scripts/audit_api_wiring_args.py'
   - '**/requirements*.txt'
+  # retired #18208: '.github/workflows/verify-generated-types.yml'
 
 # ci.yml generated-types job for autobot-slm-frontend (not a required context).
 slm_types:
@@ -113,6 +115,7 @@ slm_types:
   - 'scripts/audit_api_wiring.py'
   - 'scripts/audit_api_wiring_args.py'
   - '**/requirements*.txt'
+  # retired #18208: '.github/workflows/verify-generated-types.yml'
 
 # ci.yml security scans. Formerly security.yml's `on.pull_request.paths`: the exact
 # UNION of backend-python-paths.yml `static_analysis` and `deps`, plus the two
@@ -158,12 +161,16 @@ codeql_actions:
 # ci.yml npm package tests: one key per package.
 npm_browser_worker:
   - 'autobot-browser-worker/**'
+  # retired #18208: '.github/workflows/npm-package-tests.yml'
 npm_mcp:
   - '.mcp/**'
+  # retired #18208: '.github/workflows/npm-package-tests.yml'
 npm_sdk_ts:
   - 'libs/autobot-sdk-ts/**'
+  # retired #18208: '.github/workflows/npm-package-tests.yml'
 npm_structured_thinking:
   - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
+  # retired #18208: '.github/workflows/npm-package-tests.yml'
 
 # ci.yml SLM frontend check.
 slm_frontend:
@@ -173,3 +180,4 @@ slm_frontend:
   # reads belong to the same trigger.
   - 'autobot-frontend/src/i18n/locales/**'
   - 'scripts/lift_locale_translations.py'
+  # retired #18208: '.github/workflows/slm-frontend-check.yml'
