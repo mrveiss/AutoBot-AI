@@ -31,7 +31,7 @@ _BASE = {"tree-sitter": "0.25.0", "tree-sitter-python": "0.25.1", "tree-sitter-j
 
 
 @pytest.fixture
-def installed(monkeypatch):
+def grammar_versions_env(monkeypatch):
     """Mutable fake of the installed distributions; mutate the dict to 'upgrade' a package."""
     versions = dict(_BASE)
 
@@ -52,7 +52,7 @@ def test_every_package_the_indexer_loads_is_a_reported_grammar() -> None:
     assert set(versioning.GRAMMAR_PACKAGES) == {"tree-sitter", "tree-sitter-python", "tree-sitter-javascript"}
 
 
-def test_an_unchanged_environment_still_hits_the_cache(installed, tmp_path) -> None:
+def test_an_unchanged_environment_still_hits_the_cache(grammar_versions_env, tmp_path) -> None:
     cache = tmp_path / "hashes.json"
     first = _indexer(cache)
     first._hash_cache = {"a.py": "hash-a"}
@@ -62,18 +62,18 @@ def test_an_unchanged_environment_still_hits_the_cache(installed, tmp_path) -> N
 
 
 @pytest.mark.parametrize("package", sorted(_BASE))
-def test_changing_a_reported_version_invalidates_cached_entries(installed, tmp_path, package) -> None:
+def test_changing_a_reported_version_invalidates_cached_entries(grammar_versions_env, tmp_path, package) -> None:
     cache = tmp_path / "hashes.json"
     first = _indexer(cache)
     first._hash_cache = {"a.py": "hash-a"}
     first._save_cache()
 
-    installed[package] = "9.9.9"
+    grammar_versions_env[package] = "9.9.9"
 
     assert _indexer(cache)._hash_cache == {}
 
 
-def test_the_cache_version_is_one_value_under_the_existing_key(installed, tmp_path) -> None:
+def test_the_cache_version_is_one_value_under_the_existing_key(grammar_versions_env, tmp_path) -> None:
     cache = tmp_path / "hashes.json"
     indexer = _indexer(cache)
     indexer._save_cache()
@@ -84,13 +84,15 @@ def test_the_cache_version_is_one_value_under_the_existing_key(installed, tmp_pa
     assert "0.25.1" in written[_CACHE_VERSION_KEY]
 
 
-def test_a_missing_grammar_is_reported_not_raised(installed) -> None:
-    del installed["tree-sitter-javascript"]
+def test_a_missing_grammar_is_reported_not_raised(grammar_versions_env) -> None:
+    del grammar_versions_env["tree-sitter-javascript"]
 
     assert versioning.installed_grammar_versions()["tree-sitter-javascript"] == versioning.NOT_INSTALLED
 
 
-def test_the_provenance_record_carries_the_grammar_versions_that_wrote_the_graph(installed, tmp_path) -> None:
+def test_the_provenance_record_carries_the_grammar_versions_that_wrote_the_graph(
+    grammar_versions_env, tmp_path
+) -> None:
     collection = MagicMock()
     collection.get.return_value = {"ids": [], "metadatas": []}
     embed = MagicMock()
@@ -103,10 +105,10 @@ def test_the_provenance_record_carries_the_grammar_versions_that_wrote_the_graph
     assert json.loads(written["grammar_versions"]) == _BASE
 
 
-def test_a_graph_written_by_other_grammars_is_not_current(installed) -> None:
+def test_a_graph_written_by_other_grammars_is_not_current(grammar_versions_env) -> None:
     record = GraphProvenance(extractor_version=EXTRACTOR_VERSION, grammar_versions=versioning.grammar_versions_json())
     assert record.is_current_extractor
 
-    installed["tree-sitter-python"] = "9.9.9"
+    grammar_versions_env["tree-sitter-python"] = "9.9.9"
 
     assert not record.is_current_extractor
