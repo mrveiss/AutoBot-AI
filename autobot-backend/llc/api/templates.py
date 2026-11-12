@@ -39,6 +39,7 @@ from llc.models.template import (
     TemplateRead,
     TemplateSearchResult,
 )
+from llc.services.portability import TemplateImportError
 from llc.services.template import (
     BuiltInTemplateNotFoundError,
     TemplateAccessError,
@@ -212,6 +213,8 @@ async def import_template(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"message": "Unresolved secret placeholders", "unresolved": exc.unresolved},
         )
+    except TemplateImportError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
 
 @router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)

@@ -91,6 +91,18 @@ failures block the push with a clear "fix this" message.
 There is no open-PR cap (#19397, which retired #17006's): a new branch
 pushes at any number of open PRs.
 
+## Which Python the hooks run (#21163)
+
+Every hook that runs Python gets its interpreter from one resolver,
+`scripts/lib/hook-python.sh` (`resolve_repo_python`), never from whichever `python3`
+is first on `PATH`. The required version is read from `.python-version`. Order: the
+repo venv (`$VIRTUAL_ENV`, `venv/`, `.venv/`, also the main checkout's from a
+worktree), then `python<version>`, then `python3`/`python` only when it verifiably
+meets the version. Each candidate must also import any module the caller requires
+(the pre-push gate requires `pytest`). When none qualifies the hook stops and names
+the required version; it does not fall back to an older interpreter.
+`repo_tests/hook_interpreter_resolver_21163_test.py` fails on a hook that bypasses it.
+
 ## Bypass
 
 There is no sanctioned bypass: never `--no-verify`, never a `core.hooksPath` override
