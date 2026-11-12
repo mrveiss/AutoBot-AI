@@ -5,6 +5,8 @@
 """A KB write orphans the semantic and topic retrieval caches, and every write path is wired (#20958)."""
 
 import ast
+import asyncio
+import logging
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -27,6 +29,8 @@ from tests.fixtures.rag_cache_fakes import make_semantic_cache, make_topic_cache
 BACKEND = Path(__file__).resolve().parent.parent
 VECTOR = [0.1, 0.2, 0.3]
 DECORATOR = "invalidates_retrieval_caches"
+CONCURRENT_SEARCHES = 5
+FAILED_RETRIES = 20
 
 
 class _Kv:
@@ -34,13 +38,33 @@ class _Kv:
 
     def __init__(self) -> None:
         self.data: dict[str, str] = {}
+        self.reject_writes = False
+        self.set_calls = 0
+        self.hold_replies: list[asyncio.Event] = []  # the next SET lands, then waits for its event
+        self.parked = asyncio.Event()  # set once a SET is waiting on its reply
 
     async def get(self, key):
         return self.data[key].encode() if key in self.data else None
 
     async def set(self, key, value, nx=False):
+        if self.reject_writes:
+            raise ConnectionError("READONLY You can't write against a read only replica")
+        self.set_calls += 1
         if not (nx and key in self.data):
             self.data[key] = value
+        if self.hold_replies:
+            gate = self.hold_replies.pop(0)
+            self.parked.set()
+            await gate.wait()
+
+
+@pytest.fixture(autouse=True)
+def _no_pending_marker():
+    """The pending marker, failure generation, in-flight guard and suppressed count are module state."""
+    with patch.multiple(
+        "knowledge.retrieval_invalidation", _pending=False, _failures=0, _retry_in_flight=False, _suppressed=0
+    ):
+        yield
 
 
 @pytest.fixture
@@ -114,6 +138,106 @@ async def test_each_bump_is_a_fresh_token_in_the_acl_epoch_key(kv):
     first = kv.data[ACL_EPOCH_KEY]
     assert await invalidate_retrieval_caches("fact_deleted")
     assert kv.data[ACL_EPOCH_KEY] != first
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_bump_with_working_reads_bypasses_the_cache_instead_of_keeping_the_old_scope(kv):
+    semantic, topic = make_semantic_cache(), make_topic_cache()
+    before = await cache_scope(SYSTEM_SCOPE)
+    await _fill(semantic, topic, before)
+    kv.reject_writes = True
+
+    @invalidates_retrieval_caches("fact_updated")
+    async def write() -> str:
+        return "written"
+
+    assert await write() == "written"
+    assert await cache_scope(SYSTEM_SCOPE) is None, "the pre-write epoch must not stay usable"
+    assert await semantic.lookup("q", embedding=VECTOR, scope=None) is None
+    assert await topic.lookup(VECTOR, scope=None) is None
+
+
+@pytest.mark.asyncio
+async def test_a_later_successful_bump_restores_caching_under_the_new_epoch(kv):
+    semantic, topic = make_semantic_cache(), make_topic_cache()
+    before = await cache_scope(SYSTEM_SCOPE)
+    await _fill(semantic, topic, before)
+    kv.reject_writes = True
+    assert await invalidate_retrieval_caches("fact_updated") is False
+    assert await cache_scope(SYSTEM_SCOPE) is None, "still rejected: the retry fails and the bypass holds"
+
+    kv.reject_writes = False
+    after = await cache_scope(SYSTEM_SCOPE)  # the retry inside the call succeeds
+    assert after is not None and after != before
+    assert await semantic.lookup("q", embedding=VECTOR, scope=after) is None, "nothing from the old epoch"
+    assert await topic.lookup(VECTOR, scope=after) is None, "nothing from the old epoch"
+    await _fill(semantic, topic, after)
+    assert await semantic.lookup("q", embedding=VECTOR, scope=after) is not None
+    assert await topic.lookup(VECTOR, scope=after) is not None
+    assert await cache_scope(SYSTEM_SCOPE) == after, "no bump once the marker is clear"
+
+
+@pytest.mark.asyncio
+async def test_a_late_success_cannot_clear_a_newer_failed_bump(kv):
+    gate = asyncio.Event()
+    kv.hold_replies.append(gate)
+    bump_a = asyncio.create_task(invalidate_retrieval_caches("fact_added"))
+    await kv.parked.wait()  # A's SET has landed (epoch tA); its reply is delayed
+    epoch_a = kv.data[ACL_EPOCH_KEY]
+    semantic, topic = make_semantic_cache(), make_topic_cache()
+    scope_a = await cache_scope(SYSTEM_SCOPE)
+    await _fill(semantic, topic, scope_a)  # pre-write results cached under tA
+    kv.reject_writes = True
+    assert await invalidate_retrieval_caches("fact_updated") is False  # write W's bump B fails
+    gate.set()
+    assert await bump_a is True  # A's late success must not clear B's failure
+    assert await cache_scope(SYSTEM_SCOPE) is None, "still pending: no pre-write entry may be served"
+    assert not await _served(semantic, topic, None)
+
+    kv.reject_writes = False
+    fresh = await cache_scope(SYSTEM_SCOPE)  # a bump that started after B's failure clears it
+    assert fresh is not None and fresh != scope_a
+    assert kv.data[ACL_EPOCH_KEY] != epoch_a
+    assert not await _served(semantic, topic, fresh)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_searches_while_pending_issue_exactly_one_retry(kv):
+    kv.reject_writes = True
+    assert await invalidate_retrieval_caches("fact_added") is False
+    kv.reject_writes = False
+    kv.set_calls = 0
+    gate = asyncio.Event()
+    kv.hold_replies.append(gate)
+    tasks = [asyncio.create_task(cache_scope(SYSTEM_SCOPE)) for _ in range(CONCURRENT_SEARCHES)]
+    await kv.parked.wait()  # the one retry is in flight
+    assert await asyncio.gather(*tasks[1:]) == [None] * (CONCURRENT_SEARCHES - 1)
+    gate.set()
+    assert await tasks[0] is not None
+    assert kv.set_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_a_rejecting_redis_logs_the_transitions_not_every_failed_retry(kv, caplog):
+    kv.reject_writes = True
+    with caplog.at_level(logging.DEBUG):
+        assert await invalidate_retrieval_caches("fact_added") is False
+        for _ in range(FAILED_RETRIES):
+            assert await cache_scope(SYSTEM_SCOPE) is None
+        kv.reject_writes = False
+        assert await cache_scope(SYSTEM_SCOPE) is not None
+        assert await cache_scope(SYSTEM_SCOPE) is not None
+    loud = [r for r in caplog.records if r.name.endswith("retrieval_invalidation") and r.levelno >= logging.INFO]
+    assert [r.levelno for r in loud] == [logging.WARNING, logging.INFO]
+    assert f"{FAILED_RETRIES} failures suppressed" in loud[1].getMessage()
+
+
+@pytest.mark.asyncio
+async def test_a_working_bump_leaves_no_pending_marker_and_scopes_stay_stable(kv):
+    assert await invalidate_retrieval_caches("fact_added") is True
+    scope = await cache_scope(SYSTEM_SCOPE)
+    assert scope is not None
+    assert await cache_scope(SYSTEM_SCOPE) == scope
 
 
 def test_the_decorator_refuses_a_sync_function():

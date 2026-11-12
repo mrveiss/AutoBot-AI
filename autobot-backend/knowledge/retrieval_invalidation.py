@@ -17,8 +17,25 @@ entries are never read again and leave on their own TTL / size eviction.
 
 A write entry point opts in with ``@invalidates_retrieval_caches(reason)``. The decorator fires in a
 ``finally``: a write that failed half-way may still have changed what a search returns. A failed
-bump is logged at error level and not raised: the write is already durable, and an unreadable epoch
-makes every cache tier skip itself (``cache_scope`` returns ``None``), so no stale entry is served.
+bump is not raised: the write is already durable. When the epoch is unreadable every cache tier
+skips itself (``cache_scope`` returns ``None``). When only the SET is rejected (a read-only or
+degraded Redis) the old epoch stays readable, so the failed bump also marks this process
+"invalidation pending": ``invalidation_pending`` makes ``cache_scope`` return ``None`` (read and
+write bypass) and retries the bump until one succeeds; the marker then clears and caching resumes
+under the new epoch. At most one retry is in flight per process: a search that finds one running
+sees "pending" at once, issues no SET and waits on nothing.
+
+Guarantee and limit: the marker is process-local. The process that saw a failed bump never serves a
+result cached before the write: every failed bump increments a failure generation, and a bump may
+clear the marker only if the generation is unchanged since that bump STARTED (see
+``invalidate_retrieval_caches``), so a late success cannot undo a newer failure. Another process
+(API worker, Celery) cannot be told: with Redis rejecting writes no shared marker can be stored,
+and its reads still return the old epoch. Such a process stays stale until its next bump succeeds
+or the entry's TTL ends, which is the bounded staleness this design cannot remove.
+
+Logging: entering the degraded state logs one warning, leaving it one info line carrying the
+number of failures suppressed in between (those log at debug), so a rejecting Redis cannot flood
+the log with one line per search.
 
 ``WRITE_ENTRY_POINTS`` is the single enumeration of those entry points; the guard test
 (``retrieval_invalidation_20958_test.py``) fails when a registered function lost its decorator, a
@@ -34,6 +51,15 @@ from autobot_shared.redis_client import get_async_redis_client
 from knowledge.acl_epoch import ACL_EPOCH_DATABASE, bump_acl_epoch_async
 
 logger = get_logger(__name__)
+
+#: True while a bump failed in this process and no bump started after the latest failure has succeeded.
+_pending = False
+#: Count of failed bumps in this process; a bump clears ``_pending`` only if it is unchanged since it began.
+_failures = 0
+#: True while a pending-retry bump is running, so concurrent searches do not each issue their own SET.
+_retry_in_flight = False
+#: Failures since the degraded state was entered that were not logged above debug; reported on recovery.
+_suppressed = 0
 
 _F = TypeVar("_F", bound=Callable[..., Awaitable[Any]])
 
@@ -66,16 +92,69 @@ WRITE_ENTRY_POINTS: tuple[WriteEntryPoint, ...] = (
 )
 
 
+def _record_failure(reason: str, exc: Exception) -> None:
+    """Count a failed bump and mark this process pending; log only the transition into that state."""
+    global _pending, _failures, _suppressed
+    _failures += 1
+    if _pending:
+        _suppressed += 1
+        logger.debug("Retrieval caches still not invalidated after %s: %s", reason, exc)
+        return
+    _pending = True
+    _suppressed = 0
+    logger.warning("Retrieval caches bypassed until an epoch bump succeeds (%s): %s", reason, exc)
+
+
+def _record_success(reason: str, started_at_failures: int) -> None:
+    """Clear the marker only if no bump failed since this one started (see ``invalidate_retrieval_caches``)."""
+    global _pending, _suppressed
+    if _failures != started_at_failures:
+        logger.debug("Epoch bump after %s began before a later failure; caches stay bypassed", reason)
+        return
+    if _pending:
+        logger.info("Epoch bump succeeded after %s; caches resume (%d failures suppressed)", reason, _suppressed)
+    _pending = False
+    _suppressed = 0
+    logger.debug("Retrieval caches invalidated: %s", reason)
+
+
 async def invalidate_retrieval_caches(reason: str) -> bool:
-    """Orphan every cached retrieval result by replacing the KB epoch; ``False`` when that failed."""
+    """Orphan every cached retrieval result by replacing the KB epoch; ``False`` when that failed.
+
+    Invariant: pending is cleared only by a bump that STARTED after the most recent failure. The
+    failure generation is sampled before the first await; a success whose sample no longer matches
+    (a bump failed while it was in flight) leaves the marker set, whatever order the replies come in.
+    """
+    started_at_failures = _failures
     try:
         client = await get_async_redis_client(database=ACL_EPOCH_DATABASE)
         await bump_acl_epoch_async(client)
     except Exception as exc:
-        logger.error("Retrieval caches NOT invalidated after %s: %s", reason, exc)
+        _record_failure(reason, exc)
         return False
-    logger.debug("Retrieval caches invalidated: %s", reason)
+    _record_success(reason, started_at_failures)
     return True
+
+
+async def invalidation_pending() -> bool:
+    """True while a bump failed and no later one has cleared it.
+
+    A pending process retries the bump, single-flight: the check-and-set of ``_retry_in_flight`` has
+    no await between them, so on the event loop exactly one caller retries and the rest return
+    ``True`` without a SET. Its only caller, ``cache_scope``, is async; a plain flag (not a loop-bound
+    lock) also holds if searches run on more than one loop.
+    """
+    global _retry_in_flight
+    if not _pending:
+        return False
+    if _retry_in_flight:
+        return True
+    _retry_in_flight = True
+    try:
+        await invalidate_retrieval_caches("pending_retry")
+    finally:
+        _retry_in_flight = False
+    return _pending
 
 
 def invalidates_retrieval_caches(reason: str) -> Callable[[_F], _F]:
