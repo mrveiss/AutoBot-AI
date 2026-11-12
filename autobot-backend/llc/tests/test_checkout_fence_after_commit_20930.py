@@ -150,3 +150,9 @@ def test_a_fence_value_refuses_an_agent_id_holding_the_generation_separator() ->
     with pytest.raises(ValueError, match="must not contain"):
         own_task.checkout_fence_value("agent#1", "gen-1")
     assert own_task.fence_agent(own_task.checkout_fence_value(str(_AGENT), "gen-1")) == str(_AGENT)
+
+
+def test_a_fence_value_refuses_a_separator_agent_id_with_no_run_id() -> None:
+    """The refusal does not depend on a generation tag: a bare agent id carrying ``#`` is refused too (#21083)."""
+    with pytest.raises(ValueError, match="must not contain"):
+        own_task.checkout_fence_value("agent#1", None)

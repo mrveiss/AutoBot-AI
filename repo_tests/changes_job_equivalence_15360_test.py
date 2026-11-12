@@ -12,11 +12,13 @@ repo_tests.changes_job_equivalence_15360_test` regenerates it from a git ref, fo
 provenance only). Each caller is resolved through `_changes.yml` (its inputs and their
 defaults) into the same record and compared, field by field:
 
-* the filter source -- a path plus the SHA-256 of that file, or the parsed inline dict;
+* the filter source -- its path or inline form; its ENTRIES are judged by rules, not frozen digests
+  (#21205): the snapshot is kept in order, every addition cites its issue where it is written, and
+  no entry the merge base had goes without a `# retired #NNNN: '<entry>'` tombstone;
 * whether `base` is the merge group's base_sha, and whether the step is PR-only;
 * checkout, timeout, runner, step ids and the pinned action refs;
-* the `on:` block and the whole header, byte for byte;
-* every non-`changes` job, byte for byte (so each `needs.changes.*` read is untouched).
+* the parsed `on:` block, where a filter entry the migration gate gained must be in its `on.push.paths`;
+* the outputs every other job reads from `needs.changes.*`.
 
 An event matrix then evaluates the resolved record per event, so the answer is "same
 base, same run or skip" rather than "same fields".
@@ -27,7 +29,6 @@ only proven by CI running it.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import subprocess
@@ -37,7 +38,15 @@ from typing import Callable
 
 import pytest
 import yaml
+from repo_tests._filter_entries import (
+    agreed_entries,
+    doc_entries,
+    removed_without_tombstone,
+    split_against_snapshot,
+    uncited,
+)
 from repo_tests._paths import repo_root
+from repo_tests._ratchet_base import base_text
 
 REPO = repo_root()
 WORKFLOWS = ".github/workflows"
@@ -64,40 +73,12 @@ ON_ADDED_EVENTS = {
     "migration-gate": ("push",),
     "ai-security-review": ("pull_request",),
 }
-#: #17822 widens the Migration Gate on purpose: its filter listed where its tests live, not the code
-#: they import, so #17772 changed `secrets_coordinator.py`, the gate skipped, and it merged green.
-#: These eleven entries are the ONLY content change in this refactor, pinned by name. They land in the
-#: caller's inline `migrations` filter AND its `on.push.paths` (the two lists must agree), and nowhere
-#: else. Re-derived from commit 3006cacbb8 of the preserved branch `wip-17822-filter-guard`.
-#: The pinned set lives in DATA, not in this module: `fixtures/issue_17822_migration_gate_entries.json`.
-#: Two reasons. The glob-declaration census (#15900) reads every quoted glob in `repo_tests/*.py`
-#: as a guard reading that tree, and these are workflow-filter values, not reads; and a second
-#: copy in Python would be a second home for the eleven. The file is independent of the workflow
-#: it asserts on, so deleting an entry from the workflow YAML still fails the pin; it is also
-#: separate from `pre_15360_changes_jobs.json`, which `python -m` regenerates from a git ref and
-#: would silently rewrite the expectation.
-ISSUE_17822_ENTRIES = tuple(
-    json.loads(
-        (Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json").read_text(encoding="utf-8")
-    )
-)
-# 36 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
-# `llc/services/workspace_lease.py` (#17996), `llc/services/company.py` + `company_ceo.py` (#15907's
-# concurrent-move test), `llc/services/authz.py` + `membership_service.py` (the move's authorization,
-# #19634), `llc/services/company_move_lock.py` (the move's row locks, #19593), `autobot_shared/db_errors.py`
-# (its deadlock SQLSTATE) and `llc/scheduler/run_status.py` (#19582's concurrent-claim test), which the
-# migration tests import, `llc/services/membership_policy.py` (#19985's two-session membership-lock test), and
-# `llc/services/budget.py` + `llc/exceptions.py` (#20168's cost event foreign key test), and
-# `llc/services/company_os/**` + `llc/services/goal.py` (#20115's two-session plan convert lock test), and
-# `services/ai_line_change_proposal.py` + `autobot_shared/ai_lines.py` (imported by `plan_convert_lines.py`, which that test runs, #20086),
-# `autobot_shared/db_session.py` + `autobot_shared/user_management/models/audit.py` (the secrets API test's canonical
-# audit store on its database, #20557), and the seven `autobot_shared/user_management/` modules and its package
-# `__init__` the admin-status two-user test imports (#20670), and `llc/services/controls_service.py` (the
-# two-session pause test, #21056).
-assert (
-    len(ISSUE_17822_ENTRIES) == 38
-), "the pinned migration-gate set is 38 entries; an emptied fixture would pin nothing"
-ISSUE_17822_WORKFLOW = "migration-gate"
+
+#: The workflow whose inline `migrations` filter is mirrored by its own `on.push.paths`: every entry
+#: the filter gained must be in that list too (#17822), and nothing else may be.
+MIRRORED_FILTER_WORKFLOW = "migration-gate"
+MIRRORED_FILTER_KEY = "migrations"
+
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared
 PRE_BASE = "${{ github.event.merge_group.base_sha || '' }}"
@@ -122,232 +103,47 @@ def _git_reader(ref: str) -> ReadFile:
     return read
 
 
-def digest(data: bytes) -> str:
-    """SHA-256, hex, in dash-separated groups of eight.
-
-    A bare 64-hex string in a committed fixture is what secret scanners are built to flag;
-    these are content digests, not secrets, and the grouping keeps them out of that class
-    without an allowlist entry. Equality is all they are used for.
-    """
-    hexed = hashlib.sha256(data).hexdigest()
-    return "-".join(hexed[i : i + 8] for i in range(0, 64, 8))
-
-
-def split_jobs(text: str) -> tuple[str, dict[str, str]]:
-    """The header (everything before `jobs:`) and each job's raw text block."""
-    head, sep, body = text.partition("\njobs:\n")
-    assert sep, "no `jobs:` section"
-    blocks: dict[str, str] = {}
-    name = None
-    for line in body.split("\n"):
-        m = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
-        if m:
-            name = m.group(1)
-            blocks[name] = ""
-        if name is not None:
-            blocks[name] += line + "\n"
-    return head, {k: v.rstrip() for k, v in blocks.items()}
-
-
 def filter_source(raw: str, read: ReadFile) -> dict:
     """dorny's own rule: no newline and no colon means a path, else inline YAML."""
     if "\n" in raw or ":" in raw:
         return {"inline": yaml.safe_load(raw)}
-    data = read(raw.strip())
-    return {"file": raw.strip(), "sha256": digest(data), "content": yaml.safe_load(data)}
+    return {"file": raw.strip(), "content": yaml.safe_load(read(raw.strip()))}
 
 
-#: The deliberate widenings, per filter file and key. `python_filter_covers_its_guards_test`
-#: requires the python-suite filter to cover every file a guard reads, and these guards read
-#: `_changes.yml`; so editing it now runs the suite. Nothing else about any path set moves.
-ALLOWED_ADDITIONS = {
-    #  + #17822: the migration-gate guard reads migration-gate.yml, so editing it must run the suite.
-    ".github/filters/python-paths.yml": {
-        "python": [
-            f"{WORKFLOWS}/_changes.yml",
-            f"{WORKFLOWS}/migration-gate.yml",
-            f"{WORKFLOWS}/ai-security-review.yml",
-            # #16568: workflow_types_gate_16568_test reads the required generated-types gate.
-            f"{WORKFLOWS}/verify-generated-types.yml",
-            # #19503: install_and_code_sync_modes_19503_test reads this shell sync by concrete literal.
-            "autobot-slm-frontend/scripts/sync-to-admin.sh",
-            # #19503: its rsync guard exempts wiki.yml by concrete literal.
-            f"{WORKFLOWS}/wiki.yml",
-            # #20067: cancel_gate_survives_transient_error_20067_test runs this action's step.
-            ".github/actions/cancel-run-on-cancelled-upstream/action.yml",
-            # #19523: dependabot_root_coverage_19523_test reads dependabot.yml by concrete literal.
-            ".github/dependabot.yml",
-            # #19769: pr_conflict_gate_19769_test.py reads the conflict gate workflow.
-            f"{WORKFLOWS}/pr-merge-conflict-gate.yml",
-            # #17856: frontend_api_timeout_ssot_17856_test reads both .env.example files.
-            ".env.example",
-            "autobot-frontend/.env.example",
-            # #18592: install_preflight_and_source_18581_test.py reads INSTALL.md; compose_slm_gui_profile_18585_test.py reads the root compose file and the frontend Dockerfile.
-            "INSTALL.md",
-            "docker-compose.yml",
-            "docker/frontend/Dockerfile",
-            # #21325: apt_retry_one_mechanism_21325_test reads the apt policy and wrapper, three workflows and the mirror fallback.
-            "docker/apt/*",
-            f"{WORKFLOWS}/clean-install.yml",
-            f"{WORKFLOWS}/hardened-smoke-test.yml",
-            ".github/actions/setup-python-suite/action.yml",
-            "scripts/ci/apt_fallback_mirror.sh",
-            # #19868: proxy_upload_cap_one_home_19868_test.py reads it
-            "docker/nginx/nginx-common.conf",
-            "docker/nginx/nginx-locations.conf",
-            "docker/nginx/nginx-slm-locations.conf",
-            # #19817: guards sweep every tracked Dockerfile, under either naming.
-            "**/Dockerfile*",
-            "**/*.Dockerfile",
-            # #18556: one_static_data_copy_18556_test.py reads the canonical static data files.
-            "autobot-backend/config/permission_rules.yaml",
-            "autobot-backend/static/error_messages.yaml",
-            "autobot-monitoring/prometheus.yml",
-            "autobot-monitoring/grafana/provisioning/datasources/prometheus.yml",
-            "autobot-backend/config/llm_models.yaml",
-            "autobot-infrastructure/shared/config/permission_rules.yaml",
-            "**/error_messages.yaml",
-            "**/prometheus.yml",
-            "**/permission_rules.yaml",
-            "**/llm_models.yaml",
-            # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
-            "autobot-browser-worker/playwright-server.js",
-            "autobot-browser-worker/session-store.js",
-            # #18553: redis_direct_constructor_18553_test.py scans this installer for direct redis constructors.
-            "autobot-backend/code_analysis/install.sh",
-            # #15469: one_brand_mark_and_announcer_18240_test.py pins these icons to the kit mark.
-            "autobot-frontend/public/favicon.ico",
-            "autobot-frontend/public/favicon.svg",
-            "autobot-slm-frontend/public/favicon.svg",
-            # #18500: the autofix steps moved into a composite action with a dispatch-only caller; its guards read both.
-            ".github/actions/generated-types-autofix/action.yml",
-            ".github/actions/install-ci-requirements/action.yml",  # #20191: the shared install step
-            f"{WORKFLOWS}/dispatch-generated-types.yml",
-            # #18555: env_file_family_18555_test.py reads every tracked env file.
-            "**/.env*",
-            # #18555: root-level env files; `**/` alone does not match the root.
-            ".env*",
-            "autobot-slm-frontend/package.json",
-            "**/*.env",
-            # #18653: uninstall_covers_role_packages_18653_test.py reads .python-version.
-            ".python-version",
-            # #18729: docker_admin_seed_18729_test.py reads every Docker entrypoint.
-            "docker/*/*entrypoint*.sh",
-            # #17500: compose_exposure_and_credentials_17500_test.py checks every compose file.
-            "docker-compose.hardened.yml",
-            "docker-compose.override.example.yml",
-            "docker/mcp-bridges.yml",
-            # #18666: install_release_signed_18666_test.py compares release.yml's cosign pin with this one.
-            f"{WORKFLOWS}/image-sign.yml",
-            # #18666: the same test runs the signing-key gate against the real cosign.pub.
-            "cosign.pub",
-            # #17793: compose_exposure_and_credentials_17500_test.py checks that both smoke jobs export
-            # exactly the credentials compose requires, so editing either workflow must run the suite.
-            f"{WORKFLOWS}/docker-smoke-test.yml",
-            f"{WORKFLOWS}/co-located-smoke.yml",
-            # #17500, #18729: both guards read the secrets generator, so editing it must run the suite.
-            "docker/generate-secrets.sh",
-            "docker/write-redis-acl.sh",  # #17500
-            "docker/postgres/init-databases.sh",
-            "docker/docker-proxy/proxy.py",  # #20629
-            "docker/postgres/copy-slm-databases.sh",  # #20639
-            # #19178: user_docs_stay_consistent_19178_test.py reads docs/README.md.
-            "docs/README.md",
-            # #18266: social_preview_18266_test.py pins the rendered preview image.
-            "docs/assets/social-preview.png",
-            # #19527: this test checks the docker filter's declared additions, so editing it must run the suite.
-            ".github/filters/docker-paths.yml",
-            # #19184: the same 19178 guard reads the five Company OS docs (_COMPANY_OS_DOCS).
-            "docs/GLOSSARY.md",
-            "docs/INDEX.md",
-            "docs/architecture/PLATFORM_MODEL.md",
-            "docs/features/CATALOG.md",
-            "docs/llc/_index.md",
-            # #19459: the disaster-recovery guard reads the runbook for the units it names.
-            "docs/operations/disaster-recovery.md",
-            ".github/workflows/dependabot-close-stale.yml",
-            # #19611: the playbook-reference guard reads this guide for its declared exemption.
-            "docs/guides/slm-docker-ansible-deployment.md",
-            # #20903: python_version_declaration_drift_test.py sweeps this file's python floor lines.
-            "docs/DEPENDENCIES.md",
-            # #20903: the same guard sweeps every tracked pyproject's requires-python.
-            "**/pyproject.toml",
-            # #19279: the landing-page guard reads the page for the libraries and placeholders it renders.
-            "docs/index.html",
-            # #18559: both duplication-guard tests read the pins file.
-            ".github/duplication-pins.json",
-            # #19324: browser_port_single_home_19324_test.py pins this file's browser-port fallback.
-            "autobot-frontend/vite.config.js",
-            # #19328: node_major_one_home_19328_test.py reads the Node home and the frontend lock.
-            ".nvmrc",
-            "autobot-frontend/package-lock.json",
-        ]
-    },
-    # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the
-    # `_changes.yml` entry the workflow gained has to be here too.
-    ".github/filters/frontend-paths.yml": {"frontend": [f"{WORKFLOWS}/_changes.yml"]},
-    # #19527: the smoke job builds through this composite action and sizes its disk with the other,
-    # so editing either one must run the smoke test it can break.
-    ".github/filters/docker-paths.yml": {
-        "docker": [".github/actions/build-smoke-images/**", ".github/actions/free-disk-space/**"]
-    },
-}
-
-
-def without_allowed_additions(src: dict, name: str | None = None) -> dict:
-    """`src` with the declared additions removed and, where any applied, the hash dropped."""
-    if name == ISSUE_17822_WORKFLOW and "inline" in src:
-        inline = {k: [e for e in v if e not in ISSUE_17822_ENTRIES] for k, v in src["inline"].items()}
-        return {"inline": inline}
-    extra = ALLOWED_ADDITIONS.get(src.get("file"))
-    if not extra:
-        return src
-    content = {k: [e for e in v if e not in extra.get(k, [])] for k, v in src["content"].items()}
-    return {"file": src["file"], "content": content}
+def filter_text(raw: str, read: ReadFile) -> tuple[str | None, str]:
+    """`(path or None, the raw text)` of the filter source, for the line-level reading."""
+    if "\n" in raw or ":" in raw:
+        return None, raw
+    return raw.strip(), read(raw.strip()).decode("utf-8")
 
 
 ADDED_ENTRY = f"{WORKFLOWS}/_changes.yml"
 
 
-def strip_added_on_entries(head: str, doc_on: dict, name: str | None) -> tuple[str, dict]:
-    """The header text and parsed `on:` with the pinned `_changes.yml` additions removed.
+def strip_added_on_entries(doc_on: dict, name: str | None, mirrored: list[str]) -> dict:
+    """The parsed `on:` with the `_changes.yml` additions and the mirrored filter entries removed.
 
-    Asserts the additions are exactly where ON_ADDED_EVENTS says, and nowhere else.
+    Asserts each removed entry is exactly where it is declared (`ON_ADDED_EVENTS`, or the mirrored
+    filter's `on.push.paths`), once; the comparison with the snapshot then fails on anything else.
     """
-    events = ON_ADDED_EVENTS.get(name, ()) if name else ()
-    extra = ISSUE_17822_ENTRIES if name == ISSUE_17822_WORKFLOW else ()
-    lines = head.split("\n")
-    quoted = {f"- '{e}'" for e in (ADDED_ENTRY, *extra)} | {f'- "{ADDED_ENTRY}"'}
-    marked = [i for i, ln in enumerate(lines) if ln.strip() in quoted]
-    assert len(marked) == len(events) + len(
-        extra
-    ), f"{name}: {len(marked)} added entries, pinned {len(events) + len(extra)}"
-    kept = "\n".join(ln for i, ln in enumerate(lines) if i not in marked)
     parsed = {e: dict(v) if isinstance(v, dict) else v for e, v in doc_on.items()}
-    for event in events:
+    for event in ON_ADDED_EVENTS.get(name, ()) if name else ():
         paths = list(parsed[event]["paths"])
         assert paths.count(ADDED_ENTRY) == 1, f"{name}: on.{event}.paths lacks the pinned entry"
         parsed[event]["paths"] = [p for p in paths if p != ADDED_ENTRY]
-    for entry in extra:
+    for entry in mirrored:
         paths = list(parsed["push"]["paths"])
-        assert paths.count(entry) == 1, f"{name}: on.push.paths lacks the pinned #17822 entry {entry}"
+        assert paths.count(entry) == 1, f"{name}: on.push.paths lacks the filter entry {entry}"
         parsed["push"]["paths"] = [p for p in paths if p != entry]
-    return kept, parsed
+    return parsed
 
 
-def _common(text: str, doc: dict, read: ReadFile, name: str | None = None) -> dict:
-    head, blocks = split_jobs(text)
-    head, on_block = strip_added_on_entries(head, doc.get(True, doc.get("on")), name)
-    others = {k: v for k, v in blocks.items() if k != "changes"}
-    jobs = doc["jobs"]
+def _common(text: str, doc: dict, name: str | None = None, mirrored: list[str] = ()) -> dict:
     return {
-        "header_sha256": digest(head.encode()),
-        "on": on_block,
-        "other_jobs_sha256": {k: digest(v.encode()) for k, v in others.items()},
-        "other_jobs_if_needs": {k: [jobs[k].get("if"), jobs[k].get("needs")] for k in others},
+        "on": strip_added_on_entries(doc.get(True, doc.get("on")), name, list(mirrored)),
         "consumed_outputs": sorted(set(re.findall(r"needs\.changes\.outputs\.(\w+)", text))),
-        "display_name": jobs["changes"].get("name"),
-        "job_level_extras": sorted(set(jobs["changes"]) - _JOB_KEYS),
+        "display_name": doc["jobs"]["changes"].get("name"),
+        "job_level_extras": sorted(set(doc["jobs"]["changes"]) - _JOB_KEYS),
     }
 
 
@@ -364,7 +160,7 @@ def pre_record(text: str, read: ReadFile) -> dict:
     assert len(dorny) == 1 and len(checkout) <= 1 and len(steps) == len(dorny) + len(checkout)
     with_ = dorny[0]["with"]
     assert set(with_) <= {"base", "filters"}, with_
-    rec = _common(text, doc, read)
+    rec = _common(text, doc)
     rec.update(
         filters=filter_source(with_["filters"], read),
         base_is_merge_group=with_.get("base") == PRE_BASE,
@@ -402,9 +198,14 @@ def post_record(text: str, reusable_text: str, read: ReadFile, name: str) -> dic
     assert dorny[0]["with"]["base"] == POST_BASE and dorny[0]["if"] == POST_DORNY_IF
     assert dorny[0]["with"]["filters"] == "${{ inputs.filters }}"
     assert inner["timeout-minutes"] == "${{ inputs.timeout_minutes }}"
-    rec = _common(text, doc, read, name)
+    path, ftext = filter_text(call["filters"], read)
+    pre = _load_pre()[name]["filters"]
+    mirrored = _mirrored_entries(name, ftext, pre)
+    rec = _common(text, doc, name, mirrored)
     rec.update(
         filters=filter_source(call["filters"], read),
+        filters_path=path,
+        filters_text=ftext,
         base_is_merge_group=bool(_input(reusable, call, "merge_group_base")),
         pr_only=bool(_input(reusable, call, "pr_only")),
         checkout=bool(_input(reusable, call, "checkout")),
@@ -455,10 +256,7 @@ _EQUAL_FIELDS = (
     "timeout",
     "runs_on",
     "display_name",
-    "header_sha256",
     "on",
-    "other_jobs_sha256",
-    "other_jobs_if_needs",
     "consumed_outputs",
     "job_level_extras",
     "declared_outputs_read_from_step",
@@ -473,50 +271,69 @@ def test_the_fixture_covers_every_caller_and_is_not_vacuous():
     assert [n for n, r in pre.items() if r["pr_only"]] == ["docker-smoke-test"]
     assert {r["timeout"] for r in pre.values()} == {10, GITHUB_DEFAULT_TIMEOUT}
     assert any("inline" in r["filters"] for r in pre.values()) and any("file" in r["filters"] for r in pre.values())
-    assert all(r["other_jobs_sha256"] for r in pre.values()), "a caller with no other job freezes nothing"
+
+
+def _snapshot(pre: dict) -> list[tuple[str, str]]:
+    """The pre-conversion filter's entries, from its stored parse (`content`, or `inline` for an inline one)."""
+    return doc_entries(pre.get("content", pre.get("inline")))
+
+
+def _mirrored_entries(name: str, text: str, pre: dict) -> list[str]:
+    """The entries an inline filter gained, which its own `on.push.paths` must mirror (rule 4)."""
+    if name != MIRRORED_FILTER_WORKFLOW:
+        return []
+    _, new = split_against_snapshot(_snapshot(pre), agreed_entries(text))
+    return [e.value for e in new if e.key == MIRRORED_FILTER_KEY]
 
 
 @pytest.mark.parametrize("name", CALLERS)
 @pytest.mark.parametrize("field", _EQUAL_FIELDS)
 def test_each_resolved_field_equals_the_pre_conversion_value(name, field):
     post, pre = _post(name)[field], _load_pre()[name][field]
-    if field == "filters":
-        post, pre = without_allowed_additions(post, name), without_allowed_additions(pre, name)
+    if field == "filters":  # the entries are judged by the rules below; the shape and source must agree
+        assert ("file" in post, post.get("file")) == ("file" in pre, pre.get("file"))
+        assert set(post.get("content", post.get("inline"))) == set(pre.get("content", pre.get("inline")))
+        return
     assert post == pre
 
 
-def test_the_only_widenings_are_the_declared_entries_in_two_filter_files():
-    """Every other filter file is byte-identical (hash); this one differs by exactly the entry."""
-    widened = 0
-    for name in CALLERS:
-        pre, post = _load_pre()[name]["filters"], _post(name)["filters"]
-        if pre.get("file") not in ALLOWED_ADDITIONS:
-            assert pre.get("sha256") == post.get("sha256") or "inline" in pre
-            continue
-        widened += 1
-        key = next(iter(ALLOWED_ADDITIONS[pre["file"]]))
-        for entry in ALLOWED_ADDITIONS[pre["file"]][key]:
-            assert entry not in pre["content"][key] and post["content"][key].count(entry) == 1
-        assert len(post["content"][key]) == len(pre["content"][key]) + len(ALLOWED_ADDITIONS[pre["file"]][key])
-    assert widened >= 2, "no caller reads the widened filter; the allowance is dead"
+@pytest.mark.parametrize("name", CALLERS)
+def test_a_filter_keeps_its_snapshot_and_declares_every_addition_in_place(name):
+    """Rules 1 and 2: the snapshot entries survive in order; each new entry cites its issue where it is written."""
+    post = _post(name)
+    found = uncited(post["filters_text"], _snapshot(_load_pre()[name]["filters"]), _head_and_base_texts(name)[1])
+    assert not found, f"{name}: " + "; ".join(found)
 
 
-def test_the_only_inline_widening_is_the_pinned_17822_set_on_the_migration_gate():
-    """The one inline filter that grew: exactly the pinned entries, in the `migrations` key, no other."""
+def _head_and_base_texts(name: str) -> tuple[str, str | None, str]:
+    """`(head filter text, the same at the base, the file whose tombstones count)` for one caller."""
+    post = _post(name)
+    if post["filters_path"] is not None:
+        return post["filters_text"], base_text(REPO, post["filters_path"]), post["filters_text"]
+    rel = f"{WORKFLOWS}/{name}.yml"
+    base = base_text(REPO, rel)
+    inline = None if base is None else (yaml.safe_load(base)["jobs"]["changes"].get("with") or {}).get("filters")
+    return post["filters_text"], inline, (REPO / rel).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("name", CALLERS)
+def test_no_entry_the_merge_base_had_is_removed_without_a_tombstone(name):
+    """Rule 3. `BaseUnavailable` is never a pass: it propagates and the test errors."""
+    head, base, tombstones_in = _head_and_base_texts(name)
+    found = removed_without_tombstone(base, head, tombstones_in)
+    assert not found, f"{name}: " + "; ".join(found)
+
+
+def test_the_filters_widened_on_purpose_are_not_a_vacuous_set():
+    """Some caller's filter file and some inline filter really did gain entries, so rules 1-4 judge something."""
+    gained = {}
     for name in CALLERS:
-        pre, post = _load_pre()[name]["filters"], _post(name)["filters"]
-        if "inline" not in pre:
-            continue
-        added = {k: [e for e in post["inline"][k] if e not in pre["inline"][k]] for k in post["inline"]}
-        assert set(post["inline"]) == set(pre["inline"]), name
-        if name == ISSUE_17822_WORKFLOW:
-            assert added == {"migrations": list(ISSUE_17822_ENTRIES)}, added
-            assert all(
-                pre["inline"][k] == [e for e in post["inline"][k] if e not in ISSUE_17822_ENTRIES]
-                for k in pre["inline"]
-            )
-        else:
-            assert not any(added.values()), f"{name} widened outside the pinned #17822 set: {added}"
+        _, new = split_against_snapshot(
+            _snapshot(_load_pre()[name]["filters"]), agreed_entries(_post(name)["filters_text"])
+        )
+        gained[name] = len(new)
+    assert any(n for k, n in gained.items() if k in ("python-required-context", "frontend-test", "docker-smoke-test"))
+    assert gained[MIRRORED_FILTER_WORKFLOW] > 0, "the mirrored inline filter gained nothing; rule 4 judges nothing"
 
 
 @pytest.mark.parametrize("name", CALLERS)
