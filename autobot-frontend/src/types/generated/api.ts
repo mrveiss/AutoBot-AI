@@ -61061,6 +61061,50 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AuditEntryResponse
+         * @description One audit row, as ``AuditEntry.to_response_dict`` sends it (#20173).
+         *
+         *     ``timestamp`` is epoch SECONDS; the operation's data is in ``details``.
+         *     ``result`` is the canonical audit event's ``outcome`` (``services/audit/taxonomy.py``),
+         *     an open string: operation rows say success/denied/failed/error/attempted, identity
+         *     rows add verified/backup-code and more. It is never narrowed to a Literal, which
+         *     would turn one off-vocabulary row into a 500 for the whole query.
+         */
+        AuditEntryResponse: {
+            /** Id */
+            id: string;
+            /** Timestamp */
+            timestamp: number;
+            /** Date */
+            date: string;
+            /** Operation */
+            operation: string;
+            /** Result */
+            result: string;
+            /** User Id */
+            user_id?: string | null;
+            /** Ip Address */
+            ip_address?: string | null;
+            /** Session Id */
+            session_id?: string | null;
+            /** User Role */
+            user_role?: string | null;
+            /** Resource */
+            resource?: string | null;
+            /** Vm Source */
+            vm_source?: string | null;
+            /** Vm Name */
+            vm_name?: string | null;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /** Performance Ms */
+            performance_ms?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AuditLogData
          * @description Response data for get_audit_log.
          */
@@ -61115,9 +61159,7 @@ export interface components {
             /** Has More */
             has_more: boolean;
             /** Entries */
-            entries: {
-                [key: string]: unknown;
-            }[];
+            entries: components["schemas"]["AuditEntryResponse"][];
             /** Query */
             query: {
                 [key: string]: unknown;

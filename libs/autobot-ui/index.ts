@@ -269,3 +269,4 @@ export type {
   SelectMenuVariant,
   SelectMenuOption,
 } from './src/components/BaseSelectMenu.vue'
+export type { AuditQueryResponse } from './src/types/audit'
