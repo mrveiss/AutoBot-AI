@@ -11,8 +11,8 @@
   become: true
 
 - name: restart backend
-  ansible.builtin.systemd:
-    name: autobot-backend
-    state: restarted
-  become: true
   when: inventory_hostname in groups['backend']
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: autobot-backend
+  become: true

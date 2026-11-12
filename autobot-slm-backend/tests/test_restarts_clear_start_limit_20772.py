@@ -7,8 +7,8 @@
 A unit parked in ``failed`` by its start limit refuses a restart, so a bare ``systemd:
 state=restarted`` fails the update on that node. The restarts go through the one shared task
 file, which runs ``systemctl reset-failed`` and then restarts. These tests fail when a restart
-task in ``update-all-nodes.yml`` or a handler of a role the updater includes calls the
-``systemd`` module directly.
+task or handler anywhere under ``ansible/`` restarts a unit through the ``systemd``/``service`` module
+directly, unless the site is on ``_DIRECT_RESTARTS`` with its reason.
 """
 
 from pathlib import Path
@@ -22,8 +22,15 @@ _SHARED_SUFFIX = "_shared/tasks/restart_unit.yml"
 _ROLE_KEYS = ("ansible.builtin.include_role", "include_role", "ansible.builtin.import_role", "import_role")
 
 
+class _Loader(yaml.SafeLoader):
+    """SafeLoader that reads Ansible's custom tags (``!unsafe``, ``!vault``) as plain data."""
+
+
+_Loader.add_multi_constructor("!", lambda loader, suffix, node: None)
+
+
 def _load(path: Path):
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or []
+    return yaml.load(path.read_text(encoding="utf-8"), Loader=_Loader) or []  # noqa: S506 - SafeLoader subclass
 
 
 def _mappings(node):
@@ -90,7 +97,7 @@ def test_every_updater_role_handler_restarts_only_through_the_shared_task() -> N
 
 
 def test_every_shared_include_names_its_unit() -> None:
-    sources = [_PLAYBOOK, *_handler_files()]
+    sources = _all_yaml()
     includes = [t for src in sources for t in _mappings(_load(src)) if _shared_include(t)]
     assert includes
     nameless = [t.get("name") for t in includes if not (t.get("vars") or {}).get("restart_unit_name")]
@@ -115,3 +122,106 @@ def test_the_self_update_socket_restart_goes_through_the_shared_task() -> None:
     assert len(shared) == 1
     assert shared[0]["vars"]["restart_unit_name"] == "{{ slm_self_update_socket_service }}.socket"
     assert shared[0]["ansible.builtin.include_tasks"]["apply"]["tags"] == ["slm", "service", "systemd"]
+
+
+_RESTART_MODULES = ("systemd", "ansible.builtin.systemd", "service", "ansible.builtin.service")
+_NOT_A_UNIT_OF_OURS = (
+    "OS or third-party daemon: AutoBot renders no unit for it and sets no start limit on it (#20772 is AutoBot units)."
+)
+_CONSUMES_REGISTER = "a later task reads this restart's own register; include_tasks cannot return it (#21429)."
+# (file under ansible/, unit as written) -> why this restart stays a direct module call.
+_DIRECT_RESTARTS = {
+    (
+        "fix-slm-env-ports.yml",
+        "autobot-slm-backend",
+    ): "async: 1 / poll: 0 fire-and-forget; an include cannot be detached (#21429).",
+    ("migrate-grafana-to-vm.yml", "grafana-server"): "third-party daemon; the task also sets enabled (one call).",
+    (
+        "playbooks/deploy-native-services.yml",
+        "redis-stack-server",
+    ): "the same call also sets enabled on first configuration (#21429).",
+    ("playbooks/deploy-base.yml", "ssh"): _NOT_A_UNIT_OF_OURS,
+    ("playbooks/deploy-base.yml", "systemd-resolved"): _NOT_A_UNIT_OF_OURS,
+    ("playbooks/deploy-base.yml", "rsyslog"): _NOT_A_UNIT_OF_OURS,
+    ("playbooks/deploy-base.yml", "fail2ban"): _NOT_A_UNIT_OF_OURS,
+    ("playbooks/deploy-time-sync.yml", "{{ item }}"): _NOT_A_UNIT_OF_OURS + " Loops chrony/timesyncd, rsyslog, cron.",
+    ("playbooks/enroll-node.yml", "ssh"): _NOT_A_UNIT_OF_OURS,
+    ("playbooks/enroll-node.yml", "ufw"): _NOT_A_UNIT_OF_OURS,
+    ("playbooks/setup-vm-names-and-lvm.yml", "systemd-networkd"): _NOT_A_UNIT_OF_OURS,
+    ("playbooks/setup-vm-names-and-lvm.yml", "rsyslog"): _NOT_A_UNIT_OF_OURS,
+    ("playbooks/toggle-enforcement.yml", "autobot-backend"): _CONSUMES_REGISTER,
+    ("playbooks/update-node.yml", "{{ item }}"): _CONSUMES_REGISTER,
+    ("roles/dependency_patching/tasks/post-update.yml", "{{ current_service.service_name }}"): _CONSUMES_REGISTER,
+    ("roles/dependency_patching/tasks/rollback-system.yml", "{{ current_service.service_name }}"): _CONSUMES_REGISTER,
+    ("roles/dependency_patching/tasks/rollback.yml", "{{ current_service.service_name }}"): _CONSUMES_REGISTER,
+    ("roles/centralized_logging/handlers/main.yml", "loki"): _NOT_A_UNIT_OF_OURS,
+    ("roles/centralized_logging/handlers/main.yml", "promtail"): _NOT_A_UNIT_OF_OURS,
+    ("roles/common/handlers/main.yml", "sshd"): _NOT_A_UNIT_OF_OURS,
+    ("roles/common/handlers/main.yml", "logrotate.timer"): _NOT_A_UNIT_OF_OURS,
+    ("roles/dns/handlers/main.yml", "dnsmasq"): _NOT_A_UNIT_OF_OURS,
+    ("roles/dns/handlers/main.yml", "systemd-resolved"): _NOT_A_UNIT_OF_OURS,
+    ("roles/docker/handlers/main.yml", "docker"): _NOT_A_UNIT_OF_OURS,
+    ("roles/llm/handlers/main.yml", "ollama"): _NOT_A_UNIT_OF_OURS,
+    ("roles/time_sync/handlers/main.yml", "systemd-timesyncd"): _NOT_A_UNIT_OF_OURS,
+    ("roles/time_sync/handlers/main.yml", "chrony"): _NOT_A_UNIT_OF_OURS,
+    ("roles/time_sync/handlers/main.yml", "rsyslog"): _NOT_A_UNIT_OF_OURS,
+    ("roles/time_sync/handlers/main.yml", "cron"): _NOT_A_UNIT_OF_OURS,
+    ("roles/time_sync/handlers/main.yml", "systemd-logind"): _NOT_A_UNIT_OF_OURS,
+    ("roles/xrdp/handlers/main.yml", "{{ xrdp_service_name }}"): _NOT_A_UNIT_OF_OURS,
+}
+
+
+def _all_yaml() -> list:
+    return [p for p in sorted(_ANSIBLE.rglob("*.yml")) if not {"tests", "_shared"} & set(p.relative_to(_ANSIBLE).parts)]
+
+
+def _direct_restart_sites() -> list:
+    found = []
+    for path in _all_yaml():
+        for node in _mappings(_load(path)):
+            for module in _RESTART_MODULES:
+                spec = node.get(module)
+                if isinstance(spec, dict) and spec.get("state") == "restarted":
+                    found.append((path.relative_to(_ANSIBLE).as_posix(), str(spec.get("name"))))
+    return found
+
+
+def test_no_restart_anywhere_under_ansible_skips_the_shared_task_unless_justified() -> None:
+    sites = _direct_restart_sites()
+    assert len(sites) >= len(_DIRECT_RESTARTS), "control: the finder sees the allow-listed sites"
+    unlisted = [s for s in sites if s not in _DIRECT_RESTARTS]
+    assert not unlisted, f"direct restarts that clear no start-limit park and are not on the allow-list: {unlisted}"
+
+
+def test_the_allow_list_has_no_stale_entry() -> None:
+    assert sorted(set(_DIRECT_RESTARTS) - set(_direct_restart_sites())) == []
+
+
+# Every restart that tolerates failure, as (file, unit as written). The first eight had `failed_when: false`
+# on origin/main before the shared task (browser x2, frontend, slm_manager handlers; NPU, browser, AI Stack
+# x2 in update-all-nodes.yml); the last four carried `ignore_errors: true` / `failed_when: false` in the
+# TLS and certificate playbooks and keep that behaviour when converted.
+_TOLERANT = [
+    ("roles/browser/handlers/main.yml", "autobot-vnc"),
+    ("roles/browser/handlers/main.yml", "autobot-playwright"),
+    ("roles/frontend/handlers/main.yml", "autobot-frontend"),
+    ("roles/slm_manager/handlers/main.yml", "{{ slm_backend_service }}"),
+    ("playbooks/update-all-nodes.yml", "autobot-npu-worker"),
+    ("playbooks/update-all-nodes.yml", "autobot-playwright"),
+    ("playbooks/update-all-nodes.yml", "autobot-ai-stack"),
+    ("playbooks/update-all-nodes.yml", "autobot-chromadb"),
+    ("enable-tls.yml", "autobot-backend"),
+    ("enable-tls.yml", "{{ redis_service_name | default('redis-stack-server') }}"),
+    ("playbooks/rotate-certs.yml", "{{ _service }}"),
+    ("playbooks/rotate-certs.yml", "{{ _service }}"),
+]
+
+
+def test_exactly_the_sites_that_tolerated_failure_still_tolerate_it() -> None:
+    found = []
+    for path in _all_yaml():
+        for node in _mappings(_load(path)):
+            vars_ = node.get("vars") if _shared_include(node) else None
+            if isinstance(vars_, dict) and vars_.get("restart_unit_tolerate_failure") is True:
+                found.append((path.relative_to(_ANSIBLE).as_posix(), vars_["restart_unit_name"]))
+    assert sorted(found) == sorted(_TOLERANT)
