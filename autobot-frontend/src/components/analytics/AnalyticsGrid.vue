@@ -220,7 +220,7 @@ const getHealthClass = (health: string): string => {
 }
 
 const getQualityClass = (score: number | null): string => {
-  if (score === null) return 'quality-unknown'
+  if (score === null) return '' // not available: the element keeps its base styling
   if (score >= 80) return 'quality-excellent'
   if (score >= 60) return 'quality-good'
   if (score >= 40) return 'quality-fair'
@@ -342,7 +342,6 @@ const getEfficiencyClass = (score: number): string => {
 .quality-good { background: var(--color-info-bg); }
 .quality-fair { background: var(--color-warning-bg); }
 .quality-poor { background: var(--color-error-bg); }
-.quality-unknown { background: var(--bg-tertiary); }
 
 .score-value {
   font-size: var(--text-3xl);
