@@ -53,3 +53,17 @@ register_env_var(
         range=(100, 100000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_GRAPH_RAW_SCAN_BUDGET",
+        type=int,
+        default=50000,
+        description=(
+            "Raw records one bucket collection read may scan per request to find readable ones; "
+            "past it the section reports the budget exhausted."
+        ),
+        component="knowledge",
+        range=(100, 10000000),
+    )
+)

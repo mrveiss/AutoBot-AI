@@ -49,6 +49,10 @@ class GraphSection(BaseModel):
     returned: int = Field(description="Records on this page")
     limited: bool = Field(description="True while readable records remain past this page")
     truncated: bool = Field(False, description="True when the scan cap cut the listing short")
+    budget_exhausted: bool = Field(
+        False, description="True when the per-request scan budget ended before a readable record or the end of data"
+    )
+    failed: bool = Field(False, description="True when the section's source could not be read; total is unknown")
     cursor: str | None = Field(None, description="Facts section only: pass as `cursor` to continue the scan")
 
 

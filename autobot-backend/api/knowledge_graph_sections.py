@@ -43,7 +43,7 @@ async def bucket_sections_for_graph(
         )
     except Exception as e:
         logger.warning("Failed to build bucket sections: %s", e)
-        return []
+        return [section_report("buckets", "Knowledge buckets", None, 0, failed=True)]  # not "no buckets"
     if built["unmapped"]:
         logger.warning("Knowledge collections missing from the graph registry: %s", built["unmapped"])
     nodes.extend(built["nodes"])

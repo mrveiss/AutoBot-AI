@@ -17,7 +17,7 @@ total never counts what the caller cannot read.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, NamedTuple, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.backends.async_chromadb_adapter import _chroma_safe_name
@@ -30,7 +30,13 @@ from knowledge.graph_bucket_visibility import (
     record_page,
     visible_records,
 )
-from knowledge.graph_limits import GRAPH_SCAN_LIMIT, SCAN_BATCH, SECTION_PREVIEW_CHARS, SECTION_SAMPLE_LIMIT
+from knowledge.graph_limits import (
+    GRAPH_RAW_SCAN_BUDGET,
+    GRAPH_SCAN_LIMIT,
+    SCAN_BATCH,
+    SECTION_PREVIEW_CHARS,
+    SECTION_SAMPLE_LIMIT,
+)
 from knowledge.index_embedding_space import (
     ACCELERATOR_COLLECTIONS,
     CODE_INDEX,
@@ -123,18 +129,33 @@ def _preview(document: str | None) -> str:
     return (document or "")[:SECTION_PREVIEW_CHARS]
 
 
-async def _scan_collection(client: Any, name: str) -> Tuple[List[Dict[str, Any]], bool]:
-    """Ids and metadata of up to ``GRAPH_SCAN_LIMIT`` records of one collection, and whether it held more."""
+def _rows_of(got: Dict[str, Any]) -> List[Dict[str, Any]]:
+    ids, metas = got.get("ids") or [], got.get("metadatas") or []
+    return [{"id": rid, "metadata": (metas[i] if i < len(metas) else None) or {}} for i, rid in enumerate(ids)]
+
+
+async def _scan_collection(
+    client: Any, name: str, readable: Callable[[list], Awaitable[list]]
+) -> Tuple[List[Dict[str, Any]], bool, bool]:
+    """``(readable records, cut short by the readable cap, raw budget ran out)`` of one collection.
+
+    The permission filter runs on each raw window and the cap counts what survives it, so a hidden first window
+    never hides a readable record behind it. The scan stops at ``GRAPH_SCAN_LIMIT`` readable records, at the end of
+    the collection, or at ``GRAPH_RAW_SCAN_BUDGET`` raw records; the last is reported apart from the other two.
+    """
     collection = await client.get_collection(name)
-    rows: List[Dict[str, Any]] = []
-    while len(rows) < GRAPH_SCAN_LIMIT:
-        size = min(SCAN_BATCH, GRAPH_SCAN_LIMIT - len(rows))
-        got = await collection.get(limit=size, offset=len(rows), include=["metadatas"])
-        ids, metas = got.get("ids") or [], got.get("metadatas") or []
-        rows.extend({"id": rid, "metadata": (metas[i] if i < len(metas) else None) or {}} for i, rid in enumerate(ids))
-        if len(ids) < size:
-            return rows, False
-    return rows, await collection.count() > len(rows)
+    kept: List[Dict[str, Any]] = []
+    raw = 0
+    while len(kept) < GRAPH_SCAN_LIMIT:
+        if raw >= GRAPH_RAW_SCAN_BUDGET:
+            return kept, False, await collection.count() > raw
+        size = min(SCAN_BATCH, GRAPH_RAW_SCAN_BUDGET - raw)
+        window = _rows_of(await collection.get(limit=size, offset=raw, include=["metadatas"]))
+        kept.extend(await readable(window))
+        raw += len(window)
+        if len(window) < size:
+            return kept[:GRAPH_SCAN_LIMIT], len(kept) > GRAPH_SCAN_LIMIT, False
+    return kept[:GRAPH_SCAN_LIMIT], len(kept) > GRAPH_SCAN_LIMIT or await collection.count() > raw, False
 
 
 async def _previews(client: Any, picked: List[Tuple[str, str]]) -> Dict[Tuple[str, str], str]:
@@ -172,24 +193,37 @@ async def _readable_rows(section: BucketSection, name: str, scanned: list, viewe
     return [by_id[r["id"]] for r in seen]
 
 
+class SectionScan(NamedTuple):
+    """What reading one section's collections produced: its readable rows and how the scan ended."""
+
+    rows: list
+    truncated: bool = False  # the readable cap cut a collection short
+    exhausted: bool = False  # the raw budget ended before a readable record or the end of data
+    failed: bool = False  # a collection could not be read, so rows and total are incomplete
+
+
 async def _section_rows(
     client: Any, section: BucketSection, names: List[str], viewer: Viewer, manager, kb: Any = None
-) -> tuple:
-    """Every record of the section's collections the viewer may read, sorted, and whether a scan was cut short."""
+) -> SectionScan:
+    """Every record of the section's collections the viewer may read, sorted, and how each scan ended."""
     rows: List[Tuple[str, str, Dict[str, Any]]] = []
-    truncated = False
+    truncated = exhausted = failed = False
     for name in names:
         if not collection_in_scope(section.access, name, viewer):
             continue
+
+        async def readable(window: list, name: str = name) -> list:
+            return await _readable_rows(section, name, window, viewer, manager, kb)
+
         try:
-            scanned, cut = await _scan_collection(client, name)
-            seen = await _readable_rows(section, name, scanned, viewer, manager, kb)
-        except Exception as exc:  # one broken collection must not hide the other sections
+            seen, cut, spent = await _scan_collection(client, name, readable)
+        except Exception as exc:  # one broken collection must not hide the other sections, nor look empty
             logger.warning("Graph section %s: collection %s unreadable: %s", section.key, name, exc)
+            failed = True
             continue
-        truncated = truncated or cut
+        truncated, exhausted = truncated or cut, exhausted or spent
         rows.extend((name, r["id"], r["metadata"]) for r in seen)
-    return sorted(rows, key=lambda r: (r[0], r[1])), truncated
+    return SectionScan(sorted(rows, key=lambda r: (r[0], r[1])), truncated, exhausted, failed)
 
 
 def _nodes_of(section: BucketSection, page: List[Tuple[str, str, Dict[str, Any]]], previews: Dict) -> tuple:
@@ -238,8 +272,9 @@ async def build_bucket_sections(
         if section.access != TENANT_ADMIN or viewer.is_admin:
             by_section.setdefault(section.key, []).append(name)
     for section in (s for s in BUCKET_SECTIONS if s.key in by_section):
-        rows, truncated = await _section_rows(client, section, by_section[section.key], viewer, ownership_manager, kb)
-        if not rows and not truncated:
+        scan = await _section_rows(client, section, by_section[section.key], viewer, ownership_manager, kb)
+        rows = scan.rows
+        if not rows and not (scan.truncated or scan.exhausted or scan.failed):
             continue
         page = rows[offset : offset + max(limit, 0)]
         record_page(viewer, section.access, page)
@@ -256,16 +291,30 @@ async def build_bucket_sections(
                 "metadata": {"total": len(rows)},
             }
         )
-        report.append(section_report(section.key, section.label, len(rows), len(page), offset, truncated))
+        total = None if scan.failed else len(rows)
+        report.append(
+            section_report(
+                section.key, section.label, total, len(page), offset, scan.truncated, scan.exhausted, scan.failed
+            )
+        )
     return {"nodes": nodes, "edges": edges, "sections": report, "unmapped": unmapped}
 
 
 def section_report(
-    key: str, label: str, total: int | None, returned: int, offset: int = 0, truncated: bool = False
+    key: str,
+    label: str,
+    total: int | None,
+    returned: int,
+    offset: int = 0,
+    truncated: bool = False,
+    budget_exhausted: bool = False,
+    failed: bool = False,
 ) -> Dict[str, Any]:
     """Visible total vs this page; ``limited`` is true while records remain past the page (the UI notice).
 
-    ``truncated`` means the scan cap cut the listing short, so ``total`` is a lower bound.
+    ``truncated`` means the scan cap cut the listing short, so ``total`` is a lower bound; ``budget_exhausted``
+    that the per-request scan budget ended first (distinct from "more results exist"); ``failed`` that the
+    source could not be read, which is not the same as holding nothing.
     """
     unknown = total is None
     return {
@@ -273,6 +322,8 @@ def section_report(
         "label": label,
         "total": total,
         "returned": returned,
-        "limited": unknown or truncated or offset + returned < total,
+        "limited": unknown or truncated or budget_exhausted or offset + returned < total,
         "truncated": truncated,
+        "budget_exhausted": budget_exhausted,
+        "failed": failed,
     }

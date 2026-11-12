@@ -152,16 +152,16 @@ async def test_an_unavailable_source_registry_makes_the_collection_unreadable_no
     client = await client_with({"code_patterns": [("x", {"source_id": "some-repo"})]})
     with patch("api.codebase_analytics.endpoints.shared.authorize_source_access", new=AsyncMock(side_effect=down)):
         built = await build_bucket_sections(client, viewer(), manager())
-    assert built["sections"] == []
+    (section,) = built["sections"]
+    assert (section["failed"], section["total"], section["returned"]) == (True, None, 0), "unreadable is not empty"
 
 
 @pytest.mark.asyncio
-async def test_a_truncated_scan_with_no_readable_row_is_still_reported(monkeypatch):
+async def test_a_collection_with_no_readable_row_and_no_more_data_has_no_section(monkeypatch):
     monkeypatch.setattr("knowledge.graph_buckets.GRAPH_SCAN_LIMIT", 3)
     client = await client_with({"trajectories": [(f"t{i}", {"user_id": "bob"}) for i in range(5)]})
     built = await build_bucket_sections(client, viewer(), manager())
-    (section,) = built["sections"]
-    assert (section["total"], section["truncated"], section["limited"]) == (0, True, True)
+    assert built["sections"] == [], "the whole collection was read and holds nothing alice may see"
 
 
 @pytest.mark.asyncio
