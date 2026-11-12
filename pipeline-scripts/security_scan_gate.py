@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Turn a security scanner's report into a job verdict and a job summary (#13543).
 
-Every scanner in `.github/workflows/_gate-security.yml` ended in `|| true`, so
+Every scanner in `.github/workflows/security.yml` ended in `|| true`, so
 `Dependency Security Scan` and `Static Application Security Testing (SAST)` could
 go red only on checkout, toolchain setup or dependency install. A green tick said
 nothing at all about security, while the job names claimed a substantive control.
@@ -369,7 +369,7 @@ def _verdict_line(threshold: str, judged: int, allowed_ids: set[str]) -> str:
     if threshold == "never":
         return (
             "**This step does not gate.** Its result is a report only — a green tick here is not "
-            "a statement that the tree is clean. See the decision recorded in `_gate-security.yml`."
+            "a statement that the tree is clean. See the decision recorded in `security.yml`."
         )
     scope = "any severity" if threshold == "any" else f"severity {threshold} or worse"
     suffix = f", with {len(allowed_ids)} recorded allowance(s)" if allowed_ids else ""
@@ -418,8 +418,8 @@ def recorded_npm_allowances(today: "date | None" = None) -> "tuple[set[str], lis
     `npm_audit_gate.py` has always honoured it. This gate parses a report that
     workflow never produced, so the same advisory was judged by one gate and
     invisible to the other: the braces exception (GHSA-vfj7-8cjw-p6xm, owner
-    decision 2026-10-03, retired 2026-10-23) was live in `_gate-frontend-test.yml` and absent here, which
-    failed `_gate-security.yml` on ten open PRs at once.
+    decision 2026-10-03, retired 2026-10-23) was live in `frontend-test.yml` and absent here, which
+    failed `security.yml` on ten open PRs at once.
 
     The alternative — repeating the ids as `--allow-id` in the workflow — would
     put the same judgement in two places, which is the defect, not the fix.

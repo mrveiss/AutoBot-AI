@@ -14,8 +14,8 @@ bare bandit entry excludes any path that merely *contains* the string
 anywhere, including mid-filename.
 
 Measured against ``bandit -c .bandit -r autobot-backend/ autobot-slm-backend/
-autobot_shared/`` — the exact invocation ``_gate-code-quality.yml`` and
-``_gate-security.yml`` run — with ``git ls-files`` as ground truth: the pre-fix bare
+autobot_shared/`` — the exact invocation ``code-quality.yml`` and
+``security.yml`` run — with ``git ls-files`` as ground truth: the pre-fix bare
 entries ``temp``, ``logs``, ``reports``, ``archive`` and ``venv`` silently
 excluded 34 tracked production files that none of them named as a real
 *tracked* directory anywhere in the repo. Re-including them surfaced 3 real
@@ -66,7 +66,7 @@ WHY THIS IS A SCRIPT AND NOT ONLY A TEST. The guard has to run in a check that
 can block a merge, and the direction of this failure is what makes that
 matter: re-adding a bare name excludes *more* files, so bandit reports
 *fewer* findings and the required ``code-quality`` job goes greener. Nothing
-about the required checks would otherwise notice. ``_gate-code-quality.yml``
+about the required checks would otherwise notice. ``code-quality.yml``
 therefore calls this module with ``--audit-excludes``, the same shape as
 ``check_flake8_exclude_anchoring.py --audit-excludes`` (#14419).
 ``repo_tests/bandit_exclude_anchoring_test.py`` imports these functions

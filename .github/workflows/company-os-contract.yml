@@ -9,7 +9,7 @@
 #      route (authoritative OpenAPI audit, scoped to /api/llc).
 #   2. The core Company OS loop e2e test must pass.
 #
-# Unlike the repo-wide _gate-api-wiring.yml (non-blocking, has tracked false
+# Unlike the repo-wide api-wiring.yml (non-blocking, has tracked false
 # positives elsewhere), this gate is scoped to Company OS and IS blocking — its
 # surface was brought to zero unwired calls in #9861 and must stay there.
 

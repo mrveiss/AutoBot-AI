@@ -26,9 +26,9 @@ actual reach from ``.github/filters/code-quality-paths.yml`` and asserts every
 guarded path is covered by it.
 
 WHERE THE SET LIVES. It used to be an inline ``filters: |`` block inside
-``.github/workflows/_gate-code-quality.yml``. #15608 extracted it to
+``.github/workflows/code-quality.yml``. #15608 extracted it to
 ``.github/filters/code-quality-paths.yml`` so the complement shim in
-``.github/workflows/code-quality-required-context.yml`` (folded into ci.yml, #18208) could read the SAME set
+``.github/workflows/code-quality-required-context.yml`` could read the SAME set
 by reference instead of carrying a second copy that drifts. This checker follows
 the set to its new home rather than keeping a third reader of the old location.
 
@@ -65,7 +65,7 @@ from _scan_helpers import project_root as repo_root  # noqa: E402
 # the application's own dependencies -- so no third-party YAML parser here.
 logger = logging.getLogger(__name__)
 
-_WORKFLOW = ".github/workflows/_gate-code-quality.yml"
+_WORKFLOW = ".github/workflows/code-quality.yml"
 _FILTER_FILE = ".github/filters/code-quality-paths.yml"
 
 #: Checkers whose GUARD_INPUT_PATHS this meta-guard enforces. Add a new entry

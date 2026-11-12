@@ -45,7 +45,7 @@ jobs:
     # generic [self-hosted, Linux, X64] labels, never an npu/gpu/cuda one.
     runs-on: ubuntu-latest
     # Fail fast, not GitHub's ~360min default (#11077 precedent in
-    # _gate-frontend-test.yml). This is a required, non-path-filtered context: without a
+    # frontend-test.yml). This is a required, non-path-filtered context: without a
     # bound, a runner outage queues it for hours and wedges every open PR.
     timeout-minutes: 30
     steps:
@@ -56,7 +56,7 @@ jobs:
           # base commit is present. On a pull_request the checkout is the
           # merge commit: depth 2 supplies both parents — HEAD^1 (base tip)
           # and HEAD^2 (PR head) — which the #14137 symlink-diff step below
-          # needs. Same reasoning as _gate-code-quality.yml (#13880).
+          # needs. Same reasoning as code-quality.yml (#13880).
           fetch-depth: 2
 
       - name: Check for pre-commit config
@@ -310,7 +310,7 @@ jobs:
           # read below by git_scope_resolve_base; without this fallback it is
           # empty on a queue entrant, which is fail-CLOSED (a red required
           # context) rather than a deadlock -- but the equivalent steps in
-          # _gate-code-quality.yml and no-commit-trailers.yml already carry it, and
+          # code-quality.yml and no-commit-trailers.yml already carry it, and
           # an inconsistency here is an untested assumption, which #14054 AC2
           # asks us not to accept.
           #

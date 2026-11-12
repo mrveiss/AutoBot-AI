@@ -5,7 +5,7 @@
 # Author: mrveiss
 """Fail a detect-secrets rescan that read less than the committed baseline holds (#16275).
 
-The ``secret-detection`` job in ``_gate-security.yml`` rescans every tracked file and
+The ``secret-detection`` job in ``security.yml`` rescans every tracked file and
 fails on any finding the committed ``.secrets.baseline`` does not hold as
 audited. That comparison is one-sided. A rescan that reads NOTHING -- a filter
 in the baseline's own settings widened to match every file, a plugin set that

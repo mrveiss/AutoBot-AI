@@ -36,7 +36,7 @@ this need a REQUIRED check, not documentation: shrinking the allowlist by
 hand-adding a stale entry, or a requirements file silently resolving to zero
 entries (a rename, a moved role), both make this check report FEWER problems,
 i.e. go GREENER. Nothing about a merely-informational pytest run would notice.
-``.github/workflows/_gate-code-quality.yml`` therefore calls this module with
+``.github/workflows/code-quality.yml`` therefore calls this module with
 ``--audit``, mirroring ``check_flake8_exclude_anchoring.py --audit-excludes``
 and ``check_python_file_size.py --audit-ceilings``.
 ``repo_tests/requirements_ci_drift_test.py`` imports these functions rather
@@ -80,7 +80,7 @@ _CI_REQUIREMENTS = "requirements-ci.txt"
 #: One package name per (non-comment, non-blank) line. THIS LIST ONLY SHRINKS.
 _ALLOWLIST_FILE = "repo_tests/requirements_ci_drift_baseline.txt"
 
-#: Every repo-relative path/glob this checker reads. _gate-code-quality.yml's
+#: Every repo-relative path/glob this checker reads. code-quality.yml's
 #: dorny/paths-filter `backend` list must cover each of these, or a PR that
 #: touches only one of them skips the required check entirely -- verified by
 #: tools/lint/check_code_quality_guard_reach.py and

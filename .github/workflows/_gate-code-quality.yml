@@ -251,7 +251,7 @@ jobs:
     - name: Block new local BaseModel definitions in API files (#6056, #16178)
       # --changed-lines-only (#16178), and unlike the two scoped steps above, the
       # pre-commit stage is scoped too: this hook had no baseline and no blocking
-      # CI step (_gate-precommit.yml runs every hook, but only as warnings), so
+      # CI step (enforce-precommit.yml runs every hook, but only as warnings), so
       # its whole-file read blocked the commit itself, failing a change for a
       # model it neither added nor could move (every original domain schemas_*.py
       # is frozen at its size ceiling). With --python the wrapper cannot parse the
@@ -495,7 +495,7 @@ jobs:
     - name: Audit undefined names under autobot-infrastructure/shared/scripts (#14405)
       run: |
         # Three trees are excluded by the pre-commit flake8 hook, named by no CI
-        # flake8 invocation that can fail (_gate-security.yml runs `|| true`), and listed
+        # flake8 invocation that can fail (security.yml runs `|| true`), and listed
         # in .flake8's own exclude. Nothing linted them; 12 operator scripts
         # accumulated 103 undefined names -- live NameErrors, not style. #14405 fixed
         # all 12 and scoped a second pre-commit hook to ONE of the three trees.
@@ -714,7 +714,7 @@ jobs:
         CODEQL_CHECK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       run: |
         set -euo pipefail
-        # BLOCKING, and in this job rather than in _gate-codeql.yml on purpose: this is
+        # BLOCKING, and in this job rather than in codeql.yml on purpose: this is
         # a REQUIRED check, and CodeQL itself is not. An alert therefore has to be
         # adjudicated -- fixed, or dismissed with a written reason -- before a PR
         # can merge, which is the step that was missing when 111 of them

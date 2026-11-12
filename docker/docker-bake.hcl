@@ -3,7 +3,7 @@
 # Author: mrveiss
 #
 # The images the Docker smoke workflows build (#19527). One definition, read by
-# .github/actions/build-smoke-images for _gate-docker-smoke.yml,
+# .github/actions/build-smoke-images for docker-smoke-test.yml,
 # hardened-smoke-test.yml and co-located-smoke.yml, which each carried their own
 # copy of the same three `docker buildx build` calls.
 #

@@ -4,7 +4,7 @@
 
 `npm_audit_exceptions.ADVISORY_EXCEPTIONS` is the owner-decision record.
 `npm_audit_gate.py` has always read it; `security_scan_gate.py` — the gate
-`_gate-security.yml` actually calls on the blocking frontend audit — did not. One
+`security.yml` actually calls on the blocking frontend audit — did not. One
 advisory was therefore excused in one workflow and fatal in the other, and ten
 open PRs were red on a decision that had already been made.
 

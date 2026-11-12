@@ -76,7 +76,7 @@ NOT_OPEN = "NOT-OPEN"
 #: `405 Pull Request is still a draft`.
 #:
 #: The reason it reads green is that draft is how this repository PARKS a run:
-#: `ci.yml` and `_gate-code-quality.yml` gate their heavy jobs on
+#: `ci.yml` and `code-quality.yml` gate their heavy jobs on
 #: `github.event.pull_request.draft == false`, so on a draft the required
 #: contexts publish `skipped` -- and `skipped` is in
 #: :data:`~scripts.lib.check_run_status.ACCEPTABLE` because a path-filtered

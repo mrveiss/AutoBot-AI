@@ -277,7 +277,7 @@ class TestWorkflowUrlExemption:
         itself: an IP that WOULD be blocked inside a scanned tree is not judged
         at the repo root, because the repo-wide scan never walks there and a
         finding it produced could never be baselined. That asymmetry is what
-        made ci.yml and _gate-frontend-test.yml uneditable for months (#16260).
+        made ci.yml and frontend-test.yml uneditable for months (#16260).
         """
         result = _run_hook_with_staged(
             tmp_path,

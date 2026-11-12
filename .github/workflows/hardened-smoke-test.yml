@@ -17,7 +17,7 @@ on:
       - main
     # #13388: SAFE — this workflow publishes `hardened-smoke-test`, which is NOT
     # one of the ten required contexts (the required `smoke-test` comes from
-    # _gate-docker-smoke.yml, which is deliberately left unfiltered).
+    # docker-smoke-test.yml, which is deliberately left unfiltered).
     #
     # `paths-ignore` rather than `paths` ON PURPOSE. This job builds all three
     # images and starts the hardened compose overlay, so almost any source,
@@ -332,7 +332,7 @@ jobs:
         run: |
           # Backstop for the per-container diagnostics above: full compose
           # logs, printed inline (not just the uploaded artifact) AND kept
-          # as an artifact, matching _gate-docker-smoke.yml. (#14417)
+          # as an artifact, matching docker-smoke-test.yml. (#14417)
           #
           # Same trap as the post-mortem step above: default Actions bash is
           # `-eo pipefail`, so `docker compose logs` failing (compose already

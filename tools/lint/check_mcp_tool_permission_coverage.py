@@ -38,7 +38,7 @@ runs in `python-suite`, which gates nothing (#14353, and the same reason
 pytest). The direction of this failure is what makes placement matter: an
 under-granted tool makes `mcp_tool_permissions_test.py` and this module both
 GREENER by doing nothing, not redder — there is no accidental failure to
-notice. `.github/workflows/_gate-code-quality.yml` therefore calls this module with
+notice. `.github/workflows/code-quality.yml` therefore calls this module with
 ``--audit``, the same shape as ``check_flake8_exclude_anchoring.py
 --audit-excludes`` and ``check_undefined_names.py --audit``.
 

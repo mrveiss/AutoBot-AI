@@ -8,7 +8,7 @@ Builds a legacy ``secrets.json`` file directly (the exact on-disk shape
 ``SecretsManager._save_secrets`` produces) rather than importing ``api.secrets`` —
 that module pulls in the whole FastAPI app surface (auth middleware, memory graph,
 plugin SDK, which transitively imports ``jsonschema``), which the migration-gate
-environment deliberately keeps minimal (see ci.yml's ``migration-matrix`` job).
+environment deliberately keeps minimal (see ``.github/workflows/migration-gate.yml``).
 Imports it into a Postgres unified store (migration-gate) and verifies each row is
 envelope-readable via ``EnvelopeSecretsService`` owned by the System vault. Also
 verifies the ``json_secrets_read`` dual-read path and that no secret value is ever

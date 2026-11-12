@@ -27,7 +27,7 @@ WHY THIS IS A SCRIPT AND NOT ONLY A TEST. The guard has to run in a check that
 can block a merge, and the direction of this failure is what makes that matter:
 re-adding a bare name lints *fewer* files, so a lint job reports **fewer**
 violations and goes greener. Nothing about the required checks would notice.
-``.github/workflows/_gate-code-quality.yml`` therefore calls this module with
+``.github/workflows/code-quality.yml`` therefore calls this module with
 ``--audit-excludes``, the same shape as ``check_python_file_size.py
 --audit-ceilings`` and ``check_extension_import_boundaries.py
 --audit-baseline``. ``repo_tests/flake8_exclude_anchoring_test.py`` imports

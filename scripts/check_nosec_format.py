@@ -18,7 +18,7 @@ bandit warns once per word::
     WARNING Test in comment: dict is not a test name or id, ignoring
     WARNING Test in comment: token_estimation is not a test name or id, ignoring
 
-That matters because ``_gate-code-quality.yml`` runs bandit with no severity floor,
+That matters because ``code-quality.yml`` runs bandit with no severity floor,
 so its output is expected to be silent, and ``scripts/pr-preflight.sh`` treats
 a non-empty bandit run as a failure. The result was a papercut that recurred:
 it fired in three separate PRs on one day, each fixed a single file at a time.

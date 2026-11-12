@@ -88,7 +88,7 @@ DISCOVERY_FLOOR = 600
 #: (#14550/#14551). The sweep covers every Markdown file under docs/; the two entries
 #: are the real files standing for its two inputs — the archived tree #3315 never
 #: reached, and the rule set the address pattern is parsed from. Both must be covered
-#: by _gate-code-quality.yml's `backend` path filter: a PR touching only documentation would
+#: by code-quality.yml's `backend` path filter: a PR touching only documentation would
 #: otherwise skip the job, and a skipped required job satisfies branch protection —
 #: so the guard could not fire on the change it exists to catch.
 GUARD_INPUT_PATHS = ("docs/archives/_index.md", RULES_REL)

@@ -65,7 +65,7 @@ logger = logging.getLogger(__name__)
 _ROOT_REQUIREMENTS = "requirements.txt"
 _BACKEND_REQUIREMENTS = "autobot-backend/requirements.txt"
 
-#: Every repo-relative path this checker reads. _gate-code-quality.yml's
+#: Every repo-relative path this checker reads. code-quality.yml's
 #: dorny/paths-filter `backend` list must cover each of these, or a PR that
 #: touches only one of them skips the required check entirely — verified by
 #: tools/lint/check_code_quality_guard_reach.py.

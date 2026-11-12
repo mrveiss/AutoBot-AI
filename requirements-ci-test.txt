@@ -20,7 +20,7 @@ pytest-split==0.11.0
 # Redis test double, used by the tests that do not need the real service.
 fakeredis[lua]
 
-# Static analysis. _gate-code-quality.yml is the gate that enforces these (#13162);
+# Static analysis. code-quality.yml is the gate that enforces these (#13162);
 # they are installed here because some tests shell out to them.
 flake8
 black

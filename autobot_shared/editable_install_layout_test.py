@@ -26,7 +26,7 @@ The main sharded `python-suite` CI job (ci.yml) never runs `pip install
 cwd-adjacent mechanism this bug hides behind. This module is collected
 by that job too (it globs the whole `autobot_shared/` tree), so these
 tests skip themselves there rather than failing on an environment that
-never claims to have installed the package. `_gate-startup-import-smoke.yml`
+never claims to have installed the package. `startup-import-smoke.yml`
 DOES run `pip install -e autobot_shared` and is where this guard is
 meant to bite.
 """

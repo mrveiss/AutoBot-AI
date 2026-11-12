@@ -46,7 +46,7 @@ Design, deliberately narrow:
 WHY THIS IS A SCRIPT AND NOT ONLY A TEST. The failure direction needs a
 REQUIRED check: a test file moving, or the ansible task being renamed, both
 make the scan find fewer gated binaries, so this reports FEWER problems and
-goes GREENER. ``.github/workflows/_gate-code-quality.yml`` calls this module with
+goes GREENER. ``.github/workflows/code-quality.yml`` calls this module with
 ``--audit``, the same shape as ``check_flake8_exclude_anchoring.py
 --audit-excludes``. ``repo_tests/ci_system_package_provisioning_test.py``
 imports these functions rather than restating the rule.
@@ -101,7 +101,7 @@ _ANSIBLE_BACKEND_TASKS = "autobot-slm-backend/ansible/roles/backend/tasks/main.y
 _ANSIBLE_TASK_NAME = "Backend | Install backend-specific system dependencies"
 _SETUP_ACTION = ".github/actions/setup-python-suite/action.yml"
 
-#: Every repo-relative path this checker reads. _gate-code-quality.yml's
+#: Every repo-relative path this checker reads. code-quality.yml's
 #: dorny/paths-filter `backend` list must cover each of these, or a PR that
 #: touches only one of them skips the required check entirely -- verified by
 #: tools/lint/check_code_quality_guard_reach.py and

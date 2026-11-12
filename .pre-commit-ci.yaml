@@ -27,7 +27,7 @@ autoupdate_schedule: quarterly
 
 # Skip these hooks in pre-commit.ci (too slow or require specific environment)
 skip:
-  # Skip mypy in CI bot - it's covered by _gate-code-quality.yml workflow
+  # Skip mypy in CI bot - it's covered by code-quality.yml workflow
   - mypy
   # Skip custom hooks that need specific repo structure
   - record-branch

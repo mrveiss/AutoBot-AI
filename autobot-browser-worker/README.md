@@ -30,7 +30,7 @@ infrastructure/autobot-browser-worker/
 ## Testing
 
 `npm test` runs the package's own suite with `node:test`, gated in CI by
-`.github/workflows/_gate-npm-package-tests.yml` (#15675).
+`.github/workflows/npm-package-tests.yml` (#15675).
 
 There is deliberately **no Playwright config here**. One used to sit in this
 directory and was retired in #15695: it had never been loadable from this
@@ -45,3 +45,4 @@ copy it was separated from still exists and still has its setup file:
 `autobot-infrastructure/shared/tests/playwright.config.js`. Browser-level
 configuration belongs there, not beside a worker whose job is to *serve*
 Playwright over a socket rather than be driven by it.
+

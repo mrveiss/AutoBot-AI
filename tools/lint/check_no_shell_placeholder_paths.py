@@ -26,7 +26,7 @@ WHY A REQUIRED CHECK. The same directional argument as ``check_flake8_exclude_an
 (#14419), ``check_undefined_names`` (#14405) and
 ``check_bandit_exclude_anchoring`` (#14489): every one of these sites fails
 *quietly*, so a job that stops looking at them goes greener, not redder.
-``.github/workflows/_gate-code-quality.yml`` calls this module with ``--audit``, in the
+``.github/workflows/code-quality.yml`` calls this module with ``--audit``, in the
 same shape as its siblings.
 
 WHY THE GUARD LANDS AFTER THE SWEEP. Written first it would have needed a

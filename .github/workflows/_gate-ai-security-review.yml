@@ -8,7 +8,7 @@
 #
 # ADVISORY ONLY — never a required check. The reviewer is probabilistic, so it
 # informs the human merge gate rather than gating merge itself. Static scanning
-# (bandit, semgrep, pip-audit, secret detection) lives in _gate-security.yml and is
+# (bandit, semgrep, pip-audit, secret detection) lives in security.yml and is
 # not duplicated here; this job covers what pattern matchers structurally cannot
 # see — renames with un-updated call sites, missing ownership checks, fail-open
 # regressions, docstrings that contradict their code.
@@ -119,7 +119,7 @@ jobs:
             echo
             echo "---"
             echo "_Advisory only — this reviewer is probabilistic and does not gate merge._"
-            echo "_Findings are leads to confirm, not verdicts. Static scanning lives in \`_gate-security.yml\`._"
+            echo "_Findings are leads to confirm, not verdicts. Static scanning lives in \`security.yml\`._"
             echo "_Anything worth keeping should be filed as an issue — a PR comment is not tracking._"
           } > /tmp/comment.md
 

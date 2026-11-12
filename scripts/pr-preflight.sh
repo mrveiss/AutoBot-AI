@@ -367,7 +367,7 @@ else
   else
     printf '  %d changed Python file(s)\n' "${#PY_FILES[@]}"
 
-    # Same flags as .github/workflows/_gate-code-quality.yml. Different flags is how
+    # Same flags as .github/workflows/code-quality.yml. Different flags is how
     # a local green becomes a CI red.
     if "$PY" -m black --check --line-length=120 "${PY_FILES[@]}" >/dev/null 2>&1; then
       pass "black --line-length=120"
@@ -419,7 +419,7 @@ else
       "$PY" -m flake8 --config=.flake8 "${PY_LINT[@]}" 2>&1 | head -15 | sed 's/^/        /'
     fi
 
-    # _gate-code-quality.yml runs bandit with NO severity floor -- stricter than the
+    # code-quality.yml runs bandit with NO severity floor -- stricter than the
     # medium-and-up filter used elsewhere. A B105 on a constant named *_PREFIX
     # is the classic false positive; annotate it with "# nosec B105".
     # #13521: "nosec encountered (Bxxx), but no failed test" is bandit telling
@@ -579,7 +579,7 @@ require_check() {
 if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
   skip_gate "required status checks" "$BASE not found -- run git fetch"
 else
-  # verify-precommit-config: _gate-precommit.yml runs exactly these two, and
+  # verify-precommit-config: enforce-precommit.yml runs exactly these two, and
   # runs them UNCONDITIONALLY. It carries no `paths:` key (see its own comment at
   # :22-27: "a required check that is path-filtered out never reports, wedging
   # any PR that touches only non-matching files"). So these two take an EMPTY
@@ -687,7 +687,7 @@ CQEOF
   # itself as "Fast (<5s) -- pure imports, no Redis or network calls", so
   # unlike api-wiring it belongs in the default, path-filtered tier rather
   # than behind --full. Same command
-  # .github/workflows/_gate-startup-import-smoke.yml's "Run startup-import smoke
+  # .github/workflows/startup-import-smoke.yml's "Run startup-import smoke
   # test" step runs: `python -m pytest
   # autobot-backend/tests/test_startup_imports.py -q --tb=line`. This
   # previously ran `python -c 'import initialization.lifespan'` -- a
@@ -730,7 +730,7 @@ CQEOF
     '^autobot-frontend/' \
     bash -c 'cd "$0/autobot-frontend" && test -f src/types/generated/api.ts && npm run verify:types' "$REPO_ROOT"
 
-  # _gate-frontend-test.yml's "Unit & Integration Tests" job runs `npm run
+  # frontend-test.yml's "Unit & Integration Tests" job runs `npm run
   # test:integration` then `npm run test:coverage` -- not `test:unit`.
   # (#10365 dropped a separate `test:unit` step: `test:coverage` is `vitest
   # run --coverage` over the same default config `test:unit` uses, so a
@@ -763,7 +763,7 @@ CQEOF
     skip_check "migration-matrix" "needs a live PostgreSQL (set AUTOBOT_MIGRATION_TEST_ADMIN_URL)"
   fi
 
-  # #15933 re-audit: left unmet on purpose, not faked. _gate-docker-smoke.yml
+  # #15933 re-audit: left unmet on purpose, not faked. docker-smoke-test.yml
   # needs a Docker daemon to build three images (backend/slm/frontend) and
   # start the full compose stack via `docker compose --env-file
   # docker/.env.docker up -d`, then health-polls for up to 15 minutes --
@@ -774,7 +774,7 @@ CQEOF
   # suite changes nothing"). Reproduce manually if you want the real gate:
   # docker compose --env-file docker/.env.docker up -d
   skip_check "smoke-test" \
-    "needs a Docker daemon to build 3 images and start the full compose stack, health-polled up to 15 min (_gate-docker-smoke.yml) -- not attempted here regardless of Docker's availability, because CI's own worst case (45 min) would defeat a fast preflight; reproduce manually: docker compose --env-file docker/.env.docker up -d"
+    "needs a Docker daemon to build 3 images and start the full compose stack, health-polled up to 15 min (docker-smoke-test.yml) -- not attempted here regardless of Docker's availability, because CI's own worst case (45 min) would defeat a fast preflight; reproduce manually: docker compose --env-file docker/.env.docker up -d"
   # python-suite (#17129): CI runs it as 12 parallel shards; the same tree run
   # unsharded locally measures ~33 minutes (repo_tests/ alone), which defeats
   # this script's fast-path premise the same way smoke-test's 45-minute worst

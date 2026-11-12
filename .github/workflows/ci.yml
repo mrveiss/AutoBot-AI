@@ -585,8 +585,8 @@ jobs:
       run: echo "AUTOBOT_REACH_AUDIT=1" >> "$GITHUB_ENV"
 
     # Static checks (black / isort / flake8 / bandit) deliberately live in
-    # _gate-code-quality.yml, NOT here (#13162). They were duplicated across both
-    # workflows over the same three trees; _gate-code-quality.yml's bandit has no
+    # code-quality.yml, NOT here (#13162). They were duplicated across both
+    # workflows over the same three trees; code-quality.yml's bandit has no
     # severity floor where this one filtered to medium+, so it is the stricter
     # of the two and nothing is lost by removing this copy. Keeping them here
     # also meant four checks that finish in minutes were gated behind a

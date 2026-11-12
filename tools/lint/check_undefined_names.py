@@ -37,7 +37,7 @@ was the #14419 depth bug:
   undefined names.
 * ``.flake8``'s own ``exclude`` names ``autobot-backend/code_analysis/`` and the
   test trees as well.
-* The one CI flake8 invocation (``_gate-security.yml``) runs with ``|| true`` and
+* The one CI flake8 invocation (``security.yml``) runs with ``|| true`` and
   writes a report. It cannot fail a build, and 8 undefined names sit under
   23,758 ``E501``\ s in it — present, counted, and invisible.
 
@@ -51,7 +51,7 @@ staged files only, so it can never prove the whole tree is clean, and the pytest
 copy runs in ``python-suite``, which gates nothing (#14353). The direction of
 this failure is what makes placement matter: re-widening the exclusion lints
 *fewer* files, so every lint job reports fewer violations and goes greener.
-``.github/workflows/_gate-code-quality.yml`` — a required check — therefore calls this
+``.github/workflows/code-quality.yml`` — a required check — therefore calls this
 module with ``--audit``, the same shape as ``check_flake8_exclude_anchoring.py
 --audit-excludes`` and ``check_python_file_size.py --audit-ceilings``.
 

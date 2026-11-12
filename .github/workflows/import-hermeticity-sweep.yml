@@ -91,7 +91,7 @@ jobs:
         with:
           # 2, not 1: on pull_request the checkout is the PR's merge commit, and depth 2
           # brings both its parents -- HEAD^1 the base tip, HEAD^2 the PR head. That pair
-          # is all "Choose what to sweep" diffs, the same one _gate-precommit.yml reads;
+          # is all "Choose what to sweep" diffs, the same one enforce-precommit.yml reads;
           # no history beyond it is fetched (#16207).
           fetch-depth: 2
 

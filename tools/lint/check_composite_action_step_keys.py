@@ -37,7 +37,7 @@ REQUIRED check: a composite action gaining a new step, or an existing step
 gaining an unsupported key, both make this scan find nothing to report
 *unless it re-derives the allowed-key set correctly on every run* — nothing
 about a merely-informational pytest run would block the push that breaks
-every shard using the action. ``.github/workflows/_gate-code-quality.yml`` calls
+every shard using the action. ``.github/workflows/code-quality.yml`` calls
 this module with ``--audit``. ``repo_tests/ci_system_package_provisioning_test.py``
 carries a narrower, pre-existing pin on ``setup-python-suite/action.yml``
 specifically; this module generalises the check to every composite action in

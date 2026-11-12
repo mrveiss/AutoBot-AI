@@ -5,7 +5,7 @@
 """Every declared npm test runner must be invoked by some workflow (#15667).
 
 `autobot-slm-frontend` declared `"test:unit": "vitest run"` and carried 53
-vitest files. `_gate-slm-frontend.yml` ran type-check, lint and build; every
+vitest files. `slm-frontend-check.yml` ran type-check, lint and build; every
 `vitest` / `test:unit` reference in the other workflows belonged to
 `autobot-frontend`, a different app. An entire app's unit suite had been inert
 since it was written, and the outside view was a green check.

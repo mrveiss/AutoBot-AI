@@ -27,7 +27,7 @@ Editing rules, unchanged by the move:
 #: description of the defect, not a decision about it.
 UNINVOKED_TEST_SCRIPTS = {
     "autobot-frontend::test:unit": (
-        "#10365 -- COVERED ELSEWHERE. _gate-frontend-test.yml runs `test:coverage`, which "
+        "#10365 -- COVERED ELSEWHERE. frontend-test.yml runs `test:coverage`, which "
         "is `vitest run --coverage` over the same default config, so a separate "
         "`test:unit` step would run every unit test twice. The suite IS gated; only "
         "this spelling of it is not"
@@ -53,7 +53,7 @@ UNINVOKED_TEST_SCRIPTS = {
     "libs/autobot-sdk-ts::test:live": (
         "#15698, #15694 -- DELIBERATELY NOT GATED: IT NEEDS A BACKEND CI DOES NOT "
         "HAVE. The two tests behind this script dial a real HTTP endpoint; the four "
-        "that do not stayed in `test`, which IS gated by _gate-npm-package-tests.yml "
+        "that do not stayed in `test`, which IS gated by npm-package-tests.yml "
         "(#15676). They were "
         "split rather than left behind a skip-if-unreachable branch, because that "
         "branch ended in `return` -- jest reports that as PASSED, so a backend-less run "
@@ -73,7 +73,7 @@ UNINVOKED_TEST_SCRIPTS = {
 #: DOWN-ONLY ceiling on packages whose EVERY runner is allowlisted -- a whole
 #: app gated by nothing, which is exactly the #15667 shape. Was 5 on the first
 #: measurement (.mcp, autobot-browser-worker, vscode-autobot,
-#: mcp-structured-thinking, libs/autobot-sdk-ts); _gate-npm-package-tests.yml gates
+#: mcp-structured-thinking, libs/autobot-sdk-ts); npm-package-tests.yml gates
 #: .mcp (#15674), autobot-browser-worker (#15675), libs/autobot-sdk-ts (#15676)
 #: and mcp-structured-thinking (#15677), leaving vscode-autobot alone. NEVER
 #: raise this to make a new app pass; wire the app in, or this guard has become

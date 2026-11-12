@@ -23,8 +23,8 @@ the guard asserts two narrower things instead:
 * every pin of the SAME SHA carries labels that agree: the same version, or one
   a prefix of the other (``v4`` beside ``v4.37.9``) (#16303).
 
-The second is what the first could not see. ``_gate-security.yml`` labelled its
-``github/codeql-action`` pin ``# v3`` on the SHA ``_gate-codeql.yml`` labelled
+The second is what the first could not see. ``security.yml`` labelled its
+``github/codeql-action`` pin ``# v3`` on the SHA ``codeql.yml`` labelled
 ``# v4``, and ``image-sign.yml`` labelled ``docker/login-action``,
 ``docker/build-push-action`` and ``sigstore/cosign-installer`` one major release
 behind the very SHAs ``autoresearch-image.yml`` pins. An earlier version of this
