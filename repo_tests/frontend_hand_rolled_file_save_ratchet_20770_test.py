@@ -52,6 +52,9 @@ _ANCHOR_RECEIVER = re.compile(r"a|(?:\w*(?:anchor|link)\w*)", re.I)
 #: An optional type annotation between the name and `=` is skipped, so a typed
 #: declaration (`const el: HTMLAnchorElement = …`) still binds its initializer.
 _BINDING = re.compile(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;\n]*)?=\s*([^;\n]+)")
+#: String and template literals, blanked at the same length before brace matching so
+#: a `{` inside a string or a regex does not unbalance the scope walk.
+_STRING_LITERAL = re.compile(r"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|`(?:\\.|[^`\\])*`")
 #: Evidence, in a binding's initializer, that the variable holds an anchor element:
 #: the tag-a lookups. An id or selector of unknown target is not evidence (#21195).
 _ANCHOR_SOURCE = re.compile(
@@ -86,18 +89,51 @@ def _is_anchor(receiver: str | None, bindings: dict[str, str] | None = None) -> 
     return bool(_ANCHOR_SOURCE.search(init)) or bool(_ANCHOR_RECEIVER.fullmatch(init.strip()))
 
 
+def _scope_ends(text: str, starts: list[int]) -> list[int]:
+    """The end position of the innermost block enclosing each declaration in *starts*.
+
+    The walk matches braces over the string-blanked source, so a `const` inside a
+    function or block ends its scope at that block's `}` and cannot stand in for a
+    later use outside it (#21195). A declaration no block encloses (top level) runs
+    to the end of the file. Unbalanced braces degrade to that same file-wide end.
+    """
+    src = _STRING_LITERAL.sub(lambda m: " " * len(m.group(0)), text)
+    remaining = set(starts)
+    stack: list[int] = []
+    owner: dict[int, int | None] = {}
+    for pos, char in enumerate(src):
+        if pos in remaining:
+            owner[pos] = stack[-1] if stack else None
+            remaining.discard(pos)
+        if char == "{":
+            stack.append(pos)
+        elif char == "}" and stack:
+            stack.pop()
+    closes: dict[int, int] = {}
+    stack = []
+    for pos, char in enumerate(src):
+        if char == "{":
+            stack.append(pos)
+        elif char == "}" and stack:
+            closes[stack.pop()] = pos
+    end = len(src)
+    return [end if owner[s] is None else closes.get(owner[s], end) for s in starts]
+
+
 def _binding_in_force(
-    declarations: list[tuple[int, str, str]], receiver: str | None, pos: int
+    declarations: list[tuple[int, str, str, int]], receiver: str | None, pos: int
 ) -> dict[str, str] | None:
-    """The declaration of the receiver's root name that applies at `pos`: the nearest one before it.
+    """The declaration of the receiver's root name that applies at `pos`.
 
     A later redeclaration must not stand in for the value the use actually sees —
-    two functions each binding `el` read their own (#21195).
+    two functions each binding `el` read their own — and neither may a nearer
+    declaration whose block has already closed: `const el = …` inside a bare inner
+    block is out of scope where the outer `el` is still in force (#21195).
     """
     if receiver is None:
         return None
     name = receiver.replace("?.", ".").split(".")[0]
-    applicable = [init for start, decl, init in declarations if decl == name and start < pos]
+    applicable = [init for start, decl, init, scope_end in declarations if decl == name and start < pos <= scope_end]
     return {name: applicable[-1]} if applicable else None
 
 
@@ -118,7 +154,11 @@ def count(paths: list[Path]) -> int:
     total = 0
     for path in paths:
         text = _COMMENT_LINE.sub("", path.read_text(encoding="utf-8"))
-        declarations = [(m.start(), m.group(1), m.group(2)) for m in _BINDING.finditer(text)]
+        starts = [m.start() for m in _BINDING.finditer(text)]
+        scope_ends = _scope_ends(text, starts)
+        declarations = [
+            (m.start(), m.group(1), m.group(2), scope_ends[i]) for i, m in enumerate(_BINDING.finditer(text))
+        ]
         for match in _ASSIGNMENT.finditer(text):
             receiver = match.group("assign_receiver") or match.group("attr_receiver")
             if _is_anchor(receiver, _binding_in_force(declarations, receiver, match.start())):
@@ -224,6 +264,22 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
                 "a/R.ts",
                 "function save() { const el = document.createElement('a'); el.setAttribute('download', name) }\n"
                 "function other() { const el = document.createElement('div'); el.setAttribute('download', name) }\n",
+            ),
+        ]
+        assert count(paths) == 1
+
+    def test_a_declaration_in_a_closed_block_does_not_hide_the_outer_one(self, tmp_path: Path) -> None:
+        paths = [
+            _w(
+                tmp_path,
+                "a/SB.ts",
+                "function save() {\n"
+                "  const el = document.createElement('a');\n"
+                "  {\n"
+                "    const el = document.createElement('div');\n"
+                "  }\n"
+                "  el.setAttribute('download', name);\n"
+                "}\n",
             ),
         ]
         assert count(paths) == 1
