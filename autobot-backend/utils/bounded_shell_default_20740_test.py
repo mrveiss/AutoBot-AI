@@ -9,6 +9,7 @@ These run real processes. A mocked runner cannot show that a child process is go
 
 import asyncio
 import os
+import signal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,8 +20,11 @@ from utils import command_utils
 from utils.agent_command_helpers import run_agent_command
 from utils.command_utils import execute_shell_command
 
-#: The deadline each timeout test hands the runner; the same bound limits how long a killed process may take to vanish.
+#: The deadline each timeout test hands the runner.
 _DEADLINE_S = 1
+#: How long a killed process may take to vanish. Larger than the deadline because SIGKILL delivery is asynchronous and
+#: a loaded worker is slow; it cannot give a false pass, as every child sleeps 60 s and is still running if not killed.
+_EXIT_POLL_BOUND_S = 5
 #: Fields after the closing parenthesis of a stat line: state is first, start time is the 20th.
 _STAT_STATE, _STAT_START = 0, 19
 #: A shell snippet that records its own stat line (pid and start time) with builtins only.
@@ -45,15 +49,25 @@ def _is_gone(pid: int, start: str) -> bool:
     return fields[_STAT_STATE] == "Z" or fields[_STAT_START] != start
 
 
-async def _gone_within_deadline(pid: int, start: str) -> bool:
-    """Poll until *pid* is gone or the deadline's worth of time has passed; SIGKILL delivery is asynchronous."""
+async def _gone_within_bound(pid: int, start: str) -> bool:
+    """Poll until *pid* is gone or the exit-poll bound has passed; SIGKILL delivery is asynchronous."""
     loop = asyncio.get_running_loop()
-    give_up = loop.time() + _DEADLINE_S
+    give_up = loop.time() + _EXIT_POLL_BOUND_S
     while not await asyncio.to_thread(_is_gone, pid, start):
         if loop.time() >= give_up:
             return False
         await asyncio.sleep(0.02)
     return True
+
+
+def _kill_leftover(pid: int, start: str) -> None:
+    """Best-effort SIGKILL so a failed test leaves no long-lived child; never signals a reused pid."""
+    if _is_gone(pid, start):
+        return
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
 
 
 def _alive(pid: int) -> bool:
@@ -95,7 +109,10 @@ async def test_a_command_with_no_policy_is_killed_at_the_default_deadline(tmp_pa
     assert result["return_code"] == 124 and result["status"] == "error"
     assert result["stderr"] == f"Command timed out after {_DEADLINE_S}s and was killed"
     pid, start = await _identity_from(pid_file)
-    assert await _gone_within_deadline(pid, start), "the child outlived the deadline, not only the shell"
+    try:
+        assert await _gone_within_bound(pid, start), "the child outlived the deadline, not only the shell"
+    finally:
+        _kill_leftover(pid, start)
 
 
 @pytest.mark.asyncio
@@ -161,10 +178,13 @@ async def test_a_timed_out_command_kills_only_its_own_process_group(tmp_path):
     with patch.object(command_utils, "DEFAULT_SHELL_TIMEOUT_S", _DEADLINE_S), patch("os.killpg", recording_killpg):
         result = await execute_shell_command(f"sh -c '{_RECORD_STAT} > {pid_file}; sleep 60'")
     child, start = await _identity_from(pid_file)
-    assert result["timed_out"] is True
-    assert signalled and own_group not in signalled and 0 not in signalled
-    assert child != own_group and await _gone_within_deadline(child, start)
-    assert os.getpgid(0) == own_group  # and we are still here
+    try:
+        assert result["timed_out"] is True
+        assert signalled and own_group not in signalled and 0 not in signalled
+        assert child != own_group and await _gone_within_bound(child, start)
+        assert os.getpgid(0) == own_group  # and we are still here
+    finally:
+        _kill_leftover(child, start)
 
 
 @pytest.mark.asyncio
@@ -175,8 +195,11 @@ async def test_a_grandchild_the_shell_waits_on_dies_with_the_group(tmp_path):
     with patch.object(command_utils, "DEFAULT_SHELL_TIMEOUT_S", _DEADLINE_S):
         result = await execute_shell_command(f"sh -c '{script}'")
     pid, start = await _identity_from(pid_file)
-    assert result["timed_out"] is True
-    assert await _gone_within_deadline(pid, start), "a process the shell started survived the group kill"
+    try:
+        assert result["timed_out"] is True
+        assert await _gone_within_bound(pid, start), "a process the shell started survived the group kill"
+    finally:
+        _kill_leftover(pid, start)
 
 
 @pytest.mark.asyncio
