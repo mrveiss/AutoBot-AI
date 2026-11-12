@@ -20,7 +20,7 @@ from llc.api.work_items import CheckoutRequest
 from llc.services import work_item_own_task as own_task
 
 
-@pytest.mark.parametrize("agent_id", ["agent#1", "#", f"{uuid.uuid4()}#gen-1"])
+@pytest.mark.parametrize("agent_id", ["agent#1", "#", "3f2b8c1e-6a4d-4e0b-9c57-1d2e8a7b4f60#gen-1"])
 def test_a_checkout_request_refuses_an_agent_id_carrying_the_separator(agent_id: str) -> None:
     with pytest.raises(ValidationError, match="must not contain"):
         CheckoutRequest(agent_id=agent_id, run_id="run-1")
