@@ -26,6 +26,7 @@ import {
 
 export { toNPUWorker }
 export type { NPUWorker, NPUWorkerDefinition, NPUWorkerTestResult }
+import type { AuditQueryResponse } from '@autobot/ui'
 import type * as LF from '@/composables/autobotAdminModels'
 import type { AgentConfigSummary, MCPServer, PermissionRule } from '@/composables/autobotAdminModels'
 export type { AgentConfigSummary, MCPServer, PermissionRule }
@@ -237,13 +238,6 @@ export interface AuditLogEntry {
   performance_ms: number | null
 }
 
-export interface AuditQueryResponse {
-  success: boolean
-  total_returned: number
-  has_more: boolean
-  entries: AuditLogEntry[]
-  query: Record<string, unknown>
-}
 
 // =============================================================================
 // Advanced Control (#12653) — desktop streaming + human takeover.
@@ -1083,12 +1077,12 @@ export function useAutobotApi() {
     operation?: string
     limit?: number
     offset?: number
-  }): Promise<AuditQueryResponse> {
+  }): Promise<AuditQueryResponse<AuditLogEntry>> {
     const params = new URLSearchParams()
     if (options?.operation) params.append('operation', options.operation)
     if (options?.limit) params.append('limit', String(options.limit))
     if (options?.offset) params.append('offset', String(options.offset))
-    const response = await client.get<AuditQueryResponse>(`/audit/logs?${params}`)
+    const response = await client.get<AuditQueryResponse<AuditLogEntry>>(`/audit/logs?${params}`)
     return response
   }
 
