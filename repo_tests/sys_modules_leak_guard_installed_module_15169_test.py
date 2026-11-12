@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import sys
 import types
 from pathlib import Path
 
@@ -63,6 +64,14 @@ def _file_in(directory: Path) -> str:
 
 
 def _report_new(guard, module: types.ModuleType) -> list[str]:
+    """Register *module* as a NEW ``knowledge`` key and return what the guard reports.
+
+    The repo's own ``knowledge`` package is in ``sys.modules`` whenever an earlier test in the same
+    worker imported it. The key is dropped and the guard re-baselined first, so the module always
+    arrives as a new key and the exemption (which applies to new keys only) is what decides the result.
+    """
+    sys.modules.pop("knowledge", None)
+    guard.snapshot()
     install_module("knowledge", module)
     guard.attribute(LLC_CONFTEST)
     return leaks_for(guard, OTHER_MODULE)
