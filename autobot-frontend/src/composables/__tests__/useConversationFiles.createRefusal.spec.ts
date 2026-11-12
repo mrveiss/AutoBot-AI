@@ -1,7 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 // #20217: a 413 on /files/create carries a structured `detail`; error.value must be translated text, never an object.
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const { post, put } = vi.hoisted(() => ({ post: vi.fn(), put: vi.fn() }))
 
@@ -106,6 +106,9 @@ describe('write refusals beyond create (#20723)', () => {
 
 describe('empty and resolved-failure write results (#21185)', () => {
   type Files = ReturnType<typeof useConversationFiles>
+  // sendUpload schedules a 2s progress reset in `finally`; fake timers keep that off the real clock.
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.clearAllTimers(); vi.useRealTimers() })
   const cases: [string, string, typeof post, (f: Files) => Promise<boolean>][] = [
     ['createFile', 'chat.conversationFiles.createFailed', post, (f) => f.createFile('a.txt', 'x')],
     ['updateFileContent', 'chat.conversationFiles.saveFailed', put, (f) => f.updateFileContent('f1', 'x')],

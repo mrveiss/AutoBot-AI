@@ -47,4 +47,27 @@ describe('ChatFilePanel edit draft (#21337)', () => {
     expect(put).not.toHaveBeenCalled()
     wrapper.unmount()
   })
+
+  it('discards an edit response that lands after the session switched, so the editor stays closed', async () => {
+    let release: (v: unknown) => void = () => {}
+    get.mockImplementation((url: string) => (url.includes('/content')
+      ? new Promise((r) => { release = r })
+      : Promise.resolve(listing)))
+    const wrapper = mount(ChatFilePanel, {
+      props: { sessionId: 's1' },
+      attachTo: document.body,
+      global: { mocks: { $t: (k: string) => k }, stubs: { Icon: true, EmptyState: true, StatusBadge: true, BaseAlert: true } },
+    })
+    await flushPromises()
+    await wrapper.find('button[title="common.edit"]').trigger('click')
+    await wrapper.setProps({ sessionId: 's2' })
+    await flushPromises()
+
+    release({ content: 'old session draft' })
+    await flushPromises()
+
+    expect(document.body.querySelector('textarea')).toBeNull()
+    expect(put).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
 })

@@ -73,7 +73,10 @@ describe('preview races (#21337)', () => {
   it('deleting the file whose preview is still loading revokes the request', async () => {
     const f = await load('s1', entry('a', 'text/plain'))
     let release: (v: unknown) => void = () => {}
-    get.mockImplementation(() => new Promise((r) => { release = r }))
+    // Only the preview call is held; the list call deleteFile awaits afterwards resolves, or the test would hang.
+    get.mockImplementation((url: string) => (url.includes('/list')
+      ? Promise.resolve(listing())
+      : new Promise((r) => { release = r })))
     del.mockResolvedValue({})
     const pending = f.previewFile('a')
     await f.deleteFile('a')
