@@ -131,7 +131,8 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
   const { isLoading, wrap } = useLoadingState()
   // A separate flag: `isLoading` swaps the drawn graph for a spinner, which a next page must not do (#20945).
   const isLoadingMore = ref(false)
-  let moreInFlight: Promise<void> | null = null
+  // The shared next-page read belongs to the epoch it started in: a refresh bumps `loadEpoch`, which orphans it.
+  let moreInFlight: { epoch: number; promise: Promise<void> } | null = null
   let loadEpoch = 0 // a refresh bumps it, so a next page read for the old cursor is dropped
 
   // --------------------------------------------------------------------------
@@ -246,26 +247,32 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
       relations.value = [...relations.value, ...added]
       factsCursor.value = _factsCursorOf(page)
     } catch (error) {
+      if (epoch !== loadEpoch) return // a refresh replaced the cursor this read used: its failure is not news
       errorMessage.value = _reasonOrFallback(error)
       logger.error('Loading more facts failed:', errorMessage.value)
     }
   }
 
   function loadMoreFacts(): Promise<void> {
-    if (moreInFlight) return moreInFlight
+    if (moreInFlight?.epoch === loadEpoch) return moreInFlight.promise
     if (!factsCursor.value) return Promise.resolve()
     errorMessage.value = ''
     isLoadingMore.value = true
-    moreInFlight = _readNextFacts(loadEpoch).finally(() => {
+    const epoch = loadEpoch
+    const promise = _readNextFacts(epoch).finally(() => {
+      if (epoch !== loadEpoch) return // orphaned by a refresh, which already reset the shared state
       isLoadingMore.value = false
       moreInFlight = null
     })
-    return moreInFlight
+    moreInFlight = { epoch, promise }
+    return promise
   }
 
   async function fetchGraphData(): Promise<void> {
     errorMessage.value = ''
     loadEpoch += 1
+    moreInFlight = null // a next page read of the old epoch is orphaned; its state is not carried over
+    isLoadingMore.value = false
     await wrap(async () => {
       // allSettled, not all: the graph is assembled from two independent
       // stores, and `Promise.all` threw away a healthy store's entities

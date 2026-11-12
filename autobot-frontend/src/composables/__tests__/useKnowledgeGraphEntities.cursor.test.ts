@@ -101,4 +101,52 @@ describe('facts cursor paging (#20945)', () => {
     expect(graph.entities.value.map((e) => e.id)).toEqual(['a', 'b'])
     expect(graph.isLoadingMore.value).toBe(false)
   })
+
+  describe('a refresh while a next page is in flight', () => {
+    const seed = () =>
+      vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+        if (url.includes('/memory/entities/all')) return { data: { entities: [] } } as never
+        return page(['a'], '500:0') as never
+      })
+    const deferred = () => {
+      const settle: { resolve: (v: unknown) => void; reject: (e: unknown) => void } = {
+        resolve: () => undefined,
+        reject: () => undefined,
+      }
+      vi.mocked(apiClient.call).mockImplementationOnce((() =>
+        new Promise((resolve, reject) => { settle.resolve = resolve; settle.reject = reject })) as never)
+      return settle
+    }
+
+    it('starts its own request for a call made after the refresh and drops the stale page', async () => {
+      seed()
+      const stale = deferred()
+      const graph = useKnowledgeGraphEntities()
+      await graph.fetchGraphData()
+      const old = graph.loadMoreFacts()
+      await graph.fetchGraphData()
+      expect(graph.isLoadingMore.value).toBe(false)
+      vi.mocked(apiClient.call).mockResolvedValueOnce(page(['fresh'], null) as never)
+      await graph.loadMoreFacts()
+      expect(apiClient.call).toHaveBeenCalledTimes(2)
+      expect(graph.entities.value.map((e) => e.id)).toEqual(['a', 'fresh'])
+      stale.resolve(page(['stale'], null))
+      await old
+      expect(graph.entities.value.map((e) => e.id)).toEqual(['a', 'fresh'])
+      expect(graph.hasMoreFacts.value).toBe(false)
+    })
+
+    it('does not let the stale read set the error or the loading flag after the refresh', async () => {
+      seed()
+      const stale = deferred()
+      const graph = useKnowledgeGraphEntities()
+      await graph.fetchGraphData()
+      const old = graph.loadMoreFacts()
+      await graph.fetchGraphData()
+      stale.reject(new Error('old failure'))
+      await old
+      expect(graph.errorMessage.value).toBe('')
+      expect(graph.isLoadingMore.value).toBe(false)
+    })
+  })
 })
