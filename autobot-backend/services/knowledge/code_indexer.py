@@ -30,7 +30,6 @@ import json
 import re
 import subprocess  # nosec B404  # read-only git queries for graph provenance (#13508)
 from dataclasses import asdict, dataclass, field
-from dataclasses import fields as dataclass_fields
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -39,6 +38,19 @@ from autobot_shared.code_graph import ResolvedCall, compute_node_id, module_path
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
+from services.knowledge.code_call_sites import add_call_site, call_site_metadata, decode_edge_metadata
+from services.knowledge.code_graph_provenance import (  # noqa: F401  (re-exported: existing importers use this module)
+    _PROVENANCE_ID,
+    _PROVENANCE_RECORD_TYPE,
+    GraphProvenance,
+    load_graph_provenance,
+)
+from services.knowledge.code_index_versioning import (  # noqa: F401  (EXTRACTOR_VERSION re-exported)
+    EXTRACTOR_VERSION,
+    cache_version,
+    grammar_versions_json,
+    installed_grammar_versions,
+)
 from services.knowledge.index_cache_paths import code_index_hashes
 from utils.file_categorization import (
     ALL_CODE_EXTENSIONS,
@@ -86,20 +98,9 @@ class CodeIndexResult:
     files_total: int = 0
 
 
-# #13508: bump when extraction, resolution or node identity changes in a way that
-# makes previously-indexed records wrong rather than merely stale. A bump
-# invalidates the whole hash cache on the next run, so every file is re-extracted
-# instead of being skipped on an unchanged content hash — a content hash cannot
-# notice that the *extractor* changed.
-EXTRACTOR_VERSION = 1
-
-# One provenance document per collection, at a fixed id so a run overwrites the
-# previous record instead of accumulating history.
-_PROVENANCE_ID = "code_graph::provenance"
-_PROVENANCE_RECORD_TYPE = "graph_provenance"
-
-# Key under which the hash cache carries the version that wrote it. Deliberately
-# not a valid relative path, so it can never collide with a cached file entry.
+# Key under which the hash cache carries the version that wrote it (EXTRACTOR_VERSION +
+# grammar versions, #21316). Deliberately not a valid relative path, so it can never
+# collide with a cached file entry.
 _CACHE_VERSION_KEY = "::extractor_version"
 
 # #13509: graph-shape fingerprints live in the same cache dict under this prefix,
@@ -109,58 +110,6 @@ _SIGNATURE_KEY_PREFIX = "::sig::"
 
 # Bound on the read-only git calls provenance makes; never hard-coded inline.
 _GIT_TIMEOUT_SECONDS = env_int("AUTOBOT_CODE_INDEX_GIT_TIMEOUT_SECONDS", 10)
-
-
-@dataclass
-class GraphProvenance:
-    """How and when the code graph was built (#13508).
-
-    Absence of this record means **unknown**, never fresh: a collection indexed
-    before provenance existed must not read as current, which is why every
-    consumer goes through ``load_graph_provenance`` returning ``None`` rather
-    than a zero-valued default.
-
-    ``nodes``/``edges``/``resolved_edges`` describe **the graph**, counted from the
-    collection. ``last_run_*`` describe the run that wrote this record. Keeping
-    them apart is the point: an incremental run extracts nothing, and per-run
-    totals would report a healthy graph as empty.
-
-    Every field carries a default so a record written by an older version stays
-    readable — a missing field must degrade one value, not the whole record.
-    """
-
-    root_dir: str = ""
-    indexed_at_commit: str = ""
-    indexed_at: str = ""
-    extractor_version: int = 0
-    files_with_extractor: int = 0
-    files_total: int = 0
-    nodes: int = 0
-    edges: int = 0
-    resolved_edges: int = 0
-    unresolved_edges: int = 0
-    last_run_nodes_stored: int = 0
-    last_run_failures: int = 0
-
-    @property
-    def extractor_coverage(self) -> float:
-        """Fraction of the code the registry recognises that this indexer can read.
-
-        Deliberately not called "coverage": it says nothing about whether those
-        files were successfully extracted on any given run, only that a grammar
-        exists for them (#13510).
-        """
-        return self.files_with_extractor / self.files_total if self.files_total else 0.0
-
-    @property
-    def resolution_rate(self) -> float:
-        """Fraction of edges in the graph that resolved to a known node."""
-        return self.resolved_edges / self.edges if self.edges else 0.0
-
-    @property
-    def is_current_extractor(self) -> bool:
-        """Whether the graph was built by the extractor this process is running."""
-        return self.extractor_version == EXTRACTOR_VERSION
 
 
 def _count_by_extension(paths: "list[Path]") -> dict[str, int]:
@@ -204,7 +153,7 @@ def extract_python(source_path: str, content: bytes) -> dict:
     module_path = module_path_from_rel_path(source_path)
     nodes: dict[str, dict] = {}
     edges: list[dict] = []
-    seen_edges: set[tuple[str, str]] = set()
+    seen_edges: dict[tuple[str, str], dict] = {}
 
     _py_structural(tree.root_node, module_path, source_path, nodes, current_class=None)
     _py_call_graph(tree.root_node, module_path, source_path, edges, seen_edges, current_scope=None, current_class=None)
@@ -234,7 +183,7 @@ def _record_call_edge(
     current_scope: str,
     current_class: str | None,
     edges: list,
-    seen: set,
+    seen: dict,
 ) -> None:
     """Record one raw call edge (target not yet resolved). Shared by Python and JS/TS."""
     func_node = node.child_by_field_name("function")
@@ -242,21 +191,30 @@ def _record_call_edge(
         return
     raw = func_node.text.decode("utf-8").split("(")[0]
     target_name = raw.split(".")[-1]
-    pair = (current_scope, target_name)
-    if pair in seen:
+    line = node.start_point[0] + 1  # call site, not the callee's def line (#13471)
+    edge = seen.get((current_scope, target_name))
+    if edge is not None:
+        add_call_site(edge, line)  # #21317: one edge per (scope, target), every call-site line
         return
-    seen.add(pair)
-    edges.append(
-        {
-            "source": current_scope,
-            "target_name": target_name,
-            "module_path": module_path,
-            "current_class": current_class,
-            "kind": "calls",
-            "source_path": source_path,
-            "line": node.start_point[0] + 1,  # call site, not the callee's def line (#13471)
-        }
-    )
+    edge = _new_call_edge(current_scope, target_name, module_path, source_path, current_class, line)
+    seen[(current_scope, target_name)] = edge
+    edges.append(edge)
+
+
+def _new_call_edge(
+    scope: str, target: str, module_path: str, source_path: str, current_class: str | None, line: int
+) -> dict:
+    """The extracted (not yet resolved) call edge, carrying its first call site."""
+    return {
+        "source": scope,
+        "target_name": target,
+        "module_path": module_path,
+        "current_class": current_class,
+        "kind": "calls",
+        "source_path": source_path,
+        "lines": [line],
+        "dropped_call_sites": 0,
+    }
 
 
 def _py_structural(node: Any, module_path: str, source_path: str, nodes: dict, current_class: str | None) -> None:
@@ -292,7 +250,7 @@ def _py_call_graph(
     module_path: str,
     source_path: str,
     edges: list,
-    seen: set,
+    seen: dict,
     current_scope: str | None,
     current_class: str | None,
 ) -> None:
@@ -346,7 +304,7 @@ def _js_call_graph(
     module_path: str,
     source_path: str,
     edges: list,
-    seen: set,
+    seen: dict,
     current_scope: str | None,
     current_class: str | None,
 ) -> None:
@@ -387,7 +345,7 @@ def extract_javascript(source_path: str, content: bytes) -> dict:
     module_path = module_path_from_rel_path(source_path)
     nodes: dict[str, dict] = {}
     edges: list[dict] = []
-    seen_edges: set[tuple[str, str]] = set()
+    seen_edges: dict[tuple[str, str], dict] = {}
     _js_structural(tree.root_node, module_path, source_path, nodes, current_class=None)
     _js_call_graph(tree.root_node, module_path, source_path, edges, seen_edges, current_scope=None, current_class=None)
     return {"nodes": list(nodes.values()), "edges": edges}
@@ -450,6 +408,9 @@ class CodeIndexer:
         self._collection = collection
         self._embed_model = embed_model
         self._cache_file = cache_file or code_index_hashes()
+        # #21316: read once per indexer, not per cache save (saved after every file).
+        self._grammar_versions = installed_grammar_versions()
+        self._cache_version = cache_version(self._grammar_versions)
         self._hash_cache: dict[str, str] = self._load_cache()
         # Node ids known to the collection plus everything indexed so far this
         # run; lazily seeded (#13469) so cross-file/cross-run call resolution
@@ -765,6 +726,7 @@ class CodeIndexer:
             indexed_at_commit=await asyncio.to_thread(_git_head_commit, root_dir),
             indexed_at=datetime.now(timezone.utc).isoformat(),
             extractor_version=EXTRACTOR_VERSION,
+            grammar_versions=grammar_versions_json(self._grammar_versions),
             files_with_extractor=aggregate.files_with_extractor,
             files_total=aggregate.files_total,
             nodes=nodes,
@@ -959,12 +921,12 @@ class CodeIndexer:
         if not isinstance(cached, dict):
             return {}
         written_by = cached.pop(_CACHE_VERSION_KEY, None)
-        if written_by != EXTRACTOR_VERSION:
+        if written_by != self._cache_version:
             logger.info(
-                "code_indexer: hash cache was written by extractor version %s, now %s — "
-                "re-extracting every file (#13508)",
+                "code_indexer: hash cache was written by extractor/grammar version %s, now %s — "
+                "re-extracting every file (#13508, #21316)",
                 written_by,
-                EXTRACTOR_VERSION,
+                self._cache_version,
             )
             return {}
         return cached
@@ -972,7 +934,7 @@ class CodeIndexer:
     def _save_cache(self) -> None:
         try:
             self._cache_file.parent.mkdir(parents=True, exist_ok=True)
-            payload = {**self._hash_cache, _CACHE_VERSION_KEY: EXTRACTOR_VERSION}
+            payload = {**self._hash_cache, _CACHE_VERSION_KEY: self._cache_version}
             self._cache_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except OSError as e:
             logger.warning("Could not save code index cache: %s", e)
@@ -1007,34 +969,6 @@ def _git_head_commit(root_dir: str) -> str:
 
 
 _SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
-
-
-async def load_graph_provenance(collection: Any) -> "GraphProvenance | None":
-    """Return how the graph in *collection* was built, or ``None`` if unknown.
-
-    ``None`` covers every uncertain case — no record, an unreadable store, a
-    record this build cannot parse. A collection indexed before #13508 has no
-    record and therefore reads as unknown, never as fresh, which is the
-    constraint the issue is explicit about.
-
-    Async because the read is blocking store I/O; the first caller on an event
-    loop would otherwise stall it.
-    """
-    try:
-        found = await asyncio.to_thread(collection.get, ids=[_PROVENANCE_ID], include=["metadatas"])
-    except Exception as exc:
-        logger.warning("code_indexer: could not read graph provenance: %s", exc)
-        return None
-    metadatas = (found or {}).get("metadatas") or []
-    if not metadatas or not isinstance(metadatas[0], dict):
-        return None
-    known = {f.name for f in dataclass_fields(GraphProvenance)}
-    payload = {k: v for k, v in metadatas[0].items() if k in known}
-    try:
-        return GraphProvenance(**payload)
-    except TypeError as exc:
-        logger.warning("code_indexer: graph provenance record is not readable: %s", exc)
-        return None
 
 
 async def graph_commits_behind(collection: Any, root_dir: str) -> "int | None":
@@ -1149,9 +1083,9 @@ def _build_edge_metadata(source_id: str, edge: dict, resolved: ResolvedCall, rel
         "resolved": resolved.resolved,
         "candidate_count": resolved.candidate_count,
         "source_path": rel_path,
-        # #13471: call-site line within source_path, consumed by impact analysis
-        # to report "where do I click" instead of the callee's definition line.
-        "call_line": edge.get("line", 0),
+        # #13471/#21317: call-site lines within source_path (call_line, call_lines, dropped_call_sites),
+        # consumed by impact analysis to report "where do I click" for every site, not the callee's def line.
+        **call_site_metadata(edge),
     }
 
 
@@ -1173,4 +1107,4 @@ async def find_callers(collection: Any, target_id: str) -> list[dict[str, Any]]:
         },
         include=["metadatas"],
     )
-    return list(result.get("metadatas") or [])
+    return [decode_edge_metadata(meta) for meta in result.get("metadatas") or []]

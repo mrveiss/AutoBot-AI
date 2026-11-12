@@ -74,3 +74,13 @@ export function applyOrgHeader(headers: Headers): void {
     headers.set('X-Organization-Id', companyId)
   }
 }
+
+/**
+ * Request options that scope a call to ONE named company, whichever company is selected.
+ * The ApiClient fills the header from the selection only when the caller has not set it, so a view
+ * that is showing company X sends this for X. It only picks which company the caller asks about:
+ * the backend still resolves the tenant context from the header and checks the caller's membership.
+ */
+export function orgScope(companyId: string): { headers: { 'X-Organization-Id': string } } {
+  return { headers: { 'X-Organization-Id': companyId } }
+}

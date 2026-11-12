@@ -9,20 +9,20 @@
 -c ../constraints/shared.txt  # single source of truth for shared versions (#10524); pins transitive numpy
 
 # Core
-apscheduler>=3.11.3             # Issue #6590: hourly LLM key rotation job
+apscheduler  # Issue #6590: hourly LLM key rotation job
 croniter                        # GH#9027: required by LLC RoutineScheduler and routines API; version from constraints/shared.txt
 fastapi  # version from constraints/shared.txt (#18060)
 starlette  # security floor from constraints/shared.txt
-uvicorn>=0.54.0
+uvicorn
 websockets>=15.0.1,<16       # Issue #3098 + #10386: CAP <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16, so >=16 makes langgraph unresolvable (ResolutionImpossible). Dependabot #10997 wrongly bumped this to >=16,<17 (bypassing the <16 cap in dependabot.yml) and broke every PR's Docker build. desktop_streaming_manager + slm_client use only legacy-compat API present in 15.x; CI pins 15.0.1. DO NOT bump past <16 until langgraph-sdk widens its cap.
-python-dotenv>=1.2.3
-aiofiles>=25.1.0
-pydantic>=2.14.1
+python-dotenv
+aiofiles
+pydantic
 email-validator>=2.3.0  # Issue #2953: required by pydantic for EmailStr validation
-cachetools>=7.2.2
-celery>=5.6.3  # Issue #892: Background task processing
+cachetools
+celery  # Issue #892: Background task processing
 vulture>=2.16  # MVA-1065: dead code scanner for audit_dead_code task
-psutil>=7.2.2  # Issue #927: CPU monitoring for wake word optimization
+psutil  # Issue #927: CPU monitoring for wake word optimization
 
 # Database
 # Capped below 2.1 (#17445). A fresh venv from this file took SQLAlchemy 2.1.0
@@ -44,7 +44,7 @@ psutil>=7.2.2  # Issue #927: CPU monitoring for wake word optimization
 # `update-types: semver-major`, and 2.0 -> 2.1 is a MINOR. The durable fix is a
 # `versions: [">=2.1"]` ignore, tracked on #17451 -- until that lands, expect
 # this line to be raised again by the next grouped bump and restore it here.
-sqlalchemy>=2.0.54,<2.1
+sqlalchemy
 # greenlet is declared explicitly, not left to SQLAlchemy (#17432). SQLAlchemy
 # ships it as an `[asyncio]` extra AND, in some releases, under a
 # `platform_machine == "x86_64" or ...` marker -- so whether it arrives depends
@@ -53,14 +53,14 @@ sqlalchemy>=2.0.54,<2.1
 # `main` with `ModuleNotFoundError: No module named 'greenlet'` before the
 # container could start. The async engine is a direct requirement of this
 # service, so it is declared directly rather than inherited conditionally.
-greenlet>=3.5.6  # SQLAlchemy async engine dependency -- see the note above
-alembic>=1.20.0
-aiosqlite>=0.22.1
-asyncpg>=0.32.0  # Async PostgreSQL driver — required for RBAC user modes (single_company+) (#9713)
+greenlet  # SQLAlchemy async engine dependency -- see the note above
+alembic
+aiosqlite
+asyncpg  # Async PostgreSQL driver — required for RBAC user modes (single_company+) (#9713)
 
 # Document Generation (MVA-2174)
-python-docx>=1.2.0  # DOCX export for transcripts
-reportlab>=5.0.1    # PDF export for transcripts
+python-docx  # DOCX export for transcripts
+reportlab  # PDF export for transcripts
 # PyPDF2 removed (#13893): unmaintained, and it was the PDF reader behind the
 # Drive/OneDrive connectors while the repo pinned pypdf as a security update
 # (requirements.txt:23). All PDF reading now goes through media/document/extraction.py.
@@ -72,16 +72,16 @@ reportlab>=5.0.1    # PDF export for transcripts
 # loosens the constraint and the OneDrive connector's parsers still install (#14228, GH#9004).
 
 # AI/ML
-openai>=2.54.0
-anthropic>=1.15.0,<2.0.0              # Issue #15016: call sites fixed for the 1.x messages.create()/.stream() signature (temperature/top_p/top_k removed, routed via extra_body); capped so the next major requires a deliberate bump, not a silent break
-boto3>=1.43.114                       # GH#9010: AWS Bedrock provider
+openai
+anthropic  # Issue #15016: call sites fixed for the 1.x messages.create()/.stream() signature (temperature/top_p/top_k removed, routed via extra_body); capped so the next major requires a deliberate bump, not a silent break
+boto3>=1.43.122                       # GH#9010: AWS Bedrock provider
 chromadb                           # version from constraints/shared.txt (#19478)
-protobuf>=7.36.2,<8.0.0            # cap/floor rationale lives in ../requirements.txt (#15070, #4061); this file `-r`-includes it and pip resolves the intersection, so the two lines MUST stay identical — enforced by tools/lint/check_requirements_pin_parity.py
-sentence-transformers>=6.1.0
+protobuf  # cap/floor rationale lives in ../requirements.txt (#15070, #4061); this file `-r`-includes it and pip resolves the intersection, so the two lines MUST stay identical — enforced by tools/lint/check_requirements_pin_parity.py
+sentence-transformers
 torch  # version from constraints/shared.txt (#19330); embeddings/transcriber/multimodal; installed CPU-only in the default image (#10251). GPU build via requirements-gpu-torch.txt (#15162)
 torchvision  # version from constraints/shared.txt, paired with torch (#19330); CPU-only by default (#10251)
 # torchaudio removed (#10251): not imported anywhere in the backend, and its 2.11.0 pin mismatched torch 2.12.0
-torchmetrics>=1.9.0  # Issue #904: Training metrics
+torchmetrics  # Issue #904: Training metrics
 opencv-python-headless>=5.0.0.93  # numpy<2 cap lifted (#10524): graspologic removed, so numpy>=2 is now resolvable
 vanna>=2.0.2  # Issue #723: Natural language to SQL via Vanna.ai
                # SECURITY: CVE unpatched in all published releases (Dependabot alert #298,
@@ -94,31 +94,31 @@ vanna>=2.0.2  # Issue #723: Natural language to SQL via Vanna.ai
 # graspologic removed (#10524): it pinned numpy<2.0 and required Python <3.13, blocking the
 # numpy-2 / py3.14 migration. Louvain needs no extra dependency.
 networkx>=3.7
-tree-sitter>=0.26.0
-tree-sitter-python>=0.25.0
+tree-sitter
+tree-sitter-python
 tree-sitter-javascript>=0.25.0
 
 # Include existing requirements
 -r ../requirements.txt
 
 # Issue #858: Additional runtime dependencies for Python 3.13
-xxhash>=4.0.1          # Hash functions for LLM caching
-structlog>=26.1.0      # Structured logging for service auth
-llama-index>=0.14.25,<0.15.0          # Migrated from 0.13.x; floor aligned to 0.14.19 (#2642)
-llama-index-core>=0.14.25,<0.15.0     # Explicit core pin matching ecosystem (#2642)
-llama-index-llms-ollama>=0.11.0,<1.0.0       # Ollama LLM integration
-llama-index-embeddings-ollama>=0.10.0,<1.0.0  # Ollama embeddings
-llama-index-vector-stores-chroma>=0.6.0,<1.0.0  # ChromaDB vector store
+xxhash>=4.0.2          # Hash functions for LLM caching
+structlog  # Structured logging for service auth
+llama-index  # Migrated from 0.13.x; floor aligned to 0.14.19 (#2642)
+llama-index-core  # Explicit core pin matching ecosystem (#2642)
+llama-index-llms-ollama  # Ollama LLM integration
+llama-index-embeddings-ollama  # Ollama embeddings
+llama-index-vector-stores-chroma  # ChromaDB vector store
 # LangChain 1.x ecosystem — migrated from 0.3.x to fix SSRF CVE (#1572)
-langchain>=1.4.6,<2.0.0               # Issue #1572 + #10386: bumped from 1.3.1 — unblocked by websockets relaxation to >=15,<16; 1.3.10 requires langgraph>=1.2.5 + langchain-core>=1.4.7
-langchain-core>=1.6.11,<2.0.0          # Issue #1572 + #10386: bumped from 1.3.3 — langchain 1.3.10 requires >=1.4.7
-langchain-community>=0.4.2,<0.5.0     # Issue #1572 + #10386: bumped from 0.4.1 — aligned with ai-stack canonical (#2808)
+langchain  # Issue #1572 + #10386: bumped from 1.3.1 — unblocked by websockets relaxation to >=15,<16; 1.3.10 requires langgraph>=1.2.5 + langchain-core>=1.4.7
+langchain-core  # Issue #1572 + #10386: bumped from 1.3.3 — langchain 1.3.10 requires >=1.4.7
+langchain-community  # Issue #1572 + #10386: bumped from 0.4.1 — aligned with ai-stack canonical (#2808)
 langchain-ollama>=1.1.0,<2.0.0        # Issue #1572: ChatOllama for QA chain
-langgraph>=1.2.15,<2.0.0               # Issue #1043 + #10386: bumped from 1.2.0 — langchain 1.3.10 requires >=1.2.5; langgraph 1.2.6 pulls langgraph-sdk 0.4.2 (websockets>=14,<16) now satisfied by websockets>=15,<16
+langgraph>=1.2.18,<2.0.0               # Issue #1043 + #10386: bumped from 1.2.0 — langchain 1.3.10 requires >=1.2.5; langgraph 1.2.6 pulls langgraph-sdk 0.4.2 (websockets>=14,<16) now satisfied by websockets>=15,<16
 langgraph-checkpoint-redis>=0.5.2,<1.0.0  # Issue #1043: Redis checkpointer for thread persistence
-markdownify>=1.2.3  # HTML to Markdown conversion
-mcp>=2.3.0            # MCP protocol for skill subprocesses (Issue #731)
-PyYAML>=6.0.3            # SKILL.md frontmatter parsing (Phase 3 sync engine)
+markdownify  # HTML to Markdown conversion
+mcp  # MCP protocol for skill subprocesses (Issue #731)
+PyYAML  # SKILL.md frontmatter parsing (Phase 3 sync engine)
 
 # Community growth skill (Issue #1161)
 praw>=8.0.3             # Reddit OAuth API for CommunityGrowthSkill
@@ -130,29 +130,29 @@ pywebpush>=2.5.0        # VAPID/RFC8291 browser push delivery
 # spaCy moved to the optional requirements-nlp.txt extra (#9825): its build deps
 # (thinc/blis) have no py3.14 wheels yet, so it is not in the default 3.14 image.
 # entity_extractor falls back to the LLM extraction path when spaCy is absent.
-scikit-learn>=1.9.1           # Issue #2027: RAPTOR clustering
+scikit-learn  # Issue #2027: RAPTOR clustering
 
 # Live Canvas export (MVA-359)
 bleach>=6.4.0           # HTML sanitization for canvas HTML/PDF export (XSS prevention — security-critical)
-weasyprint>=70.0        # HTML→PDF rendering for canvas PDF export
+weasyprint  # HTML→PDF rendering for canvas PDF export
 
 # Filesystem watching (#9000 KB watch-folders, docs watcher, hot reload) — #10009:
 # imported by kb_folder_watcher/documentation_watcher/hot_reload_manager but was
 # never declared; fresh venvs 500'd on /api/knowledge_base/watch-folders
-watchdog>=6.0.0
+watchdog
 
 # Media processing pipelines (Issue #932)
-aiohttp>=3.14.5         # Async HTTP client - SECURITY UPDATE
-httpx>=0.28.1           # Issue #4412: hub registry fetches (async HTTP)
+aiohttp  # Async HTTP client - SECURITY UPDATE
+httpx  # Issue #4412: hub registry fetches (async HTTP)
 pywebpush>=2.5.0        # VAPID/RFC8291 browser push delivery (GH#4459)
-beautifulsoup4>=4.15.0  # HTML parsing for link pipeline
-Pillow>=13.0.0          # Image processing - SECURITY UPDATE (8 GHSA fixed only in 13.0.0)
+beautifulsoup4  # HTML parsing for link pipeline
+Pillow  # Image processing - SECURITY UPDATE (8 GHSA fixed only in 13.0.0)
 # OCR binding (#13885). MUST stay paired with the tesseract-ocr / libtesseract-dev
 # system packages installed by ansible (roles/backend/tasks/main.yml). Without this
 # line the binary ships on every host and no Python caller can reach it: /api/vision/ocr,
 # vnc_manager, gui_controller.read_text_from_region and the CAPTCHA solver all
 # guard-import it and degrade to "pytesseract not installed" with no alert.
-pytesseract>=0.3.13
+pytesseract
 # PDF rasterizer for the OCR fallback (#13896). pypdf cannot render pages, so
 # without this a scanned PDF can be *detected* (#13884) but never *read*.
 # media/document/ocr.py guard-imports it and degrades to "OCR unavailable"
@@ -162,21 +162,21 @@ pytesseract>=0.3.13
 # Chosen over PyMuPDF, which is AGPL-3.0-or-commercial: AutoBot ships
 # Apache-2.0, AGPL's copyleft reaches network use, and this repo already
 # removed a weaker GPL-3.0 dependency for the same reason (0d67a956e).
-pypdfium2>=5.14.0
+pypdfium2
 # PDF table extraction (#14232). pypdf cannot detect tables, which is why the
 # old _extract_pdf_tables was a stub returning [] while DOCX did real work.
 # media/document/extraction.py guard-imports it and reports tables_attempted:
 # false when absent, so a missing wheel never fails an otherwise-readable PDF.
-pdfplumber>=0.11.10
+pdfplumber
 # Container runtime SDK for sandboxed code execution (#14872). Guard-imported by
 # secure_sandbox_executor, services/execution/docker_backend, services/execution/
 # container_pool and services/docker_task_workspace, every one of which degrades to
 # a NON-CONTAINERISED path when it is absent. Undeclared, that degradation was
 # indistinguishable from a working sandbox: the feature reads as configured and
 # simply never uses a container. Same shape as the pytesseract incident (#13885).
-docker>=7.2.0
-jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract
-defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
+docker
+jsonschema  # Issue #7405: JSON Schema validation for /knowledge/extract
+defusedxml  # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 # Optional media support (opencv-python, transformers, librosa) is a REAL
 # declaration in requirements-media.txt, not a comment here (#15035). Those three
 # sat commented out under a heading that read like a declaration while
@@ -191,6 +191,6 @@ defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 # langsmith>=0.1.0       # Set LANGSMITH_API_KEY to activate
 
 # Content Reach optional source backends (#10932) — lazy-imported; backend starts without them
-ddgs>=9.16.0               # #10932 content-reach: keyless web search (optional, lazy)
-trafilatura>=2.3.1        # #10932 content-reach: readable article extraction (optional, lazy)
-yt-dlp>=2026.8.19        # #10932 content-reach: YouTube caption extraction (optional, lazy)
+ddgs  # #10932 content-reach: keyless web search (optional, lazy)
+trafilatura  # #10932 content-reach: readable article extraction (optional, lazy)
+yt-dlp  # #10932 content-reach: YouTube caption extraction (optional, lazy)
