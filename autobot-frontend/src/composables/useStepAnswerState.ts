@@ -13,8 +13,10 @@
 import { reactive } from 'vue';
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import i18n from '@/i18n';
+import { createLogger } from '@/utils/debugUtils';
 import { getEnvPositiveInt } from '@autobot/ui';
 
+const logger = createLogger('useStepAnswerState');
 const inFlight = reactive(new Set<string>());
 type DecidedEntry = { unconfirmed: boolean; after: number; reads?: number };
 /** A decided step: `after` is the refresh sequence when its send settled; `unconfirmed` means the server's receipt is unknown. */
@@ -26,6 +28,8 @@ const RECONCILE_READS = getEnvPositiveInt(import.meta.env, 'VITE_STEP_ANSWER_REC
 const retryAfterTimeout = reactive(new Set<string>());
 /** Per workflow, the sequence of the newest status response applied: an older response must not overwrite it. */
 const appliedSeq = new Map<string, number>();
+/** Per removed workflow, the newest refresh sequence issued when it was dropped: a response issued at or before it is discarded. */
+const removedSeq = new Map<string, number>();
 let refreshSeq = 0;
 
 const keyOf = (workflowId: string, stepId: string) => `${workflowId}\u0000${stepId}`;
@@ -46,7 +50,12 @@ export function useStepAnswerState() {
   /** Refresh after a decision; tell the user when it failed (unless a newer read was applied) or a refused retry still shows waiting. */
   const reconcile = async (workflowId: string, key: string, refresh: () => Promise<unknown>): Promise<void> => {
     const before = refreshSeq;
-    const ok = await refresh();
+    let ok: unknown = false;
+    try {
+      ok = await refresh();
+    } catch (err) {
+      logger.error('Status refresh after a step answer failed', err); // the decision already settled: report apart, never reject it
+    }
     if (!decided.has(key)) return;
     if (!ok && (appliedSeq.get(workflowId) ?? 0) <= before) warn('workflow.builder.stepStatusRefreshFailed'); // a stale response is not a failure
     else if (ok && decided.get(key)?.reads !== undefined) warn('workflow.builder.stepRetryStillWaiting');
@@ -83,12 +92,11 @@ export function useStepAnswerState() {
     async fetchStatus<R extends StatusResponse>(workflowId: string, request: () => Promise<R>): Promise<R> {
       const issued = ++refreshSeq;
       const r = await request();
-      if (issued < (appliedSeq.get(workflowId) ?? 0)) return { ...r, success: false }; // a newer response already owns the state
+      if (issued < (appliedSeq.get(workflowId) ?? 0) || issued <= (removedSeq.get(workflowId) ?? 0)) return { ...r, success: false }; // a newer response owns the state, or the workflow was removed since this was issued
       const steps = r.data?.workflow?.steps;
       if (r.success) appliedSeq.set(workflowId, issued);
       if (r.httpStatus === 404) {
-        dropWorkflow(workflowId);
-        appliedSeq.set(workflowId, issued); // tombstone: an older in-flight success must not be applied after the workflow is gone
+        dropWorkflow(workflowId); // leaves the removal sequence: an older in-flight success must not be applied after the workflow is gone
       } else if (r.success && Array.isArray(steps) && clearDecided(workflowId, steps, issued) > 0) warn('workflow.builder.stepLockReleased');
       return r;
     },
@@ -107,6 +115,7 @@ function dropWorkflow(workflowId: string): void {
   for (const key of decided.keys()) if (key.startsWith(`${workflowId}\u0000`)) decided.delete(key);
   for (const key of retryAfterTimeout) if (key.startsWith(`${workflowId}\u0000`)) retryAfterTimeout.delete(key);
   appliedSeq.delete(workflowId);
+  removedSeq.set(workflowId, refreshSeq); // kept (unlike appliedSeq) so forgetRemoved() cannot lift the tombstone
 }
 
 type StepInfo = { step_id: string; status: string };
