@@ -85,6 +85,8 @@ on:
       - 'autobot_shared/user_management/user_service.py'
       - 'autobot_shared/user_management/user_service_lifecycle.py'
       - 'autobot_shared/user_management/revocation_outcome.py'
+      # #21018: the last-admin race test's guard
+      - 'autobot_shared/user_management/last_platform_admin.py'
       - 'autobot_shared/user_management/__init__.py'
       - '.github/workflows/_changes.yml'
   # NOTE (#11346): no pull_request.paths filter — this workflow ALWAYS runs on PRs
@@ -202,6 +204,8 @@ jobs:
           - 'autobot_shared/user_management/user_service.py'
           - 'autobot_shared/user_management/user_service_lifecycle.py'
           - 'autobot_shared/user_management/revocation_outcome.py'
+          # #21018: the last-admin race test's guard
+          - 'autobot_shared/user_management/last_platform_admin.py'
           - 'autobot_shared/user_management/__init__.py'
 
   migration-tests:
