@@ -216,6 +216,7 @@ class WorkItemService(LLCServiceBase):
         created_by_user_id: Optional[str] = None,
         labels: Optional[List[str]] = None,
         requires_approval_before: Optional[List[str]] = None,
+        wake_agents: bool = True,
     ) -> LLCWorkItem:
         project_id, parent = await validate_create(session, self.get, company_id, type, parent_id, project_id)
         # GH#6469: inherit goal_id from parent when not explicitly provided
@@ -224,10 +225,8 @@ class WorkItemService(LLCServiceBase):
             resolved_goal_id = parent.goal_id
 
         identifier = await self._next_identifier(session, company_id)
-        # GH#13937: mirror update()'s single-assignee invariant — a creator
-        # that supplies an assignee id must not land with a NULL discriminator
-        # (that made _assignee_display() report the item as unassigned despite
-        # holding a valid assignee_agent_id/assignee_user_id).
+        # GH#13937: mirror update()'s single-assignee invariant -- an assignee id must not
+        # land with a NULL discriminator (_assignee_display() would report the item unassigned).
         resolved_assignee_type: Optional[str] = None
         if assignee_user_id:
             resolved_assignee_type = AssigneeType.USER.value
@@ -256,7 +255,8 @@ class WorkItemService(LLCServiceBase):
             requires_approval_before=_validated_approval_categories(requires_approval_before),
         )
         session.add(item)
-        await wake_for_item_changes(session, item)  # #19582: before the flush clears the history
+        if wake_agents:  # an import passes False (#20472): it records work, it assigns none
+            await wake_for_item_changes(session, item)  # #19582: before the flush clears the history
         await session.flush()
         return item
 
