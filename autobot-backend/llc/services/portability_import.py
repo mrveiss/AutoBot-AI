@@ -18,16 +18,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from llc.models.goal import LLCGoal
-from llc.models.sprint import LLCProject
+from llc.services.work_item_import import (
+    create_project,
+    create_work_item,
+    import_template_work,
+    import_work_items,
+    merge_report,
+    select_items,
+)
 
 logger = get_logger(__name__)
 
 _PLACEHOLDER_RE = re.compile(r"\{\{(\w+)\}\}")
-
-
-def _template_work_items(template: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """The work items a template carries: a template export's ``seed_work_items`` and a snapshot's ``work_items``."""
-    return [*template.get("seed_work_items", []), *template.get("work_items", [])]
 
 
 class PortabilityImportMixin:
@@ -146,36 +148,12 @@ class PortabilityImportMixin:
         return new_id
 
     async def _import_project(self, project: Dict[str, Any], company_id: uuid.UUID) -> Optional[uuid.UUID]:
-        new_id = uuid.uuid4()
-        obj = LLCProject(
-            id=new_id,
-            company_id=company_id,
-            name=project.get("name", "Imported Project"),
-            description=project.get("description"),
-            status=project.get("status", "planning"),
-        )
-        self.session.add(obj)
-        await self.session.flush()
-        return new_id
+        return await create_project(self.session, project, company_id)
 
     async def _import_work_item(
-        self, item: Dict[str, Any], company_id: uuid.UUID, project_id: str
+        self, item: Dict[str, Any], company_id: uuid.UUID, project_id: Optional[str], parent_id: Optional[str] = None
     ) -> Optional[uuid.UUID]:
-        """Create a seed work item through ``WorkItemService``, so the hierarchy rules apply (#20472)."""
-        from llc.models.enums import WorkItemPriority, WorkItemType  # noqa: PLC0415
-        from llc.services.accessors import get_work_item_service  # noqa: PLC0415
-
-        created = await get_work_item_service().create(
-            self.session,
-            company_id=str(company_id),
-            type=WorkItemType(item.get("type", "epic")),
-            title=item.get("title", ""),
-            description=item.get("description"),
-            priority=WorkItemPriority(item.get("priority", "medium")),
-            labels=item.get("labels", []),
-            project_id=project_id,
-        )
-        return created.id
+        return await create_work_item(self.session, item, company_id, project_id, parent_id)
 
     async def _import_seed_items(
         self,
@@ -185,25 +163,23 @@ class PortabilityImportMixin:
         created_entities: Dict[str, Any],
         skipped: Dict[str, Any],
         warnings: List[str],
-    ) -> None:
-        """Import the template's seed items, each into the project it names; one naming none goes to the first.
+    ) -> List[Dict[str, Any]]:
+        """The work items only, into already-imported projects; every skip is reported with a reason code."""
+        report = await import_work_items(select_items(template), company_id, project_ids, self._import_work_item)
+        return merge_report(report, created_entities, skipped, warnings)
 
-        Every work item needs a project, so a seed that cannot be placed is skipped, and the import says so. One
-        whose named project was not imported is never moved to an unrelated project.
-        """
-        fallback = next(iter(project_ids.values()), None)
-        for item in _template_work_items(template):
-            if not item.get("is_seed"):
-                continue
-            named = item.get("project_id")
-            project_id = project_ids.get(str(named)) if named else fallback
-            if project_id is None:
-                reason = "the project it names was not imported" if named else "the template has no project for it"
-                skipped["work_items"].append(item.get("title", ""))
-                warnings.append(f"Work item {item.get('title', '')!r} skipped: {reason}")
-                continue
-            item_id = await self._import_work_item(item, company_id, project_id)
-            created_entities["work_items"].append(str(item_id))
+    async def _import_work(
+        self,
+        template: Dict[str, Any],
+        company_id: uuid.UUID,
+        created_entities: Dict[str, Any],
+        skipped: Dict[str, Any],
+        warnings: List[str],
+    ) -> List[Dict[str, Any]]:
+        """Projects then work items, through the one shared import (#20472); returns the structured skips."""
+        return await import_template_work(
+            self.session, template, company_id, created_entities, skipped, warnings, self._import_work_item
+        )
 
     async def _goal_titles_exist(self, titles: List[str], company_id: Optional[uuid.UUID] = None) -> List[str]:
         if not titles:
