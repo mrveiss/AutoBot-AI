@@ -70,6 +70,7 @@ on:
       - "autobot_shared/stream_logging.py"
       - "autobot_shared/token_count.py"
       - "autobot_shared/url_safety.py"
+      - "requirements-ci/monitoring.txt"
       - ".github/workflows/llm-optimization-real-torch.yml"
   pull_request:
     # ready_for_review is REQUIRED: the job is gated on draft == false, and
@@ -134,6 +135,7 @@ on:
       - "autobot_shared/stream_logging.py"
       - "autobot_shared/token_count.py"
       - "autobot_shared/url_safety.py"
+      - "requirements-ci/monitoring.txt"
       - ".github/workflows/llm-optimization-real-torch.yml"
 
 # Least privilege (#15331). Runs tests only; no token writes.
