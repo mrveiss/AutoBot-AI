@@ -37,8 +37,15 @@ _WORKFLOWS = [
     _ROOT / ".github/workflows" / name
     for name in ("clean-install.yml", "docker-smoke-test.yml", "hardened-smoke-test.yml")
 ]
+# Options before the verb are skipped one per loop turn. The three turns are disjoint on their first
+# characters after the dash, so no text can be consumed two ways under the `*` (no ReDoS):
+#   `-o X` / `-c X` / `-t X` take a separate argument  (letter, then whitespace)
+#   `-oX=Y` (letter, then a non-space)                  attached argument
+#   any other option, `-y`, `-qq`, `--yes`              (first character not o, c, t or whitespace)
 _APT = re.compile(
-    r"\b(?:apt-get\s+(?:-[oct]\s+\S+\s+|-\S+\s+)*(?:update|install|upgrade|dist-upgrade|download|source|build-dep|remove|purge)\b|apt-add-repository\s|add-apt-repository\s)"
+    r"\b(?:apt-get\s+(?:-(?:[oct]\s+\S+|[oct]\S+|[^\soct]\S*)\s+)*"
+    r"(?:update|install|upgrade|dist-upgrade|download|source|build-dep|remove|purge)\b"
+    r"|apt-add-repository\s|add-apt-repository\s)"
 )
 _SEGMENT_BREAK = re.compile(r"&&|\|\||;|\||\bthen\b|\bdo\b|\belse\b")
 _WRAPPED = re.compile(r"(?:^|[\s/])apt[-_]retry(?:\s|$)")
@@ -123,40 +130,90 @@ def test_every_apt_call_is_wrapped(path: Path) -> None:
     assert not bare, f"{path.relative_to(_ROOT)}: apt call(s) outside apt-retry: {bare}"
 
 
+_CONF_SRC = "docker/apt/80-autobot-resilience"
+_HELPER_SRC = "docker/apt/apt-retry"
+_CONF_DIR = "/etc/apt/apt.conf.d/"
+#: Directories on the default PATH of the base images, where `apt-retry apt-get ...` resolves the wrapper by name.
+_PATH_DIRS = ("/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin")
+
+
+def _copies(stage_lines: list[str]) -> dict[str, str]:
+    """Source -> destination of each single-source COPY line seen so far (flags such as --chmod dropped)."""
+    copies = {}
+    for line in stage_lines:
+        words = [w for w in line.split() if not w.startswith("--")]
+        if words[:1] == ["COPY"] and len(words) == 3:
+            copies[words[1]] = words[2]
+    return copies
+
+
+def _destination_problem(src: str, dest: str) -> str | None:
+    """Why `dest` cannot work for `src`, or None: apt reads the policy only from apt.conf.d; the wrapper is run by name."""
+    if src == _CONF_SRC:
+        inside = dest.startswith(_CONF_DIR) and "/" not in dest[len(_CONF_DIR) :].rstrip("/")
+        return None if inside else f"{src} is copied to {dest}, not into {_CONF_DIR}"
+    directory, _, name = dest.rpartition("/") if not dest.endswith("/") else (dest.rstrip("/"), "", "apt-retry")
+    if directory in _PATH_DIRS and name == "apt-retry":
+        return None
+    return f"{src} is copied to {dest}, not to apt-retry in a PATH directory ({', '.join(_PATH_DIRS)})"
+
+
 def _stage_problems(text: str) -> tuple[int, list[str]]:
-    """(stages swept, one message per stage that runs apt before COPYing the policy and the wrapper)."""
+    """(stages swept, one message per stage that runs apt before COPYing the policy and the wrapper to where they work)."""
     stages = re.split(r"^FROM\b", text, flags=re.M)[1:]
     problems = []
     for stage in stages:
-        copied = ""
+        seen: list[str] = []
         for line in stage.splitlines():
             if line.lstrip().startswith("#"):
                 continue
             if _APT.search(line):
-                problems += [
-                    f"apt before COPY {src}"
-                    for src in ("docker/apt/80-autobot-resilience", "docker/apt/apt-retry")
-                    if f"COPY {src} " not in copied
-                ]
+                copies = _copies(seen)
+                for src in (_CONF_SRC, _HELPER_SRC):
+                    if src not in copies:
+                        problems.append(f"apt before COPY {src}")
+                    elif (why := _destination_problem(src, copies[src])) is not None:
+                        problems.append(why)
                 break
             if line.startswith("COPY "):
-                copied += line + "\n"
+                seen.append(line)
     return len(stages), problems
 
 
 _GOOD_STAGE = (
-    "FROM x\nCOPY docker/apt/80-autobot-resilience /e\nCOPY docker/apt/apt-retry /b\nRUN apt-retry apt-get update\n"
+    f"FROM x\nCOPY {_CONF_SRC} /etc/apt/apt.conf.d/80-autobot-resilience\n"
+    f"COPY {_HELPER_SRC} /usr/local/bin/apt-retry\nRUN apt-retry apt-get update\n"
 )
 
 
 def test_the_stage_sweep_flags_a_stage_without_the_policy_and_accepts_one_with_it() -> None:
     assert _stage_problems(_GOOD_STAGE) == (1, [])
-    count, problems = _stage_problems("FROM x\nCOPY docker/apt/apt-retry /b\nRUN apt-retry apt-get update\n")
-    assert (count, problems) == (1, ["apt before COPY docker/apt/80-autobot-resilience"])
+    count, problems = _stage_problems(
+        f"FROM x\nCOPY {_HELPER_SRC} /usr/local/bin/apt-retry\nRUN apt-retry apt-get update\n"
+    )
+    assert (count, problems) == (1, [f"apt before COPY {_CONF_SRC}"])
     assert _stage_problems("RUN apt-get update\n") == (
         0,
         [],
     ), "no FROM: the sweep reaches nothing, which the real-file test must reject"
+
+
+def test_the_stage_sweep_checks_where_the_policy_and_wrapper_are_copied_to() -> None:
+    wrong_conf = _GOOD_STAGE.replace("/etc/apt/apt.conf.d/80-autobot-resilience", "/etc/apt/80-autobot-resilience")
+    assert _stage_problems(wrong_conf) == (
+        1,
+        [f"{_CONF_SRC} is copied to /etc/apt/80-autobot-resilience, not into {_CONF_DIR}"],
+    )
+    off_path = _GOOD_STAGE.replace("/usr/local/bin/apt-retry", "/opt/tools/apt-retry")
+    count, problems = _stage_problems(off_path)
+    assert (
+        count == 1 and len(problems) == 1 and problems[0].startswith(f"{_HELPER_SRC} is copied to /opt/tools/apt-retry")
+    ), problems
+    renamed = _GOOD_STAGE.replace("/usr/local/bin/apt-retry", "/usr/local/bin/retry")
+    assert len(_stage_problems(renamed)[1]) == 1
+    # A directory destination and a --chmod flag are fine; the controls prove the check is not rejecting everything.
+    assert _stage_problems(_GOOD_STAGE.replace("/usr/local/bin/apt-retry", "/usr/local/bin/")) == (1, [])
+    assert _stage_problems(_GOOD_STAGE.replace(f"COPY {_HELPER_SRC}", f"COPY --chmod=0755 {_HELPER_SRC}")) == (1, [])
 
 
 @pytest.mark.parametrize("path", _dockerfiles(), ids=lambda p: p.name)

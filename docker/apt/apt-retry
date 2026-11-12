@@ -73,8 +73,10 @@ tee_grace_s="$(norm "$tee_grace_s")"
 
 tmp="$(mktemp -d)" || exit 1
 tee_pid=""
+watchdog_pid=""
 cleanup() {
     [ -z "$tee_pid" ] || kill "$tee_pid" 2>/dev/null
+    [ -z "$watchdog_pid" ] || { kill "$watchdog_pid" 2>/dev/null; wait "$watchdog_pid" 2>/dev/null; }
     rm -rf "$tmp"
 }
 trap cleanup EXIT
@@ -145,6 +147,7 @@ while :; do
     kill "$watchdog_pid" 2>/dev/null
     wait "$watchdog_pid" 2>/dev/null
     tee_pid=""
+    watchdog_pid=""
     [ "$rc" -eq 0 ] && exit 0
     if ! grep -E -i -q "$TRANSIENT" "$out"; then
         echo "apt-retry: not retrying (exit ${rc}, no transient network failure in the output): $*" >&2
