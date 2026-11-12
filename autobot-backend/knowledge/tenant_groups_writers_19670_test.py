@@ -54,6 +54,9 @@ class _FakeRedis:
 class _UserSvc(UserService):
     user_model = MagicMock()
 
+    async def _guard_last_admin(self, *args, **kwargs):  # about the revocation marker; the guard has its own (#21018)
+        return None
+
 
 class _OrgSvc(OrganizationService):
     organization_model = MagicMock()
