@@ -14,6 +14,7 @@
 import { computed, ref, type Ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
+import { orgScope } from '@/utils/orgContext'
 import type { components } from '@/types/generated/api'
 
 type Schemas = components['schemas']
@@ -81,7 +82,11 @@ export function useHandbook(companyId: () => string) {
   const sources: Ref<Record<'roles' | 'workflows' | 'processes', SourceState>> = ref({ roles: 'loading', workflows: 'loading', processes: 'loading' })
   const errors: Ref<string[]> = ref([])
   const detail: Ref<PageDetail> = ref(emptyDetail('loading'))
-  /** Opening another page while one is still being read drops the older answer. */
+  /**
+   * Request sequences (the pattern of useBacklogItems): a newer load, or another page opened while
+   * one is still being read, drops the older answer, errors and loading flags included.
+   */
+  let loaded = 0
   let opened = 0
 
   const pages = computed(() => toPages(roles.value, workflows.value, processes.value))
@@ -89,59 +94,74 @@ export function useHandbook(companyId: () => string) {
   const workflowName = (id: string): string => workflows.value.find((w) => w.workflow_id === id)?.name || id
   const processName = (key: string): string => processes.value.find((p) => p.process_key === key)?.name || key
 
-  async function pull(name: 'roles' | 'workflows' | 'processes', url: string, into: Ref<unknown[]>): Promise<void> {
+  async function pull(mine: number, name: 'roles' | 'workflows' | 'processes', read: () => Promise<unknown[]>, into: Ref<unknown[]>): Promise<void> {
     sources.value[name] = 'loading'
     try {
-      const rows: unknown[] = await api.get(url)
+      const rows = await read()
+      if (mine !== loaded) return
       into.value = rows ?? []
       sources.value[name] = 'ready'
     } catch (err: unknown) {
+      if (mine !== loaded) return
       into.value = []
       sources.value[name] = 'error'
       errors.value.push(describeApiError(err, name))
     }
   }
 
+  /** Every Company OS call names the company this screen shows, never the one that happens to be selected. */
   async function load(): Promise<void> {
+    const mine = ++loaded
+    opened++
     errors.value = []
-    if (!companyId()) return
+    detail.value = emptyDetail('loading')
+    const company = companyId()
+    if (!company) return
+    const scope = orgScope(company)
     await Promise.all([
-      pull('roles', `/api/llc/roles/${companyId()}`, roles),
-      pull('workflows', `${ROOT}/workflows`, workflows),
-      pull('processes', `${ROOT}/processes`, processes),
+      pull(mine, 'roles', () => api.get(`/api/llc/roles/${company}`), roles),
+      pull(mine, 'workflows', () => api.get(`${ROOT}/workflows`, scope), workflows),
+      pull(mine, 'processes', () => api.get(`${ROOT}/processes`, scope), processes),
     ])
   }
 
-  async function part<T>(failed: string[], name: string, read: () => Promise<T>, fallback: T): Promise<T> {
+  /** One part of a page's detail: its value, or the fallback and its name when it could not be read. */
+  async function part<T>(name: string, read: () => Promise<T>, fallback: T): Promise<{ value: T; failed: string | null }> {
     try {
-      return await read()
+      return { value: await read(), failed: null }
     } catch {
-      failed.push(name)
-      return fallback
+      return { value: fallback, failed: name }
     }
   }
 
   async function loadRole(id: string): Promise<PageDetail> {
-    const base = `/api/llc/roles/${companyId()}/${encodeURIComponent(id)}`
-    const failed: string[] = []
-    const holders: HandbookHolder[] = await part(failed, 'holders', () => api.get(`${base}/holders?include_past=false`), [])
-    const workflowIds: string[] = await part(failed, 'workflows', () => api.get(`${base}/workflows`), [])
-    const tools: string[] = await part(failed, 'tools', () => api.get(`${base}/tools`), [])
-    const skills: HandbookSkills | null = await part(failed, 'skills', () => api.get(`${ROOT}/roles/${encodeURIComponent(id)}/skills`), null)
-    return { ...emptyDetail('ready'), holders, workflowIds, tools, skills, failed }
+    const company = companyId()
+    const scope = orgScope(company)
+    const base = `/api/llc/roles/${company}/${encodeURIComponent(id)}`
+    const [holders, workflowIds, tools, skills] = await Promise.all([
+      part<HandbookHolder[]>('holders', () => api.get(`${base}/holders?include_past=false`), []),
+      part<string[]>('workflows', () => api.get(`${base}/workflows`), []),
+      part<string[]>('tools', () => api.get(`${base}/tools`), []),
+      part<HandbookSkills | null>('skills', () => api.get(`${ROOT}/roles/${encodeURIComponent(id)}/skills`, scope), null),
+    ])
+    const failed = [holders, workflowIds, tools, skills].flatMap((p) => (p.failed ? [p.failed] : []))
+    return { ...emptyDetail('ready'), holders: holders.value, workflowIds: workflowIds.value, tools: tools.value, skills: skills.value, failed }
   }
 
   async function loadGraph(id: string): Promise<PageDetail> {
-    const failed: string[] = []
-    const graph: HandbookGraph | null = await part(failed, 'graph', () => api.get(`${ROOT}/workflows/${encodeURIComponent(id)}/graph`), null)
-    return { ...emptyDetail('ready'), graph, failed }
+    const scope = orgScope(companyId())
+    const graph = await part<HandbookGraph | null>('graph', () => api.get(`${ROOT}/workflows/${encodeURIComponent(id)}/graph`, scope), null)
+    return { ...emptyDetail('ready'), graph: graph.value, failed: graph.failed ? [graph.failed] : [] }
   }
 
   /** Reads what the open page shows beyond the listings; processes need nothing more. */
   async function open(page: HandbookPage | null): Promise<void> {
     const mine = ++opened
+    if (!page) {
+      detail.value = emptyDetail('ready')
+      return
+    }
     detail.value = emptyDetail('loading')
-    if (!page) return
     let read: PageDetail = emptyDetail('ready')
     if (page.kind === 'role') read = await loadRole(page.id)
     if (page.kind === 'workflow' || page.kind === 'metaSkill') read = await loadGraph(page.id)
