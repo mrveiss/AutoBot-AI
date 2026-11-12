@@ -11,8 +11,9 @@ the active embedding space. The persist directory is never touched, other collec
 memory) are never listed, and a collection is emptied rather than dropped so a live KB's open handle
 stays valid.
 
-The names are resolved by the caller BEFORE anything is deleted and passed in: the active space is read
-from Redis, so resolving it afterwards would read a state the wipe had already changed.
+The names the wipe empties are the ones frozen in the approved plan (``frozen_collections``), checked against
+the KB's current names BEFORE anything is deleted: the active space is read from Redis, so resolving it
+afterwards would read a state the wipe had already changed.
 """
 
 from __future__ import annotations
@@ -40,6 +41,19 @@ def kb_collection_names() -> list[str]:
     if space is not None and space.collection:
         names.append(space.collection)
     return list(dict.fromkeys(names))
+
+
+def frozen_collections(plan_collections: list[dict], allowed: list[str]) -> list[str]:
+    """The collection names the approved plan lists, each checked against *allowed*; raises on any other.
+
+    The wipe empties exactly these. A name the KB does not own now (for example an embedding space that has
+    since been switched) refuses the whole wipe before any delete: propose it again against the current state.
+    """
+    names = [item["name"] for item in plan_collections]
+    outside = [name for name in names if name not in allowed]
+    if outside:
+        raise ValueError(f"the approved plan names collections the KB no longer owns ({outside}); nothing was deleted")
+    return names
 
 
 async def default_chroma_client():

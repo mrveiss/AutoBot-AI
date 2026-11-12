@@ -565,7 +565,7 @@ register_env_var(
         default=500,
         description=(
             "Keys scanned and unlinked per call while an approved knowledge wipe removes knowledge "
-            "key prefixes (services/kb_wipe_action.py, #21048)."
+            "key prefixes (services/kb_wipe_redis.py, #21048)."
         ),
         component="knowledge",
         range=(1, 10000),

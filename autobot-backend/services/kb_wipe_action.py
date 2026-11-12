@@ -10,18 +10,23 @@ ordinary approval gate, ``approval_type=destructive_action``, and nothing is del
 approves it. Approval runs :func:`execute_kb_wipe_action` through the ``services.approval_execution``
 registry.
 
-Scope is fixed in code, never read from the approval: the KB search indexes and key prefixes in the
+Scope is fixed in code and frozen in the approved plan: the KB's own search index and key prefixes in the
 ``knowledge`` Redis database (``services.kb_wipe_redis``) and the KB's own ChromaDB collections, where its
-embeddings live (``services.kb_wipe_chroma``). Settings, including the embedding-model override, survive.
+embeddings live (``services.kb_wipe_chroma``). The executor deletes exactly the plan's lists, after checking each
+name against the code's scope, and never lists the server to decide what to delete. Settings, including the
+embedding-model override, survive.
 
 Known partial wipe: the pipeline loader also writes PropertyGraph nodes (``knowledge/pipeline/loaders/
 redis_graph_loader.py``) that the memory graph shares. The wipe removes the loader's own ``entity:`` and
 ``timeline:global`` keys but NOT those shared nodes, so the KB graph is left half-wiped until ownership of
 those nodes is split or KB-origin nodes are tagged (tracked in #21128).
 
-The audit record is built step by step, so a failure partway still records exactly what was deleted. A
-self-approval follows the one four-eyes rule (``services.approval_four_eyes``): the only admin may approve
-their own request, flagged; with a second admin it is refused.
+The paper trail comes first (``knowledge/backup_audit.py``, ``services/install_cleanup_actions.py``): a durable
+"intent" entry (who proposed, who approved, the frozen scope, the approval id) is committed before the first
+delete, and no committed entry means nothing is deleted. The outcome entry is built step by step, so a failure
+partway still records exactly what was deleted and the step reached. A self-approval follows the one four-eyes
+rule (``services.approval_four_eyes``): the only admin may approve their own request, flagged; with a second
+admin it is refused.
 """
 
 from __future__ import annotations
@@ -38,8 +43,15 @@ from services.approval_execution import register_post_approval_action, verified_
 from services.approval_four_eyes import is_self_approval
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import AuditResult, audit_log
-from services.kb_wipe_chroma import ChromaFactory, clear_chroma, kb_collection_names, plan_chroma
-from services.kb_wipe_redis import KB_WIPE_DATABASES, ClientFactory, default_client, execute_redis, plan_redis
+from services.kb_wipe_chroma import ChromaFactory, clear_chroma, frozen_collections, kb_collection_names, plan_chroma
+from services.kb_wipe_redis import (
+    KB_WIPE_DATABASES,
+    ClientFactory,
+    default_client,
+    execute_redis,
+    frozen_redis_scope,
+    plan_redis,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,6 +63,10 @@ ACTION = "kb_wipe"
 #: The production module that PROPOSES this action (#17315).
 PROPOSED_BY = "services.kb_wipe_action"
 PROPOSAL_TITLE = "Wipe the knowledge base (indexes and documents)"
+PROPOSAL_DESCRIPTION = (
+    "Drops the knowledge base's own search index, removes the knowledge key prefixes and empties the knowledge "
+    "ChromaDB collections. Settings and all other data are untouched."
+)
 _WHAT = "the knowledge wipe"
 #: Where a proposal came from. Only the operator script may name a requester that is not a user id.
 CHANNEL_API = "api"
@@ -71,6 +87,23 @@ async def plan_kb_wipe(
     }
 
 
+async def _pending_proposal(session: "AsyncSession") -> "Approval | None":
+    query = select(Approval).where(
+        Approval.status == ApprovalStatus.PENDING.value, Approval.context["action"].astext == ACTION
+    )
+    return (await session.execute(query)).scalars().first()
+
+
+def _proposal_context(requested_by: str, channel: str, plan: dict) -> dict:
+    return {
+        "action": ACTION,
+        "requested_by": requested_by,
+        "channel": channel,
+        "databases": list(KB_WIPE_DATABASES),
+        "plan": plan,
+    }
+
+
 async def propose_kb_wipe(
     session: "AsyncSession", requested_by: str, plan: dict, *, channel: str = CHANNEL_API
 ) -> "Approval":
@@ -86,29 +119,16 @@ async def propose_kb_wipe(
         # and would block every later proposal behind it.
         raise ValueError(f"{_WHAT} can be proposed on the API channel only by a user id")
     await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:name))"), {"name": ACTION})
-    query = select(Approval).where(
-        Approval.status == ApprovalStatus.PENDING.value, Approval.context["action"].astext == ACTION
-    )
-    context = {
-        "action": ACTION,
-        "requested_by": requested_by,
-        "channel": channel,
-        "databases": list(KB_WIPE_DATABASES),
-        "plan": plan,
-    }
-    if (pending := (await session.execute(query)).scalars().first()) is not None:
+    if (pending := await _pending_proposal(session)) is not None:
         pending.context = {**(pending.context or {}), "plan": plan}
         await session.commit()
         return pending
     return await ApprovalGateService(session).create_approval(
         title=PROPOSAL_TITLE,
         approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
-        description=(
-            "Drops the knowledge search indexes, removes the knowledge key prefixes and empties the knowledge "
-            "ChromaDB collections. Settings and all other data are untouched."
-        ),
+        description=PROPOSAL_DESCRIPTION,
         requested_by_agent=f"kb-wipe:{requested_by}",
-        context=context,
+        context=_proposal_context(requested_by, channel, plan),
     )
 
 
@@ -125,38 +145,96 @@ async def _review_kb_wipe(approval: "Approval", session: "AsyncSession") -> bool
     return await is_self_approval(approval, session, what=_WHAT)
 
 
-async def _audit(
-    approval: "Approval", result: AuditResult, record: dict, self_approval: bool, error: str | None = None
-) -> bool:
+def _details(approval: "Approval", self_approval: bool, **extra: object) -> dict:
+    """Who proposed, who approved and under which approval id; no document content."""
+    return {
+        "approval_id": str(approval.id),
+        "proposed_by": approval.requested_by_agent,
+        "approved_by": approval.decided_by_user,
+        "approver_id": str(verified_decider(approval)),
+        "approved_at": approval.decided_at.isoformat() if approval.decided_at else None,
+        "self_approval": self_approval,
+        **extra,
+    }
+
+
+def _outcome_details(
+    approval: "Approval", self_approval: bool, record: dict, error: str | None = None, **extra: object
+) -> dict:
+    steps = len(record["redis"]) + len(record["chroma"])
+    return _details(
+        approval,
+        self_approval,
+        step=record["step"],
+        steps_started=steps,
+        collections=record["collections"],
+        redis=record["redis"],
+        chroma=record["chroma"],
+        error=error,
+        **extra,
+    )
+
+
+async def _audit(approval: "Approval", result: AuditResult, details: dict) -> bool:
+    """Whether the durable entry was committed."""
     return await audit_log(
         AuditAction.KNOWLEDGE_WIPE.value,
         result=result,
         user_id=approval.decided_by_user,
         resource="knowledge_base",
         durable=True,
-        details={
-            "approval_id": str(approval.id),
-            "approved_by": approval.decided_by_user,
-            "approver_id": str(verified_decider(approval)),
-            "approved_at": approval.decided_at.isoformat() if approval.decided_at else None,
-            "self_approval": self_approval,
-            "collections": record["collections"],
-            "redis": record["redis"],
-            "chroma": record["chroma"],
-            "error": error,
-        },
+        details=details,
     )
 
 
-async def _wipe(approval: "Approval", self_approval: bool) -> dict:
-    """Resolve the collections first, then Redis, then Chroma; a failure audits what was already deleted."""
-    record: dict = {"collections": [], "redis": [], "chroma": []}
+def _require_approved(approval: "Approval") -> None:
+    if (approval.context or {}).get("action") != ACTION or approval.status != ApprovalStatus.APPROVED.value:
+        raise ValueError(f"approval {approval.id} is not an approved {ACTION} proposal; the wipe is refused")
+
+
+async def _frozen_scope(approval: "Approval") -> dict:
+    """Exactly what the approved plan says to delete, checked against the code's scope, before anything is deleted."""
+    plan = (approval.context or {}).get("plan")
+    if not isinstance(plan, dict):
+        raise ValueError(f"approval {approval.id} carries no plan; the wipe is refused")
+    allowed = await asyncio.to_thread(kb_collection_names)  # read now: the wipe changes what this reads
     try:
-        record["collections"] = await asyncio.to_thread(kb_collection_names)  # before anything is deleted
-        await asyncio.to_thread(execute_redis, record["redis"])
-        await clear_chroma(record["collections"], record["chroma"])
+        return {
+            "redis": frozen_redis_scope(plan["databases"]),
+            "collections": frozen_collections(plan["chroma_collections"], allowed),
+        }
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f"approval {approval.id} carries a malformed plan; the wipe is refused") from exc
+
+
+async def _record_intent(approval: "Approval", scope: dict, self_approval: bool) -> None:
+    """The paper trail comes first: no committed entry means nothing is deleted (#17038)."""
+    details = _details(approval, self_approval, phase="intent", scope=scope)
+    if not await _audit(approval, "attempted", details):
+        raise RuntimeError(f"the audit entry for approval {approval.id} could not be written; nothing was deleted")
+
+
+async def _audit_failure(approval: "Approval", record: dict, self_approval: bool, exc: Exception) -> None:
+    """Record the failed outcome. Never raises, so the wipe's own error stays the one that propagates (#17038)."""
+    details = _outcome_details(approval, self_approval, record, error=type(exc).__name__, phase="failure")
+    outcome = "returned False"
+    try:
+        if await _audit(approval, "failed", details):
+            return
+    except Exception as audit_exc:  # noqa: BLE001 -- logged below; it must not replace the original error
+        outcome = type(audit_exc).__name__
+    logger.error("knowledge wipe: the failure audit entry for approval %s was not written (%s)", approval.id, outcome)
+
+
+async def _wipe(approval: "Approval", scope: dict, self_approval: bool) -> dict:
+    """Redis, then Chroma, each exactly as frozen; a failure audits what was already deleted, then re-raises."""
+    record: dict = {"step": "redis", "collections": scope["collections"], "redis": [], "chroma": []}
+    try:
+        await asyncio.to_thread(execute_redis, record["redis"], scope["redis"])
+        record["step"] = "chroma"
+        await clear_chroma(scope["collections"], record["chroma"])
     except Exception as exc:
-        await _audit(approval, "failed", record, self_approval, error=type(exc).__name__)
+        await _audit_failure(approval, record, self_approval, exc)
         raise
     return record
 
@@ -168,12 +246,15 @@ def _summary(record: dict) -> str:
 
 
 async def execute_kb_wipe_action(approval: "Approval", session: "AsyncSession") -> None:
-    """Wipe the KB for an approved gate. The durable audit comes first, then the comment and the commit."""
+    """Wipe the KB for an approved gate: the intent entry first, then the frozen scope, then the outcome entry."""
+    _require_approved(approval)
     if verified_decider(approval) is None:
         raise ValueError(f"approval {approval.id} has no verified decider; the wipe is refused")
     self_approval = await _review_kb_wipe(approval, session)
-    record = await _wipe(approval, self_approval)
-    if not await _audit(approval, "success", record, self_approval):
+    scope = await _frozen_scope(approval)
+    await _record_intent(approval, scope, self_approval)
+    record = await _wipe(approval, scope, self_approval)
+    if not await _audit(approval, "success", _outcome_details(approval, self_approval, record, phase="completion")):
         raise RuntimeError(f"the wipe for approval {approval.id} ran but its audit record could not be written")
     body = _summary(record) + (" (self-approved by the only admin)." if self_approval else ".")
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))

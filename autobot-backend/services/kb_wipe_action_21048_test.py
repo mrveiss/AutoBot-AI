@@ -137,6 +137,12 @@ def _knowledge_data():
     return {**WIPED, **KEPT}
 
 
+@pytest.fixture(autouse=True)
+def kb_index(monkeypatch):
+    """The KB's own index name comes from ``knowledge.index_scope``; pin it so no real configuration is read."""
+    monkeypatch.setattr(redis_mod, "kb_index_names", lambda: ("llama_index",))
+
+
 @pytest.fixture
 def fleet():
     return {
@@ -179,9 +185,14 @@ async def test_plan_lists_indexes_prefixes_and_collections_with_counts_and_delet
     assert set(fleet["knowledge"].data) == set(_knowledge_data())
 
 
+def _scope(fleet):
+    """The Redis scope an approver's plan freezes: what ``plan_redis`` lists, checked against the code's scope."""
+    return redis_mod.frozen_redis_scope(redis_mod.plan_redis(_factory(fleet)))
+
+
 def test_wipe_removes_kb_prefixes_and_keeps_the_embedding_override_and_every_other_database(fleet):
     record: list[dict] = []
-    redis_mod.execute_redis(record, _factory(fleet))
+    redis_mod.execute_redis(record, _scope(fleet), _factory(fleet))
     assert set(fleet["knowledge"].data) == set(KEPT)  # embedding choice, settings, credentials, locks survive
     assert fleet["knowledge"].data[OVERRIDE_KEY] == "model-b"
     assert fleet["knowledge"].indexes == {}
@@ -224,13 +235,27 @@ def test_registration_is_server_only_admin_only_reviewed_and_proposed_in_this_mo
     assert _DECISION_REVIEWS[action.ACTION] is action._review_kb_wipe
 
 
-def _approval(requester=None, channel=action.CHANNEL_OPERATOR):
+#: The plan an approver saw: the KB's index, every KB prefix and the two KB collections, as ``plan_kb_wipe`` lists them.
+PLAN = {
+    "databases": [
+        {
+            "database": "knowledge",
+            "indexes": [{"name": "llama_index", "documents": 12}],
+            "prefixes": [{"prefix": p, "keys": 0} for p in redis_mod.KB_KEY_PREFIXES],
+        }
+    ],
+    "chroma_collections": [{"name": "autobot_memory", "vectors": 7}, {"name": "space_b", "vectors": 5}],
+}
+
+
+def _approval(requester=None, channel=action.CHANNEL_OPERATOR, plan=PLAN, status="approved"):
     return types.SimpleNamespace(
         id=uuid.uuid4(),
+        status=status,
         decided_by_user="alice",
         decided_at=datetime(2026, 11, 8, 9, 0, tzinfo=timezone.utc),
         requested_by_agent=f"kb-wipe:{requester}" if requester else "kb-wipe:operator",
-        context={"action": action.ACTION, "channel": channel},
+        context={"action": action.ACTION, "channel": channel, "plan": plan},
     )
 
 
@@ -244,7 +269,7 @@ def _wire(monkeypatch, fleet, order=None):
     audit = AsyncMock(side_effect=lambda *a, **k: (order.append("audit") if order is not None else None) or True)
     monkeypatch.setattr(action, "audit_log", audit)
     real = redis_mod.execute_redis
-    monkeypatch.setattr(action, "execute_redis", lambda record: real(record, _factory(fleet)))
+    monkeypatch.setattr(action, "execute_redis", lambda record, scope: real(record, scope, _factory(fleet)))
     return audit
 
 
@@ -264,7 +289,8 @@ async def test_approved_wipe_audits_durably_before_the_commit_with_the_verified_
     assert details["approved_at"].startswith("2026-11-08T09:00") and details["self_approval"] is False
     assert details["collections"] == ["autobot_memory", "space_b"]
     assert [c["vectors"] for c in details["chroma"]] == [7, 5]
-    assert order == ["audit", "commit"]
+    assert details["phase"] == "completion" and details["step"] == "chroma"
+    assert order == ["audit", "audit", "commit"]  # the intent entry, the outcome entry, then the comment's commit
     assert set(fleet["knowledge"].data) == set(KEPT)
     assert len(chroma.cols["co"].ids) == 4
 
@@ -324,12 +350,12 @@ async def test_a_failure_midway_through_redis_keeps_the_steps_already_taken(monk
 @pytest.mark.asyncio
 async def test_a_lost_success_audit_is_raised_not_swallowed(monkeypatch, fleet, chroma):
     audit = _wire(monkeypatch, fleet)
-    audit.side_effect = None
-    audit.return_value = False
+    audit.side_effect = [True, False]  # the intent entry is written, the success entry is not
     approval = _approval()
     set_verified_decider(approval, uuid.uuid4())
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="ran but"):
         await action.execute_kb_wipe_action(approval, _session())
+    assert fleet["knowledge"].indexes == {}  # the wipe did run: the loss is raised, not hidden
 
 
 def _admins(*ids):
@@ -415,18 +441,20 @@ def test_a_failure_partway_through_a_prefix_keeps_the_count_so_far(monkeypatch):
 
     client.unlink = flaky
     record: list[dict] = []
+    scope = [{"database": "knowledge", "indexes": [], "prefixes": ["fact:"]}]
     with pytest.raises(ConnectionError):
-        redis_mod.execute_redis(record, lambda database: client)
+        redis_mod.execute_redis(record, scope, lambda database: client)
     entry = next(s for s in record if s["name"] == "fact:")
     assert entry["count"] == 2 and entry["complete"] is False
 
 
-def test_index_names_come_from_ft_list_without_a_second_prefix_scan(fleet):
+def test_the_executor_scans_each_frozen_prefix_once_and_does_not_plan_again(fleet):
+    scope = _scope(fleet)
     scans = []
     original = fleet["knowledge"].scan_iter
     fleet["knowledge"].scan_iter = lambda match, count=None: scans.append(match) or original(match, count)
-    redis_mod.execute_redis([], _factory(fleet))
-    assert len(scans) == len(redis_mod.KB_KEY_PREFIXES)  # one scan per prefix, none for planning
+    redis_mod.execute_redis([], scope, _factory(fleet))
+    assert len(scans) == len(redis_mod.KB_KEY_PREFIXES)
 
 
 @pytest.mark.asyncio
@@ -446,6 +474,6 @@ async def test_the_route_answers_403_for_a_non_user_requester_and_creates_nothin
 
     session = MagicMock(execute=AsyncMock(), commit=AsyncMock())
     with pytest.raises(HTTPException) as caught:
-        await admin_kb_wipe.propose_knowledge_wipe(current_user={"id": "alice"}, session=session)
+        await admin_kb_wipe.propose_knowledge_wipe(current_user={"id": "alice", "role": "admin"}, session=session)
     assert caught.value.status_code == 403
     session.execute.assert_not_awaited()
