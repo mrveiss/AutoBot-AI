@@ -81,8 +81,7 @@ from .work_item_comments import require_work_item_id, serialize_comment
 
 
 class HumanClaimRequest(BaseModel):
-    user_id: Optional[str] = None  # accepted, ignored: claimant and tenant are the session's (#13999)
-    company_id: Optional[str] = None
+    company_id: Optional[str] = None  # accepted, ignored: claimant and tenant are the session's (#13999)
 
 
 class HumanUnclaimRequest(HumanClaimRequest):
