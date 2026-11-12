@@ -91,6 +91,7 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 import pytest
+from repo_tests._installed_lazy_module import is_installed_subclass_module
 from repo_tests._paths import repo_root
 
 from tools.lint._comment_syntax import code_lines
@@ -561,12 +562,11 @@ class _LeakGuard:
         when the key is new.  It is passed in rather than looked up because
         the caller has already re-baselined by the time this runs.
 
-        The first test is an equivalence, not a new rule: a brand-new key holding a
-        module with a ``__spec__`` is an ordinary import, which the final line already
-        answered ``None`` for.  So is one holding a file on disk outside the repository,
-        spec or not: ``kombu`` swaps itself for a spec-less lazy module (#15169).
+        The first test is an equivalence, not a new rule: a new key holding a module with a
+        ``__spec__`` is an ordinary import, which the final line already answered ``None`` for.
+        So is a spec-less subclass an installed package defines (``kombu``, #15169; see the helper).
         """
-        installed = _is_synthetic(module) and self._is_third_party(module) and _has_real_file(module)
+        installed = is_installed_subclass_module(module, self._is_third_party, _has_real_file)
         if previous is _MISSING and (installed or not _is_synthetic(module)):
             return None
         if _is_conftest_module(module):
