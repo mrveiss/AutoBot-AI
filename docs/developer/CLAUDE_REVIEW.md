@@ -328,12 +328,11 @@ The trainmaster (PR-coordinator session) alone builds and lands trains: merge co
 
 ### Pre-board fast lane (#21359)
 
-- Before a member boards, dispatch the lane on its head, outside the train CI slots: `gh workflow run dispatch-preboard-guards.yml --ref <member branch>` (`-f base=<branch>` only if the PR targets another).
-- It runs every guard test (the `repo_tests` and `pipeline-scripts` trees, sharded) plus the generated-types check, with no fail-fast: one complete failure list per run.
-- Read it: `gh run list --workflow dispatch-preboard-guards.yml --branch <member branch> --limit 1`, then `gh run download <run id> -n preboard-guards-result` and read `result.json` (`overall`, `checks`, `failed_tests`, `behind_base`).
-- A member boards only with a completed, non-cancelled `overall: "green"` result at its approved head; a push after the run needs a new run.
-- Red: fix every listed `failed_tests` entry in the PR before it boards; a types failure uploads the `generated-types-patch` artifact.
-- Not in the lane yet (#21360): the hardcoded-value baseline audit, Semgrep at ERROR severity, the real-ChromaDB session and promtool (their tests show in `skipped_tests`).
+- Dispatch on the member head, outside the train CI slots: `gh workflow run dispatch-preboard-guards.yml --ref <member branch>` (`-f base=<branch>` only if the PR targets another). Read it: `gh run download <run id> -n preboard-guards-result`, then `result.json`.
+- It tests the head merged with the current base tip (a local commit, never pushed) and runs every pytest root except the product trees (the roots are defined in `pipeline-scripts/preboard_guard_lane.py`), with the reach-floor staleness audit on, plus the generated-types check; no fail-fast.
+- NOT covered: the product suites (`autobot-backend`, `autobot-slm-backend`, `autobot-tts-worker`, `libs`, `plugins/core-plugins`), frontend tests, two members that each move a population (only the train sees it), the dependency-floor check, the hardcoded-value baseline audit, Semgrep, and the promtool and real-ChromaDB tests (they show in `skipped_tests`); follow-up #21360.
+- Boarding rule: a completed, non-cancelled result at the approved head with `overall` = `green` or `green_with_skips` and `behind_base` = 0; read `failed_tests` and `skipped_tests`. `green_with_skips` is boardable only because the train's full suite covers those skips.
+- `red` (a failed test, a `problems` entry, a skip off the reviewed allowlist, a recorded test file that produced nothing, a conflict with base) or `cancelled`: fix it in the PR and dispatch again; a push after the run needs a new run; a types failure uploads `generated-types-patch`.
 
 ## CI Diagnosis
 
