@@ -101,4 +101,6 @@ def test_service_restarts_are_inline_after_the_proposal_include_not_handlers() -
     include = next(i for i, n in enumerate(names) if "Propose or claim re-aligning the internal key" in n)
     restart = next(i for i, n in enumerate(names) if n == "[PLAY 2] Backend | Restart service")
     assert include < restart, "the restart must come after the proposal include"
-    assert not [t for t in tasks if "notify" in t], "Play 2 restarts are inline tasks; a notify would wait on a handler flush"
+    assert not [
+        t for t in tasks if "notify" in t
+    ], "Play 2 restarts are inline tasks; a notify would wait on a handler flush"
