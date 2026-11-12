@@ -4,67 +4,54 @@
 # Author: mrveiss
 """The leak guard tells a package's own spec-less module from a stub a test built (#15169).
 
-Split from ``sys_modules_leak_guard_test.py``, which sits at the file-size ceiling.  The
-happy path is a ``ModuleType`` subclass defined by an installed file (``kombu``'s shape); the
-controls are the stub shapes that must stay reported.
+Split from ``sys_modules_leak_guard_test.py``, which sits at the file-size ceiling.  The happy
+path is ``kombu``'s shape: an instance of a ``ModuleType`` subclass whose code lives in an
+installed file and whose ``__module__`` is its own name.  The rest are stub shapes that must stay
+reported.  Each says which earlier rule it fails on: *any-outside-file* (exempt a spec-less module
+whose ``__file__`` exists outside the repo) and *owner-lookup* (trust ``type(m).__module__``).
 """
 
 from __future__ import annotations
 
 import importlib.util
 import os
-import sys
 import types
-import warnings
 from pathlib import Path
 
 import pytest
-from repo_tests.sys_modules_leak_guard import _DISK_CACHE, _LeakGuard
+from repo_tests._sys_modules_leak_guard_support import (
+    LLC_CONFTEST,
+    OTHER_MODULE,
+    fresh_guard,
+    guard_factory,
+    install_module,
+    leaks_for,
+)
 
-_ROOT = Path("/repo")
-_LLC_CONFTEST = _ROOT / "backend" / "llc" / "tests" / "conftest.py"
-_OTHER_MODULE = _ROOT / "backend" / "initialization" / "lifespan_test.py"
+make_guard = pytest.fixture(guard_factory, name="make_guard")
+guard = pytest.fixture(fresh_guard, name="guard")
 
-
-@pytest.fixture
-def make_guard(monkeypatch):
-    """Build guards over an isolated ``sys.modules`` copy, with ``knowledge`` known to exist on disk."""
-    monkeypatch.setattr(sys, "modules", dict(sys.modules))
-    monkeypatch.setattr("repo_tests.sys_modules_leak_guard._DISK_CACHE", dict(_DISK_CACHE, knowledge=True))
-
-    def build(root: Path = _ROOT) -> _LeakGuard:
-        instance = _LeakGuard(root)
-        instance.snapshot()
-        return instance
-
-    return build
+_CLASS_SOURCE = """import types
 
 
-@pytest.fixture
-def guard(make_guard):
-    return make_guard()
-
-
-def _install(name: str, module: object) -> None:
-    sys.modules[name] = module  # type: ignore[assignment]
-
-
-def _leaks_for(guard: _LeakGuard, path: Path) -> list[str]:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        guard.check(path, f"the import of {path.name}")
-    return [leak.mutation.key for leak in guard.leaks]
+class LazyModule(types.ModuleType):
+    def __dir__(self):
+        return []
+"""
 
 
 def _lazy_class(where: Path, owner_name: str) -> type:
-    """A ``ModuleType`` subclass defined by a real file at *where*, loaded the way the import system would."""
+    """A ``ModuleType`` subclass defined by a real file at *where*, whose ``__module__`` is *owner_name*."""
     where.parent.mkdir(parents=True, exist_ok=True)
-    where.write_text("import types\n\n\nclass LazyModule(types.ModuleType):\n    pass\n", encoding="utf-8")
+    where.write_text(_CLASS_SOURCE, encoding="utf-8")
     spec = importlib.util.spec_from_file_location(owner_name, where)
     owner = importlib.util.module_from_spec(spec)
-    sys.modules[owner_name] = owner
     spec.loader.exec_module(owner)
     return owner.LazyModule
+
+
+def _installed_class(tmp_path: Path, owner_name: str) -> type:
+    return _lazy_class(tmp_path / "site-packages" / owner_name / "__init__.py", owner_name)
 
 
 def _file_in(directory: Path) -> str:
@@ -75,27 +62,27 @@ def _file_in(directory: Path) -> str:
     return str(target)
 
 
-def _report_new(guard: _LeakGuard, module: types.ModuleType) -> list[str]:
-    _install("knowledge", module)
-    guard.attribute(_LLC_CONFTEST)
-    return _leaks_for(guard, _OTHER_MODULE)
+def _report_new(guard, module: types.ModuleType) -> list[str]:
+    install_module("knowledge", module)
+    guard.attribute(LLC_CONFTEST)
+    return leaks_for(guard, OTHER_MODULE)
 
 
-def test_a_spec_less_subclass_defined_by_installed_code_is_not_a_stub_15169(guard, tmp_path):
-    """``kombu`` swaps in an instance of a ``ModuleType`` subclass it defines; that is not a stub.
+def test_an_installed_packages_own_lazy_module_is_not_a_stub_15169(guard, tmp_path):
+    """The kombu shape: installed class, ``__module__`` == ``__name__`` == key, real installed file.
 
-    Fails on the unguarded classifier (the module is spec-less and new, so it is reported).
+    Fails on main (no rule).
     """
-    lazy = _lazy_class(tmp_path / "site-packages" / "lazy_owner" / "__init__.py", "lazy_owner_15169")("knowledge")
+    lazy = _installed_class(tmp_path, "knowledge")("knowledge")
     lazy.__file__ = _file_in(tmp_path / "site-packages")
 
     assert _report_new(guard, lazy) == []
 
 
 def test_a_plain_module_type_naming_an_existing_outside_file_is_still_a_stub_15169(guard):
-    """Control: ``os.__file__`` exists outside the repo, and a plain ``ModuleType`` is what a test builds.
+    """``os.__file__`` exists outside the repo; a plain ``ModuleType`` is what a test builds.
 
-    Fails on the first fix (spec-less + third-party file + real file), which exempted it.
+    Fails on any-outside-file.
     """
     stub = types.ModuleType("knowledge")
     stub.__file__ = os.__file__
@@ -104,9 +91,9 @@ def test_a_plain_module_type_naming_an_existing_outside_file_is_still_a_stub_151
 
 
 def test_a_plain_module_type_copying_an_installed_packages_file_is_still_a_stub_15169(guard):
-    """Control: copying a real package's ``__file__`` onto a fake is the classic shadowing idiom.
+    """Copying a real package's ``__file__`` onto a fake is the classic shadowing idiom.
 
-    Fails on the first fix, for the same reason as the control above.
+    Fails on any-outside-file.
     """
     stub = types.ModuleType("knowledge")
     stub.__file__ = pytest.__file__
@@ -115,22 +102,45 @@ def test_a_plain_module_type_copying_an_installed_packages_file_is_still_a_stub_
 
 
 def test_a_subclass_defined_inside_the_repo_is_still_a_stub_15169(make_guard, tmp_path):
-    """Control: a test's own ``ModuleType`` subclass is repo code even when it points at an outside file.
+    """A test's own ``ModuleType`` subclass is repo code even when it points at an outside file.
 
-    Fails on the first fix, and on any rule that checks only the instance's ``__file__`` and its type.
+    Fails on any-outside-file.
+    """
+    repo = tmp_path / "repo"
+    stub = _lazy_class(repo / "stubs" / "lazy_stub.py", "lazy_stub_15169")("knowledge")
+    stub.__file__ = _file_in(tmp_path / "site-packages")
+
+    assert _report_new(make_guard(root=repo), stub) == ["knowledge"]
+
+
+def test_a_repo_subclass_claiming_the_packages_module_name_is_still_a_stub_15169(make_guard, tmp_path):
+    """``__module__`` is an assignable string; the class's code files are not.
+
+    Fails on owner-lookup, which resolved the claimed name to the registered module itself.
     """
     repo = tmp_path / "repo"
     cls = _lazy_class(repo / "stubs" / "lazy_stub.py", "lazy_stub_15169")
+    cls.__module__ = "knowledge"
     stub = cls("knowledge")
     stub.__file__ = _file_in(tmp_path / "site-packages")
-    guard = make_guard(repo)
+
+    assert _report_new(make_guard(root=repo), stub) == ["knowledge"]
+
+
+def test_an_installed_class_instantiated_under_another_name_is_still_a_stub_15169(guard, tmp_path):
+    """Importing the real class and building a module for a different key is a stub.
+
+    Fails on any-outside-file and on owner-lookup.
+    """
+    stub = _installed_class(tmp_path, "lazy_owner_15169")("knowledge")
+    stub.__file__ = _file_in(tmp_path / "site-packages")
 
     assert _report_new(guard, stub) == ["knowledge"]
 
 
-def test_a_subclass_of_installed_code_naming_a_missing_file_is_still_a_stub_15169(guard, tmp_path):
-    """Control: the instance's file must exist, whoever defined its class."""
-    stub = _lazy_class(tmp_path / "site-packages" / "lazy_owner" / "__init__.py", "lazy_owner_15169")("knowledge")
-    stub.__file__ = str(tmp_path / "site-packages" / "knowledge" / "__init__.py")
+def test_an_installed_subclass_naming_a_missing_file_is_still_a_stub_15169(guard, tmp_path):
+    """The instance's file must exist, whoever defined its class. Pins ``_has_real_file``; fails on neither."""
+    stub = _installed_class(tmp_path, "knowledge")("knowledge")
+    stub.__file__ = str(tmp_path / "site-packages" / "elsewhere" / "__init__.py")
 
     assert _report_new(guard, stub) == ["knowledge"]
