@@ -74,7 +74,7 @@
                 <option v-for="a in people.agents.value" :key="a.id" :value="`agent:${a.id}`">{{ a.name }}</option>
               </optgroup>
             </select>
-            <button class="assignee-cancel" @click="showAssign = false">{{ $t('common.cancel') }}</button>
+            <span v-if="people.loadFailed.value" class="save-error" role="alert" data-testid="assignee-people-failed">{{ $t('nav.llcPeopleLoadFailed') }}</span><button class="assignee-cancel" @click="showAssign = false">{{ $t('common.cancel') }}</button>
           </div>
         </div>
         <div class="meta-field">

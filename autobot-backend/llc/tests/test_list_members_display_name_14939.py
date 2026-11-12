@@ -72,10 +72,10 @@ async def _names(session_factory, company_id: uuid.UUID) -> dict[str, str | None
     """user_id -> display_name, as the real endpoint returns them."""
     ctx = TenantContext(org_id=company_id, user_id=uuid.uuid4(), is_platform_admin=False)
     async with session_factory() as session:
-        rows = await list_members(
+        response = await list_members(
             company_id=company_id, session=session, svc=MembershipService(), _current_user={}, ctx=ctx
         )
-    return {row["user_id"]: row["display_name"] for row in rows}
+    return {row["user_id"]: row["display_name"] for row in response["members"]}
 
 
 def _user(username: str, display_name: str | None) -> User:
