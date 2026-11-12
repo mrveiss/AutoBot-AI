@@ -36,6 +36,7 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import BASE_SHA_ENV
 from repo_tests._reach import REACH_AUDIT_ENV
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_text
 from tools.lint._scan_helpers import tracked_paths
 
@@ -226,7 +227,7 @@ def test_the_lane_enables_what_the_suite_enables_on_a_merge_train(workflow) -> N
 
 def test_nothing_the_lane_runs_pushes(workflow, lane) -> None:
     assert not [s for s in _scripts(workflow) if "push" in _tokens(s)]
-    tree = ast.parse(support.LANE_MODULE.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(support.LANE_MODULE.read_text(encoding="utf-8"))
     strings = {n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)}
     assert "push" not in strings and "merge" in strings
 
