@@ -147,7 +147,7 @@ def test_an_installed_subclass_naming_a_missing_file_is_still_a_stub_15169(guard
 
 
 def test_a_repo_subclass_borrowing_an_installed_function_is_still_a_stub_15169(make_guard, tmp_path):
-    """A function assigned into the class keeps the donor's ``__module__`` (and its own qualname), so it is not the class's.
+    """Pins the ``__module__`` half of ``_is_own``: the donor's module differs from the class's.
 
     Fails on the code-filename-only rule, which accepted a class whose every function is installed code.
     """
@@ -157,5 +157,26 @@ def test_a_repo_subclass_borrowing_an_installed_function_is_still_a_stub_15169(m
     cls.__dir__ = donor
     stub = cls("knowledge")
     stub.__file__ = _file_in(tmp_path / "site-packages")
+
+    assert _report_new(make_guard(root=repo), stub) == ["knowledge"]
+
+
+def test_a_repo_subclass_borrowing_a_same_module_function_is_still_a_stub_15169(make_guard, tmp_path):
+    """Pins the ``__qualname__`` half of ``_is_own``; fails if that condition is removed.
+
+    The donor is loaded under the key name, so its ``__module__`` equals the stub class's, and its code
+    file is installed. Only its qualname (``Other.__dir__``, not ``LazyModule.__dir__``) tells it apart.
+    """
+    repo = tmp_path / "repo"
+    donor_file = tmp_path / "site-packages" / "knowledge" / "__init__.py"
+    donor_file.parent.mkdir(parents=True)
+    donor_file.write_text("class Other:\n    def __dir__(self):\n        return []\n", encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("knowledge", donor_file)
+    donor_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(donor_module)
+    cls = _lazy_class(repo / "stubs" / "lazy_stub.py", "knowledge")
+    cls.__dir__ = donor_module.Other.__dir__
+    stub = cls("knowledge")
+    stub.__file__ = str(donor_file)
 
     assert _report_new(make_guard(root=repo), stub) == ["knowledge"]
