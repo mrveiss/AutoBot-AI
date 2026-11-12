@@ -12,11 +12,15 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 import SecretAuditLog from '../SecretAuditLog.vue'
+import type { components } from '@/types/generated/api'
+
+type AuditRow = components['schemas']['AuditEntryResponse']
 
 const FIVE_MINUTES_AGO = Math.floor(Date.now() / 1000) - (5 * 60 + 30)
 
-// Shape of a `secret.create` row as the backend emits it.
-const createRow = {
+// A `secret.create` row typed from the generated schema: a missing required field fails
+// vue-tsc here (the generated type has an index signature, so an extra field does not).
+const createRow: AuditRow = {
   id: '6f1c2f0e-8f44-4f55-a0a1-2f3a5b7c9d10',
   timestamp: FIVE_MINUTES_AGO + 0.25,
   date: '2026-10-31',
@@ -38,7 +42,19 @@ vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ get }) }))
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
+// Every field of the generated row type. The Object.keys equality below is the guard for
+// both directions: vue-tsc does not reject an invented field (index signature).
+const ROW_FIELDS = {
+  id: 1, timestamp: 1, date: 1, operation: 1, result: 1, user_id: 1, ip_address: 1,
+  session_id: 1, user_role: 1, resource: 1, vm_source: 1, vm_name: 1, details: 1,
+  performance_ms: 1
+}
+
 describe('SecretAuditLog (#20173)', () => {
+  it('fixture carries exactly the fields of the generated schema row', () => {
+    expect(Object.keys(createRow).sort()).toEqual(Object.keys(ROW_FIELDS).sort())
+  })
+
   it('shows the real date, secret name and user of a backend row', async () => {
     get.mockResolvedValue({
       success: true,

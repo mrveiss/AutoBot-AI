@@ -64,7 +64,7 @@ describe('TeamsView writes (#14106)', () => {
   beforeEach(() => {
     for (const m of [get, post, del]) m.mockReset()
     route.params.companyId = 'coA'
-    get.mockImplementation((url: string) => Promise.resolve(url.endsWith('/teams') ? TEAMS : MEMBERS))
+    get.mockImplementation((url: string) => Promise.resolve(url.endsWith('/teams') ? TEAMS : { members: MEMBERS, viewer_can_manage: true, viewer_role: 'owner', viewer_grantable_roles: [] }))
     post.mockResolvedValue({})
     del.mockResolvedValue({})
   })
@@ -171,7 +171,7 @@ describe('TeamsView writes (#14106)', () => {
   })
 
   it('shows no write control while the teams cannot be read', async () => {
-    get.mockImplementation((url: string) => (url.endsWith('/teams') ? Promise.reject(httpError(403)) : Promise.resolve(MEMBERS)))
+    get.mockImplementation((url: string) => (url.endsWith('/teams') ? Promise.reject(httpError(403)) : Promise.resolve({ members: MEMBERS, viewer_can_manage: true, viewer_role: 'owner', viewer_grantable_roles: [] })))
     await show()
     expect(byId('teams-unavailable')).not.toBeNull()
     expect(byId('teams-create')).toBeNull()
