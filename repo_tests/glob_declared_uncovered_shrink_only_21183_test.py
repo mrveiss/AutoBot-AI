@@ -95,31 +95,31 @@ def _commit_record(repo: Path, body: str) -> str:
 def test_the_base_read_flags_a_key_added_in_a_real_git_history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Fails if the guard stopped reading the base (e.g. compared the record with itself)."""
     make_repo(tmp_path)
-    first = _commit_record(tmp_path, f'{_NAME} = {{"*.md": ({{"a_test.py"}}, "why")}}\n')
-    now_src = f'{_NAME} = {{"*.md": ({{"a_test.py"}}, "why"), "*.service": ({{"b_test.py"}}, "why")}}\n'
+    first = _commit_record(tmp_path, f'{_NAME} = {{"alpha": ({{"a_test.py"}}, "why")}}\n')
+    now_src = f'{_NAME} = {{"alpha": ({{"a_test.py"}}, "why"), "beta": ({{"b_test.py"}}, "why")}}\n'
     _commit_record(tmp_path, now_src)
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     monkeypatch.setenv("AUTOBOT_RATCHET_BASE_SHA", first)
-    assert grown_against_base(tmp_path, literal_in(now_src, _NAME)) == {"*.service": ["b_test.py"]}  # type: ignore[arg-type]
+    assert grown_against_base(tmp_path, literal_in(now_src, _NAME)) == {"beta": ["b_test.py"]}  # type: ignore[arg-type]
 
 
 def test_a_planted_added_glob_key_is_caught() -> None:
-    base = {"*.md": ({"a_test.py"}, "why")}
-    now = {**base, "*.service": ({"b_test.py"}, "why")}
-    assert grown_entries(now, base) == {"*.service": ["b_test.py"]}
+    base = {"alpha": ({"a_test.py"}, "why")}
+    now = {**base, "beta": ({"b_test.py"}, "why")}
+    assert grown_entries(now, base) == {"beta": ["b_test.py"]}
     assert "dedicated workflow" in _complaint(grown_entries(now, base))
-    assert grown_entries({**base, "*.service": (set(), "why")}, base) == {"*.service": []}, "an empty new key is a key"
+    assert grown_entries({**base, "beta": (set(), "why")}, base) == {"beta": []}, "an empty new key is a key"
 
 
 def test_a_planted_added_guard_under_an_existing_key_is_caught() -> None:
-    base = {"*.md": ({"a_test.py"}, "why")}
-    now = {"*.md": ({"a_test.py", "b_test.py"}, "why")}
-    assert grown_entries(now, base) == {"*.md": ["b_test.py"]}
+    base = {"alpha": ({"a_test.py"}, "why")}
+    now = {"alpha": ({"a_test.py", "b_test.py"}, "why")}
+    assert grown_entries(now, base) == {"alpha": ["b_test.py"]}
 
 
 def test_a_planted_removal_passes() -> None:
-    base = {"*.md": ({"a_test.py", "b_test.py"}, "why"), "*.j2": ({"c_test.py"}, "why")}
-    assert grown_entries({"*.md": ({"a_test.py"}, "why")}, base) == {}
+    base = {"alpha": ({"a_test.py", "b_test.py"}, "why"), "gamma": ({"c_test.py"}, "why")}
+    assert grown_entries({"alpha": ({"a_test.py"}, "why")}, base) == {}
     assert grown_entries(base, base) == {}
 
 
