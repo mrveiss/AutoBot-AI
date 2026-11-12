@@ -75,6 +75,38 @@ describe('facts cursor paging (#20945)', () => {
     expect(graph.relations.value).toEqual([{ from: 'cat_a', to: 'cat_b', type: 'contains', strength: 1 }])
   })
 
+  it('treats a page the server marks failed as a failure and keeps the graph and the cursor', async () => {
+    vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+      if (url.includes('/memory/entities/all')) return { data: { entities: [] } } as never
+      return page(['a'], '500:0') as never
+    })
+    const failedPage = { ...page([], '500:0'), stats: { sections: [{ key: 'facts', cursor: '500:0', failed: true }] } }
+    vi.mocked(apiClient.call).mockResolvedValue(failedPage as never)
+    const graph = useKnowledgeGraphEntities()
+    await graph.fetchGraphData()
+    await graph.loadMoreFacts()
+    expect(graph.errorMessage.value).toBe('knowledge.graph.loadFailedNoReason')
+    expect(graph.entities.value.map((e) => e.id)).toEqual(['a'])
+    expect(graph.hasMoreFacts.value).toBe(true)
+    vi.mocked(apiClient.call).mockResolvedValue(page(['b'], null) as never)
+    await graph.loadMoreFacts()
+    expect(graph.entities.value.map((e) => e.id)).toEqual(['a', 'b'])
+    expect(graph.errorMessage.value).toBe('')
+  })
+
+  it('treats an unchanged cursor with nothing new as a failure', async () => {
+    vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+      if (url.includes('/memory/entities/all')) return { data: { entities: [] } } as never
+      return page(['a'], '500:0') as never
+    })
+    vi.mocked(apiClient.call).mockResolvedValue(page(['a'], '500:0') as never)
+    const graph = useKnowledgeGraphEntities()
+    await graph.fetchGraphData()
+    await graph.loadMoreFacts()
+    expect(graph.errorMessage.value).toBe('knowledge.graph.loadFailedNoReason')
+    expect(graph.entities.value.map((e) => e.id)).toEqual(['a'])
+  })
+
   it('reports a failed next page without losing the page already shown', async () => {
     vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
       if (url.includes('/memory/entities/all')) return { data: { entities: [] } } as never

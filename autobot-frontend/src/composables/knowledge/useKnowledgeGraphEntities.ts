@@ -132,6 +132,12 @@ function _dedupeRelations(all: GraphRelation[]): GraphRelation[] {
   })
 }
 
+/** Whether the facts section of a response reports its source as unreadable (the server's `failed` flag). */
+function _factsFailedOf(payload: unknown): boolean {
+  const stats = (payload as { stats?: { sections?: Array<{ key: string; failed?: boolean }> } } | undefined)?.stats
+  return stats?.sections?.find((section) => section.key === 'facts')?.failed === true
+}
+
 export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
   const entities = ref<GraphEntity[]>([])
   const relations = ref<GraphRelation[]>([])
@@ -255,6 +261,10 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
       if (epoch !== loadEpoch) return
       const known = new Set(entities.value.map((entity) => entity.id))
       const fresh = _entitiesOf(page).filter((entity) => entity.id && !known.has(entity.id))
+      // The server marks a read it could not make as failed; an unmoved cursor with nothing new is the same
+      // failure unmarked. Either way keep the graph and the cursor, so a retry reads the same page again.
+      const stuck = _factsCursorOf(page) === requested && fresh.length === 0
+      if (_factsFailedOf(page) || stuck) throw new Error('')
       _mergePage(page, fresh)
     } catch (error) {
       if (epoch !== loadEpoch) return // a refresh replaced the cursor this read used: its failure is not news

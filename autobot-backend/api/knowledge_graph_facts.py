@@ -32,6 +32,7 @@ class FactsPage:
     truncated: bool = False
     cursor: str | None = None  # first raw position not yet returned (``position:skip``); None on the last page
     by_cursor: bool = False  # the page was read from a cursor, so no visible total exists (O(batch) per page)
+    failed: bool = False  # the read raised: the listing is unknown, not empty (reported on the section)
 
 
 def decode_fact_metadata(raw_fact: Dict[str, Any]) -> Dict[str, Any]:
