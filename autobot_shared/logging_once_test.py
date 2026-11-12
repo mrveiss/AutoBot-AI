@@ -35,6 +35,15 @@ def test_the_record_points_at_the_caller(caplog):
     assert caplog.records[0].funcName == "test_the_record_points_at_the_caller"
 
 
+def test_keyword_arguments_reach_the_logger_and_the_caller_stays_the_site(caplog):
+    log = logging.getLogger("once.kw")
+    with caplog.at_level(logging.WARNING, logger="once.kw"):
+        log_once(log, logging.WARNING, "k", "m %s", "x", extra={"window": 7})
+        log_once(log, logging.WARNING, "k", "m %s", "x", extra={"window": 8})
+    assert [r.window for r in caplog.records] == [7]
+    assert caplog.records[0].funcName == "test_keyword_arguments_reach_the_logger_and_the_caller_stays_the_site"
+
+
 def test_scope_is_the_logger_so_modules_may_share_a_key(caplog):
     with caplog.at_level(logging.WARNING):
         log_once(logging.getLogger("once.c1"), logging.WARNING, "k", "one")

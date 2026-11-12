@@ -49,15 +49,16 @@ def first_time(scope: str, key: str) -> bool:
     return _first_sight(scope, key, _MAX_KEYS)
 
 
-def log_once(logger: logging.Logger, level: int, key: str, msg: str, *args: Any) -> bool:
+def log_once(logger: logging.Logger, level: int, key: str, msg: str, *args: Any, **kwargs: Any) -> bool:
     """Log ``msg % args`` at ``level`` the first time ``key`` is used with ``logger``.
 
-    Returns True when the record was emitted. Thread-safe. The record's call site is the caller
-    of ``log_once``, not this module.
+    ``kwargs`` (``extra=``, ``exc_info=``) go to the logger call unchanged. Returns True when the
+    record was emitted. Thread-safe. The record's call site is the caller of ``log_once``, not this
+    module. Only stdlib loggers: a structlog logger has no ``name``; its caller uses ``first_time``.
     """
     if not first_time(logger.name, key):
         return False
-    logger.log(level, msg, *args, stacklevel=2)
+    logger.log(level, msg, *args, stacklevel=2, **kwargs)
     return True
 
 
