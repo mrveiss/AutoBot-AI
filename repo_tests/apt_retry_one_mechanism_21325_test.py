@@ -30,6 +30,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines, code_text
+
 _ROOT = repo_root()
 _CONF = _ROOT / "docker/apt/80-autobot-resilience"
 _HELPER = _ROOT / "docker/apt/apt-retry"
@@ -54,9 +56,7 @@ _WRAPPED = re.compile(r"(?:^|[\s/])apt[-_]retry(?:\s|$)")
 def _bare_apt(text: str) -> list[tuple[int, str]]:
     """(line number, line) for each apt invocation not first wrapped by apt-retry in its segment."""
     found = []
-    for number, line in enumerate(text.splitlines(), 1):
-        if line.lstrip().startswith(("#", "//")):
-            continue
+    for number, line in code_lines(text):
         for match in _APT.finditer(line):
             segment = _SEGMENT_BREAK.split(line[: match.start()])[-1]
             if not _WRAPPED.search(segment):
@@ -65,7 +65,7 @@ def _bare_apt(text: str) -> list[tuple[int, str]]:
 
 
 def _count_apt(text: str) -> int:
-    return sum(len(_APT.findall(line)) for line in text.splitlines() if not line.lstrip().startswith(("#", "//")))
+    return sum(len(_APT.findall(line.text)) for line in code_lines(text))
 
 
 def _dockerfiles() -> list[Path]:
@@ -107,7 +107,6 @@ def test_the_detector_flags_an_unwrapped_apt_call(line: str) -> None:
         "RUN apt-retry apt-get -qq update",
         "    apt_retry apt-get -o Dpkg::Options::=--force-confold install -y curl",
         "# apt-get update is described here",
-        "// apt-get update is described here",
         "    for cmd in curl apt-get openssl; do",
     ],
 )
@@ -164,9 +163,7 @@ def _stage_problems(text: str) -> tuple[int, list[str]]:
     problems = []
     for stage in stages:
         seen: list[str] = []
-        for line in stage.splitlines():
-            if line.lstrip().startswith("#"):
-                continue
+        for line in code_text(stage).splitlines():
             if _APT.search(line):
                 copies = _copies(seen)
                 for src in (_CONF_SRC, _HELPER_SRC):
@@ -276,7 +273,7 @@ def _fallback_before_installs(workflow: str) -> bool:
     """True when the fallback script is called before the first apt use and before either install step."""
     call = workflow.find(_FALLBACK)
     first = [i for i in (workflow.find(s) for s in _INSTALL_STEPS) if i >= 0]
-    apt = _APT.search("\n".join(l for l in workflow.splitlines() if not l.lstrip().startswith("#")))
+    apt = _APT.search(code_text(workflow))
     firsts = first + ([workflow.find(apt.group(0))] if apt else [])
     return call >= 0 and bool(firsts) and call < min(firsts)
 
