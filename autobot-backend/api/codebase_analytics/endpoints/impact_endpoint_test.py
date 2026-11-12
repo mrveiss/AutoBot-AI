@@ -29,6 +29,10 @@ class _PopulatedCollection:
     def count(self) -> int:
         return 1
 
+    def get(self, **_kwargs) -> dict:
+        """No provenance record: the answer then reads ``unknown``, which these tests do not examine."""
+        return {"ids": [], "metadatas": []}
+
 
 #: Distinguishes "caller did not pass a collection" from "caller passed None on
 #: purpose". `None` is a real input here -- it means the collection is
@@ -38,6 +42,7 @@ _DEFAULT = object()
 
 def _call(node_id="pkg.mod.Thing", max_depth=None, collection=_DEFAULT, result=None):
     """Invoke the endpoint function directly, with its two dependencies stubbed."""
+    from api.codebase_analytics import code_graph_queries as impact_service
     from api.codebase_analytics.endpoints import impact
 
     if collection is _DEFAULT:
@@ -47,8 +52,8 @@ def _call(node_id="pkg.mod.Thing", max_depth=None, collection=_DEFAULT, result=N
         return result
 
     with (
-        patch.object(impact, "get_code_graph_collection", return_value=collection),
-        patch.object(impact, "find_impact", _fake_find_impact),
+        patch.object(impact_service, "get_existing_code_graph_collection", return_value=collection),
+        patch.object(impact_service, "find_impact", _fake_find_impact),
     ):
         response = asyncio.run(impact.analyze_impact(node_id=node_id, max_depth=max_depth))
     return response.status_code, json.loads(response.body)
@@ -180,6 +185,7 @@ def test_a_complete_walk_is_reported_as_complete():
 @pytest.mark.parametrize("depth", [1, 20])
 def test_max_depth_override_reaches_the_engine(depth):
     """The knob is useless if the endpoint swallows it."""
+    from api.codebase_analytics import code_graph_queries as impact_service
     from api.codebase_analytics.endpoints import impact
 
     seen = {}
@@ -189,8 +195,8 @@ def test_max_depth_override_reaches_the_engine(depth):
         return _Result()
 
     with (
-        patch.object(impact, "get_code_graph_collection", return_value=_PopulatedCollection()),
-        patch.object(impact, "find_impact", _capture),
+        patch.object(impact_service, "get_existing_code_graph_collection", return_value=_PopulatedCollection()),
+        patch.object(impact_service, "find_impact", _capture),
     ):
         asyncio.run(impact.analyze_impact(node_id="x", max_depth=depth))
 
