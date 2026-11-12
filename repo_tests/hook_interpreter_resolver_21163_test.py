@@ -140,7 +140,7 @@ def hook_scripts() -> list[str]:
 def _is_shell_hook_file(path: str) -> bool:
     return (
         Path(path).name not in _NOT_A_HOOK
-        and not path.endswith(("_test.py", ".py", ".ere", ".awk", ".md"))
+        and not path.endswith((".py", ".ere", ".awk", ".md"))
         and (_is_text_script(path) or path.endswith(".sh"))
     )
 
