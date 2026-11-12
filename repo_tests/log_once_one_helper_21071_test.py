@@ -41,9 +41,10 @@ from collections import Counter
 from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 from tools.lint import _parse_cache as parse_cache
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _HELPER = "autobot_shared/logging_once.py"
 _NAME = re.compile(r"(warned|logged|reported)", re.IGNORECASE)
@@ -82,8 +83,27 @@ _WARNINGS_WARN = {
 #: Real copies in files an open PR still holds (file -> that PR). Empty: every copy is migrated.
 _DEFERRED: dict[tuple[str, str], str] = {}
 
+
+
+def _swept_paths(root: Path) -> list[str]:
+    """Every tracked non-test ``.py`` the sweep parses: all of them bar the helper itself."""
+    try:
+        found = tracked_paths(root, "*.py", "**/*.py")
+    except EmptyEnumeration:
+        return []  # an empty tree: the floor below raises the typed refusal instead
+    return [rel for rel in found if rel != _HELPER and not _SKIP.search(rel)]
+
+
 #: Floor on files EXAMINED (not on findings: finding nothing is also what a broken sweep reports).
-_MIN_FILES_PARSED = 2000
+#: Re-measured, not carried across (#15928): 4101 on the merged tree (`git ls-files '*.py' '**/*.py'` minus
+#: the helper and the `_SKIP` paths), allowance 300 as for the other tracked-Python sweeps.
+REACH = declare(
+    "log-once-hand-rolled-sweep-21071",
+    discover=_swept_paths,
+    floor=3951,  # mid-window: population 4101, window [3801, 4101]
+    growth=300,
+    what="tracked non-test Python files, swept for hand-rolled log-once state",
+)
 
 
 def _is_empty_state(value: ast.AST | None) -> bool:
@@ -299,15 +319,14 @@ def _sweep() -> tuple[set[tuple[str, str]], set[tuple[str, str]], dict[str, int]
     named: set[tuple[str, str]] = set()
     warns: dict[str, int] = {}
     parsed = 0
-    for rel in tracked_paths(root, "*.py", "**/*.py"):
-        if rel == _HELPER or _SKIP.search(rel):
-            continue
+    for rel in REACH.examined(root):
         parsed += 1
         text = Path(root, rel).read_text(encoding="utf-8")
         found |= {(rel, n) for n in hand_rolled_in(text)}
         named |= {(rel, n) for n in _named_state_any_value(text)}
         if count := warn_calls_in(text):
             warns[rel] = count
+    REACH.completed(parsed, root)
     return found, named, warns, parsed
 
 
@@ -375,7 +394,7 @@ def test_the_name_sweep_and_the_warnings_counter_see_their_plants() -> None:
 def test_no_new_hand_rolled_log_once() -> None:
     """Every once-state is in the helper; the only exceptions are the tables, exactly."""
     found, named, warns, parsed = _sweep()
-    assert parsed >= _MIN_FILES_PARSED, f"sweep examined {parsed} files; it is not looking at the tree"
+    assert parsed, "the sweep parsed nothing"
     copies = found - set(_NOT_LOG_ONCE)
     new = sorted(copies - set(_DEFERRED))
     assert not new, f"hand-rolled log-once outside {_HELPER} (use log_once / first_time): {new}"
