@@ -294,7 +294,10 @@ async def _wipe(approval: "Approval", scope: dict, self_approval: bool) -> dict:
         await clear_chroma(scope["collections"], record["chroma"])
     except asyncio.CancelledError as exc:
         stop.set()
-        await _audit_cancelled(approval, record, self_approval, exc)
+        try:  # shielded: a second cancellation must not drop the outcome entry; the inner write still completes
+            await asyncio.shield(_audit_cancelled(approval, record, self_approval, exc))
+        except asyncio.CancelledError:
+            logger.warning("knowledge wipe: cancelled again while writing the outcome for approval %s", approval.id)
         raise
     except Exception as exc:
         await _audit_failure(approval, record, self_approval, exc)

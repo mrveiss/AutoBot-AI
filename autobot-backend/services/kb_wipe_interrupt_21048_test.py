@@ -36,18 +36,22 @@ def _approval():
 # -- a cancelled wipe is audited and its worker told to stop -----------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_a_cancelled_wipe_writes_the_failed_outcome_stops_the_worker_and_reraises(monkeypatch):
-    audit = AsyncMock(return_value=True)
-    monkeypatch.setattr(action, "audit_log", audit)
-    started, observed = threading.Event(), {}
-
+def _blocking_worker(started, done, observed):
     def worker(record, scope, stop=None):
         record.append({"database": "knowledge", "kind": "prefix", "name": "fact:", "count": 3, "complete": False})
         started.set()
         observed["stopped"] = stop.wait(5)
+        done.set()  # after ``observed`` is recorded: the test waits on this, never on a clock
 
-    monkeypatch.setattr(action, "execute_redis", worker)
+    return worker
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_wipe_writes_the_failed_outcome_stops_the_worker_and_reraises(monkeypatch):
+    audit = AsyncMock(return_value=True)
+    monkeypatch.setattr(action, "audit_log", audit)
+    started, done, observed = threading.Event(), threading.Event(), {}
+    monkeypatch.setattr(action, "execute_redis", _blocking_worker(started, done, observed))
     task = asyncio.create_task(action._wipe(_approval(), {"redis": [], "collections": ["c"]}, False))
     assert await asyncio.to_thread(started.wait, 5)
     task.cancel()
@@ -57,11 +61,33 @@ async def test_a_cancelled_wipe_writes_the_failed_outcome_stops_the_worker_and_r
     assert kwargs["result"] == "failed" and kwargs["details"]["error"] == "CancelledError"
     assert "cancelled, in progress" in kwargs["details"]["note"]
     assert kwargs["details"]["redis"][0]["count"] == 3 and kwargs["details"]["step"] == "redis"
-    for _ in range(100):
-        if observed.get("stopped"):
-            break
-        await asyncio.sleep(0.01)
+    assert await asyncio.to_thread(done.wait, 5)
     assert observed["stopped"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_second_cancellation_during_the_outcome_write_still_ends_with_the_entry_written(monkeypatch):
+    entered, gate, finished = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+    async def slow_audit(*args, **kwargs):
+        entered.set()
+        await gate.wait()
+        finished.set()
+        return True
+
+    monkeypatch.setattr(action, "audit_log", slow_audit)
+    started, done = threading.Event(), threading.Event()
+    monkeypatch.setattr(action, "execute_redis", _blocking_worker(started, done, {}))
+    task = asyncio.create_task(action._wipe(_approval(), {"redis": [], "collections": ["c"]}, False))
+    assert await asyncio.to_thread(started.wait, 5)
+    task.cancel()
+    await asyncio.wait_for(entered.wait(), 5)  # the outcome write is now awaiting
+    task.cancel()  # the second cancellation
+    gate.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    await asyncio.wait_for(finished.wait(), 5)
+    assert await asyncio.to_thread(done.wait, 5)
 
 
 class _Redis:
