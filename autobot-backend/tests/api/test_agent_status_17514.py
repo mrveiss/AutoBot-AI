@@ -75,11 +75,23 @@ async def factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     await engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def _no_redis_feeds(monkeypatch):  # noqa: ANN001, ANN202
+    """Keep these tests off the analytics Redis (#21270): feeds are unreadable (None) unless a test says otherwise."""
+    from services import agent_org_service
+
+    async def unreadable(ids):  # noqa: ANN001, ANN202
+        return {i: None for i in ids}
+
+    monkeypatch.setattr(agent_org_service, "get_agent_feeds", unreadable)
+
+
 ADMIN = AgentVisibility(is_platform_admin=True)
 MEMBER_OF_ACME = AgentVisibility(is_platform_admin=False, company_ids=frozenset({ACME}))
 
 
-async def _status(factory, visibility: AgentVisibility = ADMIN) -> list[dict]:  # noqa: ANN001
+async def _status(factory, visibility: AgentVisibility = ADMIN, *, postgres: bool = True) -> list[dict]:  # noqa: ANN001
+    """GET /agents/status; ``postgres=False`` hands the route no session, so it takes the registry fallback."""
     app = FastAPI()
     app.include_router(router, prefix="/agents")
 
@@ -88,7 +100,7 @@ async def _status(factory, visibility: AgentVisibility = ADMIN) -> list[dict]:  
             yield session
 
     app.dependency_overrides[get_db_session] = _session
-    app.dependency_overrides[get_optional_db_session] = _session
+    app.dependency_overrides[get_optional_db_session] = _session if postgres else (lambda: None)
     app.dependency_overrides[get_agent_visibility] = lambda: visibility
     app.dependency_overrides[get_current_user] = lambda: {"user_id": str(uuid.uuid4())}
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
@@ -104,6 +116,9 @@ async def test_unmeasured_activity_is_not_reported_as_zero(factory):  # noqa: AN
         assert agent["successRate"] is None
     assert by_id["ceo-acme"]["status"] is None  # not "idle": nobody measured it
     assert by_id["paused"]["status"] == "paused"  # the one state the registry does know
+    for agent in by_id.values():  # the store is unreadable here, so the feeds are not reported either
+        assert agent["recentTasks"] is None and agent["activityTimeline"] is None
+        assert agent["activityWindowStart"] is None
 
 
 @pytest.mark.asyncio
@@ -152,3 +167,52 @@ async def test_unreadable_feeds_are_none_on_the_wire_and_measured_empty_is_a_lis
     by_id = {a["id"]: a for a in await _status(factory)}
     assert by_id["ceo-acme"]["recentTasks"] is None and by_id["ceo-acme"]["activityTimeline"] is None
     assert by_id["paused"]["recentTasks"] == [] and by_id["paused"]["activityTimeline"] == []
+
+
+def _patch_fallback_feeds(monkeypatch, feed_for):  # noqa: ANN001, ANN202
+    """Patch the helper where the route looks it up; returns the list of id-lists the route asked for."""
+    from api import agent_org
+
+    asked: list[list[str]] = []
+
+    async def feeds(ids):  # noqa: ANN001, ANN202
+        asked.append(list(ids))
+        return {i: feed_for(i) for i in ids}
+
+    monkeypatch.setattr(agent_org, "get_agent_feeds", feeds)
+    return asked
+
+
+@pytest.mark.asyncio
+async def test_fallback_route_reports_an_unreadable_store_as_none(factory, monkeypatch):  # noqa: ANN001
+    asked = _patch_fallback_feeds(monkeypatch, lambda i: None)
+    agents = await _status(factory, postgres=False)
+    assert agents and asked == [[a["id"] for a in agents]]  # the route fed its own registry agents to the helper
+    for agent in agents:
+        assert agent["recentTasks"] is None and agent["activityTimeline"] is None
+        assert agent["activityWindowStart"] is None
+
+
+@pytest.mark.asyncio
+async def test_fallback_route_reports_a_measured_empty_history_as_empty_lists(factory, monkeypatch):  # noqa: ANN001
+    _patch_fallback_feeds(monkeypatch, lambda i: {"recentTasks": [], "activityTimeline": [], "windowStart": 1234})
+    agents = await _status(factory, postgres=False)
+    assert agents
+    for agent in agents:
+        assert agent["recentTasks"] == [] and agent["activityTimeline"] == []
+        assert agent["activityWindowStart"] == 1234
+
+
+@pytest.mark.asyncio
+async def test_fallback_route_carries_the_helpers_items_per_agent(factory, monkeypatch):  # noqa: ANN001
+    def feed(agent_id: str) -> dict:
+        task = {"id": f"t-{agent_id}", "name": "Deploy", "status": "completed", "completedAt": 5}
+        bar = {"task": "Deploy", "type": "working", "startPercent": 1.0, "widthPercent": 2.0, "duration": 3}
+        return {"recentTasks": [task], "activityTimeline": [bar], "windowStart": 99}
+
+    _patch_fallback_feeds(monkeypatch, feed)
+    agents = await _status(factory, postgres=False)
+    assert agents
+    for agent in agents:
+        assert [t["id"] for t in agent["recentTasks"]] == [f"t-{agent['id']}"]
+        assert agent["activityTimeline"][0]["task"] == "Deploy" and agent["activityWindowStart"] == 99
