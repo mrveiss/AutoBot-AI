@@ -299,4 +299,4 @@ def test_a_plain_branch_name_is_accepted_as_the_base(lane, name) -> None:
 @pytest.mark.parametrize("name", ["", "-x", "a b", "a;b", "$(x)", "../x"])
 def test_a_base_that_is_not_a_branch_name_is_refused(lane, name) -> None:
     with pytest.raises(SystemExit):
-        lane.resolve_base(name)
+        lane.lane_base_commit(name)

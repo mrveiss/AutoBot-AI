@@ -92,15 +92,14 @@ def floor_for(root: Path, ratio: float = FLOOR_RATIO) -> int:
 
 
 def _git(*args: str) -> str:
-    done = subprocess.run(
-        ["git", *args], capture_output=True, text=True, timeout=300, env=scrubbed_git_env()
-    )  # nosec B603 B607
+    argv, env = ["git", *args], scrubbed_git_env()
+    done = subprocess.run(argv, capture_output=True, text=True, timeout=300, env=env)  # nosec B603 B607
     if done.returncode != 0:
         raise SystemExit(f"git {' '.join(args)} failed: {done.stderr.strip()}")
     return done.stdout.strip()
 
 
-def resolve_base(base_ref: str) -> dict[str, str]:
+def lane_base_commit(base_ref: str) -> dict[str, str]:
     """Fetch *base_ref* and name the merge base and how many commits the head lacks."""
     if not BASE_REF_PATTERN.fullmatch(base_ref) or ".." in base_ref:
         raise SystemExit(f"base {base_ref!r} is not a plain branch name")
@@ -186,7 +185,7 @@ def guards_status(needs_result: str, problems: list[str], collected: int, floor:
     return "success"
 
 
-def overall(statuses: list[str]) -> str:
+def lane_verdict(statuses: list[str]) -> str:
     if "cancelled" in statuses:
         return "cancelled"
     return "green" if statuses and all(s == "success" for s in statuses) else "red"
@@ -221,7 +220,7 @@ def build_result(env: dict[str, str], shard_dir: Path, floor: int, roots: list[s
         "base_ref": env.get("BASE_REF", ""),
         "base_sha": env.get("BASE_SHA", ""),
         "behind_base": int(env.get("BEHIND_BASE") or 0),
-        "overall": overall([checks["guards"]["status"], checks["types"]["status"]]),
+        "overall": lane_verdict([checks["guards"]["status"], checks["types"]["status"]]),
         "roots": roots,
         "checks": checks,
         "failed_tests": total["failed"],
@@ -229,7 +228,7 @@ def build_result(env: dict[str, str], shard_dir: Path, floor: int, roots: list[s
     }
 
 
-def render_markdown(result: dict[str, Any]) -> str:
+def render_lane_summary(result: dict[str, Any]) -> str:
     """The job summary: verdict, per-check status, every failed node id."""
     guards = result["checks"]["guards"]
     lines = [
@@ -252,7 +251,7 @@ def _summarize(args: argparse.Namespace) -> int:
     root = Path.cwd()
     result = build_result(dict(os.environ), Path(args.shards), floor_for(root), guard_roots(root))
     Path(args.out).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    markdown = render_markdown(result)
+    markdown = render_lane_summary(result)
     Path(args.markdown).write_text(markdown, encoding="utf-8")
     sys.stdout.write(markdown)
     return 0 if result["overall"] == "green" else 1
@@ -279,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "floor":
         sys.stdout.write(f"{floor_for(root)}\n")
     elif args.command == "base":
-        sys.stdout.write("".join(f"{k}={v}\n" for k, v in resolve_base(args.base_ref).items()))
+        sys.stdout.write("".join(f"{k}={v}\n" for k, v in lane_base_commit(args.base_ref).items()))
     else:
         return _summarize(args)
     return 0
