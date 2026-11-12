@@ -24,8 +24,8 @@ from typing import Any, NamedTuple
 
 from sqlalchemy import select
 
+from autobot_shared.after_commit import defer_until_commit
 from autobot_shared.audit_actions import spellings_of
-from autobot_shared.db_session import run_after_commit
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.membership_epoch import MembershipEpochBump
 from autobot_shared.time_utils import now_utc
@@ -130,7 +130,7 @@ class UserLifecycleMixin(UserServiceBase):
         after the commit.
         """
         mark = PasswordEpochMark(username, DEACTIVATION_EPOCH_LEAD_SECONDS, self.epoch_in_redis)
-        run_after_commit(self.session, mark)
+        defer_until_commit(self.session, mark, scope=True)
         return {"sessions_revocation": "queued_after_commit"}
 
     async def _guard_last_admin(self, user_id: uuid.UUID, action: str, attempt: str) -> None:
@@ -254,7 +254,7 @@ class UserLifecycleMixin(UserServiceBase):
     def _queue_admin_change_revocation(self, user: UserCore, is_admin: bool) -> None:
         """Queue the post-commit epoch write: lead 1 on a demotion, 0 on a promotion."""
         mark = PasswordEpochMark(user.username, _admin_change_lead(is_admin), self.epoch_in_redis)
-        run_after_commit(self.session, mark)
+        defer_until_commit(self.session, mark, scope=True)
 
     async def deactivate_user(self, user_id: uuid.UUID) -> bool:
         """Deactivate a user account; raises ``UserNotFoundError``."""
@@ -296,7 +296,7 @@ class UserLifecycleMixin(UserServiceBase):
         )
         org_ids = {user.org_id, *rows.scalars().all()} - {None}
         for org_id in sorted(org_ids, key=str):
-            run_after_commit(self.session, MembershipEpochBump(org_id))
+            defer_until_commit(self.session, MembershipEpochBump(org_id), scope=True)
 
     async def delete_user(
         self,
