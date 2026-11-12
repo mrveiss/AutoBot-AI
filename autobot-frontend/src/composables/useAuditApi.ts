@@ -18,7 +18,7 @@ import { isoDateStamp } from '@/utils/formatHelpers'
 import type {
   AuditEntry,
   AuditQueryParams,
-  AuditQueryResponse,
+  AuditDashboardResponse,
   AuditStatisticsResponse,
   AuditStatistics,
   AuditCleanupRequest,
@@ -36,7 +36,7 @@ export function useAuditApi() {
   const api = useApiClient()
 
   return {
-    async queryLogs(params?: AuditQueryParams): Promise<AuditQueryResponse | null> {
+    async queryLogs(params?: AuditQueryParams): Promise<AuditDashboardResponse | null> {
       try {
         const searchParams = new URLSearchParams()
         if (params?.start_time) searchParams.append('start_time', params.start_time)
@@ -50,7 +50,7 @@ export function useAuditApi() {
         if (params?.offset) searchParams.append('offset', params.offset.toString())
         const queryString = searchParams.toString()
         const url = `${getApiBase()}/audit/logs${queryString ? `?${queryString}` : ''}`
-        return await api.get<AuditQueryResponse>(url)
+        return await api.get<AuditDashboardResponse>(url)
       } catch (error: unknown) {
         logger.error('Failed to load audit logs', error)
         showSubtleErrorNotification('Error', 'Failed to load audit logs', 'error')
@@ -68,9 +68,9 @@ export function useAuditApi() {
       }
     },
 
-    async getSessionAuditTrail(sessionId: string): Promise<AuditQueryResponse | null> {
+    async getSessionAuditTrail(sessionId: string): Promise<AuditDashboardResponse | null> {
       try {
-        return await api.get<AuditQueryResponse>(`${getApiBase()}/audit/session/${sessionId}`)
+        return await api.get<AuditDashboardResponse>(`${getApiBase()}/audit/session/${sessionId}`)
       } catch (error: unknown) {
         logger.error('Failed to load session audit trail', error)
         showSubtleErrorNotification('Error', 'Failed to load session audit trail', 'error')
@@ -78,9 +78,9 @@ export function useAuditApi() {
       }
     },
 
-    async getUserAuditTrail(userId: string, days: number = 7): Promise<AuditQueryResponse | null> {
+    async getUserAuditTrail(userId: string, days: number = 7): Promise<AuditDashboardResponse | null> {
       try {
-        return await api.get<AuditQueryResponse>(`${getApiBase()}/audit/user/${userId}?days=${days}`)
+        return await api.get<AuditDashboardResponse>(`${getApiBase()}/audit/user/${userId}?days=${days}`)
       } catch (error: unknown) {
         logger.error('Failed to load user audit trail', error)
         showSubtleErrorNotification('Error', 'Failed to load user audit trail', 'error')
@@ -88,9 +88,9 @@ export function useAuditApi() {
       }
     },
 
-    async getFailedOperations(hours: number = 24, resultFilter: AuditResult = 'denied'): Promise<AuditQueryResponse | null> {
+    async getFailedOperations(hours: number = 24, resultFilter: AuditResult = 'denied'): Promise<AuditDashboardResponse | null> {
       try {
-        return await api.get<AuditQueryResponse>(
+        return await api.get<AuditDashboardResponse>(
           `${getApiBase()}/audit/failures?hours=${hours}&result_filter=${resultFilter}`
         )
       } catch (error: unknown) {
