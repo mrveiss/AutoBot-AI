@@ -2,45 +2,55 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The pre-board guard lane cannot report green while having run nothing (#21359, #18499 AC4).
+"""The pre-board guard lane's workflow and roots say what its verdict claims (#21359, #18499 AC4).
 
-``dispatch-preboard-guards.yml`` runs the suite's guard trees on a branch head so a merge-train
-operator learns, before boarding, every guard the head would fail. A lane that is green because it
-ran an empty or different set is worse than no lane: the operator boards on its word. Two layers:
+``dispatch-preboard-guards.yml`` runs the suite's guard trees on a branch head merged with its base,
+so a merge-train operator learns, before boarding, every guard the head would fail. A lane that is
+green because it ran a different set from the one the train runs is worse than no lane: the operator
+boards on its word. This file reads the workflow and the module statically:
 
-* the workflow is read statically: dispatch-only, its own concurrency group, no stop-on-first-failure,
-  the suite's own options, no test root written in it, the result artifact uploaded, the types job
-  reusing the composite action;
-* the module behind it (roots, floor, verdict) is exercised on synthetic reports, each verdict beside
-  the control that proves it can turn the other way.
+* dispatch-only, its own concurrency group, no stop-on-first-failure, the suite's own options, no
+  test root written in it, the result artifact uploaded, the types job reusing the composite action;
+* the roots: one definition, every ``pytest.ini`` root either run or named as left to the suite;
+* the equivalence the suite has: the base merged first, the reach audit on, the ratchet base named;
+* the skip allowlist: every entry names a skip that still exists and the issue that removes it;
+* the result fields documented in the workflow header.
 
-What this does not cover: no run is dispatched here. It cannot be before the workflow is on the
-default branch, so the first dispatched run is the end-to-end evidence.
+The verdict logic is exercised on synthetic reports in ``preboard_guard_lane_verdict_21359_test.py``.
+What neither covers: no run is dispatched here. It cannot be before the workflow is on the default
+branch, so the first dispatched run is the end-to-end evidence.
 """
 
 from __future__ import annotations
 
-import importlib.util
-import json
+import ast
+import re
 import shlex
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
+from repo_tests import _preboard_guard_lane_support as support
 from repo_tests._paths import repo_root
+from repo_tests._ratchet_base import BASE_SHA_ENV
+from repo_tests._reach import REACH_AUDIT_ENV
 
 from tools.lint._comment_syntax import code_text
+from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
-_WORKFLOWS = _ROOT / ".github" / "workflows"
-_LANE_WORKFLOW = _WORKFLOWS / "dispatch-preboard-guards.yml"
-_SUITE_WORKFLOW = _WORKFLOWS / "ci.yml"
-_LANE_MODULE = _ROOT / "pipeline-scripts" / "preboard_guard_lane.py"
+_LANE_WORKFLOW = _ROOT / ".github" / "workflows" / "dispatch-preboard-guards.yml"
+_SUITE_WORKFLOW = _ROOT / ".github" / "workflows" / "ci.yml"
 _TYPES_ACTION = "./.github/actions/generated-types-autofix"
 _STOP_EARLY = ("-x", "--exitfirst", "--maxfail")
 _SHARED_OPTIONS = ("-n", "--dist", "-p", "--shard-durations", "-m")
+_GUARDS_STEP = "Run the guard tests of this shard"
+
+
+def _workflow_files() -> list[Path]:
+    """Every workflow file, enumerated through git rather than a glob of the directory."""
+    return [_ROOT / rel for rel in tracked_paths(_ROOT, ".github/workflows") if rel.endswith(".yml")]
 
 
 def _doc(path: Path) -> dict[str, Any]:
@@ -84,17 +94,13 @@ def _suite_invocation() -> list[str]:
     return found[0]
 
 
+def _step(workflow: dict[str, Any], job: str, name: str) -> dict[str, Any]:
+    return next(s for s in workflow["jobs"][job]["steps"] if s.get("name") == name)
+
+
 @pytest.fixture(scope="module")
 def lane():
-    """The module behind the lane, loaded once and removed again (it registers itself nowhere)."""
-    spec = importlib.util.spec_from_file_location("preboard_guard_lane_under_test", _LANE_MODULE)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-        yield module
-    finally:
-        sys.modules.pop(spec.name, None)
+    yield from support.load_lane()
 
 
 @pytest.fixture(scope="module")
@@ -115,9 +121,9 @@ def test_it_has_its_own_concurrency_group_and_a_unique_name(workflow) -> None:
     group = workflow["concurrency"]
     assert "github.workflow" in group["group"] and "github.ref" in group["group"]
     assert group["cancel-in-progress"] is True
-    names = [
-        (yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("name") for p in sorted(_WORKFLOWS.glob("*.yml"))
-    ]
+    files = _workflow_files()
+    assert _LANE_WORKFLOW in files and len(files) > 20, "the enumeration found too few workflows to prove a name unique"
+    names = [(yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("name") for p in files]
     assert names.count(workflow["name"]) == 1, "another workflow shares this name, so they could share a group"
 
 
@@ -135,10 +141,15 @@ def test_it_reports_every_failure_and_never_stops_early(workflow) -> None:
     assert not flags, f"stop-on-first-failure options: {flags}"
 
 
-def test_it_runs_the_suites_own_options(workflow) -> None:
+def test_it_runs_the_suites_own_options_and_balances_over_its_own_roots(workflow) -> None:
     lane_options = _options([t for s in _scripts(workflow) for t in _invocation(s)])
-    assert lane_options == _options(_suite_invocation())
+    suite_options = _options(_suite_invocation())
     assert set(lane_options) == set(_SHARED_OPTIONS), "an option was dropped from one side or both"
+    shared = [o for o in _SHARED_OPTIONS if o != "--shard-durations"]
+    assert {o: lane_options[o] for o in shared} == {o: suite_options[o] for o in shared}
+    assert suite_options["--shard-durations"] == ".test_durations"
+    assert lane_options["--shard-durations"].endswith("durations.json")
+    assert any("preboard_guard_lane.py durations" in s for s in _scripts(workflow)), "the file is made by the lane"
     suite_env = _doc(_SUITE_WORKFLOW)["jobs"]["python-shard"]["env"]["PYTEST_FAULTHANDLER_TIMEOUT_S"]
     assert workflow["jobs"]["guards"]["env"]["PYTEST_FAULTHANDLER_TIMEOUT_S"] == suite_env
 
@@ -152,12 +163,13 @@ def test_it_restates_no_test_root(workflow, lane) -> None:
     assert any("preboard_guard_lane.py roots" in s for s in scripts) and any("${ROOTS[@]}" in s for s in scripts)
 
 
-def test_the_guard_roots_are_roots_the_suite_collects_and_names(lane) -> None:
+def test_every_pytest_root_is_run_by_the_lane_or_named_as_left_to_the_suite(lane) -> None:
+    declared, guard, product = set(lane.testpaths(_ROOT)), set(lane.GUARD_ROOTS), set(lane.PRODUCT_ROOTS)
     assert lane.guard_roots(_ROOT) == list(lane.GUARD_ROOTS)
-    declared, suite = set(lane.testpaths(_ROOT)), set(_suite_invocation())
-    for root in lane.GUARD_ROOTS:
-        assert root in declared, f"{root} is not a pytest.ini root"
-        assert root in suite, f"{root} is not named by the suite's backend shard invocation"
+    assert not guard & product, f"in both lists: {sorted(guard & product)}"
+    assert declared == guard | product, f"undecided roots: {sorted(declared ^ (guard | product))}"
+    suite = set(_suite_invocation())
+    assert guard <= suite, f"roots the suite's backend shard step does not name: {sorted(guard - suite)}"
 
 
 def test_the_types_check_is_the_one_composite_action(workflow) -> None:
@@ -179,7 +191,7 @@ def test_every_action_pin_is_one_the_suite_already_uses(workflow) -> None:
     external = {u for u in used if not u.startswith("./")}
     known = {
         step["uses"]
-        for path in _WORKFLOWS.glob("*.yml")
+        for path in _workflow_files()
         if path != _LANE_WORKFLOW
         for job in (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("jobs", {}).values()
         for step in job.get("steps", [])
@@ -188,115 +200,68 @@ def test_every_action_pin_is_one_the_suite_already_uses(workflow) -> None:
     assert external and external <= known, f"pins no other workflow uses: {sorted(external - known)}"
 
 
-def test_the_artifact_fields_are_documented_in_the_workflow_header(workflow, lane, tmp_path) -> None:
-    text = _LANE_WORKFLOW.read_text(encoding="utf-8")
-    result = lane.build_result(_env(), _write_shards(tmp_path, [_shard(1, 1, 0, 3)]), 1, ["a"])
-    names = list(result) + list(result["checks"]["guards"]) + ["status", "nodeid", "kind", "message", "reason"]
-    missing = [n for n in names if n not in text]
+# ------------------------------------------------------------------ equivalence with the suite
+
+
+def test_the_tests_run_on_the_head_merged_with_the_base_before_the_environment_is_built(workflow) -> None:
+    for job in ("guards", "types"):
+        steps = workflow["jobs"][job]["steps"]
+        merge = next(i for i, s in enumerate(steps) if "preboard_guard_lane.py merge" in s.get("run", ""))
+        later = [i for i, s in enumerate(steps) if s.get("uses", "").startswith("./.github/actions/")]
+        assert later and merge < min(later), f"{job}: the merge must precede the environment setup"
+        assert steps[0]["with"]["fetch-depth"] == 0, f"{job}: a merge needs the history"
+    run = _step(workflow, "guards", _GUARDS_STEP)
+    assert run["if"] == "steps.base.outputs.merged == 'true'"
+    conflict = next(s for s in workflow["jobs"]["guards"]["steps"] if "conflicts" in s.get("name", ""))
+    assert conflict["if"] == "steps.base.outputs.merged != 'true'" and "exit 1" in conflict["run"]
+
+
+def test_the_lane_enables_what_the_suite_enables_on_a_merge_train(workflow) -> None:
+    env = _step(workflow, "guards", _GUARDS_STEP)["env"]
+    assert env[REACH_AUDIT_ENV] == "1", "the reach-floor staleness band is the check that failed a train"
+    assert env[BASE_SHA_ENV] == "${{ steps.base.outputs.base_sha }}"
+    suite_steps = _doc(_SUITE_WORKFLOW)["jobs"]["python-shard"]["steps"]
+    assert any(f"{REACH_AUDIT_ENV}=1" in s.get("run", "") for s in suite_steps), "the suite no longer sets it"
+
+
+def test_nothing_the_lane_runs_pushes(workflow, lane) -> None:
+    assert not [s for s in _scripts(workflow) if "push" in _tokens(s)]
+    tree = ast.parse(support.LANE_MODULE.read_text(encoding="utf-8"))
+    strings = {n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+    assert "push" not in strings and "merge" in strings
+
+
+def test_every_allowlisted_skip_names_a_skip_that_still_exists_and_its_follow_up(lane) -> None:
+    allowlist = lane.report.SKIP_ALLOWLIST
+    assert allowlist, "an empty allowlist: retire this guard together with the last entry"
+    for entry in allowlist:
+        assert entry.file.split("/")[0] in lane.GUARD_ROOTS, f"{entry.file} is outside the lane's roots"
+        text = (_ROOT / entry.file).read_text(encoding="utf-8")
+        assert entry.source_marker in text, f"{entry.file} no longer holds {entry.source_marker!r}: delete the entry"
+        assert entry.reason_prefix and entry.follow_up == "#21360"
+
+
+# ------------------------------------------------------------------ the documented contract
+
+
+def _header() -> str:
+    return _LANE_WORKFLOW.read_text(encoding="utf-8").split("\nname: ", 1)[0]
+
+
+def test_the_artifact_fields_and_verdicts_are_documented_in_the_workflow_header(lane, tmp_path) -> None:
+    header = _header()
+    rows = support.passing("repo_tests/m_test.py", 3) + [support.skipped("repo_tests/m_test.py", "test_s", "r")]
+    result = support.verdict(lane, tmp_path, [support.shard(1, 1, 0, rows)])
+    skip = result["skipped_tests"][0]
+    names = list(result) + list(result["checks"]["guards"]) + list(skip) + ["status", "nodeid", "kind", "message"]
+    verdicts = ["green", "green_with_skips", "red", "cancelled"]
+    missing = [n for n in names + verdicts if not re.search(rf"(?<!\w){re.escape(n)}(?!\w)", header)]
     assert not missing, f"fields undocumented in the workflow header: {missing}"
+    assert f"schema {lane.report.SCHEMA_VERSION}" in header and lane.report.SCHEMA_VERSION == 2
+    assert result["schema"] == lane.report.SCHEMA_VERSION
 
 
-# ------------------------------------------------------------------ the module, on synthetic reports
-
-
-def _env(**over: str) -> dict[str, str]:
-    needs = {"guards": {"result": "success"}, "types": {"result": "success"}}
-    base = {"NEEDS_JSON": json.dumps(needs), "RUN_ID": "1", "REF": "b", "SHA": "s", "BASE_REF": "main"}
-    return {**base, **over}
-
-
-def _shard(number: int, splits: int, rc: int, cases: int, failing: tuple[str, ...] = ()) -> dict[str, Any]:
-    rows = [
-        f'<testcase classname="repo_tests.m_test" name="test_{i}" file="repo_tests/m_test.py"/>' for i in range(cases)
-    ]
-    for name in failing:
-        rows.append(
-            f'<testcase classname="repo_tests.m_test.TestK" name="{name}" file="repo_tests/m_test.py">'
-            '<failure message="AssertionError: too big&#10;second line">trace</failure></testcase>'
-        )
-    rows.append(
-        '<testcase classname="pipeline-scripts.p_test" name="test_s" file="pipeline-scripts/p_test.py">'
-        '<skipped message="no promtool"/></testcase>'
-    )
-    meta = {"shard": number, "splits": splits, "rc": rc}
-    return {"meta": meta, "junit": f'<testsuites><testsuite name="x">{"".join(rows)}</testsuite></testsuites>'}
-
-
-def _write_shards(tmp_path: Path, shards: list[dict[str, Any]]) -> Path:
-    for shard in shards:
-        folder = tmp_path / f"preboard-shard-{shard['meta']['shard']}"
-        folder.mkdir(parents=True, exist_ok=True)
-        (folder / "shard-meta.json").write_text(json.dumps(shard["meta"]), encoding="utf-8")
-        (folder / "junit.xml").write_text(shard["junit"], encoding="utf-8")
-    return tmp_path
-
-
-def _verdict(tmp_path: Path, shards: list[dict[str, Any]], floor: int, lane, **env: str) -> dict[str, Any]:
-    return lane.build_result(_env(**env), _write_shards(tmp_path, shards), floor, ["repo_tests"])
-
-
-def test_a_complete_clean_run_is_green(lane, tmp_path) -> None:
-    result = _verdict(tmp_path, [_shard(1, 2, 0, 5), _shard(2, 2, 0, 5)], 10, lane)
-    assert result["overall"] == "green" and result["checks"]["guards"]["collected"] == 12
-    assert result["failed_tests"] == [] and result["skipped_tests"][0]["reason"] == "no promtool"
-
-
-def test_every_failure_is_listed_with_its_node_id_and_first_line(lane, tmp_path) -> None:
-    shards = [_shard(1, 2, 1, 4, ("test_a[x]",)), _shard(2, 2, 1, 4, ("test_b",))]
-    result = _verdict(tmp_path, shards, 8, lane)
-    assert result["overall"] == "red"
-    assert [t["nodeid"] for t in result["failed_tests"]] == [
-        "repo_tests/m_test.py::TestK::test_a[x]",
-        "repo_tests/m_test.py::TestK::test_b",
-    ]
-    assert {t["message"] for t in result["failed_tests"]} == {"AssertionError: too big"}
-
-
-def test_a_run_below_the_floor_is_red_and_one_at_it_is_not(lane, tmp_path) -> None:
-    assert _verdict(tmp_path / "a", [_shard(1, 1, 0, 4)], 6, lane)["overall"] == "red"
-    assert _verdict(tmp_path / "b", [_shard(1, 1, 0, 4)], 5, lane)["overall"] == "green"
-
-
-def test_a_missing_shard_is_red_not_a_smaller_green(lane, tmp_path) -> None:
-    result = _verdict(tmp_path, [_shard(1, 2, 0, 50)], 1, lane)
-    assert result["overall"] == "red" and "shards reported" in result["checks"]["guards"]["problems"][0]
-
-
-def test_no_report_at_all_is_red(lane, tmp_path) -> None:
-    result = _verdict(tmp_path, [], 1, lane)
-    assert result["overall"] == "red" and result["checks"]["guards"]["problems"] == ["no shard reported"]
-
-
-def test_an_empty_shard_or_an_unexplained_exit_is_red(lane, tmp_path) -> None:
-    empty = _shard(1, 1, 5, 0)
-    empty["junit"] = '<testsuites><testsuite name="x"/></testsuites>'
-    assert _verdict(tmp_path / "a", [empty], 1, lane)["overall"] == "red"
-    assert _verdict(tmp_path / "b", [_shard(1, 1, 1, 9)], 1, lane)["overall"] == "red"  # exit 1, no failure on record
-
-
-def test_a_cancelled_job_is_cancelled_never_green(lane, tmp_path) -> None:
-    needs = json.dumps({"guards": {"result": "cancelled"}, "types": {"result": "success"}})
-    assert _verdict(tmp_path, [_shard(1, 1, 0, 9)], 1, lane, NEEDS_JSON=needs)["overall"] == "cancelled"
-
-
-def test_a_failed_types_check_alone_makes_the_lane_red(lane, tmp_path) -> None:
-    needs = json.dumps({"guards": {"result": "success"}, "types": {"result": "failure"}})
-    assert _verdict(tmp_path, [_shard(1, 1, 0, 9)], 1, lane, NEEDS_JSON=needs)["overall"] == "red"
-
-
-def test_the_floor_follows_the_suites_record(lane) -> None:
-    recorded = lane.recorded_count(_ROOT, lane.guard_roots(_ROOT))
-    assert recorded > 1000, "the record says little about the guard roots, so a floor from it means little"
-    assert 1 <= lane.floor_for(_ROOT) <= recorded
-    assert lane.floor_for(_ROOT) == int(recorded * lane.FLOOR_RATIO)
-
-
-@pytest.mark.parametrize("name", ["main", "release/1.2", "issue-1-x"])
-def test_a_plain_branch_name_is_accepted_as_the_base(lane, name) -> None:
-    assert lane.BASE_REF_PATTERN.fullmatch(name)
-
-
-@pytest.mark.parametrize("name", ["", "-x", "a b", "a;b", "$(x)", "../x"])
-def test_a_base_that_is_not_a_branch_name_is_refused(lane, name) -> None:
-    with pytest.raises(SystemExit):
-        lane.lane_base_commit(name)
+def test_the_header_states_what_the_lane_does_not_cover() -> None:
+    header = _header()
+    for phrase in ("product test trees", "dependency-floor", "promtool", "interaction of two members", "#21360"):
+        assert phrase in header, f"the header no longer says the lane does not cover: {phrase}"
