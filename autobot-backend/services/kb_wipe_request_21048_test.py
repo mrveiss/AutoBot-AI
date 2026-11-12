@@ -54,6 +54,10 @@ def world(monkeypatch):
     monkeypatch.setattr(knowledge, "get_or_create_knowledge_base", AsyncMock(return_value=kb))
     monkeypatch.setattr(knowledge_mcp, "get_knowledge_base", lambda: kb)
     monkeypatch.setattr(knowledge_mcp, "get_vectors_redis_client", lambda: vectors)
+    context = MagicMock()
+    context.__aenter__ = AsyncMock(return_value=MagicMock(name="session"))
+    context.__aexit__ = AsyncMock(return_value=False)
+    monkeypatch.setattr(knowledge_mcp, "get_async_session_factory", lambda: lambda: context)
     return types.SimpleNamespace(proposals=proposals, kb=kb, vectors=vectors)
 
 
@@ -70,7 +74,7 @@ async def _clear_all(user):
 
 async def _flush(user):
     body = {"operation": "flush", "params": {"confirm": True}}
-    return await knowledge_mcp.mcp_redis_vector_operations(request=body, current_user=user, session=MagicMock())
+    return await knowledge_mcp.mcp_redis_vector_operations(request=body, current_user=user)
 
 
 # -- an admin user: a proposal exists, nothing is deleted ------------------------------------------------------
@@ -113,7 +117,7 @@ async def test_mcp_flush_with_confirm_true_is_refused_for_a_caller_who_may_not_p
 @pytest.mark.asyncio
 async def test_mcp_flush_without_confirm_still_only_proposes_never_flushes(world):
     body = {"operation": "flush", "params": {}}
-    flushed = await knowledge_mcp.mcp_redis_vector_operations(request=body, current_user=ADMIN, session=MagicMock())
+    flushed = await knowledge_mcp.mcp_redis_vector_operations(request=body, current_user=ADMIN)
     assert flushed["success"] is True and flushed["approval_id"] == str(APPROVAL)
     _nothing_deleted(world)
 
@@ -124,9 +128,7 @@ async def test_mcp_flush_without_confirm_still_only_proposes_never_flushes(world
 @pytest.mark.asyncio
 async def test_the_other_vector_operations_still_dispatch_and_flush_is_not_among_them(world):
     reindex = {"operation": "reindex"}
-    answer = await knowledge_mcp.mcp_redis_vector_operations(
-        request=reindex, current_user=REFUSED["ordinary_user"], session=MagicMock()
-    )
+    answer = await knowledge_mcp.mcp_redis_vector_operations(request=reindex, current_user=REFUSED["ordinary_user"])
     assert answer["success"] is True and answer["operation"] == "reindex"
     assert "flush" not in knowledge_mcp._VECTOR_OPERATIONS
     assert world.proposals == []
