@@ -129,6 +129,24 @@ def _parse_record(raw: str) -> EmbeddingSpace | None:
     return EmbeddingSpace(str(data["model"]), data.get("collection") or None, int(data.get("generation", 0)))
 
 
+def _read_record_from_store() -> EmbeddingSpace | None:
+    """The one store read: get, decode, parse, validity check. Raises on any store or parse error.
+
+    None means the store was read and holds no valid override (an invalid model is logged and ignored). The
+    lenient cached reader and the strict reader both call this; they differ only in what they do with a raise.
+    """
+    client = _redis()
+    if client is None:
+        raise RuntimeError("the knowledge Redis database is not available")
+    raw = client.get(EMBEDDING_OVERRIDE_KEY)
+    raw = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+    record = _parse_record(raw) if raw else None
+    if record is not None and not is_embedding_model_id(record.model):
+        logger.error("embedding-model override %r is not an embedding model; ignored (#19377)", record.model)
+        return None
+    return record
+
+
 def _read_override() -> EmbeddingSpace | None:
     """The user's override record, or None. An unreadable store or an invalid value falls back
     to the SSOT default, loudly: the model must never become something that cannot embed."""
@@ -138,15 +156,9 @@ def _read_override() -> EmbeddingSpace | None:
         return _override_cache[1]
     record: EmbeddingSpace | None = None
     try:
-        client = _redis()
-        raw = client.get(EMBEDDING_OVERRIDE_KEY) if client is not None else None
-        raw = raw.decode("utf-8") if isinstance(raw, bytes) else raw
-        record = _parse_record(raw) if raw else None
+        record = _read_record_from_store()
     except Exception as exc:  # noqa: BLE001 - the store is optional; the default still works
         logger.warning("embedding-model override unreadable (%s); using the configured default", exc)
-    if record is not None and not is_embedding_model_id(record.model):
-        logger.error("embedding-model override %r is not an embedding model; ignored (#19377)", record.model)
-        record = None
     _override_cache = (now, record)
     return record
 
@@ -159,17 +171,9 @@ def read_embedding_space_strict() -> EmbeddingSpace | None:
     instead of reading as "no override". The lenient, cached reader stays for everything else.
     """
     try:
-        client = _redis()
-        if client is None:
-            raise RuntimeError("the knowledge Redis database is not available")
-        raw = client.get(EMBEDDING_OVERRIDE_KEY)
-        raw = raw.decode("utf-8") if isinstance(raw, bytes) else raw
-        record = _parse_record(raw) if raw else None
+        return _read_record_from_store()
     except Exception as exc:  # noqa: BLE001 - re-raised as one named error for the caller
         raise RuntimeError(f"the embedding-model override could not be read ({type(exc).__name__})") from exc
-    if record is not None and not is_embedding_model_id(record.model):
-        return None  # the KB ignores an invalid override too (see _read_override)
-    return record
 
 
 def set_embedding_model_override(model: str, collection: str) -> EmbeddingSpace:
