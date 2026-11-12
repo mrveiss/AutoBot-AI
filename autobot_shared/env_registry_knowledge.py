@@ -582,3 +582,18 @@ register_env_var(
         range=(1.0, 3600.0),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODE_INDEX_MAX_CALL_SITES_PER_EDGE",
+        type=int,
+        default=50,
+        description=(
+            "Most call-site lines one code-graph call edge records. Calls past the cap are counted in the "
+            "edge's dropped_call_sites rather than lost silently; raising it stores more lines per edge "
+            "in the vector store's metadata (services/knowledge/code_call_sites.py)."
+        ),
+        component="knowledge",
+        range=(1, 10000),
+    )
+)

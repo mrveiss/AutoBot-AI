@@ -33,6 +33,7 @@ import type { ToastType } from '@/composables/useToast'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { readDuplicatePayload, type DuplicateScanState } from './duplicatePayload'
 import { useCodeSmellProblems } from './useCodeSmellProblems'
+import { toDeclarationPanelRows } from './declarationPanelRows'
 import { runTimed } from '@/composables/api/useTimedNotify'
 import {
   type Problem,
@@ -500,15 +501,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     }))
   })
 
-  const declarationsForPanel = computed(() =>
-    declarationAnalysis.value.map((d) => ({
-      name: d.name,
-      file_path: d.file_path,
-      line_number: d.line_number ?? d.line ?? 0,
-      is_exported: d.is_exported ?? false,
-      declaration_type: d.type,
-    })),
-  )
+  const declarationsForPanel = computed(() => toDeclarationPanelRows(declarationAnalysis.value))
 
   // --- Config load ---
 
