@@ -386,7 +386,7 @@ stage_record() {
 # #18058/#20903/#21163: run pytest on the repo interpreter, resolved by the one
 # resolver every git hook shares (scripts/lib/hook-python.sh): the floor is .python-version
 # (the SSOT), the order is the repo venv, then python<floor>, then a python3
-# that verifiably meets the floor and can import pytest.  When none exists the
+# that verifiably meets the floor (one that also imports pytest is preferred).  When none exists the
 # push stops here, naming the required version -- it never runs the selection
 # on an older python3 and reports the resulting StrEnum / cachetools collection
 # errors as test failures.
@@ -404,9 +404,16 @@ fi
 # remote) is judged by the checkout this hook belongs to.
 _PY_ROOT="$REPO_ROOT"
 [ -r "$REPO_ROOT/.python-version" ] || _PY_ROOT="$_HOOK_ROOT"
-if ! PYTEST_PYTHON="$(resolve_repo_python --root "$_PY_ROOT" --require pytest)"; then
-    echo "[pre-push FAIL] Push BLOCKED: no interpreter that meets .python-version and imports pytest (see above)." >&2
-    exit 1
+# pytest is PREFERRED, not required, at resolution time: the selection, the PR-body check and
+# the dependency scan below run on the floor interpreter alone, and every stage that runs pytest
+# re-checks `import pytest` and stops the push through could_not_run. Requiring it up front would
+# block pushes that never run pytest. The floor itself is never relaxed: with no interpreter at
+# or above it the resolver's own message names the version and the push stops here.
+if ! PYTEST_PYTHON="$(resolve_repo_python --root "$_PY_ROOT" --require pytest 2>/dev/null)"; then
+    if ! PYTEST_PYTHON="$(resolve_repo_python --root "$_PY_ROOT")"; then
+        echo "[pre-push FAIL] Push BLOCKED: no interpreter that meets .python-version (see above)." >&2
+        exit 1
+    fi
 fi
 
 # #17451: the pytest budget follows the SELECTED work, not the changeset. A hub file
