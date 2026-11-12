@@ -4948,6 +4948,7 @@
   },
   "agent": {
     "title": "Agents",
+    "systemActor": "System",
     "status": "Agent Status",
     "config": "Agent Configuration",
     "orchestrator": "Orchestrator",
