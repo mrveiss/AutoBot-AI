@@ -39,10 +39,15 @@ const ALL = ['owner', 'admin', 'member', 'guest', 'lead']
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
 function rowsOf(prefix: string) {
-  return [
-    { user_id: `${prefix}-u1`, display_name: `${prefix} Alice`, role: 'owner' },
-    { user_id: `${prefix}-u2`, display_name: `${prefix} Bob`, role: 'member' },
-  ].map((m) => ({ ...m, viewer_role: 'owner', viewer_grantable_roles: ALL }))
+  return {
+    members: [
+      { user_id: `${prefix}-u1`, display_name: `${prefix} Alice`, role: 'owner' },
+      { user_id: `${prefix}-u2`, display_name: `${prefix} Bob`, role: 'member' },
+    ],
+    viewer_role: 'owner',
+    viewer_can_manage: true,
+    viewer_grantable_roles: ALL,
+  }
 }
 
 function deferred<T>() {
