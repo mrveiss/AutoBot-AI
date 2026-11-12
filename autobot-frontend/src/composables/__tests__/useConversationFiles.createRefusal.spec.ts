@@ -104,6 +104,31 @@ describe('write refusals beyond create (#20723)', () => {
   })
 })
 
+describe('empty and resolved-failure write results (#21185)', () => {
+  type Files = ReturnType<typeof useConversationFiles>
+  const cases: [string, string, typeof post, (f: Files) => Promise<boolean>][] = [
+    ['createFile', 'chat.conversationFiles.createFailed', post, (f) => f.createFile('a.txt', 'x')],
+    ['updateFileContent', 'chat.conversationFiles.saveFailed', put, (f) => f.updateFileContent('f1', 'x')],
+    ['copyFile', 'chat.conversationFiles.copyFailed', post, (f) => f.copyFile('f1')],
+    ['renameFile', 'chat.conversationFiles.renameFailed', put, (f) => f.renameFile('f1', 'b.txt')],
+    ['uploadFiles', 'chat.input.uploadError.unknown', post, (f) => f.uploadFiles([new File(['x'], 'a.txt')] as unknown as FileList)],
+  ]
+
+  it.each(cases)('%s uses the translated %s when the rejection message is empty', async (_name, key, mock, run) => {
+    mock.mockRejectedValueOnce(new Error(''))
+    const files = useConversationFiles('s1')
+    expect(await run(files)).toBe(false)
+    expect(files.error.value).toBe(`${key}|{}`)
+  })
+
+  it.each(cases)('%s sets the operation error when the request resolves with success false', async (_name, key, mock, run) => {
+    mock.mockResolvedValueOnce({ success: false })
+    const files = useConversationFiles('s1')
+    expect(await run(files)).toBe(false)
+    expect(files.error.value).toBe(`${key}|{}`)
+  })
+})
+
 describe('extractApiErrorMessage', () => {
   it('returns detail.message when detail is an object, and a string detail unchanged', () => {
     expect(extractApiErrorMessage({ response: { data: { detail: tooLarge } } }, 'fb')).toBe(tooLarge.message)

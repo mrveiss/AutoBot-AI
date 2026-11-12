@@ -44,7 +44,8 @@ function tr(key: string): string {
  */
 function failureText(err: unknown, fallback: string): string {
   const t = (key: string, params?: Record<string, unknown>) => i18n.global.t(key, params ?? {})
-  return describeApiRefusal(err, t) ?? extractApiErrorMessage(err, fallback)
+  // An empty message (e.g. `new Error('')`) is no message: the translated fallback applies (#21185).
+  return describeApiRefusal(err, t) ?? (extractApiErrorMessage(err, fallback) || fallback)
 }
 
 /**
