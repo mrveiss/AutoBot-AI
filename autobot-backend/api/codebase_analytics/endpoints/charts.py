@@ -241,17 +241,15 @@ async def _get_redis_fallback_chart_data(
 
     Issue #1772: source_id scopes to per-project keys.
 
-    Returns (total_problems, storage_type) or a JSONResponse on error/no-data.
+    Returns (total_problems, storage_type), a no-data dict, or a JSONResponse on error.
     """
     redis_client = await get_redis_connection()
     if not redis_client:
-        return JSONResponse(
-            {
-                "status": "no_data",
-                "message": "No codebase data found. Run indexing first.",
-                "chart_data": None,
-            }
-        )
+        return {
+            "status": "no_data",
+            "message": "No codebase data found. Run indexing first.",
+            "chart_data": None,
+        }
     try:
         total_problems = await _aggregate_from_redis(
             redis_client,
@@ -325,18 +323,16 @@ async def get_chart_data(
             file_problems,
             source_id=source_id,
         )
-        if isinstance(result, JSONResponse):
+        if isinstance(result, (dict, JSONResponse)):
             return result
         total_problems, storage_type = result
 
     # Build and return chart response (Issue #665: uses _build_chart_response helper)
-    return JSONResponse(
-        _build_chart_response(
-            problem_types,
-            severity_counts,
-            race_conditions,
-            file_problems,
-            total_problems,
-            storage_type,
-        )
+    return _build_chart_response(
+        problem_types,
+        severity_counts,
+        race_conditions,
+        file_problems,
+        total_problems,
+        storage_type,
     )

@@ -22,24 +22,47 @@ would be deleted by the very next run together with its pointer.  A reindex
 with no source drops the whole collection, record included; no findings are
 left for the record to describe in that case.
 
-A failed, killed or abandoned run never moves the pointer.  Its findings stay
+A failed, killed or cancelled run never moves the pointer.  Its findings stay
 stored and are served marked partial (:func:`run_response_fields`).  Nothing
 here deletes or rewrites findings.
 
-Terminal precedence (:func:`record_run_finished`): the first terminal status
-reported for a run id is final.  A report for another run id than the record's
-newest is ignored, so a stale report can never overwrite a newer run.
+``abandoned`` is never stored.  A record still ``running`` long after the hard
+timeout is *presented* as ``abandoned`` when read (:func:`describe_run_state`);
+a read does not write.
+
+Terminal precedence (:func:`record_run_finished`).  A report names a run id and
+meets a record whose newest run is the same id, or another one:
+
+=========================  ==================  ===================================
+record's newest run        report's run id     outcome
+=========================  ==================  ===================================
+``running``                the same            applied
+terminal                   the same            ignored: the first terminal status
+                                               of a run is final
+``running``                another             ignored: a run that is still going
+                                               owns the record
+terminal                   another             takes over: a terminal run sends no
+                                               more reports, so another id is a
+                                               newer run whose start write was lost
+none                       any                 applied
+=========================  ==================  ===================================
+
+Limit: a *late* report from an *older* run, arriving after a newer run has
+finished, takes over by the fourth row.  Runs are serial (one job at a time,
+``endpoints/indexing.py``) and an older run reports before the next starts,
+so this is not expected; run ids carry no order that could rule it out.
 """
 
 import asyncio
 import functools
-import json
+import inspect
 import signal
 from datetime import datetime, timedelta, timezone
 
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from api.source_scope import require_source_id
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.store_authority import system_of_record
 
@@ -62,8 +85,11 @@ TERMINAL_STATUSES = frozenset({STATUS_COMPLETED, STATUS_FAILED, STATUS_KILLED, S
 #: Results from a run in one of these states are partial.
 PARTIAL_STATUSES = frozenset({STATUS_FAILED, STATUS_KILLED, STATUS_ABANDONED, STATUS_CANCELLED, STATUS_RUNNING})
 
-#: Slack past the hard timeout before a still-``running`` record counts as abandoned.
-ABANDON_GRACE_SECONDS = 300
+_DEFAULT_ABANDON_GRACE_SECONDS = 300
+#: Slack past the hard timeout before a still-``running`` record is presented as abandoned.
+ABANDON_GRACE_SECONDS = env_int_clamped(
+    "AUTOBOT_INDEXING_ABANDON_GRACE_SECONDS", _DEFAULT_ABANDON_GRACE_SECONDS, 30, 86400
+)
 
 _RECORD_TYPE = "run_status"
 _OWNER_KEY = "owner_source"
@@ -154,15 +180,21 @@ async def record_run_started(source_id: str | None, run_id: str) -> bool:
 
 
 def _finish(old: dict, run_id: str, status: str, reason: str) -> dict | None:
-    """The record after ``run_id`` ended as ``status``, or ``None`` to leave ``old`` as it is."""
-    if old.get("latest_run_id") not in (None, "", run_id):
-        logger.warning("Run %s report (%s) ignored: the record belongs to run %s", run_id, status, old["latest_run_id"])
-        return None
-    if old.get("latest_run_id") == run_id and old.get("latest_status") in TERMINAL_STATUSES:
+    """The record after ``run_id`` ended as ``status``, or ``None`` to leave ``old`` as it is.
+
+    See the outcome table in the module docstring.
+    """
+    newest, newest_status = old.get("latest_run_id"), old.get("latest_status")
+    if newest == run_id and newest_status in TERMINAL_STATUSES:
         return None  # the first terminal status of a run is final
+    if newest and newest != run_id and newest_status == STATUS_RUNNING:
+        logger.warning("Run %s report (%s) ignored: run %s is still running", run_id, status, newest)
+        return None
     finished = _now().isoformat()
     new = {**old, "latest_run_id": run_id, "latest_status": status, "latest_reason": reason}
     new["latest_finished_at"] = finished
+    if newest != run_id:
+        new["latest_started_at"] = ""  # its start was never recorded
     if status == STATUS_COMPLETED:
         new["last_completed_run_id"] = run_id
         new["last_completed_at"] = finished
@@ -173,9 +205,8 @@ async def record_run_finished(source_id: str | None, run_id: str, status: str, r
     """Record how ``run_id`` ended.  Only ``completed`` advances the last-completed pointer.
 
     The first terminal status of a run is final: a supervisor reporting a crash
-    after the worker wrote ``completed`` (or the reverse) changes nothing.  An
-    ``abandoned`` record is not final -- it is a guess made on read -- so a real
-    report for the same run replaces it.  True if the record was written.
+    after the worker wrote ``completed`` (or the reverse) changes nothing.  True
+    if the record was written.
     """
     if status not in TERMINAL_STATUSES:
         raise ValueError(f"not a terminal run status: {status!r}")
@@ -193,58 +224,43 @@ def _is_overdue(meta: dict, hard_timeout: int, now: datetime) -> bool:
     return now - begun > timedelta(seconds=hard_timeout + ABANDON_GRACE_SECONDS)
 
 
-async def sweep_abandoned(source_id: str | None, hard_timeout: int, now: datetime | None = None) -> bool:
-    """Mark a run left ``running`` past its hard timeout as ``abandoned``.  True if it did.
-
-    Called on read, so a worker that died without any exit path (host restart,
-    OOM of the supervisor itself) is reported instead of shown as in progress.
-    """
-    moment = now or _now()
-    changed = []
-
-    def apply(old: dict) -> dict | None:
-        if not _is_overdue(old, hard_timeout, moment):
-            return None
-        changed.append(old["latest_run_id"])
-        return {
-            **old,
-            "latest_status": STATUS_ABANDONED,
-            "latest_reason": f"still running {hard_timeout}s after start; the worker is gone",
-            "latest_finished_at": moment.isoformat(),
-        }
-
-    await _update(source_id, apply)
-    if changed:
-        logger.warning("Run %s for %s marked abandoned (#21003)", changed[0], source_id)
-    return bool(changed)
-
-
-async def describe_run_state(source_id: str | None, hard_timeout: int = _SUBPROCESS_HARD_TIMEOUT) -> dict | None:
-    """The newest run's state, or ``None`` when no run was ever recorded for the source.
-
-    ``partial`` is true when the newest run did not complete, i.e. the findings
-    in storage may come from an interrupted run.  ``last_completed_at`` is when
-    the last complete run finished (empty if none ever did).
-    """
-    if not source_id:
-        return None
-    await sweep_abandoned(source_id, hard_timeout)
-    collection = await get_code_collection_async()
-    if collection is None:
-        return None
-    meta = await _read(collection, source_id)
-    if not meta:
-        return None
-    status = meta.get("latest_status", "")
+def _present(meta: dict, hard_timeout: float, now: datetime) -> dict:
+    """The record as readers see it.  A run still ``running`` past its limit reads as ``abandoned``."""
+    status, reason, finished = (
+        meta.get("latest_status", ""),
+        meta.get("latest_reason", ""),
+        meta.get("latest_finished_at", ""),
+    )
+    if _is_overdue(meta, hard_timeout, now):
+        status, reason, finished = STATUS_ABANDONED, "no completion reported within the limit", ""
     return {
         "run_id": meta.get("latest_run_id", ""),
         "status": status,
         "partial": status in PARTIAL_STATUSES,
-        "reason": meta.get("latest_reason", ""),
+        "reason": reason,
         "started_at": meta.get("latest_started_at", ""),
-        "finished_at": meta.get("latest_finished_at", ""),
+        "finished_at": finished,
         "last_completed_at": meta.get("last_completed_at", ""),
     }
+
+
+async def describe_run_state(
+    source_id: str | None, hard_timeout: float = _SUBPROCESS_HARD_TIMEOUT, now: datetime | None = None
+) -> dict | None:
+    """The newest run's state, or ``None`` when no run was ever recorded for the source.
+
+    One read, no write.  ``partial`` is true when the newest run did not
+    complete, i.e. the findings in storage may come from an interrupted run.
+    ``last_completed_at`` is when the last complete run finished (empty if none
+    ever did).
+    """
+    if not source_id:
+        return None
+    collection = await get_code_collection_async()
+    if collection is None:
+        return None
+    meta = await _read(collection, source_id)
+    return _present(meta, hard_timeout, now or _now()) if meta else None
 
 
 async def run_response_fields(source_id: str | None) -> dict:
@@ -263,28 +279,23 @@ async def run_response_fields(source_id: str | None) -> dict:
     return {"partial": bool(run and run["partial"]), "run": run}
 
 
-def _merged(result, fields: dict):
-    """``result`` with the run fields added: a dict or a successful JSON response with a dict body."""
-    if isinstance(result, dict):
-        return {**result, **fields}
-    if isinstance(result, JSONResponse) and result.status_code < 400:
-        body = json.loads(result.body)
-        if isinstance(body, dict):
-            headers = {k: v for k, v in result.headers.items() if k.lower() not in ("content-length", "content-type")}
-            return JSONResponse({**body, **fields}, status_code=result.status_code, headers=headers)
-    return result
-
-
 def with_run_state(handler):
-    """Route decorator: add ``partial`` and ``run`` to the handler's response, whatever branch answered.
+    """Route decorator: add ``partial`` and ``run`` to a handler that returns its body as a ``dict``.
 
-    The handler must take ``source_id`` as a keyword (as FastAPI passes it).
+    The fields are merged into the dict and the response is built once, so a large
+    body is encoded once.  Anything else the handler returns (an error response, a
+    redirect, a download) is passed through untouched, ``background`` included.
+    The handler must receive ``source_id`` (by name or by position).
     """
+    signature = inspect.signature(handler)
 
     @functools.wraps(handler)
     async def wrapper(*args, **kwargs):
         result = await handler(*args, **kwargs)
-        return _merged(result, await run_response_fields(kwargs.get("source_id")))
+        if not isinstance(result, dict):
+            return result
+        source_id = signature.bind_partial(*args, **kwargs).arguments.get("source_id")
+        return JSONResponse({**result, **await run_response_fields(source_id)})
 
     wrapper.labels_run_state = True  # functools.wraps in the outer decorators carries it to the route
     return wrapper

@@ -20,7 +20,6 @@ from api.codebase_analytics.run_status import (
     record_run_finished,
     record_run_started,
     status_for_returncode,
-    sweep_abandoned,
     watchdog_kill_reason,
 )
 
@@ -32,6 +31,8 @@ class _Collection:
 
     def __init__(self):
         self.docs = {}
+        self.reads = 0
+        self.writes = 0
 
     def _matching(self, ids, where):
         if ids is not None:
@@ -39,10 +40,12 @@ class _Collection:
         return [i for i, m in self.docs.items() if all(m.get(k) == v for k, v in (where or {}).items())]
 
     async def get(self, ids=None, where=None, include=None):
+        self.reads += 1
         found = self._matching(ids, where)
         return {"ids": found, "metadatas": [self.docs[i] for i in found]}
 
     async def upsert(self, ids, documents, metadatas):
+        self.writes += 1
         for i, m in zip(ids, metadatas):
             self.docs[i] = dict(m)
 
@@ -134,24 +137,30 @@ async def test_a_stale_report_from_another_run_does_not_touch_the_newest_run(col
 
 
 @pytest.mark.asyncio
-async def test_a_real_report_replaces_an_abandoned_guess_for_the_same_run(collection):
+async def test_a_different_run_id_takes_over_a_terminal_record_when_its_start_write_was_lost(collection):
+    """Run 2's start was never recorded; its kill must not leave run 1's ``completed`` standing."""
     await record_run_started("src", "run-1")
-    late = datetime.now(tz=timezone.utc) + timedelta(seconds=HARD + run_status.ABANDON_GRACE_SECONDS + 5)
-    assert await sweep_abandoned("src", HARD, now=late) is True
-    assert (await _state())["status"] == "abandoned"
-    assert await record_run_finished("src", "run-1", "completed") is True
-    assert (await _state())["status"] == "completed"
+    await record_run_finished("src", "run-1", "completed")
+    assert await record_run_finished("src", "run-2", "killed", "exit -9") is True
+    state = await _state()
+    assert (state["run_id"], state["status"], state["partial"]) == ("run-2", "killed", True)
+    assert state["last_completed_at"] != ""  # run 1's completion is still the last complete one
 
 
 @pytest.mark.asyncio
-async def test_run_left_running_past_timeout_is_abandoned(collection):
+async def test_a_run_left_running_past_its_limit_reads_as_abandoned_without_writing(collection):
     await record_run_started("src", "run-1")
+    writes, reads = collection.writes, collection.reads
     soon = datetime.now(tz=timezone.utc) + timedelta(seconds=HARD // 2)
-    assert await sweep_abandoned("src", HARD, now=soon) is False  # control: still within its limit
+    assert (await describe_run_state("src", HARD, now=soon))["status"] == "running"  # control: within its limit
     late = datetime.now(tz=timezone.utc) + timedelta(seconds=HARD + run_status.ABANDON_GRACE_SECONDS + 5)
-    assert await sweep_abandoned("src", HARD, now=late) is True
-    state = await _state()
+    state = await describe_run_state("src", HARD, now=late)
     assert (state["status"], state["partial"], state["last_completed_at"]) == ("abandoned", True, "")
+    assert "worker is gone" not in state["reason"] and state["reason"] != ""
+    assert collection.writes == writes, "a read must not write"
+    assert collection.reads == reads + 2, "one record read per call"
+    assert collection.docs["codebase_run_src"]["latest_status"] == "running"  # never persisted as abandoned
+    assert await record_run_finished("src", "run-1", "completed") is True  # a real report still lands
 
 
 @pytest.mark.asyncio
@@ -236,14 +245,28 @@ class _KillableProc:
         self._exited.set()
 
 
-async def _supervise(monkeypatch, limits: dict, redis_state):
-    """Run the real supervisor over a worker that never finishes, with the given limits."""
+class _ExitedProc:
+    """A worker that has already exited with ``code``."""
+
+    def __init__(self, code):
+        self._code = code
+
+    async def wait(self):
+        return self._code
+
+    def kill(self):
+        raise ProcessLookupError
+
+
+def _supervisor(monkeypatch, limits: dict, redis_state, proc=None):
+    """The real supervisor coroutine over ``proc`` (default: a worker that never finishes) and its task dict."""
     for name, value in limits.items():
         monkeypatch.setattr(subprocess_runner, name, value)
     monkeypatch.setattr(subprocess_runner, "_load_task_from_redis", AsyncMock(return_value=redis_state))
-    monkeypatch.setattr(subprocess_runner.asyncio, "create_subprocess_exec", AsyncMock(return_value=_KillableProc()))
+    spawn = AsyncMock(return_value=proc or _KillableProc())
+    monkeypatch.setattr(subprocess_runner.asyncio, "create_subprocess_exec", spawn)
     tasks: dict = {}
-    await subprocess_runner._run_indexing_subprocess(
+    coroutine = subprocess_runner._run_indexing_subprocess(
         "run-2",
         "/repo",
         tasks,
@@ -253,6 +276,13 @@ async def _supervise(monkeypatch, limits: dict, redis_state):
         lambda task_id, error: _mark_task_failed(task_id, error, tasks),
         source_id="src",
     )
+    return coroutine, tasks
+
+
+async def _supervise(monkeypatch, limits: dict, redis_state, proc=None):
+    """Run the supervisor to its end; a regression fails after 10 s instead of waiting on the real limits."""
+    coroutine, tasks = _supervisor(monkeypatch, limits, redis_state, proc)
+    await asyncio.wait_for(coroutine, 10)
     return tasks["run-2"]
 
 
@@ -298,3 +328,56 @@ async def test_a_crash_that_is_not_a_kill_is_failed_with_the_exit_code(collectio
     state = await _state()
     assert (state["status"], state["partial"]) == ("failed", True)
     assert "exit code -11" in state["reason"]
+
+
+@pytest.mark.asyncio
+async def test_cancelling_the_supervisor_kills_the_worker_and_records_cancelled(collection, monkeypatch):
+    proc = _KillableProc()
+    coroutine, _ = _supervisor(monkeypatch, {"_SUBPROCESS_WATCHDOG_INTERVAL": 0.01}, None, proc)
+    run = asyncio.ensure_future(coroutine)
+    await asyncio.sleep(0.1)
+    assert not proc.killed  # control: the worker was running, nothing killed it yet
+    run.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(run, 10)
+    state = await _state()
+    assert proc.killed
+    assert (state["status"], state["partial"], state["reason"]) == ("cancelled", True, "cancelled by user")
+    assert await record_run_finished("src", "run-2", "completed") is False  # an orphan's late completion
+    assert (await _state())["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_a_worker_that_cannot_be_started_is_recorded_failed(collection, monkeypatch):
+    coroutine, _ = _supervisor(monkeypatch, {}, None)
+    monkeypatch.setattr(
+        subprocess_runner.asyncio, "create_subprocess_exec", AsyncMock(side_effect=OSError("/secret/path: no exec"))
+    )
+    with pytest.raises(OSError):
+        await asyncio.wait_for(coroutine, 10)
+    state = await _state()
+    assert (state["status"], state["partial"]) == ("failed", True)
+    assert "OSError" in state["reason"] and "/secret/path" not in state["reason"]
+
+
+@pytest.mark.asyncio
+async def test_a_completed_task_is_recorded_completed_when_the_worker_died_after_finishing(collection):
+    """Hard timeout after the Redis task said ``completed`` but before the record write landed."""
+    await record_run_started("src", "run-2")
+    marked = []
+    done = {"status": "completed"}
+    with patch.object(subprocess_runner, "_load_task_from_redis", AsyncMock(return_value=done)):
+        await subprocess_runner._handle_subprocess_crash(
+            "run-2", -9, lambda t, e: marked.append(e), AsyncMock(), source_id="src", kill_reason="killed late"
+        )
+    state = await _state()
+    assert (state["status"], state["partial"]) == ("completed", False)
+    assert marked == []  # the task is not re-marked failed
+
+
+@pytest.mark.asyncio
+async def test_a_clean_exit_with_a_completed_task_backstops_the_record(collection, monkeypatch):
+    await record_run_started("src", "run-2")  # the worker's own record write was lost
+    done = {"status": "completed"}
+    await _supervise(monkeypatch, {}, done, proc=_ExitedProc(0))
+    assert (await _state())["status"] == "completed"

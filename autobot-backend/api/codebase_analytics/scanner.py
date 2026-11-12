@@ -366,11 +366,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str, source_id: str
     Issue #1710: source_id scopes all storage to one project.
     """
     try:
-        logger.info(
-            "[Task %s] Starting background codebase indexing for: %s",
-            task_id,
-            root_path,
-        )
+        logger.info("[Task %s] Starting background codebase indexing for: %s", task_id, root_path)
 
         async with _tasks_lock:
             state = _create_initial_task_state_bound()

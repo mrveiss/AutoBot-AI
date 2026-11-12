@@ -4,6 +4,7 @@
 # Author: mrveiss
 """#21003: every route serving a source's findings says when they come from an interrupted run."""
 
+import inspect
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -23,9 +24,41 @@ from api.codebase_analytics.run_status import (
     with_run_state,
 )
 
-#: The routes that serve findings or statistics of a run and so carry ``partial`` / ``run``.
-#: ``/report`` is a markdown download and carries them in its body and headers instead.
-_LABELLED_ROUTES = ("/stats", "/hardcodes", "/problems", "/analytics/charts")
+#: "Serves findings" is decided from the code, not from a list of names: a GET route that is scoped to a
+#: source (a ``source_id`` path or query parameter) and whose handler's module imports a code-collection
+#: accessor reads what an indexing run stored.  Such a route is labelled (``@with_run_state``), is the
+#: markdown ``/report`` (labelled in its body and headers by ``report_response``), or is named here with
+#: the reason it does not carry a run's findings.  A new route that reads the store and is none of these fails.
+_STORE_ACCESSORS = ("get_code_collection", "get_code_collection_async")
+_DOWNLOAD_ROUTES = {"/report"}
+_NOT_RUN_FINDINGS = {
+    "/analytics/import-tree/cached": "a stored task result, flagged stale against the last sync instead",
+    "/analytics/dependencies/cached": "a stored task result, flagged stale against the last sync instead",
+}
+
+
+def _reads_the_store(route) -> bool:
+    handler = inspect.unwrap(route.endpoint)
+    return any(name in getattr(handler, "__globals__", {}) for name in _STORE_ACCESSORS)
+
+
+def _is_source_scoped(route) -> bool:
+    dependant = route.dependant
+    return any(p.name == "source_id" for p in [*dependant.path_params, *dependant.query_params])
+
+
+def _unlabelled_findings_routes(mounted) -> list[str]:
+    """Paths of GET routes that read the store for one source and carry no run label."""
+    return sorted(
+        m.path
+        for m in mounted
+        if "GET" in m.methods
+        and _is_source_scoped(m.route)
+        and _reads_the_store(m.route)
+        and not getattr(m.route.endpoint, "labels_run_state", False)
+        and m.path not in _DOWNLOAD_ROUTES
+        and m.path not in _NOT_RUN_FINDINGS
+    )
 
 
 class _RunStore:
@@ -33,8 +66,10 @@ class _RunStore:
 
     def __init__(self):
         self.docs = {}
+        self.reads = 0
 
     async def get(self, ids=None, where=None, include=None):
+        self.reads += 1
         return {"metadatas": [self.docs[i] for i in ids if i in self.docs]}
 
     async def upsert(self, ids, documents, metadatas):
@@ -79,7 +114,7 @@ async def test_an_unreadable_record_does_not_fail_the_findings_it_labels(run_sto
 
 
 @pytest.mark.asyncio
-async def test_the_decorator_labels_a_dict_and_a_json_response_and_leaves_errors_alone(run_store):
+async def test_the_decorator_labels_a_dict_body_once_and_leaves_responses_alone(run_store):
     await _killed_after_a_completed_run()
 
     @with_run_state
@@ -87,28 +122,68 @@ async def test_the_decorator_labels_a_dict_and_a_json_response_and_leaves_errors
         return {"status": "success"}
 
     @with_run_state
-    async def as_json(source_id):
-        return JSONResponse({"status": "success"}, status_code=202, headers={"X-Keep": "1"})
+    async def as_response(source_id):
+        return JSONResponse({"status": "error"}, status_code=404, headers={"X-Keep": "1"})
+
+    labelled = await as_dict("src")  # positional: the label must not be lost
+    body = json.loads(labelled.body)
+    assert (body["status"], body["partial"], body["run"]["status"]) == ("success", True, "killed")
+    assert (await as_dict(source_id="src")).body == labelled.body
+    untouched = await as_response(source_id="src")
+    assert (untouched.status_code, untouched.headers["x-keep"], json.loads(untouched.body)) == (
+        404,
+        "1",
+        {"status": "error"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_labelled_request_reads_the_record_once(run_store):
+    await _killed_after_a_completed_run()
 
     @with_run_state
-    async def as_error(source_id):
-        return JSONResponse({"status": "error"}, status_code=404)
+    async def handler(source_id):
+        return {}
 
-    assert (await as_dict(source_id="src"))["partial"] is True
-    labelled = await as_json(source_id="src")
-    body = json.loads(labelled.body)
-    assert (labelled.status_code, labelled.headers["x-keep"]) == (202, "1")
-    assert (body["status"], body["partial"], body["run"]["status"]) == ("success", True, "killed")
-    assert json.loads((await as_error(source_id="src")).body) == {"status": "error"}
+    before = run_store.reads
+    await handler(source_id="src")
+    assert run_store.reads == before + 1
 
 
-def test_every_route_serving_findings_is_labelled():
+def test_every_route_that_serves_findings_is_labelled():
     from api.codebase_analytics.router import router
     from autobot_shared.api_routing.router_routes import effective_routes
 
-    served = {m.path: m.route for m in effective_routes(router) if "GET" in m.methods}
-    for path in _LABELLED_ROUTES:
-        assert getattr(served[path].endpoint, "labels_run_state", False), f"{path} does not carry partial/run"
+    mounted = effective_routes(router)
+    assert _unlabelled_findings_routes(mounted) == []
+    # the walk still sees the routes it exists to see (a rule that finds nothing would pass)
+    labelled = {m.path for m in mounted if getattr(m.route.endpoint, "labels_run_state", False)}
+    assert labelled >= {
+        "/stats",
+        "/hardcodes",
+        "/problems",
+        "/analytics/charts",
+        "/declarations",
+        "/analytics/import-tree",
+        "/analytics/dependencies",
+    }
+
+
+def test_control_an_unlabelled_store_reading_route_is_flagged_and_a_labelled_one_is_not():
+    from fastapi import APIRouter
+
+    from api.source_scope import SourceIdQuery
+    from autobot_shared.api_routing.router_routes import effective_routes
+
+    namespace = {"get_code_collection": object(), "SourceIdQuery": SourceIdQuery}
+    exec("async def reads(source_id: SourceIdQuery):\n    return {}\n", namespace)  # noqa: S102
+    unrelated = {"SourceIdQuery": SourceIdQuery}
+    exec("async def does_not_read(source_id: SourceIdQuery):\n    return {}\n", unrelated)
+    throwaway = APIRouter()
+    throwaway.get("/unlabelled")(namespace["reads"])
+    throwaway.get("/labelled")(with_run_state(namespace["reads"]))
+    throwaway.get("/elsewhere")(unrelated["does_not_read"])
+    assert _unlabelled_findings_routes(effective_routes(throwaway)) == ["/unlabelled"]
 
 
 def _stats_collection():
