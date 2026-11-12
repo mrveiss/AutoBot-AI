@@ -84,7 +84,6 @@ _WARNINGS_WARN = {
 _DEFERRED: dict[tuple[str, str], str] = {}
 
 
-
 def _swept_paths(root: Path) -> list[str]:
     """Every tracked non-test ``.py`` the sweep parses: all of them bar the helper itself."""
     try:
