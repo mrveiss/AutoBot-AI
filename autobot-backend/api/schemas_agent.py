@@ -1101,8 +1101,7 @@ class ChainOfCommandResponse(BaseModel):
 
 
 class AgentStatusItem(BaseModel):
-    """One agent for the Home dashboard "Agent Activity Monitor" (#10502, frontend ``Agent``).
-    A field the server cannot measure is None, never 0: the widget shows "not reported" (#17514)."""
+    """Home dashboard "Agent Activity Monitor" agent (#10502); an unmeasured field is None, never 0 (#17514, #21270)."""
 
     id: str
     name: str
@@ -1114,8 +1113,9 @@ class AgentStatusItem(BaseModel):
     tasksCompleted: int | None = None
     uptime: int | None = None
     successRate: int | None = None
-    recentTasks: List[Dict[str, Any]] = Field(default_factory=list)
-    activityTimeline: List[Dict[str, Any]] = Field(default_factory=list)
+    recentTasks: List[Dict[str, Any]] | None = None
+    activityTimeline: List[Dict[str, Any]] | None = None
+    activityWindowStart: int | None = None  # UTC ms of the timeline axis start (6 one-hour columns)
 
 
 class AgentStatusListResponse(BaseModel):
