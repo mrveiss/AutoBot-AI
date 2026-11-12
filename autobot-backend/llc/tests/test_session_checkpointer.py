@@ -13,6 +13,11 @@ import pytest
 from llc.scheduler.session_checkpointer import SessionCheckpointer, recover_incomplete_runs
 
 
+def _lease(held: bool = True) -> MagicMock:
+    """The startup-recovery lease: this worker holds it, or another one does."""
+    return MagicMock(update_leadership=AsyncMock(return_value=held))
+
+
 def _make_run(
     status: str = "running",
     work_item_id: str | None = None,
@@ -100,6 +105,7 @@ async def test_recover_incomplete_runs_marks_interrupted_releases_checkouts_requ
     mock_redis.zadd = AsyncMock()
 
     with (
+        patch("llc.scheduler.session_checkpointer.recovery_lease", return_value=_lease()),
         patch("llc.scheduler.session_checkpointer.get_async_session_factory", return_value=factory),
         patch("llc.scheduler.session_checkpointer.get_async_redis_client", AsyncMock(return_value=mock_redis)),
         patch("llc.services.run_checkouts.get_async_redis_client", AsyncMock(return_value=fences)),
@@ -110,6 +116,7 @@ async def test_recover_incomplete_runs_marks_interrupted_releases_checkouts_requ
     assert run.status == "interrupted"
     assert run.finished_at is not None
     assert mine.checkout_run_id is None and mine.checkout_locked_at is None
+    assert mine.status == "ready", "an interrupted run's unfinished item is claimable again"
     assert await fences.get(f"llc:checkout:{mine.id}") is None
     assert theirs.checkout_run_id is not None
     assert await fences.get(f"llc:checkout:{theirs.id}") == theirs.fence
@@ -117,6 +124,21 @@ async def test_recover_incomplete_runs_marks_interrupted_releases_checkouts_requ
     zadd_args = mock_redis.zadd.call_args[0]
     assert zadd_args[0] == "llc:heartbeat:schedule"
     assert run.agent_id in zadd_args[1]
+
+
+@pytest.mark.asyncio
+async def test_a_worker_that_does_not_hold_the_recovery_lease_recovers_nothing() -> None:
+    """Several uvicorn workers start; only the lease holder interrupts runs and clears their checkouts."""
+    run = _make_run(status="running")
+    factory = _make_factory([run])
+    with (
+        patch("llc.scheduler.session_checkpointer.recovery_lease", return_value=_lease(held=False)),
+        patch("llc.scheduler.session_checkpointer.get_async_session_factory", return_value=factory),
+    ):
+        await recover_incomplete_runs()
+
+    factory.assert_not_called()
+    assert run.status == "running"
 
 
 @pytest.mark.asyncio
@@ -131,6 +153,7 @@ async def test_recover_incomplete_runs_idempotent() -> None:
     mock_redis.zadd = AsyncMock()
 
     with (
+        patch("llc.scheduler.session_checkpointer.recovery_lease", return_value=_lease()),
         patch(
             "llc.scheduler.session_checkpointer.get_async_redis_client",
             new_callable=AsyncMock,

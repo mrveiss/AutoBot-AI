@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from user_management.database import get_async_session_factory
@@ -34,6 +35,9 @@ logger = get_logger(__name__)
 
 _CHECKPOINT_KEY_PREFIX = "llc:session:checkpoint:"
 _SCHEDULE_KEY = "llc:heartbeat:schedule"
+
+#: The lease that elects the one backend worker allowed to run startup recovery.
+RECOVERY_LEASE_KEY = "llc:session_recovery:leader"
 
 #: Why a run interrupted at startup gives back its checkouts: the system, on a restart that ended the run.
 _RECOVERY_RELEASE = ReleaseWhy(reason=LLCRunStatus.INTERRUPTED.value, source="session_checkpointer")
@@ -112,13 +116,28 @@ class SessionCheckpointer(PollLoopScheduler):
         await redis.set(key, payload, ex=LLC_CHECKPOINT_TTL_SECONDS)
 
 
+def recovery_lease() -> LeaderLease:
+    """The lease that lets one worker run startup recovery.
+
+    The backend is started with several uvicorn workers (``--workers`` in the backend service unit), and each
+    runs its lifespan startup. Recovery interrupts every ``running`` run and now clears its checkouts, so two
+    workers racing over it would double-release, and a worker starting later would take a run another worker
+    is serving. As in the system knowledge import, the lease is never released: it expires on its own, so
+    workers starting in the same window skip.
+    """
+    return LeaderLease(key=RECOVERY_LEASE_KEY, label="LLC session recovery")
+
+
 async def recover_incomplete_runs() -> None:
     """Find ``status='running'`` runs at startup and re-queue them for recovery.
 
     Idempotent: safe to call multiple times.  Only finds runs with
     ``status='running'`` so already-interrupted runs are skipped on a second
-    call.
+    call. Only the worker holding :func:`recovery_lease` recovers; the others skip.
     """
+    if not await recovery_lease().update_leadership():
+        logger.info("SessionCheckpointer: recovery lease not acquired (another worker or no Redis), skipping")
+        return
     factory = get_async_session_factory()
     try:
         async with factory() as session:
