@@ -25,6 +25,10 @@ export function isUnansweredQuestion(card: Card): boolean {
 /** *loaded* history plus every unanswered question card of *local* that it does not already hold (by question id). */
 export function keepUnansweredQuestions<L extends Card>(local: readonly Card[], loaded: L[]): L[] {
   const held = new Set(loaded.map(questionId).filter((id) => id !== undefined))
-  const missing = local.filter((card) => isUnansweredQuestion(card) && !held.has(questionId(card)))
+  const missing = local.filter((card) => {
+    if (!isUnansweredQuestion(card)) return false
+    const id = questionId(card)
+    return id === undefined || !held.has(id)
+  })
   return missing.length ? [...loaded, ...(missing as unknown as L[])] : loaded
 }
