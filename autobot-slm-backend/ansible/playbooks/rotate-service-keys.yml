@@ -201,7 +201,7 @@
 
   vars:
     backend_health_url: >-
-      {{ backend_protocol | default('https') }}://{{ ansible_host }}:{{ backend_nginx_port | default(8443) }}/api/health
+      {{ backend_protocol | default('https') }}://{{ ansible_host }}:{{ backend_nginx_port }}/api/health
     startup_delay: 10
 
   tasks:

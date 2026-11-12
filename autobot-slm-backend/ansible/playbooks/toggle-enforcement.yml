@@ -18,7 +18,7 @@
   vars:
     enforcement_mode: true
     env_file: "{{ autobot.base_dir }}/.env"
-    backend_health_url: "https://{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}:{{ backend_nginx_port | default(8443) }}/api/health"
+    backend_health_url: "https://{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}:{{ backend_nginx_port }}/api/health"
     startup_delay: 5
 
   pre_tasks:
