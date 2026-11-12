@@ -218,6 +218,7 @@ DECLARED_SCOPES = {
     ),
     "file-type-sets-one-home-19339": ("autobot-backend",),
     "llc-actor-id-scan": ("autobot-backend/llc",),
+    "llc-api-acting-identity": ("autobot-backend/llc/api",),
     "cache-never-in-repo": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "node-major-literals": (
         ".github",

@@ -195,6 +195,7 @@ REACH_ROOTS = {
         "autobot-slm-frontend/src",
     ),
     "repo_tests/knowledge_metadata_parse_canonical_18220_test.py": ("autobot-backend/api",),
+    "repo_tests/llc_acting_identity_from_credential_20521_test.py": ("autobot-backend/llc/api",),
     "repo_tests/migration_gate_filter_covers_what_its_tests_import_test.py": ("autobot-backend/tests/migrations",),
     "repo_tests/model_revision_pinning_enforced_17804_test.py": (
         "autobot-backend",
