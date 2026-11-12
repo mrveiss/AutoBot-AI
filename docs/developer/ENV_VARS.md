@@ -119,6 +119,7 @@ appears outside the known overlays.
 | `AUTOBOT_CHAT_PLANNER_ENABLED` | chat_workflow | bool | false | Enables the planner node in the chat graph, the canonical loop (#21023, #20846). Off by default; enabling adds planning to chat turns. |
 | `AUTOBOT_CHAT_PLANNER_MIN_MESSAGE_CHARS` | chat_workflow | int | `24` | Chat turns shorter than this many characters skip the planner, which otherwise adds one LLM call (bounded by AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS) before the first token (#21023). |
 | `AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS` | chat_workflow | int | `30` | Seconds the chat planner may take to write a plan (#21023); past it the turn runs without a plan. |
+| `AUTOBOT_CHAT_STALL_ANSWER_MAX_CHARS` | chat_workflow | int | `2000` | Longest answer to a chat stall question that is passed to the model; longer text is truncated (#21022). |
 | `AUTOBOT_CHAT_STALL_ESCALATION` | chat_workflow | str | `'stop'` | What the chat graph does when a turn stalls: stop halts the turn, ask escalates to the human (#21022, #20846); any other value fails config load. |
 | `AUTOBOT_CHAT_TRACE_OUTPUT_MAX_CHARS` | backend | int | `2000` | Characters of one tool result kept in a chat session trace (session_trace.py, #19963). Range: 1–100000. |
 | `AUTOBOT_CHAT_TRAJECTORY_CAPTURE_CONCURRENCY` | ai | int | `2` | Concurrent trajectory judge calls. Bounded so a burst of turns cannot stampede the LLM. |

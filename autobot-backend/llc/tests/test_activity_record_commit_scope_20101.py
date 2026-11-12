@@ -35,6 +35,7 @@ from llc.models.enums import ActivityEventType, AssigneeType, WorkItemStatus
 from llc.services import activity_log as activity_log_module
 from llc.services.activity_log import LLCActivityLogService
 from llc.services.actor import ActivityRecordError, audit
+from llc.services.after_commit import after_commit_tasks
 from llc.services.handoff import HandoffService
 from llc.tests import _e2e_harness as harness
 from testkit.fake_async_session import FakeAsyncSession
@@ -79,8 +80,8 @@ def _bulk_entry() -> dict:
 
 async def _drain_publishes() -> None:
     await asyncio.sleep(0)
-    if activity_log_module._publish_tasks:
-        await asyncio.gather(*activity_log_module._publish_tasks)
+    if after_commit_tasks:
+        await asyncio.gather(*after_commit_tasks)
 
 
 # --- the failure of the write ---------------------------------------------------------------
