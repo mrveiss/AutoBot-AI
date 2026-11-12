@@ -213,7 +213,7 @@ _BY_DESIGN = (
     ),
 )
 
-#: The lane's reviewed skips, grouped by class above. 5 + 5 + 18 entries.
+#: The lane's reviewed skips, grouped by class above. 1 + 5 + 18 entries (24).
 SKIP_ALLOWLIST: tuple[AllowedSkip, ...] = (*_COVERED, *_SILENT_GUARDS, *_BY_DESIGN)
 
 
