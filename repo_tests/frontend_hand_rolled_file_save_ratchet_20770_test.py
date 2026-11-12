@@ -55,6 +55,12 @@ _BINDING = re.compile(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;\n]*)
 #: String and template literals, blanked at the same length before brace matching so
 #: a `{` inside a string or a regex does not unbalance the scope walk.
 _STRING_LITERAL = re.compile(r"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|`(?:\\.|[^`\\])*`")
+#: Strings and comments in ONE left-to-right pass: scanning them together is what keeps
+#: a `//` inside a string from being read as a comment and a quote inside a comment from
+#: opening a literal, so neither can swallow real code. Each match is blanked at the same
+#: length (#21195), which keeps every offset in the source valid — an inline `// }`
+#: closes no block, and `_scope_ends` sees the braces the code actually has.
+_MASKED_REGION = re.compile(_STRING_LITERAL.pattern + r"|//[^\n]*|/\*.*?\*/", re.S)
 #: Evidence, in a binding's initializer, that the variable holds an anchor element:
 #: the tag-a lookups. An id or selector of unknown target is not evidence (#21195).
 _ANCHOR_SOURCE = re.compile(
@@ -92,12 +98,14 @@ def _is_anchor(receiver: str | None, bindings: dict[str, str] | None = None) -> 
 def _scope_ends(text: str, starts: list[int]) -> list[int]:
     """The end position of the innermost block enclosing each declaration in *starts*.
 
-    The walk matches braces over the string-blanked source, so a `const` inside a
-    function or block ends its scope at that block's `}` and cannot stand in for a
-    later use outside it (#21195). A declaration no block encloses (top level) runs
-    to the end of the file. Unbalanced braces degrade to that same file-wide end.
+    The walk matches braces over the source with strings and comments blanked at the
+    same length, so a `const` inside a function or block ends its scope at that block's
+    `}` and cannot stand in for a later use outside it (#21195). An inline `// }` is
+    comment, not code: it closes nothing, and the declaration keeps the block the source
+    actually gives it. A declaration no block encloses (top level) runs to the end of the
+    file. Unbalanced braces degrade to that same file-wide end.
     """
-    src = _STRING_LITERAL.sub(lambda m: " " * len(m.group(0)), text)
+    src = _MASKED_REGION.sub(lambda m: " " * len(m.group(0)), text)
     remaining = set(starts)
     stack: list[int] = []
     owner: dict[int, int | None] = {}
@@ -283,6 +291,46 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
             ),
         ]
         assert count(paths) == 1
+
+    def test_an_inline_comment_brace_does_not_close_the_binding_scope(self, tmp_path: Path) -> None:
+        planted = _w(
+            tmp_path,
+            "a/IC.ts",
+            "function save() {\n"
+            "  const el = document.createElement('a'); // }\n"
+            "  el.setAttribute('download', name);\n"
+            "}\n",
+        )
+        assert count([planted]) == 1
+
+    def test_an_inline_comment_on_the_same_line_does_not_close_the_binding_scope(self, tmp_path: Path) -> None:
+        planted = _w(
+            tmp_path,
+            "a/IC1.ts",
+            "function save() { const el = document.createElement('a'); // } el.setAttribute('download', name); }\n",
+        )
+        assert count([planted]) == 1
+
+    def test_an_element_the_save_never_touches_is_not_counted_next_to_an_inline_comment(self, tmp_path: Path) -> None:
+        paths = [
+            _w(
+                tmp_path,
+                "a/NC.ts",
+                "function save() {\n"
+                "  const box = document.createElement('div'); // }\n"
+                "  box.setAttribute('download', name);\n"
+                "}\n",
+            ),
+            _w(
+                tmp_path,
+                "a/NC2.ts",
+                "function preview() {\n"
+                "  const el = document.createElement('a'); // }\n"
+                "  el.setAttribute('title', name);\n"
+                "}\n",
+            ),
+        ]
+        assert count(paths) == 0
 
     def test_a_kit_call_a_comparison_a_comment_and_a_template_attribute_are_not_saves(self, tmp_path: Path) -> None:
         paths = [
