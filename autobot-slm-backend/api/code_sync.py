@@ -102,6 +102,7 @@ from models.schemas import (
 from services.ansible_utils import ansible_run_failure, parse_unreachable_hosts, summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
+from services.collection_errors import OPERATIONAL_COLLECTION_ERRORS, operational_failure_reason
 from services.database import get_db
 from services.deploy_activity import read_deploy_activity
 from services.deploy_artifacts import (
@@ -5172,8 +5173,8 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
             f"Collected {len(outdated_node_ids)} outdated fleet node(s)",
         )
         return outdated_node_ids
-    except Exception as exc:
-        logger.warning("update-all: could not collect outdated nodes: %s", exc)
+    except OPERATIONAL_COLLECTION_ERRORS as exc:
+        _fail_fleet_stage(job, _get_stage(job, "fleet_nodes"), operational_failure_reason("outdated nodes", exc))
         return []
 
 
@@ -5392,6 +5393,8 @@ async def _run_update_all_orchestration(job: UpdateAllJob, db_service_ref) -> No
 
     outdated_node_ids = await _collect_outdated_node_ids(job, remote_commit, db_service_ref)
     _mark_progress(job)
+    if job.status == "failed":  # #21334: could not determine, not "nothing outdated"
+        return
 
     slm_fired = await _run_slm_stage(job, remote_commit, outdated_node_ids, db_service_ref)
     _mark_progress(job)
