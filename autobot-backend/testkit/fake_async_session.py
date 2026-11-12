@@ -153,6 +153,7 @@ class FakeAsyncSession:
         self.flushes = 0
         self.rollbacks = 0
         self.closed = False
+        self.info: dict = {}  # per-session scratch, as on a real Session (``async_session_scope`` seeds it)
         self._last_commit_failed = False
         self._ids = itertools.count(1)
 
