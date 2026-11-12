@@ -751,6 +751,7 @@ const {
   progressStatus,
   selectedSource,
   withSourceId,
+  sourceKey: () => sourceIdParam.value,
   notify,
   t,
   problemsReport,

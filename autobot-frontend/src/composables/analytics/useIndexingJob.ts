@@ -13,7 +13,7 @@
  * Issue #1579: Extracted from CodebaseAnalytics.vue
  */
 
-import { ref, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
@@ -64,6 +64,8 @@ export interface UseIndexingJobDeps {
   progressStatus: Ref<string>
   /** Currently selected code source (if any). */
   selectedSource: Ref<{ id: string } | null>
+  /** Names the selected source (the key `useRunState` receives); a change drops the old source's job. */
+  sourceKey: () => string
   /** Helper that appends ?source_id= to a URL. */
   withSourceId: (url: string) => string
   /** Toast notification helper. */
@@ -359,6 +361,23 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
       )
     }
   }
+
+  // A job, a queued request and a polling session belong to ONE source: on a switch drop them
+  // (so Stop cannot hit the old source's running job) and discover the new source's, as page open does.
+  watch(deps.sourceKey, () => {
+    stopJobPolling()
+    currentJobId.value = null
+    currentJobStatus.value = null
+    jobPhases.value = null
+    jobBatches.value = null
+    jobStats.value = null
+    sawOwnJob = false
+    idlePolls = 0
+    deps.analyzing.value = false
+    deps.progressPercent.value = 0
+    deps.progressStatus.value = deps.t('analytics.codebase.status.ready')
+    void checkCurrentIndexingJob()
+  })
 
   /**
    * Send an index request with retry on 502/503.

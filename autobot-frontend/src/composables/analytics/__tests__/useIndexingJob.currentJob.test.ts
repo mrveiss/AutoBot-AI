@@ -8,7 +8,8 @@
  * when the page opens and when a job ends (#21003).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
+import { flushPromises } from '@vue/test-utils'
 import { IDLE_POLLS_BEFORE_GIVING_UP, useIndexingJob, type UseIndexingJobDeps } from '../useIndexingJob'
 
 const fetchWithAuth = vi.fn()
@@ -21,7 +22,7 @@ const IDLE = { has_active_job: false, task_id: null, status: 'idle' }
 const respond = (body: unknown) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) })
 const scoped = (url: string) => `${url}?source_id=autobot`
 
-function build(withSourceId: (url: string) => string, loadRunState = vi.fn(async () => {})) {
+function build(withSourceId: (url: string) => string, loadRunState = vi.fn(async () => {}), sourceKey: () => string = () => 'source_id=autobot') {
   const deps = {
     rootPath: ref('/repo'),
     analyzing: ref(false),
@@ -29,6 +30,7 @@ function build(withSourceId: (url: string) => string, loadRunState = vi.fn(async
     progressStatus: ref(''),
     selectedSource: ref({ id: 'autobot' }),
     withSourceId,
+    sourceKey,
     notify: vi.fn(),
     t: (key: string) => key,
     problemsReport: ref([]),
@@ -155,5 +157,69 @@ describe('a request queued behind another source\'s job (#20513)', () => {
     fetchWithAuth.mockClear()
     await job.cancelIndexingJob()
     expect(fetchWithAuth).not.toHaveBeenCalled()
+  })
+})
+
+describe('a source switch while a job is tracked (#20513)', () => {
+  const RUNNING = { has_active_job: true, task_id: 't9', source_id: 'autobot', status: 'running', progress: {} }
+  const QUEUED_B = { has_active_job: true, task_id: null, source_id: 'autobot', status: 'queued', position: 1 }
+  const IDLE_B = { has_active_job: false, task_id: null, status: 'idle' }
+  const indexCalls = () => fetchWithAuth.mock.calls.map((c) => c[0] as string).filter((u) => u.includes('/index/current'))
+
+  beforeEach(() => {
+    fetchWithAuth.mockReset()
+  })
+
+  it('mounting fires no extra /index/current request', async () => {
+    const source = ref('a')
+    build((url) => `${url}?${source.value}`, vi.fn(async () => {}), () => source.value)
+    await nextTick()
+    await flushPromises()
+    expect(indexCalls()).toHaveLength(0)
+  })
+
+  it('switching while polling a running job drops it: id cleared, cancel posts nothing', async () => {
+    vi.useFakeTimers()
+    try {
+      const source = ref('a')
+      fetchWithAuth.mockImplementation(async (url: string) => respond(url.includes('source_id=b') ? IDLE_B : RUNNING))
+      const { job, deps } = build((url) => `${url}?source_id=${source.value}`, vi.fn(async () => {}), () => source.value)
+      await job.checkCurrentIndexingJob()
+      expect(job.currentJobId.value).toBe('t9')
+      source.value = 'b'
+      await nextTick()
+      await flushPromises()
+      expect(job.currentJobId.value).toBeNull()
+      expect(deps.analyzing.value).toBe(false)
+      fetchWithAuth.mockClear()
+      await job.cancelIndexingJob()
+      expect(fetchWithAuth).not.toHaveBeenCalled()
+      job.stopJobPolling()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('switching to a source with a queued request shows the queued text and polls for it', async () => {
+    vi.useFakeTimers()
+    try {
+      const source = ref('a')
+      fetchWithAuth.mockImplementation(async (url: string) => respond(url.includes('source_id=b') ? QUEUED_B : RUNNING))
+      const { job, deps } = build((url) => `${url}?source_id=${source.value}`, vi.fn(async () => {}), () => source.value)
+      await job.checkCurrentIndexingJob()
+      source.value = 'b'
+      await nextTick()
+      await flushPromises()
+      expect(deps.progressStatus.value).toBe('analytics.codebase.status.queued')
+      expect(job.currentJobId.value).toBeNull()
+      const before = indexCalls().length
+      await vi.advanceTimersByTimeAsync(2100)
+      const added = indexCalls().slice(before)
+      expect(added.length).toBeGreaterThan(0)
+      expect(added.every((u) => u.includes('source_id=b'))).toBe(true)
+      job.stopJobPolling()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
