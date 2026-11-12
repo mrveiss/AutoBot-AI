@@ -73,7 +73,7 @@ from .run_key import issue_run_key as _issue_run_key
 from .run_key import revoke_run_key as _revoke_run_key
 from .run_status import RunSuperseded, latest_run_in, mark_running
 from .run_workspace import acquire_run_workspace, release_run_workspace, release_workspace_best_effort
-from .schedule_members import agent_due_members, drop_unschedulable_member
+from .schedule_members import agent_due_members, drop_unschedulable_member, reschedule_after_start
 from .usage_billing import ingest_run_cost
 
 logger = get_logger(__name__)
@@ -370,7 +370,10 @@ class LLCHeartbeatScheduler:
         self._tasks.add(t)
         t.add_done_callback(self._tasks.discard)
 
-        await self._reschedule(agent_id, cron_expr, redis, run_id=run.id)
+        # The adapter task is running: a failed reschedule must not requeue and run the agent again (#20117).
+        await reschedule_after_start(
+            "Heartbeat agent", agent_id, lambda: self._reschedule(agent_id, cron_expr, redis, run_id=run.id)
+        )
 
     async def _reschedule(self, agent_id: str, cron_expr: str, redis: Any, *, run_id: Any = None) -> None:
         """Advance this agent's sorted-set score to its next fire time.
