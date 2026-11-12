@@ -45,6 +45,8 @@ ACTOR_NAME = re.compile(r"(^|_)(actor|author|reviewer)(_|$)|_by($|_)")
 _VERBS = frozenset({"get", "post", "put", "patch", "delete"})
 _DUMPS = frozenset({"model_dump", "dict", "model_dump_json", "json", "model_copy", "copy"})
 _LOG_NAMES = frozenset({"logger", "log", "logging"})
+#: The methods of a logger. ``log.record(...)`` on an audit log is NOT a log call: it persists its arguments.
+_LOG_METHODS = frozenset({"debug", "info", "warning", "warn", "error", "exception", "critical", "fatal", "log"})
 
 
 @dataclass(frozen=True, order=True)
@@ -58,7 +60,8 @@ class Finding:
 
 
 def _bases(node: ast.ClassDef) -> list[str]:
-    return [b.id for b in node.bases if isinstance(b, ast.Name)]
+    """Base class names: ``Base`` and ``module.Base`` alike (a subscripted base such as ``Generic[T]`` is skipped)."""
+    return [b.id if isinstance(b, ast.Name) else b.attr for b in node.bases if isinstance(b, (ast.Name, ast.Attribute))]
 
 
 def _own_fields(node: ast.ClassDef) -> set[str]:
@@ -94,7 +97,30 @@ def _parents(root: ast.AST) -> dict[ast.AST, ast.AST]:
 
 
 def _annotation_names(annotation: ast.AST | None) -> set[str]:
-    return {n.id for n in ast.walk(annotation)} if annotation is not None else set()
+    """Every class name an annotation mentions, however it is wrapped.
+
+    ``ast.walk`` yields every node (Subscript, BinOp, Load, Tuple...), so only the nodes that CARRY a name are
+    read: a ``Name`` (``Body``), the attribute of a dotted one (``schemas.Body``) and a string annotation
+    (``"Body"``, parsed and read the same way). An un-annotated parameter has no annotation at all.
+    """
+    if annotation is None:
+        return set()
+    names: set[str] = set()
+    for node in ast.walk(annotation):
+        if isinstance(node, ast.Name):
+            names.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            names.add(node.attr)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            names |= _string_annotation_names(node.value)
+    return names
+
+
+def _string_annotation_names(text: str) -> set[str]:
+    try:
+        return _annotation_names(ast.parse(text, mode="eval").body)
+    except SyntaxError:
+        return set()
 
 
 def _args(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.arg]:
@@ -105,7 +131,7 @@ def _args(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.arg]:
 def _in_log_call(node: ast.AST, parents: Mapping[ast.AST, ast.AST]) -> bool:
     while node in parents:
         node = parents[node]
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in _LOG_METHODS:
             root = node.func.value
             if isinstance(root, ast.Name) and root.id in _LOG_NAMES:
                 return True
@@ -136,6 +162,11 @@ def _callee_param(node: ast.Name, parents: Mapping[ast.AST, ast.AST], defs: Mapp
     return (helper, positional[index]) if 0 <= index < len(positional) else None
 
 
+def _declares(func: ast.FunctionDef | ast.AsyncFunctionDef, name: str) -> bool:
+    """Whether *name* is a named parameter of *func*; one absorbed by ``**kwargs`` cannot be followed."""
+    return name in {a.arg for a in _args(func)}
+
+
 def _uses(func: ast.AST, name: str, defs: Mapping[str, ast.AST], depth: int = 3) -> Iterator[tuple[str, str]]:
     """``(how, field)`` for each way *func* VALUES parameter *name*: ``attr`` / ``dump`` / ``whole``.
 
@@ -154,7 +185,7 @@ def _uses(func: ast.AST, name: str, defs: Mapping[str, ast.AST], depth: int = 3)
                 yield "attr", parent.attr
         elif _only_looked_at(node, parents):
             continue
-        elif depth and (target := _callee_param(node, parents, defs)):
+        elif depth and (target := _callee_param(node, parents, defs)) and _declares(target[0], target[1]):
             yield from _uses(target[0], target[1], defs, depth - 1)
         else:
             yield "whole", name

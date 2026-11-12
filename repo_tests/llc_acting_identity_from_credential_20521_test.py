@@ -12,6 +12,13 @@ Frozen baseline: EMPTY (``_BASELINE``). Every instance found was fixed rather th
 in ``_SUBJECTS`` is not a baseline of defects: each entry is a field naming who is being ACTED ON or
 FILTERED BY (the person asked to review, the actor a listing is filtered to), with the reason beside it.
 
+Vocabulary limit, stated beside the baseline: "EMPTY" means empty in the detector's vocabulary only -- a field
+whose NAME says who acted (``actor``, ``*_by``, ``author_*``, ``reviewer_*``). It does not cover the whole class.
+A plain ``agent_id`` / ``user_id`` is not scanned by name, and these known instances are out of vocabulary and
+NOT fixed here (they need an owner decision, tracked on #20521): ``CheckoutRequest.agent_id`` and
+``ReleaseRequest.agent_id`` (``llc/api/work_items.py``), and the requester of ``api/approval_gates.py``
+(outside the scanned package).
+
 Boundary, stated where it is read: route modules under ``autobot-backend/llc/api``; request models are
 resolved by class name across that package; a model defined elsewhere, a handler registered without a
 ``router.<verb>`` decorator, and a raw ``await request.json()`` are not seen.
@@ -33,6 +40,7 @@ from repo_tests._acting_identity_detect import (
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _API = "autobot-backend/llc/api"
@@ -53,9 +61,6 @@ _SUBJECTS = {
 #: Declared actor-named request fields the detector must SEE (and that are deliberately never valued).
 _KNOWN_SHIMS = {
     ("ApprovalDecision", "decided_by_agent_id"),
-    ("SecretSetRequest", "actor"),
-    ("RelationCreate", "created_by_user_id"),
-    ("SprintCloseRequest", "decided_by"),
     ("HandoffToHumanRequest", "reviewer_user_id"),
 }
 
@@ -67,6 +72,10 @@ _REMOVED = {
     ("CommentCreate", "author_agent_id"),
     ("LabelCreate", "created_by"),
     ("LabelAssign", "assigned_by"),
+    ("SecretSetRequest", "actor"),
+    ("RelationCreate", "created_by_agent_id"),
+    ("RelationCreate", "created_by_user_id"),
+    ("SprintCloseRequest", "decided_by"),
 }
 
 _REQUEST_SUFFIXES = ("Request", "Create", "Update", "Body", "Payload", "Input")
@@ -77,14 +86,7 @@ def _population(root) -> list[str]:  # noqa: ANN001
         tracked = tracked_paths(root, _API)
     except EmptyEnumeration:
         return []
-    return [
-        r
-        for r in tracked
-        if r.endswith(".py")
-        and "/tests/" not in r
-        and not r.rsplit("/", 1)[-1].startswith("test_")
-        and not r.endswith("_test.py")
-    ]
+    return [r for r in tracked if r.endswith(".py") and "/tests/" not in r and not is_test_filename(r)]
 
 
 REACH = declare(
@@ -154,6 +156,40 @@ def test_an_inherited_actor_field_is_found() -> None:
 def test_a_model_defined_in_another_module_is_found() -> None:
     route = '@router.post("/x")\nasync def route(body: Body):\n    svc.create(body.created_by)\n'
     assert [f.function for f in _found(route, {"models.py": _MODEL})] == ["route"]
+
+
+@pytest.mark.parametrize(
+    ("label", "params"),
+    [
+        ("an un-annotated parameter beside it", "other, body: Body"),
+        ("Optional[...]", "body: Optional[Body] = None"),
+        ("Body | None", "body: Body | None = None"),
+        ("Annotated[...]", "body: Annotated[Body, Depends(dep)]"),
+        ("a dotted name", "body: schemas.Body"),
+        ("a string annotation", 'body: "Body"'),
+        ("a keyword-only parameter", "*, body: Body"),
+        ("a positional-only parameter", "body: Body, /"),
+        ("a parameter with a Depends default", "x: int = Depends(dep), body: Body = None"),
+    ],
+)
+def test_the_model_is_found_however_its_annotation_is_wrapped(label: str, params: str) -> None:
+    source = _MODEL + f'@router.post("/x")\nasync def route({params}):\n    svc.create(body.created_by)\n'
+    assert [f.function for f in _found(source)] == ["route"], label
+
+
+def test_a_sync_route_and_a_nested_function_are_read() -> None:
+    source = _MODEL + '@router.post("/x")\ndef route(body: Body):\n    def inner():\n        return body.created_by\n'
+    assert [f.function for f in _found(source)] == ["route"]
+
+
+def test_an_audit_log_record_call_is_not_a_log_call() -> None:
+    stmt = "log.record(session, actor_id=body.created_by)"
+    assert [f.how for f in _found(_MODEL + _ROUTE.format(stmt=stmt))] == ["attr"]
+
+
+def test_a_model_passed_to_a_helper_that_swallows_it_in_kwargs_is_a_use() -> None:
+    helper = "def _make(**kw):\n    return kw\n\n"
+    assert [f.how for f in _found(_MODEL + helper + _ROUTE.format(stmt="_make(b=body)"))] == ["whole"]
 
 
 def test_an_actor_named_query_parameter_that_is_used_is_found() -> None:
