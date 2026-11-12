@@ -107,12 +107,46 @@ async def get_unenrolled_nodes(db: AsyncSession, node_ids: Iterable[str]) -> Dic
     return states
 
 
-async def get_slm_self_node_id(db: AsyncSession, external_url: str) -> Optional[str]:
-    """node_id of the co-located SLM host (the node at the external URL's host), or None; never skipped (#21036)."""
-    own_ip = urlparse(external_url).hostname or ""
-    if not own_ip:
+#: Role token on the SLM manager's own row (the same set ``main`` registers for the local node).
+SLM_MANAGER_ROLE = "slm-backend"
+
+
+def _pick_slm_node(rows: List[Node], host: str) -> Optional[Node]:
+    """The SLM's own row among the rows sharing its address: the manager-role row, else the lowest ``id``.
+
+    Several rows on one address are normal (co-located roles each have a row), so only a pick the role cannot
+    settle is logged. *rows* arrive ordered by ``id``, which keeps the fallback stable.
+    """
+    managers = [n for n in rows if SLM_MANAGER_ROLE in (n.roles or [])]
+    if len(rows) > 1 and len(managers) != 1:
+        logger.warning(
+            "SLM self node is ambiguous: %d nodes share %s, %d carry role %s; using %s (#21036)",
+            len(rows),
+            host,
+            len(managers),
+            SLM_MANAGER_ROLE,
+            (managers or rows)[0].node_id,
+        )
+    return (managers or rows or [None])[0]
+
+
+async def get_slm_self_node(db: AsyncSession, external_url: str) -> Optional[Node]:
+    """The co-located SLM host's node (the node at the external URL's host), or None; never raises on duplicates.
+
+    ``Node.ip_address`` is not unique, so the match is a deterministic pick (``_pick_slm_node``), not a single-row
+    assertion. The one definition of "which node is the SLM" for update-all and the scheduled run (#21036).
+    """
+    host = urlparse(external_url).hostname or ""
+    if not host:
         return None
-    return (await db.execute(select(Node.node_id).where(Node.ip_address == own_ip))).scalar_one_or_none()
+    rows = (await db.execute(select(Node).where(Node.ip_address == host).order_by(Node.id))).scalars().all()
+    return _pick_slm_node(list(rows), host)
+
+
+async def get_slm_self_node_id(db: AsyncSession, external_url: str) -> Optional[str]:
+    """node_id of the co-located SLM host, or None; the node that is never skipped (#21036)."""
+    node = await get_slm_self_node(db, external_url)
+    return node.node_id if node else None
 
 
 async def split_enrollment_failed(

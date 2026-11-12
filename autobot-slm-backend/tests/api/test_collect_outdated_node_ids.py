@@ -88,9 +88,9 @@ def enrollment(monkeypatch):
 
     ``skip_ids`` are nodes whose enrollment state would skip them, unless exempt, like the
     real split_enrollment_failed(db, node_ids, exempt). ``exempt_calls`` records the exempt
-    set the code under test passes. ``self_id`` is what get_slm_self_node_id resolves to.
+    set the code under test passes. The self node is the first row of the second query, like the real helper.
     """
-    state = types.SimpleNamespace(skip_ids=set(), exempt_calls=[], self_id=SELF_NODE_ID)
+    state = types.SimpleNamespace(skip_ids=set(), exempt_calls=[])
 
     async def _split(_db, node_ids, exempt=()):
         exempt = set(exempt)
@@ -98,11 +98,12 @@ def enrollment(monkeypatch):
         targets = [n for n in node_ids if n in exempt or n not in state.skip_ids]
         return targets, [n for n in node_ids if n not in targets]
 
-    async def _self_id(_db, _external_url):
-        return state.self_id
+    async def _self_node(db, _external_url):
+        rows = (await db.execute(None)).scalars().all()
+        return rows[0] if rows else None
 
     monkeypatch.setattr("api.code_sync.split_enrollment_failed", _split)
-    monkeypatch.setattr("api.code_sync.get_slm_self_node_id", _self_id)
+    monkeypatch.setattr("api.code_sync.get_slm_self_node", _self_node)
     return state
 
 
