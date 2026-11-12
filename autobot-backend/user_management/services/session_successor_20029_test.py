@@ -274,6 +274,11 @@ class _Service(SharedUserService):
     handover: Any = None
     check: Any = None
 
+    async def _guard_last_admin(
+        self, *args, **kwargs
+    ):  # these tests are about the handover; the guard has its own (#21018)
+        return None
+
     async def check_session_reassign(self, user_id):
         if self.check is not None:
             self.check(user_id)
