@@ -17,8 +17,18 @@ entries are never read again and leave on their own TTL / size eviction.
 
 A write entry point opts in with ``@invalidates_retrieval_caches(reason)``. The decorator fires in a
 ``finally``: a write that failed half-way may still have changed what a search returns. A failed
-bump is logged at error level and not raised: the write is already durable, and an unreadable epoch
-makes every cache tier skip itself (``cache_scope`` returns ``None``), so no stale entry is served.
+bump is logged at error level and not raised: the write is already durable. When the epoch is
+unreadable every cache tier skips itself (``cache_scope`` returns ``None``). When only the SET is
+rejected (a read-only or degraded Redis) the old epoch stays readable, so the failed bump also marks
+this process "invalidation pending": ``invalidation_pending`` makes ``cache_scope`` return ``None``
+(read and write bypass) and retries the bump on each call, one SET per search, no task and no loop,
+until a bump succeeds; the marker then clears and caching resumes under the new epoch.
+
+Guarantee and limit: the marker is process-local. The process that saw the failed bump never serves
+a result cached before the write. Another process (API worker, Celery) cannot be told: with Redis
+rejecting writes no shared marker can be stored, and its reads still return the old epoch. Such a
+process stays stale until its next bump succeeds or the entry's TTL ends, which is the bounded
+staleness this design cannot remove.
 
 ``WRITE_ENTRY_POINTS`` is the single enumeration of those entry points; the guard test
 (``retrieval_invalidation_20958_test.py``) fails when a registered function lost its decorator, a
@@ -34,6 +44,9 @@ from autobot_shared.redis_client import get_async_redis_client
 from knowledge.acl_epoch import ACL_EPOCH_DATABASE, bump_acl_epoch_async
 
 logger = get_logger(__name__)
+
+#: True while a bump failed in this process and none has succeeded since (see the module doc).
+_pending = False
 
 _F = TypeVar("_F", bound=Callable[..., Awaitable[Any]])
 
@@ -68,14 +81,29 @@ WRITE_ENTRY_POINTS: tuple[WriteEntryPoint, ...] = (
 
 async def invalidate_retrieval_caches(reason: str) -> bool:
     """Orphan every cached retrieval result by replacing the KB epoch; ``False`` when that failed."""
+    global _pending
     try:
         client = await get_async_redis_client(database=ACL_EPOCH_DATABASE)
         await bump_acl_epoch_async(client)
     except Exception as exc:
+        if not _pending:
+            logger.warning("Retrieval caches bypassed until an epoch bump succeeds (%s): %s", reason, exc)
         logger.error("Retrieval caches NOT invalidated after %s: %s", reason, exc)
+        _pending = True
         return False
+    if _pending:
+        logger.info("Epoch bump succeeded after %s; retrieval caches resume", reason)
+    _pending = False
     logger.debug("Retrieval caches invalidated: %s", reason)
     return True
+
+
+async def invalidation_pending() -> bool:
+    """True while a bump failed and still fails; a pending process retries the bump once per call."""
+    if not _pending:
+        return False
+    await invalidate_retrieval_caches("pending_retry")
+    return _pending
 
 
 def invalidates_retrieval_caches(reason: str) -> Callable[[_F], _F]:

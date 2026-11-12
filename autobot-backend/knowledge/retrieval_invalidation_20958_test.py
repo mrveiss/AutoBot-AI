@@ -34,13 +34,23 @@ class _Kv:
 
     def __init__(self) -> None:
         self.data: dict[str, str] = {}
+        self.reject_writes = False
 
     async def get(self, key):
         return self.data[key].encode() if key in self.data else None
 
     async def set(self, key, value, nx=False):
+        if self.reject_writes:
+            raise ConnectionError("READONLY You can't write against a read only replica")
         if not (nx and key in self.data):
             self.data[key] = value
+
+
+@pytest.fixture(autouse=True)
+def _no_pending_marker():
+    """The pending marker is module state: every test starts, and leaves, with none."""
+    with patch("knowledge.retrieval_invalidation._pending", False):
+        yield
 
 
 @pytest.fixture
@@ -114,6 +124,51 @@ async def test_each_bump_is_a_fresh_token_in_the_acl_epoch_key(kv):
     first = kv.data[ACL_EPOCH_KEY]
     assert await invalidate_retrieval_caches("fact_deleted")
     assert kv.data[ACL_EPOCH_KEY] != first
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_bump_with_working_reads_bypasses_the_cache_instead_of_keeping_the_old_scope(kv):
+    semantic, topic = make_semantic_cache(), make_topic_cache()
+    before = await cache_scope(SYSTEM_SCOPE)
+    await _fill(semantic, topic, before)
+    kv.reject_writes = True
+
+    @invalidates_retrieval_caches("fact_updated")
+    async def write() -> str:
+        return "written"
+
+    assert await write() == "written"
+    assert await cache_scope(SYSTEM_SCOPE) is None, "the pre-write epoch must not stay usable"
+    assert await semantic.lookup("q", embedding=VECTOR, scope=None) is None
+    assert await topic.lookup(VECTOR, scope=None) is None
+
+
+@pytest.mark.asyncio
+async def test_a_later_successful_bump_restores_caching_under_the_new_epoch(kv):
+    semantic, topic = make_semantic_cache(), make_topic_cache()
+    before = await cache_scope(SYSTEM_SCOPE)
+    await _fill(semantic, topic, before)
+    kv.reject_writes = True
+    assert await invalidate_retrieval_caches("fact_updated") is False
+    assert await cache_scope(SYSTEM_SCOPE) is None, "still rejected: the retry fails and the bypass holds"
+
+    kv.reject_writes = False
+    after = await cache_scope(SYSTEM_SCOPE)  # the retry inside the call succeeds
+    assert after is not None and after != before
+    assert await semantic.lookup("q", embedding=VECTOR, scope=after) is None, "nothing from the old epoch"
+    assert await topic.lookup(VECTOR, scope=after) is None, "nothing from the old epoch"
+    await _fill(semantic, topic, after)
+    assert await semantic.lookup("q", embedding=VECTOR, scope=after) is not None
+    assert await topic.lookup(VECTOR, scope=after) is not None
+    assert await cache_scope(SYSTEM_SCOPE) == after, "no bump once the marker is clear"
+
+
+@pytest.mark.asyncio
+async def test_a_working_bump_leaves_no_pending_marker_and_scopes_stay_stable(kv):
+    assert await invalidate_retrieval_caches("fact_added") is True
+    scope = await cache_scope(SYSTEM_SCOPE)
+    assert scope is not None
+    assert await cache_scope(SYSTEM_SCOPE) == scope
 
 
 def test_the_decorator_refuses_a_sync_function():
