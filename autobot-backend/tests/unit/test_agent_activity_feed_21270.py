@@ -110,6 +110,38 @@ async def test_bad_records_are_skipped_not_fatal(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "duration_ms, completed_at",
+    [
+        (1e20, "2026-11-09T12:00:00+00:00"),  # pre-fix: OverflowError from timedelta, escaped the guard
+        (1e999, "2026-11-09T12:00:00+00:00"),  # JSON Infinity: pre-fix OverflowError, escaped
+        (float("-inf"), "2026-11-09T12:00:00+00:00"),  # pre-fix OverflowError, escaped
+        (float("nan"), "2026-11-09T12:00:00+00:00"),  # pre-fix ValueError, skipped (kept as a regression pin)
+        (-5, "2026-11-09T12:00:00+00:00"),  # pre-fix: kept, bar with negative width; now rejected
+        (60_000, "0001-01-01T00:00:00+00:00"),  # pre-fix: finished - duration underflows year 1: OverflowError
+    ],
+)
+async def test_overflowing_or_non_finite_records_are_skipped_not_fatal(monkeypatch, duration_ms, completed_at):
+    good = json.dumps(_record("ok", "completed", "2026-11-09T12:00:00+00:00"))
+    bad = json.dumps(_record("bad", "completed", completed_at, duration_ms))  # allow_nan writes NaN/Infinity
+    _use(monkeypatch, _redis([good, bad, good]))
+    got = await feed_mod.get_agent_feed("a")
+    assert got is not None
+    assert [t["id"] for t in got["recentTasks"]] == ["ok", "ok"]
+    assert len(got["activityTimeline"]) == 2
+    json.dumps(got, allow_nan=False)  # the response stays valid JSON
+
+
+@pytest.mark.asyncio
+async def test_one_bad_record_does_not_break_other_agents(monkeypatch):
+    good = json.dumps(_record("ok", "completed", "2026-11-09T12:00:00+00:00"))
+    bad = json.dumps(_record("bad", "completed", "2026-11-09T12:00:00+00:00", 1e20))
+    _use(monkeypatch, _redis([bad], [good]))
+    got = await feed_mod.get_agent_feeds(["a", "b"])
+    assert got["a"]["recentTasks"] == [] and [t["id"] for t in got["b"]["recentTasks"]] == ["ok"]
+
+
+@pytest.mark.asyncio
 async def test_get_agent_history_keeps_empty_on_failure(monkeypatch):
     analytics = _use(monkeypatch, None)
     assert await analytics.get_agent_history("a") == []

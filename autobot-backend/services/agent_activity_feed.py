@@ -9,6 +9,7 @@ One implementation over the analytics history store (the same records
 not be read ("not reported", #17514) and a real list, possibly empty, when it was.
 """
 
+import math
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
@@ -51,6 +52,18 @@ def _recent_task(record: Dict[str, Any], status: str, finished: datetime) -> Dic
     }
 
 
+def _duration_ms(record: Dict[str, Any]) -> float:
+    """The stored duration as a finite, non-negative float; ValueError for anything else.
+
+    ``json.loads`` accepts ``NaN`` / ``Infinity`` / ``1e999``, none of which is a duration (and a
+    NaN would also be invalid JSON in the response), so they are malformed, not clipped.
+    """
+    duration_ms = _duration_ms(record)
+    if not math.isfinite(duration_ms) or duration_ms < 0:
+        raise ValueError(f"duration_ms is not a finite non-negative number: {duration_ms!r}")
+    return duration_ms
+
+
 def _timeline_bar(record: Dict[str, Any], status: str, finished: datetime, win: tuple) -> Dict[str, Any] | None:
     """A bar for a finished task that overlaps the axis, clipped to it; None when outside."""
     start, span = win
@@ -86,7 +99,7 @@ def build_feed(records: List[Dict[str, Any]], now: datetime | None = None) -> Fe
     for record in records:
         try:
             entry = _record_entries(record, win)
-        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        except (KeyError, TypeError, ValueError, AttributeError, OverflowError) as exc:
             logger.warning("Skipping malformed task record in agent feed: %r", exc)
             continue
         if entry is not None:
