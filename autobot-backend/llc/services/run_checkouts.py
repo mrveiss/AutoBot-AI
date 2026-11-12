@@ -18,7 +18,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
@@ -26,7 +26,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import delete_if_value
 
 from ..models.activity import ActorType
-from ..models.enums import ActivityEventType, LLCRunStatus
+from ..models.enums import ActivityEventType, LLCRunStatus, WorkItemStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..models.work_item import LLCWorkItem
 from .activity_log import LLCActivityLogService
@@ -48,6 +48,7 @@ class ReleasedCheckout:
     item: LLCWorkItem
     fence_key: str
     fence_value: Optional[str]
+    moved: bool = False  #: the item was still ``in_progress`` and was returned to ``ReleaseWhy.then``
 
 
 def checkouts_held_by(run_id: uuid.UUID | str, company_id: uuid.UUID | str) -> Select:
@@ -83,15 +84,34 @@ class ReleaseWhy:
     actor_type: ActorType = ActorType.SYSTEM
     actor_id: Optional[str] = None
     log: Optional[LLCActivityLogService] = None
+    #: Where an item still ``in_progress`` goes: ``ready`` (claimable again) unless the caller needs a human to look.
+    then: WorkItemStatus = WorkItemStatus.READY
+
+
+def _return_status(item: LLCWorkItem, then: WorkItemStatus) -> bool:
+    """Move an item still ``in_progress`` to *then*; any other status is left exactly as it is.
+
+    This is the system's write, not a user transition: it undoes the ``ready -> in_progress`` write that
+    ``stamp_agent_checkout`` makes when a run checks the item out, so it is deliberately absent from
+    ``_ALLOWED_TRANSITIONS`` (a person cannot move an item back to ``ready`` from ``in_progress``). An item in
+    review, blocked, done or cancelled changed state on its own after the checkout and keeps that state.
+    """
+    if item.status != WorkItemStatus.IN_PROGRESS:
+        return False
+    item.status = then
+    return True
 
 
 async def _release_one(session: AsyncSession, item: LLCWorkItem, run_id, why: ReleaseWhy) -> ReleasedCheckout:
-    """Clear one checkout and record why, in the caller's transaction."""
-    released = ReleasedCheckout(item, checkout_fence_key(item.id), _fence_of(item))
-    held = item.checkout_run_id
+    """Clear one checkout, return an unfinished item to the queue and record both, in the caller's transaction."""
+    held, was = item.checkout_run_id, WorkItemStatus(item.status).value
+    released = ReleasedCheckout(item, checkout_fence_key(item.id), _fence_of(item), _return_status(item, why.then))
     item.checkout_run_id = None
     item.checkout_locked_at = None
     item.version += 1
+    before, after = {"checkout_run_id": held}, {"checkout_run_id": None}
+    if released.moved:
+        before["status"], after["status"] = was, WorkItemStatus(item.status).value
     await (why.log or _activity_log).record(
         session,
         company_id=str(item.company_id),
@@ -100,8 +120,8 @@ async def _release_one(session: AsyncSession, item: LLCWorkItem, run_id, why: Re
         event_type=ActivityEventType.WORK_ITEM_UPDATED,
         entity_type="work_item",
         entity_id=str(item.id),
-        before={"checkout_run_id": held},
-        after={"checkout_run_id": None},
+        before=before,
+        after=after,
         metadata={"reason": why.reason, "heartbeat_run_id": str(run_id), "source": why.source},
     )
     return released
@@ -110,10 +130,18 @@ async def _release_one(session: AsyncSession, item: LLCWorkItem, run_id, why: Re
 async def release_checkouts_for_run(
     session: AsyncSession, run: LLCHeartbeatRun, why: ReleaseWhy
 ) -> list[ReleasedCheckout]:
-    """Release every work-item checkout *run* made; idempotent by its predicate.
+    """Release every work-item checkout *run* made; idempotent by its predicate. The one release, for every caller.
 
-    The assignment is kept: it records who the item belongs to, not which run made it so. Redis is
-    untouched here -- hand the result to :func:`drop_released_fences` after the caller commits.
+    An item still ``in_progress`` goes back to ``ready`` so the queue offers it again (``eligible_for`` reads
+    ``ready`` and no checkout), or to ``ReleaseWhy.then`` where the caller wants a person to look. Items in any
+    other status are not touched beyond the checkout. The assignment is kept: it records who the item belongs
+    to, not which run made it so. Redis is untouched here -- hand the result to :func:`drop_released_fences`
+    after the caller commits.
+
+    Known window: a fence whose drop fails, or never runs because the process dies between the commit and the
+    drop, stays up to the checkout TTL while the database already says the item is free. ``checkout`` checks
+    the fence before the row, so another agent's checkout of that item is refused until the TTL expires; the
+    same agent is not. The fence is a fast path, the database authoritative, and the window is bounded.
     """
     run_id = str(run.id)
     result = await session.execute(checkouts_held_by(run_id, run.company_id))
@@ -147,7 +175,14 @@ async def drop_released_fences(released: list[ReleasedCheckout]) -> None:
 
 
 async def live_run_id(session: AsyncSession, agent_slug: str, company_id: str) -> Optional[uuid.UUID]:
-    """The run this agent is working in right now, or ``None``: its newest non-terminal run in the company.
+    """The run this agent is working in right now, or ``None``: its RUNNING run, else its newest QUEUED one.
+
+    The run row is read ``FOR SHARE`` and stays locked until the caller's transaction ends, so a cancel (an
+    UPDATE of that row) waits for the claim and its own release then sees it. Postgres re-evaluates the
+    non-terminal predicate once the lock is granted, so a run cancelled meanwhile is not returned.
+
+    A running run asking for work must stamp its own id: a newer queued run may be skipped, which is terminal
+    and never swept, and a checkout stamped with it would be orphaned.
 
     ``LLCHeartbeatRun.agent_id`` is the agent's slug (``agent_org_nodes.agent_id``), which is what the agent
     credential carries; the checkout itself is keyed on the node uuid.
@@ -160,7 +195,10 @@ async def live_run_id(session: AsyncSession, agent_slug: str, company_id: str) -
             LLCHeartbeatRun.status.in_(NON_TERMINAL_STATUSES),
             LLCHeartbeatRun.finished_at.is_(None),
         )
-        .order_by(LLCHeartbeatRun.created_at.desc())
+        .order_by(
+            case((LLCHeartbeatRun.status == LLCRunStatus.RUNNING.value, 0), else_=1), LLCHeartbeatRun.created_at.desc()
+        )
         .limit(1)
+        .with_for_update(read=True)
     )
     return result.scalar_one_or_none()

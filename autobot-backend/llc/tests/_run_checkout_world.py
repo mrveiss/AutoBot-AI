@@ -73,3 +73,21 @@ class Recorder:
 
     async def record(self, session: Any, **entry: Any) -> None:
         self.entries.append(entry)
+
+
+class QueueSession(FakeAsyncSession):
+    """Answers the work queue's SELECT by the predicates it binds: ``ready``, no checkout, this agent's or unassigned.
+
+    The queue's own WHERE clauses decide what is offered; a sqlite fake cannot run them, so the bound values
+    stand in: an item is returned when its status is among them, it holds no checkout and its assignee is bound.
+    """
+
+    def __init__(self, items: list) -> None:
+        super().__init__(assign_ids=uuid.uuid4, default_result=FakeResult([]))
+        self.items = items
+
+    async def execute(self, statement: Any, *args: Any, **kwargs: Any) -> FakeResult:
+        bound = bound_values(statement)
+        return FakeResult(
+            [i for i in self.items if i.status in bound and i.checkout_run_id is None and i.assignee_agent_id in bound]
+        )

@@ -22,10 +22,12 @@ from sqlalchemy.dialects import postgresql
 
 from llc.api import runs as runs_api
 from llc.models.activity import ActorType
+from llc.models.enums import WorkItemStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.services import run_checkouts
 from llc.services.run_checkouts import ReleaseWhy, drop_released_fences, release_checkouts_for_run
-from llc.tests._run_checkout_world import Item, Recorder, RoutedSession, bound_values
+from llc.services.work_item_queue import checkout_next
+from llc.tests._run_checkout_world import Item, QueueSession, Recorder, RoutedSession, bound_values
 
 _COMPANY = uuid.uuid4()
 
@@ -79,7 +81,8 @@ async def test_each_release_records_the_true_reason_and_actor() -> None:
     [entry] = log.entries
     assert entry["metadata"] == {"reason": "cancelled", "heartbeat_run_id": str(run.id), "source": "run_cancel"}
     assert (entry["actor_type"], entry["actor_id"], entry["entity_id"]) == (ActorType.USER, user, str(item.id))
-    assert entry["before"] == {"checkout_run_id": str(run.id)} and entry["after"] == {"checkout_run_id": None}
+    assert entry["before"] == {"checkout_run_id": str(run.id), "status": "in_progress"}
+    assert entry["after"] == {"checkout_run_id": None, "status": "ready"}
 
 
 @pytest.mark.asyncio
@@ -142,6 +145,7 @@ async def test_cancel_releases_every_checkout_and_fence_with_the_cancel_reason(
     assert result["status"] == "cancelled" and session.commits == 1
     for item in mine:
         assert item.checkout_run_id is None and item.checkout_locked_at is None
+        assert item.status == WorkItemStatus.READY, "a cancelled run's unfinished item is claimable again"
         assert await fences.get(f"llc:checkout:{item.id}") is None, "the fence must not outlive the checkout"
     assert theirs.checkout_run_id == str(other.id)
     assert await fences.get(f"llc:checkout:{theirs.id}") == theirs.fence
@@ -164,3 +168,78 @@ async def test_a_cancel_by_a_credential_that_is_not_a_person_is_the_systems_act(
 
     [entry] = log.entries
     assert (entry["actor_type"], entry["actor_id"]) == (ActorType.SYSTEM, None)
+
+
+@pytest.mark.asyncio
+async def test_an_unfinished_item_goes_back_to_ready_with_its_assignee_and_is_offered_again() -> None:
+    run = _run()
+    item = Item(_COMPANY, run.id)
+    agent = item.assignee_agent_id
+    await release_checkouts_for_run(
+        RoutedSession([run], [item]), run, ReleaseWhy("cancelled", "run_cancel", log=Recorder())
+    )
+    assert (item.status, item.assignee_agent_id) == (WorkItemStatus.READY, agent)
+
+    service = MagicMock(checkout=AsyncMock(return_value=item))
+    offered = await checkout_next(QueueSession([item]), service, str(agent), str(_COMPANY))
+
+    assert offered is item
+    assert service.checkout.await_args.kwargs["work_item_id"] == str(item.id)
+
+
+@pytest.mark.asyncio
+async def test_an_item_still_in_progress_is_not_offered_before_the_release() -> None:
+    item = Item(_COMPANY, uuid.uuid4())
+    service = MagicMock(checkout=AsyncMock())
+    assert await checkout_next(QueueSession([item]), service, str(item.assignee_agent_id), str(_COMPANY)) is None
+    service.checkout.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["in_review", "blocked", "done", "cancelled"])
+async def test_an_item_that_moved_on_keeps_its_status_and_only_loses_the_stale_checkout(status: str) -> None:
+    run = _run()
+    item = Item(_COMPANY, run.id)
+    item.status = status
+    log = Recorder()
+
+    released = await release_checkouts_for_run(
+        RoutedSession([run], [item]), run, ReleaseWhy("stalled", "sweep", log=log)
+    )
+
+    assert item.status == status and item.checkout_run_id is None and not released[0].moved
+    [entry] = log.entries
+    assert entry["before"] == {"checkout_run_id": str(run.id)} and entry["after"] == {"checkout_run_id": None}
+
+
+@pytest.mark.asyncio
+async def test_a_caller_may_park_unfinished_items_somewhere_else_but_only_those() -> None:
+    run = _run()
+    working, reviewed = Item(_COMPANY, run.id), Item(_COMPANY, run.id)
+    reviewed.status = "in_review"
+    why = ReleaseWhy("liveness_timeout", "liveness", log=Recorder(), then=WorkItemStatus.BLOCKED)
+
+    released = await release_checkouts_for_run(RoutedSession([run], [working, reviewed]), run, why)
+
+    assert (working.status, reviewed.status) == (WorkItemStatus.BLOCKED, "in_review")
+    assert [r.moved for r in released] == [True, False]
+
+
+@pytest.mark.asyncio
+async def test_the_live_run_is_the_running_one_before_a_newer_queued_one_and_is_locked_shared() -> None:
+    """Compiled, because sqlite cannot prove ordering across the status column or row locking."""
+
+    class _Capture:
+        statement = None
+
+        async def execute(self, statement):  # noqa: ANN001, ANN202
+            self.statement = statement
+            return MagicMock(scalar_one_or_none=lambda: None)
+
+    session = _Capture()
+    await run_checkouts.live_run_id(session, "agent-1", str(_COMPANY))
+    sql = str(session.statement.compile(dialect=postgresql.dialect()))
+    order = sql.split("ORDER BY")[1]
+    assert order.index("CASE") < order.index("created_at DESC"), "a RUNNING run must outrank a newer QUEUED one"
+    assert "FOR SHARE" in sql
+    assert "running" in bound_values(session.statement)

@@ -22,6 +22,7 @@ from sqlalchemy.dialects import postgresql
 from llc.models.enums import LLCRunStatus
 from llc.services import run_checkouts
 from llc.services.run_checkouts import ReleasedCheckout
+from llc.tests._run_checkout_world import Item, Recorder, bound_values
 from testkit.fake_async_session import FakeAsyncSession
 from testkit.fake_result import FakeResult
 from testkit.module_snapshot import reloaded
@@ -165,28 +166,20 @@ class _Lease:
         self.release_reason = None
 
 
-class _Item:
-    """A work item. Only what the checkout release filters on and writes."""
+def _item(checkout_run_id=None) -> Item:
+    """A work item of its own company; the fake itself is shared with the other checkout-release tests."""
+    return Item(uuid.uuid4(), checkout_run_id)
 
-    def __init__(self, checkout_run_id=None):
-        self.id = uuid.uuid4()
-        self.company_id = uuid.uuid4()
-        self.assignee_agent_id = uuid.uuid4()
-        self.checkout_run_id = str(checkout_run_id) if checkout_run_id else None
-        self.checkout_locked_at = datetime.now(timezone.utc) if checkout_run_id else None
-        self.version = 1
+
+def entry_status(world) -> tuple:
+    """The status change the single activity entry recorded: ``(before, after)``."""
+    [entry] = world.audit.entries
+    return entry["before"]["status"], entry["after"]["status"]
 
 
 def _fence_value(item) -> str:
     """What ``checkout`` wrote as the fence: the agent tagged with the run that made the checkout."""
     return f"{item.assignee_agent_id}#{item.checkout_run_id}"
-
-
-def _bound_values(statement) -> list:
-    values = []
-    for value in statement.compile().params.values():
-        values.extend(value if isinstance(value, (list, tuple)) else [value])
-    return values
 
 
 class _World:
@@ -201,7 +194,7 @@ class _World:
 
     def answer(self, statement, mine: set) -> list:
         entity = statement.column_descriptions[0]["entity"].__name__
-        bound = _bound_values(statement)
+        bound = bound_values(statement)
         if entity == "LLCHeartbeatRun":
             cutoff = next(v for v in bound if isinstance(v, datetime))
             rows = [r for r in self.runs if r.status in bound and (r.started_at or r.created_at) <= cutoff]
@@ -230,14 +223,6 @@ class _WorldSession(FakeAsyncSession):
     async def commit(self):
         await super().commit()
         self.world.locked -= self.mine
-
-
-class _Recorder:
-    def __init__(self):
-        self.entries: list[dict] = []
-
-    async def record(self, session, **entry):
-        self.entries.append(entry)
 
 
 class _CheckoutLandsMidRelease:
@@ -271,7 +256,7 @@ def world(sweep, monkeypatch):
     """A fresh world wired into the sweep: sessions, activity log and Redis fences."""
     state = _World()
     state.sessions = []
-    state.audit = _Recorder()
+    state.audit = Recorder()
     state.fences = fakeredis.aioredis.FakeRedis(decode_responses=True)
 
     def factory():
@@ -364,7 +349,7 @@ async def test_a_stalled_run_releases_its_checkout_and_its_lease_and_is_marked_s
     the checkout release fails this while the lease assertions stay green.
     """
     run = _Run()
-    lease, item = _Lease(run.id), _Item(run.id)
+    lease, item = _Lease(run.id), _item(run.id)
     world.runs.append(run)
     world.leases.append(lease)
     world.items.append(item)
@@ -378,6 +363,8 @@ async def test_a_stalled_run_releases_its_checkout_and_its_lease_and_is_marked_s
     assert lease.released_at is not None
     assert item.checkout_run_id is None and item.checkout_locked_at is None
     assert item.version == 2
+    assert item.status == "ready", "a stalled run's unfinished item is claimable again (#19601 AC3)"
+    assert entry_status(world) == ("in_progress", "ready")
     assert await world.fences.get(fence) is None, "the Redis fence must not outlive the checkout"
     [entry] = world.audit.entries
     assert entry["entity_id"] == str(item.id)
@@ -389,7 +376,7 @@ async def test_a_stalled_run_releases_its_checkout_and_its_lease_and_is_marked_s
 async def test_the_assignment_survives_the_checkout_release(sweep, world):
     """The assignment is not run-scoped -- it can predate the run -- so it stays."""
     run = _Run()
-    item = _Item(run.id)
+    item = _item(run.id)
     assignee = item.assignee_agent_id
     world.runs.append(run)
     world.items.append(item)
@@ -406,7 +393,7 @@ async def test_two_concurrent_sweeps_release_each_holding_once(sweep, world):
     run = _Run()
     world.runs.append(run)
     world.leases.append(_Lease(run.id))
-    world.items.append(_Item(run.id))
+    world.items.append(_item(run.id))
 
     first, second = await asyncio.gather(sweep._async_sweep(), sweep._async_sweep())
     third = await sweep._async_sweep()
@@ -422,7 +409,7 @@ async def test_two_concurrent_sweeps_release_each_holding_once(sweep, world):
 async def test_a_live_run_releases_nothing(sweep, world):
     """A run inside its deadline keeps its status, its checkout and its lease."""
     run = _Run(age_seconds=5)
-    lease, item = _Lease(run.id), _Item(run.id)
+    lease, item = _Lease(run.id), _item(run.id)
     world.runs.append(run)
     world.leases.append(lease)
     world.items.append(item)
@@ -438,7 +425,7 @@ async def test_a_live_run_releases_nothing(sweep, world):
 async def test_a_checkout_the_stalled_run_did_not_make_is_untouched(sweep, world):
     """Release what the run acquired, not what happens to be near it."""
     run, other = _Run(), _Run(age_seconds=5)
-    mine, theirs, unclaimed = _Item(run.id), _Item(other.id), _Item()
+    mine, theirs, unclaimed = _item(run.id), _item(other.id), _item()
     world.runs.extend([run, other])
     world.items.extend([mine, theirs, unclaimed])
     await world.fences.set(f"llc:checkout:{theirs.id}", _fence_value(theirs))
@@ -454,7 +441,7 @@ async def test_a_checkout_the_stalled_run_did_not_make_is_untouched(sweep, world
 async def test_a_fence_naming_a_newer_holder_is_left_alone(sweep, world):
     """The fence is dropped only while it still names the released checkout's holder."""
     run = _Run()
-    item = _Item(run.id)
+    item = _item(run.id)
     world.runs.append(run)
     world.items.append(item)
     fence = f"llc:checkout:{item.id}"
@@ -481,7 +468,7 @@ async def test_a_checkout_landing_mid_release_keeps_its_fence(sweep, world):
     checkout lands in the gap, and the DEL removes the newer holder's fence.
     """
     run = _Run()
-    item = _Item(run.id)
+    item = _item(run.id)
     world.runs.append(run)
     world.items.append(item)
     fence = f"llc:checkout:{item.id}"
@@ -498,7 +485,7 @@ async def test_a_checkout_landing_mid_release_keeps_its_fence(sweep, world):
 async def test_a_redis_client_failure_after_commit_does_not_fail_the_sweep(sweep, world, monkeypatch, caplog):
     """The DB release has committed; a missing Redis client must not turn that into a task failure."""
     run = _Run()
-    item = _Item(run.id)
+    item = _item(run.id)
     world.runs.append(run)
     world.items.append(item)
 

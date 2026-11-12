@@ -287,8 +287,12 @@ async def test_recovery_releases_every_checkout_the_run_made_and_their_fences() 
 
     run = _make_run()
     mine = [Item(run.company_id, run.id), Item(run.company_id, run.id)]
+    reviewed = Item(run.company_id, run.id)
+    reviewed.status = "in_review"
+    mine.append(reviewed)
     theirs = Item(run.company_id, uuid.uuid4())
     session = RoutedSession([run], [*mine, theirs])
+    create = AsyncMock()
     fences = fakeredis.aioredis.FakeRedis(decode_responses=True)
     for item in (*mine, theirs):
         await fences.set(f"llc:checkout:{item.id}", item.fence)
@@ -301,14 +305,20 @@ async def test_recovery_releases_every_checkout_the_run_made_and_their_fences() 
         patch("llc.scheduler.liveness_monitor.agent_ref_block_reason", AsyncMock(return_value=None)),
         patch("llc.scheduler.liveness_monitor.get_async_redis_client", AsyncMock(return_value=None)),
         patch("llc.services.run_checkouts.get_async_redis_client", AsyncMock(return_value=fences)),
-        patch("llc.scheduler.liveness_monitor.get_work_item_service", return_value=MagicMock(create=AsyncMock())),
+        patch("llc.scheduler.liveness_monitor.get_work_item_service", return_value=MagicMock(create=create)),
         patch("llc.adapters.get_adapter_for_agent", AsyncMock(return_value=None)),
     ):
         await LivenessMonitor(poll_interval=9999)._check_once()
 
     assert run.status == "timed_out"
     for item in mine:
-        assert item.checkout_run_id is None and item.checkout_locked_at is None and item.status == "blocked"
+        assert item.checkout_run_id is None and item.checkout_locked_at is None
+    assert [i.status for i in mine] == ["blocked", "blocked", "in_review"], "only an item still in progress is parked"
+    assert theirs.status == "in_progress"
+    create.assert_awaited_once()
+    description = create.await_args.kwargs["description"]
+    assert all(i.identifier in description for i in mine), "the recovery item names every released item"
+    for item in mine:
         assert await fences.get(f"llc:checkout:{item.id}") is None
     assert theirs.checkout_run_id is not None and theirs.status == "in_progress"
     assert await fences.get(f"llc:checkout:{theirs.id}") == theirs.fence

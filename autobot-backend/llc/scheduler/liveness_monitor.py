@@ -10,9 +10,11 @@ For each stuck run:
   1. Marks the run status = timed_out
   2. Calls adapter.cancel() (best-effort)
   3. Releases every checkout the run made (keyed on checkout_run_id; its Redis fence is dropped
-     once the transaction commits), one activity entry per item
-  4. Sets each released work item status = blocked
-  5. Creates a recovery work item (type=bug) assigned to the agent's manager
+     once the transaction commits), one activity entry per item. An item still in progress is set to
+     blocked by that same release (its activity entry records the status change); an item in any
+     other status keeps its status
+  4. (done by step 3: there is one release rule, parameterised only by where an unfinished item goes)
+  5. Creates ONE recovery work item (type=bug) assigned to the agent's manager, naming every released item
   6. Writes an activity log entry (first of all, in fact: see ``_recover``)
 
 Each run recovers inside its own SAVEPOINT. A failure, the audit write included, undoes that
@@ -23,7 +25,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Sequence
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,10 +54,14 @@ _DEFAULT_TIMEOUT_MINUTES = 30
 #: The ``reason`` on the run's activity entry and on each checkout released because the run timed out.
 LIVENESS_REASON = "liveness_timeout"
 
+#: Unlike a cancel or a stall, a run that timed out needs a person to look at what it was doing, so the monitor
+#: parks the unfinished items it releases as BLOCKED, visible and recoverable, instead of offering them again.
+_PARKED_AS = WorkItemStatus.BLOCKED
+
 
 def _liveness_release(log: LLCActivityLogService) -> ReleaseWhy:
     """Why the monitor releases a stuck run's checkouts: the system, on a liveness timeout."""
-    return ReleaseWhy(reason=LIVENESS_REASON, source="liveness_monitor", log=log)
+    return ReleaseWhy(reason=LIVENESS_REASON, source="liveness_monitor", log=log, then=_PARKED_AS)
 
 
 _POLL_INTERVAL_SECONDS = 60
@@ -156,14 +162,11 @@ class LivenessMonitor(PollLoopScheduler):
         # Step 3: Release every checkout the run made (DB row; its Redis fence follows the commit)
         released = await release_checkouts_for_run(session, run, _liveness_release(self._activity_log))
 
-        # Step 4: Set each released work item status = blocked
+        # Step 5: one recovery item for the run, naming every item released (step 4 is part of the release)
         work_items = [r.item for r in released]
-        for item in work_items:
-            item.status = WorkItemStatus.BLOCKED
-            session.add(item)
-
-        # Step 5: Create recovery work item
-        await self._create_recovery_item(session, run, work_items[0] if work_items else None, company_id, agent_id)
+        await self._create_recovery_item(
+            session, run, work_items[0] if work_items else None, company_id, agent_id, released_items=work_items
+        )
         return released
 
     async def _cancel_adapter(self, agent_id: str, run_id: str) -> None:
@@ -183,13 +186,14 @@ class LivenessMonitor(PollLoopScheduler):
         work_item: Optional[LLCWorkItem],
         company_id: str,
         agent_id: str,
+        released_items: Sequence[LLCWorkItem] = (),
     ) -> None:
         identifier = work_item.identifier if work_item else run_id_label(str(run.id))
         title = f"Recovery: agent {agent_id} timed out on {identifier}"
         description = (
             f"Automatic recovery item. Run {run.id} for agent {agent_id} "
             f"exceeded the liveness timeout and was marked timed_out. "
-            f"Work item {identifier} has been set to blocked. "
+            f"{_released_sentence(released_items or ([work_item] if work_item else []))}"
             f"Investigate and unblock manually."
         )
         svc = get_work_item_service()
@@ -257,6 +261,14 @@ class LivenessMonitor(PollLoopScheduler):
             after={"status": "timed_out"},
             metadata={"agent_id": str(agent_id), "reason": LIVENESS_REASON},
         )
+
+
+def _released_sentence(items: Sequence[LLCWorkItem]) -> str:
+    """Every work item the run held, and the state each was left in: blocked, or unchanged if it had moved on."""
+    if not items:
+        return ""
+    named = ", ".join(f"{i.identifier} ({WorkItemStatus(i.status).value})" for i in items)
+    return f"Work items released from the run: {named}. "
 
 
 async def _recovery_project(session: AsyncSession, work_item: Optional[LLCWorkItem], company_id: str) -> Optional[str]:

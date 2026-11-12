@@ -106,3 +106,26 @@ async def test_two_items_claimed_in_one_run_are_both_released_by_that_run(sessio
     for item in (first, second):
         await session.refresh(item)
         assert item.checkout_run_id is None and item.checkout_locked_at is None
+        assert item.status == "ready" and item.assignee_agent_id is not None, "claimable by the same agent again"
+
+    with patch("user_management.database.get_async_session_factory", new=_factory_yielding(session)):
+        again = await agent_api.get_next_work_item(_request("agent-two", company))
+    assert again["checked_out"] is True and again["work_item"]["id"] in {str(first.id), str(second.id)}
+
+
+async def test_a_running_run_is_the_live_run_even_when_a_newer_queued_one_exists(session):  # noqa: ANN001
+    """A claim is stamped with the RUNNING run: the newer QUEUED one may be skipped, which is terminal."""
+    from llc.services.run_checkouts import live_run_id
+
+    company = str(uuid.uuid4())
+    running = await _seed_run(session, company, "agent-busy")
+    queued = await _seed_run(session, company, "agent-busy")
+    row = (await session.execute(select(LLCHeartbeatRun).where(LLCHeartbeatRun.id == queued))).scalar_one()
+    row.status = LLCRunStatus.QUEUED.value
+    row.created_at = datetime.now(tz=timezone.utc).replace(year=2999)  # strictly the newest
+    await session.commit()
+
+    assert await live_run_id(session, "agent-busy", company) == running
+
+    await _finish_run(session, running)
+    assert await live_run_id(session, "agent-busy", company) == queued
