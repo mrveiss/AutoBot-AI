@@ -37,6 +37,39 @@ beforeEach(() => {
 })
 
 describe('facts cursor paging (#20945)', () => {
+  it('keeps relations whose hyphenated ids would collide under a dash-joined key', async () => {
+    const rel = (from: string, to: string) => ({ from, to, type: 'contains', strength: 1 })
+    vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+      if (url.includes('/memory/entities/all')) return { data: { entities: [] } } as never
+      return { ...page(['a'], '500:0'), data: { entities: [entity('a')], relations: [rel('a-b', 'c')] } } as never
+    })
+    vi.mocked(apiClient.call).mockResolvedValue({ ...page(['b'], null), data: { entities: [entity('b')], relations: [rel('a', 'b-c')] } } as never)
+    const graph = useKnowledgeGraphEntities()
+    await graph.fetchGraphData()
+    await graph.loadMoreFacts()
+    expect(graph.relations.value).toEqual([rel('a-b', 'c'), rel('a', 'b-c')])
+  })
+
+  it('offers no continuation while a refresh is pending and clears the stale cursor when it starts', async () => {
+    let releaseRefresh: (value: unknown) => void = () => undefined
+    let calls = 0
+    vi.mocked(apiClient.get).mockImplementation((async (url: string) => {
+      if (url.includes('/memory/entities/all')) return { data: { entities: [] } }
+      calls += 1
+      return calls === 1 ? page(['a'], '500:0') : new Promise((resolve) => { releaseRefresh = resolve })
+    }) as never)
+    const graph = useKnowledgeGraphEntities()
+    await graph.fetchGraphData()
+    expect(graph.hasMoreFacts.value).toBe(true)
+    const refresh = graph.fetchGraphData()
+    expect(graph.hasMoreFacts.value).toBe(false)
+    await graph.loadMoreFacts()
+    expect(apiClient.call).not.toHaveBeenCalled()
+    releaseRefresh(page(['a'], '900:0'))
+    await refresh
+    expect(graph.hasMoreFacts.value).toBe(true)
+  })
+
   it('follows the cursor, merges the next page and stops when the server returns none', async () => {
     const queries: Array<Record<string, unknown>> = []
     vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
@@ -85,7 +118,7 @@ describe('facts cursor paging (#20945)', () => {
     const graph = useKnowledgeGraphEntities()
     await graph.fetchGraphData()
     await graph.loadMoreFacts()
-    expect(graph.errorMessage.value).toBe('knowledge.graph.loadFailedNoReason')
+    expect(graph.errorMessage.value).toBe('knowledge.graph.loadMoreFailedNoReason')
     expect(graph.entities.value.map((e) => e.id)).toEqual(['a'])
     expect(graph.hasMoreFacts.value).toBe(true)
     vi.mocked(apiClient.call).mockResolvedValue(page(['b'], null) as never)
@@ -103,7 +136,7 @@ describe('facts cursor paging (#20945)', () => {
     const graph = useKnowledgeGraphEntities()
     await graph.fetchGraphData()
     await graph.loadMoreFacts()
-    expect(graph.errorMessage.value).toBe('knowledge.graph.loadFailedNoReason')
+    expect(graph.errorMessage.value).toBe('knowledge.graph.loadMoreFailedNoReason')
     expect(graph.entities.value.map((e) => e.id)).toEqual(['a'])
   })
 
@@ -130,7 +163,7 @@ describe('facts cursor paging (#20945)', () => {
     const graph = useKnowledgeGraphEntities()
     await graph.fetchGraphData()
     await graph.loadMoreFacts()
-    expect(graph.errorMessage.value).toBe('knowledge.graph.loadFailedNoReason')
+    expect(graph.errorMessage.value).toBe('knowledge.graph.loadMoreFailedNoReason')
   })
 
   it('serialises overlapping calls: one request, the page appended once', async () => {

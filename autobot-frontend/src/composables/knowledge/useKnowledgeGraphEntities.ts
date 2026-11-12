@@ -125,7 +125,7 @@ export interface UseKnowledgeGraphEntitiesReturn {
 function _dedupeRelations(all: GraphRelation[]): GraphRelation[] {
   const seen = new Set<string>()
   return all.filter((r) => {
-    const key = `${r.from}-${r.to}-${r.type}`
+    const key = JSON.stringify([r.from, r.to, r.type]) // `-`-joined ids collide: a-b|c vs a|b-c
     if (seen.has(key)) return false
     seen.add(key)
     return true
@@ -239,8 +239,8 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
   }
 
   /** The reason a failure carried, or the translated fallback when it carried none (never an empty banner). */
-  function _reasonOrFallback(error: unknown): string {
-    return _reason(error) || (i18n.global.t('knowledge.graph.loadFailedNoReason') as string)
+  function _reasonOrFallback(error: unknown, key = 'knowledge.graph.loadFailedNoReason'): string {
+    return _reason(error) || (i18n.global.t(key) as string)
   }
 
   /** Merge a next page into the shown graph; the category tree each response repeats is deduplicated (#20945). */
@@ -268,7 +268,7 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
       _mergePage(page, fresh)
     } catch (error) {
       if (epoch !== loadEpoch) return // a refresh replaced the cursor this read used: its failure is not news
-      errorMessage.value = _reasonOrFallback(error)
+      errorMessage.value = _reasonOrFallback(error, 'knowledge.graph.loadMoreFailedNoReason') // the graph stays shown
       logger.error('Loading more facts failed:', errorMessage.value)
     }
   }
@@ -293,6 +293,7 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
     loadEpoch += 1
     moreInFlight = null // a next page read of the old epoch is orphaned; its state is not carried over
     isLoadingMore.value = false
+    factsCursor.value = null // the old cursor belongs to the graph being replaced: no continuation until the refresh lands
     await wrap(async () => {
       // allSettled, not all: the graph is assembled from two independent
       // stores, and `Promise.all` threw away a healthy store's entities
