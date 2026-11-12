@@ -34,7 +34,10 @@ from tools.lint._comment_syntax import code_lines
 
 _REPO_ROOT = repo_root()
 _HOOK = _REPO_ROOT / "autobot-infrastructure/shared/scripts/hooks/post-merge-doc-sync"
-_COMMON_LIB = _REPO_ROOT / "autobot-infrastructure/shared/scripts/hooks/lib/_common.sh"
+_HOOK_REL = "autobot-infrastructure/shared/scripts/hooks"
+_COMMON_LIB = _REPO_ROOT / _HOOK_REL / "lib/_common.sh"
+_PYTHON_LIB = _REPO_ROOT / "scripts/lib/hook-python.sh"
+_PYTHON_VERSION = _REPO_ROOT / ".python-version"
 _POST_COMMIT = _REPO_ROOT / "scripts/hooks/post-commit"
 
 _MARKER_NAME = "INDEXER_INVOKED_MARKER"
@@ -53,6 +56,34 @@ def _git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
     return git(cwd, *args, check=check)
 
 
+def _install_post_merge(repo: Path) -> None:
+    """Lay the hook out as the tracked tree does, and install the thin `post-merge` that runs it.
+
+    #21163: the hook resolves its interpreter through scripts/lib/hook-python.sh, found relative
+    to the hook's own path in the checkout (never from a copy under .git/hooks), and the resolver
+    reads the floor from the checkout's .python-version -- so the fixture carries both, exactly
+    as scripts/hooks/post-merge reaches the hook in a real checkout.
+    """
+    for source, rel in (
+        (_HOOK, f"{_HOOK_REL}/post-merge-doc-sync"),
+        (_COMMON_LIB, f"{_HOOK_REL}/lib/_common.sh"),
+        (_PYTHON_LIB, "scripts/lib/hook-python.sh"),
+        (_PYTHON_VERSION, ".python-version"),
+    ):
+        dest = repo / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(source.read_bytes())
+    (repo / _HOOK_REL / "post-merge-doc-sync").chmod(0o755)
+    hook_dest = repo / ".git" / "hooks" / "post-merge"
+    hook_dest.parent.mkdir(parents=True, exist_ok=True)
+    hook_dest.write_text(
+        '#!/bin/bash\nGIT_ROOT="$(git rev-parse --show-toplevel)"\n'
+        f'exec bash "$GIT_ROOT/{_HOOK_REL}/post-merge-doc-sync"\n',
+        encoding="utf-8",
+    )
+    hook_dest.chmod(0o755)
+
+
 def _seed_repo(tmp_path: Path, *, name: str, branch: str) -> Path:
     """A throwaway repo carrying the real post-merge-doc-sync hook, a stub
     indexer in place of the real one (no ChromaDB/embeddings needed), and an
@@ -60,16 +91,12 @@ def _seed_repo(tmp_path: Path, *, name: str, branch: str) -> Path:
     repo = tmp_path / name
     (repo / "docs").mkdir(parents=True)
     (repo / "tools").mkdir()
-    (repo / ".git" / "hooks" / "lib").mkdir(parents=True)
 
     (repo / "docs" / "placeholder.md").write_text("# Placeholder\n", encoding="utf-8")
     (repo / "tools" / "index_documentation.py").write_text(_INDEXER_STUB, encoding="utf-8")
     (repo / "tools" / "index_documentation.py").chmod(0o755)
 
-    hook_dest = repo / ".git" / "hooks" / "post-merge"
-    hook_dest.write_bytes(_HOOK.read_bytes())
-    hook_dest.chmod(0o755)
-    (repo / ".git" / "hooks" / "lib" / "_common.sh").write_bytes(_COMMON_LIB.read_bytes())
+    _install_post_merge(repo)
 
     make_repo(repo, default_branch=branch)
     _git(repo, "add", "-A")
@@ -136,11 +163,7 @@ def _seed_bare_remote_and_clone(tmp_path: Path) -> tuple[Path, Path]:
     _git(tmp_path, "clone", "--quiet", str(bare), str(work))
     _git(work, "config", "user.email", "t@t")
     _git(work, "config", "user.name", "t")
-    (work / ".git" / "hooks" / "lib").mkdir(parents=True, exist_ok=True)
-    hook_dest = work / ".git" / "hooks" / "post-merge"
-    hook_dest.write_bytes(_HOOK.read_bytes())
-    hook_dest.chmod(0o755)
-    (work / ".git" / "hooks" / "lib" / "_common.sh").write_bytes(_COMMON_LIB.read_bytes())
+    _install_post_merge(work)
 
     return bare, work
 
