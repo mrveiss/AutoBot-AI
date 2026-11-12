@@ -112,7 +112,7 @@ Security scanning configuration:
 - Severity and confidence levels
 - Specific tests to skip
 
-### `.github/workflows/_gate-code-quality.yml`
+### `.github/workflows/code-quality.yml`
 
 CI/CD pipeline configuration:
 - Runs on push/PR to main branches
