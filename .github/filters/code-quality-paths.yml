@@ -103,3 +103,8 @@ backend:
   # #15608: this file is an input to what `code-quality` means; editing it must
   # run the gate. (The workflow files are covered by `self` in gate-paths.yml.)
   - '.github/filters/code-quality-paths.yml'
+
+# Retired with #18208: these workflow files no longer exist (their gates are `_gate-*.yml` bodies called by
+# ci.yml, whose `self` filter in gate-paths.yml forces every gate when one changes), so no change can touch them.
+# retired #18208: '.github/workflows/code-quality.yml'
+# retired #18208: '.github/workflows/code-quality-required-context.yml'

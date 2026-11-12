@@ -99,3 +99,11 @@ wiring:
   - 'scripts/audit_api_wiring_args.py'
   - 'scripts/api_wiring_baseline.txt'
   - 'requirements*.txt'
+
+# Retired with #18208: these workflow files no longer exist (their gates are `_gate-*.yml` bodies called by
+# ci.yml, whose `self` filter in gate-paths.yml forces every gate when one changes), so no change can touch them.
+# retired #18208: '.github/workflows/security.yml'
+# retired #18208: '.github/workflows/ai-security-review.yml'
+# retired #18208: '.github/workflows/startup-import-smoke.yml'
+# retired #18208: '.github/workflows/backend-required-context.yml'
+# retired #18208: '.github/workflows/api-wiring.yml'

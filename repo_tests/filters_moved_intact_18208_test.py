@@ -26,11 +26,14 @@ that is the silent direction.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._filter_entries import doc_entries, removed_without_tombstone, uncited
 from repo_tests._paths import repo_root
+from repo_tests._ratchet_base import base_text
 
 REPO = repo_root()
 FIXTURE = Path(__file__).parent / "fixtures" / "pre_15360_changes_jobs.json"
@@ -109,28 +112,92 @@ def test_every_pattern_a_changes_job_read_is_still_read(case):
     )
 
 
-#: #17822 widened the Migration Gate on purpose: its filter used to list where its tests live, not the
-#: code they import. The pinned set is DATA (`fixtures/issue_17822_migration_gate_entries.json`),
-#: separate from the regenerable pre-#15360 fixture, so removing an entry from gate-paths.yml still
-#: fails here. It was held by changes_job_equivalence_15360_test.py until #18208 retired that test.
-ISSUE_17822_FIXTURE = Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json"
-#: 38 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
-#: `llc/services/workspace_lease.py` (#17996), and `llc/services/company.py` + `company_ceo.py` (#15907's
-#: concurrent-move test), which the migration tests import, plus `company_move_lock.py`, `authz.py`,
-#: `membership_service.py`, `scheduler/run_status.py` and `autobot_shared/db_errors.py` (#19634's move tests).
-#: `membership_policy.py` is #19985's two-session membership-lock test; `llc/services/budget.py` and
-#: `llc/exceptions.py` are #20168's cost event foreign key test. `llc/services/company_os/**` and `goal.py` are
-#: #20115's two-session plan convert lock test, `services/ai_line_change_proposal.py` and `autobot_shared/ai_lines.py`
-#: are imported by the `plan_convert_lines.py` it runs (#20086), `autobot_shared/db_session.py` and
-#: `user_management/models/audit.py` are the secrets API test's canonical audit store (#20557), and the seven
-#: `autobot_shared/user_management/` modules plus its package `__init__` are what the admin-status two-user test
-#: imports (#20670), and `llc/services/controls_service.py` is the two-session pause test's import (#21056).
-ISSUE_17822_COUNT = 38
+#: The Migration Gate's `migrations` list was widened on purpose over time (#17822 and the issues cited
+#: beside each entry in gate-paths.yml): it listed where its tests live, not the code they import. It is
+#: judged by the same rules as every other path filter (#21205, `repo_tests/_filter_entries.py`) -- no
+#: frozen table of additions: the pre-#15360 snapshot stays in order, each entry beyond it cites its issue
+#: where it is written, and no entry the merge base had goes without a `# retired #NNNN: '<entry>'`
+#: tombstone. A snapshot self-reference to a workflow file that no longer exists is not an entry any more.
+MIGRATIONS_KEY = "migrations"
+GATE_PATHS = ".github/filters/gate-paths.yml"
 
 
-def test_the_issue_17822_migration_entries_are_still_read():
-    entries = json.loads(ISSUE_17822_FIXTURE.read_text(encoding="utf-8"))
-    assert len(entries) == ISSUE_17822_COUNT, "an emptied fixture would pin nothing"
-    migrations = _flat(_new_keys("gate-paths.yml")["migrations"])
-    missing = sorted(set(entries) - migrations)
-    assert not missing, f"gate-paths.yml `migrations` no longer reads the #17822 entries {missing}"
+def _migrations_section(text: str) -> str:
+    """The `migrations:` key of gate-paths.yml with its entries and comments, up to the next top-level key."""
+    match = re.search(rf"^{MIGRATIONS_KEY}:.*?(?=^[A-Za-z0-9_-]+:)", text + "\nend:", re.S | re.M)
+    assert match, f"gate-paths.yml has no {MIGRATIONS_KEY!r} key"
+    return match.group(0)
+
+
+def _migrations_snapshot() -> list[tuple[str, str]]:
+    pre = json.loads(FIXTURE.read_text(encoding="utf-8"))["migration-gate"]["filters"]["inline"]
+    entries = doc_entries({MIGRATIONS_KEY: pre[MIGRATIONS_KEY]})
+    return [(k, v) for k, v in entries if not (v.startswith(".github/workflows/") and not (REPO / v).exists())]
+
+
+def test_the_migrations_snapshot_is_not_vacuous():
+    assert len(_migrations_snapshot()) >= 9, "an emptied snapshot would judge nothing"
+
+
+def test_migrations_keeps_its_snapshot_and_cites_every_addition_in_place():
+    text = (REPO / GATE_PATHS).read_text(encoding="utf-8")
+    section = _migrations_section(text)
+    base = base_text(REPO, GATE_PATHS)
+    found = uncited(section, _migrations_snapshot(), None if base is None else _migrations_section(base))
+    assert not found, "; ".join(found)
+
+
+def test_no_migrations_entry_the_merge_base_had_is_removed_without_a_tombstone():
+    """`BaseUnavailable` is never a pass: it propagates and the test errors. A base without the file has nothing to lose."""
+    base = base_text(REPO, GATE_PATHS)
+    head = _migrations_section((REPO / GATE_PATHS).read_text(encoding="utf-8"))
+    found = removed_without_tombstone(None if base is None else _migrations_section(base), head)
+    assert not found, "; ".join(found)
+
+
+# --- the filter-entry rules of #21205 for the filter FILES a converted `changes` job read -----------------
+#: changes_job_equivalence_15360_test.py held rules 1-3 for these files until #18208 retired it; they move
+#: here so deleting that test does not lift them. A workflow file the refactor deleted is retired with a
+#: `# retired #18208: '<entry>'` tombstone in the filter that listed it.
+_FILTER_FILES = sorted({c[1] for c in _CASES if c[5] == "file"})
+
+
+def _file_snapshot(fname: str) -> list[tuple[str, str]]:
+    """The pre-#15360 entries of one filter file under their current key names, minus deleted workflow files."""
+    data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    entries: list[tuple[str, str]] = []
+    for rec in data.values():
+        src = rec["filters"]
+        if "file" in src and Path(src["file"]).name == fname:
+            renamed = {FILE_KEY_RENAMES.get((fname, k), k): v for k, v in src["content"].items()}
+            entries = doc_entries(renamed)
+    return [(k, v) for k, v in entries if not (v.startswith(".github/workflows/") and not (REPO / v).exists())]
+
+
+def _base_with_new_key_names(fname: str) -> str | None:
+    """The filter file at the merge base, its top-level keys renamed the way #18208 renamed them."""
+    text = base_text(REPO, f".github/filters/{fname}")
+    for (file, old), new in FILE_KEY_RENAMES.items():
+        if text is not None and file == fname:
+            text = re.sub(rf"^{re.escape(old)}:", f"{new}:", text, flags=re.M)
+    return text
+
+
+def test_the_filter_files_under_the_rules_are_not_a_vacuous_set():
+    assert len(_FILTER_FILES) >= 5
+    assert all(len(_file_snapshot(f)) >= 5 for f in _FILTER_FILES), "an emptied snapshot would judge nothing"
+
+
+@pytest.mark.parametrize("fname", _FILTER_FILES)
+def test_a_filter_file_keeps_its_snapshot_and_declares_every_addition_in_place(fname):
+    text = (FILTERS / fname).read_text(encoding="utf-8")
+    found = uncited(text, _file_snapshot(fname), _base_with_new_key_names(fname))
+    assert not found, f"{fname}: " + "; ".join(found)
+
+
+@pytest.mark.parametrize("fname", _FILTER_FILES)
+def test_no_filter_file_entry_the_merge_base_had_is_removed_without_a_tombstone(fname):
+    """`BaseUnavailable` is never a pass: it propagates and the test errors."""
+    text = (FILTERS / fname).read_text(encoding="utf-8")
+    found = removed_without_tombstone(_base_with_new_key_names(fname), text)
+    assert not found, f"{fname}: " + "; ".join(found)
