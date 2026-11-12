@@ -342,3 +342,140 @@ def test_run_in_worker_loop_defaults_to_the_bounded_run_timeout(monkeypatch):
     with pytest.raises(Exception):
         worker_loop.run_in_worker_loop(never_finishes())
     assert cancelled.wait(5)
+
+
+@pytest.mark.parametrize(
+    "bad,expected",
+    [("-1", 3600.0), ("0", 3600.0), ("nan", 3600.0), ("inf", 3600.0), ("0.01", 0.1), ("999999", 86400.0)],
+)
+def test_run_timeout_env_rejects_values_that_would_expire_tasks(monkeypatch, bad, expected):
+    import importlib
+
+    monkeypatch.setenv("AUTOBOT_WORKER_LOOP_RUN_TIMEOUT", bad)
+    try:
+        reloaded = importlib.reload(worker_loop)
+        assert 0.1 <= reloaded.WORKER_LOOP_RUN_TIMEOUT <= 86400.0
+        assert reloaded.WORKER_LOOP_RUN_TIMEOUT == expected
+    finally:
+        monkeypatch.delenv("AUTOBOT_WORKER_LOOP_RUN_TIMEOUT")
+        importlib.reload(worker_loop)
+
+
+def test_late_starting_loop_thread_is_stopped_and_tracked(monkeypatch):
+    """A thread that starts only after the startup timeout must exit, not serve forever."""
+    gate = threading.Event()
+    real_main = worker_loop._loop_main
+    real_abandon = worker_loop._abandon_slow_loop
+    tracked: list[threading.Thread] = []
+
+    def track_abandoned(loop, thread):
+        tracked.append(thread)
+        real_abandon(loop, thread)
+
+    monkeypatch.setattr(worker_loop, "WORKER_LOOP_START_TIMEOUT", 0.05)
+    monkeypatch.setattr(worker_loop, "_loop_main", lambda loop, ready: (gate.wait(10), real_main(loop, ready)))
+    monkeypatch.setattr(worker_loop, "_abandon_slow_loop", track_abandoned)
+    try:
+        with pytest.raises(RuntimeError, match="did not start in time"):
+            worker_loop._spawn_loop()
+        assert len(tracked) == 1
+        assert tracked[0] in worker_loop._ABANDONED_THREADS
+    finally:
+        gate.set()
+        for thread in tracked:
+            thread.join(10)
+    assert not tracked[0].is_alive()
+
+
+def test_abandoned_threads_that_exited_are_pruned(monkeypatch):
+    dead = threading.Thread(target=lambda: None)
+    dead.start()
+    dead.join()
+    live_gate = threading.Event()
+    live = threading.Thread(target=live_gate.wait, args=(10,), daemon=True)
+    live.start()
+    loop = asyncio.new_event_loop()
+    monkeypatch.setattr(worker_loop, "_ABANDONED_THREADS", [dead, live])
+    try:
+        worker_loop._abandon_slow_loop(loop, live)
+        assert dead not in worker_loop._ABANDONED_THREADS
+        assert live in worker_loop._ABANDONED_THREADS
+    finally:
+        live_gate.set()
+        live.join(10)
+        loop.close()
+
+
+def test_stalled_first_disposer_does_not_skip_the_others(monkeypatch):
+    ran: list[str] = []
+
+    async def hang():
+        await asyncio.sleep(60)
+
+    async def ok_t():
+        ran.append("transcriber")
+
+    async def ok_r():
+        ran.append("redis")
+
+    import importlib
+
+    monkeypatch.setattr(
+        worker_loop, "_DISPOSERS", (("database", "m", "a"), ("transcriber", "m", "b"), ("redis", "m", "c"))
+    )
+    attrs = {"a": hang, "b": ok_t, "c": ok_r}
+    monkeypatch.setattr(importlib, "import_module", lambda m: type("M", (), attrs))
+    asyncio.run(asyncio.wait_for(worker_loop._dispose_shared_resources(0.6), 10))
+    assert ran == ["transcriber", "redis"]
+
+
+def _patch_disposers(monkeypatch, attrs):
+    import importlib
+
+    monkeypatch.setattr(worker_loop, "_DISPOSERS", tuple((f"d{i}", "m", k) for i, k in enumerate(attrs)))
+    monkeypatch.setattr(importlib, "import_module", lambda m: type("M", (), attrs))
+
+
+def test_fast_disposer_passes_its_leftover_to_the_next(monkeypatch):
+    shares: list[float] = []
+    real = worker_loop._run_disposer
+
+    async def spy(name, step, share):
+        shares.append(share)
+        await real(name, step, share)
+
+    async def fast():
+        return None
+
+    monkeypatch.setattr(worker_loop, "_run_disposer", spy)
+    _patch_disposers(monkeypatch, {"a": fast, "b": fast, "c": fast})
+    asyncio.run(worker_loop._dispose_shared_resources(30.0))
+    assert shares[0] == pytest.approx(10.0, abs=0.1)
+    assert shares[1] == pytest.approx(15.0, abs=0.1)
+    assert shares[2] == pytest.approx(30.0, abs=0.2)
+
+
+def test_disposer_swallowing_cancellation_cannot_overrun_the_budget(monkeypatch):
+    release = threading.Event()
+
+    async def stubborn():
+        while not release.is_set():
+            try:
+                await asyncio.sleep(0.05)
+            except asyncio.CancelledError:
+                continue
+
+    async def ok():
+        return None
+
+    _patch_disposers(monkeypatch, {"a": stubborn, "b": stubborn, "c": ok})
+
+    async def run():
+        loop = asyncio.get_running_loop()
+        start = loop.time()
+        await worker_loop._dispose_shared_resources(0.6)
+        elapsed = loop.time() - start
+        release.set()  # let the abandoned tasks finish so asyncio.run can close
+        return elapsed
+
+    assert asyncio.run(asyncio.wait_for(run(), 10)) < 1.0

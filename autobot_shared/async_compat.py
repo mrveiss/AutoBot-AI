@@ -40,9 +40,18 @@ into ``autobot_shared`` so all callers share one implementation.
      directly. Standard sync-entry behavior.
   2. **Event loop is running in the current thread** → submit the coro to
      the API process's registered main loop (``register_main_loop``) and
-     block until it returns. If the caller IS the main loop's thread that
-     would deadlock, so only then does it fall back to a thread with its
-     own loop.
+     block until it returns (in a Celery worker the target is the worker's
+     persistent loop instead). It falls back to a thread with its own loop
+     only in the two situations listed under the fresh-loop fallback below.
+
+  **Fresh-loop fallback (#21082, #20919).** Case 2 uses a thread with a brand-new
+  loop in exactly two situations: (a) the target loop is unavailable (no main loop
+  registered, or it is not running / is closed; no worker loop in a worker), or
+  (b) the target loop IS the caller's own running loop. A fresh loop does not own the
+  process-wide loop-bound singletons (async DB engine, Redis pools, aiosqlite
+  connections), so touching them there can fail with ``Event loop is closed`` or
+  attach them to a loop that dies on return. The first fallback per call site is
+  logged as a warning; callers on the loop thread should ``await`` instead.
 
 Use it only at the sync/async boundary — never as a substitute for
 ``await`` inside async code.
@@ -147,10 +156,21 @@ def run_or_schedule(coro: Coroutine[Any, Any, T]) -> T:
     """Run ``coro`` to completion from either sync or async context.
 
     See module docstring for the full contract. Inside a Celery worker the
-    coroutine always runs on the worker's persistent loop. Otherwise, with no
+    coroutine runs on the worker's persistent loop, except in the fresh-loop
+    fallback cases below (running loop, target unavailable or the caller's own
+    loop). Otherwise, with no
     loop running in this thread it uses ``asyncio.run``; with a loop running it
-    is submitted to the API process's main loop (never a fresh loop in a
-    thread, which would touch loop-bound singletons from the wrong loop).
+    is submitted to the worker loop or the API process's main loop; a fresh loop in a
+    thread is used only in the fallback cases below, because it would touch loop-bound
+    singletons from the wrong loop. Worker-loop lookup checks only that the loop is
+    not closed, not ``is_running()``.
+
+    Fresh-loop fallback (#21082, #20919): under a running loop the coroutine runs in a
+    thread with its OWN new loop when (a) the target loop (worker loop, or registered
+    main loop) is unavailable, or (b) the target is the caller's own loop, since blocking
+    on it would deadlock. Loop-bound singletons (async DB engine, Redis pools) used there
+    are bound to a loop that closes on return and may fail on later reuse; the first
+    fallback per call site logs a warning.
 
     Raises whatever ``coro`` raises.
     """
