@@ -142,6 +142,19 @@ async def test_import_template_reports_a_missing_parent_and_rejects_a_bad_enum(s
             await TemplateService(session).import_template(tid, TemplateImportRequest(target_company_id=org.id))
 
 
+async def test_a_programming_error_in_a_library_import_propagates_and_rolls_back(
+    session_factory,
+) -> None:  # noqa: ANN001
+    org, tid, row = await _library_session(session_factory, {"metadata": {"name": "T"}, "work_items": [{"title": "X"}]})
+    async with session_factory() as session:
+        with (
+            patch("llc.services.template._fetch_row", new=AsyncMock(return_value=row)),
+            patch("llc.services.template_entity_import.import_template_work", new=AsyncMock(side_effect=TypeError)),
+            pytest.raises(TypeError),
+        ):
+            await TemplateService(session).import_template(tid, TemplateImportRequest(target_company_id=org.id))
+
+
 async def _create_mentioning(factory, slug: str, *, wake: bool) -> None:  # noqa: ANN001
     async with factory() as session:
         await WorkItemService().create(

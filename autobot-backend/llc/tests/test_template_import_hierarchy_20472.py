@@ -20,7 +20,7 @@ from llc.models.enums import WorkItemType as T
 from llc.models.sprint import LLCProject
 from llc.models.work_item import LLCWorkItem
 from llc.services.work_item_hierarchy import ALLOWED_PARENT_TYPES
-from llc.services.work_item_import import import_template_work, import_work_items
+from llc.services.work_item_import import KIND_LIBRARY, import_template_work, import_work_items, select_items
 from llc.tests import _e2e_harness as harness
 
 pytestmark = pytest.mark.asyncio
@@ -46,6 +46,7 @@ async def session() -> AsyncIterator[AsyncSession]:
 async def _run(session, template) -> tuple[dict, dict, list]:
     created = {"projects": [], "work_items": []}
     skipped = {"work_items": []}
+    template = {"export_kind": KIND_LIBRARY, **template}  # tests state their kind; a stated one wins
     skipped_items = await import_template_work(session, template, uuid.uuid4(), created, skipped, [])
     return created, skipped, skipped_items
 
@@ -161,3 +162,23 @@ async def test_an_item_with_no_project_to_go_to_is_reported(session) -> None:
 
 async def _never(*_args):  # noqa: ANN002, ANN202
     raise AssertionError("an item with no project must not be created")
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected"),
+    [
+        (None, ["seed"]),
+        ("not-a-kind", ["seed"]),
+        ("template", ["seed"]),
+        ("snapshot", ["seed", "plain"]),
+        ("library", ["seed", "plain"]),
+    ],
+)
+async def test_select_items_reads_a_missing_or_unknown_kind_as_a_template_export(kind, expected) -> None:
+    template = {
+        "seed_work_items": [{"title": "seed", "is_seed": True}],
+        "work_items": [{"title": "plain"}],
+    }
+    if kind:
+        template["export_kind"] = kind
+    assert [i["title"] for i in select_items(template)] == expected
