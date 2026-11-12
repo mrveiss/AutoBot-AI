@@ -55,3 +55,21 @@ def test_blank_value_falls_back_to_default(var) -> None:
 def test_valid_values_still_parse() -> None:
     settings = _load({"CODEBASE_INDEX_BATCH_SIZE": "2500", "CODEBASE_INDEX_EMBED_BATCH_SIZE": "250"})
     assert (settings.codebase_index_batch_size, settings.codebase_index_embed_batch_size) == (2500, 250)
+
+
+def test_programmatic_ints_and_integral_floats_are_kept_not_replaced() -> None:
+    """Pre-fix of the parse helper, ``str(5.0)`` -> ``int("5.0")`` failed and 5.0 became the default."""
+    with patch.dict(os.environ, {}, clear=True):
+        built = CodebaseIndexSettings(  # type: ignore[call-arg]
+            _env_file=None, CODEBASE_INDEX_BATCH_SIZE=2500, CODEBASE_INDEX_EMBED_BATCH_SIZE=250.0
+        )
+    assert (built.codebase_index_batch_size, built.codebase_index_embed_batch_size) == (2500, 250)
+
+
+def test_a_fractional_float_or_bool_falls_back() -> None:
+    with patch.dict(os.environ, {}, clear=True):
+        built = CodebaseIndexSettings(  # type: ignore[call-arg]
+            _env_file=None, CODEBASE_INDEX_BATCH_SIZE=2.5, CODEBASE_INDEX_EMBED_BATCH_SIZE=True
+        )
+    assert built.codebase_index_batch_size == DEFAULT_CODEBASE_INDEX_BATCH_SIZE
+    assert built.codebase_index_embed_batch_size == DEFAULT_CODEBASE_INDEX_EMBED_BATCH_SIZE

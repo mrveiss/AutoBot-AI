@@ -98,6 +98,10 @@ def parse_int_or_default(name: str, raw: object, default: int) -> int:
     ``os.environ``; pydantic ``mode="before"`` field validators feed it the value settings
     loading hands them, so a bad value falls back instead of raising ``ValidationError``.
     """
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return raw
+    if isinstance(raw, float) and raw.is_integer():
+        return int(raw)
     if blank_to_none(raw) is None:
         return default
     try:
@@ -119,16 +123,7 @@ def env_int_clamped(
     valid integer.  Returns *default* silently when the var is absent.
     Clamps to [min_v, max_v] when either bound is provided.
     """
-    raw = env_raw(name)
-    if raw is None:
-        value = default
-    else:
-        try:
-            value = int(raw)
-        except ValueError:
-            logger.warning("Invalid %s=%r; using %d", name, raw, default)
-            value = default
-    return _clamped(name, value, min_v, max_v)
+    return _clamped(name, parse_int_or_default(name, env_raw(name), default), min_v, max_v)
 
 
 def _clamped(name: str, value, min_v, max_v):

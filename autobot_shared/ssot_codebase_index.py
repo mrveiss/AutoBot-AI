@@ -16,8 +16,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from autobot_shared.env_utils import parse_int_or_default
 from autobot_shared.paths import project_root
 
-# One declared default per knob: the field default, the unparseable-value fallback and the
-# reader's own fallback in ``chromadb_storage`` all use these (#20683).
+# One declared default per knob: the field default and the unparseable-value fallback both use
+# these. Readers (``chromadb_storage``) take the already-validated field and only clamp it (#20683).
 DEFAULT_CODEBASE_INDEX_BATCH_SIZE = 5000
 DEFAULT_CODEBASE_INDEX_EMBED_BATCH_SIZE = 100
 
