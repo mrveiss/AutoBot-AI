@@ -44,6 +44,9 @@ from tests.security._revocation_harness import token_request as _token_request
 class _Bound(UserService):
     user_model = MagicMock()
 
+    async def _guard_last_admin(self, *args, **kwargs):  # about the revocation marker; the guard has its own (#21018)
+        return None
+
 
 def _user(**state):
     return SimpleNamespace(id=uuid.uuid4(), username="alice", is_active=True, deleted_at=None, **state)

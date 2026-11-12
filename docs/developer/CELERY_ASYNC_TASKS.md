@@ -68,9 +68,19 @@ context; it is not for tasks.
 | inside a Celery worker | worker loop |
 | no loop running in the thread (CLI, script) | `asyncio.run` |
 | a loop is running in the thread, API process | submitted to the main loop registered by the lifespan (`register_main_loop`) with `run_coroutine_threadsafe` |
-| called on the main loop's own thread | cannot block on itself; falls back to a thread with its own loop |
+| called on the main loop's own thread, or the target loop is unavailable | cannot block on itself; falls back to a thread with its own fresh loop. Loop-bound singletons (DB engine, Redis pools) are unsafe there (#20919) |
 
 ## Trade-off
 
 One loop per worker means a runaway coroutine delays later tasks in the same child. The
 bounds are Celery's time limits and the future cancellation above.
+
+- **Cancellation is cooperative.** Cancelling the future (timeout, soft time limit,
+  `KeyboardInterrupt`) delivers `CancelledError` to the coroutine at its next `await`. A
+  coroutine that swallows it, or blocks without awaiting (a sync call, a tight CPU loop),
+  keeps the loop busy and later tasks in that child wait behind it.
+- **Celery time limits are not configured by default** (`celery_app.py` sets none). The only
+  default bound is `AUTOBOT_WORKER_LOOP_RUN_TIMEOUT` (3600s), which cancels cooperatively.
+- **A blocked worker may need a restart.** If the loop is stuck in non-cooperative code,
+  only restarting the child or the worker clears it (`--max-tasks-per-child` recycles
+  children, but not one that is stuck).
