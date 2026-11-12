@@ -895,11 +895,31 @@
       become: false  # the other mark-synced tasks do not escalate; the install inventory sets ansible_become
       tags: ['mark-synced']
 
+    # #18663: a no_log task still registers its full result for later tasks (only the callback
+    # display is censored), so the SHAPE of a status-less login result can be reported without
+    # printing json/content/headers/body, which carry the credentials and the token. Keys and
+    # the module error fields only; the interpreter fields name an interpreter-discovery failure.
+    - name: "Mark-synced | Record the shape of a login result that is not HTTP 200 (#18663)"
+      ansible.builtin.set_fact:
+        _slm_login_shape: >-
+          keys={{ (_slm_login | default({})).keys() | list | sort }}
+          msg={{ (_slm_login.msg | default('')) | string | truncate(300, True, '') }}
+          module_stderr={{ (_slm_login.module_stderr | default('')) | string | truncate(300, True, '') }}
+          rc={{ _slm_login.rc | default('') }}
+          failed={{ _slm_login.failed | default('') }}
+          censored={{ _slm_login.censored | default('') }}
+          ansible_python_interpreter={{ ansible_python_interpreter | default('') }}
+          discovered_interpreter_python={{ ansible_facts.discovered_interpreter_python | default('') }}
+      when: (_slm_login.status | default(0)) != 200
+      run_once: true
+      tags: ['mark-synced']
+
     - name: "Mark-synced | Warn if login failed (skip mark-synced gracefully)"
       ansible.builtin.debug:
         msg: >-
           WARNING: SLM login returned status {{ _slm_login.status | default('none') }}
           ({{ _slm_login.msg | default('no response recorded') }}) —
+          result shape: {{ _slm_login_shape | default('') }} —
           mark-synced skipped. Code Sync UI will show this node as 'unknown'
           until next 'Update' run. (#7103)
       when: (_slm_login.status | default(0)) != 200
@@ -950,6 +970,7 @@
         msg: >-
           mark-synced did not stamp {{ slm_node_id | default(inventory_hostname) }}: SLM login HTTP
           {{ _slm_login.status | default('none') }} ({{ _slm_login.msg | default('no response recorded') }}), mark-synced HTTP {{ _mark_synced.status | default('none') }}
+          (login result shape: {{ _slm_login_shape | default('login returned 200') }})
       when:
         - mark_synced_strict | default(false) | bool
         - (_slm_login.status | default(0)) != 200 or (_mark_synced.status | default(-1)) != 200
