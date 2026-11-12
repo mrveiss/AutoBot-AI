@@ -994,7 +994,7 @@ async def delete_secret(
     secret_id: str,
     http_request: Request,
     chat_id: str | None = Query(None),
-    confirm_dependents: bool = Query(False),
+    dependents_digest: str | None = Query(None),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Delete a secret (Issue #744: requires admin authentication)"""
@@ -1007,7 +1007,7 @@ async def delete_secret(
         success = await asyncio.to_thread(secrets_manager.delete_secret, secret_id, chat_id=chat_id)
         # #17099/#17731: a SYSTEM secret lives in the vault; delete it there too (409 while dependents exist).
         success = success or await delete_system_vault_secret(
-            secret_id, owner_id, http_request.headers, confirm_dependents
+            secret_id, owner_id, http_request.headers, dependents_digest
         )
         if not success:
             # #16428: revoke() is idempotent, so check existence first to 404 an unknown id.
