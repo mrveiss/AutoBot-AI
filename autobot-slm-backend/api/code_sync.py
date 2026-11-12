@@ -102,7 +102,7 @@ from models.schemas import (
 from services.ansible_utils import ansible_run_failure, parse_unreachable_hosts, summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
-from services.collection_errors import OPERATIONAL_COLLECTION_ERRORS, operational_failure_reason
+from services.collection_errors import operational_failure_reason
 from services.database import get_db
 from services.deploy_activity import read_deploy_activity
 from services.deploy_artifacts import (
@@ -5173,7 +5173,7 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
             f"Collected {len(outdated_node_ids)} outdated fleet node(s)",
         )
         return outdated_node_ids
-    except OPERATIONAL_COLLECTION_ERRORS as exc:
+    except Exception as exc:  # operational_failure_reason decides: it re-raises a programming error (#21334)
         _fail_fleet_stage(job, _get_stage(job, "fleet_nodes"), operational_failure_reason("outdated nodes", exc))
         return []
 
