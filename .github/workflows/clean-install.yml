@@ -41,7 +41,9 @@ jobs:
     # A fork's branch is not on this repository, so the installer could not clone it.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    # #21325: observed passing maximum 1228 s (job) over 40 passing runs; 40 minutes is about 1.95x that,
+    # where 75 let a hung apt call hold the job for an hour.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -52,6 +54,56 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      # #21325: the runner's mirror host stopped resolving for whole jobs, and the installer's own
+      # apt calls cannot be wrapped here. The script probes the runner's archive and the fallback mirror
+      # (the apt-fallback-mirror input default, shared with the Python suite's provisioning fallback,
+      # #19308) and repoints the runner's mirror list only when the archive is unhealthy and the fallback
+      # is healthy; otherwise it changes nothing and says why. An unprobed mirror is never ordered first:
+      # one that accepts connections and then stalls cost 30 to 65 minutes of silence per job. The step
+      # timeout is a few probe bounds (4 requests of 10 s at most), far above a normal run.
+      - name: Use the fallback apt mirror
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          mirror=$(awk '/^  apt-fallback-mirror:/ {f=1} f && /^    default:/ {print $2; exit}' .github/actions/setup-python-suite/action.yml)
+          [ -n "${mirror}" ] || { echo "::error::no apt-fallback-mirror default found in the setup-python-suite action"; exit 1; }
+          rc=0; sudo bash scripts/ci/apt_fallback_mirror.sh /etc/apt "${mirror}" >/dev/null || rc=$?
+          case "${rc}" in
+            0|3) ;;  # the script printed which of "applied" / "not applied" it was, and why
+            *) echo "::error title=apt fallback mirror script failed::exit ${rc}"; exit 1 ;;
+          esac
+
+      # #21325: apt's connection-idle and lock-wait bounds for every apt call on this runner from here on,
+      # the installer's and Ansible's apt_repository included. The same script, the one definition, that the
+      # Python suite's provisioning step runs. A CI-environment mitigation: the installer's own apt calls on
+      # a real host stay unbounded (#21358).
+      - name: Bound apt network and lock waits
+        run: sudo bash scripts/ci/apt_network_config.sh
+
+      # #21325: what the runner's resolver looks like before the installer runs, so a resolution failure
+      # in a later step can be read against it. Informational: it never fails the job.
+      - name: Resolver diagnostics
+        run: |
+          echo "== /etc/resolv.conf"; cat /etc/resolv.conf || echo "(no /etc/resolv.conf)"
+          echo "== resolvectl status"; resolvectl status 2>&1 | head -n 40
+          echo "== hosts in the apt mirror list"
+          for host in $(sed -nE 's#^[a-z+]*://([^/:[:space:]]+).*#\1#p' /etc/apt/apt-mirrors.txt 2>/dev/null | sort -u | head -n 5); do
+            echo "-- ${host}"; getent hosts "${host}" || echo "(no answer)"
+          done
+
+      # #21325: install.sh adds this PPA through apt-add-repository, whose Launchpad API lookup has no retry and
+      # failed on a name-resolution error on both legs. It skips the add when the PPA is already configured, so the
+      # runner is given it here through the backoff wrapper. The literal is install.sh's own (a repo test keeps them
+      # equal). What Clean install still proves: the installer, from a blank host, installs and serves with that
+      # PPA's packages; what it no longer proves is the installer's own `apt-add-repository` call.
+      - name: Pre-add the Python 3.14 PPA through the retry wrapper
+        # Passing runs took 10 to 11 s. The wrapper bounds each attempt (docker/apt/apt-retry), so this is the
+        # outer limit: one hung attempt is killed and retried inside it, and a second hang fails the step.
+        # The step timeout, not the wrapper's attempt cap, is the effective bound here (8 attempts exceed it).
+        timeout-minutes: 15
+        run: |
+          sudo sh docker/apt/apt-retry add-apt-repository -y ppa:deadsnakes/ppa
 
       # #20903: the repo scripts import autobot_shared, which refuses an interpreter
       # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
@@ -94,16 +146,27 @@ jobs:
       # log is public, so that line is masked on its way to the log.
       - name: "Step: install (no tty)"
         if: matrix.mode == 'no-tty'
+        # Observed passing maximum 847 s over 40 passing runs; 30 minutes leaves room for a slow runner.
+        timeout-minutes: 30
         run: |
           set -euo pipefail
           setsid bash -c "${INSTALL_CMD}" </dev/null 2>&1 | bash scripts/ci/mask_install_summary.sh \
             || { echo "::error title=clean install: step 'install' failed::the no-tty one-liner exited non-zero"; exit 1; }
 
+      # #21325: the repo's one apt backoff wrapper, in its own step so its bound is not part of the install's.
+      - name: Install expect through the retry wrapper
+        if: matrix.mode == 'tty'
+        timeout-minutes: 15
+        run: sudo sh docker/apt/apt-retry apt-get install -y -qq expect
+
       - name: "Step: install (tty)"
         if: matrix.mode == 'tty'
+        # Observed passing maximum 1209 s (tty install step) over 40 passing runs; 30 minutes. scripts/ci/clean_install_tty.exp
+        # gives up earlier (2 * 120 s prompt waits + 1500 s install wait = 1740 s < 1800 s), so its own
+        # `installer timed out` and last output line are printed before the runner kills the step.
+        timeout-minutes: 30
         run: |
           set -euo pipefail
-          sudo apt-get install -y -qq expect >/dev/null
           typed="${RUNNER_TEMP}/typed-at-prompt"
           # #19236 AC2: spaces and both quote kinds, so a green login proves the exact string round-trips.
           python3 -c 'import secrets; print(secrets.token_urlsafe(12) + " with " + chr(34) + "dq" + chr(34) + " and " + chr(39) + "sq" + chr(39))' > "${typed}"
