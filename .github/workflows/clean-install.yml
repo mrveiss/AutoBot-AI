@@ -56,18 +56,21 @@ jobs:
           persist-credentials: false
 
       # #21325: the runner's mirror host stopped resolving for whole jobs, and the installer's own
-      # apt calls cannot be wrapped here. Repoint the runner's mirror list BEFORE any apt use, with the
-      # script and the one mirror definition (the apt-fallback-mirror input default) that the Python
-      # suite's provisioning fallback already uses (#19308). Exit 3 = nothing to repoint, said out loud.
+      # apt calls cannot be wrapped here. The script probes the runner's archive and the fallback mirror
+      # (the apt-fallback-mirror input default, shared with the Python suite's provisioning fallback,
+      # #19308) and repoints the runner's mirror list only when the archive is unhealthy and the fallback
+      # is healthy; otherwise it changes nothing and says why. An unprobed mirror is never ordered first:
+      # one that accepts connections and then stalls cost 30 to 65 minutes of silence per job. The step
+      # timeout is a few probe bounds (4 requests of 10 s at most), far above a normal run.
       - name: Use the fallback apt mirror
+        timeout-minutes: 3
         run: |
           set -euo pipefail
           mirror=$(awk '/^  apt-fallback-mirror:/ {f=1} f && /^    default:/ {print $2; exit}' .github/actions/setup-python-suite/action.yml)
           [ -n "${mirror}" ] || { echo "::error::no apt-fallback-mirror default found in the setup-python-suite action"; exit 1; }
-          rc=0; n=$(sudo bash scripts/ci/apt_fallback_mirror.sh /etc/apt "${mirror}") || rc=$?
+          rc=0; sudo bash scripts/ci/apt_fallback_mirror.sh /etc/apt "${mirror}" >/dev/null || rc=$?
           case "${rc}" in
-            0) echo "apt: fallback mirror applied to ${n} apt file(s) (#19308)" ;;
-            3) echo "::warning title=apt fallback mirror not applied::no Ubuntu archive entry found to repoint" ;;
+            0|3) ;;  # the script printed which of "applied" / "not applied" it was, and why
             *) echo "::error title=apt fallback mirror script failed::exit ${rc}"; exit 1 ;;
           esac
 
