@@ -22,7 +22,7 @@ openvino>=2026.4.1
 
 # croniter: the cron engine behind the shared 5-field validator, the backend triggers, the LLC
 # routine scheduler and the SLM schedule executor (#18449). Was declared in two files.
-croniter>=6.2.4
+croniter>=7.0.0
 
 # chromadb: the vector store client in the backend, the ai-stack container and code_analysis,
 # plus the standalone server venvs the ansible redis role and install-bare-metal.sh build.
@@ -33,7 +33,7 @@ chromadb>=1.5.9,<2.0.0
 # filelock: runtime dependency via torch (unbounded `filelock` requirement) and the HF stack.
 # Floor at the release fixing CVE-2026-112940, CVE-2026-112913 and CVE-2026-112907 (#19426).
 # Was also a stale 3.20.1 floor in ansible dependency_patching; that restatement is removed.
-filelock>=4.2.5
+filelock>=4.2.10
 
 # starlette: the security floor for the O(n^2) Range-header DoS. fastapi itself only requires
 # starlette>=0.46.0, so its floor does not imply this one and it is declared here for every manifest.
@@ -44,14 +44,14 @@ starlette>=1.10.0
 # requirements-ci/framework.txt, 0.147.0 in dependency_patching and an inline ansible spec), so every
 # dependabot bump left the others behind (#18060). 0.162.0 changes how an omitted bool Form field
 # is parsed; every bool Form parameter therefore carries an explicit default.
-fastapi>=0.162.0
+fastapi>=0.162.2
 
 # torch / torchvision: ONE coupled pair (#19330, maintainer decision 2026-10-26). torchvision 0.29.x
 # is built against torch 2.14.x -- move them together, never one alone. Was pinned in 7 places at
 # three patch levels (2.12.1 in the backend image, #19072; 2.14.0 on GPU hosts; 2.14.1 elsewhere).
 # `==2.14.1` also matches the CPU index's `2.14.1+cpu` and CUDA builds' `2.14.1+cuNNN` local versions.
-torch==2.14.1
-torchvision==0.29.1
+torch==2.15.0+cpu
+torchvision==0.29.2+cpu
 
 # #20092: autobot_shared and the SLM both need it, and declared different floors.
 pydantic-settings>=2.16.2
@@ -65,30 +65,30 @@ aiofiles>=25.1.0
 aiohttp>=3.14.5
 aiosqlite>=0.22.1
 alembic>=1.20.1
-anthropic>=1.15.0,<2.0.0
+anthropic>=2.7.0,<3.0.0
 apscheduler>=3.11.3,<4.0.0
 async-timeout>=5.0.1
 asyncpg>=0.32.0
 asyncssh>=2.24.1,<3.0.0
 bcrypt>=5.0.0
 beautifulsoup4>=4.15.0
-cachetools>=7.2.7
-celery>=5.6.3
-click>=8.5.0
+cachetools>=8.0.0
+celery>=5.7.0
+click>=8.5.1
 cryptography>=50.0.2
 datasketch>=2.0.0
 ddgs>=9.16.1
 defusedxml>=0.7.1
 docker>=7.2.0
-fakeredis>=2.38.0
+fakeredis>=2.40.0
 faiss-cpu>=1.15.1
 greenlet>=3.5.6
 httpx>=0.28.1
 jinja2>=3.1.6,<4.0.0
 jsonschema>=4.26.0
-langchain>=1.4.7,<2.0.0
+langchain>=1.4.9,<2.0.0
 langchain-community>=0.4.2,<0.5.0
-langchain-core>=1.7.3,<2.0.0
+langchain-core>=1.7.6,<2.0.0
 ldap3>=2.9.1
 llama-index>=0.14.25,<0.15.0
 llama-index-core>=0.14.25,<0.15.0
@@ -113,19 +113,19 @@ prometheus-client>=0.26.0
 protobuf>=7.36.2,<8.0.0
 psutil>=7.2.2
 psycopg2-binary>=2.9.13,<3.0.0
-pydantic>=2.14.2
+pydantic>=2.14.3
 pyjwt>=2.15.1
-pypdf>=6.21.4
-pypdfium2>=5.14.0
+pypdf>=7.0.0
+pypdfium2>=5.15.2
 pyside6>=6.12.0
 pytesseract>=0.3.13
 pytest>=9.2.0
-pytest-asyncio>=1.4.1
+pytest-asyncio>=1.4.1.post1
 pytest-xdist>=3.8.0
 python-docx>=1.2.0
 python-dotenv>=1.2.4
 python-json-logger>=4.2.0
-python-multipart>=0.0.32
+python-multipart>=0.0.33
 pyyaml>=6.0.3
 reportlab>=5.1.0
 requests>=2.34.2
@@ -133,17 +133,17 @@ rich>=15.0.0
 scikit-learn>=1.9.1
 scipy>=1.18.1
 sentence-transformers>=6.2.0
-sqlalchemy>=2.0.55,<2.1
+sqlalchemy>=2.0.57,<2.1
 structlog>=26.1.0
 tenacity>=9.2.1
 tiktoken>=0.14.0
 torchmetrics>=1.9.0,<2.0.0
 tqdm>=4.70.1
 trafilatura>=2.3.1
-tree-sitter>=0.26.0
+tree-sitter>=0.26.1
 tree-sitter-python>=0.25.0
 typing-extensions>=4.16.0
 uvicorn>=0.54.0
-watchdog>=6.0.0
+watchdog>=7.1.0
 weasyprint>=70.0
 yt-dlp>=2026.10.26
