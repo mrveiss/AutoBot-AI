@@ -4,13 +4,16 @@
 
 import copy
 import re
+from pathlib import Path
 
 import yaml
-from repo_tests._gate_verdict_driver import run_verdict
+from repo_tests._gate_verdict_driver import run_cancel_decision, run_verdict
 from repo_tests._github_expressions import evaluate, strip_expression_braces
 from repo_tests._paths import repo_root
 
-_WORKFLOWS = repo_root() / ".github" / "workflows"
+_CI = repo_root() / ".github" / "workflows" / "ci.yml"
+_AUTO_FIX = repo_root() / ".github" / "workflows" / "auto-fix-generated-types.yml"
+_TRIAGE = repo_root() / ".github" / "workflows" / "issue-triage.yml"
 _FAST_LIST = repo_root() / "tools" / "git-hooks" / "fast_guard_tests.txt"
 #: Called with the verdict of short-check's successors, or cheap by design.
 _NOT_STAGED = {"changes", "short-check", "run-precommit"}
@@ -18,12 +21,12 @@ _STATUS_FUNCTIONS = ("always()", "cancelled()", "failure()")
 _CHANGES_OUTPUT = re.compile(r"needs\.changes\.outputs\.([\w-]+)")
 
 
-def _doc(name: str) -> dict:
-    return yaml.safe_load((_WORKFLOWS / name).read_text(encoding="utf-8"))
+def _doc(path: Path) -> dict:
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
 def _jobs() -> dict:
-    return _doc("ci.yml")["jobs"]
+    return _doc(_CI)["jobs"]
 
 
 def _needs(job: dict) -> list[str]:
@@ -167,10 +170,49 @@ def test_the_evaluator_reads_the_operators_the_gates_use() -> None:
     assert evaluate("needs.a-b.outputs.missing == 'true' || false", context) is False
 
 
-def test_a_cancelled_short_check_ends_each_gate_cancelled() -> None:
-    for name, job in _gates().items():
-        results = _steps_using(job, "cancel-run-on-cancelled-upstream")[0]["with"]["results"]
-        assert "needs.short-check.result" in results, name
+_EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}")
+_SHORT_CHECK_RESULT = re.compile(r"\s*\$\{\{ needs\.short-check\.result \}\}")
+
+
+def _cancel_results(job: dict, context: dict) -> str:
+    """The `results` string the gate's cancel step passes, every `${{ }}` evaluated in `context`."""
+    raw = _steps_using(job, "cancel-run-on-cancelled-upstream")[0]["with"]["results"]
+    return _EXPRESSION.sub(lambda m: str(evaluate(m.group(1).strip(), context)), raw)
+
+
+def _cancels(job: dict, short_check: str, work: str) -> bool:
+    """Whether the real decision logic of the cancel action fires for this state of the gate's needs."""
+    rc, out = run_cancel_decision(_cancel_results(job, _needs_context(job, short_check, work, True)))
+    assert rc == 0, out
+    assert ("DECISION=cancel" in out) != ("no upstream was cancelled" in out), out
+    return "DECISION=cancel" in out
+
+
+def test_a_cancelled_short_check_cancels_each_gate_a_failed_one_does_not() -> None:
+    """The second acceptance criterion of #20552: cancelling a train still clears it.
+
+    The cancel action's own shell is run up to the point where it would call the API (the decision
+    is the `case` on the results list), with the `results` each gate passes, evaluated from ci.yml.
+    A cancelled short check fires it; a failed or a successful one does not (a failure is the
+    verdict script's, proven above). Cannot be proven without a real run: that the force-cancel
+    API call takes effect, and that a skipped work job's result reads `skipped` to the next step.
+    """
+    gates = _gates()
+    assert len(gates) == 8, sorted(gates)
+    for name, job in gates.items():
+        assert _cancels(job, short_check="cancelled", work="skipped"), name
+        assert not _cancels(job, short_check="failure", work="skipped"), name
+        assert not _cancels(job, short_check="success", work="success"), name
+
+
+def test_control_a_gate_whose_cancel_results_omit_the_short_check_is_detected() -> None:
+    job = copy.deepcopy(_gates()["smoke-test"])
+    step = _steps_using(job, "cancel-run-on-cancelled-upstream")[0]
+    omitted = _SHORT_CHECK_RESULT.sub("", step["with"]["results"])
+    assert omitted != step["with"]["results"], "control: the short-check result is not in the results"
+    step["with"]["results"] = omitted
+    assert not _cancels(job, short_check="cancelled", work="skipped")
+    assert _cancels(job, short_check="success", work="cancelled"), "control: the action still fires on a cancelled need"
 
 
 def test_the_short_check_itself_always_starts() -> None:
@@ -184,12 +226,12 @@ def test_the_listed_guards_exist() -> None:
 
 
 def test_auto_fix_runs_only_after_verify_failed() -> None:
-    assert list(_doc("auto-fix-generated-types.yml")[True]) == ["workflow_call"]
+    assert list(_doc(_AUTO_FIX)[True]) == ["workflow_call"]
     condition = _jobs()["run-auto-fix-types"]["if"]
     assert "needs.run-generated-types.result == 'failure'" in condition
 
 
 def test_triage_structure_ignores_labels_that_cannot_change_its_verdict() -> None:
-    condition = _doc("issue-triage.yml")["jobs"]["structure"]["if"]
+    condition = _doc(_TRIAGE)["jobs"]["structure"]["if"]
     assert "startsWith(github.event.label.name, 'phase:')" in condition
     assert "github.event.label.name == 'needs-structure'" in condition

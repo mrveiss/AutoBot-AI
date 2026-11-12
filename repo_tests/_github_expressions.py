@@ -24,6 +24,15 @@ literals, ``true``/``false``/``null``, ``==``, ``!=``, ``>``, ``>=``, ``&&``, ``
 context lookups where a missing segment is null. Add operators only when a
 real expression needs them -- this is an anchor for one gate, not a GitHub
 Actions expression engine.
+
+Known divergences from GitHub's own semantics (the gates' expressions use neither):
+
+* ``null == ''`` is true on GitHub (null coerces to the empty string) and false here; only ``!=``
+  reads a null as ``''``.
+* GitHub compares strings without regard to case; ``==`` and ``!=`` here are case-sensitive.
+
+There are no status functions (``always()``, ``cancelled()``): a guard that evaluates a condition
+containing one asserts its presence separately and evaluates the remaining clauses.
 """
 
 from __future__ import annotations
