@@ -78,7 +78,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         "docs/developer/WSL2_NETWORKING.md",
         "docs/development/MCP_DEBUG_SCENARIOS.md",
         "docs/runbooks/ROTATE_SSH_KEYS.md",
-        "pytest.ini",
         # #17133: "README.md" is a literal pre_push_no_open_pr_cap_19397_test.py
         # writes inside its own synthetic tmp_path repo fixture (_seed_repo),
         # never a read of the real root-level file -- same shape as the
@@ -147,7 +146,8 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: `docker/generate-secrets.sh`, which two guards really read (#17500, #18729).
 #: LOWERED 39 -> 38 by #19523: the filter now covers `.github/dependabot.yml`, which the
 #: dependabot coverage guards read; deleting a block's directory touches no .py file.
-MAX_UNCOVERED_READS = 34
+#: LOWERED 34 -> 33 by #21359: the filter now covers `pytest.ini`, which the pre-board lane's guard reads.
+MAX_UNCOVERED_READS = 33
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
 #: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not
