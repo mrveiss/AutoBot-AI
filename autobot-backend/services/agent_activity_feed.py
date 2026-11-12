@@ -14,8 +14,8 @@ from typing import Any, Dict, List
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import TaskStatus
 from autobot_shared.time_utils import now_utc, parse_utc_iso
-from constants.status_enums import TaskStatus
 from services.agent_analytics import get_agent_analytics
 
 logger = get_logger(__name__)
