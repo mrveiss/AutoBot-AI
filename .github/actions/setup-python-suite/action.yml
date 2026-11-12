@@ -177,6 +177,7 @@ runs:
         # Relative to this action, not to the workspace (#19345 review): a caller that checks
         # the repo out elsewhere still finds the script that ships beside the action.
         APT_FALLBACK_SCRIPT: ${{ github.action_path }}/../../../scripts/ci/apt_fallback_mirror.sh
+        APT_NETWORK_CONFIG_SCRIPT: ${{ github.action_path }}/../../../scripts/ci/apt_network_config.sh
       run: |
         set -euo pipefail
         if command -v ffmpeg >/dev/null 2>&1 && command -v tesseract >/dev/null 2>&1; then
@@ -193,8 +194,8 @@ runs:
         # Why this is not the timeout-doubling #14550 rejected as guessing: that objection
         # was about an undersized budget being one hypothesis among several, with lock
         # contention the likelier. The exit code now rules the alternatives out. apt is
-        # configured to drop a connection idle for APT_HTTP_IDLE_S and to retry a failed
-        # fetch APT_FETCH_RETRIES times, so a stalled mirror ends an attempt with apt's own
+        # configured (scripts/ci/apt_network_config.sh) to drop a connection idle for 30s and to
+        # retry a failed fetch 3 times, so a stalled mirror ends an attempt with apt's own
         # non-zero status at roughly 120s. What four occurrences on 2026-10-08 actually
         # showed was exit 124 -- coreutils timeout killing it at the full 300s -- on every
         # attempt. A connection that never stalled for 30s was receiving data; it was simply
@@ -213,9 +214,6 @@ runs:
         # so the partial download carries over. Same two tries, same worst-case bound. The
         # mirror and the source rewrite live in scripts/ci/apt_fallback_mirror.sh.
         readonly APT_BACKOFF_S=15         # the sleep after try N is N times this
-        readonly APT_FETCH_RETRIES=3      # apt's own retries of one failed download
-        readonly APT_HTTP_IDLE_S=30       # drop a connection that sends nothing this long
-        readonly APT_LOCK_WAIT_S=120      # wait this long for the dpkg lock
         readonly TIMEOUT_KILLED=124       # coreutils timeout's exit status when it kills
 
         # apt_retry LABEL COMMAND...: up to APT_ATTEMPTS tries (#15515, above).
@@ -281,9 +279,9 @@ runs:
         # builds (#16291) there is no Error-Mode here: the runner image's own
         # sources are outside this repo, and one of them failing must not fail
         # a shard whose packages come from the Ubuntu archive.
-        printf '%s\n' "Acquire::Retries \"${APT_FETCH_RETRIES}\";" "Acquire::http::Timeout \"${APT_HTTP_IDLE_S}\";" \
-          "DPkg::Lock::Timeout \"${APT_LOCK_WAIT_S}\";" \
-          | sudo tee /etc/apt/apt.conf.d/80-ci-provisioning >/dev/null
+        # The settings (retries, connection idle bound, dpkg lock wait) are defined once, in
+        # scripts/ci/apt_network_config.sh, which the Clean install workflow runs too (#21325).
+        sudo "$BASH" "$APT_NETWORK_CONFIG_SCRIPT"
 
         APT_ADVISORY=1 apt_retry "update" timeout "$APT_TIMEOUT_S" sudo apt-get update -qq
 

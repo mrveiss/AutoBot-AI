@@ -16,6 +16,9 @@ What it does NOT see: install.sh (its 1168-line ceiling, #17353, leaves no room 
 installer's delivery of it is decided -- #21325), apt run by something install.sh starts (the NodeSource setup
 script, Ansible roles, scripts/ci/*), Dockerfiles compose does not build, apt reached through a variable or function other than
 ``apt_retry``, and the apt calls inside the setup-python-suite action (its own wrapper, #15515).
+
+Bounds on a HUNG call (wrapper timeout, step timeouts, shared apt network bounds, expect wait) are pinned in
+``apt_retry_hang_bound_21325_test.py``.
 """
 
 from __future__ import annotations

@@ -41,7 +41,9 @@ jobs:
     # A fork's branch is not on this repository, so the installer could not clone it.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    # #21325: observed passing maximum 1228 s (job) over 40 passing runs; 40 minutes is about 1.95x that,
+    # where 75 let a hung apt call hold the job for an hour.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -69,6 +71,13 @@ jobs:
             *) echo "::error title=apt fallback mirror script failed::exit ${rc}"; exit 1 ;;
           esac
 
+      # #21325: apt's connection-idle and lock-wait bounds for every apt call on this runner from here on,
+      # the installer's and Ansible's apt_repository included. The same script, the one definition, that the
+      # Python suite's provisioning step runs. A CI-environment mitigation: the installer's own apt calls on
+      # a real host stay unbounded (#21358).
+      - name: Bound apt network and lock waits
+        run: sudo bash scripts/ci/apt_network_config.sh
+
       # #21325: what the runner's resolver looks like before the installer runs, so a resolution failure
       # in a later step can be read against it. Informational: it never fails the job.
       - name: Resolver diagnostics
@@ -86,6 +95,10 @@ jobs:
       # equal). What Clean install still proves: the installer, from a blank host, installs and serves with that
       # PPA's packages; what it no longer proves is the installer's own `apt-add-repository` call.
       - name: Pre-add the Python 3.14 PPA through the retry wrapper
+        # Passing runs took 10 to 11 s. The wrapper bounds each attempt (docker/apt/apt-retry), so this is the
+        # outer limit: one hung attempt is killed and retried inside it, and a second hang fails the step.
+        # The step timeout, not the wrapper's attempt cap, is the effective bound here (8 attempts exceed it).
+        timeout-minutes: 15
         run: |
           sudo sh docker/apt/apt-retry add-apt-repository -y ppa:deadsnakes/ppa
 
@@ -130,17 +143,27 @@ jobs:
       # log is public, so that line is masked on its way to the log.
       - name: "Step: install (no tty)"
         if: matrix.mode == 'no-tty'
+        # Observed passing maximum 847 s over 40 passing runs; 30 minutes leaves room for a slow runner.
+        timeout-minutes: 30
         run: |
           set -euo pipefail
           setsid bash -c "${INSTALL_CMD}" </dev/null 2>&1 | bash scripts/ci/mask_install_summary.sh \
             || { echo "::error title=clean install: step 'install' failed::the no-tty one-liner exited non-zero"; exit 1; }
 
+      # #21325: the repo's one apt backoff wrapper, in its own step so its bound is not part of the install's.
+      - name: Install expect through the retry wrapper
+        if: matrix.mode == 'tty'
+        timeout-minutes: 15
+        run: sudo sh docker/apt/apt-retry apt-get install -y -qq expect
+
       - name: "Step: install (tty)"
         if: matrix.mode == 'tty'
+        # Observed passing maximum 1209 s (tty install step) over 40 passing runs; 30 minutes. scripts/ci/clean_install_tty.exp
+        # gives up earlier (2 * 120 s prompt waits + 1500 s install wait = 1740 s < 1800 s), so its own
+        # `installer timed out` and last output line are printed before the runner kills the step.
+        timeout-minutes: 30
         run: |
           set -euo pipefail
-          # #21325: the repo's one apt backoff wrapper.
-          sudo sh docker/apt/apt-retry apt-get install -y -qq expect
           typed="${RUNNER_TEMP}/typed-at-prompt"
           # #19236 AC2: spaces and both quote kinds, so a green login proves the exact string round-trips.
           python3 -c 'import secrets; print(secrets.token_urlsafe(12) + " with " + chr(34) + "dq" + chr(34) + " and " + chr(39) + "sq" + chr(39))' > "${typed}"
