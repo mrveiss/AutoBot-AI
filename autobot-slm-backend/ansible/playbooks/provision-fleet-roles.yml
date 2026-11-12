@@ -892,15 +892,17 @@
       failed_when: false
       run_once: true
       delegate_to: localhost
+      become: false  # the other mark-synced tasks do not escalate; the install inventory sets ansible_become
       tags: ['mark-synced']
 
     - name: "Mark-synced | Warn if login failed (skip mark-synced gracefully)"
       ansible.builtin.debug:
         msg: >-
-          WARNING: SLM login returned status {{ _slm_login.status }} —
+          WARNING: SLM login returned status {{ _slm_login.status | default('none') }}
+          ({{ _slm_login.msg | default('no response recorded') }}) —
           mark-synced skipped. Code Sync UI will show this node as 'unknown'
           until next 'Update' run. (#7103)
-      when: _slm_login.status != 200
+      when: (_slm_login.status | default(0)) != 200
       run_once: true
       tags: ['mark-synced']
 
@@ -926,8 +928,9 @@
         timeout: 10
       register: _mark_synced
       delegate_to: localhost
+      become: false
       ignore_errors: true
-      when: _slm_login.status == 200
+      when: (_slm_login.status | default(0)) == 200
       tags: ['mark-synced']
       no_log: true  # #19764: credentials in the request or response
 
@@ -937,7 +940,7 @@
           WARNING: mark-synced did not stamp {{ slm_node_id | default(inventory_hostname) }} (HTTP
           {{ _mark_synced.status | default('none') }}); 404 means no registered node has that ID
           (look up the node_id the wizard registered). Check the node's status in Code Sync.
-      when: _slm_login.status == 200 and (_mark_synced.status | default(-1)) != 200
+      when: (_slm_login.status | default(0)) == 200 and (_mark_synced.status | default(-1)) != 200
       tags: ['mark-synced']
 
     # #18663: the install path passes mark_synced_strict=true, so a login failure or a POST that
@@ -946,10 +949,10 @@
       ansible.builtin.fail:
         msg: >-
           mark-synced did not stamp {{ slm_node_id | default(inventory_hostname) }}: SLM login HTTP
-          {{ _slm_login.status | default('none') }}, mark-synced HTTP {{ _mark_synced.status | default('none') }}
+          {{ _slm_login.status | default('none') }} ({{ _slm_login.msg | default('no response recorded') }}), mark-synced HTTP {{ _mark_synced.status | default('none') }}
       when:
         - mark_synced_strict | default(false) | bool
-        - _slm_login.status != 200 or (_mark_synced.status | default(-1)) != 200
+        - (_slm_login.status | default(0)) != 200 or (_mark_synced.status | default(-1)) != 200
       tags: ['mark-synced']
 
 # -------------------------------------------------------------------
