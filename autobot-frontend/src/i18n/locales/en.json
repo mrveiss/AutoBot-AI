@@ -1684,6 +1684,9 @@
           "abandoned": "abandoned",
           "cancelled": "cancelled"
         }
+      },
+      "staleResult": {
+        "message": "This result was computed before the source was last synced. It is shown as it was stored and may not match the current code; run the analysis again to refresh it."
       }
     },
     "patterns": {

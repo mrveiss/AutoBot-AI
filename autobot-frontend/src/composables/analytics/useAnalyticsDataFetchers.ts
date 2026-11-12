@@ -35,6 +35,7 @@ import { useCodeSmellProblems } from './useCodeSmellProblems'
 import { toDeclarationPanelRows } from './declarationPanelRows'
 import { loadProjectRoot } from './projectRoot'
 import { useRunState } from './useRunState'
+import { useStaleResults } from './useStaleResults'
 import { runTimed } from '@/composables/api/useTimedNotify'
 import {
   type Problem,
@@ -72,6 +73,7 @@ export interface UseAnalyticsDataFetchersDeps {
 export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const { rootPath, sourceIdQuery, withSourceId, t, showToast, notify } = deps
   const runState = useRunState(withSourceId) // #21003: partial/run fields ride on the stats and problems bodies
+  const staleResults = useStaleResults() // #17982: a cached result older than the last sync is flagged
 
   // --- Task loaders (#1304/#1321) ---
 
@@ -116,6 +118,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   // #17983: a failed scan is its own state, never "0 duplicates found"
   const duplicateScanState = ref<DuplicateScanState>('not_scanned')
   const applyDuplicates = (raw: unknown) => {
+    staleResults.clear('duplicates') // only the cached route re-marks it, after this
     const reading = readDuplicatePayload(raw)
     duplicateAnalysis.value = reading.duplicates
     duplicateScanState.value = reading.state
@@ -301,7 +304,8 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   const cachedDuplicatesEndpoint = useFetchEndpoint<unknown, unknown>(
     { path: '/api/analytics/codebase/duplicates/cached', scopeToSource: true, requireSource: true,
-      label: 'Cached duplicates endpoint', pickData: (raw) => raw, onSuccess: applyDuplicates, onError: failDuplicates,
+      label: 'Cached duplicates endpoint', pickData: (raw) => raw, onError: failDuplicates,
+      onSuccess: (raw) => { applyDuplicates(raw); staleResults.markFromCached('duplicates', raw) },
       onNoData: () => { duplicateAnalysis.value = []; duplicateScanState.value = 'not_scanned' } },
     { withSourceId },
   )
@@ -318,7 +322,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
         raw.status === 'success' && raw.dependency_data
           ? (raw.dependency_data as DependencyGraph)
           : null,
-      onSuccess: (d) => { dependencyData.value = d }, onNoData: () => { dependencyData.value = null },
+      onSuccess: (d, raw) => { dependencyData.value = d; staleResults.markFromCached('dependencies', raw) }, onNoData: () => { dependencyData.value = null; staleResults.clear('dependencies') },
     },
     { withSourceId },
   )
@@ -335,7 +339,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
         raw.status === 'success' && raw.import_tree
           ? (raw.import_tree as ImportTreeNode[])
           : null,
-      onSuccess: (d) => { importTreeData.value = d }, onNoData: () => { importTreeData.value = null },
+      onSuccess: (d, raw) => { importTreeData.value = d; staleResults.markFromCached('importTree', raw) }, onNoData: () => { importTreeData.value = null; staleResults.clear('importTree') },
     },
     { withSourceId },
   )
@@ -352,8 +356,8 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   // #17758: both routes now REQUIRE source_id -- omitting it is a 422, not a
   // repo-wide scan. `useTaskLoader.load(body, query)` takes the query record,
   // and `sourceIdQuery` is the same one the `*/cached` fetchers already send.
-  const loadDependencyData = () => _loadDependencyTask(undefined, sourceIdQuery.value)
-  const loadImportTreeData = () => _loadImportTreeTask(undefined, sourceIdQuery.value)
+  const loadDependencyData = () => { staleResults.clear('dependencies'); return _loadDependencyTask(undefined, sourceIdQuery.value) }
+  const loadImportTreeData = () => { staleResults.clear('importTree'); return _loadImportTreeTask(undefined, sourceIdQuery.value) }
 
   const loadDeclarations = async () => {
     loadingProgress.declarations = true

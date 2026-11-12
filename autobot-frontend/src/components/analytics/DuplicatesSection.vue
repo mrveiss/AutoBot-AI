@@ -19,6 +19,7 @@
       <span>{{ $t('analytics.codebase.actions.loading') }}</span>
     </div>
     <div v-else-if="duplicates && duplicates.length > 0" class="section-content">
+      <StaleResultNotice kind="duplicates" />
       <!-- Similarity Summary Cards -->
       <div class="summary-cards">
         <div class="summary-card total">
@@ -125,6 +126,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { useShowMore } from '@autobot/ui'
 import TruncationNotice from './TruncationNotice.vue'
+import StaleResultNotice from './StaleResultNotice.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
