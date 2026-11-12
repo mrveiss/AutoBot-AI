@@ -6,7 +6,7 @@
 
 ``.github/codeql/python-exclusions.qls`` sat in the tree describing a Python
 query-suite exclusion in its header, and was loaded by nothing: neither
-``.github/workflows/codeql.yml`` nor ``.github/codeql/codeql-config.yml`` named
+``.github/workflows/_gate-codeql.yml`` nor ``.github/codeql/codeql-config.yml`` named
 it, and CodeQL never read it (``git grep python-exclusions.qls`` found 0 hits).
 Nothing failed -- the file just described a suppression the analysis never
 applied, the same "config claims a scan that doesn't run" shape as #16302. It
@@ -15,7 +15,7 @@ was retired once its one exclusion pair was shown to already live in
 
 This guard is the standing check for the next such file: every file directly
 under ``.github/codeql/`` must be the value of a ``config-file:`` key in
-``.github/workflows/codeql.yml``, a ``uses:`` key under a ``codeql-config.yml``
+``.github/workflows/_gate-codeql.yml``, a ``uses:`` key under a ``codeql-config.yml``
 ``queries:`` entry, or a value under its ``packs:`` key (#16302). Both files are
 parsed with ``yaml.safe_load`` rather than scanned for the filename as a
 substring, so a name that only appears in a comment -- never loaded by CodeQL --
@@ -30,7 +30,7 @@ import yaml
 from repo_tests._paths import repo_root
 
 _CODEQL_DIR = repo_root() / ".github" / "codeql"
-_WORKFLOW = repo_root() / ".github" / "workflows" / "codeql.yml"
+_WORKFLOW = repo_root() / ".github" / "workflows" / "_gate-codeql.yml"
 _CONFIG = _CODEQL_DIR / "codeql-config.yml"
 
 
