@@ -29,6 +29,11 @@ source "$SCRIPT_DIR/lib/_common.sh" || {
     echo "FATAL: cannot load lib/_common.sh — refusing to report clean" >&2
     exit 1
 }
+# shellcheck source=../../../../scripts/lib/hook-python.sh
+source "$SCRIPT_DIR/../../../../scripts/lib/hook-python.sh" || {
+    echo "FATAL: cannot load scripts/lib/hook-python.sh — refusing to report clean" >&2
+    exit 1
+}
 
 # The checkout this hook belongs to: hooks/ -> scripts/ -> shared/ -> autobot-infrastructure/ -> root.
 # File paths stay relative to the invoking cwd (the repo being committed to); only the matcher and
@@ -50,9 +55,12 @@ main() {
         return 0
     fi
 
-    local status=0
+    # #21163: the repo interpreter (.python-version), not whichever python3 is on PATH --
+    # autobot_shared refuses to import below that floor.
+    local python_cmd status=0
+    python_cmd="$(resolve_repo_python)" || return 1
     # shellcheck disable=SC2086  # one path per line, no spaces in tracked source paths
-    PYTHONPATH="$TOOL_ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 -m tools.lint.check_no_direct_redis $files || status=$?
+    PYTHONPATH="$TOOL_ROOT${PYTHONPATH:+:$PYTHONPATH}" "$python_cmd" -m tools.lint.check_no_direct_redis $files || status=$?
 
     echo "================================================"
     if [[ $status -ne 0 ]]; then
