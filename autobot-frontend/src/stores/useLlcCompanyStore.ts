@@ -12,6 +12,7 @@ import { defineStore } from 'pinia'
 import { isHttpError } from '@autobot/ui'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { orgScope } from '@/utils/orgContext'
 
 const logger = createLogger('useLlcCompanyStore')
 
@@ -111,9 +112,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
    */
   async function deleteCompany(id: string): Promise<void> {
     const api = useApiClient()
-    await api.delete(`${COMPANIES_ENDPOINT}${id}`, {
-      headers: { 'X-Organization-Id': id },
-    })
+    await api.delete(`${COMPANIES_ENDPOINT}${id}`, orgScope(id))
     companies.value = companies.value.filter((c) => c.id !== id)
     if (selectedCompanyId.value === id) selectedCompanyId.value = ''
   }
