@@ -101,7 +101,7 @@
           </div>
           <div class="detail-item">
             <span class="label">{{ $t('workflow.orchestration.progress') }}</span>
-            <span class="value">{{ currentWorkflow.current_step + 1 }} / {{ currentWorkflow.total_steps }}</span>
+            <span class="value">{{ getWorkflowStepDisplay(currentWorkflow).current }} / {{ getWorkflowStepDisplay(currentWorkflow).total }}</span>
           </div>
           <div class="detail-item">
             <span class="label">{{ $t('workflow.orchestration.status') }}</span>
@@ -125,6 +125,7 @@
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue';
+import { getWorkflowStepDisplay } from '@/utils/workflowStepProgress';
 import { useI18n } from 'vue-i18n';
 import type { OrchestrationStatus, StrategyInfo, ActiveWorkflow } from '@/composables/useWorkflowBuilder';
 
