@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('@/utils/ApiClient', () => ({
-  default: { get: vi.fn(), post: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn(), call: vi.fn() },
 }))
 
 vi.mock('@/config/ssot-config', () => ({
@@ -31,32 +31,35 @@ const page = (ids: string[], cursor: string | null) => ({
 
 beforeEach(() => {
   vi.mocked(apiClient.get).mockReset()
+  vi.mocked(apiClient.call).mockReset()
 })
 
 describe('facts cursor paging (#20945)', () => {
   it('follows the cursor, merges the next page and stops when the server returns none', async () => {
-    const urls: string[] = []
+    const queries: Array<Record<string, unknown>> = []
     vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
-      urls.push(url)
       if (url.includes('/memory/entities/all')) return { data: { entities: [] } } as never
-      if (url.includes('cursor=500%3A0')) return page(['b', 'a'], null) as never
       return page(['a'], '500:0') as never
     })
+    vi.mocked(apiClient.call).mockImplementation((async (_verb: string, _path: string, opts: { query: Record<string, unknown> }) => {
+      queries.push(opts.query)
+      return page(['b', 'a'], null)
+    }) as never)
     const graph = useKnowledgeGraphEntities()
     await graph.fetchGraphData()
     expect(graph.hasMoreFacts.value).toBe(true)
     await graph.loadMoreFacts()
     expect(graph.entities.value.map((e) => e.id)).toEqual(['a', 'b'])
     expect(graph.hasMoreFacts.value).toBe(false)
-    expect(urls.some((u) => u.includes('cursor=500%3A0') && u.includes('include_buckets=false'))).toBe(true)
+    expect(queries).toEqual([{ max_facts: 100, include_buckets: false, cursor: '500:0' }])
   })
 
   it('reports a failed next page without losing the page already shown', async () => {
     vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
       if (url.includes('/memory/entities/all')) return { data: { entities: [] } } as never
-      if (url.includes('cursor=')) throw new Error('boom')
       return page(['a'], '500:0') as never
     })
+    vi.mocked(apiClient.call).mockRejectedValue(new Error('boom'))
     const graph = useKnowledgeGraphEntities()
     await graph.fetchGraphData()
     await graph.loadMoreFacts()
