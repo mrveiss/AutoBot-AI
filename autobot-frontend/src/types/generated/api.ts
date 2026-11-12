@@ -58280,8 +58280,7 @@ export interface components {
         };
         /**
          * AgentStatusItem
-         * @description One agent for the Home dashboard "Agent Activity Monitor" (#10502, frontend ``Agent``).
-         *     A field the server cannot measure is None, never 0: the widget shows "not reported" (#17514).
+         * @description Home dashboard "Agent Activity Monitor" agent (#10502); an unmeasured field is None, never 0 (#17514, #21270).
          */
         AgentStatusItem: {
             /** Id */
@@ -58310,11 +58309,13 @@ export interface components {
             /** Recenttasks */
             recentTasks?: {
                 [key: string]: unknown;
-            }[];
+            }[] | null;
             /** Activitytimeline */
             activityTimeline?: {
                 [key: string]: unknown;
-            }[];
+            }[] | null;
+            /** Activitywindowstart */
+            activityWindowStart?: number | null;
         } & {
             [key: string]: unknown;
         };
