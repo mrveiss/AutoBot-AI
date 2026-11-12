@@ -510,6 +510,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test infrastructure Python, against all tracked .py under autobot-infrastructure; drifts.",
     ),
+    "kb-wipe-never-invoked": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every tracked file, so a caller of the KB setup script in any component is seen (#21048); files are "
+        "added in every PR, so an exact floor would fail any new file.",
+    ),
     "kb-admin-read-bypass": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
