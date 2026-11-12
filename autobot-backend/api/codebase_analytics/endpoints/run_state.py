@@ -11,10 +11,10 @@ was interrupted.  Mount point: /api/analytics/codebase (via router.py).
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 
-from ..indexing_executor import _SUBPROCESS_HARD_TIMEOUT
-from ..run_status import describe_run_state
+from ..run_status import run_response_fields
 
 router = APIRouter()
 
@@ -26,12 +26,13 @@ router = APIRouter()
     operation="get_index_run_state",
     error_code_prefix="CODEBASE",
 )
-async def get_index_run_state(source_id: str | None = None):
-    """Return the newest run's terminal status and the last completed run.
+async def get_index_run_state(source_id: SourceIdQuery):
+    """Return how the source's newest indexing run ended and when the last complete one finished.
 
+    ``run`` is ``null`` (and ``partial`` false) for a source with no recorded run.
     ``partial`` is true when the newest run did not complete: the findings in
     storage may be from an interrupted run and must be shown labelled.
     A run left ``running`` past its hard timeout is reported ``abandoned``.
     """
-    state = await describe_run_state(source_id, _SUBPROCESS_HARD_TIMEOUT)
-    return JSONResponse({"status": "success", "run": state})
+    fields = await run_response_fields(require_source_id(source_id, "run state"))
+    return JSONResponse({"status": "success", "source_id": source_id, **fields})

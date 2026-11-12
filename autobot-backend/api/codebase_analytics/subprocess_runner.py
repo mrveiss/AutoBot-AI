@@ -31,17 +31,14 @@ from .run_status import (
     STATUS_KILLED,
     TERMINAL_STATUSES,
     RunKilled,
+    hard_timeout_kill_reason,
     record_run_finished,
     record_run_started,
     status_for_returncode,
+    watchdog_kill_reason,
 )
 
 logger = get_logger(__name__)
-
-# #21003: why the supervisor killed a worker, by task id.  ``_wait_with_watchdog``
-# returns only an exit code, and both kill paths return -9, so the cause would
-# otherwise be lost between the kill and the status record.
-_KILL_REASONS: dict[str, str] = {}
 
 
 async def _handle_subprocess_crash(
@@ -82,12 +79,16 @@ async def _handle_subprocess_crash(
 async def _wait_with_watchdog(
     proc: asyncio.subprocess.Process,
     task_id: str,
+    kill_reasons: list[str] | None = None,
 ) -> int:
     """Wait for subprocess with progress watchdog (#1341).
 
     Periodically checks if the subprocess is still making progress by reading
     the task state from Redis.  If no progress update is observed for
     ``_SUBPROCESS_PROGRESS_TIMEOUT`` seconds, the subprocess is killed.
+
+    #21003: both kill paths return -9, so the cause is appended to ``kill_reasons``
+    (when given) before the kill, for the run record.
     """
     last_progress_hash = None
     last_progress_time = asyncio.get_running_loop().time()
@@ -136,10 +137,10 @@ async def _wait_with_watchdog(
                     task_id,
                     int(now - last_progress_time),
                 )
-                _KILL_REASONS[task_id] = (
-                    f"killed by the progress watchdog: no progress for {int(now - last_progress_time)}s "
-                    f"(limit {_SUBPROCESS_PROGRESS_TIMEOUT}s)"
-                )
+                if kill_reasons is not None:
+                    kill_reasons.append(
+                        watchdog_kill_reason(int(now - last_progress_time), _SUBPROCESS_PROGRESS_TIMEOUT)
+                    )
                 proc.kill()
                 await proc.wait()
                 return -9
@@ -189,9 +190,10 @@ async def _run_indexing_subprocess(
     logger.info("[Task %s] Launching isolated indexing subprocess (#1180)", task_id)
     proc = await asyncio.create_subprocess_exec(*cmd)
 
+    kill_reasons: list[str] = []
     try:
         returncode = await asyncio.wait_for(
-            _wait_with_watchdog(proc, task_id),
+            _wait_with_watchdog(proc, task_id, kill_reasons),
             timeout=_SUBPROCESS_HARD_TIMEOUT,
         )
     except asyncio.TimeoutError:
@@ -200,15 +202,19 @@ async def _run_indexing_subprocess(
             task_id,
             _SUBPROCESS_HARD_TIMEOUT,
         )
-        _KILL_REASONS[task_id] = f"killed by the hard timeout: run exceeded {_SUBPROCESS_HARD_TIMEOUT}s"
+        kill_reasons.append(hard_timeout_kill_reason(_SUBPROCESS_HARD_TIMEOUT))
         proc.kill()
         await proc.wait()
         returncode = -9
 
-    kill_reason = _KILL_REASONS.pop(task_id, "")
     if returncode != 0:
         await _handle_subprocess_crash(
-            task_id, returncode, mark_task_failed_fn, save_task_fn, source_id=source_id, kill_reason=kill_reason
+            task_id,
+            returncode,
+            mark_task_failed_fn,
+            save_task_fn,
+            source_id=source_id,
+            kill_reason=kill_reasons[0] if kill_reasons else "",
         )
     else:
         logger.info("[Task %s] Subprocess completed successfully (rc=0)", task_id)

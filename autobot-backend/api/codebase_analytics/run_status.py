@@ -2,32 +2,49 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Durable terminal status for indexing runs, and the "latest complete run" pointer (#21003).
+"""Durable terminal status for indexing runs, and the "last completed run" pointer (#21003).
 
 A run that was killed (exit -9) keeps the findings it had already stored, and
 those were shown afterwards as if they were the whole result.  Task records
 live in Redis for a day, so nothing durable said the run never finished.
 
-One record per source lives next to the findings, in the same ChromaDB
-collection (the system of record for ``codebase_analytics``, see
-``autobot_shared.store_authority``):
+One record per source lives in the same ChromaDB collection as the findings,
+which is the system of record for ``codebase_analytics``
+(``autobot_shared.store_authority``):
 
 * ``latest_*``         -- the newest run and how it ended;
 * ``last_completed_*`` -- the pointer only a ``completed`` finish advances.
 
+The record names its source under ``owner_source``, never ``source_id``: every
+per-source reindex starts by deleting ``where={"source_id": ...}``
+(``chromadb_storage._delete_source_documents``), and a record that matched
+would be deleted by the very next run together with its pointer.  A reindex
+with no source drops the whole collection, record included; no findings are
+left for the record to describe in that case.
+
 A failed, killed or abandoned run never moves the pointer.  Its findings stay
-stored and are reported as partial through :func:`describe_run_state`.  Nothing
-here deletes data.
+stored and are served marked partial (:func:`run_response_fields`).  Nothing
+here deletes or rewrites findings.
+
+Terminal precedence (:func:`record_run_finished`): the first terminal status
+reported for a run id is final.  A report for another run id than the record's
+newest is ignored, so a stale report can never overwrite a newer run.
 """
 
+import asyncio
 import signal
 from datetime import datetime, timedelta, timezone
 
+from api.source_scope import require_source_id
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.store_authority import system_of_record
 
+from .indexing_executor import _SUBPROCESS_HARD_TIMEOUT
 from .storage import get_code_collection_async
 
 logger = get_logger(__name__)
+
+SYSTEM_OF_RECORD = system_of_record("codebase_analytics")
 
 STATUS_RUNNING = "running"
 STATUS_COMPLETED = "completed"
@@ -36,7 +53,7 @@ STATUS_KILLED = "killed"
 STATUS_ABANDONED = "abandoned"
 STATUS_CANCELLED = "cancelled"
 
-#: A run in one of these states is over; the supervisor and the watchdog stop on them.
+#: A run in one of these states is over and its status is final.
 TERMINAL_STATUSES = frozenset({STATUS_COMPLETED, STATUS_FAILED, STATUS_KILLED, STATUS_CANCELLED})
 #: Results from a run in one of these states are partial.
 PARTIAL_STATUSES = frozenset({STATUS_FAILED, STATUS_KILLED, STATUS_ABANDONED, STATUS_CANCELLED, STATUS_RUNNING})
@@ -45,16 +62,29 @@ PARTIAL_STATUSES = frozenset({STATUS_FAILED, STATUS_KILLED, STATUS_ABANDONED, ST
 ABANDON_GRACE_SECONDS = 300
 
 _RECORD_TYPE = "run_status"
-_DEFAULT_SOURCE = "default"
+_OWNER_KEY = "owner_source"
+#: Serialises read-modify-write inside one process.  Two processes (the worker and
+#: its supervisor) can still interleave; terminal precedence is what keeps that safe.
+_UPDATE_LOCK = asyncio.Lock()
 
 
 class RunKilled(RuntimeError):
     """The run's worker was killed (SIGKILL: the watchdog, a time limit or the OOM killer)."""
 
 
+def watchdog_kill_reason(idle_seconds: int, limit_seconds: int) -> str:
+    """Reason recorded when the progress watchdog killed the worker."""
+    return f"killed by the progress watchdog: no progress for {idle_seconds}s (limit {limit_seconds}s)"
+
+
+def hard_timeout_kill_reason(limit_seconds: int) -> str:
+    """Reason recorded when the hard timeout killed the worker."""
+    return f"killed by the hard timeout: run exceeded {limit_seconds}s"
+
+
 def run_record_id(source_id: str | None) -> str:
-    """Document id of the run record for ``source_id``."""
-    return f"codebase_run_{source_id or _DEFAULT_SOURCE}"
+    """Document id of the run record for ``source_id`` (a source is required)."""
+    return f"codebase_run_{require_source_id(source_id, 'run record id')}"
 
 
 def status_for_returncode(returncode: int) -> str:
@@ -66,20 +96,46 @@ def _now() -> datetime:
     return datetime.now(tz=timezone.utc)
 
 
-async def _read(collection, source_id: str | None) -> dict:
+async def _read(collection, source_id: str) -> dict:
     result = await collection.get(ids=[run_record_id(source_id)], include=["metadatas"])
     metas = (result or {}).get("metadatas") or []
     return dict(metas[0]) if metas else {}
 
 
-async def _write(collection, source_id: str | None, meta: dict) -> None:
-    meta = {**meta, "type": _RECORD_TYPE, "source_id": source_id or _DEFAULT_SOURCE}
-    document = f"Run status {meta.get('latest_status', '')} for {meta['source_id']}"
+async def _write(collection, source_id: str, meta: dict) -> None:
+    meta = {**meta, "type": _RECORD_TYPE, _OWNER_KEY: source_id}
+    document = f"Run status {meta.get('latest_status', '')} for {source_id}"
     await collection.upsert(ids=[run_record_id(source_id)], documents=[document], metadatas=[meta])
 
 
+async def _update(source_id: str | None, change) -> bool:
+    """Apply ``change(old_record) -> new_record | None``; True only if a record was written.
+
+    A run with no source (the dev ``root_path`` mode) has no record: there is no
+    source for a reader to ask about.
+    """
+    if not source_id:
+        return False
+    collection = await get_code_collection_async()
+    if collection is None:
+        logger.warning("Run status not recorded for %s: code collection unavailable (#21003)", source_id)
+        return False
+    try:
+        async with _UPDATE_LOCK:
+            new = change(await _read(collection, source_id))
+            if new is not None:
+                await _write(collection, source_id, new)
+        return new is not None
+    except Exception as exc:
+        logger.warning("Run status not recorded for %s (#21003): %s", source_id, exc)
+        return False
+
+
 async def record_run_started(source_id: str | None, run_id: str) -> bool:
-    """Record ``run_id`` as the newest run, ``running``.  Leaves the completed pointer alone."""
+    """Record ``run_id`` as the newest run, ``running``.  A new run id always starts fresh.
+
+    Whatever the previous run's status, it is replaced; the completed pointer is kept.
+    """
     return await _update(
         source_id,
         lambda old: {
@@ -93,50 +149,33 @@ async def record_run_started(source_id: str | None, run_id: str) -> bool:
     )
 
 
+def _finish(old: dict, run_id: str, status: str, reason: str) -> dict | None:
+    """The record after ``run_id`` ended as ``status``, or ``None`` to leave ``old`` as it is."""
+    if old.get("latest_run_id") not in (None, "", run_id):
+        logger.warning("Run %s report (%s) ignored: the record belongs to run %s", run_id, status, old["latest_run_id"])
+        return None
+    if old.get("latest_run_id") == run_id and old.get("latest_status") in TERMINAL_STATUSES:
+        return None  # the first terminal status of a run is final
+    finished = _now().isoformat()
+    new = {**old, "latest_run_id": run_id, "latest_status": status, "latest_reason": reason}
+    new["latest_finished_at"] = finished
+    if status == STATUS_COMPLETED:
+        new["last_completed_run_id"] = run_id
+        new["last_completed_at"] = finished
+    return new
+
+
 async def record_run_finished(source_id: str | None, run_id: str, status: str, reason: str = "") -> bool:
     """Record how ``run_id`` ended.  Only ``completed`` advances the last-completed pointer.
 
-    A run that already holds a terminal status keeps it: a supervisor reporting
-    a crash after the worker wrote ``completed`` must not overwrite it.
+    The first terminal status of a run is final: a supervisor reporting a crash
+    after the worker wrote ``completed`` (or the reverse) changes nothing.  An
+    ``abandoned`` record is not final -- it is a guess made on read -- so a real
+    report for the same run replaces it.  True if the record was written.
     """
-    if status not in TERMINAL_STATUSES and status != STATUS_ABANDONED:
+    if status not in TERMINAL_STATUSES:
         raise ValueError(f"not a terminal run status: {status!r}")
-
-    def apply(old: dict) -> dict | None:
-        same_run = old.get("latest_run_id") == run_id
-        if same_run and old.get("latest_status") in TERMINAL_STATUSES:
-            return None
-        if not same_run and status != STATUS_COMPLETED and old.get("latest_run_id"):
-            return None  # a newer run owns the record; this one's failure is not its status
-        finished = _now().isoformat()
-        new = {
-            **old,
-            "latest_run_id": run_id,
-            "latest_status": status,
-            "latest_reason": reason,
-            "latest_finished_at": finished,
-        }
-        if status == STATUS_COMPLETED:
-            new["last_completed_run_id"] = run_id
-            new["last_completed_at"] = finished
-        return new
-
-    return await _update(source_id, apply)
-
-
-async def _update(source_id: str | None, change) -> bool:
-    collection = await get_code_collection_async()
-    if collection is None:
-        logger.warning("Run status not recorded for %s: code collection unavailable (#21003)", source_id)
-        return False
-    try:
-        new = change(await _read(collection, source_id))
-        if new is not None:
-            await _write(collection, source_id, new)
-        return True
-    except Exception as exc:
-        logger.warning("Run status not recorded for %s (#21003): %s", source_id, exc)
-        return False
+    return await _update(source_id, lambda old: _finish(old, run_id, status, reason))
 
 
 def _is_overdue(meta: dict, hard_timeout: int, now: datetime) -> bool:
@@ -176,13 +215,15 @@ async def sweep_abandoned(source_id: str | None, hard_timeout: int, now: datetim
     return bool(changed)
 
 
-async def describe_run_state(source_id: str | None, hard_timeout: int) -> dict | None:
-    """What a reader needs to label results: ``None`` when no run was ever recorded.
+async def describe_run_state(source_id: str | None, hard_timeout: int = _SUBPROCESS_HARD_TIMEOUT) -> dict | None:
+    """The newest run's state, or ``None`` when no run was ever recorded for the source.
 
     ``partial`` is true when the newest run did not complete, i.e. the findings
-    in storage may come from an interrupted run.  ``last_completed_*`` names the
-    run whose result is the latest complete one (empty if none ever finished).
+    in storage may come from an interrupted run.  ``last_completed_at`` is when
+    the last complete run finished (empty if none ever did).
     """
+    if not source_id:
+        return None
     await sweep_abandoned(source_id, hard_timeout)
     collection = await get_code_collection_async()
     if collection is None:
@@ -192,11 +233,27 @@ async def describe_run_state(source_id: str | None, hard_timeout: int) -> dict |
         return None
     status = meta.get("latest_status", "")
     return {
-        "latest_run_id": meta.get("latest_run_id", ""),
+        "run_id": meta.get("latest_run_id", ""),
         "status": status,
         "partial": status in PARTIAL_STATUSES,
         "reason": meta.get("latest_reason", ""),
+        "started_at": meta.get("latest_started_at", ""),
         "finished_at": meta.get("latest_finished_at", ""),
-        "last_completed_run_id": meta.get("last_completed_run_id", ""),
         "last_completed_at": meta.get("last_completed_at", ""),
     }
+
+
+async def run_response_fields(source_id: str | None) -> dict:
+    """``{"partial": bool, "run": dict | None}`` -- the ONE shape every results route carries.
+
+    A source with no run record (indexed before run records existed, or never
+    indexed) is ``run: None, partial: False``: nothing says its results are
+    incomplete, so none is claimed.  A record that cannot be read is reported
+    the same way and logged; it must not fail the findings it only labels.
+    """
+    try:
+        run = await describe_run_state(source_id)
+    except Exception as exc:
+        logger.warning("Run state unreadable for %s (#21003): %s", source_id, exc)
+        run = None
+    return {"partial": bool(run and run["partial"]), "run": run}
