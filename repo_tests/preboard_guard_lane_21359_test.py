@@ -235,14 +235,46 @@ def test_nothing_the_lane_runs_pushes(workflow, lane) -> None:
 def test_every_allowlisted_skip_names_a_skip_that_still_exists_and_its_follow_up(lane) -> None:
     allowlist = lane.report.SKIP_ALLOWLIST
     assert allowlist, "an empty allowlist: retire this guard together with the last entry"
-    for entry in allowlist:
-        assert entry.file.split("/")[0] in lane.GUARD_ROOTS, f"{entry.file} is outside the lane's roots"
-        text = (_ROOT / entry.file).read_text(encoding="utf-8")
-        assert entry.source_marker in text, f"{entry.file} no longer holds {entry.source_marker!r}: delete the entry"
-        assert entry.reason_prefix and entry.skip_class in lane.report.SKIP_CLASSES, entry
-        if entry.skip_class == lane.report.COVERED_BY_SUITE_ONLY:
-            assert entry.follow_up == "#21360", f"{entry.file}: a covered-by-suite-only skip is removed by #21360"
-        assert re.fullmatch(r"#\d+", entry.follow_up), entry
+    outside = [e.file for e in allowlist if e.file.split("/")[0] not in lane.GUARD_ROOTS]
+    assert not outside, f"{outside} are outside the lane's roots"
+    assert lane.report.stale_entries(allowlist, _ROOT) == []
+
+
+def _entry(lane, file: str, **over: str):
+    fields = {
+        "reason_prefix": "needs a binary",
+        "source_marker": "needs a binary",
+        "skip_class": lane.report.EQUIVALENT_TO_SUITE,
+        "follow_up": "by design: nothing to check",
+        "why": "nothing to check",
+    }
+    return lane.report.AllowedSkip(file, **{**fields, **over})
+
+
+def test_an_entry_whose_file_or_reason_text_is_gone_fails(lane, tmp_path) -> None:
+    (tmp_path / "present_test.py").write_text("skip('needs a binary')\n", encoding="utf-8")
+    good = _entry(lane, "present_test.py")
+    assert lane.report.stale_entries((good,), tmp_path) == []
+    gone_file = _entry(lane, "deleted_test.py")
+    gone_text = _entry(lane, "present_test.py", source_marker="a reason the file no longer holds")
+    problems = lane.report.stale_entries((good, gone_file, gone_text), tmp_path)
+    assert [p.split(":")[0] for p in problems] == ["deleted_test.py", "present_test.py"], problems
+    assert "no longer exists" in problems[0] and "no longer holds" in problems[1]
+
+
+@pytest.mark.parametrize(
+    "over",
+    [
+        {"skip_class": "made-up-class"},
+        {"follow_up": "soon"},
+        {"why": ""},
+        {"reason_prefix": ""},
+        {"skip_class": "covered-by-suite-only", "follow_up": "#1"},
+    ],
+)
+def test_an_entry_with_no_class_follow_up_or_reason_fails(lane, tmp_path, over) -> None:
+    (tmp_path / "present_test.py").write_text("skip('needs a binary')\n", encoding="utf-8")
+    assert lane.report.stale_entries((_entry(lane, "present_test.py", **over),), tmp_path)
 
 
 # ------------------------------------------------------------------ the documented contract

@@ -12,6 +12,7 @@ so each stays small. This module reads what the shards wrote and decides ``overa
 * ``green_with_skips``  -- the same, and every skip is on :data:`SKIP_ALLOWLIST`, each in one class:
   ``covered-by-suite-only`` (the lane skips it, the train's suite RUNS it) or ``equivalent-to-suite``
   (the suite skips it the same way on the same runner image, so the train is no stricter than the lane).
+  The entries and their evidence live in ``preboard_guard_lane_skips.py``.
 * ``red``               -- a failure, a missing shard or recorded test file, a conflict with the
   base, a skip nobody reviewed, or fewer executed tests than the floor.
 * ``cancelled``         -- a job was cancelled. Never boardable.
@@ -25,9 +26,18 @@ from __future__ import annotations
 import json
 import xml.etree.ElementTree as ET  # nosec B405  # parses the junit file pytest itself wrote
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any
 
 import preboard_guard_lane_junit as junit
+from preboard_guard_lane_skips import (  # noqa: F401  # re-exported: the lane and its guards read them from here
+    COVERED_BY_SUITE_ONLY,
+    EQUIVALENT_TO_SUITE,
+    FOLLOW_UP,
+    SKIP_ALLOWLIST,
+    SKIP_CLASSES,
+    AllowedSkip,
+    stale_entries,
+)
 
 #: Bumped when a field of the result artifact is renamed or removed.
 SCHEMA_VERSION = 2
@@ -35,66 +45,8 @@ SCHEMA_VERSION = 2
 #: Verdicts an operator may board on. Anything else is not boardable.
 BOARDABLE = ("green", "green_with_skips")
 
-#: The lane skips it and the train's suite runs it (the suite provides a tool or session the lane does not).
-COVERED_BY_SUITE_ONLY = "covered-by-suite-only"
-
-#: The suite skips it identically on the same runner image: the train exercises nothing more than the lane.
-EQUIVALENT_TO_SUITE = "equivalent-to-suite"
-
 #: A skip on neither list. Never accepted.
 UNREVIEWED = "unreviewed"
-
-SKIP_CLASSES = (COVERED_BY_SUITE_ONLY, EQUIVALENT_TO_SUITE)
-
-#: The issue that removes every ``covered-by-suite-only`` entry, by moving the skipped check into a composite action.
-FOLLOW_UP = "#21360"
-
-
-class AllowedSkip(NamedTuple):
-    """One reviewed skip: the file, the start of its reason, the text proving it exists, its class and follow-up."""
-
-    file: str
-    reason_prefix: str
-    source_marker: str
-    skip_class: str = COVERED_BY_SUITE_ONLY
-    follow_up: str = FOLLOW_UP
-
-
-#: The skips this lane accepts, each with a class. An entry joins only with evidence: the skip reason
-#: observed in a suite shard's ``-rs`` summary (ci.yml prints it), and the class decided by comparing the
-#: lane's setup with the suite's. ``equivalent-to-suite`` entries are added from that summary, never guessed.
-#: Every entry below is ``covered-by-suite-only``: the check needs a service or a binary the suite's
-#: python-shard job provides and this workflow does not.
-#: ``source_marker`` is text that must stay in ``file``, so an entry cannot outlive the skip it
-#: names (checked by the lane's guard test). Follow-up #21360 moves each check into a composite
-#: action both workflows call; the entry for it is removed in that change. A skip not listed
-#: here makes the verdict ``red``: add an entry only after reading what the test skips on.
-SKIP_ALLOWLIST: tuple[AllowedSkip, ...] = (
-    # #21360: promtool is installed by ci.yml's python-shard job only.
-    AllowedSkip("repo_tests/promtool_rules_test.py", "promtool not found at", "promtool not found at"),
-    # #21360: the real-ChromaDB tests run in their own session in ci.yml (shard 1); here they skip
-    # when the library is stubbed or absent.
-    AllowedSkip(
-        "repo_tests/backup_embeddings_on_real_chroma_19647_test.py",
-        "chromadb is stubbed, not the real library",
-        "chromadb is stubbed, not the real library",
-    ),
-    AllowedSkip(
-        "repo_tests/backup_embeddings_on_real_chroma_19647_test.py",
-        "could not import 'chromadb'",
-        'importorskip("chromadb")',
-    ),
-    AllowedSkip(
-        "repo_tests/chromadb_missing_key_serving_where_18820_test.py",
-        "chromadb is stubbed, not the real library",
-        "chromadb is stubbed, not the real library",
-    ),
-    AllowedSkip(
-        "repo_tests/chromadb_missing_key_serving_where_18820_test.py",
-        "could not import 'chromadb'",
-        'importorskip("chromadb")',
-    ),
-)
 
 
 def skip_class(nodeid: str, reason: str, allowlist: tuple[AllowedSkip, ...] = SKIP_ALLOWLIST) -> str:
