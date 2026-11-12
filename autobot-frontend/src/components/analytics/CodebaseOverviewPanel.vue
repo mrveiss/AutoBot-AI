@@ -429,6 +429,11 @@ const getQualityClass = (score: number | null): string => {
   color: var(--color-error);
 }
 
+.quality-unknown {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
 .btn-link {
   background: none;
   border: none;

@@ -342,6 +342,7 @@ const getEfficiencyClass = (score: number): string => {
 .quality-good { background: var(--color-info-bg); }
 .quality-fair { background: var(--color-warning-bg); }
 .quality-poor { background: var(--color-error-bg); }
+.quality-unknown { background: var(--bg-tertiary); }
 
 .score-value {
   font-size: var(--text-3xl);
