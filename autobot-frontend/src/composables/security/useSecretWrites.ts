@@ -8,7 +8,9 @@
  * SYSTEM-vault panel delete, save and transfer through the same rules.
  *
  * - A delete the backend refuses because something still uses the secret (409
- *   `secret_has_dependents`) lists those dependents in a second confirm before forcing it.
+ *   `secret_has_dependents`) lists those dependents in a second confirm before forcing it; the
+ *   forced delete echoes the listing's digest, so a dependent registered after the person saw
+ *   the list is refused again with the new list (#21039).
  * - A failed write's outcome is unconfirmed (it may have been refused, or applied with the
  *   response lost), so it sets `writeFailed` and the screen reloads what is stored.
  * - A declined confirmation is not a change: no reload, no alert.
@@ -37,11 +39,19 @@ interface Dependent {
   dependent_id: string
 }
 
-/** Dependents the backend refused the delete for (409), or null for any other error (#20557). */
-export function dependentsOf(error: unknown): Dependent[] | null {
+interface DependentsRefusal {
+  dependents: Dependent[]
+  digest?: string
+}
+
+/** The dependents (and their digest) the backend refused the delete for (409), or null for any other error (#20557). */
+export function refusalOf(error: unknown): DependentsRefusal | null {
   if (!isHttpError(error) || error.status !== 409) return null
-  const detail = error.details?.detail as { code?: string; dependents?: Dependent[] } | undefined
-  return detail?.code === 'secret_has_dependents' ? (detail.dependents ?? []) : null
+  const detail = error.details?.detail as
+    | { code?: string; dependents?: Dependent[]; dependents_digest?: string }
+    | undefined
+  if (detail?.code !== 'secret_has_dependents') return null
+  return { dependents: detail.dependents ?? [], digest: detail.dependents_digest }
 }
 
 export function useSecretWrites() {
@@ -49,21 +59,31 @@ export function useSecretWrites() {
   const { confirm } = useConfirmDialog()
   const writeFailed = ref(false)
 
-  /** Delete; when dependents still use the secret, confirm again before forcing it. `false` = declined. */
+  /** Ask the person to confirm the listed dependents. */
+  function confirmDependents(secret: DeletableSecret, dependents: Dependent[]): Promise<boolean> {
+    const listed = dependents.map((d) => `${d.dependent_kind}:${d.dependent_id}`).join(', ')
+    return confirm({
+      title: t('security.secretsManager.dependentsTitle'),
+      message: t('security.secretsManager.dependentsMessage', { name: secret.name, dependents: listed })
+    })
+  }
+
+  /**
+   * Delete; when dependents still use the secret, confirm the listed set before forcing it. The forced
+   * delete carries that listing's digest, so a set that changed meanwhile is listed and confirmed again.
+   * `false` = declined.
+   */
   async function deleteConfirmingDependents(secret: DeletableSecret): Promise<unknown> {
-    const chatId = secret.chat_id
-    try {
-      return await secretsApiClient.deleteSecret(secret.id, { chatId })
-    } catch (error) {
-      const dependents = dependentsOf(error)
-      if (!dependents) throw error
-      const listed = dependents.map((d) => `${d.dependent_kind}:${d.dependent_id}`).join(', ')
-      const ok = await confirm({
-        title: t('security.secretsManager.dependentsTitle'),
-        message: t('security.secretsManager.dependentsMessage', { name: secret.name, dependents: listed })
-      })
-      if (!ok) return false
-      return secretsApiClient.deleteSecret(secret.id, { chatId, confirmDependents: true })
+    let dependentsDigest: string | undefined
+    for (;;) {
+      try {
+        return await secretsApiClient.deleteSecret(secret.id, { chatId: secret.chat_id, dependentsDigest })
+      } catch (error) {
+        const refusal = refusalOf(error)
+        if (!refusal?.digest) throw error
+        if (!(await confirmDependents(secret, refusal.dependents))) return false
+        dependentsDigest = refusal.digest
+      }
     }
   }
 
