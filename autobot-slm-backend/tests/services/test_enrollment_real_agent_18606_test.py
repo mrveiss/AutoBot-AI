@@ -282,11 +282,30 @@ def test_the_source_resolves_to_a_tree_containing_autobot_shared(playbook: Path)
 def test_an_explicit_code_source_dir_wins_and_a_missing_source_fails_clearly() -> None:
     assert _shared_parent(_PLAYBOOK, code_source_dir="/srv/cs") == "/srv/cs"
     tasks = _shared_block()["block"]
-    check = next(t for t in tasks if "ansible.builtin.assert" in t)
+    check = next(t for t in tasks if t.get("ansible.builtin.assert", {}).get("that") == "shared_src.stat.exists")
     assert "code_source_dir" in check["ansible.builtin.assert"]["fail_msg"]
     stat_idx = next(i for i, t in enumerate(tasks) if "ansible.builtin.stat" in t)
     tar_idx = next(i for i, t in enumerate(tasks) if "ansible.builtin.command" in t)
     assert stat_idx < tasks.index(check) < tar_idx
+
+
+def _anchor_holds(playbook_dir: str) -> bool:
+    """Evaluate the derived-tree anchor (#20509) for a playbook directory, as Ansible would."""
+    import jinja2
+
+    anchor = next(t for t in _shared_block()["block"] if "derived source tree" in t["name"])
+    env = jinja2.Environment()
+    env.filters["dirname"] = os.path.dirname
+    shared_parent = env.from_string(_shared_block()["vars"]["shared_parent"]).render(playbook_dir=playbook_dir)
+    expr = "{{ " + anchor["ansible.builtin.assert"]["that"] + " }}"
+    return env.from_string(expr).render(shared_parent=shared_parent, playbook_dir=playbook_dir) == "True"
+
+
+def test_the_anchor_holds_for_both_callers_fails_at_another_depth_and_skips_an_explicit_source() -> None:
+    anchor = next(t for t in _shared_block()["block"] if "derived source tree" in t["name"])
+    assert anchor["when"] == "(code_source_dir | default('', true)) == ''"
+    assert _anchor_holds(str(_PLAYBOOK.parent)) and _anchor_holds(str(_DEPLOY_PLAYBOOK.parent))
+    assert not _anchor_holds(str(_PLAYBOOK.parent / "nested"))
 
 
 def test_the_play_notifies_only_handlers_the_slm_agent_role_defines() -> None:
