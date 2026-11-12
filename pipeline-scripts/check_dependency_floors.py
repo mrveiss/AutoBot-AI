@@ -88,7 +88,9 @@ ABSENT = "(absent)"
 UNREADABLE = "(version unreadable)"
 
 _REQUIREMENT = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(==|>=|~=|>)\s*([0-9][A-Za-z0-9.]*)")
-_INCLUDE = re.compile(r"^\s*(?:-r|--requirement)[\s=]+(\S+)")
+# `-c` is followed too (#18060): a floor that moved into constraints/shared.txt is still a declared
+# floor the installed environment must meet, and a bare name in the including file declares none.
+_INCLUDE = re.compile(r"^\s*(?:-r|--requirement|-c|--constraint)[\s=]+(\S+)")
 _RELEASE = re.compile(r"^(\d+(?:\.\d+)*)(.*)$")
 
 
@@ -186,7 +188,7 @@ def satisfies(installed: str, operator: str, required: str) -> bool:
 
 
 def _includes(path: Path) -> list[Path]:
-    """Files pulled in by ``-r`` / ``--requirement`` lines of *path*."""
+    """Files pulled in by ``-r`` / ``--requirement`` / ``-c`` lines of *path*."""
     out: list[Path] = []
     for raw in path.read_text(encoding="utf-8").splitlines():
         match = _INCLUDE.match(raw.split("#")[0])

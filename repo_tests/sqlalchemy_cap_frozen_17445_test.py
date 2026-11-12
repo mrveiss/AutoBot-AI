@@ -72,28 +72,48 @@ _ROWS = [
 _IDS = [row[0] for row in _ROWS]
 
 
-def _sqlalchemy_requirement(text: str):
-    """The single sqlalchemy Requirement in *text*, parsed by packaging."""
+_SHARED_INCLUDE = re.compile(r"^-c\s+\S*constraints/shared\.txt\b", re.MULTILINE)
+
+
+def _sqlalchemy_lines(text: str) -> list:
+    """Every sqlalchemy Requirement in *text*, parsed by packaging."""
     found = []
     for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
-        if not line or line.startswith("-"):
-            continue
-        req = packaging_requirements.Requirement(line)
-        if req.name.lower() == "sqlalchemy":
-            found.append(req)
-    assert len(found) == 1, f"expected exactly one sqlalchemy requirement, found {len(found)}"
-    return found[0]
+        if line and not line.startswith("-"):
+            req = packaging_requirements.Requirement(line)
+            if req.name.lower() == "sqlalchemy":
+                found.append(req)
+    return found
+
+
+def _sqlalchemy_specifier(text: str) -> packaging_specifiers.SpecifierSet:
+    """The sqlalchemy specifier a manifest installs under: its own, plus constraints/shared.txt's.
+
+    The cap lives ONCE in constraints/shared.txt (#18060); a manifest that carries
+    `-c .../constraints/shared.txt` is bound by it, whatever it lists itself.
+    """
+    own = _sqlalchemy_lines(text)
+    assert len(own) == 1, f"expected exactly one sqlalchemy requirement in the manifest, found {len(own)}"
+    found = list(own)
+    if _SHARED_INCLUDE.search(text):
+        shared = _sqlalchemy_lines((repo_root() / "constraints" / "shared.txt").read_text(encoding="utf-8"))
+        assert len(shared) <= 1, f"constraints/shared.txt declares sqlalchemy {len(shared)} times"
+        found += shared
+    spec = packaging_specifiers.SpecifierSet()
+    for req in found:
+        spec &= req.specifier
+    return spec
 
 
 def _admitted_21x(text: str) -> list[str]:
     """The versions at or above the ceiling that the manifest's requirement admits."""
-    spec = _sqlalchemy_requirement(text).specifier
+    spec = _sqlalchemy_specifier(text)
     return [v for v in _EXCLUDED if spec.contains(v, prereleases=True)]
 
 
 def _shape_ok(text: str, shape: str) -> bool:
-    spec = _sqlalchemy_requirement(text).specifier
+    spec = _sqlalchemy_specifier(text)
     if shape == "exact":
         return any(s.operator == "==" and _EXACT_20X.fullmatch(s.version) for s in spec)
     # Upper bound: any spelling (`<2.1`, `<2.1.0`, `<=2.0.99`) that excludes 2.1

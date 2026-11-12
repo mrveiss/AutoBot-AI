@@ -34,7 +34,11 @@ function Set-InstalledConstraints {
         throw "No shared constraints file for $requirements. Expected $staged."
     }
 
-    $lines = Get-Content -Path $requirements -Encoding UTF8
-    $rewritten = $lines -replace '^-c\s+\S+', '-c constraints-shared.txt'
-    Set-Content -Path $requirements -Value $rewritten -Encoding UTF8
+    # #18060: requirements-gui.txt lists its multiply-declared packages bare, so it names the same constraints.
+    foreach ($file in @($requirements, (Join-Path $InstallPath "requirements-gui.txt"))) {
+        if (-not (Test-Path $file)) { continue }
+        $lines = Get-Content -Path $file -Encoding UTF8
+        $rewritten = $lines -replace '^-c\s+\S+', '-c constraints-shared.txt'
+        Set-Content -Path $file -Value $rewritten -Encoding UTF8
+    }
 }

@@ -1,10 +1,11 @@
-paramiko>=5.0.0
+-c constraints/shared.txt  # single source of truth for shared versions (#10524, #18060)
+paramiko
 
 # Retry logic for resilient operations
-tenacity>=9.2.1
+tenacity
 
 # Async SSH for PKI certificate distribution (Issue #166)
-asyncssh>=2.24.1
+asyncssh
 
 # protobuf — cap and floor, re-derived 2026-08-26 (#15070).
 #
@@ -29,7 +30,7 @@ asyncssh>=2.24.1
 # autobot-backend/requirements.txt `-r`-includes this file and ALSO declares
 # protobuf. pip resolves the intersection, so the two lines must stay
 # identical; tools/lint/check_requirements_pin_parity.py enforces that.
-protobuf>=7.36.2,<8.0.0
+protobuf
 
 # vLLM (GPU inference) is an OPTIONAL extra — NOT a default dependency (#10251).
 # It pulls the full CUDA toolkit (cuda-toolkit, nvidia-*, flashinfer, CUDA torch),
@@ -40,20 +41,20 @@ protobuf>=7.36.2,<8.0.0
 
 # Document parsing libraries for knowledge base
 # Supports PDF, Word, Excel, PowerPoint, OpenDocument formats
-pypdf>=6.21.4             # PDF parsing - SECURITY UPDATE (improved permission checks)
-python-docx>=1.2.0        # Microsoft Word (.docx)
+pypdf  # PDF parsing - SECURITY UPDATE (improved permission checks)
+python-docx  # Microsoft Word (.docx)
 openpyxl>=3.1.5           # Microsoft Excel (.xlsx)
 python-pptx>=1.0.2        # Microsoft PowerPoint (.pptx)
 odfpy>=1.4.1              # OpenDocument formats (.odt, .ods, .odp, .odg)
 
 # OpenTelemetry - Distributed Tracing (Issue #57, #697)
 # Provides request tracing across AutoBot's distributed, role-based infrastructure
-opentelemetry-api==1.45.2
-opentelemetry-sdk==1.45.2
+opentelemetry-api
+opentelemetry-sdk
 opentelemetry-exporter-otlp==1.45.2
-opentelemetry-exporter-otlp-proto-grpc==1.45.2
+opentelemetry-exporter-otlp-proto-grpc
 opentelemetry-exporter-otlp-proto-http==1.45.2
-opentelemetry-proto==1.45.2
+opentelemetry-proto
 opentelemetry-instrumentation-fastapi>=0.66b2
 opentelemetry-propagator-b3==1.45.2
 # Issue #697: Additional instrumentation for comprehensive tracing
@@ -65,13 +66,13 @@ opentelemetry-instrumentation-aiohttp-client>=0.66b2
 # default CPU build, installed in every image. GPU build via
 # requirements-gpu-faiss.txt (#15163), which the ansible backend role
 # installs on every host with a GPU present, automatically.
-faiss-cpu>=1.15.1
-aiosqlite>=0.22.1
+faiss-cpu
+aiosqlite
 
 # Security - XML parsing protection (Issue #67)
 # Prevents XXE (XML External Entity) attacks in threat intelligence parsing
-defusedxml>=0.7.1
+defusedxml
 
 # MinHash LSH - Locality-Sensitive Hashing for duplicate detection (Issue #659)
 # Provides 10-100x speedup for similarity search via O(n) expected complexity
-datasketch>=2.0.0
+datasketch
