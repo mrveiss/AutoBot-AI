@@ -95,8 +95,16 @@ async def plan_kb_wipe(
 
 
 async def _pending_proposal(session: "AsyncSession") -> "Approval | None":
-    query = select(Approval).where(
-        Approval.status == ApprovalStatus.PENDING.value, Approval.context["action"].astext == ACTION
+    """The pending proposal, row-locked until the caller commits.
+
+    The lock serialises a refresh against a decision: the approval's conditional ``pending -> approved`` update
+    waits for the refresh to commit, and a refresh that starts after the approval committed no longer matches the
+    row, so it proposes anew instead of rewriting the plan an approver already holds.
+    """
+    query = (
+        select(Approval)
+        .where(Approval.status == ApprovalStatus.PENDING.value, Approval.context["action"].astext == ACTION)
+        .with_for_update()
     )
     return (await session.execute(query)).scalars().first()
 
