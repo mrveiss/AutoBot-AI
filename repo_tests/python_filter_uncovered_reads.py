@@ -67,7 +67,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         # #18653: uninstall_covers_role_components_18653_test.py composes `Path(tmp) / "autobot"`
         # -- a synthetic /opt/autobot inside a tmp dir, never a read of a repo tree.
         "autobot",
-        "constraints/shared.txt",
         "docker/secrets-init.sh",
         "docker/with-secrets.sh",
         "docs/audit/python_314_consistency.md",
@@ -146,7 +145,8 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: LOWERED 39 -> 38 by #19523: the filter now covers `.github/dependabot.yml`, which the
 #: dependabot coverage guards read; deleting a block's directory touches no .py file.
 #: LOWERED 32 -> 31 by #21359: the filter now covers `pytest.ini`, which the pre-board lane's guard reads.
-MAX_UNCOVERED_READS = 31
+#: LOWERED 31 -> 30 by #18060: the filter now covers `constraints/shared.txt`, which several guards read.
+MAX_UNCOVERED_READS = 30
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
 #: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not

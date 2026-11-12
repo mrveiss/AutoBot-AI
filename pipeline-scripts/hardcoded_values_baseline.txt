@@ -1119,7 +1119,6 @@
 2|other|autobot-slm-backend/ansible/roles/time_sync/tasks/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/time_sync/vars/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml|120
-1|other|autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml|300
 1|other|autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml|https://download.pytorch.org/whl/cpu
 1|other|autobot-slm-backend/ansible/roles/vnc/tasks/main.yml|https://github.com/novnc/noVNC/archive/refs/tags/v{{
 1|other|autobot-slm-backend/ansible/roles/xrdp/tasks/main.yml|30

@@ -67,7 +67,7 @@ _ACCEPTS_WITHOUT_READING: frozenset[str] = frozenset()
 _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
     {
         "autobot-backend/tasks/pattern_checkpoint.py:22",
-        "autobot-backend/api/codebase_analytics/chromadb_storage.py:616",
+        "autobot-backend/api/codebase_analytics/chromadb_storage.py:606",
     }
 )
 
