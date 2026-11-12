@@ -142,22 +142,44 @@ async def _predates_last_sync(source_id: str, completed_at: "str | None") -> boo
     ``endpoints/sources.py`` (``CodeSource.last_synced``), both as ISO-8601 UTC strings;
     ``parse_utc_iso`` reads a naive one as UTC so the two always compare.
 
-    Unknown is "not stale": either timestamp missing or unparsable, no such source, or an
-    unreadable registry (``get_source_or_none_if_unreadable`` is the decoration accessor).
-    Only a staleness that can be shown is claimed.
+    Unknown is "not stale": either timestamp missing or unparsable, no such source, or a
+    registry that cannot be read (any failure: a connection error, a record that does not
+    validate).  Only a staleness that can be shown is claimed, and a flag that is decoration
+    must not fail a ``*/cached`` route that worked before it existed.
+
+    What the flag means, exactly:
+
+    * it fires on every ``last_synced``, including a sync that changed nothing;
+    * a scan that started before the sync but completed after it is not flagged;
+    * ``stale`` overrides a key of the same name in the stored result payload.
     """
     if not completed_at:
         return False
-    from api.codebase_analytics.source_storage import get_source_or_none_if_unreadable
-
-    source = await get_source_or_none_if_unreadable(source_id)
-    if source is None or not source.last_synced:
-        return False
     try:
+        from api.codebase_analytics.source_storage import get_source_or_none_if_unreadable
+
+        source = await get_source_or_none_if_unreadable(source_id)
+        if source is None or not source.last_synced:
+            return False
         return parse_utc_iso(source.last_synced) > parse_utc_iso(completed_at)
-    except (ValueError, TypeError):
-        logger.warning("source %s: a sync or completion time is unparsable; not flagging stale", source_id)
+    except Exception as exc:
+        logger.warning("source %s: stale check skipped (%s)", source_id, type(exc).__name__)
         return False
+
+
+def _refuse_a_failed_scan(prefix: str, source_id: str, error: str):
+    """HTTP 409 for a latest scan that failed (#17982), without echoing the reason.
+
+    HTTP 200 with an error payload is what let a consumer that checks only the status
+    code render a refused scan as "no duplicates".  The reason is logged and served by
+    ``*/status/{task_id}``; it is not echoed here, because a task's exception text is
+    not safe to return (CWE-209).
+    """
+    logger.warning("latest %s task failed for source %s: %s", prefix, source_id, error)
+    raise HTTPException(
+        status_code=409,
+        detail={"status": "error", "message": "the latest scan failed; see the task status for its reason"},
+    )
 
 
 async def cached_task_result(prefix: str, source_id: str) -> dict:
@@ -173,15 +195,7 @@ async def cached_task_result(prefix: str, source_id: str) -> dict:
 
     cached = await get_latest_task_result(source_scoped_prefix(prefix, source_id))
     if cached and cached.get("error"):
-        # #17982: HTTP 200 with an error payload is what let a consumer that
-        # checks only the status code render a refused scan as "no duplicates".
-        # The reason is logged and served by ``*/status/{task_id}``; it is not
-        # echoed here, because a task's exception text is not safe to return (CWE-209).
-        logger.warning("latest %s task failed for source %s: %s", prefix, source_id, cached["error"])
-        raise HTTPException(
-            status_code=409,
-            detail={"status": "error", "message": "the latest scan failed; see the task status for its reason"},
-        )
+        _refuse_a_failed_scan(prefix, source_id, cached["error"])
     if cached and cached.get("result"):
         # #17982: a result older than the source's last sync is served, flagged, not hidden.
         stale = await _predates_last_sync(source_id, cached.get("completed_at"))

@@ -73,3 +73,24 @@ async def test_an_unknown_source_an_unreadable_registry_or_an_unparsable_time_is
     assert (await _cached(None, registry_error=RegistryUnavailable("down")))[0]["stale"] is False
     assert (await _cached("not a time"))[0]["stale"] is False
     assert (await _cached("2030-01-01T00:00:00+00:00", completed_at="not a time"))[0]["stale"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [ConnectionError("redis down"), ValueError("record does not validate")])
+async def test_a_registry_failure_does_not_fail_a_cached_route_that_worked_before(error):
+    """Fails on a bare registry read: ``get_source_or_none_if_unreadable`` only absorbs ``RegistryUnavailable``."""
+    body, _ = await _cached(None, registry_error=error)
+    assert (body["status"], body["from_cache"], body["stale"]) == ("success", True, False)
+
+
+@pytest.mark.asyncio
+async def test_stale_overrides_a_same_named_key_in_the_stored_result():
+    stored = {"result": {"stale": "from the payload"}, "completed_at": COMPLETED}
+    with (
+        patch("utils.celery_task_status.get_latest_task_result", AsyncMock(return_value=stored)),
+        patch(
+            "api.codebase_analytics.source_storage.get_source",
+            AsyncMock(return_value=SimpleNamespace(last_synced="2026-11-06T09:00:00+00:00")),
+        ),
+    ):
+        assert (await cached_task_result("dup_task:", "src-a"))["stale"] is False
