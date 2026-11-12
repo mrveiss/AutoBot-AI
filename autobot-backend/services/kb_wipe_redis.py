@@ -15,6 +15,7 @@ scope frozen in the approved plan (``frozen_redis_scope``): it never lists index
 
 from __future__ import annotations
 
+import threading
 from typing import Any, Callable
 
 from autobot_shared.env_utils import env_int_clamped
@@ -173,45 +174,71 @@ def frozen_redis_scope(plan_databases: list[dict]) -> list[dict]:
     return scope
 
 
-def _unlink_prefix(client, prefix: str, entry: dict) -> None:
-    """Unlink the keys under *prefix*, updating ``entry["count"]`` per batch so a failure keeps the count so far."""
+class WipeStopped(RuntimeError):
+    """The caller stopped the wipe between two batches (the awaiting task was cancelled)."""
+
+
+def _check_stop(stop: threading.Event | None) -> None:
+    if stop is not None and stop.is_set():
+        raise WipeStopped("the knowledge wipe was stopped between batches")
+
+
+def _unlink_prefix(client, prefix: str, entry: dict, stop: threading.Event | None = None) -> None:
+    """Unlink the keys under *prefix*, updating ``entry["count"]`` per batch so a failure keeps the count so far.
+
+    *stop* is checked before every batch: at most the batch in flight completes after it is set.
+    """
     batch: list = []
     for key in _wiped_keys(client, prefix):
         batch.append(key)
         if len(batch) >= SCAN_BATCH:
+            _check_stop(stop)
             entry["count"] += int(client.unlink(*batch))
             batch = []
     if batch:
+        _check_stop(stop)
         entry["count"] += int(client.unlink(*batch))
 
 
-def _drop_indexes(client, database: str, names: list[str], record: list[dict]) -> None:
+def _drop_indexes(
+    client, database: str, names: list[str], record: list[dict], stop: threading.Event | None = None
+) -> None:
     """Drop each approved index (with its documents) that still exists; an index already gone is recorded, not retried.
 
-    ``FT._LIST`` is read only to skip a vanished name. It can narrow what is dropped, never widen it.
+    ``FT._LIST`` is read only to skip a vanished name. It can narrow what is dropped, never widen it. A step is
+    appended with ``complete=False`` BEFORE ``FT.DROPINDEX`` runs and flips when it returns, so a connection lost
+    after the server executed the drop still leaves the step in the failure audit.
     """
     present = {decode_redis_value(name) for name in client.execute_command("FT._LIST") or []}
     for name in names:
-        step = {"database": database, "kind": "index", "name": name, "count": 0}
+        _check_stop(stop)
+        step = {"database": database, "kind": "index", "name": name, "count": 0, "complete": False}
+        record.append(step)
         if name in present:
             step["count"] = _index_documents(client, name)
             client.execute_command("FT.DROPINDEX", name, "DD")
         else:
             step["absent"] = True
-        record.append(step)
+        step["complete"] = True
 
 
-def execute_redis(record: list[dict], scope: list[dict], client_factory: ClientFactory = default_client) -> None:
+def execute_redis(
+    record: list[dict],
+    scope: list[dict],
+    client_factory: ClientFactory = default_client,
+    stop: threading.Event | None = None,
+) -> None:
     """Delete exactly *scope* (from ``frozen_redis_scope``): its indexes first, then its prefixes; append per step.
 
-    A prefix's entry is appended BEFORE its keys are scanned and ``complete`` flips when it finishes.
+    A prefix's entry is appended BEFORE its keys are scanned and ``complete`` flips when it finishes. Setting
+    *stop* from another thread ends the wipe at the next batch with ``WipeStopped``.
     """
     for entry in scope:
         database = entry["database"]
         client = _client_or_raise(client_factory, database)
-        _drop_indexes(client, database, entry["indexes"], record)
+        _drop_indexes(client, database, entry["indexes"], record, stop)
         for prefix in entry["prefixes"]:
             step = {"database": database, "kind": "prefix", "name": prefix, "count": 0, "complete": False}
             record.append(step)
-            _unlink_prefix(client, prefix, step)
+            _unlink_prefix(client, prefix, step, stop)
             step["complete"] = True

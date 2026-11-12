@@ -151,6 +151,27 @@ def _read_override() -> EmbeddingSpace | None:
     return record
 
 
+def read_embedding_space_strict() -> EmbeddingSpace | None:
+    """The override record read straight from the store, never cached; raises when the store cannot be read.
+
+    For a caller that must not act on a guess (the knowledge wipe names the active collection from it, #21048).
+    None means the store was read and holds no valid override; an unreadable store raises ``RuntimeError``
+    instead of reading as "no override". The lenient, cached reader stays for everything else.
+    """
+    try:
+        client = _redis()
+        if client is None:
+            raise RuntimeError("the knowledge Redis database is not available")
+        raw = client.get(EMBEDDING_OVERRIDE_KEY)
+        raw = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+        record = _parse_record(raw) if raw else None
+    except Exception as exc:  # noqa: BLE001 - re-raised as one named error for the caller
+        raise RuntimeError(f"the embedding-model override could not be read ({type(exc).__name__})") from exc
+    if record is not None and not is_embedding_model_id(record.model):
+        return None  # the KB ignores an invalid override too (see _read_override)
+    return record
+
+
 def set_embedding_model_override(model: str, collection: str) -> EmbeddingSpace:
     """Make *model* and *collection* the active embedding space for every process (#19377).
 

@@ -95,7 +95,7 @@ def world(monkeypatch):
     monkeypatch.setattr(chroma_mod, "CLEAR_BATCH", 3)
     monkeypatch.setattr(action, "kb_collection_names", lambda: ["autobot_memory", "space_b"])
     monkeypatch.setattr(action, "audit_log", audit)
-    monkeypatch.setattr(action, "execute_redis", lambda record, scope: real(record, scope, factory))
+    monkeypatch.setattr(action, "execute_redis", lambda record, scope, stop=None: real(record, scope, factory, stop))
     return types.SimpleNamespace(log=log, redis=redis, chroma=chroma, audit=audit, factory=factory)
 
 
@@ -159,7 +159,14 @@ async def test_an_index_that_vanished_since_the_plan_is_recorded_absent_and_noth
     await action.execute_kb_wipe_action(_ready(plan), _session())
 
     first = world.audit.await_args.kwargs["details"]["redis"][0]
-    assert first == {"database": "knowledge", "kind": "index", "name": "llama_index", "count": 0, "absent": True}
+    assert first == {
+        "database": "knowledge",
+        "kind": "index",
+        "name": "llama_index",
+        "count": 0,
+        "complete": True,
+        "absent": True,
+    }
     assert not any(c[0] == "FT.DROPINDEX" for c in world.redis.commands)
     assert world.redis.indexes == {FOREIGN_INDEX: 40}
 

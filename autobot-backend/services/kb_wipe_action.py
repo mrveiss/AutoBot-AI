@@ -32,6 +32,7 @@ admin it is refused.
 from __future__ import annotations
 
 import asyncio
+import threading
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select, text
@@ -269,9 +270,11 @@ async def _record_intent(approval: "Approval", scope: dict, self_approval: bool)
         raise RuntimeError(f"the audit entry for approval {approval.id} could not be written; nothing was deleted")
 
 
-async def _audit_failure(approval: "Approval", record: dict, self_approval: bool, exc: Exception) -> None:
+async def _audit_failure(
+    approval: "Approval", record: dict, self_approval: bool, exc: BaseException, **extra: object
+) -> None:
     """Record the failed outcome. Never raises, so the wipe's own error stays the one that propagates (#17038)."""
-    details = _outcome_details(approval, self_approval, record, error=type(exc).__name__, phase="failure")
+    details = _outcome_details(approval, self_approval, record, error=type(exc).__name__, phase="failure", **extra)
     outcome = "returned False"
     try:
         if await _audit(approval, "failed", details):
@@ -284,14 +287,31 @@ async def _audit_failure(approval: "Approval", record: dict, self_approval: bool
 async def _wipe(approval: "Approval", scope: dict, self_approval: bool) -> dict:
     """Redis, then Chroma, each exactly as frozen; a failure audits what was already deleted, then re-raises."""
     record: dict = {"step": "redis", "collections": scope["collections"], "redis": [], "chroma": []}
+    stop = threading.Event()  # set on cancellation; the worker thread checks it between batches
     try:
-        await asyncio.to_thread(execute_redis, record["redis"], scope["redis"])
+        await asyncio.to_thread(execute_redis, record["redis"], scope["redis"], stop=stop)
         record["step"] = "chroma"
         await clear_chroma(scope["collections"], record["chroma"])
+    except asyncio.CancelledError as exc:
+        stop.set()
+        await _audit_cancelled(approval, record, self_approval, exc)
+        raise
     except Exception as exc:
         await _audit_failure(approval, record, self_approval, exc)
         raise
     return record
+
+
+async def _audit_cancelled(approval: "Approval", record: dict, self_approval: bool, exc: BaseException) -> None:
+    """The wipe task was cancelled: write the failed outcome from a snapshot of the live record.
+
+    The Redis worker thread cannot be interrupted. It was told to stop and ends before its next batch, so it may
+    still delete the batch in flight (at most ``SCAN_BATCH`` keys of a frozen prefix, or the one index drop being
+    executed); nothing outside the frozen scope. The entry says so, since the snapshot cannot include that batch.
+    """
+    snapshot = {**record, "redis": [dict(s) for s in record["redis"]], "chroma": [dict(s) for s in record["chroma"]]}
+    note = "cancelled, in progress: the worker was told to stop and may still finish the batch in flight"
+    await _audit_failure(approval, snapshot, self_approval, exc, note=note)
 
 
 def _summary(record: dict) -> str:
