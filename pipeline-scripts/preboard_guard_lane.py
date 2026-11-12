@@ -187,6 +187,7 @@ def _summarize(args: argparse.Namespace) -> int:
     markdown = report.render_lane_summary(result)
     Path(args.markdown).write_text(markdown, encoding="utf-8")
     sys.stdout.write(markdown)
+    sys.stdout.write("\n".join(report.workflow_commands(result)) + "\n")
     return 0 if result["overall"] in report.BOARDABLE else 1
 
 

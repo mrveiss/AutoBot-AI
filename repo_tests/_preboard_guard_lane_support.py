@@ -22,6 +22,7 @@ from repo_tests._paths import repo_root
 ROOT = repo_root()
 LANE_MODULE = ROOT / "pipeline-scripts" / "preboard_guard_lane.py"
 BASE_SHA = "b" * 40
+RUNNER_DIR = "/runner/work/repo/repo"
 PROMTOOL_FILE = "repo_tests/promtool_rules_test.py"
 PROMTOOL_REASON = "promtool not found at the default location, Prometheus rule BEHAVIOUR is unverified"
 
@@ -45,8 +46,10 @@ def env(**over: str) -> dict[str, str]:
 
 
 def case(file: str, name: str, *, child: str = "", attrs: str = "") -> str:
+    """A test function's testcase as ``junit_family=xunit1`` writes it (classname, name, file, line, time)."""
     module = file[:-3].replace("/", ".")
-    return f'<testcase classname="{module}" name="{name}" file="{file}"{attrs}>{child}</testcase>'
+    head = f'<testcase classname="{module}" name="{name}" file="{file}" line="12" time="0.001"{attrs}>'
+    return f"{head}{child}</testcase>"
 
 
 def passing(file: str, count: int) -> list[str]:
@@ -59,7 +62,9 @@ def failing(file: str, name: str) -> str:
 
 
 def skipped(file: str, name: str, reason: str) -> str:
-    return case(file, name, child=f'<skipped type="pytest.skip" message="{reason}">skipped</skipped>')
+    """A call-time skip as ``append_skipped`` writes it: the reason in ``message``, ``path:line: reason`` as text."""
+    child = f'<skipped type="pytest.skip" message="{reason}">{RUNNER_DIR}/{file}:14: {reason}</skipped>'
+    return case(file, name, child=child)
 
 
 def shard(number: int, splits: int, rc: int | None, rows: list[str], **meta: Any) -> dict[str, Any]:

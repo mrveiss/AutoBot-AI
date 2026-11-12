@@ -9,8 +9,9 @@ Split from ``preboard_guard_lane.py`` (the roots, the merge with the base, the s
 so each stays small. This module reads what the shards wrote and decides ``overall``:
 
 * ``green``             -- every test that ran passed and nothing was skipped.
-* ``green_with_skips``  -- the same, and every skip is on :data:`SKIP_ALLOWLIST`. The skipped
-  checks are not covered by the lane; the merge train's full suite covers them.
+* ``green_with_skips``  -- the same, and every skip is on :data:`SKIP_ALLOWLIST`, each in one class:
+  ``covered-by-suite-only`` (the lane skips it, the train's suite RUNS it) or ``equivalent-to-suite``
+  (the suite skips it the same way on the same runner image, so the train is no stricter than the lane).
 * ``red``               -- a failure, a missing shard or recorded test file, a conflict with the
   base, a skip nobody reviewed, or fewer executed tests than the floor.
 * ``cancelled``         -- a job was cancelled. Never boardable.
@@ -26,31 +27,44 @@ import xml.etree.ElementTree as ET  # nosec B405  # parses the junit file pytest
 from pathlib import Path
 from typing import Any, NamedTuple
 
+import preboard_guard_lane_junit as junit
+
 #: Bumped when a field of the result artifact is renamed or removed.
 SCHEMA_VERSION = 2
 
 #: Verdicts an operator may board on. Anything else is not boardable.
 BOARDABLE = ("green", "green_with_skips")
 
-#: The ``type`` pytest gives the ``skipped`` element of an expected failure: it RAN.
-XFAIL_TYPE = "pytest.xfail"
+#: The lane skips it and the train's suite runs it (the suite provides a tool or session the lane does not).
+COVERED_BY_SUITE_ONLY = "covered-by-suite-only"
 
+#: The suite skips it identically on the same runner image: the train exercises nothing more than the lane.
+EQUIVALENT_TO_SUITE = "equivalent-to-suite"
 
-#: The issue that removes every allowlist entry, by moving the skipped check into a composite action.
+#: A skip on neither list. Never accepted.
+UNREVIEWED = "unreviewed"
+
+SKIP_CLASSES = (COVERED_BY_SUITE_ONLY, EQUIVALENT_TO_SUITE)
+
+#: The issue that removes every ``covered-by-suite-only`` entry, by moving the skipped check into a composite action.
 FOLLOW_UP = "#21360"
 
 
 class AllowedSkip(NamedTuple):
-    """One reviewed skip: the file, the start of its reason, the text proving it exists, its follow-up."""
+    """One reviewed skip: the file, the start of its reason, the text proving it exists, its class and follow-up."""
 
     file: str
     reason_prefix: str
     source_marker: str
+    skip_class: str = COVERED_BY_SUITE_ONLY
     follow_up: str = FOLLOW_UP
 
 
-#: The skips this lane accepts, each because the check is left out of the lane by design: it needs
-#: a service or a binary the suite's python-shard job provides and this workflow does not.
+#: The skips this lane accepts, each with a class. An entry joins only with evidence: the skip reason
+#: observed in a suite shard's ``-rs`` summary (ci.yml prints it), and the class decided by comparing the
+#: lane's setup with the suite's. ``equivalent-to-suite`` entries are added from that summary, never guessed.
+#: Every entry below is ``covered-by-suite-only``: the check needs a service or a binary the suite's
+#: python-shard job provides and this workflow does not.
 #: ``source_marker`` is text that must stay in ``file``, so an entry cannot outlive the skip it
 #: names (checked by the lane's guard test). Follow-up #21360 moves each check into a composite
 #: action both workflows call; the entry for it is removed in that change. A skip not listed
@@ -83,88 +97,46 @@ SKIP_ALLOWLIST: tuple[AllowedSkip, ...] = (
 )
 
 
-def _first_line(text: str | None) -> str:
-    return (text or "").strip().splitlines()[0] if (text or "").strip() else ""
-
-
-def file_of(nodeid: str) -> str:
-    """The file part of a node id."""
-    return nodeid.split("::", 1)[0]
-
-
-def node_id(case: ET.Element) -> str:
-    """The pytest node id of a junit ``testcase`` (xunit1 carries ``file``)."""
-    name, classname, path = case.get("name", ""), case.get("classname", ""), case.get("file", "")
-    if not path:
-        return f"{classname}::{name}"
-    module = path[:-3].replace("/", ".") if path.endswith(".py") else path
-    parts = classname[len(module) + 1 :].split(".") if classname.startswith(module + ".") else []
-    return "::".join([path, *parts, name])
-
-
-def is_allowed_skip(nodeid: str, reason: str, allowlist: tuple[AllowedSkip, ...] = SKIP_ALLOWLIST) -> bool:
-    """Whether a skip of *nodeid* for *reason* is a reviewed one (file AND reason must match)."""
-    file = file_of(nodeid)
+def skip_class(nodeid: str, reason: str, allowlist: tuple[AllowedSkip, ...] = SKIP_ALLOWLIST) -> str:
+    """The class of a skip of *nodeid* for *reason*: file AND reason prefix must match, else ``unreviewed``."""
+    file = junit.file_of(nodeid)
     for entry in allowlist:
         dotted = entry.file[:-3].replace("/", ".")
         if file in (entry.file, dotted) and reason.startswith(entry.reason_prefix):
-            return True
-    return False
+            return entry.skip_class
+    return UNREVIEWED
 
 
-def _outcome(case: ET.Element) -> str:
-    """``failed`` | ``skipped`` | ``passed``. An expected failure ran, so it is not a skip."""
-    if case.find("failure") is not None or case.find("error") is not None:
-        return "failed"
-    skipped = case.find("skipped")
-    if skipped is not None and skipped.get("type") != XFAIL_TYPE:
-        return "skipped"
-    return "passed"
+def is_allowed_skip(nodeid: str, reason: str, allowlist: tuple[AllowedSkip, ...] = SKIP_ALLOWLIST) -> bool:
+    """Whether a skip of *nodeid* for *reason* is a reviewed one."""
+    return skip_class(nodeid, reason, allowlist) != UNREVIEWED
 
 
-def _failures(case: ET.Element, nodeid: str) -> list[dict[str, str]]:
-    found = []
-    for kind in ("failure", "error"):
-        element = case.find(kind)
-        if element is not None:
-            message = element.get("message") or element.text
-            found.append({"nodeid": nodeid, "kind": kind, "message": _first_line(message)})
-    return found
+def _classified(raw: list[dict[str, str]]) -> list[dict[str, Any]]:
+    """Each raw skip with its class and whether it is on the allowlist."""
+    rows = []
+    for skip in raw:
+        klass = skip_class(skip["nodeid"], skip["reason"])
+        rows.append({**skip, "allowed": klass != UNREVIEWED, "skip_class": klass})
+    return rows
 
 
-def parse_junit(path: Path) -> dict[str, Any]:
-    """Executed count, failures, skips and the files that produced a usable test, of one junit file."""
-    out: dict[str, Any] = {"executed": 0, "failed": [], "skipped": [], "produced": set()}
-    for case in ET.parse(path).getroot().iter("testcase"):  # nosec B314  # our own pytest output
-        nodeid, outcome = node_id(case), _outcome(case)
-        if outcome == "skipped":
-            reason = _first_line(case.find("skipped").get("message"))
-            allowed = is_allowed_skip(nodeid, reason)
-            out["skipped"].append({"nodeid": nodeid, "reason": reason, "allowed": allowed})
-            if allowed:
-                out["produced"].add(file_of(nodeid))
-            continue
-        out["executed"] += 1
-        out["produced"].add(file_of(nodeid))
-        out["failed"] += _failures(case, nodeid)
-    return out
-
-
-def _absorb(meta: dict[str, Any], junit: Path, total: dict[str, Any]) -> list[str]:
+def _absorb(meta: dict[str, Any], junit_file: Path, total: dict[str, Any]) -> list[str]:
     """Add one shard's junit to *total*; the problem when it cannot be read."""
     meta["executed"] = 0
-    if not junit.is_file():
+    if not junit_file.is_file():
         return []
     try:
-        parsed = parse_junit(junit)
+        parsed = junit.parse_junit(junit_file)
     except (ET.ParseError, OSError) as err:
         meta["junit_unreadable"] = True
         return [f"shard {meta.get('shard')}: junit.xml is unreadable ({err})"]
+    skipped = _classified(parsed["skipped"])
     meta["executed"], meta["failed"] = parsed["executed"], len(parsed["failed"])
     total["executed"] += parsed["executed"]
     total["failed"] += parsed["failed"]
-    total["skipped"] += parsed["skipped"]
-    total["produced"] |= parsed["produced"]
+    total["skipped"] += skipped
+    total["produced"] |= parsed["ran"] | {junit.file_of(s["nodeid"]) for s in skipped if s["allowed"]}
     return []
 
 
@@ -256,6 +228,11 @@ def lane_facts(metas: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def skip_class_counts(skipped: list[dict[str, Any]]) -> dict[str, int]:
+    """How many skips fall in each class, every class present (zero included)."""
+    return {name: sum(1 for s in skipped if s["skip_class"] == name) for name in (*SKIP_CLASSES, UNREVIEWED)}
+
+
 def guards_check(needs: dict[str, Any], metas: list[dict[str, Any]], total: dict[str, Any], read: list[str]) -> dict:
     """The ``checks.guards`` object."""
     facts = lane_facts(metas)
@@ -273,6 +250,7 @@ def guards_check(needs: dict[str, Any], metas: list[dict[str, Any]], total: dict
         "failed": len(total["failed"]),
         "skipped": len(total["skipped"]),
         "unreviewed_skips": len(unreviewed),
+        "skip_classes": skip_class_counts(total["skipped"]),
         "shards": len(metas),
         "problems": problems,
     }
@@ -303,12 +281,13 @@ def build_result(env: dict[str, str], shard_dir: Path) -> dict[str, Any]:
 
 def _skip_lines(skipped: list[dict[str, Any]]) -> list[str]:
     """Every skipped node id, grouped by reason and marked reviewed or not."""
-    groups: dict[tuple[str, bool], list[str]] = {}
+    groups: dict[tuple[str, str], list[str]] = {}
     for skip in skipped:
-        groups.setdefault((skip["reason"], skip["allowed"]), []).append(skip["nodeid"])
+        groups.setdefault((skip["reason"], skip["skip_class"]), []).append(skip["nodeid"])
     lines = []
-    for (reason, allowed), nodeids in sorted(groups.items()):
-        lines.append(f"- {'allowlisted' if allowed else 'NOT ON THE ALLOWLIST'}: {reason or '(no reason)'}")
+    for (reason, klass), nodeids in sorted(groups.items()):
+        label = "NOT ON THE ALLOWLIST" if klass == UNREVIEWED else f"allowlisted, {klass}"
+        lines.append(f"- {label}: {reason or '(no reason)'}")
         lines += [f"  - `{nodeid}`" for nodeid in nodeids]
     return lines
 
@@ -316,6 +295,7 @@ def _skip_lines(skipped: list[dict[str, Any]]) -> list[str]:
 def render_lane_summary(result: dict[str, Any]) -> str:
     """The job summary: verdict, per-check status, every failed and every skipped node id."""
     guards = result["checks"]["guards"]
+    classes = ", ".join(f"{name} {count}" for name, count in guards["skip_classes"].items())
     lines = [
         f"## Pre-board guard lane: {result['overall']}",
         f"`{result['sha']}` on `{result['ref']}`, merged with base `{result['base_sha']}`: {result['merged']} "
@@ -326,8 +306,42 @@ def render_lane_summary(result: dict[str, Any]) -> str:
         f"| guards ({guards['executed']} executed, floor {guards['floor']}, "
         f"{guards['failed']} failed, {guards['skipped']} skipped) | {guards['status']} |",
         f"| types | {result['checks']['types']['status']} |",
+        "",
+        f"Skips by class: {classes}. `covered-by-suite-only` is still exercised by the train's suite; "
+        "`equivalent-to-suite` is skipped there too.",
+        "",
     ]
     lines += [f"- lane problem: {p}" for p in guards["problems"]]
     failed = [f"- `{t['nodeid']}` ({t['kind']}): {t['message']}" for t in result["failed_tests"]]
     lines += ["", "### Failed tests", *failed, "", "### Skipped tests", *_skip_lines(result["skipped_tests"])]
     return "\n".join(lines) + "\n"
+
+
+def _escape_command(text: str) -> str:
+    """Workflow-command data: ``%``, CR and LF must be escaped or the line ends early."""
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+#: GitHub shows at most ten annotations of one level per step; the full list is in the summary.
+MAX_ERROR_LINES = 9
+
+
+def _error_lines(result: dict[str, Any]) -> list[str]:
+    """One ``::error`` per lane problem, then per failed test, up to :data:`MAX_ERROR_LINES`."""
+    texts = list(result["checks"]["guards"]["problems"])
+    texts += [f"{t['nodeid']} ({t['kind']}): {t['message']}" for t in result["failed_tests"]]
+    return [f"::error::{_escape_command(text)}" for text in texts[:MAX_ERROR_LINES]]
+
+
+def workflow_commands(result: dict[str, Any]) -> list[str]:
+    """The annotations that put the verdict on the run's page: ``overall``, skips by class, ``behind_base``."""
+    guards, overall, behind = result["checks"]["guards"], result["overall"], result["behind_base"]
+    classes = ", ".join(f"{name}={count}" for name, count in guards["skip_classes"].items())
+    head = f"overall={overall}; behind_base={behind}; skips: {classes}; executed={guards['executed']}"
+    level = "notice" if overall == "green" else "warning" if overall == "green_with_skips" else "error"
+    lines = [f"::{level} title=Pre-board guard lane::{_escape_command(head)}"]
+    if overall in BOARDABLE:
+        if behind:
+            lines.append(f"::warning::behind_base={behind}: merge the base into the head, then dispatch again to board")
+        return lines
+    return lines + _error_lines(result)

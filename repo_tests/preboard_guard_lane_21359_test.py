@@ -238,7 +238,10 @@ def test_every_allowlisted_skip_names_a_skip_that_still_exists_and_its_follow_up
         assert entry.file.split("/")[0] in lane.GUARD_ROOTS, f"{entry.file} is outside the lane's roots"
         text = (_ROOT / entry.file).read_text(encoding="utf-8")
         assert entry.source_marker in text, f"{entry.file} no longer holds {entry.source_marker!r}: delete the entry"
-        assert entry.reason_prefix and entry.follow_up == "#21360"
+        assert entry.reason_prefix and entry.skip_class in lane.report.SKIP_CLASSES, entry
+        if entry.skip_class == lane.report.COVERED_BY_SUITE_ONLY:
+            assert entry.follow_up == "#21360", f"{entry.file}: a covered-by-suite-only skip is removed by #21360"
+        assert re.fullmatch(r"#\d+", entry.follow_up), entry
 
 
 # ------------------------------------------------------------------ the documented contract

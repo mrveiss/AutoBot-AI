@@ -109,7 +109,12 @@ def test_allowlisted_skips_give_green_with_skips_never_green(lane, tmp_path) -> 
     rows = passing(_M, 5) + [skipped(PROMTOOL_FILE, "test_rules", PROMTOOL_REASON)]
     result = _verdict(lane, tmp_path, [shard(1, 1, 0, rows)])
     assert result["overall"] == "green_with_skips" and result["checks"]["guards"]["status"] == "success_with_skips"
-    expected = {"nodeid": f"{PROMTOOL_FILE}::test_rules", "reason": PROMTOOL_REASON, "allowed": True}
+    expected = {
+        "nodeid": f"{PROMTOOL_FILE}::test_rules",
+        "reason": PROMTOOL_REASON,
+        "allowed": True,
+        "skip_class": "covered-by-suite-only",
+    }
     assert result["skipped_tests"] == [expected]
 
 
