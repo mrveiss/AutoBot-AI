@@ -16,6 +16,12 @@ from services.agent_analytics import AgentAnalytics
 NOW = datetime(2026, 11, 9, 12, 30, tzinfo=timezone.utc)  # axis: 07:00 -> 13:00
 
 
+@pytest.fixture(autouse=True)
+def fixed_clock(monkeypatch):
+    """Every test sees the same "now": get_agent_feeds builds feeds with the module's now_utc."""
+    monkeypatch.setattr(feed_mod, "now_utc", lambda: NOW)
+
+
 def _record(task_id, status, completed_at, duration_ms=60_000):
     return {
         "task_id": task_id,
