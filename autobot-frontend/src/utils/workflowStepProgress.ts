@@ -15,7 +15,8 @@
  *
  * Only a successful completion is "done" (current === total, 100%). The executor's
  * `cancel_workflow` also stamps `completed_at`, so `is_cancelled` (or a
- * `cancelled` status) wins over it; a failed run (`status: 'failed'` or any step
+ * `cancelled` status) wins over it, as does a pause indicator (`is_paused` or `status: 'paused'`,
+ * checked before any completed marker); a failed run (`status: 'failed'` or any step
  * with status `failed`) and a paused run (`is_paused` / `status: 'paused'`) show
  * the step reached with percent below 100.
  */
@@ -40,6 +41,7 @@ export interface WorkflowStepDisplay {
 }
 
 function isSuccessfulCompletion(wf: WorkflowStepProgressInput): boolean {
+  if (wf.is_paused || wf.status === 'paused') return false
   if (wf.is_cancelled || wf.status === 'cancelled' || wf.status === 'failed') return false
   if (wf.steps?.some((s) => s.status === 'failed')) return false
   return Boolean(wf.completed_at) || wf.status === 'completed'
