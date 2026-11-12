@@ -16,20 +16,10 @@ from api.knowledge_graph_facts import visible_facts_page
 from autobot_shared.ssot_config import config
 from knowledge.fact_stream import collect_facts, stream_facts
 from knowledge.quarantine import apply_quarantine
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 from tests.fixtures.graph_buckets_fakes_20945 import ALICE, manager
 
 BATCH, CAP = 4, 12
-
-
-class _Pipe:
-    def __init__(self, rows):
-        self.rows, self.keys = rows, []
-
-    def hgetall(self, key):
-        self.keys.append(key)
-
-    async def execute(self):
-        return [self.rows[key] for key in self.keys]
 
 
 class _Redis:
@@ -40,8 +30,11 @@ class _Redis:
         for key in self.rows:
             yield key
 
-    def pipeline(self):
-        return _Pipe(self.rows)
+    def hgetall(self, key):
+        return self.rows[key]
+
+    def pipeline(self, transaction=True):
+        return FakeAsyncPipeline(self, transaction=transaction)
 
 
 class StreamKB:
