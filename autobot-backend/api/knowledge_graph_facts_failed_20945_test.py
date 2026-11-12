@@ -28,3 +28,17 @@ async def test_a_raising_continuation_read_marks_the_facts_section_failed():
     assert facts["failed"] is True and facts["total"] is None and facts["limited"] is True
     assert facts["cursor"] == "500:0", "the requested cursor is kept so a retry reads the same page"
     assert "secret" not in repr(result), "exception text never reaches the caller"
+
+
+@pytest.mark.asyncio
+async def test_a_knowledge_base_that_could_not_be_initialised_marks_the_facts_section_failed():
+    user = {"user_id": ALICE, "role": "user", "org_id": TENANT_A, "auth_method": "jwt"}
+    body = GraphRequest(include_categories=False, include_relations=False, cursor="500:0")
+    with (
+        patch("api.knowledge_search_aggregator.get_or_create_knowledge_base", new=AsyncMock(return_value=None)),
+        patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)),
+    ):
+        result = await get_multi_source_graph(MagicMock(), body, user)
+    facts = next(s for s in result["stats"]["sections"] if s["key"] == "facts")
+    assert facts["failed"] is True and facts["total"] is None
+    assert facts["cursor"] == "500:0", "the requested cursor is kept so a retry reads the same page"

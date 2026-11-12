@@ -833,14 +833,13 @@ async def get_multi_source_graph(req: Request, body: GraphRequest, current_user:
         category_map = await _process_category_tree_for_graph(kb, body, nodes, edges)
 
         # Get facts for the graph
-        page = FactsPage()  # total None: unreadable listing reports limited
+        page = FactsPage(cursor=body.cursor, failed=True)  # no KB / unreadable listing: failed, not empty or success
         if kb is not None:
             try:
                 scope = (kb, body.category_filter, body.max_facts, body.offset, user_id, user_org_id, user_group_ids)
                 page = await visible_facts_page(*scope, is_admin, is_superadmin_user(current_user), body.cursor)
             except Exception as e:
                 logger.warning("Failed to get facts: %s", e)
-                page = FactsPage(cursor=body.cursor, failed=True)  # reported as a failed section, not success
         facts = page.facts
 
         # If no category nodes from tree, create them dynamically from facts
