@@ -6,7 +6,8 @@
 
 Moved out of ``knowledge_search_aggregator`` (which must not grow). The listing is scanned in batches up
 to ``GRAPH_SCAN_LIMIT``, each batch filtered by what the caller may read, and ``offset``/``max_facts``
-page the *visible* set; every page carries a ``cursor`` to the first raw position it did not return.
+page the *visible* set (``get_all_facts`` drops quarantined facts before its offset/limit, #20866, so a short
+listing batch is the real end); every page carries a ``cursor`` to the first raw position it did not return.
 The reported total is the visible total: it never counts a fact the caller cannot see,
 and a short page means the end, not a filtered-out page.
 """
@@ -67,8 +68,6 @@ async def _readable_batch(kb: Any, category_filter: str | None, offset: int, siz
         advance, more = size, bool(result.get("has_more"))  # a deleted fact shortens the batch, not the index
     else:
         # #19727: listed, not a search for "*", which the keyword fallback matches nothing for; quarantine stays out
-        # get_all_facts drops quarantined facts while streaming, BEFORE offset/limit (#20866), so offset counts
-        # listed facts and ``len(raw) < size`` is the real end of the listing, not a filtered-short batch.
         raw = await kb.get_all_facts(limit=size, offset=offset)
         category_of = lambda fact: (fact.get("metadata") or {}).get("category", CategoryDefaults.GENERAL)  # noqa: E731
         facts = [{**fact, "id": fact.get("fact_id"), "category": category_of(fact)} for fact in raw]

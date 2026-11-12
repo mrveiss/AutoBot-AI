@@ -245,6 +245,31 @@ def _nodes_of(section: BucketSection, page: List[Tuple[str, str, Dict[str, Any]]
     return nodes, edges
 
 
+async def _emit_section(
+    client: Any, viewer: Viewer, section: BucketSection, scan: SectionScan, limit: int, offset: int
+):
+    """``(nodes, edges, report)`` of one section: its page of record nodes, the section node and its totals."""
+    rows = scan.rows
+    page = rows[offset : offset + max(limit, 0)]
+    record_page(viewer, section.access, page)
+    previews = await _previews(client, [(n, i) for n, i, _ in page]) if page else {}
+    nodes, edges = _nodes_of(section, page, previews)
+    nodes.append(
+        {
+            "id": f"section:{section.key}",
+            "name": section.label,
+            "type": "section",
+            "section": section.key,
+            "metadata": {"total": len(rows)},
+        }
+    )
+    total = None if scan.failed else len(rows)
+    entry = section_report(
+        section.key, section.label, total, len(page), offset, scan.truncated, scan.exhausted, scan.failed
+    )
+    return nodes, edges, entry
+
+
 async def build_bucket_sections(
     client: Any,
     viewer: Viewer,
@@ -276,27 +301,10 @@ async def build_bucket_sections(
         rows = scan.rows
         if not rows and not (scan.truncated or scan.exhausted or scan.failed):
             continue
-        page = rows[offset : offset + max(limit, 0)]
-        record_page(viewer, section.access, page)
-        previews = await _previews(client, [(n, i) for n, i, _ in page]) if page else {}
-        new_nodes, new_edges = _nodes_of(section, page, previews)
+        new_nodes, new_edges, entry = await _emit_section(client, viewer, section, scan, limit, offset)
         nodes.extend(new_nodes)
         edges.extend(new_edges)
-        nodes.append(
-            {
-                "id": f"section:{section.key}",
-                "name": section.label,
-                "type": "section",
-                "section": section.key,
-                "metadata": {"total": len(rows)},
-            }
-        )
-        total = None if scan.failed else len(rows)
-        report.append(
-            section_report(
-                section.key, section.label, total, len(page), offset, scan.truncated, scan.exhausted, scan.failed
-            )
-        )
+        report.append(entry)
     return {"nodes": nodes, "edges": edges, "sections": report, "unmapped": unmapped}
 
 
