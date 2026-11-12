@@ -12,6 +12,7 @@ db_session_context() in user_management.database, which passes that service's ow
 session maker (each service binds its own engine).
 """
 
+import inspect
 from collections.abc import AsyncGenerator, Callable, Generator
 from contextlib import asynccontextmanager, contextmanager
 
@@ -67,7 +68,9 @@ async def _run_post_commit_callbacks(session: AsyncSession) -> None:
     errors: list[Exception] = []
     for cb in session.info.pop(POST_COMMIT_CALLBACKS, []):
         try:
-            await cb()
+            outcome = cb()
+            if inspect.isawaitable(outcome):
+                await outcome
         except Exception as exc:
             logger.error("post-commit callback failed after a successful commit", exc_info=True)
             errors.append(exc)
