@@ -392,7 +392,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/tools/tool_registry.py": 809,
     "autobot-backend/utils/advanced_cache_manager.py": 1213,
     "autobot-backend/utils/claude_api_integration.py": 917,
-    "autobot-backend/utils/error_catalog.py": 775,
+    "autobot-backend/utils/error_catalog.py": 774,
     "autobot-backend/utils/file_categorization.py": 724,
     "autobot-backend/utils/gpu_vector_search.py": 1227,
     "autobot-backend/utils/hardware_metrics.py": 1267,
