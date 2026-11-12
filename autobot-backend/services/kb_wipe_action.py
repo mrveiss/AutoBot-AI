@@ -39,8 +39,8 @@ from sqlalchemy import select, text
 from autobot_shared.approval_four_eyes import requester_id
 from autobot_shared.logging_manager import get_logger
 from models.approval import Approval, ApprovalComment, ApprovalStatus, ApprovalType
-from services.approval_execution import register_post_approval_action, verified_decider
-from services.approval_four_eyes import is_self_approval
+from services.approval_execution import context_change_violation, register_post_approval_action, verified_decider
+from services.approval_four_eyes import REFRESHED_BY_KEY, is_self_approval, proposer_ids
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import AuditResult, audit_log
 from services.kb_wipe_chroma import ChromaFactory, clear_chroma, frozen_collections, kb_collection_names, plan_chroma
@@ -63,9 +63,15 @@ ACTION = "kb_wipe"
 #: The production module that PROPOSES this action (#17315).
 PROPOSED_BY = "services.kb_wipe_action"
 PROPOSAL_TITLE = "Wipe the knowledge base (indexes and documents)"
+#: Said to the approver in the description and in the plan: the knowledge base is one shared store.
+PLATFORM_WIDE_NOTE = (
+    "Platform-wide: the knowledge base is one shared store, so this removes the facts of every organisation, "
+    "user and group, not one tenant's."
+)
 PROPOSAL_DESCRIPTION = (
-    "Drops the knowledge base's own search index, removes the knowledge key prefixes and empties the knowledge "
-    "ChromaDB collections. Settings and all other data are untouched."
+    f"{PLATFORM_WIDE_NOTE} Drops the knowledge base's own search index, removes the knowledge key prefixes and "
+    "empties the knowledge ChromaDB collections. Settings, boards, collections, categories and all other data "
+    "are untouched."
 )
 _WHAT = "the knowledge wipe"
 #: Where a proposal came from. Only the operator script may name a requester that is not a user id.
@@ -80,6 +86,7 @@ async def plan_kb_wipe(
     stores = await asyncio.to_thread(plan_redis, client_factory)
     collections = await plan_chroma(await asyncio.to_thread(kb_collection_names), chroma_factory)
     return {
+        "scope_note": PLATFORM_WIDE_NOTE,
         "databases": stores,
         "chroma_collections": collections,
         "total_keys": sum(s["keys"] for s in stores),
@@ -104,6 +111,41 @@ def _proposal_context(requested_by: str, channel: str, plan: dict) -> dict:
     }
 
 
+def _count_changes(old: object, new: dict) -> dict:
+    """Old and new scope totals, as ``[before, after]`` pairs; no document content."""
+    old = old if isinstance(old, dict) else {}
+    return {k: [old.get(k), new.get(k)] for k in ("total_keys", "total_vectors")}
+
+
+def _reviewed_fields(context: dict) -> dict:
+    """The context minus the two keys a refresh may change; the rest is what the approver reviewed (#17349)."""
+    return {k: v for k, v in context.items() if k not in ("plan", REFRESHED_BY_KEY)}
+
+
+async def _refresh_pending(session: "AsyncSession", pending: "Approval", requested_by: str, plan: dict) -> None:
+    """Re-propose a pending wipe: the plan is replaced, the refresh is recorded durably, the requester stays.
+
+    The same freeze as a resubmit applies (``context_change_violation``): only ``plan`` and ``refreshed_by`` move.
+    The refresher joins ``refreshed_by``, so four eyes treats them as a proposer. The durable audit entry comes
+    first; without it the plan is not changed.
+    """
+    old = pending.context or {}
+    new = {**old, "plan": plan, REFRESHED_BY_KEY: [*(old.get(REFRESHED_BY_KEY) or []), requested_by]}
+    if (changed := context_change_violation(_reviewed_fields(old), _reviewed_fields(new))) is not None:
+        raise ValueError(f"{_WHAT} proposal: {changed} cannot change on a refresh")
+    counts = _count_changes(old.get("plan"), plan)
+    details = {"approval_id": str(pending.id), "phase": "plan_refresh", "refreshed_by": requested_by, "counts": counts}
+    if not await audit_log(
+        AuditAction.KNOWLEDGE_WIPE.value, user_id=requested_by, resource="knowledge_base", durable=True, details=details
+    ):
+        raise RuntimeError(f"the audit entry for refreshing approval {pending.id} could not be written; plan unchanged")
+    pending.context = new
+    keys, vectors = counts["total_keys"], counts["total_vectors"]
+    body = f"Plan refreshed by {requested_by}: keys {keys}, vectors {vectors} (before, after)."
+    session.add(ApprovalComment(approval_id=pending.id, author="system", author_type="system", body=body))
+    await session.commit()
+
+
 async def propose_kb_wipe(
     session: "AsyncSession", requested_by: str, plan: dict, *, channel: str = CHANNEL_API
 ) -> "Approval":
@@ -120,8 +162,7 @@ async def propose_kb_wipe(
         raise ValueError(f"{_WHAT} can be proposed on the API channel only by a user id")
     await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:name))"), {"name": ACTION})
     if (pending := await _pending_proposal(session)) is not None:
-        pending.context = {**(pending.context or {}), "plan": plan}
-        await session.commit()
+        await _refresh_pending(session, pending, requested_by, plan)
         return pending
     return await ApprovalGateService(session).create_approval(
         title=PROPOSAL_TITLE,
@@ -136,12 +177,14 @@ async def _review_kb_wipe(approval: "Approval", session: "AsyncSession") -> bool
     """Four eyes, before the decision commits: True for the only admin approving their own request.
 
     A requester that names no person passes unflagged only on the operator-script channel, which cannot
-    authenticate. On the API channel it fails closed: the decision is refused, never waved through.
+    authenticate, and only while no admin has refreshed its plan (a refresher is a proposer). On the API channel
+    it fails closed: the decision is refused, never waved through.
     """
     if requester_id(approval.requested_by_agent) is None:
-        if (approval.context or {}).get("channel") == CHANNEL_OPERATOR:
+        if (approval.context or {}).get("channel") != CHANNEL_OPERATOR:
+            raise ValueError(f"{_WHAT} was proposed by a requester that names no user; it cannot be approved")
+        if not proposer_ids(approval):  # nobody refreshed it either: there is no person to compare the decider to
             return False
-        raise ValueError(f"{_WHAT} was proposed by a requester that names no user; it cannot be approved")
     return await is_self_approval(approval, session, what=_WHAT)
 
 

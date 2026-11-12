@@ -417,7 +417,8 @@ async def test_a_self_approved_wipe_is_flagged_in_the_audit(monkeypatch, fleet, 
 @pytest.mark.asyncio
 async def test_propose_takes_the_advisory_lock_first_and_refreshes_a_reused_proposal(monkeypatch):
     calls: list[str] = []
-    pending = types.SimpleNamespace(context={"action": action.ACTION, "plan": {"total_keys": 1}})
+    monkeypatch.setattr(action, "audit_log", AsyncMock(return_value=True))
+    pending = types.SimpleNamespace(id=uuid.uuid4(), context={"action": action.ACTION, "plan": {"total_keys": 1}})
     session = MagicMock()
     found = MagicMock()
     found.scalars.return_value.first.return_value = pending
