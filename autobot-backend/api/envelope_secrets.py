@@ -527,14 +527,14 @@ async def rotate_secret(
 async def delete_secret(
     secret_id: uuid.UUID,
     request: Request,
-    confirm_dependents: bool = False,
+    dependents_digest: str | None = None,
     who: tuple[uuid.UUID, set[str]] = Depends(principal),
     session: AsyncSession = Depends(get_session),
     coordinator: SecretsCoordinator = Depends(get_coordinator),
 ) -> None:
-    """Delete a secret; 409 with the dependents listed unless ``confirm_dependents`` (#20640)."""
+    """Delete a secret; 409 with the dependents listed unless ``dependents_digest`` confirms that set (#20640)."""
     user_id, perms = who
-    await delete_as_user(request, session, coordinator, secret_id, user_id, perms, confirm_dependents, _mapped)
+    await delete_as_user(request, session, coordinator, secret_id, user_id, perms, dependents_digest, _mapped)
 
 
 @router.post("/{secret_id}/share", status_code=status.HTTP_201_CREATED)

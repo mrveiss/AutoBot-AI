@@ -8345,6 +8345,7 @@
     "llcUnassigned": "Unassigned",
     "llcAssign": "Assign",
     "llcHumans": "People",
+    "llcPeopleLoadFailed": "The company's agents and people could not be loaded, so nobody can be chosen right now.",
     "llcAgents": "Agents",
     "llcPortfolios": "Portfolios",
     "llcTimeline": "Timeline",
@@ -8494,6 +8495,7 @@
     "confirmAdd": "Add",
     "confirmRemove": "Remove {name} from this company?",
     "loadError": "Failed to load members.",
+    "staleRows": "These rows may be out of date, and changes are unavailable until your access is confirmed again.",
     "addError": "Failed to add member.",
     "removeError": "Failed to remove member.",
     "colChangeRole": "Change role",
@@ -8503,6 +8505,7 @@
     "roleChangeError": "Failed to change the role.",
     "roleNotGrantable": "Your role in this company does not allow changing this role.",
     "addNotAllowed": "Your role in this company does not allow adding members.",
+    "accessUnconfirmed": "Couldn't confirm your access. Retry to load your role.",
     "usersLoadError": "Failed to load users.",
     "role": {
       "owner": "Owner",

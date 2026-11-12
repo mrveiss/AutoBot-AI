@@ -47,3 +47,20 @@ describe('AuditLogTable pagination', () => {
     expect(button(w, L.previous).attributes('disabled')).toBeDefined()
   })
 })
+
+// The API sends the canonical event outcome, an open string (auth.mfa has `verified`): an
+// outcome the badge map does not know renders its own text and the fallback icon (#20173).
+describe('AuditLogTable with an off-vocabulary result', () => {
+  const entry = {
+    id: 'e1', timestamp: 1_700_000_000, date: '2023-11-14', operation: 'auth.mfa', result: 'verified',
+    user_id: 'alice', ip_address: null, session_id: null, user_role: null, resource: null,
+    vm_source: null, vm_name: null, details: {}, performance_ms: null
+  }
+
+  it('renders the real outcome text with the fallback icon and does not throw', () => {
+    const w = render({ entries: [entry], currentPage: 1, hasMore: false })
+    const badge = w.find('.result-badge')
+    expect(badge.text()).toContain('verified')
+    expect(badge.find('icon-stub').attributes('name')).toBe('question-circle')
+  })
+})
