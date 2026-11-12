@@ -33,6 +33,7 @@ from typing import Annotated
 from fastapi import HTTPException, Query
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = get_logger(__name__)
 
@@ -134,6 +135,31 @@ def source_scoped_prefix(prefix: str, source_id: "str | None") -> str:
     return scoped_prefix(prefix, require_source_id(source_id, "task-result prefix"), "source_id")
 
 
+async def _predates_last_sync(source_id: str, completed_at: "str | None") -> bool:
+    """Whether the source was re-synced after a stored result completed (#17982).
+
+    ``completed_at`` is written by ``tasks/analytics_tasks._wrap`` and ``last_synced`` by
+    ``endpoints/sources.py`` (``CodeSource.last_synced``), both as ISO-8601 UTC strings;
+    ``parse_utc_iso`` reads a naive one as UTC so the two always compare.
+
+    Unknown is "not stale": either timestamp missing or unparsable, no such source, or an
+    unreadable registry (``get_source_or_none_if_unreadable`` is the decoration accessor).
+    Only a staleness that can be shown is claimed.
+    """
+    if not completed_at:
+        return False
+    from api.codebase_analytics.source_storage import get_source_or_none_if_unreadable
+
+    source = await get_source_or_none_if_unreadable(source_id)
+    if source is None or not source.last_synced:
+        return False
+    try:
+        return parse_utc_iso(source.last_synced) > parse_utc_iso(completed_at)
+    except (ValueError, TypeError):
+        logger.warning("source %s: a sync or completion time is unparsable; not flagging stale", source_id)
+        return False
+
+
 async def cached_task_result(prefix: str, source_id: str) -> dict:
     """The ``*/cached`` response for ONE source, or ``no_data`` (#17758).
 
@@ -157,10 +183,13 @@ async def cached_task_result(prefix: str, source_id: str) -> dict:
             detail={"status": "error", "message": "the latest scan failed; see the task status for its reason"},
         )
     if cached and cached.get("result"):
+        # #17982: a result older than the source's last sync is served, flagged, not hidden.
+        stale = await _predates_last_sync(source_id, cached.get("completed_at"))
         return {
             "status": "success",
             "from_cache": True,
             "completed_at": cached.get("completed_at"),
             **cached["result"],
+            "stale": stale,
         }
     return {"status": "no_data"}
