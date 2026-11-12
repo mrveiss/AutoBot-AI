@@ -63,12 +63,7 @@ from ..services.attachment_service import (
     AttachmentService,
     AttachmentTooLarge,
 )
-from ..services.handoff import (
-    HandoffAttachment,
-    HandoffNotAllowed,
-    HandoffNotAuthorized,
-    HandoffService,
-)
+from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import (
     CheckoutConflict,
     CoWorkingPermissionError,
@@ -76,6 +71,7 @@ from ..services.work_item_service import (
     WorkItemService,
     resolve_actor_role,
 )
+from ._common import FenceSafeAgentId
 from ._common import actor_id as verified_user_id
 from ._common import own_task_actor, refused_transition, write_refusal
 from ._handoff_identity import handing_off_agent, member_reviewer
@@ -179,7 +175,7 @@ class WorkItemUpdate(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
-    agent_id: str
+    agent_id: FenceSafeAgentId
     run_id: Optional[str] = None
     # GH#9532: optional free-text intent for the audit trail + similarity check
     work_intent: Optional[str] = None

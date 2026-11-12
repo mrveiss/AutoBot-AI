@@ -1504,10 +1504,8 @@ route:autobot-backend/llc/api/work_items.py:POST /{work_item_id}/review/approve	
 route:autobot-backend/llc/api/work_items.py:POST /{work_item_id}/review/request-changes	#20977
 route:autobot-backend/llc/api/work_items.py:POST /{work_item_id}/unclaim	#20977
 route:autobot-backend/llc/api/workflows.py:DELETE /{company_id}/{workflow_id}	#20977
-route:autobot-backend/llc/api/workflows.py:GET /{company_id}	#20977
 route:autobot-backend/llc/api/workflows.py:GET /{company_id}/{workflow_id}	#20977
 route:autobot-backend/llc/api/workflows.py:PATCH /{company_id}/{workflow_id}	#20977
-route:autobot-backend/llc/api/workflows.py:POST /{company_id}	#20977
 route:autobot-backend/routers/code_completion.py:GET /patterns	#20973
 route:autobot-backend/routers/code_completion.py:GET /statistics	#20973
 route:autobot-backend/routers/code_completion.py:POST /extract	#20973
