@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
@@ -39,11 +40,12 @@ def prod(monkeypatch):
     """The real ``build_chat_graph()`` with a checkpointer; only the model call and persistence are stubbed."""
     seen: dict = {}
 
-    async def generate(state, config_):
+    # LangGraph injects the run config only into a parameter named ``config`` -- the production nodes' convention.
+    async def generate(state, config: RunnableConfig):
         seen["generate"] = state
         return {"error": "end of test"}  # route_after_generation -> persist_conversation
 
-    async def persist(state, config_):
+    async def persist(state, config: RunnableConfig):
         seen["persist"] = state
         return {}
 
