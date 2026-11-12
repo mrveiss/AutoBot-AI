@@ -43,6 +43,7 @@ from api.user_management.dependencies import (
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
+from llc.api.company_member_schemas import CompanyMembersResponse
 from llc.deps import assert_company_access, get_session, service_dep
 from llc.kb.collections import KbCollectionManager, company_id_of
 from llc.models.company import (
@@ -538,34 +539,33 @@ async def get_kb_ancestry_collections(
 # ------------------------------------------------------------------
 
 
-@router.get("/{company_id}/members")
+@router.get("/{company_id}/members", response_model=CompanyMembersResponse)
 async def list_members(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
     svc: MembershipService = Depends(_get_membership_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     # Issue #12233: tenant authz — caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
     members = await svc.list_members(session, str(company_id))
     # Resolve display names so the assignee/reviewer pickers show people, not UUIDs. `active` is #13956:
     # whether each member may still be given work. Carried, not filtered -- see `person_is_active`.
     names, active = await member_people(session, [m.user_id for m in members])
-    # #20073: the caller's own standing, computed here from the verified context so the view only reflects it.
     standing = await viewer_standing(session, company_id, ctx.user_id, platform_admin=ctx.is_platform_admin)
-    return [
-        {
-            **_to_member_read(m),
-            "display_name": resolve_display_name(names.get(m.user_id), None, str(m.user_id)),
-            # A membership whose user row is missing entirely resolves to
-            # False: nothing is known about them, and unknown must not read as
-            # available.
-            "is_active": active.get(m.user_id, False),
-            **standing,
-        }
-        for m in members
-    ]
+    return {
+        "members": [
+            {
+                **_to_member_read(m),
+                "display_name": resolve_display_name(names.get(m.user_id), None, str(m.user_id)),
+                # A membership whose user row is gone resolves to False: unknown must not read as available.
+                "is_active": active.get(m.user_id, False),
+            }
+            for m in members
+        ],
+        **standing,
+    }
 
 
 # ------------------------------------------------------------------

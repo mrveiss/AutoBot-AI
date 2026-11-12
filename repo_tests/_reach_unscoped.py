@@ -39,6 +39,8 @@ UNSCOPED = frozenset(
         "user-mode-values-sweep-19437",
         # #19076: items are (role, unit) pairs from one registry file, not paths -- no roots= to check.
         "role-registry-installed-units",
+        # #21183: items are glob keys of one record file, not paths -- no roots= to check.
+        "glob-declared-uncovered-entries",
         # #19413: every tracked file, so a ChromaDB heartbeat path written anywhere is seen.
         "chromadb-heartbeat-one-home-sweep",
         # #20894: every tracked non-test python file, since an in-repo log path can be written in any

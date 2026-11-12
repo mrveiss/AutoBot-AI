@@ -375,4 +375,6 @@ DECLARED_SCOPES = {
         "autobot-backend/code_analysis",
         "install.sh",
     ),
+    "ansible-secret-renders-20941": ("autobot-slm-backend/ansible",),
+    "one-after-commit-queue-21107": ("autobot-backend", "autobot_shared"),
 }

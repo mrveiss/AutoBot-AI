@@ -53,7 +53,7 @@ describe('TeamsView pending members and role labels (#20816)', () => {
   })
 
   it('shows the translated role once members arrive', async () => {
-    await show(Promise.resolve(MEMBERS))
+    await show(Promise.resolve({ members: MEMBERS, viewer_can_manage: true, viewer_role: 'owner', viewer_grantable_roles: [] }))
     await click(viewMembersButton())
     const table = byId('team-members')?.textContent ?? ''
     expect(table).toContain('Jane Doe')

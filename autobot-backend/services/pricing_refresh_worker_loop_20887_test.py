@@ -33,6 +33,8 @@ def test_task_bodies_route_through_run_in_worker_loop(task_attr, body_attr):
     ):
         getattr(pricing_refresh, task_attr).run()
     assert len(seen) == 1
+    # The coroutine handed to the loop is the patched body, not some other coroutine.
+    assert seen[0].cr_code is fake_body.__code__
 
 
 def test_cli_main_still_uses_asyncio_run(capsys):

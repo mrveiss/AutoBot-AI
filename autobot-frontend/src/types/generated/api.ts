@@ -1579,6 +1579,7 @@ export interface paths {
          *     Body:
          *         approved (bool): Whether the command was approved
          *         reason (str, optional): Reason for denial
+         *         answer (str, optional): The answer to a stall question the graph asked (#21022)
          */
         post: operations["resume_chat_graph_api_chats__chat_id__resume_post"];
         delete?: never;
@@ -18361,6 +18362,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/files/raw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download file bytes for SLM admin file browser
+         * @description Stream the file at an absolute path unchanged from an already-open handle.
+         */
+        get: operations["admin_download_file_api_files_raw_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/developer/endpoints": {
         parameters: {
             query?: never;
@@ -23177,6 +23198,12 @@ export interface paths {
          *     "the code graph has not been built" is a different answer from "that node
          *     does not exist", and collapsing them would send an operator hunting for a
          *     typo in their node id.
+         *
+         *     *symbol* resolves a name to its node id first (#21327); several matches come back
+         *     as ``status: ambiguous`` with every candidate and no walk.
+         *
+         *     Every answer carries ``indexed_at_commit`` and, when *expected_commit* is
+         *     given, ``stale`` (#21327).
          */
         get: operations["analyze_impact_api_analytics_codebase_impact_get"];
         put?: never;
@@ -33542,7 +33569,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Secret
-         * @description Delete a secret; 409 with the dependents listed unless ``confirm_dependents`` (#20640).
+         * @description Delete a secret; 409 with the dependents listed unless ``dependents_digest`` confirms that set (#20640).
          */
         delete: operations["delete_secret_api_v2_secrets__secret_id__delete"];
         options?: never;
@@ -55740,7 +55767,11 @@ export interface paths {
          *     response and is never stored in plaintext — only the secret is kept in
          *     Redis as a lookup key.  Callers must save the token immediately.
          *
-         *     Valid scopes: ``kb``, ``memory``, ``agents``.
+         *     Valid scopes: ``kb``, ``memory``, ``agents``, ``code``.  The ``code``
+         *     scope is admin-equivalent: it reads the code graph (symbols, callers,
+         *     paths) across all indexed sources, like the admin-gated analytics
+         *     routes.  ``code.similar`` reads unowned, public and shared sources and
+         *     refuses another owner's private source.
          */
         post: operations["create_mcp_token_api_mcp_tokens_post"];
         delete?: never;
@@ -58070,7 +58101,10 @@ export interface components {
         AgentPauseRequest: {
             /** Reason */
             reason?: string | null;
-            /** Paused By */
+            /**
+             * Paused By
+             * @description Ignored; the actor is the verified caller.
+             */
             paused_by?: string | null;
         } & {
             [key: string]: unknown;
@@ -58246,8 +58280,7 @@ export interface components {
         };
         /**
          * AgentStatusItem
-         * @description One agent for the Home dashboard "Agent Activity Monitor" (#10502, frontend ``Agent``).
-         *     A field the server cannot measure is None, never 0: the widget shows "not reported" (#17514).
+         * @description Home dashboard "Agent Activity Monitor" agent (#10502); an unmeasured field is None, never 0 (#17514, #21270).
          */
         AgentStatusItem: {
             /** Id */
@@ -58276,11 +58309,13 @@ export interface components {
             /** Recenttasks */
             recentTasks?: {
                 [key: string]: unknown;
-            }[];
+            }[] | null;
             /** Activitytimeline */
             activityTimeline?: {
                 [key: string]: unknown;
-            }[];
+            }[] | null;
+            /** Activitywindowstart */
+            activityWindowStart?: number | null;
         } & {
             [key: string]: unknown;
         };
@@ -61030,6 +61065,50 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AuditEntryResponse
+         * @description One audit row, as ``AuditEntry.to_response_dict`` sends it (#20173).
+         *
+         *     ``timestamp`` is epoch SECONDS; the operation's data is in ``details``.
+         *     ``result`` is the canonical audit event's ``outcome`` (``services/audit/taxonomy.py``),
+         *     an open string: operation rows say success/denied/failed/error/attempted, identity
+         *     rows add verified/backup-code and more. It is never narrowed to a Literal, which
+         *     would turn one off-vocabulary row into a 500 for the whole query.
+         */
+        AuditEntryResponse: {
+            /** Id */
+            id: string;
+            /** Timestamp */
+            timestamp: number;
+            /** Date */
+            date: string;
+            /** Operation */
+            operation: string;
+            /** Result */
+            result: string;
+            /** User Id */
+            user_id?: string | null;
+            /** Ip Address */
+            ip_address?: string | null;
+            /** Session Id */
+            session_id?: string | null;
+            /** User Role */
+            user_role?: string | null;
+            /** Resource */
+            resource?: string | null;
+            /** Vm Source */
+            vm_source?: string | null;
+            /** Vm Name */
+            vm_name?: string | null;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /** Performance Ms */
+            performance_ms?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AuditLogData
          * @description Response data for get_audit_log.
          */
@@ -61084,9 +61163,7 @@ export interface components {
             /** Has More */
             has_more: boolean;
             /** Entries */
-            entries: {
-                [key: string]: unknown;
-            }[];
+            entries: components["schemas"]["AuditEntryResponse"][];
             /** Query */
             query: {
                 [key: string]: unknown;
@@ -61361,6 +61438,31 @@ export interface components {
              * @default 300
              */
             timeout_per_step: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AutomationWorkflowListResponse
+         * @description ``GET /active_workflows`` and ``GET /completed_workflows``.
+         */
+        AutomationWorkflowListResponse: {
+            /** Success */
+            success: boolean;
+            /** Workflows */
+            workflows: components["schemas"]["WorkflowStatusPayload"][];
+            /** Count */
+            count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AutomationWorkflowStatusResponse
+         * @description ``GET /workflow_status/{id}``.
+         */
+        AutomationWorkflowStatusResponse: {
+            /** Success */
+            success: boolean;
+            workflow: components["schemas"]["WorkflowStatusPayload"];
         } & {
             [key: string]: unknown;
         };
@@ -66982,6 +67084,44 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * CompanyMemberRow
+         * @description One person in the members list.
+         */
+        CompanyMemberRow: {
+            /** Id */
+            id: string;
+            /** Company Id */
+            company_id: string;
+            /** User Id */
+            user_id: string;
+            /** Role */
+            role: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Display Name */
+            display_name: string;
+            /** Is Active */
+            is_active: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CompanyMembersResponse
+         * @description The members and the caller's own standing, which does not depend on there being any.
+         */
+        CompanyMembersResponse: {
+            /** Members */
+            members: components["schemas"]["CompanyMemberRow"][];
+            /** Viewer Role */
+            viewer_role?: string | null;
+            /** Viewer Can Manage */
+            viewer_can_manage: boolean;
+            /** Viewer Grantable Roles */
+            viewer_grantable_roles: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * CompanyRead
          * @description Response schema for a single company.
          */
@@ -69428,7 +69568,7 @@ export interface components {
         CreateTokenRequest: {
             /**
              * Scopes
-             * @description List of scopes: kb, memory, agents
+             * @description List of scopes: kb, memory, agents, code. The code scope grants read access to the code graph across ALL indexed sources (equivalent to the admin-gated analytics routes); code.similar reads unowned, public and shared sources and refuses another owner's private source.
              */
             scopes: string[];
             /**
@@ -79983,6 +80123,11 @@ export interface components {
             paused_at?: string | null;
             /** Paused By */
             paused_by?: string | null;
+            /**
+             * Paused By Name
+             * @description Display name of the user in paused_by; null for system actors or unknown users.
+             */
+            paused_by_name?: string | null;
             /** Error Detail */
             error_detail?: string | null;
             /** Error At */
@@ -103103,6 +103248,13 @@ export interface components {
             entities_created?: {
                 [key: string]: number;
             };
+            /**
+             * Skipped Work Items
+             * @description Work items that could not be imported: title, source_id and a reason code
+             */
+            skipped_work_items?: {
+                [key: string]: unknown;
+            }[];
         } & {
             [key: string]: unknown;
         };
@@ -108283,6 +108435,18 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * WorkflowActionResponse
+         * @description ``POST /start_workflow/{id}`` and ``POST /control_workflow``.
+         */
+        WorkflowActionResponse: {
+            /** Success */
+            success: boolean;
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** WorkflowApprovalResponse */
         WorkflowApprovalResponse: {
             /** Workflow Id */
@@ -108391,6 +108555,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * WorkflowCreatedResponse
+         * @description ``POST /create_workflow``.
+         */
+        WorkflowCreatedResponse: {
+            /** Success */
+            success: boolean;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * WorkflowDetailResponse
          * @description Response shape for GET /workflow/{workflow_id}.
          */
@@ -108424,6 +108602,16 @@ export interface components {
             transitions?: components["schemas"]["TransitionSpec"][];
             /** Approval Policy Keys */
             approval_policy_keys?: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * WorkflowErrorResponse
+         * @description The ``HTTPException`` body the routes raise for 403, 404, 409 and 500.
+         */
+        WorkflowErrorResponse: {
+            /** Detail */
+            detail: string;
         } & {
             [key: string]: unknown;
         };
@@ -108723,6 +108911,56 @@ export interface components {
          */
         WorkflowStatus: "planned" | "running" | "completed" | "failed" | "cancelled";
         /**
+         * WorkflowStatusPayload
+         * @description A workflow as ``ActiveWorkflow.to_status_dict`` reports it.
+         */
+        WorkflowStatusPayload: {
+            /** Workflow Id */
+            workflow_id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Session Id */
+            session_id: string;
+            /** Current Step */
+            current_step: number;
+            /** Total Steps */
+            total_steps: number;
+            /** Is Paused */
+            is_paused: boolean;
+            /** Is Cancelled */
+            is_cancelled: boolean;
+            /** Automation Mode */
+            automation_mode: string;
+            /** Phase */
+            phase?: string | null;
+            /** Active Service */
+            active_service?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Steps */
+            steps: components["schemas"]["WorkflowStepStatusPayload"][];
+            /** User Interventions */
+            user_interventions: {
+                [key: string]: unknown;
+            }[];
+            /** Notification Config */
+            notification_config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Trigger Payload */
+            trigger_payload?: {
+                [key: string]: unknown;
+            } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * WorkflowStatusResponse
          * @description Response shape for GET /workflow/{workflow_id}/status.
          */
@@ -108783,6 +109021,32 @@ export interface components {
             dependencies: string[];
             /** Timeout Seconds */
             timeout_seconds?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * WorkflowStepStatusPayload
+         * @description One step as ``WorkflowStep.to_status_dict`` reports it.
+         */
+        WorkflowStepStatusPayload: {
+            /** Step Id */
+            step_id: string;
+            /** Command */
+            command: string;
+            /** Description */
+            description: string;
+            /** Status */
+            status: string;
+            /** Requires Confirmation */
+            requires_confirmation: boolean;
+            /** Risk Level */
+            risk_level: string;
+            /** Risk Tier */
+            risk_tier?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -132995,6 +133259,35 @@ export interface operations {
             };
         };
     };
+    admin_download_file_api_files_raw_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_api_endpoints_api_developer_endpoints_get: {
         parameters: {
             query?: never;
@@ -139306,11 +139599,15 @@ export interface operations {
     };
     analyze_impact_api_analytics_codebase_impact_get: {
         parameters: {
-            query: {
-                /** @description Graph node id to walk back from */
-                node_id: string;
+            query?: {
+                /** @description Exact graph node id to walk back from */
+                node_id?: string | null;
+                /** @description Symbol name (bare, Class.method or node id) instead of node_id; an ambiguous name returns its candidates, never a guess */
+                symbol?: string | null;
                 /** @description Override the configured hop limit. Omit to use impact_analysis_max_depth. */
                 max_depth?: number | null;
+                /** @description Commit the caller expects the graph to describe; a mismatch is flagged stale in the answer. */
+                expected_commit?: string | null;
             };
             header?: never;
             path?: never;
@@ -151339,7 +151636,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WorkflowCreatedResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -151349,6 +151664,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
         };
@@ -151374,7 +151698,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WorkflowActionResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -151384,6 +151735,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
         };
@@ -151407,7 +151767,43 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WorkflowActionResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -151417,6 +151813,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
         };
@@ -151438,7 +151843,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AutomationWorkflowStatusResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -151448,6 +151880,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
         };
@@ -151467,7 +151908,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AutomationWorkflowListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
         };
@@ -151487,7 +151955,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AutomationWorkflowListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
         };
@@ -152701,7 +153196,7 @@ export interface operations {
         parameters: {
             query?: {
                 chat_id?: string | null;
-                confirm_dependents?: boolean;
+                dependents_digest?: string | null;
             };
             header?: never;
             path: {
@@ -153135,7 +153630,7 @@ export interface operations {
     delete_secret_api_v2_secrets__secret_id__delete: {
         parameters: {
             query?: {
-                confirm_dependents?: boolean;
+                dependents_digest?: string | null;
             };
             header?: never;
             path: {
@@ -176898,9 +177393,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["CompanyMembersResponse"];
                 };
             };
             /** @description Validation Error */

@@ -36,8 +36,6 @@ autobot-backend/requirements.txt::aiohttp
 autobot-backend/requirements.txt::aiosqlite
 autobot-backend/requirements.txt::alembic
 autobot-backend/requirements.txt::anthropic
-autobot-backend/requirements.txt::apscheduler
-autobot-backend/requirements.txt::asyncssh
 autobot-backend/requirements.txt::beautifulsoup4
 autobot-backend/requirements.txt::celery
 autobot-backend/requirements.txt::greenlet
@@ -57,10 +55,8 @@ autobot-backend/requirements.txt::pyyaml
 autobot-backend/requirements.txt::sentence-transformers
 autobot-backend/requirements.txt::sqlalchemy
 autobot-backend/requirements.txt::structlog
-autobot-backend/requirements.txt::torchmetrics
 autobot-backend/requirements.txt::uvicorn
 autobot-backend/requirements.txt::watchdog
-autobot-backend/requirements.txt::weasyprint
 autobot-backend/requirements.txt::websockets
 autobot-slm-backend/requirements.txt::aiofiles
 autobot-slm-backend/requirements.txt::aiohttp
@@ -68,10 +64,8 @@ autobot-slm-backend/requirements.txt::aiosqlite
 autobot-slm-backend/requirements.txt::cryptography
 autobot-slm-backend/requirements.txt::greenlet
 autobot-slm-backend/requirements.txt::httpx
-autobot-slm-backend/requirements.txt::jinja2
 autobot-slm-backend/requirements.txt::prometheus-client
 autobot-slm-backend/requirements.txt::psutil
-autobot-slm-backend/requirements.txt::psycopg2-binary
 autobot-slm-backend/requirements.txt::pydantic
 autobot-slm-backend/requirements.txt::python-multipart
 autobot-slm-backend/requirements.txt::redis

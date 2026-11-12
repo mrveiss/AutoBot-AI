@@ -120,3 +120,39 @@ register_env_var(
         component="analytics",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AGENT_FEED_RECORDS",
+        type=int,
+        default=20,
+        description="Task records read per agent for the Agent Activity feeds (agent_activity_feed.py, #21270).",
+        component="analytics",
+        range=(1, 200),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AGENT_FEED_MAX_AGENTS",
+        type=int,
+        default=200,
+        description="Agents whose activity feed one /agents/status call reads; the rest report not-measured (#21270).",
+        component="analytics",
+        range=(1, 5000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODE_TOOL_MAX_ITEMS",
+        type=int,
+        default=200,
+        description=(
+            "Entries kept per list in one code.* MCP tool response (code_graph_tools.py, #21327); "
+            "the rest are counted in the response's omitted field."
+        ),
+        component="backend",
+        range=(1, 10000),
+    )
+)
