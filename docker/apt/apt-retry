@@ -35,6 +35,18 @@
 #   stopped (a daemon still writing then gets SIGPIPE), so the wrapper never hangs on it. INT/TERM/HUP
 #   clean up and exit 130/143/129; dash defers a trap until the foreground command returns, so a TERM
 #   sent to the wrapper alone takes effect after the command finishes.
+# - A HUNG command is bounded too: every attempt (and the `apt-get update` between attempts) runs under
+#   coreutils `timeout --kill-after`, so no attempt outlives APT_RETRY_ATTEMPT_TIMEOUT_S (default 600)
+#   seconds: TERM at the bound, KILL APT_RETRY_KILL_AFTER_S (default 15) seconds later if TERM was
+#   ignored. `timeout` is run WITHOUT --foreground on purpose: it then puts the command in its own
+#   process group and signals the whole group, so apt's http/gpg/curl children die with it instead of
+#   being orphaned holding the output pipe; --foreground would signal only the direct child. Exit 124
+#   (timed out) or 137 (killed) is TRANSIENT: logged naming the attempt, the bound and the command,
+#   then retried with the backoff above, up to APT_RETRY_ATTEMPTS. When the last attempt also hung the
+#   wrapper fails with "apt command hung; N attempts timed out". The bound is per attempt, so a caller
+#   needs its own outer limit (a workflow step's timeout-minutes) sized for more than one attempt.
+#   After a hung install/upgrade, `dpkg --configure -a` is run (same bound) before the refresh, since
+#   a kill during unpack leaves dpkg interrupted and every retry would fail at once.
 
 if [ "$#" -eq 0 ]; then
     echo "usage: apt-retry COMMAND [ARG...]" >&2
@@ -46,11 +58,13 @@ delay="${APT_RETRY_DELAY_S:-10}"
 max_delay="${APT_RETRY_MAX_DELAY_S:-120}"
 mirrors="${APT_RETRY_MIRRORS_FILE:-/etc/apt/apt-mirrors.txt}"
 tee_grace_s="${APT_RETRY_TEE_GRACE_S:-5}"
+attempt_timeout_s="${APT_RETRY_ATTEMPT_TIMEOUT_S:-600}"
+kill_after_s="${APT_RETRY_KILL_AFTER_S:-15}"
 
 # The one list of transient signatures (extended regex, case-insensitive).
 TRANSIENT='Temporary failure resolving|Could not resolve|Could not connect|Cannot initiate the connection|Connection (failed|refused|reset|timed out)|Operation too slow|Timeout was reached|Reading from server failed|Unable to find the server|Hash Sum mismatch|File has unexpected size|Writing more data than expected|Undetermined Error|(Failed to fetch|Err:[0-9]+) .* 5[0-9][0-9] '
 
-for spec in "APT_RETRY_ATTEMPTS=$attempts=1" "APT_RETRY_DELAY_S=$delay=0" "APT_RETRY_MAX_DELAY_S=$max_delay=0" "APT_RETRY_TEE_GRACE_S=$tee_grace_s=0"; do
+for spec in "APT_RETRY_ATTEMPTS=$attempts=1" "APT_RETRY_DELAY_S=$delay=0" "APT_RETRY_MAX_DELAY_S=$max_delay=0" "APT_RETRY_TEE_GRACE_S=$tee_grace_s=0" "APT_RETRY_ATTEMPT_TIMEOUT_S=$attempt_timeout_s=1" "APT_RETRY_KILL_AFTER_S=$kill_after_s=1"; do
     min="${spec##*=}"
     rest="${spec%=*}"
     value="${rest#*=}"
@@ -69,7 +83,16 @@ attempts="$(norm "$attempts")"
 delay="$(norm "$delay")"
 max_delay="$(norm "$max_delay")"
 tee_grace_s="$(norm "$tee_grace_s")"
+attempt_timeout_s="$(norm "$attempt_timeout_s")"
+kill_after_s="$(norm "$kill_after_s")"
 [ "$delay" -le "$max_delay" ] || delay="$max_delay"
+
+command -v timeout >/dev/null 2>&1 || { echo "apt-retry: coreutils 'timeout' is required to bound a hung command" >&2; exit 2; }
+
+# bounded COMMAND...: run COMMAND under the per-attempt wall-clock bound (see the header).
+bounded() {
+    timeout --kill-after="${kill_after_s}" "${attempt_timeout_s}" "$@"
+}
 
 tmp="$(mktemp -d)" || exit 1
 tee_pid=""
@@ -128,10 +151,11 @@ diagnostics() {
 }
 
 n=1
+hung_n=0
 while :; do
     tee "$out" <"$fifo" &
     tee_pid=$!
-    "$@" >"$fifo" 2>&1
+    bounded "$@" >"$fifo" 2>&1
     rc=$?
     # A daemon the command left running can hold the fifo open, so tee never sees EOF. A watchdog
     # (all its fds on /dev/null, so it holds nothing) stops tee after the grace; the plain `wait`
@@ -149,19 +173,31 @@ while :; do
     tee_pid=""
     watchdog_pid=""
     [ "$rc" -eq 0 ] && exit 0
-    if ! grep -E -i -q "$TRANSIENT" "$out"; then
+    hung=0
+    case "$rc" in 124 | 137) hung=1 ;; esac
+    if [ "$hung" -eq 0 ] && ! grep -E -i -q "$TRANSIENT" "$out"; then
         echo "apt-retry: not retrying (exit ${rc}, no transient network failure in the output): $*" >&2
         exit "$rc"
     fi
+    if [ "$hung" -eq 1 ]; then
+        hung_n=$((hung_n + 1))
+        echo "apt-retry: attempt ${n}/${attempts} timed out (exit ${rc}): no result within the ${attempt_timeout_s}s bound (killed ${kill_after_s}s after TERM if ignored): $*" >&2
+    fi
     if [ "$n" -ge "$attempts" ]; then
-        echo "apt-retry: giving up after ${n} attempts (last exit ${rc}): $*" >&2
+        if [ "$hung" -eq 1 ]; then
+            echo "apt-retry: apt command hung; ${hung_n} attempts timed out (${attempt_timeout_s}s bound each, ${n} attempts, last exit ${rc}): $*" >&2
+        else
+            echo "apt-retry: giving up after ${n} attempts (last exit ${rc}): $*" >&2
+        fi
         diagnostics
         exit "$rc"
     fi
-    echo "apt-retry: attempt ${n}/${attempts} failed transiently (exit ${rc}): $*; retrying in ${delay}s" >&2
+    [ "$hung" -eq 1 ] || echo "apt-retry: attempt ${n}/${attempts} failed transiently (exit ${rc}): $*; retrying in ${delay}s" >&2
+    [ "$hung" -eq 0 ] || echo "apt-retry: retrying the timed-out command in ${delay}s" >&2
     sleep "$delay"
     if [ "$refresh" -eq 1 ]; then
-        apt-get update || echo "apt-retry: apt-get update failed (exit $?); retrying the command anyway" >&2
+        [ "$hung" -eq 0 ] || bounded dpkg --configure -a || echo "apt-retry: dpkg --configure -a exited $?; the retry reports why" >&2
+        bounded apt-get update || echo "apt-retry: apt-get update failed (exit $?); retrying the command anyway" >&2
     fi
     delay=$((delay * 2))
     [ "$delay" -le "$max_delay" ] || delay="$max_delay"
