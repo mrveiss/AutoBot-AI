@@ -497,20 +497,55 @@ def test_a_daemon_holding_the_output_does_not_hang_the_wrapper(tmp_path: Path) -
     assert 0.9 <= elapsed < 10, f"the wrapper should wait out the 1 s grace, no longer ({elapsed:.1f} s)"
 
 
-def test_a_prompt_capture_costs_none_of_the_grace(tmp_path: Path) -> None:
+#: The grace the prompt-path tests configure, far above their bounds: a wrapper that sits in it cannot pass by luck.
+_LONG_GRACE_S = 30
+_PROMPT_BOUND_S = 10
+
+
+def _prompt_run(tmp_path: Path, ignore_term: bool) -> tuple[float, float, int, str]:
+    """(seconds until the wrapper exits, seconds until its output pipes reach EOF, exit code, stderr) for a command that exits at once."""
     sh = shutil.which("sh")
     if sh is None:
         pytest.skip("sh unavailable")
     stub = tmp_path / "apt-get"
     stub.write_text("#!/bin/sh\necho started\nexit 0\n", encoding="utf-8")
     stub.chmod(0o755)
-    env = {"PATH": f"{tmp_path}:/usr/bin:/bin", "APT_RETRY_TEE_GRACE_S": "30"}
+    env = {"PATH": f"{tmp_path}:/usr/bin:/bin", "APT_RETRY_TEE_GRACE_S": str(_LONG_GRACE_S)}
+    # `trap '' TERM` before the exec: a signal ignored on entry stays ignored in the wrapper whatever it traps.
+    prefix = 'trap "" TERM; exec "$@"' if ignore_term else 'exec "$@"'
+    argv = [sh, "-c", prefix, "sh", sh, str(_HELPER), "apt-get", "install", "x"]
     start = time.monotonic()
-    done = subprocess.run(
-        [sh, str(_HELPER), "apt-get", "install", "x"], env=env, capture_output=True, text=True, timeout=20, check=False
-    )
-    assert done.returncode == 0 and "started" in done.stdout, done.stderr
-    assert time.monotonic() - start < 10, "the wrapper waited out the grace although tee had exited"
+    proc = subprocess.Popen(argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        code = proc.wait(timeout=_PROMPT_BOUND_S)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        pytest.fail(f"the wrapper had not exited {_PROMPT_BOUND_S} s after its command did (grace {_LONG_GRACE_S} s)")
+    exited = time.monotonic() - start
+    try:
+        out, err = proc.communicate(timeout=_PROMPT_BOUND_S)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        pytest.fail(f"the wrapper exited after {exited:.1f} s but a child it left holds its output pipe open")
+    assert "started" in out, err
+    return exited, time.monotonic() - start, code, err
+
+
+def test_a_prompt_capture_costs_none_of_the_grace(tmp_path: Path) -> None:
+    exited, eof, code, err = _prompt_run(tmp_path, ignore_term=False)
+    assert code == 0, err
+    assert eof < _PROMPT_BOUND_S, f"wrapper exit {exited:.1f} s, pipe EOF {eof:.1f} s"
+
+
+def test_a_prompt_capture_costs_none_of_the_grace_when_term_is_ignored(tmp_path: Path) -> None:
+    """#21384: the watchdog was stopped with TERM, which a subshell just forked loses (it still carries the wrapper's
+    handler) and a TERM ignored on entry never delivers; `wait` then blocked for the whole grace. Ignoring TERM
+    here forces that ordering every time instead of on a loaded runner."""
+    exited, eof, code, err = _prompt_run(tmp_path, ignore_term=True)
+    assert code == 0, err
+    assert eof < _PROMPT_BOUND_S, f"wrapper exit {exited:.1f} s, pipe EOF {eof:.1f} s"
 
 
 def test_diagnostics_name_only_real_hosts_never_a_quoted_format_string(tmp_path: Path) -> None:
