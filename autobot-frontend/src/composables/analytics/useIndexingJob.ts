@@ -24,6 +24,12 @@ import type { RunStateHandle } from './useRunState'
 
 const logger = createLogger('useIndexingJob')
 
+/**
+ * Polls that may answer `idle` while this page is still waiting for a request it queued itself
+ * before the wait is given up (the request is not visible to the backend until it is queued).
+ */
+export const IDLE_POLLS_BEFORE_GIVING_UP = 5
+
 interface JobPhase {
   id: string
   name: string
@@ -100,6 +106,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     task_id?: string
     source_id?: string | null
     status?: string
+    position?: number
     progress?: { step?: string; percent?: number }
     error?: string
   }
@@ -164,8 +171,23 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     { intervalMs: 2000 }
   )
 
+  // A polling session starts not having seen its own job; `queued` or an active job for this
+  // source sets it, and only then is a bare `idle` the end of the job rather than a wait.
+  let sawOwnJob = false
+  let idlePolls = 0
+
   const startJobPolling = () => {
+    sawOwnJob = false
+    idlePolls = 0
     _startJobPoller('')
+  }
+
+  /** This source's own request is queued behind another source's job (#20513): wait, do not finish. */
+  const _showQueued = (data: CurrentJobRaw) => {
+    sawOwnJob = true
+    idlePolls = 0
+    deps.analyzing.value = true
+    deps.progressStatus.value = deps.t('analytics.codebase.status.queued', { position: data.position })
   }
 
   // --- Internal helpers ---
@@ -234,13 +256,20 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     }
     const data = currentJobEndpoint.data.value
     if (!data) return
-    // #20491: this page's queued job may still be behind another source's; keep waiting for it.
+    // The backend answers only for the requested source (#20513), so this is a second check.
     if (!jobBelongsToSource(data.source_id, deps.selectedSource.value?.id)) return
 
     currentJobStatus.value = data.status ?? null
-    if (data.has_active_job) {
+    if (data.status === 'queued') {
+      _showQueued(data)
+    } else if (data.has_active_job) {
+      sawOwnJob = true
+      idlePolls = 0
+      if (data.task_id) currentJobId.value = data.task_id
       _updateActiveJobProgress(data as Record<string, unknown>)
       await pollIntermediateResults()
+    } else if (data.status === 'idle' && !sawOwnJob && !currentJobId.value && ++idlePolls <= IDLE_POLLS_BEFORE_GIVING_UP) {
+      logger.debug('Waiting for the queued job to appear')
     } else {
       await _handleJobFinished(data.status ?? '', data.error)
     }
@@ -268,7 +297,12 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     if (!data) return
     if (!jobBelongsToSource(data.source_id, deps.selectedSource.value?.id)) return
 
-    if (data.has_active_job) {
+    if (data.status === 'queued') {
+      // Queued behind another source's job: no job of ours exists yet, so no task id, no
+      // "already running" notice and no progress figure; keep polling until it starts.
+      startJobPolling()
+      _showQueued(data)
+    } else if (data.has_active_job) {
       currentJobId.value = data.task_id ?? null
       currentJobStatus.value = data.status ?? null
       deps.analyzing.value = true

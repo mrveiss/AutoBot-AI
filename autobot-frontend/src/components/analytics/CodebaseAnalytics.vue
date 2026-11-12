@@ -6,6 +6,7 @@
       :root-path="rootPath"
       :selected-source="selectedSource"
       :scan-runner-running="scanRunner.running.value"
+      :stop-disabled="analyzing && !currentJobId && !scanRunner.running.value"
       :loading-api-endpoints="loadingApiEndpoints"
       :analyzing-code-smells="analyzingCodeSmells"
       :exporting-report="exportingReport"

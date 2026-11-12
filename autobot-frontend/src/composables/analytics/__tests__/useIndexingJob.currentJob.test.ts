@@ -9,12 +9,12 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
-import { useIndexingJob, type UseIndexingJobDeps } from '../useIndexingJob'
+import { IDLE_POLLS_BEFORE_GIVING_UP, useIndexingJob, type UseIndexingJobDeps } from '../useIndexingJob'
 
 const fetchWithAuth = vi.fn()
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: (...a: unknown[]) => fetchWithAuth(...a) }))
 vi.mock('@/config/AppConfig.js', () => ({
-  default: { getServiceUrl: vi.fn().mockResolvedValue('http://backend') },
+  default: { getServiceUrl: vi.fn(async () => 'http://backend') },
 }))
 
 const IDLE = { has_active_job: false, task_id: null, status: 'idle' }
@@ -42,7 +42,7 @@ function build(withSourceId: (url: string) => string, loadRunState = vi.fn(async
     onIndexComplete: vi.fn(async () => {}),
     storageKeyPath: 'k',
   } as unknown as UseIndexingJobDeps
-  return { job: useIndexingJob(deps), loadRunState }
+  return { job: useIndexingJob(deps), loadRunState, deps }
 }
 
 describe('useIndexingJob current-job read (#20513, #21003)', () => {
@@ -75,5 +75,85 @@ describe('useIndexingJob current-job read (#20513, #21003)', () => {
     const { job, loadRunState } = build(scoped)
     await job.pollJobStatus()
     expect(loadRunState).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('a request queued behind another source\'s job (#20513)', () => {
+  const QUEUED = { has_active_job: true, task_id: null, source_id: 'autobot', status: 'queued', position: 2 }
+  const RUNNING = { has_active_job: true, task_id: 't9', source_id: 'autobot', status: 'running', progress: {} }
+  const currentCalls = () => fetchWithAuth.mock.calls.map((c) => c[0] as string).filter((u) => u.includes('/index/current'))
+
+  beforeEach(() => {
+    fetchWithAuth.mockReset()
+    fetchWithAuth.mockResolvedValue(respond(IDLE))
+  })
+
+  it('polling keeps waiting and shows the queued text with the position', async () => {
+    fetchWithAuth.mockResolvedValue(respond(QUEUED))
+    const { job, deps } = build(scoped)
+    await job.pollJobStatus()
+    expect(deps.analyzing.value).toBe(true)
+    expect(deps.progressStatus.value).toBe('analytics.codebase.status.queued')
+    expect(job.currentJobId.value).toBeNull()
+    expect(fetchWithAuth.mock.calls.every((c) => (c[0] as string).includes('/index/current'))).toBe(true) // no problems/stats polls
+    expect(deps.notify).not.toHaveBeenCalled()
+  })
+
+  it('queued then running sets the job id', async () => {
+    fetchWithAuth.mockResolvedValueOnce(respond(QUEUED)).mockResolvedValue(respond(RUNNING))
+    const { job } = build(scoped)
+    await job.pollJobStatus()
+    expect(job.currentJobId.value).toBeNull()
+    await job.pollJobStatus()
+    expect(job.currentJobId.value).toBe('t9')
+  })
+
+  it('queued then idle: the job that started and ended is terminal', async () => {
+    fetchWithAuth.mockResolvedValueOnce(respond(QUEUED)).mockResolvedValue(respond(IDLE))
+    const { job, deps, loadRunState } = build(scoped)
+    await job.pollJobStatus()
+    await job.pollJobStatus()
+    expect(deps.analyzing.value).toBe(false)
+    expect(loadRunState).toHaveBeenCalledTimes(1)
+  })
+
+  it('idle while waiting for a request this page queued: waits, then gives up after the bound', async () => {
+    const { job, deps, loadRunState } = build(scoped)
+    deps.analyzing.value = true
+    for (let i = 0; i < IDLE_POLLS_BEFORE_GIVING_UP; i++) await job.pollJobStatus()
+    expect(deps.analyzing.value).toBe(true)
+    expect(loadRunState).not.toHaveBeenCalled()
+    await job.pollJobStatus()
+    expect(deps.analyzing.value).toBe(false)
+    expect(loadRunState).toHaveBeenCalledTimes(1)
+  })
+
+  it('page open while queued starts polling, without the "already running" notice', async () => {
+    vi.useFakeTimers()
+    try {
+      fetchWithAuth.mockResolvedValue(respond(QUEUED))
+      const { job, deps } = build(scoped)
+      await job.checkCurrentIndexingJob()
+      expect(deps.analyzing.value).toBe(true)
+      expect(deps.progressStatus.value).toBe('analytics.codebase.status.queued')
+      expect(deps.progressPercent.value).toBe(0)
+      expect(job.currentJobId.value).toBeNull()
+      expect(deps.notify).not.toHaveBeenCalled()
+      const before = currentCalls().length
+      await vi.advanceTimersByTimeAsync(2100)
+      expect(currentCalls().length).toBeGreaterThan(before)
+      job.stopJobPolling()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancel while only queued posts nothing (it would stop another source\'s job)', async () => {
+    fetchWithAuth.mockResolvedValue(respond(QUEUED))
+    const { job } = build(scoped)
+    await job.pollJobStatus()
+    fetchWithAuth.mockClear()
+    await job.cancelIndexingJob()
+    expect(fetchWithAuth).not.toHaveBeenCalled()
   })
 })

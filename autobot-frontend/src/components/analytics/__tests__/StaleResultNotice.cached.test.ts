@@ -16,7 +16,7 @@ import en from '@/i18n/locales/en.json'
 const fetchWithAuth = vi.fn()
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: (...a: unknown[]) => fetchWithAuth(...a) }))
 vi.mock('@/config/AppConfig.js', () => ({
-  default: { getServiceUrl: vi.fn().mockResolvedValue('http://backend'), getApiUrl: vi.fn().mockResolvedValue('http://backend/api') },
+  default: { getServiceUrl: vi.fn(async () => 'http://backend'), getApiUrl: vi.fn(async () => 'http://backend/api') },
 }))
 
 import { useAnalyticsDataFetchers } from '@/composables/analytics/useAnalyticsDataFetchers'
