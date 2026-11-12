@@ -137,7 +137,8 @@
       "compressedToast": "Context window optimized - older messages summarized",
       "summaryTitle": "Context Summary",
       "summaryToggle": "Show details",
-      "summarizing": "Summarizing..."
+      "summarizing": "Summarizing...",
+      "unavailable": "Context size unavailable (model list failed to load)"
     },
     "sendMessage": "Send a message...",
     "newChat": "New Chat",
