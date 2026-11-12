@@ -99,3 +99,25 @@ describe('recent tasks: not reported vs measured empty (#21270)', () => {
     expect(w.get('.task-list').text()).toContain('Deploy')
   })
 })
+
+describe('timeline view: not reported vs measured empty (#21270)', () => {
+  async function timeline(overrides: Record<string, unknown>) {
+    const w = await render([{ ...unmeasured('a', 'Acme'), ...overrides }])
+    await w.findAll('.view-toggle button')[1].trigger('click')
+    return w
+  }
+
+  it('a null timeline reads "not reported" on the agent row', async () => {
+    const w = await timeline({ recentTasks: null, activityTimeline: null })
+    expect(w.find('.agents-grid').exists()).toBe(false) // the click really switched view
+    expect(w.get('.activity-bars').text()).toBe(A.notReported)
+    expect(w.text()).not.toContain(A.noRecentTasks)
+  })
+
+  it('a measured empty timeline shows no bars and no "not reported"', async () => {
+    const w = await timeline({ recentTasks: [], activityTimeline: [] })
+    expect(w.find('.agents-grid').exists()).toBe(false)
+    expect(w.get('.activity-bars').text()).toBe('')
+    expect(w.findAll('.activity-bar')).toHaveLength(0)
+  })
+})
