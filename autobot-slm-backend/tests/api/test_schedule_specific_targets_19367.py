@@ -60,6 +60,12 @@ _CASES = {
 _IDS = [f"{t}-{n!r}" for t, n, _ in _CASES.values()]
 
 
+@pytest.fixture(autouse=True)
+def slm_external_url(monkeypatch):
+    """get_schedule_target_nodes resolves the SLM self node from this URL (#21036); the stubbed settings has none."""
+    monkeypatch.setattr(_executor.settings, "external_url", "http://slm.example.test:8000", raising=False)
+
+
 @pytest.fixture
 async def maker():
     with real_modules_swapped():

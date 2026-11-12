@@ -117,7 +117,7 @@ from services.drift_checker import (
 )
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
-from services.node_events import split_enrollment_failed
+from services.node_events import get_slm_self_node, split_enrollment_failed
 from services.playbook_executor import get_playbook_executor
 from services.schedule_executor import get_schedule_target_nodes
 from services.single_flight_cache import SingleFlightCache
@@ -4371,7 +4371,7 @@ class UpdateAllJob(BaseModel):
     completed_fleet_nodes: int = 0
     failed_fleet_nodes: int = 0
     skipped_fleet_nodes: int = 0  # non-operational nodes skipped (#11511)
-    enrollment_skipped_nodes: List[EnrollmentSkip] = []  # last enrollment failed (#21036)
+    enrollment_skipped_nodes: List[EnrollmentSkip] = []  # not fully enrolled: failed, pending or degraded (#21036)
     created_at: str = ""
     completed_at: Optional[str] = None
     failure_reason: Optional[str] = None
@@ -4910,10 +4910,9 @@ _NON_OPERATIONAL_STATUSES = frozenset({"degraded", "offline", "error", "pending"
 def _is_node_operational(node: Node) -> bool:
     """Return True only when a node is in a state where a deploy is safe (#11511).
 
-    Nodes that are degraded, have never sent a heartbeat, or whose status is
-    anything other than online/maintenance are not targeted — attempting an
-    Ansible deploy against them will always fail and should not affect the
-    overall job result.
+    Deploy-safety, not enrollment (see status_enums.NOT_FULLY_ENROLLED_STATUSES): nodes that are
+    degraded, never heartbeated or not online/maintenance are not targeted; an Ansible deploy
+    against them always fails and should not affect the overall job result.
     """
     if node.last_heartbeat is None:
         return False
@@ -5135,7 +5134,6 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
     currency count — it does not cause a double-update.
     """
     try:
-        slm_own_ip = urlparse(settings.external_url).hostname or ""
         async with db_service_ref.session() as db:
             # B: use version comparison — reliable immediately after stages 1-2
             nodes_result = await db.execute(
@@ -5149,23 +5147,21 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
 
             # A: self-node inclusion — ensure the co-located SLM host is counted
             # even when heartbeat hasn't yet updated its code_status to OUTDATED.
-            if slm_own_ip:
-                slm_result = await db.execute(select(Node).where(Node.ip_address == slm_own_ip))
-                slm_node = slm_result.scalar_one_or_none()
-                if slm_node and slm_node.node_id not in seen_ids:
-                    # Self-node is not captured by version comparison (e.g. no
-                    # code_version recorded yet); include it so the pipeline
-                    # does not report "everything current" prematurely.
-                    logger.info(
-                        "update-all: self-node %s not in version-outdated list "
-                        "(code_version=%s vs remote=%s) — adding explicitly (#9996-A)",
-                        slm_node.node_id,
-                        _short_sha(slm_node.code_version),
-                        _short_sha(remote_commit),
-                    )
-                    outdated_node_ids.append(slm_node.node_id)
+            slm_node = await get_slm_self_node(db, settings.external_url)
+            if slm_node and slm_node.node_id not in seen_ids:
+                # Not captured by version comparison (e.g. no code_version yet); include it so the
+                # pipeline does not report "everything current" prematurely.
+                logger.info(
+                    "update-all: self-node %s not outdated (code_version=%s, remote=%s), adding (#9996-A)",
+                    slm_node.node_id,
+                    _short_sha(slm_node.code_version),
+                    _short_sha(remote_commit),
+                )
+                outdated_node_ids.append(slm_node.node_id)
 
-            outdated_node_ids, job.enrollment_skipped_nodes = await split_enrollment_failed(db, outdated_node_ids)
+            outdated_node_ids, job.enrollment_skipped_nodes = await split_enrollment_failed(
+                db, outdated_node_ids, {slm_node.node_id} if slm_node else set()
+            )
 
         stage_fleet = _get_stage(job, "fleet_nodes")
         stage_fleet.sha = _short_sha(remote_commit)
