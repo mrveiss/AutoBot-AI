@@ -74,7 +74,7 @@ reportlab  # PDF export for transcripts
 # AI/ML
 openai
 anthropic  # Issue #15016: call sites fixed for the 1.x messages.create()/.stream() signature (temperature/top_p/top_k removed, routed via extra_body); capped so the next major requires a deliberate bump, not a silent break
-boto3>=1.43.122                       # GH#9010: AWS Bedrock provider
+boto3>=1.43.126                       # GH#9010: AWS Bedrock provider
 chromadb                           # version from constraints/shared.txt (#19478)
 protobuf  # cap/floor rationale lives in ../requirements.txt (#15070, #4061); this file `-r`-includes it and pip resolves the intersection, so the two lines MUST stay identical — enforced by tools/lint/check_requirements_pin_parity.py
 sentence-transformers
@@ -102,7 +102,7 @@ tree-sitter-javascript>=0.25.0
 -r ../requirements.txt
 
 # Issue #858: Additional runtime dependencies for Python 3.13
-xxhash>=4.0.2          # Hash functions for LLM caching
+xxhash>=4.1.0          # Hash functions for LLM caching
 structlog  # Structured logging for service auth
 llama-index  # Migrated from 0.13.x; floor aligned to 0.14.19 (#2642)
 llama-index-core  # Explicit core pin matching ecosystem (#2642)
@@ -114,8 +114,8 @@ langchain  # Issue #1572 + #10386: bumped from 1.3.1 — unblocked by websockets
 langchain-core  # Issue #1572 + #10386: bumped from 1.3.3 — langchain 1.3.10 requires >=1.4.7
 langchain-community  # Issue #1572 + #10386: bumped from 0.4.1 — aligned with ai-stack canonical (#2808)
 langchain-ollama>=1.1.0,<2.0.0        # Issue #1572: ChatOllama for QA chain
-langgraph>=1.2.18,<2.0.0               # Issue #1043 + #10386: bumped from 1.2.0 — langchain 1.3.10 requires >=1.2.5; langgraph 1.2.6 pulls langgraph-sdk 0.4.2 (websockets>=14,<16) now satisfied by websockets>=15,<16
-langgraph-checkpoint-redis>=0.5.2,<1.0.0  # Issue #1043: Redis checkpointer for thread persistence
+langgraph>=1.2.20,<2.0.0               # Issue #1043 + #10386: bumped from 1.2.0 — langchain 1.3.10 requires >=1.2.5; langgraph 1.2.6 pulls langgraph-sdk 0.4.2 (websockets>=14,<16) now satisfied by websockets>=15,<16
+langgraph-checkpoint-redis>=0.6.0,<1.0.0  # Issue #1043: Redis checkpointer for thread persistence
 markdownify  # HTML to Markdown conversion
 mcp  # MCP protocol for skill subprocesses (Issue #731)
 PyYAML  # SKILL.md frontmatter parsing (Phase 3 sync engine)
