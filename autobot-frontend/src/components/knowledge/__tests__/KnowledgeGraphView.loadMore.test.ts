@@ -73,4 +73,23 @@ describe('KnowledgeGraphView load more', () => {
     expect(wrapper.find('.cytoscape-container').element).toBe(container)
     expect(added.filter((element) => !element.data.source).map((element) => element.data.id)).toContain('b')
   })
+
+  it('offers the continuation when the first scan window is empty but carries a cursor', async () => {
+    vi.mocked(apiClient.get).mockImplementation((async (url: string) =>
+      url.includes('/memory/entities/all') ? { data: { entities: [] } } : graphPage([], '100:0')) as never)
+    vi.mocked(apiClient.call).mockResolvedValue(graphPage(['b'], null) as never)
+    const wrapper = mount(KnowledgeGraphView, {
+      global: {
+        mocks: { $t: (key: string) => key },
+        stubs: { RouterLink: true, RouterView: true, Icon: true, MemoryOrphanManager: true },
+      },
+    })
+    await flushPromises()
+    const more = wrapper.find('.error-notification[role="status"] button')
+    expect(more.exists()).toBe(true)
+    await more.trigger('click')
+    await flushPromises()
+    expect(apiClient.call).toHaveBeenCalled()
+    expect(wrapper.find('.error-notification[role="status"] button').exists()).toBe(false)
+  })
 })
