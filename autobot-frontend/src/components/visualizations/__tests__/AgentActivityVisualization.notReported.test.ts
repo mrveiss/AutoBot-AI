@@ -111,7 +111,7 @@ describe('timeline view: not reported vs measured empty (#21270)', () => {
     const w = await timeline({ recentTasks: null, activityTimeline: null })
     expect(w.find('.agents-grid').exists()).toBe(false) // the click really switched view
     expect(w.get('.activity-bars').text()).toBe(A.notReported)
-    expect(w.text()).not.toContain(A.noRecentTasks)
+    expect(w.findAll('.activity-bar')).toHaveLength(0)
   })
 
   it('a measured empty timeline shows no bars and no "not reported"', async () => {

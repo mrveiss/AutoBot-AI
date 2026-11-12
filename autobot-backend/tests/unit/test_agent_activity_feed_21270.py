@@ -16,6 +16,12 @@ from services.agent_analytics import AgentAnalytics
 NOW = datetime(2026, 11, 9, 12, 30, tzinfo=timezone.utc)  # axis: 07:00 -> 13:00
 
 
+@pytest.fixture(autouse=True)
+def fixed_clock(monkeypatch):
+    """Every test sees the same "now": get_agent_feeds builds feeds with the module's now_utc."""
+    monkeypatch.setattr(feed_mod, "now_utc", lambda: NOW)
+
+
 def _record(task_id, status, completed_at, duration_ms=60_000):
     return {
         "task_id": task_id,
@@ -101,6 +107,81 @@ async def test_bad_records_are_skipped_not_fatal(monkeypatch):
     got = await feed_mod.get_agent_feed("a")
     assert got is not None
     assert [t["id"] for t in got["recentTasks"]] == ["ok", "ok"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "duration_ms, completed_at",
+    [
+        (1e20, "2026-11-09T12:00:00+00:00"),  # pre-fix: OverflowError from timedelta, escaped the guard
+        (1e999, "2026-11-09T12:00:00+00:00"),  # JSON Infinity: pre-fix OverflowError, escaped
+        (float("-inf"), "2026-11-09T12:00:00+00:00"),  # pre-fix OverflowError, escaped
+        (float("nan"), "2026-11-09T12:00:00+00:00"),  # pre-fix ValueError, skipped (kept as a regression pin)
+        ("abc", "2026-11-09T12:00:00+00:00"),  # float() ValueError
+        ([1], "2026-11-09T12:00:00+00:00"),  # float() TypeError
+        (60_000, "0001-01-01T00:00:00+00:00"),  # pre-fix: finished - duration underflows year 1: OverflowError
+    ],
+)
+async def test_overflowing_or_non_finite_records_are_skipped_not_fatal(monkeypatch, duration_ms, completed_at):
+    good = json.dumps(_record("ok", "completed", "2026-11-09T12:00:00+00:00"))
+    bad = json.dumps(_record("bad", "completed", completed_at, duration_ms))  # allow_nan writes NaN/Infinity
+    _use(monkeypatch, _redis([good, bad, good]))
+    got = await feed_mod.get_agent_feed("a")
+    assert got is not None
+    assert [t["id"] for t in got["recentTasks"]] == ["ok", "ok"]
+    assert len(got["activityTimeline"]) == 2
+    json.dumps(got, allow_nan=False)  # the response stays valid JSON
+
+
+_MISSING = object()
+
+
+@pytest.mark.parametrize(
+    "duration_ms, expected",
+    [
+        (_MISSING, 0),  # key absent
+        (None, 0),
+        (0, 0),
+        ("1500", 1500),  # numeric string: float() accepts it
+        (True, 1),  # bool is an int: 1 ms
+        (-5, 0),  # the writer subtracts wall clocks without clamping: a real task, shown zero-length
+        (-0.4, 0),
+    ],
+)
+def test_lenient_durations_keep_the_task_with_a_non_negative_bar(duration_ms, expected):
+    record = _record("t", "completed", "2026-11-09T12:00:00+00:00", duration_ms)
+    if duration_ms is _MISSING:
+        del record["duration_ms"]
+    got = feed_mod.build_feed([record], NOW)
+    assert [t["id"] for t in got["recentTasks"]] == ["t"]
+    (bar,) = got["activityTimeline"]
+    assert bar["duration"] == expected and bar["widthPercent"] >= 0
+    json.dumps(got, allow_nan=False)
+
+
+def test_non_dict_records_are_skipped_not_fatal():
+    good = _record("ok", "completed", "2026-11-09T12:00:00+00:00")
+    got = feed_mod.build_feed([good, [1, 2], "text", None, 7, good], NOW)
+    assert [t["id"] for t in got["recentTasks"]] == ["ok", "ok"]
+
+
+def test_skips_are_one_counted_warning_without_record_content(caplog):
+    caplog.set_level("DEBUG", logger=feed_mod.logger.name)
+    task_name = "PRIVATE-TASK-NAME"
+    bad = [{"task_id": task_name, "status": "completed", "completed_at": "nope"} for _ in range(3)]
+    feed_mod.build_feed(bad, NOW, agent_id="agent-x")
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1 and "3" in warnings[0].getMessage() and "agent-x" in warnings[0].getMessage()
+    assert task_name not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_one_bad_record_does_not_break_other_agents(monkeypatch):
+    good = json.dumps(_record("ok", "completed", "2026-11-09T12:00:00+00:00"))
+    bad = json.dumps(_record("bad", "completed", "2026-11-09T12:00:00+00:00", 1e20))
+    _use(monkeypatch, _redis([bad], [good]))
+    got = await feed_mod.get_agent_feeds(["a", "b"])
+    assert got["a"]["recentTasks"] == [] and [t["id"] for t in got["b"]["recentTasks"]] == ["ok"]
 
 
 @pytest.mark.asyncio

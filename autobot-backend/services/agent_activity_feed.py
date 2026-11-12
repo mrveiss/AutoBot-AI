@@ -9,6 +9,7 @@ One implementation over the analytics history store (the same records
 not be read ("not reported", #17514) and a real list, possibly empty, when it was.
 """
 
+import math
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
@@ -51,10 +52,24 @@ def _recent_task(record: Dict[str, Any], status: str, finished: datetime) -> Dic
     }
 
 
+def _duration_ms(record: Dict[str, Any]) -> float:
+    """The stored duration in ms: finite and >= 0; ValueError for NaN / Infinity.
+
+    The writer subtracts two wall-clock timestamps (``AgentAnalytics.complete_task``) and does not clamp, so a
+    clock step can store a small negative for a real task: it is shown as zero-length, not dropped.
+    ``json.loads`` accepts ``NaN`` / ``Infinity`` / ``1e999``, which are no duration (and invalid JSON in
+    the response), so they are malformed. A missing or null value counts as 0.
+    """
+    value = float(record.get("duration_ms") or 0)
+    if not math.isfinite(value):
+        raise ValueError("duration_ms is not finite")
+    return max(value, 0.0)
+
+
 def _timeline_bar(record: Dict[str, Any], status: str, finished: datetime, win: tuple) -> Dict[str, Any] | None:
     """A bar for a finished task that overlaps the axis, clipped to it; None when outside."""
     start, span = win
-    duration_ms = float(record.get("duration_ms") or 0)
+    duration_ms = _duration_ms(record)
     began = finished - timedelta(milliseconds=duration_ms)
     left = max((began - start).total_seconds(), 0.0)
     right = min((finished - start).total_seconds(), span)
@@ -78,20 +93,30 @@ def _record_entries(record: Dict[str, Any], win: tuple) -> tuple | None:
     return _recent_task(record, status, finished), _timeline_bar(record, status, finished, win)
 
 
-def build_feed(records: List[Dict[str, Any]], now: datetime | None = None) -> Feed:
-    """Turn analytics task records into the widget's feed; a bad record is logged and skipped."""
-    win = _window(now or now_utc())
+def _collect(records: List[Dict[str, Any]], win: tuple) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], int]:
+    """(recent tasks, timeline bars, number of malformed records skipped)."""
     tasks: List[Dict[str, Any]] = []
     bars: List[Dict[str, Any]] = []
+    skipped = 0
     for record in records:
         try:
             entry = _record_entries(record, win)
-        except (KeyError, TypeError, ValueError, AttributeError) as exc:
-            logger.warning("Skipping malformed task record in agent feed: %r", exc)
+        except (KeyError, TypeError, ValueError, AttributeError, OverflowError) as exc:
+            skipped += 1
+            logger.debug("Skipping malformed task record in agent feed: %s", type(exc).__name__)
             continue
         if entry is not None:
             tasks.append(entry[0])
             bars.extend([entry[1]] if entry[1] is not None else [])
+    return tasks, bars, skipped
+
+
+def build_feed(records: List[Dict[str, Any]], now: datetime | None = None, agent_id: str = "") -> Feed:
+    """Turn analytics task records into the widget's feed; a bad record is skipped, counted in one warning."""
+    win = _window(now or now_utc())
+    tasks, bars, skipped = _collect(records, win)
+    if skipped:
+        logger.warning("Skipped %d malformed task record(s) in the agent feed for %r", skipped, agent_id)
     return {
         "recentTasks": tasks,
         "activityTimeline": bars,
@@ -112,7 +137,7 @@ async def get_agent_feeds(agent_ids: List[str]) -> Dict[str, Feed | None]:
         histories = None
     feeds = {a: None for a in agent_ids}
     if histories is not None:
-        feeds.update({a: build_feed(records) for a, records in histories.items()})
+        feeds.update({a: build_feed(records, agent_id=a) for a, records in histories.items()})
     return feeds
 
 
