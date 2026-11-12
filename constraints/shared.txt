@@ -60,7 +60,7 @@ pydantic-settings>=2.16.2
 # One floor (the highest any declaring file asked for, with any #20649 patch bump) plus the
 # tightest cap any file carried. Component files list these BARE and carry `-c <rel>/constraints/shared.txt`;
 # scripts/check_constraint_drift.py fails any PR that re-declares one or adds a second declaration outside here.
-# Exempt (a real, recorded conflict between planes -- see EXEMPT in the guard): websockets, huggingface-hub, transformers.
+# Exempt (a real, recorded conflict between planes -- see EXEMPT in the guard): websockets, huggingface-hub, transformers, tokenizers, pandas, redis.
 aiofiles>=25.1.0
 aiohttp>=3.14.5
 aiosqlite>=0.22.1
