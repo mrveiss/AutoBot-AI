@@ -4,18 +4,21 @@
 // Author: mrveiss
 /** The stall question card (#21022): an answer is emitted; an empty answer means stop; an answered card has no form. */
 
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 import StallQuestionCard from '../StallQuestionCard.vue'
 
-const answerStallQuestion = vi.fn()
-class FakeRejected extends Error {
-  constructor(readonly status: number) {
-    super(`resume failed: ${status}`)
+// vi.mock factories are hoisted above the imports and top-level declarations, so what they reference is built here too.
+const { answerStallQuestion, FakeRejected } = vi.hoisted(() => {
+  class FakeRejected extends Error {
+    constructor(readonly status: number) {
+      super(`resume failed: ${status}`)
+    }
   }
-}
+  return { answerStallQuestion: vi.fn(), FakeRejected }
+})
 vi.mock('@/composables/useGraphApproval', () => ({
   useStallAnswer: () => answerStallQuestion,
   ResumeRejectedError: FakeRejected,
@@ -30,6 +33,10 @@ const mountCard = (metadata: Record<string, unknown> = {}) =>
   })
 
 describe('StallQuestionCard', () => {
+  beforeEach(() => {
+    answerStallQuestion.mockReset() // call counts must not leak between tests
+  })
+
   it('emits the typed answer', async () => {
     const wrapper = mountCard({})
     await wrapper.find('input').setValue('use host B')
