@@ -12,14 +12,17 @@ charged by exactly one of the two.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from llc.adapters.autobot_agent_adapter import AutoBotAgentAdapter
+from llc.adapters.base import AdapterRunStatus
 from llc.exceptions import BudgetExhausted
-from llc.scheduler.heartbeat_scheduler import _dispatch_autobot_agent
+from llc.models.enums import LLCRunStatus
+from llc.scheduler.heartbeat_scheduler import _dispatch_autobot_agent, _ingest_adapter_usage
 from testkit.fake_async_session import FakeAsyncSession
 
 _HBS = "llc.scheduler.heartbeat_scheduler"
@@ -138,3 +141,31 @@ async def test_scheduler_construction_site_passes_a_budget_session_factory() -> 
         ):
             await _dispatch_autobot_agent(dict(_AGENT), {"title": "T"})
     assert callable(built.call_args.kwargs["budget_session_factory"])
+
+
+@pytest.mark.asyncio
+async def test_a_lost_charge_is_logged_at_error_with_traceback_and_does_not_fail_the_run(caplog: Any) -> None:
+    """Any failure but `BudgetExhausted` leaves the finished run alone, but never silently."""
+    service = MagicMock(ingest_cost_event=AsyncMock(side_effect=RuntimeError("db down")))
+    with caplog.at_level(logging.ERROR, logger="llc.adapters.autobot_agent_adapter"):
+        opened = await _dispatch(_USAGE_AGENT_PATH, service)
+
+    lost = [r for r in caplog.records if "charge is lost" in r.getMessage()]
+    assert len(lost) == 1 and lost[0].levelno == logging.ERROR and lost[0].exc_info is not None
+    assert (opened[0].commits, opened[0].rollbacks) == (0, 1)  # nothing half-written
+
+
+@pytest.mark.asyncio
+async def test_a_registry_run_lost_charge_is_logged_the_same_way(caplog: Any) -> None:
+    result = AdapterRunStatus(status=LLCRunStatus.COMPLETED, tokens_in=3, tokens_out=2)
+    factory = MagicMock(return_value=FakeAsyncSession())
+    service = MagicMock(ingest_cost_event=AsyncMock(side_effect=RuntimeError("db down")))
+    with (
+        patch(f"{_HBS}.get_async_session_factory", return_value=factory),
+        patch(f"{_HBS}.get_budget_service", return_value=service),
+        caplog.at_level(logging.ERROR, logger=_HBS),
+    ):
+        await _ingest_adapter_usage(dict(_AGENT, model="test-model"), result)
+
+    lost = [r for r in caplog.records if "charge is lost" in r.getMessage()]
+    assert len(lost) == 1 and lost[0].levelno == logging.ERROR and lost[0].exc_info is not None

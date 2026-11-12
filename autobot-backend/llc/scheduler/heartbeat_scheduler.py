@@ -947,7 +947,7 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
     except BudgetExhausted:
         raise  # GH#8215 hard-stop — propagate so the run is recorded FAILED
     except Exception:
-        logger.warning("Budget ingest failed for agent %s (best-effort)", agent_id)
+        logger.exception("Budget ingest failed for agent %s: this run's charge is lost (#20883)", agent_id)
 
 
 async def _safe_cancel(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> None:

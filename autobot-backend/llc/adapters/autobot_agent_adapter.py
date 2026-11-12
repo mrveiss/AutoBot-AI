@@ -377,8 +377,10 @@ class AutoBotAgentAdapter:
         """Forward token-usage from *response.metadata* to BudgetService.
 
         ``BudgetExhausted`` is re-raised so the GH#8215 hard-stop propagates
-        to ``_run_agent`` and the run is recorded as FAILED.  All other errors
-        are best-effort: logged as warnings and never re-raised.
+        to ``_run_agent`` and the run is recorded as FAILED.  Any other error
+        never fails the finished run, but the charge is lost, so it is logged at
+        error level with its traceback -- as ``_ingest_adapter_usage`` does for a
+        registry run (#20883).
         """
         if self._budget_session_factory is None:
             return
@@ -421,8 +423,8 @@ class AutoBotAgentAdapter:
         except BudgetExhausted:
             raise  # Hard-stop from GH#8215: propagate so run is marked FAILED
         except Exception:
-            logger.warning(
-                "AutoBotAgentAdapter: cost forwarding failed for run_id=%s agent=%s",
+            logger.error(
+                "AutoBotAgentAdapter: cost forwarding failed for run_id=%s agent=%s: this run's charge is lost",
                 run_id,
                 agent_id,
                 exc_info=True,
