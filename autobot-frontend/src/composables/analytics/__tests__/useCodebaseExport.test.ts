@@ -14,6 +14,7 @@
  *     ref its panel is bound to (or a documented projection of it).
  */
 import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref, type Ref } from 'vue'
@@ -69,7 +70,10 @@ const DATA: Record<SectionType, unknown> = {
     duplicates_found: 1, report: '',
     duplicates: [{ value: 'MARK_CFG_VALUE', locations: [{ file: 'src/mark-cfg.py', line: 3 }] }],
   },
-  'code-intelligence': { grade: 'B', health_score: 83, breakdown: { security: 77 } },
+  'code-intelligence': {
+    status: 'success', grade: 'B', health_score: 83, total_issues: 14, files_analyzed: 21,
+    severity_breakdown: { high: 3, low: 11 },
+  },
   'environment': {
     total_in_export: 1, total_in_analysis: 1, high_priority_count: 1,
     hardcoded_values: [{ type: 'url', value: 'markenvvalue', file: 'src/mark-env.py', line: 3, severity: 'high' }],
@@ -94,7 +98,7 @@ const MARKER: Record<SectionType, string> = {
   'api-endpoints': '/api/mark-orphan',
   'cross-language': '| API Contract Mismatches | 1 |',
   'config-duplicates': 'src/mark-cfg.py:3',
-  'code-intelligence': '| Health Score | 83 |',
+  'code-intelligence': '| Total Issues | 14 |',
   'environment': 'src/mark-env.py',
   'statistics': '| Total Files | 7 |',
   'ownership': 'Mark Author',
@@ -154,7 +158,8 @@ describe('section export carries the displayed data (#20492)', () => {
 })
 
 describe('every exporting panel exports from the data it renders (#20492)', () => {
-  const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf-8')
+  const HERE = dirname(fileURLToPath(import.meta.url))
+  const read = (rel: string) => readFileSync(resolve(HERE, rel), 'utf-8')
   const page = read('../../../components/analytics/CodebaseAnalytics.vue')
   const wiring = page.slice(page.indexOf('useCodebaseExport({'))
 
@@ -166,12 +171,22 @@ describe('every exporting panel exports from the data it renders (#20492)', () =
   )
 
   /**
-   * Sections whose export is a documented projection of what the panel binds:
-   * the panel gets a mapped list, the export the same list plus its counts.
+   * The panel prop each exporting section renders its data from. A section
+   * whose export is a derivation of what the panel binds names that source
+   * here; the derivation itself is proven in `exportPanelDerivation.test.ts`.
    */
-  const PROJECTIONS: Record<string, string> = {
-    'code-smells': 'smellsForPanel', // smellsExport = buildSmellsExport(smellsForPanel)
-    'declarations': 'declarationsForPanel', // maps declarationAnalysis field names
+  const PANEL_PROP: Record<string, { prop: string; source: string }> = {
+    'problems': { prop: 'problems', source: 'problemsReport' },
+    'code-smells': { prop: 'smells', source: 'smellsForPanel' },
+    'duplicates': { prop: 'duplicates', source: 'duplicateAnalysis' },
+    'declarations': { prop: 'declarations', source: 'declarationsForPanel' },
+    'hardcodes': { prop: 'hardcodes', source: 'hardcodeAnalysis' },
+    'api-endpoints': { prop: 'analysis', source: 'apiEndpointAnalysis' },
+    'cross-language': { prop: 'analysis', source: 'crossLanguageAnalysis' },
+    'config-duplicates': { prop: 'analysis', source: 'configDuplicatesAnalysis' },
+    'bug-prediction': { prop: 'analysis', source: 'bugPredictionAnalysis' },
+    'environment': { prop: 'analysis', source: 'environmentAnalysis' },
+    'ownership': { prop: 'analysis', source: 'ownershipAnalysis' },
   }
 
   it('the page exports every section this test covers, and no other', () => {
@@ -187,20 +202,31 @@ describe('every exporting panel exports from the data it renders (#20492)', () =
     for (const section of emitted) expect(SECTIONS).toContain(section)
   })
 
-  it('each panel with an export button is bound to the ref its export reads', () => {
-    const buttons = [...page.matchAll(/exportSection\('([\w-]+)'/g)].filter((m) => m.index !== undefined)
-    expect(buttons.length).toBeGreaterThan(0)
-    for (const m of buttons) {
-      const section = m[1]
-      const start = page.lastIndexOf('\n      <', m.index!)
-      const tag = page.slice(start, m.index)
-      const bound = [...tag.matchAll(/:[\w-]+="(\w+)"/g)].map((b) => b[1])
-      const source = PROJECTIONS[section] ?? exportedFrom.get(section)
-      expect(bound, `${section} panel is not bound to ${source}`).toContain(source)
-    }
+  /** The component tag (opening `<Name` up to the export call) a call sits in. */
+  const tagOf = (callIndex: number) => {
+    const opens = [...page.matchAll(/<([A-Z]\w*)\b/g)].filter((o) => o.index! < callIndex)
+    return page.slice(opens[opens.length - 1].index!, callIndex)
+  }
+  const bindingOf = (tag: string, prop: string) =>
+    [...tag.matchAll(new RegExp(`(?:^|\\s):${prop}="([^"]*)"`, 'g'))].map((b) => b[1])
+
+  it.each(Object.keys(PANEL_PROP))('%s: its panel prop is bound to exactly the source it exports', (section) => {
+    const { prop, source } = PANEL_PROP[section]
+    const call = page.indexOf(`exportSection('${section}'`)
+    expect(call, `${section} has no export button on the page`).toBeGreaterThan(-1)
+    expect(bindingOf(tagOf(call), prop)).toEqual([source])
+    // the export reads that source, or (for a derived one) a value built from it
+    const reads = exportedFrom.get(section)
+    if (reads !== source) expect(['smellsExport', 'declarationAnalysis']).toContain(reads)
+  })
+
+  it('every section with a page export button has an entry above', () => {
+    const buttons = new Set([...page.matchAll(/exportSection\('([\w-]+)'/g)].map((m) => m[1]))
+    expect([...buttons].sort()).toEqual(Object.keys(PANEL_PROP).sort())
   })
 
   it('statistics: the charts section renders the ref the export reads', () => {
-    expect(page).toMatch(new RegExp(`:codebase-stats="${exportedFrom.get('statistics')}"`))
+    const bound = [...page.matchAll(/:codebase-stats="(\w+)"/g)].map((m) => m[1])
+    expect(bound).toEqual([exportedFrom.get('statistics')])
   })
 })

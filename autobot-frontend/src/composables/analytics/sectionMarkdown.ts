@@ -302,10 +302,17 @@ function _generateEnvRecommendations(env: EnvExportData): string {
 }
 
 function _generateCodeIntelligenceMd(ci: SectionDataMap['code-intelligence']): string {
-  let md = `## Code Intelligence Scores\n\n| Metric | Score |\n|--------|-------|\n`
+  // Fields of GET /api/code-intelligence/health-score (api/code_intelligence.py).
+  let md = `## Code Intelligence Scores\n\n| Metric | Value |\n|--------|-------|\n`
   md += `| Health Score | ${ci.health_score ?? 'N/A'} |\n`
   md += `| Grade | ${ci.grade || 'N/A'} |\n`
-  Object.entries(ci.breakdown ?? {}).forEach(([k, v]) => { md += `| ${k} | ${String(v)} |\n` })
+  md += `| Total Issues | ${ci.total_issues ?? 'N/A'} |\n`
+  md += `| Files Analyzed | ${ci.files_analyzed ?? 'N/A'} |\n`
+  const severities = Object.entries(ci.severity_breakdown ?? {})
+  if (severities.length > 0) {
+    md += `\n### Severity Breakdown\n\n`
+    severities.forEach(([severity, count]) => { md += `- **${severity}:** ${count}\n` })
+  }
   return md
 }
 
