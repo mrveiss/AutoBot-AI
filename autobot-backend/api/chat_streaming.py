@@ -45,7 +45,9 @@ async def attachments_allowed(chat_id: str, current_user: dict | None, request) 
 
 def _text_field(request_data: dict, key: str) -> str:
     """The string at *key* (empty when absent); anything else is the client's error, not a scanner crash (400)."""
-    value = request_data.get(key) or ""
+    value = request_data.get(key)
+    if value is None:
+        return ""
     if not isinstance(value, str):
         raise HTTPException(status_code=400, detail=f"{key} must be a string")
     return value

@@ -24,6 +24,7 @@ const fakeStore = {
     if (card) Object.assign(card.metadata, updates)
     return !!card
   }),
+  hasPendingApproval: true,
   setPendingApproval: vi.fn(),
   setTyping: vi.fn(),
 }
@@ -51,6 +52,7 @@ describe('graph-interrupt approval cards', () => {
   beforeEach(() => {
     fakeStore.currentMessages = []
     fakeStore.updateMessageMetadata.mockClear()
+    fakeStore.setPendingApproval.mockClear()
     fetchWithAuth.mockReset()
     handleStreamingResponse.mockReset()
     fetchWithAuth.mockResolvedValue({ ok: true })
@@ -100,6 +102,14 @@ describe('graph-interrupt approval cards', () => {
     await expect(useApprovalRouting(vi.fn())('term-1', true)).rejects.toThrow()
     expect(handleStreamingResponse).not.toHaveBeenCalled()
   })
+
+  it('gives the approval controls back when the resume is refused (#21022)', async () => {
+    const { store, id } = seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }], approval_status: 'pending' })
+    fetchWithAuth.mockResolvedValue({ ok: false, status: 409 })
+    await expect(useApprovalRouting(vi.fn())('term-1', true, 'go')).rejects.toBeInstanceOf(ResumeRejectedError)
+    expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('pending')
+    expect(store.setPendingApproval.mock.calls).toEqual([[false], [true]])
+  })
 })
 
 describe('stall question answers (#21022)', () => {
@@ -125,6 +135,12 @@ describe('stall question answers (#21022)', () => {
     await expect(useStallAnswer()(fakeStore.currentMessages[0] as never, 'use host B')).rejects.toBeInstanceOf(
       ResumeStreamError
     )
+    expect(answered()).toBe(false)
+  })
+
+  it('a stream read that throws leaves the question open and retryable (#21022)', async () => {
+    handleStreamingResponse.mockRejectedValue(new Error('reader failed'))
+    await expect(useStallAnswer()(fakeStore.currentMessages[0] as never, 'use host B')).rejects.toThrow('reader failed')
     expect(answered()).toBe(false)
   })
 

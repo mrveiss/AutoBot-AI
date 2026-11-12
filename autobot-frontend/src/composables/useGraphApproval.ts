@@ -62,6 +62,7 @@ function useResumePost() {
   ): Promise<void> {
     const chatId = String((message.metadata as Record<string, unknown>)?.session_id || store.currentSessionId || '')
     store.setTyping(true)
+    let accepted = false
     try {
       const response = await fetchWithAuth(`${getApiBase()}/chats/${encodeURIComponent(chatId)}/resume`, {
         method: 'POST',
@@ -69,6 +70,7 @@ function useResumePost() {
         body: JSON.stringify(body),
       })
       if (!response.ok) throw new ResumeRejectedError(response.status)
+      accepted = true
       hooks.onAccepted?.()
       if ((await controller.handleStreamingResponse(response)) === true) {
         hooks.onStreamError?.() // HTTP 200 is not the graph resuming: the question is still open
@@ -76,6 +78,8 @@ function useResumePost() {
       }
     } catch (error) {
       logger.error('Resuming the chat failed:', error)
+      // A stream that reported an error already restored the card; a read that threw has not (#21022).
+      if (accepted && !(error instanceof ResumeStreamError)) hooks.onStreamError?.()
       throw error
     } finally {
       store.setTyping(false)
@@ -107,9 +111,19 @@ export function useApprovalRouting(terminalApprove: TerminalApprove) {
     )
 
   async function resumeGraph(message: ChatMessage, approved: boolean, comment?: string): Promise<void> {
+    const before = message.metadata as Record<string, unknown> | undefined
+    const previous = { approval_status: before?.approval_status, approval_comment: before?.approval_comment }
+    const wasPending = store.hasPendingApproval
     store.updateMessageMetadata(message.id, { approval_status: approved ? 'approved' : 'denied', approval_comment: comment })
     store.setPendingApproval(false)
-    await postResume(message, { approved, reason: comment || '' })
+    try {
+      await postResume(message, { approved, reason: comment || '' })
+    } catch (error) {
+      // The graph is still waiting: give the person the controls back so the decision can be retried (#21022).
+      store.updateMessageMetadata(message.id, previous)
+      store.setPendingApproval(wasPending)
+      throw error
+    }
   }
 
   /** Same signature as the terminal approve; a graph card goes to resume, any other card to the terminal route. */

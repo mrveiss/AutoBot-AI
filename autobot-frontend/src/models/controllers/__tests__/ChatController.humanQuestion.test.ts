@@ -77,6 +77,15 @@ describe('an unanswered question survives a history poll (#21022)', () => {
     expect(answered).toHaveLength(0)
   })
 
+  it('a stale history response cannot reopen a question the person already answered (#21022)', () => {
+    const local = [question('q1', { answered: true, answer_text: 'host B' })]
+    const merged = keepUnansweredQuestions(local, [question('q1')]) // loaded before the answer was accepted
+    expect(merged).toHaveLength(1)
+    expect((merged[0] as { metadata?: object }).metadata).toMatchObject({ question_id: 'q1', answered: true, answer_text: 'host B' })
+    const other = keepUnansweredQuestions(local, [question('q2')]) // control: another question is untouched
+    expect((other[0] as { metadata?: { answered?: boolean } }).metadata?.answered).toBeUndefined()
+  })
+
   it('loadChatMessages keeps the open card when the backend history is newer but lacks it', async () => {
     const store = useChatStore()
     const sessionId = store.currentSessionId as string

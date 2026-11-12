@@ -141,3 +141,34 @@ async def test_an_overlong_answer_is_capped_and_a_short_one_is_untouched(monkeyp
     monkeypatch.setattr(config.llm, "chat_stall_answer_max_chars", 5)
     assert resume_decision({"answer": "abcdefghij"}, "s1")["answer"] == "abcde"
     assert resume_decision({"answer": "abc"}, "s1")["answer"] == "abc"  # control
+
+
+@pytest.mark.parametrize("bad", [0, False, [], {}, 5])
+async def test_a_non_string_answer_is_a_400_even_when_falsey_but_none_and_empty_are_not(bad):
+    from fastapi import HTTPException
+
+    from api.chat_streaming import resume_decision
+
+    with pytest.raises(HTTPException) as caught:
+        resume_decision({"answer": bad}, "s1")
+    assert caught.value.status_code == 400
+    assert "answer must be a string" in caught.value.detail
+    assert "answer" not in resume_decision({"answer": None}, "s1")  # control: absent
+    assert "answer" not in resume_decision({"answer": ""}, "s1")  # control: empty is "no answer"
+
+
+async def test_the_pending_card_rides_only_the_newest_history_page(monkeypatch):
+    from types import SimpleNamespace
+
+    from api import chat_session_messages
+
+    card = AsyncMock(side_effect=lambda request, session_id, messages: [*messages, {"type": "human_question"}])
+    monkeypatch.setattr(chat_session_messages, "with_pending_question", card)
+    stored = [{"content": "m"}]
+    manager = SimpleNamespace(get_session_messages=AsyncMock(return_value=stored))
+
+    newest = await chat_session_messages.fetch_session_messages(None, manager, "s1", 50, 0)
+    older = await chat_session_messages.fetch_session_messages(None, manager, "s1", 50, 50)
+
+    assert newest[-1] == {"type": "human_question"}  # control: the newest page still carries the card
+    assert older == stored and card.await_count == 1  # an older page is the stored messages only
