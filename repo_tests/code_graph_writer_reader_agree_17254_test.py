@@ -26,15 +26,19 @@ this goes red naming both sides.
 
 from __future__ import annotations
 
+import ast
 import re
+from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
+from tools.lint._comment_syntax import code_text
 
 _ROOT = repo_root()
 _STORAGE = _ROOT / "autobot-backend" / "api" / "codebase_analytics" / "storage.py"
-_READER = _ROOT / "autobot-backend" / "api" / "codebase_analytics" / "endpoints" / "impact.py"
+_BACKEND = _ROOT / "autobot-backend"
 _ROUTE = _ROOT / "autobot-backend" / "api" / "knowledge_population.py"
 #: The worker moved out of knowledge_population.py, which sits at its size
 #: ceiling and may not grow (#5060) -- the route stays there, the indexing does not.
@@ -58,27 +62,76 @@ def test_the_graph_collection_is_its_own_store():
     )
 
 
+def _accessors() -> set[str]:
+    """Every function storage.py defines to hand out the graph collection."""
+    tree = parse_cache.parse(_text(_STORAGE))
+    return {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)) and "code_graph_collection" in node.name
+    }
+
+
+def _backend_modules() -> list[Path]:
+    """Every non-test backend module, so a reader is found wherever it lives."""
+    return [p for p in _BACKEND.rglob("*.py") if not is_test_filename(p.name, include_js=False)]
+
+
+def _readers() -> list[Path]:
+    """Modules other than storage.py and the writer that obtain the graph collection."""
+    names = _accessors()
+    found = []
+    for path in _backend_modules():
+        if path in (_STORAGE, _WRITER):
+            continue
+        code = code_text(path)
+        if any(re.search(rf"\b{name}\b", code) for name in names):
+            found.append(path)
+    return found
+
+
 def test_reader_and_writer_use_the_same_accessor():
     """The two sides must resolve the collection through one helper, not two names."""
-    reader, writer = _text(_READER), _text(_WRITER)
+    readers = _readers()
 
-    assert (
-        "get_code_graph_collection" in reader
-    ), "impact.py no longer resolves the graph collection through the shared accessor"
+    assert _accessors(), "storage.py defines no code-graph accessor -- this guard would pass vacuously"
+    assert readers, (
+        "no module reads the code graph through a storage.py accessor any more; the read moved "
+        "somewhere this guard cannot see"
+    )
     # Either accessor is fine -- require_* wraps the async getter and raises
     # rather than returning None. What must not happen is the indexer naming a
     # collection of its own again.
-    assert (
-        "code_graph_collection" in writer
+    assert any(
+        re.search(rf"\b{name}\b", code_text(_WRITER)) for name in _accessors()
     ), "the indexer no longer resolves the graph collection through the shared accessor"
+
+
+def test_no_module_opens_the_graph_collection_by_another_route():
+    """Only storage.py may name the collection; everyone else goes through its accessors."""
+    offenders = [
+        str(path.relative_to(_ROOT))
+        for path in _backend_modules()
+        if path != _STORAGE
+        and re.search(r"\bCODE_GRAPH_COLLECTION\b|autobot_code_graph", code_text(path))
+    ]
+
+    assert not offenders, (
+        f"{offenders} name the code-graph collection directly; a reader or writer that opens it "
+        "by name can drift to a different collection than the other side (#17254)"
+    )
 
 
 def test_the_reader_does_not_query_the_inventory_collection():
     """autobot_code holds type=function|class|import, never record_type."""
-    reader = _text(_READER)
+    offenders = [
+        str(path.relative_to(_ROOT))
+        for path in _readers()
+        if "get_code_collection" in re.sub(r"get_code_graph_collection", "", code_text(path))
+    ]
 
-    assert "get_code_collection" not in reader.replace("get_code_graph_collection", ""), (
-        "impact.py reads the inventory collection again; its writer never emits "
+    assert not offenders, (
+        f"{offenders} read the inventory collection again; its writer never emits "
         "record_type, so every query would return an empty reach set"
     )
 
