@@ -71,6 +71,13 @@ _EVENTS = {
 }
 
 
+@pytest.fixture(autouse=True)
+def slm_external_url(monkeypatch):
+    """The SLM external URL both code paths read; the unit env's stubbed settings has no real one."""
+    for module in (code_sync, _executor):
+        monkeypatch.setattr(module.settings, "external_url", "http://slm.example.test:8000", raising=False)
+
+
 @pytest.fixture
 async def maker():
     with real_modules_swapped():
@@ -156,6 +163,7 @@ async def test_collect_outdated_drops_unenrolled_nodes_and_counts_them(maker, mo
     monkeypatch.setattr(code_sync, "select", select)
     monkeypatch.setattr(code_sync, "Node", _db.Node)
     monkeypatch.setattr(code_sync, "split_enrollment_failed", _events.split_enrollment_failed)
+    monkeypatch.setattr(code_sync, "get_slm_self_node_id", _events.get_slm_self_node_id)
     monkeypatch.setattr(code_sync, "_compute_deps_changed", _no_deps)
     job = code_sync.UpdateAllJob(
         job_id="j-21036",
@@ -226,6 +234,7 @@ async def test_collect_outdated_never_drops_the_slm_self_node(maker, monkeypatch
     monkeypatch.setattr(code_sync, "select", select)
     monkeypatch.setattr(code_sync, "Node", _db.Node)
     monkeypatch.setattr(code_sync, "split_enrollment_failed", _events.split_enrollment_failed)
+    monkeypatch.setattr(code_sync, "get_slm_self_node_id", _events.get_slm_self_node_id)
     monkeypatch.setattr(code_sync, "_compute_deps_changed", _no_deps)
     job = code_sync.UpdateAllJob(
         job_id="j-21036-self",
