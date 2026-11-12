@@ -45,6 +45,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -75,8 +76,7 @@ SHARED_CALL = "register_validation_error_handlers"
 
 
 def _is_test_file(rel: str) -> bool:
-    name = Path(rel).name
-    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py" or "/tests/" in rel
+    return is_test_filename(rel, include_js=False) or "/tests/" in rel
 
 
 def _called_names(tree: ast.AST) -> set[str]:

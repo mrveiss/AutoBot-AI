@@ -20,3 +20,14 @@ export interface NamedUser {
 export function displayNameOf(user: NamedUser | null | undefined, fallback = ''): string {
   return user?.display_name || user?.username || fallback
 }
+
+/**
+ * Who performed an action, from a stored principal id and the server-resolved name (#21136).
+ *
+ * `system:*` actors show `systemLabel` (translated by the caller); a user shows the resolved
+ * name; an actor the server could not resolve (a legacy free-text value) shows as stored.
+ */
+export function actorLabel(actor: string | null | undefined, name: string | null | undefined, systemLabel: string): string {
+  if (!actor) return '—'
+  return actor.startsWith('system:') ? systemLabel : name || actor
+}

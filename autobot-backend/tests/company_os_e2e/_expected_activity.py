@@ -30,6 +30,9 @@ class Expected:
     owner: str | None
     writer: str  # where the event is written on this path, or "none"
     after: str | None = None  # key of a timestamp in scenario.ids: only rows at or after it count
+    # Actions starting with this never count: step 6's resume writes control.agent_resumed after t_budget, and that
+    # is the control plane, not a budget event, so it must not satisfy "some record about agent:a" (#21166).
+    except_prefix: str | None = None
 
 
 EXPECTED: tuple[Expected, ...] = (
@@ -54,7 +57,17 @@ EXPECTED: tuple[Expected, ...] = (
         "5", "heartbeat.started", "system", "agent:a", AUDIT, "none (liveness_monitor writes heartbeat.failed only)"
     ),
     Expected("5", "heartbeat.completed", "system", "agent:a", AUDIT, "none"),
-    Expected("6", None, "user", "agent:a", AUDIT, "no budget event type exists", after="t_budget"),
+    # The dispatch gate, not a person, refuses the exhausted agent's next run (#21212).
+    Expected(
+        "6",
+        "budget.dispatch_refused",
+        "system",
+        "agent:a",
+        None,
+        "dispatch_gate (budget.dispatch_refused)",
+        after="t_budget",
+        except_prefix="control.",
+    ),
     Expected("7", "control.agent_paused", "user", "agent:b", None, "controls_service.pause_agent"),
     Expected("7", "control.agent_resumed", "user", "agent:b", None, "controls_service.resume_agent"),
     Expected("8", "approval.requested", "user", "approval", AUDIT, "none (sprint_autoclose only)"),

@@ -32,9 +32,10 @@ import { getApiBase } from '@/config/ssot-config'
 import type { ToastType } from '@/composables/useToast'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { readDuplicatePayload, type DuplicateScanState } from './duplicatePayload'
+import { useCodeSmellProblems } from './useCodeSmellProblems'
+import { toDeclarationPanelRows } from './declarationPanelRows'
 import { runTimed } from '@/composables/api/useTimedNotify'
 import {
-  CODE_SMELL_TYPES,
   type Problem,
   type DuplicateCode,
   type Declaration,
@@ -150,7 +151,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/analytics/charts',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Chart data endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.chart_data ? raw.chart_data : null,
@@ -200,7 +201,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/analytics/call-graph',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Call graph endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.call_graph
@@ -232,7 +233,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/declarations',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Declarations endpoint',
       pickData: (raw) => (raw.status === 'success' || raw.status === 'no_data' ? raw.declarations ?? [] : null),
       onSuccess: (d) => { declarationAnalysis.value = d },
@@ -246,7 +247,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/hardcodes',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Hardcodes endpoint',
       pickData: (raw) => (raw.status === 'success' || raw.status === 'no_data' ? raw.hardcodes ?? [] : null),
       onSuccess: (d) => { hardcodeAnalysis.value = d },
@@ -255,7 +256,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   )
 
   const duplicatesSilent = useFetchEndpoint<unknown, unknown>(
-    { path: '/api/analytics/codebase/duplicates', scopeToSource: true, label: 'Duplicates endpoint',
+    { path: '/api/analytics/codebase/duplicates', scopeToSource: true, requireSource: true, label: 'Duplicates endpoint',
       pickData: (raw) => raw, onSuccess: applyDuplicates, onError: failDuplicates },
     { withSourceId },
   )
@@ -266,7 +267,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/stats',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Stats endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.stats ? raw.stats : null,
@@ -285,7 +286,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/problems',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Problems endpoint',
       pickData: (raw) => (raw.status === 'no_data' ? [] : raw.problems ?? []),
       onSuccess: (d) => { problemsReport.value = d },
@@ -293,10 +294,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { withSourceId },
   )
 
+  // #20493: the code-smell panel and its export share this one load.
+  const smells = useCodeSmellProblems(withSourceId)
+
   const cachedDuplicatesEndpoint = useFetchEndpoint<unknown, unknown>(
-    { path: '/api/analytics/codebase/duplicates/cached', scopeToSource: true,
-      label: 'Cached duplicates endpoint', pickData: (raw) => raw,
-      onSuccess: applyDuplicates, onError: failDuplicates },
+    { path: '/api/analytics/codebase/duplicates/cached', scopeToSource: true, requireSource: true,
+      label: 'Cached duplicates endpoint', pickData: (raw) => raw, onSuccess: applyDuplicates, onError: failDuplicates,
+      onNoData: () => { duplicateAnalysis.value = []; duplicateScanState.value = 'not_scanned' } },
     { withSourceId },
   )
 
@@ -306,13 +310,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/analytics/dependencies/cached',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Cached dependencies endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.dependency_data
           ? (raw.dependency_data as DependencyGraph)
           : null,
-      onSuccess: (d) => { dependencyData.value = d },
+      onSuccess: (d) => { dependencyData.value = d }, onNoData: () => { dependencyData.value = null },
     },
     { withSourceId },
   )
@@ -323,13 +327,13 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/analytics/codebase/analytics/import-tree/cached',
-      scopeToSource: true,
+      scopeToSource: true, requireSource: true,
       label: 'Cached import tree endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.import_tree
           ? (raw.import_tree as ImportTreeNode[])
           : null,
-      onSuccess: (d) => { importTreeData.value = d },
+      onSuccess: (d) => { importTreeData.value = d }, onNoData: () => { importTreeData.value = null },
     },
     { withSourceId },
   )
@@ -497,34 +501,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     }))
   })
 
-  const codeSmellsFromProblems = computed(() =>
-    !problemsReport.value || problemsReport.value.length === 0
-      ? []
-      : problemsReport.value.filter(
-          (p) => p.type && CODE_SMELL_TYPES.has(p.type),
-        ),
-  )
-
-  const codeSmellsForPanel = computed(() =>
-    codeSmellsFromProblems.value.map((p) => ({
-      severity: p.severity,
-      description: p.description || p.message,
-      file_path: p.file_path,
-      line_number: p.line_number ?? p.line,
-      suggestion: p.suggestion,
-      smell_type: p.type,
-    })),
-  )
-
-  const declarationsForPanel = computed(() =>
-    declarationAnalysis.value.map((d) => ({
-      name: d.name,
-      file_path: d.file_path,
-      line_number: d.line_number ?? d.line ?? 0,
-      is_exported: d.is_exported ?? false,
-      declaration_type: d.type,
-    })),
-  )
+  const declarationsForPanel = computed(() => toDeclarationPanelRows(declarationAnalysis.value))
 
   // --- Config load ---
 
@@ -552,6 +529,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const buildScanList = (useFullScans: boolean) => [
     { id: 'stats', label: t('analytics.codebase.scans.stats'), run: getCodebaseStats },
     { id: 'problems', label: t('analytics.codebase.scans.problems'), run: getProblemsReport },
+    { id: 'smells', label: t('analytics.codebase.scans.smells'), run: smells.loadSmellProblems },
     { id: 'declarations', label: t('analytics.codebase.scans.declarations'), run: loadDeclarations },
     {
       id: 'duplicates',
@@ -670,8 +648,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     // Computed
     hasAnyResults,
     availableCategories,
-    codeSmellsFromProblems,
-    codeSmellsForPanel,
+    ...smells,
     declarationsForPanel,
     // Data loaders
     loadChartData,

@@ -108,6 +108,20 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_BUDGET_REFUSAL_DEDUP_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "How long the de-duplication mark of a budget-refused dispatch is kept in Redis (#21212). "
+            "One budget.dispatch_refused activity row is written per exhaustion episode; a long episode "
+            "is restated after this many seconds. Minimum 1."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_LLC_SCHEDULE_RECONCILE_INTERVAL_SECONDS",
         type=float,
         default=60.0,
@@ -275,6 +289,20 @@ env_registry.register_env_var(
             "same (or a subset of its) trigger ids (#19759), so a human's rejection is not refiled on "
             "every audit run. Floored at 1 day."
         ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_HIERARCHY_VIOLATIONS_LIMIT",
+        type=int,
+        default=500,
+        description=(
+            "Most work-item hierarchy violations one report returns (#20936). The limit is applied in the "
+            "database query; the response sets truncated when more rows break the rules than are returned."
+        ),
+        range=(1, 5000),
         component="orchestrator",
     )
 )

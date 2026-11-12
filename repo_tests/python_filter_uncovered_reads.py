@@ -37,9 +37,7 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         ".dockerignore",
         ".flake8",
         ".github/actions/setup-python-ci/action.yml",
-        ".github/actions/setup-python-suite/action.yml",
         ".github/filters/code-quality-paths.yml",
-        ".github/workflows/hardened-smoke-test.yml",
         ".github/workflows/marker-tests.yml",
         ".github/workflows/ssot-coverage.yml",
         # #19548: replaces the parked-branch workflow's entry one-for-one (its
@@ -66,7 +64,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         # #18653: uninstall_covers_role_components_18653_test.py composes `Path(tmp) / "autobot"`
         # -- a synthetic /opt/autobot inside a tmp dir, never a read of a repo tree.
         "autobot",
-        "constraints/shared.txt",
         "docker/secrets-init.sh",
         "docker/with-secrets.sh",
         "docs/audit/python_314_consistency.md",
@@ -75,7 +72,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         "docs/developer/WSL2_NETWORKING.md",
         "docs/development/MCP_DEBUG_SCENARIOS.md",
         "docs/runbooks/ROTATE_SSH_KEYS.md",
-        "pytest.ini",
         # #17133: "README.md" is a literal pre_push_no_open_pr_cap_19397_test.py
         # writes inside its own synthetic tmp_path repo fixture (_seed_repo),
         # never a read of the real root-level file -- same shape as the
@@ -142,11 +138,15 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: uninstall guard (a fake /opt/autobot tree), a new bypass and not a real read.
 #: LOWERED 40 -> 39 by the train-81 CodeRabbit round: the filter now covers
 #: `docker/generate-secrets.sh`, which two guards really read (#17500, #18729).
-#: LOWERED 34 -> 31 by #18208: the filter now names `.github/workflows/_gate-*.yml`, the reusable gate
-#: bodies the guards read (the pre-merge `code-quality.yml`, `security.yml` and friends were uncovered reads).
+#: LOWERED 34 -> 32 by #21325 (the filter now covers the setup-python-suite action and hardened-smoke-test.yml).
 #: LOWERED 39 -> 38 by #19523: the filter now covers `.github/dependabot.yml`, which the
 #: dependabot coverage guards read; deleting a block's directory touches no .py file.
-MAX_UNCOVERED_READS = 31
+#: LOWERED 32 -> 31 by #21359: the filter now covers `pytest.ini`, which the pre-board lane's guard reads.
+#: LOWERED 31 -> 30 by #18060: the filter now covers `constraints/shared.txt`, which several guards read.
+#: LOWERED 30 -> 27 by #18208: the three workflows `code-quality-required-context.yml`, `code-quality.yml` and
+#: `frontend-test.yml` no longer exist (their gates are `_gate-*.yml` bodies the filter now names), so no guard
+#: reads them.
+MAX_UNCOVERED_READS = 27
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
 #: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not

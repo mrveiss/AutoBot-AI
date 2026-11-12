@@ -17,12 +17,16 @@ USER/SYSTEM discriminator be whatever the caller typed (#13969 review M1).
 from __future__ import annotations
 
 import uuid
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import HTTPException, Request, status
+from pydantic import AfterValidator
 
 from autobot_shared.auth.interactive_principal import is_interactive_human
 from autobot_shared.logging_manager import get_logger
+
+from ..services.work_item_hierarchy import HierarchyViolation
+from ..services.work_item_own_task import ensure_fence_safe_agent_id
 
 logger = get_logger(__name__)
 
@@ -42,6 +46,10 @@ def actor_id(current_user: dict) -> uuid.UUID:
         return uuid.UUID(str(raw))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated") from exc
+
+
+#: An agent id a checkout can fence: a request carrying one that cannot is refused with 422 (#21083).
+FenceSafeAgentId = Annotated[str, AfterValidator(ensure_fence_safe_agent_id)]
 
 
 def own_task_actor(current_user: dict) -> Optional[uuid.UUID]:
@@ -244,3 +252,12 @@ def refused_transition(exc: Exception) -> HTTPException:
     """
     logger.info("Rejected illegal work-item transition: %s", exc)
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
+def write_refusal(exc: ValueError) -> HTTPException:
+    """A refused work-item create/update: a hierarchy-rule breach (incl. ``ProjectRequired``) is 422 (#20936).
+
+    Any other ``ValueError`` (e.g. an unknown approval category, GH#11206) stays 400.
+    """
+    code = status.HTTP_422_UNPROCESSABLE_ENTITY if isinstance(exc, HierarchyViolation) else status.HTTP_400_BAD_REQUEST
+    return HTTPException(status_code=code, detail=str(exc))

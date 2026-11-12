@@ -546,6 +546,7 @@
     owner: "{{ slm_user }}"
     group: "{{ slm_group }}"
     mode: "0600"
+  diff: false  # the file carries secrets (#20941)
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']

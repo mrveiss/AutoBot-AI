@@ -14,8 +14,11 @@ from decimal import Decimal
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
+from llc.models.enums import ActivityEventType
 from tests.company_os_e2e._helpers import (
     CONTROL_TASKS,
+    agent_is_active,
     make_ready_task,
     make_ready_tasks,
     observe_silence,
@@ -25,6 +28,7 @@ from tests.company_os_e2e._helpers import (
 from tests.company_os_e2e._scenario import WAKE_WINDOW_SECONDS, step, wait_for
 
 pytestmark = pytest.mark.e2e
+logger = get_logger(__name__)
 
 # A local model has no price and needs no catalogue (a clean install has none, so a hosted model's
 # cost event is refused as unpriced); its tokens still count against a TOKEN budget.
@@ -60,13 +64,39 @@ def _exhaust(api, agent_id: str) -> None:
     assert over.status_code == 402, f"a further event on an exhausted budget answered {over.status_code}"
 
 
+def _refusal_rows(scenario, node_id: str) -> list[dict]:  # noqa: ANN001
+    """Activity rows of the budget refusal for this agent's node, written after the budget was exhausted."""
+    api, since = scenario.api, datetime.fromisoformat(scenario.ids["t_budget"])
+    body = api.call("GET", api.company("/activity?page=1&page_size=200"))
+    return [
+        r
+        for r in body["items"]
+        if r["entity_id"] == node_id
+        and r["action"] == ActivityEventType.BUDGET_DISPATCH_REFUSED.value
+        and datetime.fromisoformat(r["occurred_at"]) >= since
+    ]
+
+
 def test_step_6_exhausted_budget_is_not_dispatched(scenario):  # noqa: ANN001
     scenario.require(2, 4)
     a, b = scenario.agent("a"), scenario.agent("b")
     with step(6):
-        quiesce(scenario, a["agent_id"])  # a run still in flight is not this step's dispatch
-        scenario.ids["t_budget"] = datetime.now(timezone.utc).isoformat()
-        _exhaust(scenario.api, a["agent_id"])  # precondition: asserted, not xfailed
+        # quiesce() is a point-in-time check: it returns the moment no run is in flight, and a heartbeat or
+        # assignment wake can start the next run right after, which then spends tokens between _exhaust's
+        # read and its ingest (#21166, #20830). Pausing makes the agent ineligible for dispatch FIRST, so
+        # waiting for the run table to settle stays true while the limit is set and exhausted.
+        direct = _pause(scenario, a["agent_id"])
+        try:
+            quiesce(scenario, a["agent_id"])  # no new run can start; wait out the one already running
+            scenario.ids["t_budget"] = datetime.now(timezone.utc).isoformat()
+            _exhaust(scenario.api, a["agent_id"])  # precondition: asserted, not xfailed
+        except BaseException:
+            _resume_logging_failure(scenario, a["agent_id"], direct)  # the original error is the one reported
+            raise
+        _resume(scenario, a["agent_id"], direct)  # eligible again: only the exhausted budget may now stop it
+        # Silence only means "the budget stopped it" if nothing else can: read the agent back as active.
+        active = wait_for(lambda: agent_is_active(scenario, a["agent_id"]), WAKE_WINDOW_SECONDS)
+        assert active, f"agent is not eligible after the resume, so its silence would not be the budget's: {a}"
 
         def arrange() -> None:
             make_ready_task(scenario, "Exhausted agent's next task", a["node_id"])
@@ -74,6 +104,9 @@ def test_step_6_exhausted_budget_is_not_dispatched(scenario):  # noqa: ANN001
 
         control, subject = observe_silence(scenario, b["agent_id"], a["agent_id"], arrange)
         assert not subject, f"the exhausted agent was dispatched {subject} time(s) beside the control's {control}"
+        # Positive signal: the dispatch gate records the refusal as a budget.dispatch_refused activity row (#21212).
+        refused = wait_for(lambda: _refusal_rows(scenario, a["node_id"]), WAKE_WINDOW_SECONDS)
+        assert refused, f"no {ActivityEventType.BUDGET_DISPATCH_REFUSED.value} activity row for agent {a['agent_id']}"
         scenario.done.add(6)
 
 
@@ -104,6 +137,14 @@ def _resume(scenario, agent: str, direct: bool) -> None:  # noqa: ANN001
         set_paused_directly(scenario, agent, False)
     else:
         scenario.api.call("POST", scenario.api.company(f"/controls/agents/{agent}/resume"))
+
+
+def _resume_logging_failure(scenario, agent: str, direct: bool) -> None:  # noqa: ANN001
+    """Resume on the error path: a failure here is logged, never allowed to replace the error being handled."""
+    try:
+        _resume(scenario, agent, direct)
+    except Exception:
+        logger.exception("Could not resume agent %s after a failed step 6", agent)
 
 
 def test_step_7b_paused_agent_is_not_dispatched_until_resumed(scenario):  # noqa: ANN001

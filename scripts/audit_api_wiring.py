@@ -65,6 +65,7 @@ if str(REPO_ROOT) not in sys.path:
 from autobot_shared.api_routing import frontend_call_paths as _fcp  # noqa: E402
 from autobot_shared.api_routing import router_prefixes as _routing  # noqa: E402
 from autobot_shared.openapi_schema import normalize_pattern_anchors  # noqa: E402
+from autobot_shared.testfile_names import is_test_filename as _is_test_name  # noqa: E402
 
 BACKEND = REPO_ROOT / "autobot-backend"
 # #12381: the SLM control-plane backend (autobot-slm-backend, :8000) mounts its own '/api'-prefixed route table,
@@ -133,8 +134,8 @@ def _runtime_websocket_paths(app) -> set[str]:  # noqa: ANN001
     return {r.path for r in app.routes if isinstance(r, WebSocketRoute)}
 
 
-def dump_openapi(out_path: str) -> int:
-    """Import the app and dump app.openapi() — authoritative route table."""
+def dump_openapi(out_path: str, include_websocket_paths: bool = True) -> int:
+    """Dump app.openapi(); without the audit-only x-websocket-paths key it is what openapi-typescript reads (#12363)."""
     # Resolve BEFORE chdir: a relative out_path must land where the caller
     # expects, not inside autobot-backend/ (#9864 — this stranded openapi.json
     # in CI and the audit step crashed with FileNotFoundError every run).
@@ -159,8 +160,9 @@ def dump_openapi(out_path: str) -> int:
         # FastAPI (confirmed in CI: "+0 websocket" despite 25 real handlers).
         # The static scan is version-independent and is the source of truth;
         # the runtime walk is kept as a supplementary safety net.
-        ws = _runtime_websocket_paths(app) | static_websocket_paths(BACKEND)
-        spec["x-websocket-paths"] = sorted(ws)
+        if include_websocket_paths:
+            ws = _runtime_websocket_paths(app) | static_websocket_paths(BACKEND)
+            spec["x-websocket-paths"] = sorted(ws)
     except Exception as e:  # noqa: BLE001
         print(f"[dump-openapi] FAILED to build app: {e}", file=sys.stderr)
         return 1
@@ -172,7 +174,7 @@ def dump_openapi(out_path: str) -> int:
     return 0
 
 
-def dump_slm_openapi(out_path: str) -> int:
+def dump_slm_openapi(out_path: str, include_websocket_paths: bool = True) -> int:
     """Import the SLM backend app and dump app.openapi() (#12381).
 
     Mirrors dump_openapi() but imports the module-level ``app`` from
@@ -194,8 +196,9 @@ def dump_slm_openapi(out_path: str) -> int:
         # path produced, so any divergence is reported as stale generated types.
         spec = normalize_pattern_anchors(app.openapi())
         # Same runtime+static WebSocket union as dump_openapi() (GH#9864, #12381).
-        ws = _runtime_websocket_paths(app) | static_websocket_paths(SLM_BACKEND)
-        spec["x-websocket-paths"] = sorted(ws)
+        if include_websocket_paths:
+            ws = _runtime_websocket_paths(app) | static_websocket_paths(SLM_BACKEND)
+            spec["x-websocket-paths"] = sorted(ws)
     except Exception as e:  # noqa: BLE001
         print(f"[dump-slm-openapi] FAILED to build app: {e}", file=sys.stderr)
         return 1
@@ -261,16 +264,14 @@ def _registry_module_prefixes(root: Path) -> dict[str, str]:
 def _scan_route_decorators(
     root: Path,
 ) -> tuple[dict[str, list[tuple[str, str]]], dict[str, str], set[str]]:
-    """Regex-scan `root` for @router.<method>(...) decorators, APIRouter
-    prefixes, and include_router() mount prefixes. Returns
-    (module -> [(method, path), ...], module -> own prefix, mount prefixes).
-    """
+    """Regex-scan `root` for @router.<method>(...) decorators, APIRouter prefixes and include_router()
+    mount prefixes. Returns (module -> [(method, path), ...], module -> own prefix, mount prefixes)."""
     raw: dict[str, list[tuple[str, str]]] = defaultdict(list)
     module_prefix: dict[str, str] = {}
     prefixes: set[str] = set()
     for py in root.rglob("*.py"):
         sp = str(py)
-        if "__pycache__" in sp or "/tests/" in sp or sp.endswith("_test.py") or "/test_" in sp:
+        if "__pycache__" in sp or "/tests/" in sp or _is_test_name(py.name, include_js=False, include_conftest=False):
             continue
         txt = py.read_text(encoding="utf-8", errors="ignore")
         mp = apirouter_prefix(txt)
@@ -387,7 +388,7 @@ def find_unmounted_routers(backend: set[str] | None = None) -> list[str]:
         module_txt = {
             py.stem: py.read_text(encoding="utf-8", errors="ignore")
             for py in api_dir.glob("*.py")
-            if py.stem != "__init__" and not py.stem.endswith("_test") and not py.stem.startswith("test_")
+            if py.stem != "__init__" and not _is_test_name(py.name, include_js=False, include_conftest=False)
         }
         init_txt = (
             (api_dir / "__init__.py").read_text(encoding="utf-8", errors="ignore")
@@ -751,60 +752,37 @@ def audit_baseline(
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # exec_module needs this; direct execution doesn't (#16816)
-from dead_surface import report_dead_surface  # noqa: E402
+from audit_api_wiring_args import build_parser  # noqa: E402
+from dead_surface import baseline_health_lines, report_dead_surface  # noqa: E402
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    return build_parser(__doc__)
+
+
+def _known_backend_paths(args: argparse.Namespace) -> tuple[set[str], str]:
+    """The backend route table the frontend calls are checked against, and how it was obtained."""
+    if not args.openapi:
+        return backend_paths_static()[0], "STATIC (regex, heuristic — prefer --openapi)"
+    backend = backend_paths_from_openapi(args.openapi)
+    mode = "AUTHORITATIVE (openapi)"
+    if args.slm_openapi:
+        slm_backend = backend_paths_from_openapi(args.slm_openapi)
+        backend |= slm_backend
+        mode += f" + SLM ({len(slm_backend)} paths unioned)"
+    return backend, mode
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--openapi", help="openapi.json path or URL (authoritative mode)")
-    ap.add_argument("--dump-openapi", metavar="OUT", help="import app_factory.create_app() and dump spec, then exit")
-    ap.add_argument(
-        "--slm-openapi",
-        metavar="FILE",
-        help="second openapi.json (SLM control-plane backend, "
-        "autobot-slm-backend) whose paths are UNIONed into the known "
-        "backend route table (#12381) — produce it with "
-        "--dump-slm-openapi first",
-    )
-    ap.add_argument(
-        "--dump-slm-openapi", metavar="OUT", help="import autobot-slm-backend/main.py's app and dump spec, " "then exit"
-    )
-    ap.add_argument(
-        "--baseline",
-        metavar="FILE",
-        help="file of known/tracked unwired frontend paths (one per line) "
-        "excluded from the --fail-on-unwired exit code (#12381) — "
-        "still reported, just not gated",
-    )
-    ap.add_argument("--dead-surface", action="store_true", help="also report backend paths with no frontend consumer")
-    ap.add_argument(
-        "--fail-on-unwired", action="store_true", help="exit non-zero if any unwired call or unmounted router found"
-    )
-    ap.add_argument(
-        "--only-prefix",
-        metavar="PREFIX",
-        help="restrict unwired-call reporting and exit code to frontend "
-        "calls under PREFIX (e.g. /api/llc). Lets CI gate one module "
-        "while other pre-existing findings are tracked separately.",
-    )
-    args = ap.parse_args()
+    args = _build_parser().parse_args()
 
     if args.dump_openapi:
-        return dump_openapi(args.dump_openapi)
+        return dump_openapi(args.dump_openapi, include_websocket_paths=not args.no_websocket_paths)
 
     if args.dump_slm_openapi:
-        return dump_slm_openapi(args.dump_slm_openapi)
+        return dump_slm_openapi(args.dump_slm_openapi, include_websocket_paths=not args.no_websocket_paths)
 
-    if args.openapi:
-        backend = backend_paths_from_openapi(args.openapi)
-        mode = "AUTHORITATIVE (openapi)"
-        if args.slm_openapi:
-            slm_backend = backend_paths_from_openapi(args.slm_openapi)
-            backend |= slm_backend
-            mode += f" + SLM ({len(slm_backend)} paths unioned)"
-    else:
-        backend, _ = backend_paths_static()
-        mode = "STATIC (regex, heuristic — prefer --openapi)"
+    backend, mode = _known_backend_paths(args)
 
     fe = frontend_calls()
     print(f"mode: {mode}")
@@ -828,26 +806,7 @@ def main() -> int:
     # the gate green while the button is dead. Report what the baseline is
     # absorbing — non-gating, so the blocking behaviour is unchanged.
     if baseline:
-        health = audit_baseline(baseline, unwired_all, fe, backend)
-        rematch, resolved, absent = health["rematch"], health["resolved"], health["absent"]
-        namespace_only = health["namespace_only"]
-        print(
-            f"\n== BASELINE HEALTH: {len(rematch)} renamed, "
-            f"{len(namespace_only)} namespace-only, "
-            f"{len(resolved)} resolved, {len(absent)} no-longer-called =="
-        )
-        for path, suggestions in rematch:
-            print(f"  RENAMED ENDPOINT (rewire the caller)  {path}")
-            for suggestion in suggestions:
-                print(f"      ->  now served by {suggestion}")
-        for path, suggestions in namespace_only:
-            print(f"  NAMESPACE ALIVE, NO MATCHING ROUTE  {path}")
-            for suggestion in suggestions:
-                print(f"      ~  nearest, NOT a rename: {suggestion}")
-        for path, _ in resolved:
-            print(f"  RESOLVED (prune from baseline)  {path}")
-        for path, _ in absent:
-            print(f"  NO LONGER CALLED (prune from baseline)  {path}")
+        print("\n".join(baseline_health_lines(audit_baseline(baseline, unwired_all, fe, backend))))
 
     # #10037: getBackendUrl() calls that forgot /api (only when /api<path> is real).
     missing_api = find_missing_api_prefix(backend) if args.openapi else {}

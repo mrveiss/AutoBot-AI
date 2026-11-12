@@ -16,6 +16,8 @@
 import { ref } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
+import { buildCodeQuality } from './codeQualityOverview'
+import type { CodeQualityData } from './codeQualityOverview'
 
 const logger = createLogger('useDashboardLoaders')
 
@@ -33,12 +35,7 @@ export interface CommunicationPatternsData {
   unique_endpoints: number
 }
 
-export interface CodeQualityData {
-  overall_score: number
-  test_coverage: number
-  code_duplicates: number
-  technical_debt: number
-}
+export type { CodeQualityData } from './codeQualityOverview'
 
 export interface PerformanceMetricsData {
   efficiency_score: number
@@ -86,6 +83,7 @@ export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
     {
       path: '/api/analytics/codebase/duplicates/cached', // #20491: page open reads, never scans
       scopeToSource: true,
+      requireSource: true,
       pickData: (r) => r,
       label: 'Codebase duplicates',
     },
@@ -206,31 +204,7 @@ export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
       return
     }
 
-    const breakdown = (healthData?.breakdown as Record<string, number>) || {}
-    const testCoverage = breakdown.testability || 50
-    const performanceScore = breakdown.performance || 0
-    const overallScore = (healthData?.health_score as number) || performanceScore
-
-    let duplicateCount = 0
-    if (duplicatesData?.status === 'success') {
-      duplicateCount =
-        (duplicatesData.total_count as number) ||
-        (duplicatesData.total_duplicates as number) ||
-        (duplicatesData.count as number) ||
-        0
-    }
-
-    const technicalDebt =
-      (debtData?.total_debt_hours as number) ||
-      (debtData?.total_items as number) ||
-      0
-
-    codeQuality.value = {
-      overall_score: Math.round(overallScore),
-      test_coverage: Math.round(testCoverage),
-      code_duplicates: duplicateCount,
-      technical_debt: technicalDebt,
-    }
+    codeQuality.value = buildCodeQuality(healthData, duplicatesData, debtData)
   }
 
   const loadPerformanceMetrics = async () => {

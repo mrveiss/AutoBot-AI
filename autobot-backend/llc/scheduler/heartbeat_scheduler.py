@@ -65,7 +65,7 @@ from .auth_failure import adapter_run_failure, pause_after_auth_failure
 # Aliased to the name `_run_adapter` already calls (#17726). Renaming the call
 # site would put that unrelated 82-line function in scope for the function-length
 # guard, and refactoring it is not this change.
-from .dispatch_gate import adapter_block_reason, dispatch_block_reason, require_dispatchable
+from .dispatch_gate import adapter_block_reason, dispatch_block_reason, note_refused_wake, require_dispatchable
 from .replay_recording import record_run_for_replay as _record_run_for_replay
 from .run_context import enrich_run_context
 from .run_key import ADAPTER_MAX_WAIT_SECONDS
@@ -308,7 +308,7 @@ class LLCHeartbeatScheduler:
 
             reason = await dispatch_block_reason(session, agent_id, agent.get("company_id"), agent.get("status"))
             if reason is not None:
-                logger.info("Heartbeat skipped for agent %s: %s", agent_id, reason)
+                await note_refused_wake(session, agent.get("company_id"), agent_id, reason)
                 await self._reschedule(agent_id, cron_expr, redis)
                 return
 
@@ -736,13 +736,8 @@ class LLCHeartbeatScheduler:
                     )
                 )
                 if company_id:
-                    await ControlsService().pause_agent(
-                        session,
-                        company_id,
-                        agent_id,
-                        actor_user_id=None,
-                        reason=f"subscription quota exhausted (run {run_id})",
-                        actor_type="system",
+                    await ControlsService().auto_pause_agent(
+                        session, company_id, agent_id, f"subscription quota exhausted (run {run_id})"
                     )
                 else:
                     logger.warning("Agent %s quota-exhausted but has no company_id — not auto-paused", agent_id)

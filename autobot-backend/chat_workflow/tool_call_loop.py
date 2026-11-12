@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers
+from chat_workflow.stall_escalation import stall_mode
 
 logger = get_logger(__name__)
 
@@ -149,7 +150,7 @@ def _inline_loop_update(state: Dict[str, Any], summaries: list, messages: list, 
     loop_count = state.get("tool_loop_count", 0) + 1 if is_loop else 0  # consecutive: an unrelated pass ends it
     if is_loop:
         logger.warning("Tool-call loop detected inline (loop_count=%d): %s", loop_count, fingerprints[-1])
-    if loop_count >= _LOOP_ABORT_THRESHOLD:
+    if loop_count >= _LOOP_ABORT_THRESHOLD and stall_mode(state) == "stop":  # "ask" says it at ask_human (#21022)
         _append_loop_abort_message(messages, stream_cb, iteration)
     return {
         "tool_call_fingerprints": fingerprints,

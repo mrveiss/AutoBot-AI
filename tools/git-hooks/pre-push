@@ -27,7 +27,8 @@ REPO_ROOT="$PWD"
 # levels up is the repository both for tools/git-hooks/pre-push and for the
 # installed .git/hooks/pre-push, while a push from a fixture repo has no
 # scripts/lib of its own.
-_HOOK_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)/scripts/lib/git-root.sh"
+_HOOK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)"
+_HOOK_LIB="$_HOOK_ROOT/scripts/lib/git-root.sh"
 # shellcheck source=../../scripts/lib/git-root.sh
 if ! . "$_HOOK_LIB"; then
     echo "[pre-push FAIL] cannot load $_HOOK_LIB" >&2
@@ -317,14 +318,15 @@ machine_slot_wait() {
   [ -z "${CI:-}" ] && [ -z "${AUTOBOT_MACHINE_SLOT_HELD:-}" ] || return 0
   command -v flock >/dev/null 2>&1 || { warn "flock is missing: this push did not queue for a machine slot"; return 0; }
   local dir="${AUTOBOT_MACHINE_SLOT_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/autobot-machine-slots-$(id -u)}"
-  local start=$SECONDS next=$SECONDS every="${AUTOBOT_MACHINE_SLOT_REPORT:-60}" why
+  local start=$SECONDS next=$SECONDS every="${AUTOBOT_MACHINE_SLOT_REPORT:-60}" why waited=0
   mkdir -p "$dir"
   while :; do
     # A slot is taken only while the 1-minute load is under the ceiling.
     if machine_slot_load_high; then
       why="$MACHINE_SLOT_LOAD_MSG"
     elif machine_slot_take "$dir"; then
-      [ "$SECONDS" != "$start" ] || return 0
+      # #21225: a wait is an iteration of this loop; SECONDS is an integer clock and also ticks across a first-attempt take.
+      [ "$waited" = 1 ] || return 0
       log "waited $((SECONDS - start))s for a machine slot"
       # #20260: the queue has no time limit, so the marker set before it may be about to expire.
       [ -z "${branch_name:-}" ] || push_marker_set "$branch_name" "${remote_sha:-$ZERO}"
@@ -336,6 +338,7 @@ machine_slot_wait() {
       log "queued $((SECONDS - start))s: $why"
       next=$((SECONDS + every))
     fi
+    waited=1
     sleep "${AUTOBOT_MACHINE_SLOT_POLL:-5}"
   done
 }
@@ -380,54 +383,38 @@ stage_record() {
 }
 
 # ---------------------------------------------------------------------------
-# #18058/#20903: run pytest on an interpreter that meets the platform floor,
-# read from .python-version (the SSOT) rather than restated here.
-#
-# Bare `python3` is whatever the machine happens to ship.  Where that is below
-# the floor, every selected group dies at COLLECT time on a newer-only name
-# (enum.StrEnum, asyncio.Task.cancelling) and the push is blocked by the
-# interpreter rather than by anything in the changeset.  Classifying that
-# after the fact only names the problem; choosing a conforming interpreter
-# removes it.
-#
-# Preference order, all derived from the session -- no absolute paths:
-#   1. the repo's own venv, which is what the tree was set up against
-#   2. python3, when it already meets the floor
-#   3. the newest explicitly-versioned python3.N on PATH that meets it
-# Falls back to python3 so the floor classifier above still reports honestly
-# when nothing conforming exists.
+# #18058/#20903/#21163: run pytest on the repo interpreter, resolved by the one
+# resolver every git hook shares (scripts/lib/hook-python.sh): the floor is .python-version
+# (the SSOT), the order is the repo venv, then python<floor>, then a python3
+# that verifiably meets the floor (one that also imports pytest is preferred).  When none exists the
+# push stops here, naming the required version -- it never runs the selection
+# on an older python3 and reports the resulting StrEnum / cachetools collection
+# errors as test failures.
 # ---------------------------------------------------------------------------
-pick_python() {
-    # A candidate qualifies only if it meets the floor AND can actually
-    # IMPORT pytest -- find_spec only proves the package is locatable, so a
-    # stale venv with a broken install would be chosen over a working python3.
-    # Version alone is not enough: a bare /usr/bin/python3.14 with no pytest
-    # fails with "No module named pytest", which is the same push-blocking
-    # non-failure in different words.
-    local candidate main_root floor_text="" floor_major floor_minor
-    local floor_fallback="3.14"  # only if .python-version is unreadable; swept by the drift guard
-    # The floor is the repo's .python-version (initialised above: this hook runs under set -u).
-    [ -r "$REPO_ROOT/.python-version" ] && IFS= read -r floor_text < "$REPO_ROOT/.python-version"
-    case "$floor_text" in
-        ([0-9]*.[0-9]*) [ -z "${floor_text//[0-9.]/}" ] || floor_text="$floor_fallback" ;;
-        (*) floor_text="$floor_fallback" ;;
-    esac
-    IFS=. read -r floor_major floor_minor _ <<< "$floor_text"
-    # In a worktree $PWD is the worktree, which has no venv; the venv lives in
-    # the main checkout, whose path is the parent of the common git dir.
-    main_root="$(dirname "$(git rev-parse --git-common-dir 2>/dev/null || echo .)")"
-    for candidate in "$REPO_ROOT/venv/bin/python" "$REPO_ROOT/.venv/bin/python" \
-                     "$main_root/venv/bin/python" "$main_root/.venv/bin/python" \
-                     python3 python3.14 python3.15 python3.16; do
-        command -v "$candidate" >/dev/null 2>&1 || [ -x "$candidate" ] || continue
-        if "$candidate" -c 'import sys; sys.exit(1) if sys.version_info[:2] < ('"$floor_major"', '"$floor_minor"') else __import__("pytest")' 2>/dev/null; then
-            printf '%s' "$candidate"
-            return 0
-        fi
-    done
-    printf '%s' python3
-}
-PYTEST_PYTHON="$(pick_python)"
+# The pushing checkout's copy wins: an installed hook is shared by every worktree and can be
+# newer than the checkout it was installed from, which then has no such library yet.
+_PYTHON_LIB="$REPO_ROOT/scripts/lib/hook-python.sh"
+[ -r "$_PYTHON_LIB" ] || _PYTHON_LIB="$_HOOK_ROOT/scripts/lib/hook-python.sh"
+# shellcheck source=../../scripts/lib/hook-python.sh
+if ! . "$_PYTHON_LIB"; then
+    echo "[pre-push FAIL] cannot load $_PYTHON_LIB -- rebase this branch onto main (it ships scripts/lib/hook-python.sh) or reinstall the hooks (scripts/install-git-hooks.sh)." >&2
+    exit 1
+fi
+# The pushing repo declares the floor; a repo without .python-version (a fixture, a foreign
+# remote) is judged by the checkout this hook belongs to.
+_PY_ROOT="$REPO_ROOT"
+[ -r "$REPO_ROOT/.python-version" ] || _PY_ROOT="$_HOOK_ROOT"
+# pytest is PREFERRED, not required, at resolution time: the selection, the PR-body check and
+# the dependency scan below run on the floor interpreter alone, and every stage that runs pytest
+# re-checks `import pytest` and stops the push through could_not_run. Requiring it up front would
+# block pushes that never run pytest. The floor itself is never relaxed: with no interpreter at
+# or above it the resolver's own message names the version and the push stops here.
+if ! PYTEST_PYTHON="$(resolve_repo_python --root "$_PY_ROOT" --require pytest 2>/dev/null)"; then
+    if ! PYTEST_PYTHON="$(resolve_repo_python --root "$_PY_ROOT")"; then
+        echo "[pre-push FAIL] Push BLOCKED: no interpreter that meets .python-version (see above)." >&2
+        exit 1
+    fi
+fi
 
 # #17451: the pytest budget follows the SELECTED work, not the changeset. A hub file
 # changes one path and selects dozens of guards, so the changed-file count under-sizes
@@ -747,7 +734,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # ------------------------------------------------------------------------
   if ! command -v gh >/dev/null 2>&1; then
     log "gh CLI not installed — PR body NOT checked (#16859); before pushing, validate it yourself:"
-    log "  python3 scripts/validate_pr_body.py --file <path>"
+    log "  \"\$PYTEST_PYTHON\" scripts/validate_pr_body.py --file <path>"
   else
     gh_view_output=$(gh pr view "$branch_name" --json number --jq '.number' 2>&1)
     gh_view_exit=$?
@@ -769,7 +756,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       # skip that looks identical to "nothing to check".
       log "no open PR yet for $branch_name — this hook cannot check a body before 'gh pr create' (#16859)"
       log "  before 'gh pr create --body-file <path>', validate it yourself:"
-      log "  python3 scripts/validate_pr_body.py --file <path>"
+      log "  \"\$PYTEST_PYTHON\" scripts/validate_pr_body.py --file <path>"
     else
       # gh ran and failed for a reason OTHER than "no PR" -- not signed in,
       # offline, rate-limited, an API error. Must not read as "no open PR":

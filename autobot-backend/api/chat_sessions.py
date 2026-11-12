@@ -11,12 +11,14 @@ storage to the chat_history subsystem.
 """
 
 import json
-from typing import Dict, List
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 from api.chat_activity_store import _process_activity_batch, _store_single_activity, activity_principal
+from api.chat_session_messages import fetch_session_messages
+from api.chat_sessions_update import apply_session_update
 from api.schemas_chat import (
     ActivityAddData,
     ActivityBatchCreate,
@@ -47,6 +49,7 @@ from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from chat_history.owner_keys import owner_from_metadata, strip_server_controlled
 
 # Import session lifecycle hooks (Issue #4260)
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
@@ -218,53 +221,6 @@ def _validate_pagination_params(page: int, per_page: int) -> None:
         raise ValidationError("Invalid pagination parameters")
 
 
-async def _fetch_session_messages_or_raise(chat_history_manager, session_id: str, limit: int, offset: int = 0) -> List:
-    """
-    Fetch session messages and raise ResourceNotFoundError if session not found.
-
-    Issue #620.
-    Issue #1797: Granular exception mapping for session load failures.
-
-    Args:
-        chat_history_manager: Chat history manager instance
-        session_id: Session ID to fetch messages for
-        limit: Maximum messages to return
-        offset: Messages to skip, counting back from the newest (#15186)
-
-    Returns:
-        List of messages
-
-    Raises:
-        ResourceNotFoundError: If session does not exist
-        ValidationError: If session data is corrupted (ValueError)
-        InternalError: If session cannot be accessed (PermissionError)
-    """
-    (
-        AutoBotError,
-        InternalError,
-        ResourceNotFoundError,
-        ValidationError,
-        get_error_code,
-    ) = get_exceptions_lazy()
-
-    try:
-        messages = await chat_history_manager.get_session_messages(session_id, limit=limit, offset=offset)
-    except FileNotFoundError:
-        logger.warning("Session file not found for session %s", session_id)
-        raise ResourceNotFoundError(f"Session {session_id} not found")
-    except PermissionError:
-        logger.error("Permission denied accessing session %s", session_id)
-        raise InternalError("Unable to access chat session")
-    except ValueError as exc:
-        logger.error("Corrupted session data for session %s: %s", session_id, exc)
-        raise ValidationError("Chat session data is corrupted")
-
-    if messages is None:
-        raise ResourceNotFoundError(f"Session {session_id} not found")
-
-    return messages
-
-
 def _validate_export_format_or_raise(export_format: str) -> None:
     """
     Validate export format and raise ValidationError if invalid.
@@ -360,7 +316,7 @@ async def get_session_messages(
 
     chat_history_manager = get_chat_history_manager(request)
 
-    messages = await _fetch_session_messages_or_raise(chat_history_manager, session_id, per_page, (page - 1) * per_page)
+    messages = await fetch_session_messages(request, chat_history_manager, session_id, per_page, (page - 1) * per_page)
     total_count = await chat_history_manager.get_session_message_count(session_id)
 
     return create_chat_response(
@@ -793,7 +749,7 @@ async def _reject_session_id_collision(chat_history_manager, session_id: str, us
             raise _session_id_taken_error()
         return
 
-    owner = ((existing.get("metadata") or {}) if isinstance(existing, dict) else {}).get("owner")
+    owner = owner_from_metadata((existing.get("metadata") or {}) if isinstance(existing, dict) else {})
     caller = (user_data or {}).get("username")
     if owner and caller and owner == caller:
         return  # the caller's own session — a retry, not a takeover
@@ -851,7 +807,9 @@ async def create_session(session_data: SessionCreate, request: Request):
         session_id = generate_chat_session_id()
     session_title = session_data.title or DEFAULT_SESSION_TITLE
 
-    metadata = session_data.metadata or {}
+    # #20928: client metadata can't set server-controlled ownership keys; the one strip the PUT
+    # route also uses runs before the server adds its own.
+    metadata = strip_server_controlled(session_data.metadata)
     # #14020: one builder for every path that stamps ownership (#684 org/team
     # hierarchy included), so create and backfill cannot drift apart.
     metadata.update(build_owner_metadata(user_data, session_data.team_id))
@@ -943,22 +901,7 @@ async def update_session(
     # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
 
-    # Update session
-    updated_session = await chat_history_manager.update_session(
-        session_id=session_id,
-        title=session_data.title,
-        metadata=session_data.metadata,
-    )
-
-    if updated_session is None:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ResourceNotFoundError(f"Session {session_id} not found")
+    updated_session = await apply_session_update(chat_history_manager, session_id, session_data)
 
     log_chat_event(
         "session_updated",

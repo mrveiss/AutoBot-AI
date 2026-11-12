@@ -47,12 +47,15 @@ truth.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from collections.abc import Collection
 from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_text, base_tree_texts, literal_in
+
+from autobot_shared.testfile_names import is_test_filename
 
 _REPO_ROOT = repo_root()
 
@@ -79,7 +82,6 @@ _APPS = ("autobot-frontend", "autobot-slm-frontend")
 # fails when an entry no longer contains a raw fetch, so the list cannot rot.
 _RAW_FETCH_EXCEPTIONS: dict[str, str] = {
     "autobot-frontend/src/utils/fetchWithAuth.ts": "the canonical auth-injecting fetch helper",
-    "autobot-frontend/src/utils/slmClient.ts": "SLM-origin transport client with its own bearer token; the main-app JWT must not be sent",
     "autobot-frontend/src/config/AppConfig.js": "bootstrap config fetch; ApiClient derives its base URL from AppConfig, so it cannot depend on it",
     "autobot-frontend/src/config/ssot-config.ts": "SLM service discovery during config bootstrap, before any client exists; imported by the client",
     "autobot-frontend/src/config/ServiceDiscovery.js": "probes candidate hosts for reachability; not a call to the configured backend",
@@ -108,7 +110,22 @@ _RAW_FETCH_SUFFIXES = _SOURCE_SUFFIXES + (".js",)
 # pass by reaching nothing.
 _MIN_SOURCE_FILES = {"autobot-frontend": 500, "autobot-slm-frontend": 100}
 
-_CLIENT_CLASS_RE = re.compile(r"\bclass\s+([A-Za-z]+(?:ApiClient|ApiService|Client))\b")
+# #12363 slice 0: the prefix is optional so a bare `ApiService` / `ApiClient` is a client class too, and the
+# declaration header is captured so a class that `extends ApiClientBase` (the one kit transport; the app's
+# canonical client) is not counted as another client -- only classes that share no base with it are sprawl.
+# Only the NAME is matched here: the heritage clause is read by `_class_heritage` after a bracket-depth scan
+# over the type-parameter list, because `<T extends ApiClientBase>` is a constraint, not a base class.
+_CLIENT_CLASS_RE = re.compile(r"\bclass\s+([A-Za-z]*(?:ApiClient|ApiService|Client))\b")
+_EXTENDS_KIT_BASE_RE = re.compile(r"extends\s+ApiClientBase\b")
+_HERITAGE_RE = re.compile(r"[^{;]*(?=\{)")
+# Files that pull in the bridge `fetchWithAuth` (retired in #12363 slice 3): static, dynamic or CommonJS `require(`.
+_FETCH_WITH_AUTH_IMPORT_RE = re.compile(
+    r"""(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*)['"][^'"]*\bfetchWithAuth(?:\.[jt]s)?['"]"""
+)
+# A URL assembled by hand from the base helper instead of a typed `apiClient.call(...)` path. The WebSocket
+# URL builder shares the helper and is a different transport, so a line naming `getBackendWsUrl(` is out.
+_HAND_BUILT_URL_RE = re.compile(r"\$\{getApiBase\(\)\}/")
+_COMMENT_LINE_RE = re.compile(r"^\s*(?://|\*|/\*|<!--)")
 # No `\s*` before the paren: prose such as "a failed fetch (#14064)" or a test
 # name like "share ONE voices fetch (no self-aborting race)" matches with it, and
 # three such comments were counted as transport sites on the first pass. A real
@@ -125,7 +142,7 @@ _RESPONSE_INTERFACE_RE = re.compile(r"^\s*(?:export\s+)?interface\s+\w+Response\
 # (#13993). Counted separately from hand-typed interfaces because the fix is
 # different: these become checked by importing the generated contract, which
 # for LLC already exists and simply is not imported.
-_INLINE_GENERIC_RE = re.compile(r"\b\w*[aA]pi\w*\.(?:get|post|put|patch|delete)\s*<")
+_INLINE_GENERIC_RE = re.compile(r"\b\w*[aA]pi\w*\.(?:get|post|put|patch|delete|call)\s*<")
 
 
 def _is_test(path: Path) -> bool:
@@ -135,7 +152,7 @@ def _is_test(path: Path) -> bool:
     bypassing the client — counting it would make the ratchet grow whenever
     someone adds coverage, which is the opposite of the incentive intended.
     """
-    return "__tests__" in path.parts or ".test." in path.name or ".spec." in path.name
+    return "__tests__" in path.parts or is_test_filename(path.name)
 
 
 def _source_files(root: Path, suffixes: tuple[str, ...] = _SOURCE_SUFFIXES) -> list[Path]:
@@ -154,13 +171,43 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def _type_params_end(text: str, pos: int) -> int:
+    """Index just past the `<...>` type-parameter list starting at *pos* (whitespace first), nested or not.
+
+    Returns the whitespace-skipped *pos* unchanged when no list opens there. An `=>` inside the list is
+    an arrow, not a closer.
+    """
+    while pos < len(text) and text[pos].isspace():
+        pos += 1
+    if text[pos : pos + 1] != "<":
+        return pos
+    depth = 0
+    for i in range(pos, len(text)):
+        char = text[i]
+        if char == "<":
+            depth += 1
+        elif char == ">" and text[i - 1] != "=":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return pos
+
+
+def _class_heritage(text: str, name_end: int) -> str | None:
+    """The `extends ... implements ...` clause after the class name and its type parameters; None if no body follows."""
+    match = _HERITAGE_RE.match(text, _type_params_end(text, name_end))
+    return match.group(0).strip() if match else None
+
+
 def _client_class_names(root: Path) -> set[str]:
-    """Every HTTP-client class name, excluding test mocks."""
+    """Every HTTP-client class name, excluding test mocks and classes whose heritage extends the kit base."""
     names: set[str] = set()
     for path in _source_files(root):
-        for name in _CLIENT_CLASS_RE.findall(_read(path)):
-            if "Mock" not in name:
-                names.add(name)
+        text = _read(path)
+        for match in _CLIENT_CLASS_RE.finditer(text):
+            heritage = _class_heritage(text, match.end())
+            if heritage is not None and "Mock" not in match.group(1) and not _EXTENDS_KIT_BASE_RE.match(heritage):
+                names.add(match.group(1))
     return names
 
 
@@ -188,6 +235,33 @@ def _axios_importers(root: Path, base: Path = _REPO_ROOT) -> list[str]:
     return [path.relative_to(base).as_posix() for path in _source_files(root) if _AXIOS_IMPORT_RE.search(_read(path))]
 
 
+def _fetch_with_auth_importers(root: Path, base: Path = _REPO_ROOT) -> list[str]:
+    return [
+        path.relative_to(base).as_posix()
+        for path in _source_files(root, _RAW_FETCH_SUFFIXES)
+        if _FETCH_WITH_AUTH_IMPORT_RE.search(_read(path))
+    ]
+
+
+def _hand_built_urls(root: Path, base: Path = _REPO_ROOT) -> Counter[tuple[str, str]]:
+    """Code lines building `${getApiBase()}/...` by hand (comments and WebSocket-URL lines excluded).
+
+    Keyed by (repo-relative path, stripped line text) -- never a line number, which churns on every edit
+    above it -- with a multiplicity, so a second identical line in a file is a new member too.
+    """
+    sites: Counter[tuple[str, str]] = Counter()
+    for path in _source_files(root, _RAW_FETCH_SUFFIXES):
+        rel = path.relative_to(base).as_posix()
+        for line in _read(path).splitlines():
+            if _HAND_BUILT_URL_RE.search(line) and not _COMMENT_LINE_RE.match(line) and "getBackendWsUrl(" not in line:
+                sites[(rel, line.strip())] += 1
+    return sites
+
+
+def _hand_built_url_count(root: Path) -> int:
+    return sum(_hand_built_urls(root, root).values())
+
+
 def _hand_typed_response_count(root: Path) -> int:
     return sum(len(_RESPONSE_INTERFACE_RE.findall(_read(path))) for path in _source_files(root))
 
@@ -198,7 +272,7 @@ def _inline_generic_count(root: Path) -> int:
 
 
 def _measure(app: str, repo: Path = _REPO_ROOT, exceptions: Collection[str] | None = None) -> dict[str, int]:
-    """The five counts for *app* in the tree rooted at *repo* (the checkout, or an exported base)."""
+    """The counts (see `_DIMENSION_ADVICE`) for *app* in the tree rooted at *repo* (the checkout, or an exported base)."""
     root = repo / app / "src"
     return {
         "clients": len(_client_class_names(root)),
@@ -206,7 +280,22 @@ def _measure(app: str, repo: Path = _REPO_ROOT, exceptions: Collection[str] | No
         "axios": len(_axios_importers(root, repo)),
         "responses": _hand_typed_response_count(root),
         "inline_generics": _inline_generic_count(root),
+        "fetch_with_auth_importers": len(_fetch_with_auth_importers(root, repo)),
+        "hand_built_urls": _hand_built_url_count(root),
     }
+
+
+def _identities(app: str, repo: Path = _REPO_ROOT) -> dict[str, Counter[tuple[str, ...]]]:
+    """The measured MEMBERS of the two identity-compared dimensions, as multisets of stable keys."""
+    root = repo / app / "src"
+    importers = Counter((rel,) for rel in _fetch_with_auth_importers(root, repo))
+    return {"fetch_with_auth_importers": importers, "hand_built_urls": Counter(_hand_built_urls(root, repo))}
+
+
+def _new_members(app: str, head: Path, base: Path) -> dict[str, list[tuple[str, ...]]]:
+    """``{dimension: [member, ...]}`` present on *head* beyond what *base* had -- a swap grows this at equal count."""
+    now, then = _identities(app, head), _identities(app, base)
+    return {dim: sorted((now[dim] - then[dim]).elements()) for dim in now if now[dim] - then[dim]}
 
 
 def _export_base(dest: Path, apps: tuple[str, ...] = _APPS, sha: str | None = None) -> Path:
@@ -242,6 +331,8 @@ _DIMENSION_ADVICE = {
     "raw_fetch": "Route the call through that app's transport client; a direct fetch builds its own URL, so no config fix reaches it.",
     "axios": "Use the transport client, not axios directly.",
     "responses": "Import the generated contract at `src/types/generated/api.ts` instead of declaring another response shape by hand.",
+    "fetch_with_auth_importers": "Call `apiClient.call(...)`, not the `fetchWithAuth` bridge slice 3 of #12363 retires.",
+    "hand_built_urls": "Name the path as a typed `apiClient.call('get', '/api/...')` key instead of assembling `${getApiBase()}/...` by hand.",
     "inline_generics": "Type the call from the generated contract rather than asserting a shape inline — `api.get<Shape>` is a claim TypeScript cannot check.",
 }
 
@@ -273,6 +364,16 @@ def test_contract_sprawl_only_shrinks(app: str, dimension: str, base_tree: tuple
         f"{app}: {dimension} is {grown[dimension][1]}, the merge base has {grown[dimension][0]} "
         f"(#12363, #12420, #19673).\n{_DIMENSION_ADVICE[dimension]}"
     )
+
+
+@pytest.mark.parametrize("app", _APPS)
+@pytest.mark.parametrize("dimension", ("fetch_with_auth_importers", "hand_built_urls"))
+def test_no_new_bridge_importer_or_hand_built_url_even_at_equal_count(
+    app: str, dimension: str, base_tree: tuple[Path, frozenset[str]]
+) -> None:
+    """Identities, not totals: removing one site and adding another is still a new site (#12363)."""
+    new = _new_members(app, _REPO_ROOT, base_tree[0]).get(dimension, [])
+    assert not new, f"{app}: new {dimension} member(s) vs the merge base: {new[:10]}\n{_DIMENSION_ADVICE[dimension]}"
 
 
 def _tree(root: Path, responses: int, raw_fetch_files: tuple[str, ...] = ()) -> Path:
@@ -323,3 +424,134 @@ def test_the_exception_list_separates_listed_from_unlisted_raw_fetch(tmp_path: P
         assert _unlisted_raw_fetch_files(src, tmp_path) == ["src/rogue.ts"]
     finally:
         del _RAW_FETCH_EXCEPTIONS["src/blessed.ts"]
+
+
+def test_a_class_extending_the_kit_base_is_not_counted_but_a_bare_service_is(tmp_path: Path) -> None:
+    """Control strings for the widened client-class detector (#12363 slice 0)."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "canonical.ts").write_text(
+        "export class ApiClient extends ApiClientBase<Opts, paths> {\n}\n", encoding="utf-8"
+    )
+    (src / "slm.ts").write_text("export class SlmApiClient\n  extends ApiClientBase<Opts> {\n}\n", encoding="utf-8")
+    (src / "bare.ts").write_text("class ApiService {\n}\n", encoding="utf-8")
+    (src / "private.ts").write_text("export class FooApiClient {\n}\n", encoding="utf-8")
+    (src / "mock.ts").write_text("class MockApiClient {\n}\n", encoding="utf-8")
+    (src / "decoy.ts").write_text("class FreshApiClient<T extends ApiClientBase> {\n}\n", encoding="utf-8")
+    (src / "nested.ts").write_text(
+        "class NestedApiClient<T extends Foo<Bar>, U = Baz>\n  extends ApiClientBase<T, U> {\n}\n", encoding="utf-8"
+    )
+    (src / "impl.ts").write_text("class ImplApiClient implements ApiClientBase {\n}\n", encoding="utf-8")
+    (src / "multi.ts").write_text(
+        "export class MultiApiClient<\n  T extends Foo<{ a: 1 }>,\n  F = () => void\n>\n  implements Thing {\n}\n",
+        encoding="utf-8",
+    )
+    (src / "multiext.ts").write_text(
+        "export class MultiBaseApiClient<\n  T extends Foo<Bar>\n>\n  extends ApiClientBase<T> {\n}\n",
+        encoding="utf-8",
+    )
+    assert _client_class_names(src) == {
+        "ApiService",
+        "FooApiClient",
+        "FreshApiClient",
+        "ImplApiClient",
+        "MultiApiClient",
+    }
+
+
+def test_the_inline_generic_detector_matches_the_typed_call_but_not_a_plain_call() -> None:
+    assert _INLINE_GENERIC_RE.search("await apiClient.call<Foo>('get', '/api/x')")
+    assert _INLINE_GENERIC_RE.search("await api.get<Foo>('/api/x')")
+    assert not _INLINE_GENERIC_RE.search("await apiClient.call('get', '/api/x')")
+    assert not _INLINE_GENERIC_RE.search("await recall<Foo>(x)")
+
+
+def test_the_fetch_with_auth_importer_detector_matches_static_dynamic_and_require_imports_only(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "static.ts").write_text("import { fetchWithAuth } from '@/utils/fetchWithAuth'\n", encoding="utf-8")
+    (src / "dynamic.js").write_text("const m = await import('../utils/fetchWithAuth')\n", encoding="utf-8")
+    (src / "mention.ts").write_text("// see fetchWithAuth\nconst fetchWithAuthLike = 1\n", encoding="utf-8")
+    (src / "other.ts").write_text("import { x } from '@/utils/fetchWithAuthExtras'\n", encoding="utf-8")
+    (src / "ext.ts").write_text("import { x } from '../utils/fetchWithAuth.ts'\n", encoding="utf-8")
+    (src / "extjs.js").write_text("import { x } from './utils/fetchWithAuth.js'\n", encoding="utf-8")
+    (src / "cjs.js").write_text("const { fetchWithAuth } = require('./utils/fetchWithAuth')\n", encoding="utf-8")
+    (src / "cjsother.js").write_text("const x = require('./utils/fetchWithAuthExtras')\n", encoding="utf-8")  # control
+    (src / "otherext.ts").write_text(
+        "import { x } from './fetchWithAuth.json'\n", encoding="utf-8"
+    )  # control: not the bridge
+    assert _fetch_with_auth_importers(src, tmp_path) == [
+        "src/cjs.js",
+        "src/dynamic.js",
+        "src/ext.ts",
+        "src/extjs.js",
+        "src/static.ts",
+    ]
+
+
+def test_the_hand_built_url_detector_skips_comments_and_websocket_urls(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "a.ts").write_text(
+        "const u = `${getApiBase()}/x`\n"
+        "// was `${getApiBase()}/y`\n"
+        " * `${getApiBase()}/z`\n"
+        "const w = `${getBackendWsUrl()}${getApiBase()}/ws`\n"
+        "const k = apiClient.call('get', '/api/x')\n",
+        encoding="utf-8",
+    )
+    assert _hand_built_url_count(src) == 1
+
+
+def _planted(root: Path, bridge_importers: int, hand_built: int) -> Path:
+    src = root / "autobot-frontend" / "src"
+    src.mkdir(parents=True)
+    for i in range(bridge_importers):
+        (src / f"b{i}.ts").write_text("import { fetchWithAuth } from '@/utils/fetchWithAuth'\n", encoding="utf-8")
+    (src / "u.ts").write_text("const u = `${getApiBase()}/x`\n" * hand_built, encoding="utf-8")
+    return root
+
+
+def test_the_slice_0_dimensions_catch_growth_and_pass_a_shrink(tmp_path: Path) -> None:
+    """Planted control through the real decision: each new dimension grows alone, and a shrink is silent (#12363)."""
+    base = _planted(tmp_path / "base", 1, 1)
+    assert _regressions("autobot-frontend", _planted(tmp_path / "more_bridge", 2, 1), base, frozenset()) == {
+        "fetch_with_auth_importers": (1, 2)
+    }
+    assert _regressions("autobot-frontend", _planted(tmp_path / "more_urls", 1, 2), base, frozenset()) == {
+        "hand_built_urls": (1, 2)
+    }
+    assert _regressions("autobot-frontend", _planted(tmp_path / "less", 0, 0), base, frozenset()) == {}
+
+
+def _swapped(root: Path, importer: str, url_file: str) -> Path:
+    """A tree with one bridge importer (named *importer*) and one hand-built URL (in *url_file*)."""
+    src = root / "autobot-frontend" / "src"
+    src.mkdir(parents=True)
+    (src / importer).write_text("import { fetchWithAuth } from '@/utils/fetchWithAuth'\n", encoding="utf-8")
+    (src / url_file).write_text("const u = `${getApiBase()}/x`\n", encoding="utf-8")
+    return root
+
+
+def test_an_equal_count_replacement_is_a_new_member_in_both_identity_dimensions(tmp_path: Path) -> None:
+    """Swap one site for another: the counts match, so only the identity comparison can fail it (#12363)."""
+    base = _swapped(tmp_path / "base", "old.ts", "oldu.ts")
+    swapped = _swapped(tmp_path / "swap", "new.ts", "newu.ts")
+    assert _regressions("autobot-frontend", swapped, base, frozenset()) == {}  # the count-only decision is blind to it
+    assert _new_members("autobot-frontend", swapped, base) == {
+        "fetch_with_auth_importers": [("autobot-frontend/src/new.ts",)],
+        "hand_built_urls": [("autobot-frontend/src/newu.ts", "const u = `${getApiBase()}/x`")],
+    }
+    assert _new_members("autobot-frontend", base, base) == {}  # contrast: an unchanged tree has none
+
+
+def test_a_shrunk_or_line_shifted_site_is_not_a_new_member_but_a_duplicate_line_is(tmp_path: Path) -> None:
+    """Line numbers are not identity; a repeated identical line in the same file is one more member."""
+    base = _swapped(tmp_path / "base", "old.ts", "u.ts")
+    shifted = _swapped(tmp_path / "shift", "old.ts", "u.ts")
+    (shifted / "autobot-frontend" / "src" / "u.ts").write_text("\n\nconst u = `${getApiBase()}/x`\n", encoding="utf-8")
+    assert _new_members("autobot-frontend", shifted, base) == {}
+    doubled = _swapped(tmp_path / "dup", "old.ts", "u.ts")
+    (doubled / "autobot-frontend" / "src" / "u.ts").write_text("const u = `${getApiBase()}/x`\n" * 2, encoding="utf-8")
+    assert list(_new_members("autobot-frontend", doubled, base)) == ["hand_built_urls"]
+    assert _new_members("autobot-frontend", base, doubled) == {}

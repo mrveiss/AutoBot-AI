@@ -47,7 +47,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/agent_config.py": 1371,
     "autobot-backend/api/agent_terminal.py": 773,
     "autobot-backend/api/analytics.py": 1269,
-    "autobot-backend/api/analytics_architecture.py": 1260,
+    "autobot-backend/api/analytics_architecture.py": 1257,
     "autobot-backend/api/analytics_bug_prediction.py": 1430,
     "autobot-backend/api/analytics_cfg.py": 1331,
     "autobot-backend/api/analytics_code_generation.py": 992,
@@ -82,9 +82,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1119,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 744,
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 695,  # #13602: sanitised traversal log
-    "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
+    "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 794,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
-    "autobot-backend/api/codebase_analytics/endpoints/stats.py": 659,
+    "autobot-backend/api/codebase_analytics/endpoints/stats.py": 647,
     "autobot-backend/api/conversation_files.py": 916,
     "autobot-backend/api/database_mcp.py": 1056,
     "autobot-backend/api/development_speedup.py": 611,
@@ -126,7 +126,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3257,
     "autobot-backend/api/schemas_knowledge.py": 5113,
-    "autobot-backend/api/schemas_system.py": 4175,  # #18734 4345 -> 4176; #17731 -> 4175
+    "autobot-backend/api/schemas_system.py": 4117,  # #18734 -> 4176; #17731 -> 4175; #21136 -> 4117
     "autobot-backend/api/schemas_workflows.py": 2823,
     "autobot-backend/api/secrets.py": 1142,  # #20557 (was 1145); #19476; vault writes: secrets_system_vault.py
     "autobot-backend/api/security_assessment.py": 913,
@@ -148,7 +148,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1443,  # #19715; #21023
     "autobot-backend/chat_workflow/llm_handler.py": 1286,  # #20852: model reaches the refresh
-    "autobot-backend/chat_workflow/manager.py": 3750,  # #17273: turn_control; #19753: reasoning_kwargs
+    "autobot-backend/chat_workflow/manager.py": 3749,  # #17273: turn_control; #19753: reasoning_kwargs
     "autobot-backend/chat_workflow/tool_handler.py": 3617,  # #11542 dispatch merge + #14068 mirror + #19950
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
@@ -255,7 +255,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llm_shared/optimization/layer_inference_test.py": 715,
     "autobot-backend/llm_shared/tests/test_provider_auth.py": 1145,
     "autobot-backend/markdown_reference_system.py": 707,
-    "autobot-backend/mcp_server/autobot_server.py": 778,
+    "autobot-backend/mcp_server/autobot_server.py": 756,
     "autobot-backend/mcp_server/mcp_security_test.py": 812,
     "autobot-backend/media/link/pipeline_test.py": 963,
     "autobot-backend/memory/manager.py": 979,
@@ -300,9 +300,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/security/session_ownership.py": 813,
     "autobot-backend/security/threat_detection_refactor_test.py": 880,
     "autobot-backend/security/threat_intelligence.py": 762,
-    "autobot-backend/security_layer.py": 663,
+    "autobot-backend/security_layer.py": 661,
     "autobot-backend/services/agent_analytics.py": 686,
-    "autobot-backend/services/agent_terminal/service.py": 922,
+    "autobot-backend/services/agent_terminal/service.py": 915,
     "autobot-backend/services/ai_stack_client.py": 764,
     "autobot-backend/services/analytics_service.py": 835,
     "autobot-backend/services/autoresearch/auto_research_agent.py": 1187,
@@ -482,7 +482,7 @@ KNOWN_LARGE: dict[str, int] = {
     "repo_tests/enum_union_guard_test.py": 801,
     "repo_tests/sync_deletions_ansible_wiring_16310_test.py": 674,  # #16310
     "repo_tests/sys_modules_leak_guard.py": 1145,
-    "scripts/audit_api_wiring.py": 883,  # #16816: reporting moved to dead_surface.py
+    "scripts/audit_api_wiring.py": 842,  # #16816 moved reporting out; #12363 -40 (arg parser split)
 }
 
 #: Entries annotated by hand as live, tracked violations rather than #5060's

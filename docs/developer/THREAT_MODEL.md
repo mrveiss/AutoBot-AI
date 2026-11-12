@@ -56,7 +56,7 @@ Two postures, one validator (#14016): the contract is the docstring of [`securit
 **Canonical enforcement:** every route in
 [`autobot-backend/plugin_manager.py`](../../autobot-backend/plugin_manager.py) carries a
 `Depends` on [`auth_middleware.py`](../../autobot-backend/auth_middleware.py)
-`check_admin_permission` (:944).
+`check_admin_permission` (:941).
 Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-backend/archive_safety.py)
 — `validate_zip_metadata` (:29), `safe_extract` (:60), `MAX_UPLOAD_BYTES` (:21).
 
@@ -131,6 +131,11 @@ refused `1008` before any RFB byte. Full reasoning is in that function's docstri
 **Invariants**
 - A relation needs BOTH ends readable: [`queries.py`](../../autobot-backend/autobot_memory_graph/queries.py) `_readable_relation_ends` (:254) drops the edge, or its id and type leak.
 - No admin bypass (`is_platform_admin` ignored); cross-user reads are `UNSCOPED_ALL_USERS`, system callers only. Ownerless entities are invisible, never rewritten (#17038).
+
+## 7. MCP `code` scope (code graph)
+
+**Boundary:** a token with the `code` scope vs. the code graph, which is not tagged by source: the scope reads symbols and callers from ALL indexed sources, like the admin-gated `/impact` route (#21010). Tokens record no minting principal, so there is no call-time admin re-check.
+**Invariant:** `code.similar` authorizes as an ownerless principal: unowned, public and shared sources are readable; another owner's private source is refused.
 
 ## Cross-cutting
 

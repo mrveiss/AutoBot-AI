@@ -713,6 +713,9 @@ jobs:
         # root-set agreement (#14917) stays true; the marker selection below
         # deselects the marker-carrying tests already covered elsewhere, so nothing
         # here runs twice within the PR gate.
+        # #21359: `-rs` prints one `SKIPPED [n] file:line: reason` line per distinct skip in the shard's
+        # final summary. The pre-board guard lane accepts a skip only when it is on its reviewed allowlist,
+        # and no log of this step named a reason before, so that list could not be reviewed against the suite.
         python -m pytest \
           autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks autobot-infrastructure/shared/scripts/monitoring .claude/skills/claims-audit autobot-infrastructure/shared/tests libs plugins/core-plugins \
           -n auto --dist loadscope \
@@ -724,7 +727,7 @@ jobs:
           -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
           --durations=25 \
           --durations-min=10.0 \
-          -q
+          -q -rs
 
     - name: Run unit tests — slm-backend
       # Runs even when the invocation above failed: it is a separate interpreter

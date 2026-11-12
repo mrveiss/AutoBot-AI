@@ -69,7 +69,10 @@ const none = { company_id: 'c1', holder_exists: false }
 const live = { company_id: 'c1', holder_type: 'agent', holder_id: AGENT, holder_exists: true }
 const gone = { company_id: 'c1', holder_type: 'agent', holder_id: AGENT, holder_exists: false }
 
-function serve(designation: unknown, members: unknown[] = [{ user_id: USER, display_name: 'Ada', role: 'owner', viewer_can_manage: true }]) {
+function serve(
+  designation: unknown,
+  members: unknown = { members: [{ user_id: USER, display_name: 'Ada', role: 'owner' }], viewer_can_manage: true },
+) {
   get.mockImplementation((url: string) => {
     if (url.endsWith('/ceo')) return designation instanceof Error ? Promise.reject(designation) : Promise.resolve(designation)
     if (url.endsWith('/org-chart')) {
@@ -215,9 +218,11 @@ describe('CompanyCeoCard controls follow the server verdict (#20542)', () => {
     get.mockReset()
   })
 
-  const asViewer = (role: string | null, canManage: boolean) => [
-    { user_id: USER, display_name: 'Ada', role: 'member', viewer_role: role, viewer_can_manage: canManage },
-  ]
+  const asViewer = (role: string | null, canManage: boolean, rows = [{ user_id: USER, display_name: 'Ada', role: 'member' }]) => ({
+    members: rows,
+    viewer_role: role,
+    viewer_can_manage: canManage,
+  })
   const controls = ['ceo-change', 'ceo-set', 'ceo-clear']
   const membersCalls = () => get.mock.calls.filter(([url]) => String(url).endsWith('/members')).length
 
@@ -233,6 +238,12 @@ describe('CompanyCeoCard controls follow the server verdict (#20542)', () => {
     const wrapper = await mountCard()
     expect(wrapper.find('[data-testid="ceo-live"]').exists()).toBe(true)
     for (const id of controls) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(false)
+  })
+
+  it('offers set and clear to a platform admin on a company with no member rows (#21096)', async () => {
+    serve(live, asViewer(null, true, []))
+    const wrapper = await mountCard()
+    for (const id of controls) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(true)
   })
 
   it('hides set and clear while the verdict cannot be read, and says the people did not load', async () => {

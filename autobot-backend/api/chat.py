@@ -39,6 +39,7 @@ from api.chat_streaming import (
     attach_scope,
     principal_scope,
     resume_attachment_verdict,
+    resume_decision,
 )
 from api.schemas_chat import (
     ChatCapabilitiesData,
@@ -70,6 +71,7 @@ from chat_history.message_schema import llm_role, message_text, message_type
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
 from chat_history.session_merge import dropped_keys
 from chat_workflow.session_work_item import SessionWorkItemService
+from chat_workflow.stall_pending import guarded_resume
 from constants.threshold_constants import TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
@@ -1570,20 +1572,17 @@ async def resume_chat_graph(
     Body:
         approved (bool): Whether the command was approved
         reason (str, optional): Reason for denial
+        answer (str, optional): The answer to a stall question the graph asked (#21022)
     """
     request_id = generate_request_id()
     log_request_context(request, "resume_chat_graph", request_id)
 
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_workflow_manager(chat_workflow_manager)
+    decision = resume_decision(request_data, chat_id)
 
-    decision = {
-        "approved": request_data.get("approved", False),
-        "reason": scan_chat_message(request_data.get("reason", ""), chat_id),  # #16561
-    }
-
-    return _create_streaming_response(
-        _stream_graph_resume(
+    async def _open():  # #21022
+        return _stream_graph_resume(
             chat_workflow_manager,
             chat_id,
             decision,
@@ -1591,7 +1590,8 @@ async def resume_chat_graph(
             await resume_attachment_verdict(chat_workflow_manager, chat_id, current_user, request),  # #20195
             auth_scope=principal_scope(current_user),  # the budget gate names this user (#16845, #19241)
         )
-    )
+
+    return _create_streaming_response(await guarded_resume(chat_id, request_data, chat_workflow_manager, _open))
 
 
 async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:

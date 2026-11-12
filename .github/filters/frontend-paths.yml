@@ -34,3 +34,9 @@ frontend:
   # #15002: the redactor drift guard runs in this suite and reads the terminal
   # plugin's copy, so a plugin-only edit must still run it.
   - 'autobot-plugins/terminal/**'
+
+# Retired with #18208: these workflow files no longer exist (their gates are `_gate-*.yml` bodies called by
+# ci.yml, whose `self` filter in gate-paths.yml forces every gate when one changes), so no change can touch them.
+# retired #18208: '.github/workflows/frontend-test.yml'
+# retired #18208: '.github/workflows/_changes.yml'
+# retired #18208: '.github/workflows/frontend-required-context.yml'

@@ -126,16 +126,26 @@ def stamp_agent_checkout(item: LLCWorkItem, agent_id: str, run_id: Optional[str]
 _FENCE_GENERATION_SEP = "#"
 
 
+def ensure_fence_safe_agent_id(agent_id: str) -> str:
+    """Return *agent_id* unchanged, or raise ValueError when it carries the generation separator (#21083).
+
+    ``fence_agent`` splits on the first separator, so an id carrying one would name the wrong holder. The
+    request model runs this before the service call, so the caller gets a validation error (422).
+    """
+    if _FENCE_GENERATION_SEP in agent_id:
+        raise ValueError(
+            f"agent id {agent_id!r} must not contain {_FENCE_GENERATION_SEP!r}: it separates the fence generation"
+        )
+    return agent_id
+
+
 def checkout_fence_value(agent_id: str, run_id: Optional[str]) -> str:
     """The fence value of one agent checkout: the agent id tagged with the checkout generation (``checkout_run_id``).
 
     The tag lets a release deferred from an earlier transition compare-and-delete only its own generation, so it
     cannot drop the fence the same agent took by checking out again.
     """
-    if _FENCE_GENERATION_SEP in agent_id:
-        raise ValueError(
-            f"agent id {agent_id!r} must not contain {_FENCE_GENERATION_SEP!r}: it separates the fence generation"
-        )
+    ensure_fence_safe_agent_id(agent_id)
     return f"{agent_id}{_FENCE_GENERATION_SEP}{run_id}" if run_id else agent_id
 
 
@@ -182,4 +192,5 @@ def stamp_and_release(
     holder = _checkout_holder(item)
     stamp_status(item, new_status, now, own=own)
     if held and holder is not None and item.checkout_locked_at is None:
-        defer_until_commit(session, lambda: _delete_fence(item.id, holder), f"release checkout fence of {item.id}")
+        item_id = item.id
+        defer_until_commit(session, lambda: _delete_fence(item_id, holder), f"release checkout fence of {item_id}")
