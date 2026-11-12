@@ -17,7 +17,6 @@ dispatched run, which cannot happen before the workflow is on the default branch
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -32,7 +31,7 @@ from repo_tests._preboard_guard_lane_support import (
     skipped,
 )
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 
 _M = "repo_tests/m_test.py"
 _OTHER = "repo_tests/other_test.py"
@@ -284,10 +283,8 @@ def test_a_base_that_is_not_a_branch_name_is_refused(lane, name) -> None:
 # ------------------------------------------------------------------ the merge, on throwaway repositories
 
 
-def _git(cwd: Path, *args: str) -> str:
-    argv = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args]
-    done = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, check=True, env=scrubbed_git_env())
-    return done.stdout.strip()
+def _git(repo: Path, *args: str) -> str:
+    return git(repo, *args).stdout.strip()
 
 
 def _commit(repo: Path, name: str, text: str) -> None:
@@ -297,9 +294,7 @@ def _commit(repo: Path, name: str, text: str) -> None:
 
 
 def _clone(tmp_path: Path) -> tuple[Path, Path]:
-    origin = tmp_path / "origin"
-    origin.mkdir()
-    _git(origin, "init", "-q", "-b", "main")
+    origin = make_repo(tmp_path / "origin")
     _commit(origin, "a.txt", "base\n")
     _git(tmp_path, "clone", "-q", str(origin), "work")
     work = tmp_path / "work"
