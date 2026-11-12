@@ -18,7 +18,8 @@ from importlib import metadata
 # #13508: bump when extraction, resolution or node identity changes in a way that makes
 # previously-indexed records wrong rather than merely stale. A bump invalidates the whole hash
 # cache on the next run, so every file is re-extracted instead of skipped on an unchanged hash.
-EXTRACTOR_VERSION = 1
+# #21317: 2 — a call edge now carries every call-site line, not only the first.
+EXTRACTOR_VERSION = 2
 
 # Distribution names of everything ``extract_python`` / ``extract_javascript`` import:
 # ``tree_sitter``, ``tree_sitter_python`` and ``tree_sitter_javascript`` (TS and Vue are parsed

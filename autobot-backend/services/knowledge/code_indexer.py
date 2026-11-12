@@ -38,6 +38,7 @@ from autobot_shared.code_graph import ResolvedCall, compute_node_id, module_path
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
+from services.knowledge.code_call_sites import add_call_site, call_site_metadata, decode_edge_metadata
 from services.knowledge.code_graph_provenance import (  # noqa: F401  (re-exported: existing importers use this module)
     _PROVENANCE_ID,
     _PROVENANCE_RECORD_TYPE,
@@ -152,7 +153,7 @@ def extract_python(source_path: str, content: bytes) -> dict:
     module_path = module_path_from_rel_path(source_path)
     nodes: dict[str, dict] = {}
     edges: list[dict] = []
-    seen_edges: set[tuple[str, str]] = set()
+    seen_edges: dict[tuple[str, str], dict] = {}
 
     _py_structural(tree.root_node, module_path, source_path, nodes, current_class=None)
     _py_call_graph(tree.root_node, module_path, source_path, edges, seen_edges, current_scope=None, current_class=None)
@@ -182,7 +183,7 @@ def _record_call_edge(
     current_scope: str,
     current_class: str | None,
     edges: list,
-    seen: set,
+    seen: dict,
 ) -> None:
     """Record one raw call edge (target not yet resolved). Shared by Python and JS/TS."""
     func_node = node.child_by_field_name("function")
@@ -190,21 +191,23 @@ def _record_call_edge(
         return
     raw = func_node.text.decode("utf-8").split("(")[0]
     target_name = raw.split(".")[-1]
-    pair = (current_scope, target_name)
-    if pair in seen:
+    line = node.start_point[0] + 1  # call site, not the callee's def line (#13471)
+    edge = seen.get((current_scope, target_name))
+    if edge is not None:
+        add_call_site(edge, line)  # #21317: one edge per (scope, target), every call-site line
         return
-    seen.add(pair)
-    edges.append(
-        {
-            "source": current_scope,
-            "target_name": target_name,
-            "module_path": module_path,
-            "current_class": current_class,
-            "kind": "calls",
-            "source_path": source_path,
-            "line": node.start_point[0] + 1,  # call site, not the callee's def line (#13471)
-        }
-    )
+    edge = {
+        "source": current_scope,
+        "target_name": target_name,
+        "module_path": module_path,
+        "current_class": current_class,
+        "kind": "calls",
+        "source_path": source_path,
+        "lines": [line],
+        "dropped_call_sites": 0,
+    }
+    seen[(current_scope, target_name)] = edge
+    edges.append(edge)
 
 
 def _py_structural(node: Any, module_path: str, source_path: str, nodes: dict, current_class: str | None) -> None:
@@ -240,7 +243,7 @@ def _py_call_graph(
     module_path: str,
     source_path: str,
     edges: list,
-    seen: set,
+    seen: dict,
     current_scope: str | None,
     current_class: str | None,
 ) -> None:
@@ -294,7 +297,7 @@ def _js_call_graph(
     module_path: str,
     source_path: str,
     edges: list,
-    seen: set,
+    seen: dict,
     current_scope: str | None,
     current_class: str | None,
 ) -> None:
@@ -335,7 +338,7 @@ def extract_javascript(source_path: str, content: bytes) -> dict:
     module_path = module_path_from_rel_path(source_path)
     nodes: dict[str, dict] = {}
     edges: list[dict] = []
-    seen_edges: set[tuple[str, str]] = set()
+    seen_edges: dict[tuple[str, str], dict] = {}
     _js_structural(tree.root_node, module_path, source_path, nodes, current_class=None)
     _js_call_graph(tree.root_node, module_path, source_path, edges, seen_edges, current_scope=None, current_class=None)
     return {"nodes": list(nodes.values()), "edges": edges}
@@ -1073,9 +1076,9 @@ def _build_edge_metadata(source_id: str, edge: dict, resolved: ResolvedCall, rel
         "resolved": resolved.resolved,
         "candidate_count": resolved.candidate_count,
         "source_path": rel_path,
-        # #13471: call-site line within source_path, consumed by impact analysis
-        # to report "where do I click" instead of the callee's definition line.
-        "call_line": edge.get("line", 0),
+        # #13471/#21317: call-site lines within source_path (call_line, call_lines, dropped_call_sites),
+        # consumed by impact analysis to report "where do I click" for every site, not the callee's def line.
+        **call_site_metadata(edge),
     }
 
 
@@ -1097,4 +1100,4 @@ async def find_callers(collection: Any, target_id: str) -> list[dict[str, Any]]:
         },
         include=["metadatas"],
     )
-    return list(result.get("metadatas") or [])
+    return [decode_edge_metadata(meta) for meta in result.get("metadatas") or []]
