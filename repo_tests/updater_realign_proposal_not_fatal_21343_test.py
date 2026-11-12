@@ -58,9 +58,33 @@ def test_the_proposal_task_is_inside_a_block_with_a_rescue() -> None:
     assert not top_level, "the proposal task must not sit outside the rescued block"
 
 
+def _report() -> str:
+    return _named(_unit()["rescue"], "could not be proposed")["ansible.builtin.set_fact"][
+        "internal_api_key_realign_report"
+    ]
+
+
 def test_nothing_in_the_rescue_can_fail_again() -> None:
     for task in _unit()["rescue"]:
         assert task.get("failed_when") is not True, f"rescue task {task['name']!r} must not fail"
+    report = _report()
+    for var in (
+        "ansible_failed_result",
+        "internal_api_key_by_file",
+        "internal_api_key_canonical",
+        "_r.msg",
+        "_r.status",
+    ):
+        assert f"{var} | default(" in report or f"{var}|default(" in report, f"the rescue reads {var} without a default"
+    assert "is mapping" in report, "the rescue must not assume the key map is a mapping"
+    assert "map('string')" in report, "keys must be cast to str before the `in` test"
+
+
+def test_the_rescue_neutralises_braces_in_the_embedded_error_text() -> None:
+    report = _report()
+    assert (
+        "replace('{', '(')" in report and "replace('}', ')')" in report
+    ), "a templating error quotes the failing expression; the line is templated again, so braces must go"
 
 
 def test_the_rescue_reports_status_and_field_names_not_the_whole_result() -> None:
@@ -104,3 +128,30 @@ def test_service_restarts_are_inline_after_the_proposal_include_not_handlers() -
     assert not [
         t for t in tasks if "notify" in t
     ], "Play 2 restarts are inline tasks; a notify would wait on a handler flush"
+
+
+def test_the_internal_key_url_is_built_from_the_flat_port_not_the_infrastructure_dict() -> None:
+    """Looking up `infrastructure` templates the whole dict, so one bad entry kills any task using it (#21343)."""
+    plays = [p for p in _load(_UPDATER) if isinstance(p, dict)]
+    urls = [
+        t["vars"]["internal_api_key_backend_url"]
+        for p in plays
+        for t in p.get("tasks", [])
+        if "internal_api_key_backend_url" in (t.get("vars") or {})
+    ]
+    assert len(urls) == 2, "expected the claim and the verify include"
+    for url in urls:
+        assert "infrastructure." not in url and "{{ backend_port }}" in url, url
+
+
+def test_every_groups_index_in_the_infrastructure_dict_is_guarded() -> None:
+    path = _ANSIBLE / "inventory" / "group_vars" / "infrastructure.yml"
+    bad = [
+        ln.strip()
+        for ln in path.read_text(encoding="utf-8").splitlines()
+        if "groups[" in ln and not ln.lstrip().startswith("#")
+    ]
+    assert not bad, f"an unguarded groups[...] index raises for a group the inventory lacks: {bad}"
+    hosts = yaml.safe_load(path.read_text(encoding="utf-8"))["infrastructure"]["hosts"]
+    unguarded = [k for k, v in hosts.items() if "{{" in str(v) and "groups.get(" not in str(v)]
+    assert not unguarded, f"host entries that index groups without .get: {unguarded}"

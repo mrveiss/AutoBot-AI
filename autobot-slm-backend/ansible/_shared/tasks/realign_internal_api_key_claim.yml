@@ -40,7 +40,8 @@
 # failed fatally on every update (the failure line carried no HTTP answer, so it never reached a module
 # result), and the fatal ended the play: the backend and every service after it never restarted. block/rescue absorbs ANY failure of the unit.
 # The rescue records a fixed-shape, key-free line (HTTP status, result field names, the error text only
-# when it holds neither key) as `internal_api_key_realign_report`, which the update summary prints.
+# when it holds neither key, with braces neutralised: a templating error quotes the failing expression and
+# the line is templated again) as `internal_api_key_realign_report`, which the update summary prints.
 - name: "Internal key | Propose or claim the realign without ever failing the update (#21343)"
   block:
     - name: "Internal key | Propose re-aligning the backend's key to the SLM's (#20750)"
@@ -111,14 +112,16 @@
     - name: "Internal key | WARNING: the realign could not be proposed or claimed; the update continues (#21343)"
       ansible.builtin.set_fact:
         internal_api_key_realign_report: >-
-          {% set _msg = ansible_failed_result.msg | default('') | string %}
-          {% set _keys = (internal_api_key_by_file | default({})).values() | list + [internal_api_key_canonical | default('')] %}
+          {% set _r = ansible_failed_result | default({}) %}
+          {% set _msg = _r.msg | default('') | string %}
+          {% set _files = internal_api_key_by_file | default({}) %}
+          {% set _keys = (_files.values() | list if _files is mapping else []) + [internal_api_key_canonical | default('')] %}
           FINDING #21343: re-aligning this node's backend key to the SLM's was NOT recorded: the proposal step failed
-          (HTTP {{ ansible_failed_result.status | default('none') }};
-          result fields: {{ ansible_failed_result.keys() | list | sort | join(',') }};
-          error: {{ _msg | truncate(160, True, '') if (_keys | select | select('in', _msg) | list | length == 0) else '(withheld: could name a key)' }}).
-          No key was rewritten; the update continues. A person must raise the credential approval from the
-          admin UI (#20750).
+          (HTTP {{ _r.status | default('none') }};
+          result fields: {{ (_r.keys() | list | sort | join(',')) if _r is mapping else '' }};
+          error: {{ (_msg | replace('{', '(') | replace('}', ')') | truncate(160, True, '')) if (_keys | select | map('string') | select('in', _msg) | list | length == 0) else '(withheld: could name a key)' }}).
+          No key was rewritten; the update continues. No approval exists to decide: the proposal was not
+          created (#20750).
       no_log: true  # reads the keys to keep them out of the line
 
     - name: "Internal key | Say that the realign could not be recorded (#21343)"

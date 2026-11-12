@@ -1198,7 +1198,7 @@
           tags: [backend, env]
       vars:
         internal_api_key_loaded_file: "{{ autobot.base_dir }}/autobot-backend/.env"
-        internal_api_key_backend_url: "http://127.0.0.1:{{ infrastructure.ports.backend }}"  # pragma: allowlist secret -- a URL
+        internal_api_key_backend_url: "http://127.0.0.1:{{ backend_port }}"  # pragma: allowlist secret -- a URL; flat var from the inventory (#21343)
       when: "'backend' in group_names"
       tags: [backend, env]
 
@@ -1505,7 +1505,7 @@
         apply:
           tags: [backend, restart]
       vars:
-        internal_api_key_backend_url: "http://127.0.0.1:{{ infrastructure.ports.backend }}"  # pragma: allowlist secret -- a URL
+        internal_api_key_backend_url: "http://127.0.0.1:{{ backend_port }}"  # pragma: allowlist secret -- a URL; flat var from the inventory (#21343)
       when:
         - "'backend' in group_names"
         - internal_api_key_realign_applying | default(false) | bool
