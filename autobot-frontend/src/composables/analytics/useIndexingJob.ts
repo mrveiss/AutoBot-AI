@@ -90,8 +90,10 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
 
   // --- Endpoints (#5257) ---------------------------------------------------
   // Shared by pollJobStatus + checkCurrentIndexingJob (same URL, different
-  // response-handling). `/index/current` and `/index/cancel` are NOT
-  // source-scoped (backend has a single module-level current-task slot).
+  // response-handling). `/index/current` is scoped to the selected source (#20513):
+  // the backend holds one current-task slot for all sources and answers idle when
+  // that job belongs to another. `/index/cancel` is NOT source-scoped: it acts on
+  // the one running job (the backend left it deferred).
 
   interface CurrentJobRaw {
     has_active_job?: boolean
@@ -102,11 +104,16 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     error?: string
   }
 
-  const currentJobEndpoint = useFetchEndpoint<CurrentJobRaw, CurrentJobRaw>({
-    path: '/api/analytics/codebase/index/current',
-    pickData: (r) => r, // caller reads endpoint.data.value directly
-    label: 'Current indexing job',
-  })
+  const currentJobEndpoint = useFetchEndpoint<CurrentJobRaw, CurrentJobRaw>(
+    {
+      path: '/api/analytics/codebase/index/current',
+      scopeToSource: true,
+      requireSource: true,
+      pickData: (r) => r, // caller reads endpoint.data.value directly
+      label: 'Current indexing job',
+    },
+    { withSourceId: deps.withSourceId },
+  )
 
   const problemsPollEndpoint = useFetchEndpoint<
     { problems?: unknown[] },
