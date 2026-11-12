@@ -112,8 +112,7 @@ def test_no_module_opens_the_graph_collection_by_another_route():
     offenders = [
         str(path.relative_to(_ROOT))
         for path in _backend_modules()
-        if path != _STORAGE
-        and re.search(r"\bCODE_GRAPH_COLLECTION\b|autobot_code_graph", code_text(path))
+        if path != _STORAGE and re.search(r"\bCODE_GRAPH_COLLECTION\b|autobot_code_graph", code_text(path))
     ]
 
     assert not offenders, (
