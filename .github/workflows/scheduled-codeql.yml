@@ -1,0 +1,36 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Weekly and manual CodeQL base scan (#18208). The analysis is the reusable body
+# `_gate-codeql.yml`; ci.yml calls it on pull requests and pushes. This thin caller runs the SAME
+# body unfiltered over every language, because a pull request's results are compared with the
+# analysis of its base branch and a base scan must never be skipped by a path filter.
+#
+# Concurrency: each scheduled or manual run is its own group (no block at all), so a base scan
+# is never cancelled, nor replaced while pending (#2699 had turned cancelling off after
+# cancelled runs left a 3-second failing CodeQL check on pull requests).
+
+name: Scheduled CodeQL Analysis
+
+on:
+  schedule:
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: "Upload results to code scanning ('never' is a dry run)"
+        type: choice
+        options: [always, never]
+        default: always
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    uses: ./.github/workflows/_gate-codeql.yml
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      upload: ${{ inputs.upload || 'always' }}

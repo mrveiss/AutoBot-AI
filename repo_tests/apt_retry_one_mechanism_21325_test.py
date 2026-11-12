@@ -40,7 +40,7 @@ _CONF = _ROOT / "docker/apt/80-autobot-resilience"
 _HELPER = _ROOT / "docker/apt/apt-retry"
 _WORKFLOWS = [
     _ROOT / ".github/workflows" / name
-    for name in ("clean-install.yml", "docker-smoke-test.yml", "hardened-smoke-test.yml")
+    for name in ("clean-install.yml", "_gate-docker-smoke.yml", "hardened-smoke-test.yml")
 ]
 # Options before the verb are skipped one per loop turn. The three turns are disjoint on their first
 # characters after the dash, so no text can be consumed two ways under the `*` (no ReDoS):
