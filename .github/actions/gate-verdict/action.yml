@@ -1,0 +1,57 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# The verdict of one required-context gate job in ci.yml (#18208).
+#
+# Every required context is published by a TOP-LEVEL `if: always()` job in ci.yml
+# that calls this action, so the context is never `skipped` and never absent. The
+# logic lives here once instead of nine times: the order of the checks IS the
+# contract, and repo_tests/gate_verdict_18208_test.py runs verdict.sh over every
+# branch of it.
+name: Gate verdict
+description: Report one required context as success, "not affected", or failure -- never skipped.
+
+inputs:
+  context:
+    description: The required status context this job publishes (used in messages only).
+    required: true
+  changes-result:
+    description: needs.changes.result. Anything but 'success' fails the gate closed.
+    required: true
+  applies:
+    description: "'true' when the change touches this gate's paths (or the gate is forced)."
+    required: true
+  work-ok:
+    description: "'true' only when the work this gate stands for finished with every step passed."
+    required: true
+  work-detail:
+    description: Free text naming the work result(s), for the failure message.
+    required: false
+    default: ''
+  event:
+    description: github.event_name.
+    required: true
+  draft:
+    description: "'true' when the pull request is a draft."
+    required: false
+    default: 'false'
+  draft-gated:
+    description: "'false' for the one context that runs on drafts (verify-precommit-config, #17957)."
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Verdict for ${{ inputs.context }}
+      shell: bash
+      env:
+        GATE_CONTEXT: ${{ inputs.context }}
+        GATE_CHANGES_RESULT: ${{ inputs.changes-result }}
+        GATE_APPLIES: ${{ inputs.applies }}
+        GATE_WORK_OK: ${{ inputs.work-ok }}
+        GATE_WORK_DETAIL: ${{ inputs.work-detail }}
+        GATE_EVENT: ${{ inputs.event }}
+        GATE_DRAFT: ${{ inputs.draft }}
+        GATE_DRAFT_GATED: ${{ inputs.draft-gated }}
+      run: bash "${{ github.action_path }}/verdict.sh"
