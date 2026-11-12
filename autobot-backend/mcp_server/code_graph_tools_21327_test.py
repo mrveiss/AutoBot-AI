@@ -10,7 +10,7 @@ service and a read-only fake graph: the answers asserted are the persisted graph
 
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -21,6 +21,7 @@ from autobot_shared.ssot_config import config
 from mcp_server import code_graph_tools
 from mcp_server.autobot_server import AutoBotMCPServer
 from testkit.fake_graph_collection import DEFAULT_COMMIT, FakeGraphCollection
+from testkit.pattern_store_fakes import install_pattern_fakes
 
 SECRET = "code-tools-secret"  # pragma: allowlist secret
 CODE_TOKEN = f"{SECRET}:code"
@@ -211,15 +212,13 @@ async def test_the_fake_graph_refuses_every_write(method):
 
 
 @pytest.mark.asyncio
-async def test_running_every_read_tool_end_to_end_never_writes_to_the_graph(_graph):
+async def test_running_every_read_tool_end_to_end_never_writes_to_the_graph(_graph, monkeypatch):
     """Each tool runs against a graph whose every write raises; a write would surface as an error response."""
     pattern_search = AsyncMock(return_value=[{"pattern_id": "p1"}])
-    with (
-        patch("api.codebase_analytics.source_storage.get_source", AsyncMock(return_value=_source(None))),
-        patch("code_intelligence.pattern_analysis.CodePatternAnalyzer") as analyzer,
-        patch("code_intelligence.pattern_analysis.storage.search_similar_patterns", pattern_search),
-    ):
-        analyzer.return_value._generate_embedding = AsyncMock(return_value=[0.0])
+    analyzer = MagicMock()
+    analyzer.return_value._generate_embedding = AsyncMock(return_value=[0.0])
+    install_pattern_fakes(monkeypatch, analyzer=analyzer, search=pattern_search)
+    with patch("api.codebase_analytics.source_storage.get_source", AsyncMock(return_value=_source(None))):
         for name, arguments in (
             ("code.resolve_symbol", {"symbol": "helper"}),
             ("code.affected", {"symbol": "target"}),

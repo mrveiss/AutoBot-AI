@@ -21,6 +21,7 @@ from api.codebase_analytics import code_graph_queries as cgq
 from api.codebase_analytics.endpoints import impact
 from autobot_shared.code_graph.commit_freshness import freshness_of
 from testkit.fake_graph_collection import DEFAULT_COMMIT, FakeGraphCollection, sample_records
+from testkit.pattern_store_fakes import install_pattern_fakes
 
 
 @pytest.fixture
@@ -183,16 +184,13 @@ async def test_the_read_paths_never_write(graph):
 
 
 @pytest.mark.asyncio
-async def test_similar_code_embeds_the_snippet_and_scopes_the_search_to_the_source():
+async def test_similar_code_embeds_the_snippet_and_scopes_the_search_to_the_source(monkeypatch):
     hits = [{"pattern_id": "p1", "similarity": 0.9}]
     search = AsyncMock(return_value=hits)
-    with (
-        patch(
-            "code_intelligence.pattern_analysis.CodePatternAnalyzer._generate_embedding", AsyncMock(return_value=[1.0])
-        ),
-        patch("code_intelligence.pattern_analysis.storage.search_similar_patterns", search),
-    ):
-        assert await cgq.find_similar_code("def f(): pass", "src-a", "dup", 5) == hits
+    analyzer = MagicMock()
+    analyzer.return_value._generate_embedding = AsyncMock(return_value=[1.0])
+    install_pattern_fakes(monkeypatch, analyzer=analyzer, search=search)
+    assert await cgq.find_similar_code("def f(): pass", "src-a", "dup", 5) == hits
     search.assert_awaited_once_with(query_embedding=[1.0], pattern_type="dup", n_results=5, source_id="src-a")
 
 
