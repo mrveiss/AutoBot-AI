@@ -44,7 +44,7 @@ def require_context(approval: "Approval", *keys: str) -> list[Any]:
     return values
 
 
-async def record_outcome(
+async def record_cleanup_outcome(
     approval: "Approval",
     session: "AsyncSession",
     *,

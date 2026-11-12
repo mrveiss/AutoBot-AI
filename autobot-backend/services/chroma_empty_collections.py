@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 from autobot_shared.logging_manager import get_logger
 from services.approval_execution import register_post_approval_action
-from services.kb_cleanup_proposals import record_outcome, require_context
+from services.kb_cleanup_proposals import record_cleanup_outcome, require_context
 from utils.async_chromadb_client import get_async_chromadb_client
 
 if TYPE_CHECKING:
@@ -77,7 +77,7 @@ async def execute_empty_collection_delete(approval: "Approval", session: "AsyncS
     """Delete the collection an approved gate named, and record what happened."""
     (name,) = require_context(approval, "collection")
     done, reason = await delete_empty_collection(name)
-    await record_outcome(
+    await record_cleanup_outcome(
         approval,
         session,
         operation="chroma.empty_collection_delete",
@@ -88,6 +88,6 @@ async def execute_empty_collection_delete(approval: "Approval", session: "AsyncS
     )
 
 
-def register_cleanup_action() -> None:
+def register_empty_collection_delete() -> None:
     """Idempotent. Server-only: only the proposer route may create this approval."""
     register_post_approval_action(ACTION, execute_empty_collection_delete, proposed_by=PROPOSED_BY, server_only=True)

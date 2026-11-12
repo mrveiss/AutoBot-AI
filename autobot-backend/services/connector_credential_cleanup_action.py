@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from services.approval_execution import register_post_approval_action
 from services.connector_credential_scan import strip_sensitive_fields
-from services.kb_cleanup_proposals import record_outcome, require_context
+from services.kb_cleanup_proposals import record_cleanup_outcome, require_context
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +33,7 @@ async def execute_connector_credential_strip(approval: "Approval", session: "Asy
     """Strip the clear-text copies from the connector the approved gate named, and record what happened."""
     (connector_id,) = require_context(approval, "connector_id")
     done, reason = await strip_sensitive_fields(connector_id)
-    await record_outcome(
+    await record_cleanup_outcome(
         approval,
         session,
         operation="connector_credentials.strip",
@@ -44,11 +44,11 @@ async def execute_connector_credential_strip(approval: "Approval", session: "Asy
     )
 
 
-def register_cleanup_action() -> None:
+def register_connector_credential_strip() -> None:
     """Idempotent. Server-only and admin-decided: this approves rewriting stored credential data."""
     register_post_approval_action(
         ACTION, execute_connector_credential_strip, proposed_by=PROPOSED_BY, server_only=True, admin_only=True
     )
 
 
-__all__ = ["ACTION", "PROPOSED_BY", "execute_connector_credential_strip", "register_cleanup_action"]
+__all__ = ["ACTION", "PROPOSED_BY", "execute_connector_credential_strip", "register_connector_credential_strip"]

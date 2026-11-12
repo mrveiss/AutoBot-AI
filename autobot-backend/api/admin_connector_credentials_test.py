@@ -23,6 +23,7 @@ from services.approval_gate_service import ApprovalGateService
 from testkit.canonical_gate import canonical_resolver, real_admin_gate
 from testkit.fake_approval_session import ApprovalClaimSession
 from testkit.fake_async_session import FakeAsyncSession
+from testkit.fake_redis_pipeline import FakePipeline
 
 _ADMIN = {"username": "admin", "role": "admin", "user_id": "admin-1"}
 _SECRET_VALUE = "clear-text-sentinel"  # pragma: allowlist secret
@@ -39,33 +40,6 @@ class _Connector:
         return _Auth
 
 
-class _Pipe:
-    def __init__(self, data):
-        self.data = data
-        self.key = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
-
-    def watch(self, key):
-        self.key = key
-
-    def get(self, key):
-        return self.data[key]
-
-    def multi(self):
-        pass
-
-    def set(self, key, value):
-        self.pending = (key, value)
-
-    def execute(self):
-        self.data[self.pending[0]] = self.pending[1]
-
-
 class _Redis:
     def __init__(self, records):
         self.data = {f"connector:{cid}": json.dumps(rec) for cid, rec in records.items()}
@@ -77,8 +51,11 @@ class _Redis:
     def get(self, key):
         return self.data.get(key)
 
+    def set(self, key, value):
+        self.data[key] = value
+
     def pipeline(self):
-        return _Pipe(self.data)
+        return FakePipeline(self)
 
 
 class _Store:
@@ -187,7 +164,7 @@ def test_a_record_without_a_secrets_store_copy_cannot_be_proposed(world):
 
 
 def test_the_action_is_server_only_and_admin_decided():
-    action.register_cleanup_action()
+    action.register_connector_credential_strip()
     assert approval_execution.is_server_only_action(action.ACTION)
     assert approval_execution.action_needs_elevated_approver(action.ACTION)
 
@@ -205,7 +182,7 @@ def chain(monkeypatch):
 
     monkeypatch.setattr(approval_execution, "audit_log", _audit_log)
     monkeypatch.setattr("services.kb_cleanup_proposals.audit_log", _audit_log)
-    action.register_cleanup_action()
+    action.register_connector_credential_strip()
     return audited
 
 

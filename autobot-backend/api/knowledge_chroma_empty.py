@@ -24,13 +24,13 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_current_user
 from services.approval_gate_service import ApprovalGateService
 from services.chroma_empty_collections import ACTION as EMPTY_COLLECTION_DELETE
-from services.chroma_empty_collections import register_cleanup_action, scan_empty_collections
+from services.chroma_empty_collections import register_empty_collection_delete, scan_empty_collections
 from services.kb_cleanup_proposals import cleanup_proposal
 
 router = APIRouter(prefix="/empty-collections", dependencies=[Depends(check_admin_permission)])
 
 # Registered at this router's import time so the handler exists before any approve() can reach it.
-register_cleanup_action()
+register_empty_collection_delete()
 
 
 @router.get("", response_model=EmptyCollectionsResponse)

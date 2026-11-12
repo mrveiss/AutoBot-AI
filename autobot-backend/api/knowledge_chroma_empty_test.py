@@ -133,7 +133,7 @@ def chain(monkeypatch):
 
     monkeypatch.setattr(approval_execution, "audit_log", _audit_log)
     monkeypatch.setattr("services.kb_cleanup_proposals.audit_log", _audit_log)
-    svc.register_cleanup_action()
+    svc.register_empty_collection_delete()
 
 
 async def _propose_and_decide(session, approve):

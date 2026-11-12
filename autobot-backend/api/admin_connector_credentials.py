@@ -26,14 +26,14 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_current_user
 from services.approval_gate_service import ApprovalGateService
 from services.connector_credential_cleanup_action import ACTION as CONNECTOR_CREDENTIAL_STRIP
-from services.connector_credential_cleanup_action import register_cleanup_action
+from services.connector_credential_cleanup_action import register_connector_credential_strip
 from services.connector_credential_scan import CredentialScanReport, scan_connector_credentials
 from services.kb_cleanup_proposals import cleanup_proposal
 
 router = APIRouter(prefix="/knowledge_base/connector_credentials", dependencies=[Depends(check_admin_permission)])
 
 # Registered at this router's import time so the handler exists before any approve() can reach it.
-register_cleanup_action()
+register_connector_credential_strip()
 
 
 def _scan_response(report: CredentialScanReport) -> ConnectorCredentialScanResponse:
