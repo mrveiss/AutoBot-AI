@@ -92,21 +92,21 @@
         </template>
         <div v-if="codeQuality" class="quality-metrics">
           <div class="quality-score" :class="getQualityClass(codeQuality.overall_score)">
-            <div class="score-value">{{ codeQuality.overall_score || 0 }}</div>
+            <div class="score-value">{{ codeQuality.overall_score ?? $t('analytics.codebase.quality.notAvailable') }}</div>
             <div class="score-label">{{ $t('analytics.codebase.quality.overallScore') }}</div>
           </div>
           <div class="quality-details">
             <div class="quality-item">
               <span class="quality-label">{{ $t('analytics.codebase.quality.testCoverage') }}:</span>
-              <span class="quality-value">{{ codeQuality.test_coverage || 0 }}%</span>
+              <span class="quality-value"><template v-if="codeQuality.test_coverage !== null">{{ codeQuality.test_coverage }}%</template><template v-else>{{ $t('analytics.codebase.quality.notAvailable') }}</template></span>
             </div>
             <div class="quality-item">
               <span class="quality-label">{{ $t('analytics.codebase.quality.codeDuplicates') }}:</span>
-              <span class="quality-value">{{ codeQuality.code_duplicates || 0 }}</span>
+              <span class="quality-value">{{ codeQuality.code_duplicates ?? $t('analytics.codebase.quality.notAvailable') }}</span>
             </div>
             <div class="quality-item">
               <span class="quality-label">{{ $t('analytics.codebase.quality.technicalDebt') }}:</span>
-              <span class="quality-value">{{ codeQuality.technical_debt || 0 }}h</span>
+              <span class="quality-value"><template v-if="codeQuality.technical_debt !== null">{{ codeQuality.technical_debt }}h</template><template v-else>{{ $t('analytics.codebase.quality.notAvailable') }}</template></span>
             </div>
           </div>
         </div>
@@ -182,10 +182,10 @@ interface CommunicationPatternsData {
 }
 
 interface CodeQualityData {
-  overall_score: number
-  test_coverage: number
-  code_duplicates: number
-  technical_debt: number
+  overall_score: number | null
+  test_coverage: number | null
+  code_duplicates: number | null
+  technical_debt: number | null
 }
 
 interface PerformanceMetricsData {
@@ -232,7 +232,8 @@ const getEfficiencyClass = (score: number): string => {
   return 'efficiency-low'
 }
 
-const getQualityClass = (score: number): string => {
+const getQualityClass = (score: number | null): string => {
+  if (score === null) return 'quality-unknown'
   if (score >= 80) return 'quality-high'
   if (score >= 60) return 'quality-medium'
   return 'quality-low'

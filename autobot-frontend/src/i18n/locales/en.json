@@ -1232,6 +1232,7 @@
         "testCoverage": "Test Coverage",
         "codeDuplicates": "Code Duplicates",
         "technicalDebt": "Technical Debt",
+        "notAvailable": "Not available",
         "noMetrics": "No code quality metrics available."
       },
       "performance": {
@@ -2478,6 +2479,7 @@
       "testCoverage": "Test Coverage",
       "codeDuplicates": "Code Duplicates",
       "technicalDebt": "Technical Debt",
+      "notAvailable": "Not available",
       "noQualityMetrics": "No quality metrics available",
       "performanceMetrics": "Performance Metrics",
       "efficiency": "Efficiency",
