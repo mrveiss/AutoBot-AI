@@ -20,6 +20,7 @@ import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { jobBelongsToSource } from './indexingJobSource'
+import type { RunStateHandle } from './useRunState'
 
 const logger = createLogger('useIndexingJob')
 
@@ -70,6 +71,8 @@ export interface UseIndexingJobDeps {
   duplicateAnalysis: Ref<unknown[]>
   hardcodeAnalysis: Ref<unknown[]>
   chartData: Ref<unknown | null>
+  /** How the newest run ended (#21003): re-read when a job ends and when the page opens. */
+  runState: Pick<RunStateHandle, 'loadRunState'>
   /** Show knowledge-base opt-in banner after successful indexing. */
   showKnowledgeBaseOptIn: Ref<boolean>
   /** Callback invoked after a successful index completion to run follow-up scans. */
@@ -195,6 +198,8 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     jobPhases.value = null
     jobBatches.value = null
     jobStats.value = null
+    // #21003: how the run ended decides whether the stored findings are labelled partial.
+    const runStateRead = deps.runState.loadRunState()
 
     if (status === 'completed') {
       deps.progressStatus.value = deps.t('analytics.codebase.status.indexingCompleted')
@@ -211,6 +216,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
       deps.notify(deps.t('analytics.codebase.notify.indexingFailed', { error: errMsg }), 'error')
     }
     currentJobId.value = null
+    await runStateRead
   }
 
   const pollJobStatus = async () => {
@@ -242,7 +248,8 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
   // --- Public API ---
 
   const checkCurrentIndexingJob = async () => {
-    await currentJobEndpoint.load()
+    // #21003: opening the page reads how the newest run ended (a GET; it starts nothing).
+    await Promise.all([currentJobEndpoint.load(), deps.runState.loadRunState()])
     if (currentJobEndpoint.error.value) {
       logger.warn(
         'Could not check for running job:',

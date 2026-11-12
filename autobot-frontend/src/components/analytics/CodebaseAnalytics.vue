@@ -451,6 +451,7 @@ import { useSourceRegistry } from '@/composables/analytics/useSourceRegistry'
 import { useAnalyticsDataFetchers } from '@/composables/analytics/useAnalyticsDataFetchers'
 import { useCodeIntelAnalysis } from '@/composables/analytics/useCodeIntelAnalysis'
 import { useAnalyticsDebug } from '@/composables/analytics/useAnalyticsDebug'
+import { useProjectSubTabs } from '@/composables/analytics/useProjectSubTabs'
 import { createLogger } from '@/utils/debugUtils'
 import { useApiClient } from '@/plugins/api'
 // Issue #1133: Code Source Registry Components
@@ -509,15 +510,7 @@ const route = useRoute()
 const analyticsRouter = useRouter()
 
 // Issue #3436: Sub-tab active-state computed properties
-const isOverviewTabActive = computed(() => {
-  const path = route.path
-  // Active when on the exact project path (no child segment)
-  return /^\/analytics\/codebase\/[^/]+\/?$/.test(path)
-})
-const isCodeQualityTabActive = computed(() => route.path.includes('/code-quality'))
-const isCodeReviewTabActive = computed(() => route.path.includes('/code-review'))
-const isEvolutionTabActive = computed(() => route.path.endsWith('/evolution'))
-const isCodeGenerationTabActive = computed(() => route.path.includes('/code-generation'))
+const { isOverviewTabActive, isCodeQualityTabActive, isCodeReviewTabActive, isEvolutionTabActive, isCodeGenerationTabActive } = useProjectSubTabs(route)
 
 // Toast notifications
 const { showToast } = useNotificationBus()
@@ -567,6 +560,7 @@ const {
   duplicateScanState,
   declarationAnalysis,
   hardcodeAnalysis,
+  runState,
   problemsError, declarationsError, hardcodesError,
   loadingProgress,
   chartData,
@@ -764,6 +758,7 @@ const {
   duplicateAnalysis,
   hardcodeAnalysis,
   chartData,
+  runState,
   showKnowledgeBaseOptIn,
   onIndexComplete: () => runAllAnalysisScans(codeIntelFullScans()),
   storageKeyPath: STORAGE_KEY_PATH,

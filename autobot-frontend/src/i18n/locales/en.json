@@ -1668,6 +1668,22 @@
         "high": "High",
         "medium": "Medium",
         "low": "Low"
+      },
+      "runState": {
+        "runningTitle": "Indexing is in progress",
+        "partialTitle": "The latest indexing run did not finish",
+        "running": "The results below are updating while the run is in progress. They may change when it finishes.",
+        "ended": "The latest run ended as {status}.",
+        "endedWithReason": "The latest run ended as {status}: {reason}",
+        "partialFindings": "The findings shown are partial: they may come from the interrupted run.",
+        "lastCompleted": "The last completed run finished on {when}.",
+        "neverCompleted": "No run has completed for this source yet.",
+        "status": {
+          "failed": "failed",
+          "killed": "killed",
+          "abandoned": "abandoned",
+          "cancelled": "cancelled"
+        }
       }
     },
     "patterns": {

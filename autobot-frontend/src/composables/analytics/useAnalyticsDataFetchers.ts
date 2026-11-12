@@ -23,7 +23,6 @@
  */
 
 import { ref, reactive, computed, watch, type Ref, type ComputedRef } from 'vue'
-import appConfig from '@/config/AppConfig.js'
 import { useBackgroundTask } from '@/composables/useBackgroundTask'
 import { useTaskLoader } from '@/composables/useTaskLoader'
 import { useAnalyticsScanRunner } from '@/composables/useAnalyticsScanRunner'
@@ -34,6 +33,8 @@ import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { readDuplicatePayload, type DuplicateScanState } from './duplicatePayload'
 import { useCodeSmellProblems } from './useCodeSmellProblems'
 import { toDeclarationPanelRows } from './declarationPanelRows'
+import { loadProjectRoot } from './projectRoot'
+import { useRunState } from './useRunState'
 import { runTimed } from '@/composables/api/useTimedNotify'
 import {
   type Problem,
@@ -70,6 +71,7 @@ export interface UseAnalyticsDataFetchersDeps {
 
 export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const { rootPath, sourceIdQuery, withSourceId, t, showToast, notify } = deps
+  const runState = useRunState(withSourceId) // #21003: partial/run fields ride on the stats and problems bodies
 
   // --- Task loaders (#1304/#1321) ---
 
@@ -271,7 +273,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
       label: 'Stats endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.stats ? raw.stats : null,
-      onSuccess: (d) => { codebaseStats.value = d },
+      onSuccess: (d, raw) => { codebaseStats.value = d; runState.applyRunFields(raw) },
       onNoData: () => {
         codebaseStats.value = null
         logger.debug('No codebase stats - run indexing first')
@@ -289,7 +291,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
       scopeToSource: true, requireSource: true,
       label: 'Problems endpoint',
       pickData: (raw) => (raw.status === 'no_data' ? [] : raw.problems ?? []),
-      onSuccess: (d) => { problemsReport.value = d },
+      onSuccess: (d, raw) => { problemsReport.value = d; runState.applyRunFields(raw) },
     },
     { withSourceId },
   )
@@ -503,27 +505,6 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   const declarationsForPanel = computed(() => toDeclarationPanelRows(declarationAnalysis.value))
 
-  // --- Config load ---
-
-  const loadProjectRoot = async () => {
-    const saved = localStorage.getItem('codebase-analytics-path')
-    if (saved) {
-      logger.debug('Using saved path from localStorage:', saved)
-      return
-    }
-    try {
-      const projectRoot = await appConfig.getProjectRoot()
-      if (projectRoot) {
-        rootPath.value = projectRoot
-      } else {
-        logger.warn('Project root not found in config, using default')
-      }
-    } catch (error: unknown) {
-      logger.error('Failed to load project root:', error)
-      progressStatus.value = t('analytics.codebase.status.enterProjectPath')
-    }
-  }
-
   // --- Scan orchestration ---
 
   const buildScanList = (useFullScans: boolean) => [
@@ -625,6 +606,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     duplicateScanState,
     declarationAnalysis,
     hardcodeAnalysis,
+    runState,
     // A failed load must not render as an empty ("none found") section.
     problemsError: problemsEndpoint.error, declarationsError: declarationsSilent.error, hardcodesError: hardcodesSilent.error,
     chartData: chartEndpoint.data,
@@ -661,7 +643,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     loadHardcodes,
     loadDependencyData,
     loadImportTreeData,
-    loadProjectRoot,
+    loadProjectRoot: () => loadProjectRoot({ rootPath, progressStatus, t }),
     getCodebaseStats,
     getProblemsReport,
     getDeclarationsData,
