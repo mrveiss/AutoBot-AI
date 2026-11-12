@@ -88,11 +88,20 @@ def env_int(name: str, default: int) -> int:
     Returns *default* silently when the var is absent.
     Logs a warning and returns *default* when the var is set but not a valid integer.
     """
-    raw = env_raw(name)
-    if raw is None:
+    return parse_int_or_default(name, env_raw(name), default)
+
+
+def parse_int_or_default(name: str, raw: object, default: int) -> int:
+    """Parse *raw* as an int, returning *default* (with a warning) when absent, blank or unparseable (#20683).
+
+    The single definition of "tolerant int parse" for both routes: :func:`env_int` feeds it
+    ``os.environ``; pydantic ``mode="before"`` field validators feed it the value settings
+    loading hands them, so a bad value falls back instead of raising ``ValidationError``.
+    """
+    if blank_to_none(raw) is None:
         return default
     try:
-        return int(raw)
+        return int(str(raw).strip())
     except ValueError:
         logger.warning("Invalid %s=%r; using default %d", name, raw, default)
         return default
