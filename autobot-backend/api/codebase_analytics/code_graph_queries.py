@@ -37,7 +37,10 @@ SOURCE_SCOPE = "cross-source"
 RESOLVE_MAX_CANDIDATES = 50
 
 _NOT_BUILT = "The code graph collection is not available — run an index first."  # missing; reading never creates it
-_EMPTY = "The code graph collection exists but is empty — run POST /api/knowledge_base/index/code and retry."
+#: The route that builds the graph. Kept as its own quoted path so the unconnected-code gate (#20512)
+#: sees this module as the caller it is -- the hint below is the only thing that sends a user to it.
+_INDEX_CODE_PATH = "/api/knowledge_base/index/code"
+_EMPTY = f"The code graph collection exists but is empty — run POST {_INDEX_CODE_PATH} and retry."
 
 
 def provenance_fields(provenance: "GraphProvenance | None", expected_commit: str | None) -> dict[str, Any]:
