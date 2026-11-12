@@ -491,6 +491,32 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_REFUSED_RETRY_INTERVAL_S",
+        type=int,
+        default=3600,
+        description=(
+            "Seconds before a person copy the SLM refused as last platform admin is pushed again (#21018). "
+            "Range 60 to 604800."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LAST_ADMIN_RETRY_AFTER_S",
+        type=int,
+        default=1,
+        description=(
+            "Retry-After seconds sent with the 503 for a transient last-platform-admin lock failure (#21018). "
+            "Range 1 to 30."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PERSON_COPY_LOCK_TTL_S",
         type=int,
         default=60,
