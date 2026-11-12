@@ -15,21 +15,25 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
 
 
 def _every_tracked_path(root: Path) -> list[str]:
-    return tracked_paths(root)
+    try:
+        return tracked_paths(root)
+    except EmptyEnumeration:
+        return []  # an empty tree: the min_fraction below raises the typed refusal instead
 
 
+#: The whole tracked tree, so its fraction of the tracked-file count is 1.0; 0.9 fires once a
+#: tenth of the tree goes unread.
 REACH = declare(
     "no-tracked-cache-or-log-files-20892",
     discover=_every_tracked_path,
-    floor=13500,  # mid-window pin (#17356): 14044 tracked paths when measured, growth tolerates tree movement
-    growth=1000,
-    what="tracked paths",
+    min_fraction=0.9,
+    what="every tracked path, swept for a committed cache or log file",
 )
 
 #: (label, fnmatch pattern on the full tracked path). A directory pattern matches at any depth.
