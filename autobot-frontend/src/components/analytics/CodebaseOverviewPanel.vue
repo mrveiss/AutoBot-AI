@@ -233,7 +233,7 @@ const getEfficiencyClass = (score: number): string => {
 }
 
 const getQualityClass = (score: number | null): string => {
-  if (score === null) return 'quality-unknown'
+  if (score === null) return '' // not available: the element keeps its base styling
   if (score >= 80) return 'quality-high'
   if (score >= 60) return 'quality-medium'
   return 'quality-low'
@@ -427,11 +427,6 @@ const getQualityClass = (score: number | null): string => {
 .efficiency-low {
   background: rgba(239, 68, 68, 0.1);
   color: var(--color-error);
-}
-
-.quality-unknown {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
 }
 
 .btn-link {
