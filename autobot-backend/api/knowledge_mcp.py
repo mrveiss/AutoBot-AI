@@ -16,12 +16,14 @@ import asyncio
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.knowledge_mcp_llm import _get_chat_ollama
 from api.schemas_code import (
     SubscribeResourceRequest,
     UnsubscribeResourceRequest,
 )
+from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -47,6 +49,7 @@ from knowledge.schemas.mcp import (
 from knowledge.search_filters import caller_principal, filter_for_caller
 from knowledge.write_scope import add_document_as
 from knowledge_base import KnowledgeBase
+from services.kb_wipe_request import request_vector_flush
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
 
@@ -388,7 +391,7 @@ def _get_knowledge_management_tools() -> List[McpToolsResponse]:
                     "operation": {
                         "type": "string",
                         "enum": ["info", "flush", "reindex", "backup"],
-                        "description": "Redis vector operation to perform",
+                        "description": "Redis vector operation to perform; flush requests a wipe for approval",
                     },
                     "params": {
                         "type": "object",
@@ -889,20 +892,6 @@ async def _vector_op_info(kb, redis_mgr, params: dict) -> dict:
     }
 
 
-async def _vector_op_flush(kb, vectors_client, params: dict) -> dict:
-    """Handle vector flush operation. (Issue #315 - extracted)"""
-    if not params.get("confirm", False):
-        return {
-            "success": False,
-            "operation": "flush",
-            "error": "Confirmation required (set params.confirm = true)",
-        }
-    if not vectors_client:
-        return {"success": False, "operation": "flush", "error": "Redis not available"}
-    await asyncio.to_thread(vectors_client.flushdb)
-    return {"success": True, "operation": "flush", "message": "Vector database flushed"}
-
-
 async def _vector_op_reindex(kb, vectors_client, params: dict) -> dict:
     """Handle vector reindex operation. (Issue #315 - extracted)"""
     if kb and hasattr(kb, "index"):
@@ -930,7 +919,6 @@ async def _vector_op_backup(kb, vectors_client, params: dict) -> dict:
 # Issue #315: Dispatch table for vector operations
 _VECTOR_OPERATIONS = {
     "info": _vector_op_info,
-    "flush": _vector_op_flush,
     "reindex": _vector_op_reindex,
     "backup": _vector_op_backup,
 }
@@ -945,15 +933,18 @@ _VECTOR_OPERATIONS = {
 async def mcp_redis_vector_operations(
     request: Metadata,
     current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """MCP tool: Direct Redis vector store operations.
 
-    Issue #744: Requires authenticated user. Admin operations (flush, reindex)
-    should be further restricted at the application level.
+    Issue #744: Requires authenticated user. ``flush`` deletes nothing (#21048, #17038): it requests a knowledge
+    wipe, for an admin user only, and the wipe runs after a human approves it.
     """
     try:
         operation = request.get("operation")
         params = request.get("params", {})
+        if operation == "flush":
+            return await request_vector_flush(current_user, session)
 
         kb = get_knowledge_base()
         vectors_client = get_vectors_redis_client()
