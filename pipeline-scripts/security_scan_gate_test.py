@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The security gate must fail on a planted finding, and be wired to the workflow (#13543).
 
-Reading `security.yml` proves nothing about whether a job can go red — the
+Reading `_gate-security.yml` proves nothing about whether a job can go red — the
 scanners it runs ended in `|| true` for years while the checks tab stayed green.
 So this suite plants findings and asserts a non-zero exit:
 
@@ -30,7 +30,7 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = REPO_ROOT / ".github" / "workflows" / "security.yml"
+WORKFLOW = REPO_ROOT / ".github" / "workflows" / "_gate-security.yml"
 SCRIPT = Path(__file__).with_name("security_scan_gate.py")
 
 _MODULE_NAME = "security_scan_gate"
@@ -351,7 +351,7 @@ class TestWorkflowWiring:
 
     def test_the_workflow_invokes_the_gate(self, gate_steps):
         assert gate_steps, (
-            f"security.yml no longer runs {SCRIPT.name} — every scanner is back to reporting "
+            f"_gate-security.yml no longer runs {SCRIPT.name} — every scanner is back to reporting "
             "into an artifact nobody reads, and the jobs can only fail on infrastructure"
         )
 
@@ -388,7 +388,7 @@ class TestWorkflowWiring:
         gated fails instead of quietly becoming an artifact nobody opens.
         """
         written = self._written_reports(run_steps)
-        assert written, "no scanner output path found in security.yml; this check is inspecting nothing"
+        assert written, "no scanner output path found in _gate-security.yml; this check is inspecting nothing"
 
         gated = self._gated_reports(gate_steps)
         # `safety-report.json` and `semgrep.sarif` are the two recorded exceptions:
@@ -428,7 +428,7 @@ class TestWorkflowWiring:
         }
         assert referenced, "no gate step names a script path"
         missing = sorted(token for token in referenced if not (REPO_ROOT / token).exists())
-        assert not missing, f"security.yml references script(s) that do not exist: {missing}"
+        assert not missing, f"_gate-security.yml references script(s) that do not exist: {missing}"
 
 
 if __name__ == "__main__":

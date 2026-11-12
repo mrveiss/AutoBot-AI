@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Every lint-tool version is pinned twice; this keeps the two copies equal (#15134).
 
-``.github/workflows/code-quality.yml`` installs exact versions and says they
+``.github/workflows/_gate-code-quality.yml`` installs exact versions and says they
 "match .pre-commit-config.yaml". Nothing checked that. The two files can drift,
 and the drift is invisible in the worst direction: the local hook passes on one
 version while the required CI context runs another, so a developer's green run
@@ -29,7 +29,7 @@ import yaml
 from repo_tests._paths import repo_root
 
 REPO_ROOT = repo_root()
-CODE_QUALITY = REPO_ROOT / ".github" / "workflows" / "code-quality.yml"
+CODE_QUALITY = REPO_ROOT / ".github" / "workflows" / "_gate-code-quality.yml"
 PRE_COMMIT = REPO_ROOT / ".pre-commit-config.yaml"
 
 #: pre-commit repo slug -> the distribution name the CI workflow pip-installs.
@@ -50,7 +50,7 @@ _PINNED = re.compile(r"([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([0-9][A-Za-
 
 
 def _ci_pins() -> dict[str, str]:
-    """Exact versions ``code-quality.yml`` pip-installs, keyed by distribution."""
+    """Exact versions ``_gate-code-quality.yml`` pip-installs, keyed by distribution."""
     text = CODE_QUALITY.read_text(encoding="utf-8")
     return {name.lower(): version for name, version in _PINNED.findall(text)}
 

@@ -32,7 +32,10 @@ from repo_tests._paths import repo_root
 _ROOT = repo_root()
 _GEN = _ROOT / "autobot-infrastructure" / "shared" / "scripts" / "gen_frontend_types.py"
 _WORKFLOW_TS = "autobot-frontend/src/types/_generated/workflow.ts"
-_VERIFY = _ROOT / ".github" / "workflows" / "verify-generated-types.yml"
+# #18208: the body of the required `verify-generated-types` gate lives in _gate-generated-types.yml
+# (called by ci.yml); its path filters live in .github/filters/gate-paths.yml.
+_VERIFY = _ROOT / ".github" / "workflows" / "_gate-generated-types.yml"
+_FILTERS = _ROOT / ".github" / "filters" / "gate-paths.yml"
 _AUTOFIX = _ROOT / ".github" / "workflows" / "auto-fix-generated-types.yml"
 _ACTION = _ROOT / ".github" / "actions" / "generated-types-autofix" / "action.yml"
 _GEN_SCRIPT_REL = "autobot-infrastructure/shared/scripts/gen_frontend_types.py"
@@ -101,19 +104,12 @@ def test_the_required_gate_regenerates_then_diffs_workflow_ts():
 def test_no_new_required_context_was_added():
     """The decision: extend verify-generated-types, do not add a context."""
     names = {job.get("name", key) for key, job in _verify_doc()["jobs"].items()}
-    assert names == {
-        "Detect changed paths",
-        "verify-types-run",
-        "verify-generated-types-slm",
-        "verify-generated-types",
-    }
+    assert names == {"verify-types-run", "verify-generated-types-slm"}
 
 
 @pytest.mark.parametrize("path", _REQUIRED_PATHS)
 def test_every_source_path_fires_the_required_gate(path):
-    doc = _verify_doc()
-    assert path in doc[True]["push"]["paths"], f"on.push.paths lacks {path}"
-    filters = yaml.safe_load(doc["jobs"]["changes"]["with"]["filters"])
+    filters = yaml.safe_load(_FILTERS.read_text(encoding="utf-8"))
     assert path in filters["types"], f"the `types` filter lacks {path}"
     assert path not in filters["slm_types"], "workflow.ts has nothing to do with the SLM job"
 
@@ -123,7 +119,7 @@ def test_the_generators_python_sources_are_under_watched_trees():
     text = _GEN.read_text(encoding="utf-8")
     sources = set(re.findall(r'"((?:autobot_shared|autobot-backend)/[\w/.-]+\.py)"', text))
     assert len(sources) >= 5, "the scan found no manifest sources"
-    filters = yaml.safe_load(_verify_doc()["jobs"]["changes"]["with"]["filters"])["types"]
+    filters = yaml.safe_load(_FILTERS.read_text(encoding="utf-8"))["types"]
     prefixes = {g.removesuffix("/**/*.py") for g in filters if g.endswith("/**/*.py")}
     unwatched = {s for s in sources if s.split("/")[0] not in prefixes}
     assert unwatched == set(), f"generator sources that cannot trigger the required gate: {unwatched}"
