@@ -49,6 +49,28 @@ async def drop_stale_chunks(
     return len(stale)
 
 
+@invalidates_retrieval_caches("docs_collection_recreated")
+async def _bump_after_recreate() -> None:
+    """Invalidate cached retrievals once a dimension-mismatch recreate ends, even when it raised (#20992)."""
+
+
+async def resolve_collection(indexer: Any, model_name: str, embed_dim: Any) -> Any:
+    """Run the indexer's sync collection resolve; a dimension-mismatch recreate invalidates caches (#20992).
+
+    ``_handle_dim_mismatch`` deletes the collection and sets ``_needs_reindex`` from a worker thread, so
+    the await-able invalidation lives here. It runs when the resolve recreated the collection (also if the
+    create then failed) and regardless of how many files the forced re-index later finds.
+    """
+    prior, indexer._needs_reindex = indexer._needs_reindex, False
+    try:
+        return await asyncio.to_thread(indexer._resolve_collection, model_name, embed_dim)
+    finally:
+        recreated = indexer._needs_reindex
+        indexer._needs_reindex = prior or recreated
+        if recreated:
+            await _bump_after_recreate()
+
+
 @invalidates_retrieval_caches("docs_collection_dropped")
 async def drop_collection(client: Any, name: str) -> None:
     """Delete the docs collection; cached retrievals of its chunks are invalidated even if this raises (#20958)."""
