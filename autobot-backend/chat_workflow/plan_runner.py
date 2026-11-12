@@ -27,9 +27,11 @@ A canned fallback plan (the model wrote none) is treated as no plan.
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from planner import LLMPlannerModule
 from planner.planner import PlannerConfig
 from planner.types import ExecutionPlan, PlanStep
@@ -62,10 +64,6 @@ STATUS_OUTCOME: Dict[str, str] = {
     "approval_required": WAIT,
     "pending_delegation": WAIT,
 }
-#: Log-once flag for the no-Redis notice. The repo has no shared public log-once helper (only private per-module
-#: ``_warn_once`` copies, five of them, plus this flag), so this is an explicit per-process flag set only by
-#: ``_log_no_redis_once``. Consolidation into one shared helper: #21071.
-_NO_REDIS_LOGGED = False
 
 
 def steps_for_depth(depth: int) -> int:
@@ -184,10 +182,12 @@ async def _create(planner: LLMPlannerModule, task: str) -> Optional[ExecutionPla
 
 def _log_no_redis_once() -> None:
     """Without Redis a plan cannot be read back per node, so it is not made (and not announced)."""
-    global _NO_REDIS_LOGGED
-    if not _NO_REDIS_LOGGED:
-        _NO_REDIS_LOGGED = True
-        logger.info("chat planner: no Redis client, so a plan cannot be tracked; turns run without a plan")
+    log_once(
+        logger,
+        logging.INFO,
+        "no_redis",
+        "chat planner: no Redis client, so a plan cannot be tracked; turns run without a plan",
+    )
 
 
 async def open_plan(manager: Any, *, session_id: str, task: str, model: str, depth: int = 0) -> Optional[PlanTracker]:

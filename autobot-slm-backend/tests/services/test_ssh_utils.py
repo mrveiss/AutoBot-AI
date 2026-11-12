@@ -17,6 +17,7 @@ from unittest.mock import patch
 import pytest
 
 import services.ssh_utils as ssh_utils
+from autobot_shared.logging_once import reset_log_once
 from services.ssh_utils import _ssh_key_usable, build_ssh_base_cmd
 
 _LOGGER_NAME = "services.ssh_utils"
@@ -25,9 +26,9 @@ _LOGGER_NAME = "services.ssh_utils"
 @pytest.fixture(autouse=True)
 def _reset_warned_paths():
     """Each test starts with a clean warn-once ledger."""
-    ssh_utils._WARNED_PATHS.clear()
+    reset_log_once()
     yield
-    ssh_utils._WARNED_PATHS.clear()
+    reset_log_once()
 
 
 def _warnings(caplog) -> list:

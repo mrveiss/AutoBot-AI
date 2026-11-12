@@ -331,6 +331,7 @@ appears outside the known overlays.
 | `AUTOBOT_LOG_FLOOD_MAX_KEYS` | logging | int | `2048` | Maximum distinct call sites tracked by the log-flood guard before least-recent eviction. |
 | `AUTOBOT_LOG_FLOOD_THRESHOLD` | logging | int | `5` | Records one log call site may emit per flood window before the rest are suppressed. |
 | `AUTOBOT_LOG_FLOOD_WINDOW_SECONDS` | logging | float | `60.0` | Length of the log-flood suppression window, in seconds. |
+| `AUTOBOT_LOG_ONCE_MAX_KEYS` | logging | int | `1024` | Maximum keys the shared log-once helper remembers before forgetting the least recent (#21071). |
 | `AUTOBOT_LOG_VALUE_MAX_CHARS` | security | int | `256` | Longest untrusted value sanitize_log_value() will interpolate into a log line (#13602). Beyond it the value is truncated with an explicit marker, so the subject of a rejected request cannot pad the log store out. A negative value is rejected in favour of the default: disabling the bound would defeat the guard. |
 | `AUTOBOT_LOG_VIEWER_URL` | logging | str | `'http://localhost:5341'` | Base URL of the Seq (or compatible) structured-log viewer. |
 | `AUTOBOT_MACHINE_SLOTS` | testing | int | `2` | How many heavy local runs (hooks, floor checks, big pytest runs) go at once. |
