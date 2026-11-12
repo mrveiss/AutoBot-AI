@@ -15,8 +15,10 @@
 # the one that is certainly present; it need not be under autobot.base_dir/code_source.
 # Both callers are playbooks that import this file statically, so there is no role_path:
 # playbook_dir is the only handle. #20509: the derivation is therefore PROVEN, not trusted --
-# the first task below fails unless the derived tree contains this very file, so a playbook
+# the first task below fails unless the derived tree is the one this playbook sits in, so a playbook
 # moved to another depth stops here instead of shipping some neighbouring tree's autobot_shared.
+# It runs only on the derived path: an explicit code_source_dir is the caller's choice and needs no
+# repository layout beyond autobot_shared/ itself, which the next two tasks check.
 #
 # The real agent imports autobot_shared (health_collector -> redis_client); the
 # unit's PYTHONPATH includes {{ slm_agent_dir | dirname }} (= autobot.base_dir).
@@ -38,21 +40,13 @@
       - ".env.*"
       - .envrc
   block:
-    - name: Check the source tree is the one this task file belongs to (#20509)
-      ansible.builtin.stat:
-        path: "{{ shared_parent }}/autobot-slm-backend/ansible/roles/_shared/tasks/install_agent_autobot_shared.yml"
-      register: shared_anchor
-      delegate_to: localhost
-      run_once: true
-      become: false
-
-    - name: Fail when the derived source tree is not this repository (#20509)
+    - name: Fail when the derived source tree is not the tree this playbook sits in (#20509)
       ansible.builtin.assert:
-        that: shared_anchor.stat.exists
+        that: (shared_parent ~ '/autobot-slm-backend/ansible') == (playbook_dir | dirname)
         fail_msg: >-
-          {{ shared_parent }} is not the source tree of this playbook (no
-          autobot-slm-backend/ansible/roles/_shared/tasks/install_agent_autobot_shared.yml in it).
-          The playbook moved to another depth, or code_source_dir names a different checkout.
+          {{ shared_parent }} (derived from {{ playbook_dir }}) is not the repository this playbook
+          belongs to: the playbook moved to another depth. Fix the derivation, or set code_source_dir.
+      when: (code_source_dir | default('', true)) == ''
       run_once: true
 
     - name: Check autobot_shared exists in the source tree on the controller
