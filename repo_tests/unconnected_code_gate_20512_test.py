@@ -103,7 +103,7 @@ MODULES_REACH = declare(
 ROUTES_REACH = declare(
     "unconnected-code-routes",
     discover=_route_files,
-    floor=404,
+    floor=421,  # mid-window: population 441, window (401, 441)
     what="non-test python files of autobot-backend and autobot-slm-backend that declare a route decorator",
     roots=routes.ROUTE_ROOTS,
     growth=40,
