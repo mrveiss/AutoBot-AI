@@ -326,6 +326,15 @@ After merging all PRs in a batch:
 
 The trainmaster (PR-coordinator session) alone builds and lands trains: merge commits, never squash, two CI slots, two trains may run in CI, and only the one landing next is built and fixed. Authors send the PR number and head, then stop pushing to a queued head unless asked; a head moved only by merging main stays in line, and any other new commit needs a fresh look. CodeRabbit never blocks a first CI run; a relaunch answers open threads first. Full list: [`OWNER_RULES.md`](OWNER_RULES.md).
 
+### Pre-board fast lane (#21359)
+
+- Before a member boards, dispatch the lane on its head, outside the train CI slots: `gh workflow run dispatch-preboard-guards.yml --ref <member branch>` (`-f base=<branch>` only if the PR targets another).
+- It runs every guard test (the `repo_tests` and `pipeline-scripts` trees, sharded) plus the generated-types check, with no fail-fast: one complete failure list per run.
+- Read it: `gh run list --workflow dispatch-preboard-guards.yml --branch <member branch> --limit 1`, then `gh run download <run id> -n preboard-guards-result` and read `result.json` (`overall`, `checks`, `failed_tests`, `behind_base`).
+- A member boards only with a completed, non-cancelled `overall: "green"` result at its approved head; a push after the run needs a new run.
+- Red: fix every listed `failed_tests` entry in the PR before it boards; a types failure uploads the `generated-types-patch` artifact.
+- Not in the lane yet (#21360): the hardcoded-value baseline audit, Semgrep at ERROR severity, the real-ChromaDB session and promtool (their tests show in `skipped_tests`).
+
 ## CI Diagnosis
 
 **Before declaring CI "stuck" or attempting to cancel/retrigger:**

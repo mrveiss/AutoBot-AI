@@ -410,6 +410,8 @@ python:
   - '.github/actions/generated-types-autofix/action.yml'
   - '.github/actions/install-ci-requirements/action.yml'
   - '.github/workflows/dispatch-generated-types.yml'
+  # #21359: `preboard_guard_lane_21359_test.py` reads the pre-board guard lane workflow by concrete literal.
+  - '.github/workflows/dispatch-preboard-guards.yml'
   # #16568: workflow_types_gate_16568_test.py reads the required gate workflow by concrete literal.
   - '.github/workflows/verify-generated-types.yml'
   # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`

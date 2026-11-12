@@ -1,0 +1,212 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-board fast lane (#21359, AC4 of #18499). Dispatch it on a member PR's head to learn, in
+# minutes and with EVERY failure listed, whether the head would fail a mechanical guard -- instead
+# of finding one guard per merge-train cycle inside the full suite.
+#
+#   gh workflow run dispatch-preboard-guards.yml --ref <member branch> [-f base=main]
+#   gh run download <run id> -n preboard-guards-result
+#
+# A member boards a train only with a completed (not cancelled) green lane result at its approved
+# head. The lane runs outside the train CI slots: it is dispatch-only, so it never starts on its
+# own, and its concurrency group is its own (one run per dispatched ref; a newer dispatch on the
+# same ref supersedes the older one and nothing else).
+#
+# What it runs
+#   guards  Every test the python suite collects from the guard roots, with the suite's own
+#           interpreter setup, env, marker selection and shard plugin. The roots, the floor and
+#           the verdict come from pipeline-scripts/preboard_guard_lane.py; this file names none.
+#           Split in the matrix below by the suite's stable module sharding. Not fail-fast, no
+#           stop-on-first-failure option: one complete list per run.
+#   types   The generated-types check, through the composite action the types dispatch uses.
+#   result  The summary and the artifact below. Fails unless the lane is green.
+#
+# Not in the lane yet (each is an inline step of a larger job; copying it would give it a second
+# definition). Follow-up #21360: move each into a composite action that its workflow and this one call.
+#   - the hardcoded-value baseline audit (ssot-coverage.yml)
+#   - Semgrep at ERROR severity (security.yml)
+#   - the real-ChromaDB session and the promtool install (ci.yml): their tests are collected
+#     here but skip, and every skip is listed in `skipped_tests`
+# The reach-floor staleness audit is enforced on train branches only, as on a pull request.
+# The head is tested as it is, not merged with the base: `behind_base` says how stale it is.
+#
+# Result artifact `preboard-guards-result` holds `result.json` (and `summary.md`), schema 1:
+#   schema        1; bumped when a field below is renamed or removed
+#   run_id        the workflow run
+#   ref, sha      the dispatched branch and its head commit
+#   base_ref      the `base` input; base_sha the merge base with it; behind_base the commits
+#                 the head lacks from it
+#   overall       "green" | "red" | "cancelled"; green only if every check is "success"
+#   roots         the guard roots that ran
+#   checks.guards status, collected, floor, failed, skipped, shards, problems (the reasons the
+#                 run was not a complete one: a shard missing, an unexpected exit code, no test)
+#   checks.types  status (the types job result)
+#   failed_tests  [{nodeid, kind: "failure" | "error", message: first line}]
+#   skipped_tests [{nodeid, reason}]
+# `collected` below `floor` makes the guards check a failure. The floor is a share of the node
+# ids .test_durations records under the roots.
+
+name: Dispatch Preboard Guards
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Branch the head is compared with by guards that read the merge base
+        required: false
+        default: main
+        type: string
+
+# One run per dispatched ref. Its own group: it never joins, queues behind, or cancels a pull
+# request or train run, and a run of this lane on one ref never cancels another ref's.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
+
+jobs:
+  guards:
+    name: guards shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTEST_FAULTHANDLER_TIMEOUT_S: 600
+      BASE_REF: ${{ inputs.base }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Six shards: the guard roots hold about three quarters of the recorded suite time, so
+        # fewer would run past the cost target. THIS LIST IS THE SHARD COUNT: the plugin and the
+        # job name read it through `strategy.job-total`.
+        shard: [1, 2, 3, 4, 5, 6]
+    services:
+      redis:
+        image: ghcr.io/mrveiss/ci-redis:7-alpine
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      # The dispatched branch itself, with the history a merge-base guard reads.
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-python-suite
+
+      - name: Resolve the base the ratchets compare with
+        id: base
+        run: python3 pipeline-scripts/preboard_guard_lane.py base --base-ref "$BASE_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Run the guard tests of this shard
+        env:
+          AUTOBOT_RATCHET_BASE_SHA: ${{ steps.base.outputs.base_sha }}
+          SHARD: ${{ matrix.shard }}
+          SPLITS: ${{ strategy.job-total }}
+        run: |
+          roots=$(python3 pipeline-scripts/preboard_guard_lane.py roots)
+          mapfile -t ROOTS <<< "$roots"
+          out="$RUNNER_TEMP/preboard/shard-$SHARD"
+          mkdir -p "$out"
+          rc=0
+          python -m pytest "${ROOTS[@]}" \
+            -n auto --dist loadscope \
+            -p repo_tests.stable_shard \
+            --shard-splits "$SPLITS" --shard-group "$SHARD" \
+            --shard-durations .test_durations \
+            -m "not integration and not slow and not distributed and not performance" \
+            --tb=short \
+            -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
+            -o junit_family=xunit1 --junitxml="$out/junit.xml" \
+            -q || rc=$?
+          printf '{"shard": %s, "splits": %s, "rc": %s}\n' "$SHARD" "$SPLITS" "$rc" > "$out/shard-meta.json"
+          exit "$rc"
+
+      - name: Upload this shard's report
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: preboard-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/preboard/shard-${{ matrix.shard }}
+          if-no-files-found: warn
+          retention-days: 7
+
+  types:
+    name: types
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # The dispatched branch itself: the default ref, no PR- or input-derived value.
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+
+      - name: Regenerate the generated types and report drift
+        uses: ./.github/actions/generated-types-autofix
+
+  result:
+    name: result
+    needs: [guards, types]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASE_REF: ${{ inputs.base }}
+    steps:
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Resolve the base
+        id: base
+        run: python3 pipeline-scripts/preboard_guard_lane.py base --base-ref "$BASE_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Download the shard reports
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: preboard-shard-*
+          path: ${{ runner.temp }}/shards
+
+      - name: Summarize
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          RUN_ID: ${{ github.run_id }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+          BEHIND_BASE: ${{ steps.base.outputs.behind_base }}
+          OUT_DIR: ${{ runner.temp }}/result
+        run: |
+          mkdir -p "$OUT_DIR" "$RUNNER_TEMP/shards"
+          rc=0
+          python3 pipeline-scripts/preboard_guard_lane.py summarize \
+            --shards "$RUNNER_TEMP/shards" \
+            --out "$OUT_DIR/result.json" --markdown "$OUT_DIR/summary.md" || rc=$?
+          cat "$OUT_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+      - name: Upload the result
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: preboard-guards-result
+          path: ${{ runner.temp }}/result
+          if-no-files-found: error
+          retention-days: 14
