@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from models.agent_org import AgentOrgNode, OrgRole
+from services.agent_activity_feed import get_agent_feeds, with_feed
 
 logger = get_logger(__name__)
 
@@ -144,17 +145,20 @@ class AgentOrgService:
         names = await self._company_names({n.company_id for n in nodes if n.company_id})
         # #17514: the registry measures no activity, so those fields are None ("not reported"),
         # never a 0 that reads as observed. The company tells two same-role agents apart.
+        # #21270: the task feeds come from the analytics history, None when it is unreadable.
+        feeds = await get_agent_feeds([n.agent_id for n in nodes])
         return [
-            {
-                "id": node.agent_id,
-                "name": node.name,
-                "type": _ROLE_TO_ACTIVITY_TYPE.get(node.org_role, "worker"),
-                "status": self._status_for_node(node),
-                "companyId": str(node.company_id) if node.company_id else None,
-                "companyName": names.get(node.company_id),
-                "recentTasks": [],
-                "activityTimeline": [],
-            }
+            with_feed(
+                {
+                    "id": node.agent_id,
+                    "name": node.name,
+                    "type": _ROLE_TO_ACTIVITY_TYPE.get(node.org_role, "worker"),
+                    "status": self._status_for_node(node),
+                    "companyId": str(node.company_id) if node.company_id else None,
+                    "companyName": names.get(node.company_id),
+                },
+                feeds[node.agent_id],
+            )
             for node in nodes
         ]
 
