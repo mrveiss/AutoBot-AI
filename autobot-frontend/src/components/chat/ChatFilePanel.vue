@@ -517,6 +517,9 @@ onUnmounted(() => {
 
 watch(() => props.sessionId, (newSessionId) => {
   resetForSession()
+  // A draft belongs to the file of the previous conversation; saving it here would write into the new one (#21337).
+  editingFileId.value = null
+  editingContent.value = ''
   if (newSessionId) loadFiles()
 })
 </script>
