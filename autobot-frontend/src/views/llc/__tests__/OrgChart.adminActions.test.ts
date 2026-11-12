@@ -52,7 +52,7 @@ function respond(viewerRole: string | null | 'fail'): void {
     if (url.endsWith('/members')) {
       return viewerRole === 'fail'
         ? Promise.reject(new Error('HTTP 503'))
-        : Promise.resolve([{ user_id: 'u1', display_name: 'Ada', role: 'member', viewer_can_manage: viewerRole === 'owner' || viewerRole === 'admin' }])
+        : Promise.resolve({ members: [{ user_id: 'u1', display_name: 'Ada', role: 'member' }], viewer_can_manage: viewerRole === 'owner' || viewerRole === 'admin' })
     }
     if (url.includes('/org-chart')) return Promise.resolve({ nodes: [AGENT] })
     if (url.includes('/involved')) return Promise.resolve({ with_role: [CONTACT], unassigned: [] })

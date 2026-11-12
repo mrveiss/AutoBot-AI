@@ -20,7 +20,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { components } from '@/types/generated/api'
 import { createLogger } from '@/utils/debugUtils'
-import type { Member as CompanyMember } from '@/composables/llc/useCompanyMembers'
+import { isMembersEnvelope, type Member as CompanyMember, type MembersResponse } from '@/composables/llc/useCompanyMembers'
 
 const logger = createLogger('useCompanyTeams')
 
@@ -75,11 +75,13 @@ export function useCompanyTeams(api: TeamsApi, companyId: () => string) {
    */
   function readMembers(id: string, current: () => boolean): void {
     if (members.value.length === 0) membersPending.value = true
-    void (api.get(`/api/llc/companies/${id}/members`) as Promise<Member[]>).then(
-      (list) => {
+    void (api.get(`/api/llc/companies/${id}/members`) as Promise<MembersResponse>).then(
+      (res) => {
         if (!current()) return
-        membersFailed.value = false
-        members.value = Array.isArray(list) ? list : []
+        // #21096: a reply without the envelope is a failed read, not a company with no members.
+        const ok = isMembersEnvelope(res)
+        membersFailed.value = !ok
+        members.value = ok ? res.members : []
         membersPending.value = false
       },
       () => {
