@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The members list tells the viewer their own company role and what they may grant (#20073).
+"""The members response tells the viewer their own company role and what they may grant (#20073).
 
 Computed from the verified tenant context, so a client can only reflect it; the writes still refuse
 what the caller may not do (#19654). Calls the real route function against an in-memory database.
@@ -94,9 +94,10 @@ async def test_each_row_carries_the_callers_own_role_and_grantable_roles(
 
     rows = await _list_as(session_factory, company, viewer)
 
-    assert len(rows) == 2
-    assert {r["viewer_role"] for r in rows} == {role}
-    assert all(r["viewer_grantable_roles"] == grantable for r in rows)
+    assert len(rows["members"]) == 2
+    assert rows["viewer_role"] == role
+    assert rows["viewer_grantable_roles"] == grantable
+    assert all("viewer_role" not in r and "viewer_can_manage" not in r for r in rows["members"])
 
 
 @pytest.mark.asyncio
@@ -106,8 +107,8 @@ async def test_a_platform_admin_outside_the_company_may_grant_everything(session
 
     rows = await _list_as(session_factory, company, uuid.uuid4(), platform_admin=True)
 
-    assert rows[0]["viewer_role"] is None
-    assert rows[0]["viewer_grantable_roles"] == _ALL
+    assert rows["viewer_role"] is None
+    assert rows["viewer_grantable_roles"] == _ALL
 
 
 @pytest.mark.asyncio
@@ -117,8 +118,8 @@ async def test_the_role_is_the_callers_not_another_members(session_factory):  # 
 
     rows = await _list_as(session_factory, company, plain)
 
-    assert {r["viewer_role"] for r in rows} == {"member"}
-    assert {r["viewer_grantable_roles"] == [] for r in rows} == {True}
+    assert rows["viewer_role"] == "member"
+    assert rows["viewer_grantable_roles"] == []
 
 
 @pytest.mark.asyncio
@@ -129,8 +130,8 @@ async def test_a_platform_admin_with_no_membership_can_manage(session_factory): 
 
     rows = await _list_as(session_factory, company, uuid.uuid4(), platform_admin=True)
 
-    assert rows[0]["viewer_role"] is None
-    assert {r["viewer_can_manage"] for r in rows} == {True}
+    assert rows["viewer_role"] is None
+    assert rows["viewer_can_manage"] is True
 
 
 @pytest.mark.asyncio
@@ -143,4 +144,79 @@ async def test_viewer_can_manage_follows_the_company_admin_gate(session_factory,
 
     rows = await _list_as(session_factory, company, viewer)
 
-    assert {r["viewer_can_manage"] for r in rows} == {expected}
+    assert rows["viewer_can_manage"] is expected
+
+
+@pytest.mark.asyncio
+async def test_an_empty_company_keeps_the_servers_verdict_for_a_platform_admin(session_factory):  # noqa: ANN001
+    """#21096: no rows used to mean no standing, so the controls the server would accept were hidden."""
+    rows = await _list_as(session_factory, uuid.uuid4(), uuid.uuid4(), platform_admin=True)
+
+    assert rows["members"] == []
+    assert rows["viewer_can_manage"] is True
+    assert rows["viewer_role"] is None
+    assert rows["viewer_grantable_roles"] == _ALL
+
+
+@pytest.mark.asyncio
+async def test_an_empty_company_refuses_a_plain_viewer(session_factory):  # noqa: ANN001
+    rows = await _list_as(session_factory, uuid.uuid4(), uuid.uuid4())
+
+    assert rows["members"] == []
+    assert rows["viewer_can_manage"] is False
+    assert rows["viewer_grantable_roles"] == []
+
+
+async def _get_over_http(session_factory, company_id, viewer_id, *, platform_admin=False):  # noqa: ANN001
+    """GET the mounted route through the ASGI app, so response_model validation runs (#21096)."""
+    import httpx
+    from fastapi import FastAPI
+
+    from api.user_management.dependencies import get_current_user, require_org_context
+    from llc.api.companies import router
+    from user_management.database import get_async_session
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/llc")
+    async with session_factory() as session:
+
+        async def _session():
+            yield session
+
+        app.dependency_overrides[get_async_session] = _session
+        app.dependency_overrides[get_current_user] = lambda: {"id": str(viewer_id)}
+        app.dependency_overrides[require_org_context] = lambda: TenantContext(
+            org_id=company_id, user_id=viewer_id, is_platform_admin=platform_admin
+        )
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            return await client.get(f"/api/llc/companies/{company_id}/members")
+
+
+@pytest.mark.asyncio
+async def test_http_populated_company_returns_the_envelope_with_role_strings(session_factory):  # noqa: ANN001
+    company, owner, plain = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    await _seed(session_factory, company, {owner: "owner", plain: "member"})
+
+    resp = await _get_over_http(session_factory, company, owner)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"members", "viewer_role", "viewer_can_manage", "viewer_grantable_roles"}
+    assert body["viewer_role"] == "owner"
+    assert body["viewer_can_manage"] is True
+    assert body["viewer_grantable_roles"] == _ALL
+    assert {m["user_id"]: m["role"] for m in body["members"]} == {str(owner): "owner", str(plain): "member"}
+    assert all(isinstance(m["display_name"], str) and m["display_name"] for m in body["members"])
+
+
+@pytest.mark.asyncio
+async def test_http_empty_company_returns_an_envelope_not_an_array(session_factory):  # noqa: ANN001
+    resp = await _get_over_http(session_factory, uuid.uuid4(), uuid.uuid4(), platform_admin=True)
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "members": [],
+        "viewer_role": None,
+        "viewer_can_manage": True,
+        "viewer_grantable_roles": _ALL,
+    }
