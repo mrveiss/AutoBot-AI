@@ -22,16 +22,20 @@ from services.deployment import DeploymentService
 _ROOT = Path(__file__).resolve().parents[1]
 # `"-i", "<host>,"`-shaped argv pairs; the one place allowed to spell one is the shared builder.
 _BARE_LITERAL = re.compile(r"""["']-i["'],\s*f?["'][^"'\n]*,["']""")
-# A fixed `localhost,` provisioning run of a role that reads neither port (python_interpreter).
-_FIXED_LOCALHOST = {"api/code_sync.py"}
+# One fixed `localhost,` provisioning run of a role that reads neither port (python_interpreter): the file
+# may spell exactly this many bare-inventory pairs, so a second one added there is still caught.
+_FIXED_LOCALHOST = {"api/code_sync.py": 1}
 
 
 def _ports_in(cmd: list[str]) -> dict:
-    values = [cmd[i + 1] for i, tok in enumerate(cmd[:-1]) if tok == "-e" and cmd[i + 1].startswith("{")]
+    """The two port keys out of the command's JSON ``-e`` values (other JSON extra-vars are ignored)."""
     merged: dict = {}
-    for value in values:
-        merged.update(json.loads(value))
-    return merged
+    for i, tok in enumerate(cmd[:-1]):
+        if tok == "-e" and cmd[i + 1].startswith("{"):
+            merged.update(json.loads(cmd[i + 1]))
+    missing = [key for key in _expected() if key not in merged]
+    assert not missing, f"port extra-vars missing from the command: {missing}"
+    return {key: merged[key] for key in _expected()}
 
 
 def _service() -> DeploymentService:
@@ -64,26 +68,36 @@ def test_enrollment_command_carries_both_ports_from_the_ssot() -> None:
 def test_single_host_playbook_command_carries_both_ports(monkeypatch, tmp_path) -> None:
     captured: list = []
 
+    class _FakeProcess:
+        returncode = 0
+
+        async def communicate(self):
+            return b"", None
+
     async def fake_exec(*argv, **_kw):
         captured.extend(argv)
-        raise RuntimeError("stop after the argv is built")
+        return _FakeProcess()
 
     monkeypatch.setattr(ansible_utils.asyncio, "create_subprocess_exec", fake_exec)
-    try:
-        asyncio.run(ansible_utils.run_single_host_playbook(tmp_path, tmp_path / "p.yml", "node-a", "u", 22, timeout=1))
-    except RuntimeError:
-        pass
+    # The empty output fails the recap check; only the argv handed to the subprocess matters here.
+    result = asyncio.run(
+        ansible_utils.run_single_host_playbook(tmp_path, tmp_path / "p.yml", "node-a", "u", 22, timeout=5)
+    )
+    assert result is not None
+    assert captured[2:4] == ["-i", "node-a,"]
     assert _ports_in(captured) == _expected()
 
 
 def test_no_command_builder_spells_a_bare_inventory_outside_the_shared_builder() -> None:
+    """Matches the ``"-i", "<x>,"`` spelling in Python sources only; a bare inventory built another way is not seen."""
     offenders = []
     for path in sorted(_ROOT.rglob("*.py")):
         rel = path.relative_to(_ROOT).as_posix()
         if rel.startswith(("tests/", "venv/")) or "/tests/" in rel or rel.endswith("_test.py"):
             continue
-        if rel == "services/ansible_utils.py" or rel in _FIXED_LOCALHOST:
+        if rel == "services/ansible_utils.py":
             continue
-        text = path.read_text(encoding="utf-8", errors="replace")
-        offenders += [f"{rel}: {m.group(0)}" for m in _BARE_LITERAL.finditer(text)]
+        found = [m.group(0) for m in _BARE_LITERAL.finditer(path.read_text(encoding="utf-8", errors="replace"))]
+        if len(found) != _FIXED_LOCALHOST.get(rel, 0):
+            offenders += [f"{rel}: {text}" for text in found] or [f"{rel}: expected {_FIXED_LOCALHOST[rel]}, found 0"]
     assert offenders == [], f"bare `-i host,` built outside bare_inventory_args: {offenders}"
