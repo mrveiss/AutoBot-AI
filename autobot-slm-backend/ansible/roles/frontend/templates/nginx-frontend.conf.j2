@@ -27,7 +27,7 @@ map $http_upgrade $connection_upgrade {
 
 # Issue #1098: Health-aware upstream with failure tracking
 upstream autobot_backend {
-    server {{ backend_host | default(ansible_host) }}:{{ backend_port }} max_fails={{ backend_max_fails | default(3) }} fail_timeout={{ backend_fail_timeout | default('30s') }};
+    server {{ backend_host | default(ansible_host) }}:{{ backend_port | default(8443) }} max_fails={{ backend_max_fails | default(3) }} fail_timeout={{ backend_fail_timeout | default('30s') }};
 }
 
 server {

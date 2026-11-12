@@ -67,6 +67,6 @@
       debug:
         msg:
           - "✅ Backend deployment complete"
-          - "Backend API: https://{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}:{{ backend_nginx_port }}"
+          - "Backend API: https://{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}:{{ backend_nginx_port | default(8443) }}"
           - "Celery Worker: Running with {{ celery_concurrency }} workers"
           - "Logs: ssh autobot@{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }} 'journalctl -u autobot-backend -f'"
