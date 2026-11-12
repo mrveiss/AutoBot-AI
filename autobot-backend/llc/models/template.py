@@ -93,6 +93,10 @@ class TemplateImportResult(BaseModel):
         default_factory=dict,
         description="Counts of each entity type created",
     )
+    skipped_work_items: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Work items that could not be imported: title, source_id and a reason code",
+    )
 
 
 class TemplateSearchResult(BaseModel):
