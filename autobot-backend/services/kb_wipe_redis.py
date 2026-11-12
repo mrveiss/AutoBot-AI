@@ -27,7 +27,7 @@ KB_WIPE_DATABASES: tuple[str, ...] = ("knowledge",)
 #: SCAN patterns (a ``*`` inside is a glob). Each family's database was verified as ``knowledge``:
 #:   fact:, session:facts:, content_hash:, unique_key:  ``knowledge/facts.py`` (``redis_client``, ``base.py:336``)
 #:   user:kb:, group:kb:, org:kb:, user:facts:          ``knowledge/ownership.py`` (fact-id membership sets)
-#:   kb:                  stats, ingest records, ACL epoch, relations, system/category indexes (``knowledge/*.py``)
+#:   kb:                  every ``kb:`` key in the knowledge database EXCEPT ``KB_KEPT_PREFIXES``; classified below
 #:   tag:, category:facts:, collection:facts:           membership sets of fact ids (``tags.py``, ``categories.py``,
 #:                                                      ``collections.py``)
 #:   connector:*:ts:, connector:*:checkpoint, connector:*:external_state, connector:notion:hash:
@@ -36,7 +36,17 @@ KB_WIPE_DATABASES: tuple[str, ...] = ("knowledge",)
 #:   bm25:corpus_stats    ``search_components/keyword_search.py:26`` via the KB's ``_aioredis_client`` (``base.py:352``)
 #:   context:summary:     ``pipeline/cognifiers/context_generator.py:42,76`` (summaries keyed by dropped doc ids)
 #:   entity:, timeline:global   the pipeline's graph of KB documents (``pipeline/loaders/redis_graph_loader.py``)
-#: KEPT on purpose (settings, credentials, locks, definitions, user activity): ``category:{id}``,
+#: The ``kb:`` writers, each classified (grep of backend and shared code; database in brackets):
+#:   WIPED  kb:stats [knowledge, ``knowledge/base.py``], kb:ingest: [knowledge, ``document_ingest.py``],
+#:          kb:rel:out:/kb:rel:in: [knowledge, ``relations.py``], kb:acl_epoch [knowledge, ``acl_epoch.py``],
+#:          kb:system:facts, kb:category:chat_knowledge [knowledge, ``ownership*.py``], kb:vectorize:pending
+#:          [knowledge, ``background_vectorization.py``], kb:lint:report [knowledge, ``contradiction_detector.py``],
+#:          kb:cache:, kb:stats:category: [knowledge, ``api/knowledge.py``, ``knowledge_category_counts.py``]
+#:   KEPT   kb:boards [knowledge, ``api/knowledge_boards.py``]: user-made board definitions, taxonomy like
+#:          ``collection:{id}``, not ingested knowledge (``KB_KEPT_PREFIXES``)
+#:   OUT OF SCOPE (main database, never scanned): kb:synthesis:*, kb:watch_folders, kb:watch_folder:
+#:   NOT A KEY: kb:embedding-switch (a coordination scope name, ``embedding_switch_lock.py``)
+#: KEPT on purpose (settings, credentials, locks, definitions, user activity): ``kb:boards``, ``category:{id}``,
 #: ``category:path:``, ``category:children:``, ``category:root`` and ``collection:{id}``, ``collection:all``
 #: (user-made taxonomy), ``tag_style:`` (display preference), ``metadata:template:`` (templates),
 #: ``connector:{id}`` / ``:auth`` / ``oauth:`` / ``schedule:`` / ``scheduler:leader`` / ``sync:`` (config, credentials,
@@ -64,6 +74,9 @@ KB_KEY_PREFIXES: tuple[str, ...] = (
     "entity:",
     "timeline:global",
 )
+#: Key families under a ``KB_KEY_PREFIXES`` entry that the wipe never touches: the scan skips them and
+#: ``frozen_redis_scope`` refuses a plan that names one, so no plan can re-include them.
+KB_KEPT_PREFIXES: tuple[str, ...] = ("kb:boards",)
 #: Stated in the plan output: the wipe does not quiesce the KB.
 NOT_ATOMIC_NOTE = "Not atomic: keys written by a concurrent writer during the wipe survive. Run it with the KB idle."
 #: Keys scanned and unlinked per call.
@@ -84,8 +97,18 @@ def _index_documents(client, name: str) -> int:
     return int(info[info.index("num_docs") + 1]) if "num_docs" in info else 0
 
 
+def is_kept_key(key: object) -> bool:
+    """Whether *key* belongs to a family the wipe never touches (``KB_KEPT_PREFIXES``)."""
+    return decode_redis_value(key).startswith(KB_KEPT_PREFIXES)
+
+
+def _wiped_keys(client, prefix: str):
+    """The keys under *prefix* that the wipe may remove: the scan with the kept families skipped."""
+    return (key for key in client.scan_iter(match=f"{prefix}*", count=SCAN_BATCH) if not is_kept_key(key))
+
+
 def _count_prefix(client, prefix: str) -> int:
-    return sum(1 for _ in client.scan_iter(match=f"{prefix}*", count=SCAN_BATCH))
+    return sum(1 for _ in _wiped_keys(client, prefix))
 
 
 def _kb_indexes_present(client) -> list[str]:
@@ -123,6 +146,12 @@ def _refuse_outside_scope(kind: str, names: list[str], allowed: tuple[str, ...])
         raise ValueError(f"the approved plan names {kind} outside the knowledge scope ({outside}); nothing was deleted")
 
 
+def _refuse_kept(prefixes: list[str]) -> None:
+    kept = [p for p in prefixes if p.startswith(KB_KEPT_PREFIXES)]
+    if kept:
+        raise ValueError(f"the approved plan names a key family the wipe always keeps ({kept}); nothing was deleted")
+
+
 def frozen_redis_scope(plan_databases: list[dict]) -> list[dict]:
     """What the approved plan says to delete in Redis, checked against the code's scope; raises when it exceeds it.
 
@@ -137,6 +166,7 @@ def frozen_redis_scope(plan_databases: list[dict]) -> list[dict]:
         prefixes = [item["prefix"] for item in entry["prefixes"]]
         _refuse_outside_scope("a database", [database], KB_WIPE_DATABASES)
         _refuse_outside_scope("an index", indexes, kb_index_names())
+        _refuse_kept(prefixes)
         _refuse_outside_scope("a key prefix", prefixes, KB_KEY_PREFIXES)
         scope.append({"database": database, "indexes": indexes, "prefixes": prefixes})
     return scope
@@ -145,7 +175,7 @@ def frozen_redis_scope(plan_databases: list[dict]) -> list[dict]:
 def _unlink_prefix(client, prefix: str, entry: dict) -> None:
     """Unlink the keys under *prefix*, updating ``entry["count"]`` per batch so a failure keeps the count so far."""
     batch: list = []
-    for key in client.scan_iter(match=f"{prefix}*", count=SCAN_BATCH):
+    for key in _wiped_keys(client, prefix):
         batch.append(key)
         if len(batch) >= SCAN_BATCH:
             entry["count"] += int(client.unlink(*batch))
