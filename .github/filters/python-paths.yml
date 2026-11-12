@@ -457,7 +457,7 @@ python:
   # decides how CI cost is distributed across the twelve shards, so a change
   # confined to it must run the suite that measures the result -- otherwise the
   # one file that sets shard balance is the one file whose change is invisible
-  # to the balance guard, and the PR takes the required-context shim's green.
+  # to the balance guard, and the PR takes the python-suite gate's green.
   - '.test_durations'
   # #17798, #17886: the SLM suite's shard weights, read by --shard-durations in
   # this same suite and, since #17886, by the durations-coverage guard. Without
@@ -473,7 +473,7 @@ python:
   # docs/research/_index.md AND every document it links, comparing each row's
   # phase claim against its document's headings. Both sides of that comparison
   # live here, so a change confined to docs/research/ -- which is exactly the
-  # change that creates the drift -- would take the required-context shim's
+  # change that creates the drift -- would take the python-suite gate's
   # green while the guard that detects it never runs.
   - 'docs/research/**'
   # #17930: `repo_tests/_glob_declared_uncovered.py` names this workflow by
