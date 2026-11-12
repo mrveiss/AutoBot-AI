@@ -19,6 +19,7 @@ from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_h
 from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
 
+from ..run_status import with_run_state
 from ..storage import get_code_collection, get_redis_connection
 from ..type_coverage import problem_type_coverage
 
@@ -279,6 +280,7 @@ async def _get_redis_fallback_chart_data(
     operation="get_chart_data",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_chart_data(
     source_id: SourceIdQuery,
 ):

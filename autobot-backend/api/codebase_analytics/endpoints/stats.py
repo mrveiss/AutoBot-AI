@@ -25,6 +25,7 @@ from utils.chromadb_client import get_all_paginated
 from ..analyzers import normalize_hardcode_record
 from ..problem_dedup import dedupe_same_location_problems
 from ..problem_query import ProblemCategory, problem_where, select_category
+from ..run_status import with_run_state
 from ..scanner import _tasks_sync_lock, indexing_tasks
 from ..storage import get_code_collection, get_redis_connection
 from .shared import (
@@ -199,6 +200,7 @@ def _build_indexing_response(
     operation="get_codebase_stats",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_codebase_stats(source_id: SourceIdQuery):
     """
     Get real codebase statistics from storage.
@@ -228,16 +230,13 @@ async def get_codebase_stats(source_id: SourceIdQuery):
         results = code_collection.get(ids=[stats_doc_id], include=["metadatas"])
     except Exception as chroma_error:
         logger.warning("ChromaDB stats query failed: %s", chroma_error)
-        # Issue #540, #665: Show indexing status even on query failure
         if active_task:
             return _build_indexing_response("Indexing in progress.", active_task, source_id)
         return JSONResponse(
             {**no_data_response("No codebase data found. Run indexing first.", stats=None), "source_id": source_id}
         )
 
-    # Check if we have data
     if not results.get("metadatas") or len(results["metadatas"]) == 0:
-        # Issue #540, #665: Show indexing status when no stats yet
         if active_task:
             return _build_indexing_response(
                 "Indexing in progress. Stats will be available when complete.",
@@ -248,7 +247,6 @@ async def get_codebase_stats(source_id: SourceIdQuery):
             {**no_data_response("No codebase data found. Run indexing first.", stats=None), "source_id": source_id}
         )
 
-    # Parse and return stats (Issue #315 - use extracted helper)
     stats_metadata = results["metadatas"][0]
     stats = _parse_stats_metadata(stats_metadata)
 
@@ -348,6 +346,7 @@ _normalize_hardcode_record = normalize_hardcode_record
     operation="get_hardcoded_values",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_hardcoded_values(
     source_id: SourceIdQuery,
     hardcode_type: str | None = None,
@@ -592,6 +591,7 @@ async def reset_embedding_stats_endpoint() -> JSONResponse:
     operation="get_codebase_problems",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_codebase_problems(
     source_id: SourceIdQuery,
     problem_type: str | None = None,

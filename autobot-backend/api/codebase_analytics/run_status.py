@@ -32,8 +32,12 @@ newest is ignored, so a stale report can never overwrite a newer run.
 """
 
 import asyncio
+import functools
+import json
 import signal
 from datetime import datetime, timedelta, timezone
+
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from api.source_scope import require_source_id
 from autobot_shared.logging_manager import get_logger
@@ -257,3 +261,59 @@ async def run_response_fields(source_id: str | None) -> dict:
         logger.warning("Run state unreadable for %s (#21003): %s", source_id, exc)
         run = None
     return {"partial": bool(run and run["partial"]), "run": run}
+
+
+def _merged(result, fields: dict):
+    """``result`` with the run fields added: a dict or a successful JSON response with a dict body."""
+    if isinstance(result, dict):
+        return {**result, **fields}
+    if isinstance(result, JSONResponse) and result.status_code < 400:
+        body = json.loads(result.body)
+        if isinstance(body, dict):
+            headers = {k: v for k, v in result.headers.items() if k.lower() not in ("content-length", "content-type")}
+            return JSONResponse({**body, **fields}, status_code=result.status_code, headers=headers)
+    return result
+
+
+def with_run_state(handler):
+    """Route decorator: add ``partial`` and ``run`` to the handler's response, whatever branch answered.
+
+    The handler must take ``source_id`` as a keyword (as FastAPI passes it).
+    """
+
+    @functools.wraps(handler)
+    async def wrapper(*args, **kwargs):
+        result = await handler(*args, **kwargs)
+        return _merged(result, await run_response_fields(kwargs.get("source_id")))
+
+    wrapper.labels_run_state = True  # functools.wraps in the outer decorators carries it to the route
+    return wrapper
+
+
+def partial_report_banner(run: dict | None) -> str:
+    """Markdown banner for a report built from a non-completed run; empty otherwise."""
+    if not run or not run["partial"]:
+        return ""
+    since = run["last_completed_at"] or "never"
+    return (
+        f"> **Partial results.** The newest indexing run did not complete (status: {run['status']}). "
+        f"These findings may come from the interrupted run. Last completed run: {since}.\n\n"
+    )
+
+
+def report_response(report: str, fields: dict, source_id: str) -> PlainTextResponse:
+    """The markdown report download, labelled partial when its run did not complete."""
+    run = fields["run"]
+    headers = {
+        "Content-Disposition": 'attachment; filename="code-analysis-report.md"',
+        "X-Source-Id": source_id,
+        "X-Run-Partial": str(fields["partial"]).lower(),
+    }
+    if run:
+        headers["X-Run-Status"] = run["status"]
+        headers["X-Run-Last-Completed-At"] = run["last_completed_at"]
+    return PlainTextResponse(
+        content=partial_report_banner(run) + report,
+        media_type="text/markdown; charset=utf-8",
+        headers=headers,
+    )
