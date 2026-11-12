@@ -344,4 +344,10 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "Tracked Python under five code roots, a subset of tracked Python; the other trees grow at their "
         "own rate, so a share of all Python would sink with nothing wrong.",
     ),
+    "one-after-commit-queue-21107": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test .py under the backend and shared roots, against all tracked .py there; the test-file share "
+        "drifts on its own.",
+    ),
 }
