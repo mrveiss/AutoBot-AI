@@ -13,9 +13,12 @@ import { BaseAlert, formatFileSize } from '@autobot/ui'
 
 import { ref, computed, onMounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
+import { useI18n } from 'vue-i18n'
+import { downloadAdminFile, downloadErrorKey } from '@/composables/adminFileDownload'
 import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
+const { t } = useI18n()
 
 // State
 const loading = ref(false)
@@ -139,18 +142,10 @@ async function downloadFile(entry: FileEntry): Promise<void> {
     const filePath = currentPath.value === '/'
       ? `/${entry.name}`
       : `${currentPath.value}/${entry.name}`
-    const content = await api.readFile(filePath)
-
-    // Create download link
-    const blob = new Blob([content], { type: 'application/octet-stream' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = entry.name
-    a.click()
-    URL.revokeObjectURL(url)
+    await downloadAdminFile(filePath, entry.name)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to download file'
+    const key = downloadErrorKey(e)
+    error.value = key ? t(key) : e instanceof Error ? e.message : t('tools.admin.fileBrowserTool.downloadFailed')
   }
 }
 
