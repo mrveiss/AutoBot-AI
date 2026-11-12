@@ -41,21 +41,28 @@ terminal                   the same            ignored: the first terminal statu
                                                of a run is final
 ``running``                another             ignored: a run that is still going
                                                owns the record
-terminal                   another             takes over: a terminal run sends no
-                                               more reports, so another id is a
-                                               newer run whose start write was lost
+terminal                   another, unseen     takes over: a terminal run sends no
+                                               more reports, so an id the record
+                                               never saw is a newer run whose
+                                               start write was lost
+terminal                   another, seen       ignored: an older run reporting late
 none                       any                 applied
 =========================  ==================  ===================================
 
-Limit: a *late* report from an *older* run, arriving after a newer run has
-finished, takes over by the fourth row.  Runs are serial (one job at a time,
-``endpoints/indexing.py``) and an older run reports before the next starts,
-so this is not expected; run ids carry no order that could rule it out.
+"Seen" means the id is in the record's ``seen_run_ids``: the last
+``MAX_SEEN_RUN_IDS`` ids, newest last, added by :func:`record_run_started` and by
+an accepted take-over.  Run ids are uuid4s with no order, so this list is what
+tells a late report of an older run (always listed) from a newer run whose start
+was lost (never listed).  Residual limits: an older run whose start write was
+*also* lost is indistinguishable from a newer one and takes over; and ids older
+than the cap are forgotten, so a report that late is read as unseen.  A record
+written before the field existed reads as an empty list.
 """
 
 import asyncio
 import functools
 import inspect
+import json
 import signal
 from datetime import datetime, timedelta, timezone
 
@@ -65,6 +72,7 @@ from api.source_scope import require_source_id
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.store_authority import system_of_record
+from autobot_shared.time_utils import parse_utc_iso
 
 from .indexing_executor import _SUBPROCESS_HARD_TIMEOUT
 from .storage import get_code_collection_async
@@ -91,6 +99,9 @@ ABANDON_GRACE_SECONDS = env_int_clamped(
     "AUTOBOT_INDEXING_ABANDON_GRACE_SECONDS", _DEFAULT_ABANDON_GRACE_SECONDS, 30, 86400
 )
 
+#: Structural bound on the run ids a record remembers (see the module docstring).
+MAX_SEEN_RUN_IDS = 8
+_SEEN_KEY = "seen_run_ids"
 _RECORD_TYPE = "run_status"
 _OWNER_KEY = "owner_source"
 #: Serialises read-modify-write inside one process.  Two processes (the worker and
@@ -161,6 +172,24 @@ async def _update(source_id: str | None, change) -> bool:
         return False
 
 
+def _decode_seen(meta: dict) -> list[str]:
+    """The run ids a record has seen; a record without the field (or with a damaged one) has none."""
+    try:
+        ids = json.loads(meta.get(_SEEN_KEY) or "[]")
+    except (TypeError, ValueError):
+        return []
+    return [i for i in ids if isinstance(i, str)] if isinstance(ids, list) else []
+
+
+def _encode_seen(ids: list[str]) -> str:
+    """Chroma metadata is scalar, so the bounded list travels as a JSON string."""
+    return json.dumps(ids[-MAX_SEEN_RUN_IDS:])
+
+
+def _with_seen(meta: dict, run_id: str) -> str:
+    return _encode_seen([i for i in _decode_seen(meta) if i != run_id] + [run_id])
+
+
 async def record_run_started(source_id: str | None, run_id: str) -> bool:
     """Record ``run_id`` as the newest run, ``running``.  A new run id always starts fresh.
 
@@ -171,6 +200,7 @@ async def record_run_started(source_id: str | None, run_id: str) -> bool:
         lambda old: {
             **old,
             "latest_run_id": run_id,
+            _SEEN_KEY: _with_seen(old, run_id),
             "latest_status": STATUS_RUNNING,
             "latest_reason": "",
             "latest_started_at": _now().isoformat(),
@@ -190,9 +220,13 @@ def _finish(old: dict, run_id: str, status: str, reason: str) -> dict | None:
     if newest and newest != run_id and newest_status == STATUS_RUNNING:
         logger.warning("Run %s report (%s) ignored: run %s is still running", run_id, status, newest)
         return None
+    if newest and newest != run_id and run_id in _decode_seen(old):
+        logger.warning("Run %s report (%s) ignored: it is older than run %s", run_id, status, newest)
+        return None
     finished = _now().isoformat()
     new = {**old, "latest_run_id": run_id, "latest_status": status, "latest_reason": reason}
     new["latest_finished_at"] = finished
+    new[_SEEN_KEY] = _with_seen(old, run_id)
     if newest != run_id:
         new["latest_started_at"] = ""  # its start was never recorded
     if status == STATUS_COMPLETED:
@@ -218,8 +252,8 @@ def _is_overdue(meta: dict, hard_timeout: int, now: datetime) -> bool:
     if meta.get("latest_status") != STATUS_RUNNING or not started:
         return False
     try:
-        begun = datetime.fromisoformat(started)
-    except ValueError:
+        begun = parse_utc_iso(started)  # a naive timestamp is read as UTC
+    except (ValueError, TypeError):
         return False
     return now - begun > timedelta(seconds=hard_timeout + ABANDON_GRACE_SECONDS)
 

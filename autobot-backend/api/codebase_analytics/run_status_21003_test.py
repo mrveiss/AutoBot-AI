@@ -234,9 +234,11 @@ class _KillableProc:
 
     def __init__(self):
         self.killed = False
+        self.waiting = asyncio.Event()  # set once the supervisor is waiting on the worker
         self._exited = asyncio.Event()
 
     async def wait(self):
+        self.waiting.set()
         await self._exited.wait()
         return -9
 
@@ -335,7 +337,7 @@ async def test_cancelling_the_supervisor_kills_the_worker_and_records_cancelled(
     proc = _KillableProc()
     coroutine, _ = _supervisor(monkeypatch, {"_SUBPROCESS_WATCHDOG_INTERVAL": 0.01}, None, proc)
     run = asyncio.ensure_future(coroutine)
-    await asyncio.sleep(0.1)
+    await asyncio.wait_for(proc.waiting.wait(), 10)
     assert not proc.killed  # control: the worker was running, nothing killed it yet
     run.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -381,3 +383,68 @@ async def test_a_clean_exit_with_a_completed_task_backstops_the_record(collectio
     done = {"status": "completed"}
     await _supervise(monkeypatch, {}, done, proc=_ExitedProc(0))
     assert (await _state())["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_a_late_completed_from_an_older_run_does_not_make_a_killed_newer_run_complete(collection):
+    await record_run_started("src", "run-x")
+    await record_run_started("src", "run-y")
+    await record_run_finished("src", "run-y", "killed", "exit -9")
+    assert await record_run_finished("src", "run-x", "completed") is False
+    state = await _state()
+    assert (state["run_id"], state["status"], state["partial"], state["last_completed_at"]) == (
+        "run-y",
+        "killed",
+        True,
+        "",
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_late_failure_from_an_older_run_does_not_make_a_completed_newer_run_partial(collection):
+    await record_run_started("src", "run-x")
+    await record_run_started("src", "run-y")
+    await record_run_finished("src", "run-y", "completed")
+    assert await record_run_finished("src", "run-x", "killed", "late") is False
+    state = await _state()
+    assert (state["run_id"], state["status"], state["partial"]) == ("run-y", "completed", False)
+
+
+@pytest.mark.asyncio
+async def test_the_record_remembers_only_the_last_cap_run_ids_newest_last(collection):
+    ids = [f"run-{n}" for n in range(run_status.MAX_SEEN_RUN_IDS + 3)]
+    for run_id in ids:
+        await record_run_started("src", run_id)
+    seen = run_status._decode_seen(collection.docs["codebase_run_src"])
+    assert seen == ids[-run_status.MAX_SEEN_RUN_IDS :]
+    assert len(seen) == run_status.MAX_SEEN_RUN_IDS
+
+
+@pytest.mark.asyncio
+async def test_a_record_written_before_the_field_existed_reads_as_empty_and_an_unseen_id_takes_over(collection):
+    collection.docs["codebase_run_src"] = {
+        "type": "run_status",
+        "owner_source": "src",
+        "latest_run_id": "run-1",
+        "latest_status": "completed",
+        "last_completed_at": "2026-11-01T00:00:00+00:00",
+    }
+    assert run_status._decode_seen(collection.docs["codebase_run_src"]) == []
+    assert await record_run_finished("src", "run-2", "killed", "exit -9") is True
+    state = await _state()
+    assert (state["run_id"], state["status"]) == ("run-2", "killed")
+    assert state["last_completed_at"] == "2026-11-01T00:00:00+00:00"
+    assert run_status._decode_seen(collection.docs["codebase_run_src"]) == ["run-2"]
+
+
+@pytest.mark.asyncio
+async def test_a_naive_started_at_is_read_as_utc_not_an_error(collection):
+    """Fails with ``TypeError`` on a bare ``fromisoformat`` compared to an aware ``now``."""
+    collection.docs["codebase_run_src"] = {
+        "latest_run_id": "run-1",
+        "latest_status": "running",
+        "latest_started_at": "2020-01-01T00:00:00",
+    }
+    assert (await _state())["status"] == "abandoned"
+    collection.docs["codebase_run_src"]["latest_started_at"] = "garbage"
+    assert (await _state())["status"] == "running"
