@@ -61,6 +61,7 @@ from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
 from autobot_shared import env_registry_knowledge  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
+    env_registry_admin_files,
     env_registry_agent_tools,
     env_registry_ai,
     env_registry_analytics,
@@ -436,7 +437,6 @@ register_env_var(
 )
 
 # --- tls, network: env_registry_tls.py (#18765; one line to make room for the mesh sibling import) ---
-
 # --- voice / speech-to-text -------------------------------------------------
 
 register_env_var(

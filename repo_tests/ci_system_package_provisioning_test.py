@@ -268,7 +268,9 @@ def test_setup_python_suite_apt_step_waits_for_the_dpkg_lock_and_cannot_hang_the
     including the negative half.
     """
     action = (REPO_ROOT / ".github" / "actions" / "setup-python-suite" / "action.yml").read_text(encoding="utf-8")
-    assert "DPkg::Lock::Timeout" in action, "apt-get must bound its wait for the dpkg lock, not hang indefinitely"
+    shared = (REPO_ROOT / "scripts" / "ci" / "apt_network_config.sh").read_text(encoding="utf-8")
+    assert "DPkg::Lock::Timeout" in shared, "apt-get must bound its wait for the dpkg lock, not hang indefinitely"
+    assert "apt_network_config.sh" in action, "the step must write the lock/network bounds through the shared script"
     parsed = yaml.safe_load(action)
     apt_steps = [s for s in parsed["runs"]["steps"] if "apt-get install" in s.get("run", "")]
     assert apt_steps, "no step installs system packages — did the step get renamed?"
