@@ -26,7 +26,9 @@ class HeartbeatConfigResponse(BaseModel):
     paused_reason: str | None = None
     paused_at: str | None = None
     paused_by: str | None = None
-    paused_by_name: str | None = Field(default=None, description="Display name for paused_by; null if unresolved.")
+    paused_by_name: str | None = Field(
+        default=None, description="Display name of the user in paused_by; null for system actors or unknown users."
+    )
     error_detail: str | None = None
     error_at: str | None = None
     error_code: str | None = None
