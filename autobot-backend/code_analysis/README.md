@@ -219,7 +219,7 @@ Security Fix Example:
 
 ### CI/CD Integration
 ```yaml
-# .github/workflows/code-quality.yml
+# .github/workflows/_gate-code-quality.yml
 name: Code Quality Analysis
 on: [push, pull_request]
 

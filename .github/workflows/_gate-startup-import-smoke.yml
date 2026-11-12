@@ -53,7 +53,7 @@ jobs:
         # #7018: switched from `autobot-backend/requirements.txt` to `requirements-ci.txt`
         # because the former pulls torch>=2.11.0 + transitive vllm 0.19.x (requires torch==2.10.0),
         # an unsatisfiable resolver state. `requirements-ci.txt` is purpose-built to exclude
-        # vllm and other GPU-dependent packages — see `security.yml` which has used it for years.
+        # vllm and other GPU-dependent packages — see `_gate-security.yml` which has used it for years.
         # autobot_shared is installed separately (editable, from repo root, no CWD trickery).
         shell: bash
         run: |

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Fail when a BEHAVIOURAL pre-commit hook reported a finding (#14878).
 
-`.github/workflows/enforce-precommit.yml` runs `pre-commit run --all-files` and
+`.github/workflows/_gate-precommit.yml` runs `pre-commit run --all-files` and
 routes findings to `::warning::`. For a formatter or a linter that is the right
 call and the step's own comment says so: gating a merge on Black's opinion is a
 judgement nobody made. `check_precommit_hooks_executed.py` (#14181) already

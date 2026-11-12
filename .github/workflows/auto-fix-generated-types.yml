@@ -1,5 +1,5 @@
 # Auto-regenerate the frontend generated types (api.ts) on PR branches.
-# Companion to verify-generated-types.yml (the REQUIRED gate): rather than
+# Companion to _gate-generated-types.yml (the REQUIRED gate): rather than
 # force every author to hand-run `npm run gen:types` against a py3.14 backend
 # (the deployed/dev boxes may run a different Python and produce a schema that
 # never matches the gate), this job regenerates api.ts in the SAME py3.14

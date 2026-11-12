@@ -416,7 +416,7 @@ def declares_self_hosted(text: str) -> bool:
     """True when a workflow declares at least one job on the self-hosted pool.
 
     Comments are stripped before matching, which is correctness rather than
-    tidiness: `code-quality.yml` carries
+    tidiness: `_gate-code-quality.yml` carries
 
         runs-on: ubuntu-latest  # Temporary: self-hosted runner offline
 

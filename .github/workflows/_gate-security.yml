@@ -204,8 +204,8 @@ jobs:
 
     # GATES at high/critical (#13543). Backlog measured at 0 advisories across
     # every severity over 1191 dependencies when #13400 armed the same lockfile
-    # in frontend-test.yml. The duplication with that job is deliberate: this
-    # workflow also runs on a daily `schedule`, where frontend-test.yml does not.
+    # in _gate-frontend-test.yml. The duplication with that job is deliberate: this
+    # workflow also runs on a daily `schedule`, where _gate-frontend-test.yml does not.
     - name: Node.js Dependency Audit
       # #13543: `!cancelled()` so an earlier scanner's GATE failing does not skip
       # this one. Before the gates existed no scanner could fail, so ordering was

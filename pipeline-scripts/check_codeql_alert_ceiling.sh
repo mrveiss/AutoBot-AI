@@ -99,7 +99,7 @@ if [ -n "$ALERT_REF" ]; then
   # Check runs attach to the commit that was PUSHED -- the PR head -- while analyses are recorded
   # against the merge commit GITHUB_SHA names (#18123 review: merge bc3dd1f240 had 0 runs, its
   # head 54). So every check-run read uses CODEQL_CHECK_SHA, which _gate-code-quality.yml sets.
-  # The default wait covers codeql.yml's job bounds: Analyze 30 min plus detect 5 min, plus margin.
+  # The default wait covers _gate-codeql.yml's job bounds: Analyze 30 min plus detect 5 min, plus margin.
   readonly CODEQL_CHECK_SHA="${CODEQL_CHECK_SHA:-${GITHUB_SHA:-${ALERT_REF}}}"
   readonly CODEQL_WAIT_S="${CODEQL_WAIT_S:-2400}" CODEQL_POLL_S="${CODEQL_POLL_S:-30}"
   [[ "$CODEQL_WAIT_S" =~ ^[0-9]+$ ]] || fail "CODEQL_WAIT_S='${CODEQL_WAIT_S}' is not a whole number of seconds"

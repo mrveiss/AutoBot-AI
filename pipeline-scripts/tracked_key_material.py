@@ -9,7 +9,7 @@
 repository root -- was tracked in this public repository for eleven months. The
 secret scanning of the day grepped three shapes inside three directories, so the
 root was never read. Wiring detect-secrets over the whole tree (see
-``.pre-commit-config.yaml`` and the ``secret-detection`` job in ``security.yml``)
+``.pre-commit-config.yaml`` and the ``secret-detection`` job in ``_gate-security.yml``)
 closes the directory gap but not the shape gap: **detect-secrets 1.5.0 reports
 nothing for that file**, measured, because its high-entropy plugins read quoted
 strings and a bare key file has no quotes. This module checks the shape that

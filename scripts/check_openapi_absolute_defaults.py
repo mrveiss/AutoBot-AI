@@ -109,7 +109,7 @@ def _load_contract(argv: list[str]) -> dict | None:
     """Return the contract, reusing a pre-dumped file when one is given.
 
     ``--contract <path>`` exists so CI does not pay for a second dump:
-    ``verify-generated-types.yml`` already builds ``app.openapi()`` and writes it
+    ``_gate-generated-types.yml`` already builds ``app.openapi()`` and writes it
     out, and that build is the expensive part of the job.
     """
     if "--contract" in argv:

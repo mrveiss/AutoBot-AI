@@ -127,7 +127,7 @@ def test_the_ceiling_file_holds_exactly_one_number():
 def test_the_gate_is_invoked_from_the_code_quality_workflow():
     """Invoked from code-quality, which IS a required status check.
 
-    Moving it to codeql.yml would look equivalent and would not be: that workflow
+    Moving it to _gate-codeql.yml would look equivalent and would not be: that workflow
     is not in branch protection's required contexts, so its verdict cannot block
     a merge.
     """
@@ -174,7 +174,7 @@ _SCRIPT_SRC = _SCRIPT.read_text(encoding="utf-8")
 
 #: Check-runs on a commit CodeQL never ran for -- the paths filter excluded it (#18105).
 _CHECKS_WITHOUT_CODEQL = '{"total_count":2,"check_runs":[{"name":"python-suite"},{"name":"code-quality"}]}'
-#: codeql.yml's own job name.
+#: _gate-codeql.yml's own job name.
 _CHECKS_WORKFLOW_JOB = '{"total_count":2,"check_runs":[{"name":"Analyze (python)"},{"name":"python-suite"}]}'
 #: The same job as ci.yml publishes it since #18208: "<caller job> / <job>".
 _CHECKS_CALLEE_JOB = '{"total_count":2,"check_runs":[{"name":"run-codeql / Analyze (python)"},{"name":"python-suite"}]}'
@@ -355,7 +355,7 @@ def test_nothing_scanned_the_ref_and_codeql_never_ran_falls_back_to_the_default_
     """SHOULD NOT trip (#18105): CodeQL does not run on a change it does not scan.
 
     This case used to fail, and it made `code-quality` — a REQUIRED check —
-    unpassable for every dependency-only and docs-only PR. codeql.yml's
+    unpassable for every dependency-only and docs-only PR. _gate-codeql.yml's
     `pull_request` trigger carries a `paths` filter, so #18105 (a two-line
     requirements bump) read `no CodeQL analysis for refs/pull/18105/merge` forever,
     on a change that cannot grow the backlog.

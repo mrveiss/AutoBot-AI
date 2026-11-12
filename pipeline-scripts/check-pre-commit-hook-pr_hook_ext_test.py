@@ -44,7 +44,7 @@ def _run(tmp_path: Path, base: str, head: str, *ext: str) -> subprocess.Complete
 
 @pytest.mark.skipif(not WRAPPER.exists(), reason="wrapper script not found")
 class TestHookModeExt:
-    """The step in code-quality.yml passes ``--ext py,sh`` to the Redis hook."""
+    """The step in _gate-code-quality.yml passes ``--ext py,sh`` to the Redis hook."""
 
     def test_the_default_pathspec_never_reaches_a_shell_only_change(self, tmp_path: Path) -> None:
         """The control: without --ext the .sh change is skipped as 'no changed source files'."""

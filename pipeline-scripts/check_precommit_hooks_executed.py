@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Fail when a pre-commit hook could not RUN, as distinct from finding something (#14181).
 
-`.github/workflows/enforce-precommit.yml` runs `pre-commit run --all-files` and
+`.github/workflows/_gate-precommit.yml` runs `pre-commit run --all-files` and
 swallows the result with `|| { echo "::warning::…"; exit 0; }`. Its own comment
 states the intent — *"The goal is to catch configuration errors, not necessarily
 code issues"* — but it never implemented the distinction, so both outcomes are

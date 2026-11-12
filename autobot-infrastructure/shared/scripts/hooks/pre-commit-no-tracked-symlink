@@ -58,7 +58,7 @@
 #
 # Issue: #14137
 # Install: pre-commit install (uses .pre-commit-config.yaml)
-# CI: invoked with an explicit file list (see .github/workflows/enforce-precommit.yml)
+# CI: invoked with an explicit file list (see .github/workflows/_gate-precommit.yml)
 
 set -euo pipefail
 

@@ -51,7 +51,7 @@ VENV="${CI_PARITY_VENV:-$HOME/.venv-python-suite}"
 PY_BIN="$VENV/bin/python"
 
 # Kept in one place so a CI bump is a one-line change here too. Sourced from
-# .github/actions/setup-python-suite/action.yml and code-quality.yml.
+# .github/actions/setup-python-suite/action.yml and _gate-code-quality.yml.
 REQUIRED_MAJOR_MINOR="3.14"
 TORCH_CPU_INDEX="https://download.pytorch.org/whl/cpu"
 

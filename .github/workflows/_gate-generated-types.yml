@@ -91,7 +91,7 @@ jobs:
   verify-types-run:
     outputs:
       ok: ${{ steps.done.outputs.ok }}
-    # `!= 'false'` rather than `== 'true'`, matching migration-gate.yml: an
+    # `!= 'false'` rather than `== 'true'`, matching ci.yml's `migration-matrix` job: an
     # unexpected or empty filter output then still RUNS the check instead of
     # silently skipping it. With `== 'true'`, a paths-filter that succeeded but
     # emitted nothing would skip this job and the verdict below would report a
@@ -226,7 +226,7 @@ jobs:
 
       - name: Install SLM backend dependencies
         # autobot-slm-backend/main.py needs its own requirements (croniter,
-        # authlib, ldap3, pysaml2, pyotp, ...) — see api-wiring.yml's identical
+        # authlib, ldap3, pysaml2, pyotp, ...) — see _gate-api-wiring.yml's identical
         # note. dump_slm_openapi() imports `main.app` directly, same recipe as
         # the API wiring audit's --dump-slm-openapi.
         run: |

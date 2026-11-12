@@ -52,7 +52,7 @@ it can pass:
   erase, so they cannot be policed by the superset check above -- but the one
   entry they all need is the one whose absence made a REQUIRED context report
   green over work that never ran;
-* ``api-wiring.yml`` still has NO ``pull_request.paths`` (#12934). That absence
+* ``_gate-api-wiring.yml`` still has NO ``pull_request.paths`` (#12934). That absence
   is deliberate -- a path-filtered required check never reports and deadlocks
   the pull request -- and it is exactly the kind of asymmetry a later
   "tidy the filters into uniformity" pass would erase. Asserting the absence

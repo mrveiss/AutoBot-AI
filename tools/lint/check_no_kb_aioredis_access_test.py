@@ -109,7 +109,7 @@ def test_this_test_file_does_not_violate_the_rule_it_tests() -> None:
     pattern as a verbatim literal to synthesize a violation, which made the
     file itself a violation — the checker reported 1 hit on the very PR that
     turned the hook on, while the PR body claimed 0. CI missed it only because
-    `enforce-precommit.yml` swallows hook failures (#14181's second AC).
+    `_gate-precommit.yml` swallows hook failures (#14181's second AC).
 
     Asserted rather than remembered, because the natural way to write the next
     such test is the way that breaks it.

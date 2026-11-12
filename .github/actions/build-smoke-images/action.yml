@@ -4,7 +4,7 @@
 #
 # Composite action: build the Docker smoke images from docker/docker-bake.hcl (#19527)
 #
-# Shared by docker-smoke-test.yml, hardened-smoke-test.yml and co-located-smoke.yml,
+# Shared by _gate-docker-smoke.yml, hardened-smoke-test.yml and co-located-smoke.yml,
 # which each carried their own copy of the cache restore, three sequential
 # `docker buildx build` calls, the cache rotation and the main-only save.
 #

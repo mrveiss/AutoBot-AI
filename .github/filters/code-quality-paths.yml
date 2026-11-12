@@ -33,7 +33,7 @@
 
 # ── the canonical set ────────────────────────────────────────────────────────
 # The key is `backend`, unchanged from the inline copy it replaces, so
-# code-quality.yml's `steps.filter.outputs.backend` keeps working verbatim. It
+# the `backend` output the code-quality gate reads in ci.yml keeps working verbatim. It
 # is NOT the `backend` of backend-python-paths.yml: a single dorny/paths-filter
 # step reads exactly one `filters` source, and these two files are never read by
 # the same step.

@@ -41,7 +41,7 @@
 #   - the product test trees (autobot-backend, autobot-slm-backend, autobot-tts-worker, libs,
 #     plugins/core-plugins), the frontend tests, and the interaction of two members
 #   - the dependency-floor check, the hardcoded-value baseline audit (ssot-coverage.yml), Semgrep
-#     at ERROR severity (security.yml)
+#     at ERROR severity (_gate-security.yml)
 #   - promtool (AUTOBOT_REQUIRE_PROMTOOL, ci.yml): its tests skip here and are accepted only through
 #     the skip allowlist in preboard_guard_lane_skips.py. The two real-ChromaDB modules RUN here against
 #     the real library (no backend conftest stubs it); a skip of either is off-list, so red

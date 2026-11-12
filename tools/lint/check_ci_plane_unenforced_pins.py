@@ -82,7 +82,7 @@ BASELINE: dict[str, str] = {
     "protobuf": "onnxruntime",
 }
 
-#: Read by this checker; code-quality.yml's filter must cover each, or a PR
+#: Read by this checker; _gate-code-quality.yml's filter must cover each, or a PR
 #: touching only one of them skips the required check (#14550/#14551/#17542).
 GUARD_INPUT_PATHS = (*_PRODUCTION_REQUIREMENTS, _CI_REQUIREMENTS, "requirements-ci/*.txt")
 

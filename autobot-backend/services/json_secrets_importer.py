@@ -18,7 +18,7 @@ Deliberately reads the JSON file directly (mirroring ``sqlite_secrets_importer.p
 ``sqlite_path`` + ``fernet`` parameters) rather than importing ``api.secrets``: that module
 pulls in the whole FastAPI app surface (auth middleware, memory graph, plugin SDK — which
 transitively imports ``jsonschema``), which the migration-gate test environment deliberately
-keeps minimal (see ``.github/workflows/migration-gate.yml``). The caller supplies the already
+keeps minimal (see ci.yml's ``migration-matrix`` job). The caller supplies the already
 -built ``Fernet`` (e.g. the live ``secrets_manager.cipher`` when running in-process, or one
 built from the key file by a future migration-runner CLI — see #13052).
 

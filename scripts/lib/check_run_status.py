@@ -53,7 +53,7 @@ from typing import Iterable
 #:
 #: `skipped` has a SECOND cause that is not acceptable, and it cannot be told
 #: apart here: this repository parks CI by leaving a PR in draft, and `ci.yml` /
-#: `code-quality.yml` gate their heavy jobs on `draft == false`, so on a draft
+#: `_gate-code-quality.yml` gate their heavy jobs on `draft == false`, so on a draft
 #: every required context publishes `skipped` too. "Nothing to do here" and
 #: "not allowed to start yet" arrive as the same string, so the distinction is
 #: not available at this layer -- a conclusion carries no reason. It is drawn

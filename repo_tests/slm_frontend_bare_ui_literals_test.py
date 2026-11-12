@@ -55,7 +55,7 @@ the shape #15665 is about. It declares a `*.vue` glob, and the python path
 filter does not cover `autobot-slm-frontend/` -- a gap recorded deliberately in
 `glob_declared_reads_15900_test.py`, since widening the filter to those trees
 would cost twelve shards on nearly every pull request. So a .vue-only change
-would not reach the python suite at all. `slm-frontend-check.yml`, which DOES
+would not reach the python suite at all. `_gate-slm-frontend.yml`, which DOES
 trigger on `autobot-slm-frontend/**`, runs this file directly for exactly that
 reason. Two entry points, one guard, and the recorded glob dependency is what
 makes the arrangement legible rather than lucky.

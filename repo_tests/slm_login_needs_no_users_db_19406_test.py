@@ -4,7 +4,7 @@
 # Author: mrveiss
 """The SLM owns the first login, so nothing but the two user routers reaches autobot_users (#19406).
 
-``docker-smoke-test.yml`` proves it live on a compose stack. That job runs only for Docker paths,
+``_gate-docker-smoke.yml`` proves it live on a compose stack. That job runs only for Docker paths,
 so this keeps the boundary on every PR: a login or startup path that imports the engine fails here.
 """
 

@@ -34,7 +34,7 @@ true for the host-side schedule to even be installable:
   a doc nobody revisits is exactly how fault #2 happened the first time.
 
 WHY A REQUIRED CHECK AND NOT ONLY A TEST. The direction of failure here is
-the same as every other audit `code-quality.yml` runs with `--audit`: an
+the same as every other audit `_gate-code-quality.yml` runs with `--audit`: an
 inventory entry silently deleted, or a `verified` date nobody bumps, makes
 this scan find FEWER problems, not more — it goes greener by doing nothing.
 `repo_tests/runner_watchdog_schedule_test.py` imports these functions rather

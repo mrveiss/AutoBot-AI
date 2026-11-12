@@ -19,7 +19,7 @@
 # is open and a broken setup is still red. The step names and the M2.x issue each maps to are in tests/company_os_e2e/_scenario.py (STEPS).
 #
 # Not a required context. The scenario waits on real cron boundaries (about ten minutes).
-# Migrations are not in the path filter: migration-gate.yml owns that surface; the nightly run
+# Migrations are not in the path filter: ci.yml's `migration-matrix` job owns that surface; the nightly run
 # covers the combination.
 
 name: Company OS Workflow E2E
@@ -67,7 +67,7 @@ jobs:
     services:
       postgres:
         # Mirror of the upstream image (ci-image-mirror.yml, #18160): anonymous pulls hit the
-        # per-IP quota. Same image and credentials as migration-gate.yml.
+        # per-IP quota. Same image and credentials as ci.yml's `migration-matrix` job.
         image: ghcr.io/mrveiss/ci-postgres:16
         credentials:
           username: ${{ github.actor }}

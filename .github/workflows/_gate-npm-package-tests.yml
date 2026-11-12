@@ -9,8 +9,8 @@
 # family of packages whose entire suite ran nowhere — the #15667 shape, where a
 # check reports on what it reaches and nothing checks its reach.
 #
-# The big frontends have their own workflows (frontend-test.yml,
-# slm-frontend-check.yml). This file is for the small packages that each need a
+# The big frontends have their own workflows (_gate-frontend-test.yml,
+# _gate-slm-frontend.yml). This file is for the small packages that each need a
 # handful of seconds and no browser: one job, one checkout, and a per-package
 # `if:` so an unrelated pull request pays for nothing.
 #

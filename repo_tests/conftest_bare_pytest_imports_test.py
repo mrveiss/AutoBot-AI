@@ -7,7 +7,7 @@
 pytest imports a directory's ``conftest.py`` before it collects anything in that
 directory, so every module-level import there is a hard dependency of running
 ANY test under ``repo_tests/`` -- including guards that touch no backend code at
-all. ``.github/workflows/slm-frontend-check.yml`` runs two i18n guards from this
+all. ``.github/workflows/_gate-slm-frontend.yml`` runs two i18n guards from this
 directory after installing pytest and nothing else.
 
 This exists because fixing it once was not enough. The first fix moved
@@ -172,7 +172,7 @@ def test_the_conftest_imports_nothing_a_bare_pytest_runner_lacks() -> None:
         "bare-pytest runner does not have:\n  "
         + "\n  ".join(offenders)
         + "\nMove the import inside the function that uses it. A job that installs only pytest "
-        "(.github/workflows/slm-frontend-check.yml) cannot collect ANY file in this directory "
+        "(.github/workflows/_gate-slm-frontend.yml) cannot collect ANY file in this directory "
         "while conftest.py needs a package it does not have."
     )
 
