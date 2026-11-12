@@ -228,18 +228,10 @@ async def test_a_caller_may_park_unfinished_items_somewhere_else_but_only_those(
 @pytest.mark.asyncio
 async def test_the_live_run_is_the_running_one_before_a_newer_queued_one_and_is_locked_shared() -> None:
     """Compiled, because sqlite cannot prove ordering across the status column or row locking."""
-
-    class _Capture:
-        statement = None
-
-        async def execute(self, statement):  # noqa: ANN001, ANN202
-            self.statement = statement
-            return MagicMock(scalar_one_or_none=lambda: None)
-
-    session = _Capture()
+    session = RoutedSession([], [])
     await run_checkouts.live_run_id(session, "agent-1", str(_COMPANY))
-    sql = str(session.statement.compile(dialect=postgresql.dialect()))
+    sql = str(session.statements[0].compile(dialect=postgresql.dialect()))
     order = sql.split("ORDER BY")[1]
     assert order.index("CASE") < order.index("created_at DESC"), "a RUNNING run must outrank a newer QUEUED one"
     assert "FOR SHARE" in sql
-    assert "running" in bound_values(session.statement)
+    assert "running" in bound_values(session.statements[0])
