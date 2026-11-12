@@ -56,9 +56,7 @@ WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 # autobot-frontend/scripts/check-ts-delta.sh). A bare assignment such as
 # `TSC_BIN=".../vue-tsc"` has neither `--noEmit` nor `-p <tsconfig>` on the
 # same line, so it is not a match — this only fires on an actual invocation.
-COMPILE_PATTERN = re.compile(
-    r'(?:\bvue-tsc\b|"\$\{?TSC_BIN\}?")[^\n]*--noEmit[^\n]*-p\s+\S*tsconfig'
-)
+COMPILE_PATTERN = re.compile(r'(?:\bvue-tsc\b|"\$\{?TSC_BIN\}?")[^\n]*--noEmit[^\n]*-p\s+\S*tsconfig')
 
 # The marker two cooperating steps use to hand off a captured compile instead
 # of running a second one (the #14481 fix's reuse contract). A compile line
@@ -106,11 +104,7 @@ def _executable_lines(text: str) -> str:
     line would credit that job with a compile it never runs, hiding a real
     duplicate under a false one.
     """
-    return "\n".join(
-        line
-        for line in text.splitlines()
-        if not line.strip().startswith(("echo", "printf"))
-    )
+    return "\n".join(line for line in text.splitlines() if not line.strip().startswith(("echo", "printf")))
 
 
 def _unguarded_compile_count(text: str) -> int:
@@ -175,9 +169,9 @@ def _all_jobs() -> list[tuple[str, str, dict]]:
 
 def _unit_tests_job() -> dict:
     for workflow_name, job_key, job in _all_jobs():
-        if workflow_name == "frontend-test.yml" and job_key == "unit-tests":
+        if workflow_name == "_gate-frontend-test.yml" and job_key == "unit-tests":
             return job
-    raise AssertionError("frontend-test.yml no longer has a job keyed 'unit-tests'")
+    raise AssertionError("_gate-frontend-test.yml no longer has a job keyed 'unit-tests'")
 
 
 def test_the_scan_actually_finds_jobs():
@@ -194,9 +188,7 @@ def test_the_scan_actually_resolves_the_check_ts_delta_script():
     would still "pass" without ever having looked at check-ts-delta.sh.
     """
     job = _unit_tests_job()
-    delta_step = next(
-        s for s in job["steps"] if s.get("name") == "Check TypeScript error delta"
-    )
+    delta_step = next(s for s in job["steps"] if s.get("name") == "Check TypeScript error delta")
     texts = _texts_for_step(job, delta_step)
     assert len(texts) >= 2, (
         "resolving 'npm run check-ts-delta' should yield the step's own run text "
@@ -277,9 +269,9 @@ def test_the_pre_fix_shape_fails_the_same_guard():
         "the reuse marker — it would no longer exercise the unguarded path"
     )
 
-    count = _unguarded_compile_count(
-        _PRE_FIX_TYPE_CHECK_RESOLVED
-    ) + _unguarded_compile_count(_PRE_FIX_CHECK_TS_DELTA_SH)
+    count = _unguarded_compile_count(_PRE_FIX_TYPE_CHECK_RESOLVED) + _unguarded_compile_count(
+        _PRE_FIX_CHECK_TS_DELTA_SH
+    )
 
     assert count > 1, (
         f"expected the pre-#14481 shape to register more than one unguarded "

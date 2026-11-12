@@ -311,10 +311,10 @@ def test_code_quality_runs_the_audit():
     notice (#14353 tracks the wider gap: the pytest suite is not a required
     check).
     """
-    workflow = (REPO_ROOT / ".github" / "workflows" / "code-quality.yml").read_text(encoding="utf-8")
+    workflow = (REPO_ROOT / ".github" / "workflows" / "_gate-code-quality.yml").read_text(encoding="utf-8")
 
     assert "check_flake8_exclude_anchoring.py --audit-excludes" in workflow, (
-        "code-quality.yml no longer runs the exclude-anchoring audit — the guard "
+        "_gate-code-quality.yml no longer runs the exclude-anchoring audit — the guard "
         "would stop blocking merges while these tests kept passing (#14419)"
     )
     assert _CHECKER.is_file(), f"{_CHECKER} is gone but the workflow still calls it"
