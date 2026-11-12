@@ -44,7 +44,9 @@ import { toDeclarationPanelRows } from '../declarationPanelRows'
 
 const FINDINGS = [
   { type: 'long_function', severity: 'high', message: 'first smell message', file_path: 'src/first-smell.py', line: 10 },
-  { type: 'god_class', severity: 'medium', description: 'second smell description', file_path: 'src/second-smell.py', line_number: 20 },
+  { type: 'debug_code', severity: 'medium', description: 'second smell description', file_path: 'src/second-smell.py', line_number: 20 },
+  // Not in CODE_SMELL_TYPES and no `code_smell_` prefix: isCodeSmellType drops it from panel and export.
+  { type: 'god_class', severity: 'low', message: 'not a smell finding', file_path: 'src/not-a-smell.py', line: 30 },
 ]
 
 function exporterFor(smellsExport: Ref<unknown>) {
@@ -68,7 +70,8 @@ describe('code smells: the export is built from the findings the panel shows (#2
     await s.loadSmellProblems()
     fetched.onSuccess?.(FINDINGS)
     const shown = s.smellsForPanel.value
-    expect(shown).toHaveLength(2)
+    expect(shown).toHaveLength(2) // 3 loaded; the non-smell entry is filtered out
+    expect(shown.map((f) => f.file_path)).toEqual(['src/first-smell.py', 'src/second-smell.py'])
 
     const { exportSection } = exporterFor(s.smellsExport as Ref<unknown>)
     await exportSection('code-smells', 'json')
@@ -78,6 +81,8 @@ describe('code smells: the export is built from the findings the panel shows (#2
 
     expect(json.smells).toEqual(shown)
     expect(json.summary.total_smells).toBe(shown.length)
+    expect(JSON.stringify(json)).not.toContain('not-a-smell')
+    expect(md).not.toContain('not-a-smell')
     for (const f of shown) {
       expect(md).toContain(f.file_path)
       expect(md).toContain(f.description as string)
