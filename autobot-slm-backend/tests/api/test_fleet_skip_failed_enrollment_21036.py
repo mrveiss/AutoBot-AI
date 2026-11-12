@@ -128,7 +128,9 @@ async def test_only_a_latest_failed_enrollment_is_returned(maker):
 async def test_split_skips_every_unenrolled_node_naming_its_state_and_targets_the_rest(maker):
     async with maker() as db:
         targets, skipped = await _events.split_enrollment_failed(db, list(_EVENTS))
-    assert {s.node_id: s.reason for s in skipped} == {n: _enrollment.skip_reason(st) for n, st in _SKIPPED.items()}
+    assert {s.node_id: s.reason for s in skipped} == {
+        n: _enrollment.enrollment_skip_reason(st) for n, st in _SKIPPED.items()
+    }
     assert targets == [n for n in _EVENTS if n not in _SKIPPED]
     assert {"n-completed", "n-retried", "n-selfreg", "n-historical-failed", "n-update-failed"} <= set(targets)
 
@@ -177,7 +179,7 @@ async def test_collect_outdated_drops_unenrolled_nodes_and_counts_them(maker, mo
 
     assert set(_SKIPPED).isdisjoint(ids)
     assert {s.node_id: s.reason for s in job.enrollment_skipped_nodes} == {
-        n: _enrollment.skip_reason(st) for n, st in _SKIPPED.items()
+        n: _enrollment.enrollment_skip_reason(st) for n, st in _SKIPPED.items()
     }
     assert set(ids) == set(_EVENTS) - set(_SKIPPED)
 

@@ -17,7 +17,7 @@ STATE_PENDING = "pending"
 STATE_DEGRADED = "degraded"
 
 
-def skip_reason(state: str) -> str:
+def enrollment_skip_reason(state: str) -> str:
     """The reason string naming the not-fully-enrolled *state* that caused the skip."""
     return f"skipped: not fully enrolled ({state})"
 

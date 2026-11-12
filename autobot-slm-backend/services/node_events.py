@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from models.database import EventSeverity, Node, NodeEvent, NodeEventType, NodeStatus
-from models.enrollment_skip import STATE_DEGRADED, STATE_FAILED, STATE_PENDING, EnrollmentSkip, skip_reason
+from models.enrollment_skip import STATE_DEGRADED, STATE_FAILED, STATE_PENDING, EnrollmentSkip, enrollment_skip_reason
 from status_enums import NOT_FULLY_ENROLLED_STATUSES
 
 logger = get_logger(__name__)
@@ -154,7 +154,7 @@ async def split_enrollment_failed(
 ) -> Tuple[List[str], List[EnrollmentSkip]]:
     """Split *node_ids* into (targets, skipped with reason) by enrollment state; *exempt* is never skipped (#21036)."""
     states = await get_unenrolled_nodes(db, [n for n in node_ids if n not in set(exempt)])
-    skipped = [EnrollmentSkip(node_id=n, reason=skip_reason(states[n])) for n in sorted(states)]
+    skipped = [EnrollmentSkip(node_id=n, reason=enrollment_skip_reason(states[n])) for n in sorted(states)]
     for skip in skipped:
         logger.warning("fleet update: skipping node %s — %s (#21036)", skip.node_id, skip.reason)
     return [n for n in node_ids if n not in states], skipped
