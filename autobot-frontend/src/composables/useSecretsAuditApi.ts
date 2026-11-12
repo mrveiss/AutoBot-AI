@@ -15,7 +15,7 @@ import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { useLoadingState } from '@/composables/useLoadingState'
-import type { AuditApiEntry, AuditQueryResponse } from '@/types/audit'
+import type { AuditApiEntry, AuditDashboardResponse } from '@/types/audit'
 
 const logger = createLogger('SecretsAuditApi')
 
@@ -60,7 +60,7 @@ export function useSecretsAuditApi() {
 
     return wrap(async () => {
       try {
-        const data = await api.get<AuditQueryResponse<AuditApiEntry>>(
+        const data = await api.get<AuditDashboardResponse<AuditApiEntry>>(
           `${getApiBase()}/audit/logs?${params.toString()}`
         )
 
