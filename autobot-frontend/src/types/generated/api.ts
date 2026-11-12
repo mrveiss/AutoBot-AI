@@ -61369,6 +61369,31 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AutomationWorkflowListResponse
+         * @description ``GET /active_workflows`` and ``GET /completed_workflows``.
+         */
+        AutomationWorkflowListResponse: {
+            /** Success */
+            success: boolean;
+            /** Workflows */
+            workflows: components["schemas"]["WorkflowStatusPayload"][];
+            /** Count */
+            count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AutomationWorkflowStatusResponse
+         * @description ``GET /workflow_status/{id}``.
+         */
+        AutomationWorkflowStatusResponse: {
+            /** Success */
+            success: boolean;
+            workflow: components["schemas"]["WorkflowStatusPayload"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * BackgroundVectorizationResponse
          * @description Response for POST /vectorize_facts/background.
          */
@@ -103112,6 +103137,13 @@ export interface components {
             entities_created?: {
                 [key: string]: number;
             };
+            /**
+             * Skipped Work Items
+             * @description Work items that could not be imported: title, source_id and a reason code
+             */
+            skipped_work_items?: {
+                [key: string]: unknown;
+            }[];
         } & {
             [key: string]: unknown;
         };
@@ -108292,6 +108324,18 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * WorkflowActionResponse
+         * @description ``POST /start_workflow/{id}`` and ``POST /control_workflow``.
+         */
+        WorkflowActionResponse: {
+            /** Success */
+            success: boolean;
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** WorkflowApprovalResponse */
         WorkflowApprovalResponse: {
             /** Workflow Id */
@@ -108400,6 +108444,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * WorkflowCreatedResponse
+         * @description ``POST /create_workflow``.
+         */
+        WorkflowCreatedResponse: {
+            /** Success */
+            success: boolean;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * WorkflowDetailResponse
          * @description Response shape for GET /workflow/{workflow_id}.
          */
@@ -108433,6 +108491,16 @@ export interface components {
             transitions?: components["schemas"]["TransitionSpec"][];
             /** Approval Policy Keys */
             approval_policy_keys?: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * WorkflowErrorResponse
+         * @description The ``HTTPException`` body the routes raise for 403, 404, 409 and 500.
+         */
+        WorkflowErrorResponse: {
+            /** Detail */
+            detail: string;
         } & {
             [key: string]: unknown;
         };
@@ -108732,6 +108800,56 @@ export interface components {
          */
         WorkflowStatus: "planned" | "running" | "completed" | "failed" | "cancelled";
         /**
+         * WorkflowStatusPayload
+         * @description A workflow as ``ActiveWorkflow.to_status_dict`` reports it.
+         */
+        WorkflowStatusPayload: {
+            /** Workflow Id */
+            workflow_id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Session Id */
+            session_id: string;
+            /** Current Step */
+            current_step: number;
+            /** Total Steps */
+            total_steps: number;
+            /** Is Paused */
+            is_paused: boolean;
+            /** Is Cancelled */
+            is_cancelled: boolean;
+            /** Automation Mode */
+            automation_mode: string;
+            /** Phase */
+            phase?: string | null;
+            /** Active Service */
+            active_service?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Steps */
+            steps: components["schemas"]["WorkflowStepStatusPayload"][];
+            /** User Interventions */
+            user_interventions: {
+                [key: string]: unknown;
+            }[];
+            /** Notification Config */
+            notification_config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Trigger Payload */
+            trigger_payload?: {
+                [key: string]: unknown;
+            } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * WorkflowStatusResponse
          * @description Response shape for GET /workflow/{workflow_id}/status.
          */
@@ -108792,6 +108910,32 @@ export interface components {
             dependencies: string[];
             /** Timeout Seconds */
             timeout_seconds?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * WorkflowStepStatusPayload
+         * @description One step as ``WorkflowStep.to_status_dict`` reports it.
+         */
+        WorkflowStepStatusPayload: {
+            /** Step Id */
+            step_id: string;
+            /** Command */
+            command: string;
+            /** Description */
+            description: string;
+            /** Status */
+            status: string;
+            /** Requires Confirmation */
+            requires_confirmation: boolean;
+            /** Risk Level */
+            risk_level: string;
+            /** Risk Tier */
+            risk_tier?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -151348,7 +151492,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WorkflowCreatedResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -151358,6 +151520,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
         };
@@ -151383,7 +151554,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WorkflowActionResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -151393,6 +151591,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
         };
@@ -151416,7 +151623,43 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WorkflowActionResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -151426,6 +151669,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
         };
@@ -151447,7 +151699,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AutomationWorkflowStatusResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -151457,6 +151736,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
         };
@@ -151476,7 +151764,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AutomationWorkflowListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
         };
@@ -151496,7 +151811,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AutomationWorkflowListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowErrorResponse"];
                 };
             };
         };
