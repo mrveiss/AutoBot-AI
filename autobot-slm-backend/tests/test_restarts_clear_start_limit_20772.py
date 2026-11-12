@@ -172,7 +172,9 @@ def test_the_tag_check_sees_a_missing_apply() -> None:
 
 def test_the_loader_reads_every_document_of_a_multi_document_file(tmp_path: Path) -> None:
     sample = tmp_path / "two.yml"
-    sample.write_text("---\n- name: a\n  hosts: x\n---\n- name: b\n  hosts: y\n---\n---\nkey: !vault |\n  abc\n", encoding="utf-8")
+    sample.write_text(
+        "---\n- name: a\n  hosts: x\n---\n- name: b\n  hosts: y\n---\n---\nkey: !vault |\n  abc\n", encoding="utf-8"
+    )
     assert [d.get("name", d.get("key")) for d in _load(sample)] == ["a", "b", None]
     broken = tmp_path / "broken.yml"
     broken.write_text("- a: [unclosed\n", encoding="utf-8")
