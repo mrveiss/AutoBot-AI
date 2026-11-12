@@ -82,11 +82,23 @@ async def _readable_batch(kb: Any, category_filter: str | None, offset: int, siz
     return advance, more, readable
 
 
-async def _listing_continues(kb: Any, category_filter: str | None, scanned: int, more: bool) -> bool:
-    """Whether facts remain past the scan cap; a plain listing is probed for one more, a category knows."""
-    if not more or category_filter:
-        return more
-    return bool(await kb.get_all_facts(limit=1, offset=scanned))
+async def _more_visible(kb: Any, category_filter: str | None, position: int, who: tuple) -> bool:
+    """Whether the caller may read a fact at or after *position*: the probe goes through the same
+    permission filter as the page it continues, so it never reports another owner's facts.
+
+    One scan window is probed; a window with nothing readable and a listing that goes on is the scan cap,
+    which the page reports as truncated.
+    """
+    probed = 0
+    while probed < GRAPH_SCAN_LIMIT:
+        size = min(SCAN_BATCH, GRAPH_SCAN_LIMIT - probed)
+        advance, more, readable = await _readable_batch(kb, category_filter, position + probed, size, who)
+        if readable:
+            return True
+        probed += advance
+        if not more:
+            return False
+    return True
 
 
 def parse_cursor(cursor: str | None) -> tuple:
@@ -123,7 +135,9 @@ async def _page_from_cursor(kb: Any, category_filter: str | None, max_facts: int
         if not more:
             break
         if len(taken) == max_facts or scanned >= GRAPH_SCAN_LIMIT:
-            next_cursor = _cursor(position, 0)
+            if await _more_visible(kb, category_filter, position, who):
+                next_cursor = _cursor(position, 0)
+            break
     return FactsPage(taken, None, False, next_cursor, True)
 
 
@@ -166,7 +180,7 @@ async def _page_from_start(kb: Any, category_filter: str | None, max_facts: int,
         if not more:
             break
         if scanned >= GRAPH_SCAN_LIMIT:
-            truncated = await _listing_continues(kb, category_filter, scanned, more)
+            truncated = await _more_visible(kb, category_filter, scanned, who)
     return FactsPage(
         visible[offset : offset + max_facts], len(visible), truncated, _cursor(scanned, 0) if truncated else None
     )

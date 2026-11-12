@@ -235,3 +235,23 @@ def test_a_malformed_cursor_is_refused():
         GraphRequest(cursor="-1:0")
     with pytest.raises(ValidationError):
         GraphRequest(cursor="abc")
+
+
+def _own_then_foreign(own, foreign):
+    return ListingKB(
+        [fact(f"mine{i}", ALICE) for i in range(own)] + [fact(f"theirs{i}", "bob") for i in range(foreign)]
+    )
+
+
+@pytest.mark.asyncio
+async def test_no_next_page_is_promised_for_facts_only_another_owner_holds(monkeypatch):
+    """The continuation probe reads through the permission filter, so it neither leaks nor promises a hidden page."""
+    monkeypatch.setattr("api.knowledge_graph_facts.GRAPH_SCAN_LIMIT", SCAN_BATCH)
+    kb = _own_then_foreign(3, SCAN_BATCH + 10)  # the cap ends inside another owner's facts, which go on past it
+    first = await visible_facts_page(kb, None, 5, 0, ALICE, None, [], False)
+    assert [f["fact_id"] for f in first.facts] == ["mine0", "mine1", "mine2"]
+    assert first.truncated is False and first.cursor is None, "nothing readable is left past the cap"
+    exact = await visible_facts_page(kb, None, 3, 0, ALICE, None, [], False, cursor="0:0")
+    assert len(exact.facts) == 3 and exact.cursor is None, "a page filled by the last readable fact ends the listing"
+    seen = await _walk_by_cursor(kb, 2)
+    assert seen == ["mine0", "mine1", "mine2"], "no item of another owner on any page"

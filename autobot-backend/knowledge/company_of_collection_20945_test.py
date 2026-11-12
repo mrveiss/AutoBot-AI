@@ -4,8 +4,6 @@
 # Author: mrveiss
 """company_of_collection parses exactly the names llc.kb.collections produces, logical and stored (#20945)."""
 
-import uuid
-
 import pytest
 
 from knowledge.backends.async_chromadb_adapter import _chroma_safe_name
@@ -13,7 +11,9 @@ from knowledge.graph_bucket_visibility import Viewer, collection_in_scope, compa
 from llc.kb.collections import KbCollectionManager, company_collection
 from tests.fixtures.graph_buckets_fakes_20945 import ALICE
 
-CID = str(uuid.uuid4())
+CID = (
+    "3f2b8c1e-5d4a-4e7b-9a60-1c2d3e4f5a6b"  # fixed: a per-process random id gives each xdist worker different test ids
+)
 SUFFIXES = (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX)
 
 
@@ -28,7 +28,7 @@ def test_every_name_the_llc_layer_produces_resolves_in_both_forms(company_id, su
 def test_an_admins_own_suffixed_collection_is_in_scope_and_anothers_is_not():
     viewer = Viewer(ALICE, CID, (), False, ledger=True)
     own = _chroma_safe_name(company_collection(CID, "agents"))
-    other = _chroma_safe_name(company_collection(str(uuid.uuid4()), "agents"))
+    other = _chroma_safe_name(company_collection("7a9d0e41-2b6c-4f83-8d15-6e0c9b2a4f37", "agents"))
     assert collection_in_scope("tenant_admin", own, viewer)
     assert not collection_in_scope("tenant_admin", other, viewer)
 
