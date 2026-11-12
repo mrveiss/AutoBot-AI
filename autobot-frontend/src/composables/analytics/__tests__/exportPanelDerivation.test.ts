@@ -26,7 +26,9 @@ import { ref, type Ref } from 'vue'
 const saved = vi.hoisted(() => vi.fn())
 const fetched = vi.hoisted(() => ({ onSuccess: undefined as undefined | ((d: unknown[]) => void) }))
 
-vi.mock('@autobot/ui', () => ({
+// Partial: the module graph (debugUtils -> log/createLogger) needs the rest of the kit.
+vi.mock('@autobot/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@autobot/ui')>()),
   saveTextFile: (...args: unknown[]) => saved(...args),
   isoTimestampStamp: () => 'TS',
 }))
