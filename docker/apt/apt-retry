@@ -47,6 +47,9 @@
 #   needs its own outer limit (a workflow step's timeout-minutes) sized for more than one attempt.
 #   After a hung install/upgrade, `dpkg --configure -a` is run (same bound) before the refresh, since
 #   a kill during unpack leaves dpkg interrupted and every retry would fail at once.
+# - NON-INTERACTIVE use only: each attempt runs under `timeout` without `--foreground`, i.e. in a background
+#   process group, so a command that reads the controlling TTY would be stopped and then killed at the bound.
+# - A caller's own step timeout can be the effective bound: 8 attempts of 600 s outlast a 15-minute step.
 
 if [ "$#" -eq 0 ]; then
     echo "usage: apt-retry COMMAND [ARG...]" >&2

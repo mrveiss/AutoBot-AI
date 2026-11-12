@@ -42,6 +42,9 @@ _EXPECT = _ROOT / "scripts/ci/clean_install_tty.exp"
 _CLEAN_INSTALL = _ROOT / ".github/workflows/clean-install.yml"
 _TIMEOUT_VAR = "APT_RETRY_ATTEMPT_TIMEOUT_S"
 _KILL_VAR = "APT_RETRY_KILL_AFTER_S"
+# the per-attempt bound of the behavioural tests: the retry attempt must also finish inside it, so a loaded
+# runner needs headroom; the stub hangs for 60 s, far beyond it
+_ATTEMPT_BOUND_S = 3
 
 
 def _install_steps() -> list[dict]:
@@ -142,7 +145,7 @@ def _run_hung(tmp_path: Path, hang_times: int, attempts: int, args=("apt-get", "
         "APT_RETRY_ATTEMPTS": str(attempts),
         "APT_RETRY_DELAY_S": "0",
         "APT_RETRY_TEE_GRACE_S": "1",
-        _TIMEOUT_VAR: "1",
+        _TIMEOUT_VAR: str(_ATTEMPT_BOUND_S),
         _KILL_VAR: "1",
     }
     start = time.monotonic()
@@ -162,7 +165,9 @@ def _alive(pid: int) -> bool:
 def test_a_hung_attempt_is_killed_with_its_children_logged_and_retried(tmp_path: Path) -> None:
     done, calls, pids, elapsed = _run_hung(tmp_path, hang_times=1, attempts=3)
     assert (done.returncode, calls) == (0, ["update", "update"]), done.stderr
-    assert "attempt 1/3 timed out (exit 124)" in done.stderr and "1s bound" in done.stderr, done.stderr
+    assert (
+        "attempt 1/3 timed out (exit 124)" in done.stderr and f"{_ATTEMPT_BOUND_S}s bound" in done.stderr
+    ), done.stderr
     assert elapsed < 20, f"the hang was not cut at the bound ({elapsed:.1f} s)"
     assert len(pids) == 1
     time.sleep(0.5)

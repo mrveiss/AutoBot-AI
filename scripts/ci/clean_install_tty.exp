@@ -11,9 +11,10 @@
 # The prompts follow the quick preflight checks, so a missed one fails in minutes; only the
 # installer's own run after them gets the long wait. The waits are set below the workflow step's
 # timeout-minutes (#21325): both prompt waits plus install_wait must end before the runner kills the
-# step, so the `installer timed out` diagnostic below is printed. A passing run takes ~10.5 minutes.
+# step, so the `installer timed out` diagnostic below is printed. Sized from the observed passing maximum
+# of the tty install step, 1209 s over 40 passing runs: 2 * 120 + 1500 = 1740 s, under the step's 1800 s.
 set prompt_wait 120
-set install_wait 900
+set install_wait 1500
 set timeout $prompt_wait
 set branch [expr {[info exists env(INSTALL_BRANCH)] ? $env(INSTALL_BRANCH) : ""}]
 set fh [open $env(EXPECT_PASSWORD_FILE) r]

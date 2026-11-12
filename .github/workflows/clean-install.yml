@@ -41,9 +41,9 @@ jobs:
     # A fork's branch is not on this repository, so the installer could not clone it.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    # #21325: passing runs of this job took 8.0 to 10.9 minutes (runs 43134163000, 43145017296); 30 is about
-    # 2.75x the slowest, where 75 let a hung apt call hold the job for an hour.
-    timeout-minutes: 30
+    # #21325: observed passing maximum 1228 s (job) over 40 passing runs; 40 minutes is about 1.95x that,
+    # where 75 let a hung apt call hold the job for an hour.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -97,6 +97,7 @@ jobs:
       - name: Pre-add the Python 3.14 PPA through the retry wrapper
         # Passing runs took 10 to 11 s. The wrapper bounds each attempt (docker/apt/apt-retry), so this is the
         # outer limit: one hung attempt is killed and retried inside it, and a second hang fails the step.
+        # The step timeout, not the wrapper's attempt cap, is the effective bound here (8 attempts exceed it).
         timeout-minutes: 15
         run: |
           sudo sh docker/apt/apt-retry add-apt-repository -y ppa:deadsnakes/ppa
@@ -142,8 +143,8 @@ jobs:
       # log is public, so that line is masked on its way to the log.
       - name: "Step: install (no tty)"
         if: matrix.mode == 'no-tty'
-        # Passing runs took 7.7 and 10.5 minutes; 21 is 2x the slowest.
-        timeout-minutes: 21
+        # Observed passing maximum 847 s over 40 passing runs; 30 minutes leaves room for a slow runner.
+        timeout-minutes: 30
         run: |
           set -euo pipefail
           setsid bash -c "${INSTALL_CMD}" </dev/null 2>&1 | bash scripts/ci/mask_install_summary.sh \
@@ -157,10 +158,10 @@ jobs:
 
       - name: "Step: install (tty)"
         if: matrix.mode == 'tty'
-        # Passing runs took 8.0 and 10.3 minutes; 21 is 2x the slowest. scripts/ci/clean_install_tty.exp
-        # gives up earlier (both prompt waits plus its install wait), so its own `installer timed out`
-        # and last output line are printed before the runner kills the step.
-        timeout-minutes: 21
+        # Observed passing maximum 1209 s (tty install step) over 40 passing runs; 30 minutes. scripts/ci/clean_install_tty.exp
+        # gives up earlier (2 * 120 s prompt waits + 1500 s install wait = 1740 s < 1800 s), so its own
+        # `installer timed out` and last output line are printed before the runner kills the step.
+        timeout-minutes: 30
         run: |
           set -euo pipefail
           typed="${RUNNER_TEMP}/typed-at-prompt"
