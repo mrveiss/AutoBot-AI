@@ -72,7 +72,7 @@ def _real_service_lookups():
         patch.object(TeamService, "_find_team_by_name", AsyncMock(return_value=None)),
         patch.object(TeamService, "get_team", AsyncMock(return_value=_team())),
         patch.object(TeamService, "_get_membership", AsyncMock(return_value=None)),
-        patch(f"{_SERVICE}.run_after_commit"),
+        patch(f"{_SERVICE}.defer_until_commit"),
     )
 
 
