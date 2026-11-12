@@ -1189,6 +1189,17 @@
       when: "'backend' in group_names"
       tags: [backend, env]
 
+    # #21343: loaded BEFORE the key proposal below (it was after the DB-credential reads): `backend_port`
+    # is the one the backend's unit and env render from, so the proposal's URL cannot disagree with the
+    # port the service listens on, and it exists on the registry-built inventory, which sets none. Tagged
+    # `always` ONLY (not `always, env`: a skip tag matches any tag on the task), so neither `--tags` nor
+    # `--skip-tags` of a reader's tag can run the reader without it.
+    - name: "[PLAY 2] Backend | Load shared backend env vars (#2727)"
+      ansible.builtin.include_vars:
+        file: vars/backend-env.yml
+      when: "'backend' in group_names"
+      tags: [always]
+
     # #20750: a mismatch is proposed for approval; an approved realign is claimed here and applied by
     # this run's render, restart and the verify step after "Wait for API to be ready".
     - name: "[PLAY 2] Backend | Propose or claim re-aligning the internal key (#20750)"
@@ -1198,7 +1209,7 @@
           tags: [backend, env]
       vars:
         internal_api_key_loaded_file: "{{ autobot.base_dir }}/autobot-backend/.env"
-        internal_api_key_backend_url: "http://127.0.0.1:{{ infrastructure.ports.backend }}"  # pragma: allowlist secret -- a URL
+        internal_api_key_backend_url: "http://127.0.0.1:{{ backend_port }}"  # pragma: allowlist secret -- a URL; vars/backend-env.yml (#21343)
       when: "'backend' in group_names"
       tags: [backend, env]
 
@@ -1246,12 +1257,6 @@
         apply:
           become: true
           tags: [backend, env]
-      when: "'backend' in group_names"
-      tags: [backend, env]
-
-    - name: "[PLAY 2] Backend | Load shared backend env vars (#2727)"
-      ansible.builtin.include_vars:
-        file: vars/backend-env.yml
       when: "'backend' in group_names"
       tags: [backend, env]
 
@@ -1480,17 +1485,17 @@
 
     - name: "[PLAY 2] Backend | Wait for API to be ready"
       uri:
-        # uvicorn binds plain HTTP on localhost:8001 (backend_port); nginx holds
+        # uvicorn binds plain HTTP on localhost:<backend_port>; nginx holds
         # TLS on 443. There is NO 8443 listener (#957/#10378). Probe the direct
         # backend on the loopback — it does not depend on nginx (deployed after
         # this task) and needs no cert validation (#10650).
         #
         # #11455: run ON the backend node (no delegate_to) so 127.0.0.1 is the
-        # node's own loopback. 8001 is bound to localhost, so it is unreachable
+        # node's own loopback. backend_port is bound to localhost, so it is unreachable
         # from the controller — delegating to localhost only worked for a
         # co-located single-node backend and spun 42×10s against the wrong host
         # for any remote backend, aborting the rollout via any_errors_fatal.
-        url: "http://127.0.0.1:8001/api/health"
+        url: "http://127.0.0.1:{{ backend_port }}/api/health"  # the port the unit renders from (#21343)
         status_code: 200
       register: backend_health_check
       until: backend_health_check.status == 200
@@ -1505,7 +1510,7 @@
         apply:
           tags: [backend, restart]
       vars:
-        internal_api_key_backend_url: "http://127.0.0.1:{{ infrastructure.ports.backend }}"  # pragma: allowlist secret -- a URL
+        internal_api_key_backend_url: "http://127.0.0.1:{{ backend_port }}"  # pragma: allowlist secret -- a URL; vars/backend-env.yml (#21343)
       when:
         - "'backend' in group_names"
         - internal_api_key_realign_applying | default(false) | bool
@@ -2566,6 +2571,14 @@
         fleet_nodes_before.json is defined and
         (fleet_nodes_before.json.database != 'healthy' or fleet_nodes_health.json.database | default('') != 'healthy')
 
+    # #21343: where the credential re-alignment stands, from each node that reported it; the proposal
+    # step records it and never fails the update.
+    - name: "Collect the credential re-alignment reports (#21343)"
+      ansible.builtin.set_fact:
+        internal_key_realign_lines: >-
+          {{ groups['infrastructure'] | default([]) | map('extract', hostvars, 'internal_api_key_realign_report')
+             | select('defined') | list }}
+
     - name: Display update summary
       debug:
         msg:
@@ -2580,4 +2593,6 @@
           - ""
           - "  SLM Admin:     https://{{ slm_host | default('(not-deployed)') }}/"
           - "  User Frontend: https://{{ frontend_host | default('(not-deployed)') }}/"
+          - ""
+          - "  Credential re-alignment: {{ internal_key_realign_lines | default([]) | join(' | ') or 'nothing pending' }}"
           - ""
