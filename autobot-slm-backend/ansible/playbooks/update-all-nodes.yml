@@ -1191,13 +1191,14 @@
 
     # #21343: loaded BEFORE the key proposal below (it was after the DB-credential reads): `backend_port`
     # is the one the backend's unit and env render from, so the proposal's URL cannot disagree with the
-    # port the service listens on, and it exists on the registry-built inventory, which sets none. Its tags
-    # cover every task that reads it (the health probe and the key check run under `restart`).
+    # port the service listens on, and it exists on the registry-built inventory, which sets none. Tagged
+    # `always` ONLY (not `always, env`: a skip tag matches any tag on the task), so neither `--tags` nor
+    # `--skip-tags` of a reader's tag can run the reader without it.
     - name: "[PLAY 2] Backend | Load shared backend env vars (#2727)"
       ansible.builtin.include_vars:
         file: vars/backend-env.yml
       when: "'backend' in group_names"
-      tags: [backend, env, restart]
+      tags: [always]
 
     # #20750: a mismatch is proposed for approval; an approved realign is claimed here and applied by
     # this run's render, restart and the verify step after "Wait for API to be ready".

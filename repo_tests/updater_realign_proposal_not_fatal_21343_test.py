@@ -195,14 +195,21 @@ def test_every_infrastructure_host_entry_uses_the_guarded_group_idiom() -> None:
     assert not bad, f"host entries not using the guarded group idiom: {bad}"
 
 
-def test_the_backend_vars_load_runs_for_every_tag_selection_that_reads_it() -> None:
-    """A consumer under a tag the include_vars lacks reads an undefined variable under `--tags <that tag>`."""
+def test_the_backend_vars_load_is_always_tagged_and_precedes_every_reader() -> None:
+    """The load carries EXACTLY `always`: a skip tag matches any tag on a task, so `[always, env]` would be skipped
+    by `--skip-tags env` while a `restart` reader still ran. `--skip-tags always` is the one selection that skips
+    it, by design. The readers below document who depends on it; the load must come before the first of them.
+    """
     tasks = _play2_tasks()
     load = _named(tasks, "Load shared backend env vars")
+    assert load.get("tags") == ["always"], "the vars load must be tagged exactly `always`"
+    assert load.get("when") == "'backend' in group_names", "the load stays limited to backend nodes"
     file = _ANSIBLE / "playbooks" / load["ansible.builtin.include_vars"]["file"]
     keys = set(yaml.safe_load(file.read_text(encoding="utf-8")))
-    covered = set(load.get("tags", []))
-    consumers = [t for t in tasks if t is not load and any(re.search(rf"\{{\{{[^}}]*\b{k}\b", _dump(t)) for k in keys)]
-    assert consumers, "expected tasks that read the vars file's variables"
-    uncovered = [t["name"] for t in consumers if "always" not in covered and not set(t.get("tags", [])) <= covered]
-    assert not uncovered, f"tasks whose tags the vars load does not carry: {uncovered}"
+    readers = [
+        i
+        for i, t in enumerate(tasks)
+        if t is not load and any(re.search(rf"\{{\{{[^}}]*\b{k}\b", _dump(t)) for k in keys)
+    ]
+    assert readers, "expected tasks that read the vars file's variables"
+    assert tasks.index(load) < readers[0], "the vars load must come before its first reader"
