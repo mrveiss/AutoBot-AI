@@ -10,7 +10,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autobot_shared.redis_utils import COMPARE_HOLDER_AND_DELETE_LUA
 from llc.scheduler.session_checkpointer import SessionCheckpointer, recover_incomplete_runs
 
 
@@ -82,30 +81,38 @@ async def test_write_checkpoint_correct_key_ttl_payload() -> None:
 
 
 @pytest.mark.asyncio
-async def test_recover_incomplete_runs_marks_interrupted_releases_lock_requeues() -> None:
-    """recover_incomplete_runs marks run interrupted, releases checkout lock, re-queues agent."""
-    wid = str(uuid.uuid4())
-    run = _make_run(status="running", work_item_id=wid)
-    factory = _make_factory([run])
+async def test_recover_incomplete_runs_marks_interrupted_releases_checkouts_requeues() -> None:
+    """Startup recovery interrupts the run, gives back every checkout it made (#19601), and re-queues the agent."""
+    import fakeredis
 
+    from llc.tests._run_checkout_world import Item, RoutedSession
+
+    run = _make_run(status="running")
+    mine, theirs = Item(run.company_id, run.id), Item(run.company_id, uuid.uuid4())
+    session = RoutedSession([run], [mine, theirs])
+    factory = MagicMock()
+    factory.return_value.__aenter__ = AsyncMock(return_value=session)
+    factory.return_value.__aexit__ = AsyncMock(return_value=False)
+    fences = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    for item in (mine, theirs):
+        await fences.set(f"llc:checkout:{item.id}", item.fence)
     mock_redis = AsyncMock()
-    mock_redis.eval = AsyncMock(return_value=1)
     mock_redis.zadd = AsyncMock()
 
     with (
         patch("llc.scheduler.session_checkpointer.get_async_session_factory", return_value=factory),
-        patch(
-            "llc.scheduler.session_checkpointer.get_async_redis_client",
-            new_callable=AsyncMock,
-            return_value=mock_redis,
-        ),
+        patch("llc.scheduler.session_checkpointer.get_async_redis_client", AsyncMock(return_value=mock_redis)),
+        patch("llc.services.run_checkouts.get_async_redis_client", AsyncMock(return_value=fences)),
+        patch("llc.services.run_checkouts._activity_log", MagicMock(record=AsyncMock())),
     ):
         await recover_incomplete_runs()
 
     assert run.status == "interrupted"
     assert run.finished_at is not None
-    mock_redis.eval.assert_called_once_with(COMPARE_HOLDER_AND_DELETE_LUA, 1, f"llc:checkout:{wid}", str(run.agent_id))
-    mock_redis.delete.assert_not_called()
+    assert mine.checkout_run_id is None and mine.checkout_locked_at is None
+    assert await fences.get(f"llc:checkout:{mine.id}") is None
+    assert theirs.checkout_run_id is not None
+    assert await fences.get(f"llc:checkout:{theirs.id}") == theirs.fence
     mock_redis.zadd.assert_called_once()
     zadd_args = mock_redis.zadd.call_args[0]
     assert zadd_args[0] == "llc:heartbeat:schedule"

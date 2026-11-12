@@ -23,18 +23,20 @@ from sqlalchemy import select
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_holder
 from user_management.database import get_async_session_factory
 
 from ..models.enums import LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
+from ..services.run_checkouts import ReleasedCheckout, ReleaseWhy, drop_released_fences, release_checkouts_for_run
 from .base import PollLoopScheduler
 
 logger = get_logger(__name__)
 
 _CHECKPOINT_KEY_PREFIX = "llc:session:checkpoint:"
-_CHECKOUT_KEY_PREFIX = "llc:checkout:"
 _SCHEDULE_KEY = "llc:heartbeat:schedule"
+
+#: Why a run interrupted at startup gives back its checkouts: the system, on a restart that ended the run.
+_RECOVERY_RELEASE = ReleaseWhy(reason=LLCRunStatus.INTERRUPTED.value, source="session_checkpointer")
 
 
 def _resolve_int_env(name: str, default: int) -> int:
@@ -131,6 +133,7 @@ async def recover_incomplete_runs() -> None:
 
             redis = await get_async_redis_client()
             now_ts = time.time()
+            released: list[ReleasedCheckout] = []
 
             for run in runs:
                 try:
@@ -140,13 +143,7 @@ async def recover_incomplete_runs() -> None:
                     run.finished_at = datetime.now(tz=timezone.utc)
                     session.add(run)
 
-                    if run.work_item_id and redis is not None:
-                        try:
-                            await delete_if_holder(
-                                redis, f"{_CHECKOUT_KEY_PREFIX}{run.work_item_id}", str(run.agent_id)
-                            )
-                        except Exception:
-                            logger.debug("Redis DEL checkout key failed for run %s (swallowed)", run_id)
+                    released.extend(await release_checkouts_for_run(session, run, _RECOVERY_RELEASE))
 
                     if redis is not None:
                         try:
@@ -167,5 +164,7 @@ async def recover_incomplete_runs() -> None:
             except Exception:
                 logger.exception("SessionCheckpointer: commit failed during recovery (swallowed)")
                 await session.rollback()
+            else:
+                await drop_released_fences(released)  # only once the DB release is durable
     except Exception:
         logger.exception("SessionCheckpointer: recover_incomplete_runs failed (swallowed)")

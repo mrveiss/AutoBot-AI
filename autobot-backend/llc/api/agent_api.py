@@ -53,6 +53,7 @@ async def get_next_work_item(request: Request) -> Dict[str, Any]:
     from user_management.database import get_async_session_factory
 
     from ..services.accessors import get_work_item_service
+    from ..services.run_checkouts import live_run_id
     from ..services.work_item_queue import checkout_next
 
     agent_id, company_id = agent_context(request)
@@ -70,8 +71,13 @@ async def get_next_work_item(request: Request) -> Dict[str, Any]:
 
     factory = get_async_session_factory()
     async with factory() as session:
+        # The run is the agent's own, found server-side from its credential: a claim is made inside a run or
+        # not at all, so the run can always release it (#19600).
+        run_id = await live_run_id(session, agent_id, company_id)
+        if run_id is None:
+            raise HTTPException(status_code=409, detail="No active run for this agent; work is claimed during a run")
         svc = get_work_item_service()
-        item = await checkout_next(session, svc, agent_id=str(node_uuid), company_id=company_id)
+        item = await checkout_next(session, svc, agent_id=str(node_uuid), company_id=company_id, run_id=str(run_id))
         await session.commit()
 
     if item is None:

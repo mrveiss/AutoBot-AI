@@ -20,6 +20,8 @@ import pytest
 from sqlalchemy.dialects import postgresql
 
 from llc.models.enums import LLCRunStatus
+from llc.services import run_checkouts
+from llc.services.run_checkouts import ReleasedCheckout
 from testkit.fake_async_session import FakeAsyncSession
 from testkit.fake_result import FakeResult
 from testkit.module_snapshot import reloaded
@@ -144,6 +146,7 @@ class _Run:
 
     def __init__(self, age_seconds: int = 3600):
         self.id = uuid.uuid4()
+        self.company_id = uuid.uuid4()
         self.status = "running"
         self.finished_at = None
         self.error = None
@@ -172,6 +175,11 @@ class _Item:
         self.checkout_run_id = str(checkout_run_id) if checkout_run_id else None
         self.checkout_locked_at = datetime.now(timezone.utc) if checkout_run_id else None
         self.version = 1
+
+
+def _fence_value(item) -> str:
+    """What ``checkout`` wrote as the fence: the agent tagged with the run that made the checkout."""
+    return f"{item.assignee_agent_id}#{item.checkout_run_id}"
 
 
 def _bound_values(statement) -> list:
@@ -272,14 +280,14 @@ def world(sweep, monkeypatch):
         return session
 
     monkeypatch.setattr(sweep, "get_async_session_factory", lambda: factory)
-    monkeypatch.setattr(sweep, "_activity_log", state.audit)
+    monkeypatch.setattr(run_checkouts, "_activity_log", state.audit)
 
     async def redis():
         return state.redis or state.fences
 
     state.redis = None
 
-    monkeypatch.setattr(sweep, "get_async_redis_client", redis)
+    monkeypatch.setattr(run_checkouts, "get_async_redis_client", redis)
     return state
 
 
@@ -361,7 +369,7 @@ async def test_a_stalled_run_releases_its_checkout_and_its_lease_and_is_marked_s
     world.leases.append(lease)
     world.items.append(item)
     fence = f"llc:checkout:{item.id}"
-    await world.fences.set(fence, str(item.assignee_agent_id))
+    await world.fences.set(fence, _fence_value(item))
 
     report = await sweep._async_sweep()
 
@@ -433,13 +441,13 @@ async def test_a_checkout_the_stalled_run_did_not_make_is_untouched(sweep, world
     mine, theirs, unclaimed = _Item(run.id), _Item(other.id), _Item()
     world.runs.extend([run, other])
     world.items.extend([mine, theirs, unclaimed])
-    await world.fences.set(f"llc:checkout:{theirs.id}", str(theirs.assignee_agent_id))
+    await world.fences.set(f"llc:checkout:{theirs.id}", _fence_value(theirs))
 
     assert (await sweep._async_sweep())["checkouts"] == 1
     assert mine.checkout_run_id is None
     assert theirs.checkout_run_id == str(other.id) and theirs.version == 1
     assert unclaimed.checkout_run_id is None and unclaimed.version == 1
-    assert await world.fences.get(f"llc:checkout:{theirs.id}") == str(theirs.assignee_agent_id)
+    assert await world.fences.get(f"llc:checkout:{theirs.id}") == _fence_value(theirs)
 
 
 @pytest.mark.asyncio
@@ -460,8 +468,8 @@ async def test_a_fence_naming_a_newer_holder_is_left_alone(sweep, world):
 def test_the_checkout_lookup_is_keyed_by_the_run_and_row_locked(sweep):
     """The release is scoped by ``checkout_run_id`` -- the run's own key -- and waits
     for, rather than skips, an item another transaction holds."""
-    sql = str(sweep._checkouts_held_by(uuid.uuid4()).compile(dialect=postgresql.dialect()))
-    assert "checkout_run_id" in sql
+    sql = str(run_checkouts.checkouts_held_by(uuid.uuid4(), uuid.uuid4()).compile(dialect=postgresql.dialect()))
+    assert "checkout_run_id" in sql and "company_id" in sql
     assert "FOR UPDATE" in sql and "SKIP LOCKED" not in sql
 
 
@@ -477,7 +485,7 @@ async def test_a_checkout_landing_mid_release_keeps_its_fence(sweep, world):
     world.runs.append(run)
     world.items.append(item)
     fence = f"llc:checkout:{item.id}"
-    await world.fences.set(fence, str(item.assignee_agent_id))
+    await world.fences.set(fence, _fence_value(item))
     world.redis = _CheckoutLandsMidRelease(world.fences, fence, "agent-newer")
 
     report = await sweep._async_sweep()
@@ -497,7 +505,7 @@ async def test_a_redis_client_failure_after_commit_does_not_fail_the_sweep(sweep
     async def broken():
         raise ConnectionError("redis unreachable")
 
-    monkeypatch.setattr(sweep, "get_async_redis_client", broken)
+    monkeypatch.setattr(run_checkouts, "get_async_redis_client", broken)
 
     report = await sweep._async_sweep()
 
@@ -518,10 +526,15 @@ async def test_one_failing_fence_does_not_stop_the_next(sweep, world, monkeypatc
         await world.fences.delete(key)
         return True
 
-    monkeypatch.setattr(sweep, "delete_if_holder", flaky)
-    await world.fences.set("llc:checkout:b", "agent-b")
+    monkeypatch.setattr(run_checkouts, "delete_if_value", flaky)
+    await world.fences.set("llc:checkout:b", "agent-b#run")
 
-    await sweep._drop_checkout_fences([("a", "agent-a"), ("b", "agent-b")])
+    await run_checkouts.drop_released_fences(
+        [
+            ReleasedCheckout(None, "llc:checkout:a", "agent-a#run"),
+            ReleasedCheckout(None, "llc:checkout:b", "agent-b#run"),
+        ]
+    )
 
     assert calls == ["llc:checkout:a", "llc:checkout:b"]
     assert await world.fences.get("llc:checkout:b") is None

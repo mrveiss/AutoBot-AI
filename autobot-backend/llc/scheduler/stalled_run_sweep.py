@@ -33,7 +33,8 @@ itself acquired, and nothing else:
 1. **Workspace leases** -- every ``LLCWorkspaceLease`` whose ``heartbeat_run_id`` is
    the run (``release_for_run``), reason ``STALL_RELEASE_REASON``.
 2. **Work-item checkouts** -- every ``LLCWorkItem`` whose ``checkout_run_id`` is the
-   run: ``checkout_run_id`` and ``checkout_locked_at`` cleared, ``version`` bumped,
+   run, released by ``llc.services.run_checkouts`` (the one release a cancel and the
+   liveness monitor use as well, #19601): ``checkout_run_id`` and ``checkout_locked_at`` cleared, ``version`` bumped,
    one ``work_item.updated`` activity entry each with ``reason="stalled"``. After the
    commit, the item's ``llc:checkout:{id}`` Redis fence is dropped when it still
    names the checkout's holder.
@@ -60,14 +61,16 @@ from sqlalchemy import func, select
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_holder
 from autobot_shared.worker_loop import run_in_worker_loop
-from llc.models.activity import ActorType
-from llc.models.enums import ActivityEventType, LLCRunStatus
+from llc.models.enums import LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
-from llc.models.work_item import LLCWorkItem
-from llc.services.activity_log import LLCActivityLogService
+from llc.services.run_checkouts import (
+    NON_TERMINAL_STATUSES,
+    ReleasedCheckout,
+    ReleaseWhy,
+    drop_released_fences,
+    release_checkouts_for_run,
+)
 from llc.services.workspace_lease import release_for_run
 from user_management.database import get_async_session_factory
 from utils.celery_reliability import (
@@ -85,9 +88,6 @@ logger = get_logger(__name__)
 # the failure it exists to catch stays invisible for longer.
 STALL_TIMEOUT_SECONDS = env_int("LLC_RUN_STALL_TIMEOUT_SECONDS", 6 * 60 * 60)
 
-#: Statuses a run can sit in while still believed to be alive.
-NON_TERMINAL_STATUSES = (LLCRunStatus.QUEUED.value, LLCRunStatus.RUNNING.value)
-
 #: Written to ``error`` for the human-readable detail. It is no longer the only
 #: thing distinguishing a stall from an adapter timeout — ``STALLED`` is — so a
 #: re-wording here can no longer make the two indistinguishable.
@@ -103,8 +103,8 @@ STALL_RELEASE_REASON = "run stalled: workspace released by the stalled-run sweep
 #: it had none (#16817 AC4).
 STALL_CHECKOUT_REASON = LLCRunStatus.STALLED.value
 
-#: Append-only audit sink for checkout releases. Module-level so tests can swap it.
-_activity_log = LLCActivityLogService()
+#: Why and by whom a stalled run's checkouts are released: the system, on the sweep's own decision.
+_STALL_RELEASE = ReleaseWhy(reason=STALL_CHECKOUT_REASON, source="stalled_run_sweep")
 
 
 @shared_task(
@@ -168,96 +168,26 @@ def _stalled_candidates(cutoff: datetime):
     )
 
 
-def _checkouts_held_by(run_id):
-    """Work items whose checkout this run made. The run-scoped claim, by its own key.
-
-    Plain ``FOR UPDATE`` (not SKIP LOCKED): an item another transaction is touching
-    is waited for, and Postgres re-checks the predicate once the lock is granted, so
-    an item released or re-checked-out meanwhile drops out instead of being cleared.
-    """
-    return select(LLCWorkItem).where(LLCWorkItem.checkout_run_id == str(run_id)).with_for_update()
-
-
-async def _release_checkout(session, item: LLCWorkItem, run_id) -> None:
-    """Clear one checkout the run held and record why, in the caller's transaction."""
-    held = item.checkout_run_id
-    item.checkout_run_id = None
-    item.checkout_locked_at = None
-    item.version += 1
-    await _activity_log.record(
-        session,
-        company_id=str(item.company_id),
-        actor_type=ActorType.SYSTEM,
-        actor_id=None,
-        event_type=ActivityEventType.WORK_ITEM_UPDATED,
-        entity_type="work_item",
-        entity_id=str(item.id),
-        before={"checkout_run_id": held},
-        after={"checkout_run_id": None},
-        metadata={"reason": STALL_CHECKOUT_REASON, "heartbeat_run_id": str(run_id), "source": "stalled_run_sweep"},
-    )
-
-
-async def release_checkouts_for_run(session, run_id) -> list[LLCWorkItem]:
-    """Release every work-item checkout *run_id* made; idempotent by its predicate."""
-    result = await session.execute(_checkouts_held_by(run_id))
-    items = [item for item in result.scalars().all() if item.checkout_run_id == str(run_id)]
-    for item in items:
-        await _release_checkout(session, item, run_id)
-    return items
-
-
-async def _drop_checkout_fences(fences: list[tuple[str, str]]) -> None:
-    """Drop each released item's Redis fence, after the DB release has committed.
-
-    The fence (``llc:checkout:{id}``, value = holder) is a fast path in front of the
-    row lock, not the lock itself, and it carries its own TTL. A fence that now names
-    a different holder belongs to a newer checkout and is left alone -- decided in one
-    atomic compare-and-delete, so a checkout landing mid-release keeps its fence.
-    Nothing here may fail the task: the DB release is authoritative and has already
-    committed, and a fence left behind expires on its TTL.
-    """
-    if not fences:
-        return
-    try:
-        redis = await get_async_redis_client()
-    except Exception as exc:
-        logger.warning("Stalled-run sweep has no Redis client for %d checkout fence(s): %s", len(fences), exc)
-        return
-    if redis is None:
-        return
-    for item_id, holder in fences:
-        key = f"llc:checkout:{item_id}"
-        try:
-            await delete_if_holder(redis, key, holder)
-        except Exception as exc:
-            logger.warning("Stalled-run sweep could not drop checkout fence %s: %s", key, exc)
-
-
 def _mark_stalled(run: LLCHeartbeatRun) -> None:
     run.status = LLCRunStatus.STALLED.value
     run.finished_at = datetime.now(timezone.utc)
     run.error = STALL_ERROR.format(seconds=STALL_TIMEOUT_SECONDS)
 
 
-async def _release_held(session, run: LLCHeartbeatRun, report: dict, fences: list) -> None:
+async def _release_held(session, run: LLCHeartbeatRun, report: dict, fences: list[ReleasedCheckout]) -> None:
     """Everything the run acquired, inside the transaction that marks it stalled."""
     leases = await release_for_run(session, run.id, STALL_RELEASE_REASON)
-    items = await release_checkouts_for_run(session, run.id)
+    released = await release_checkouts_for_run(session, run, _STALL_RELEASE)
     report["workspace_leases"] += len(leases)
-    report["checkouts"] += len(items)
-    # Source of truth for the holder: checkout() SETs its agent_id as the fence value
-    # (llc/services/work_item_service.py:490) and writes the same agent_id to
-    # assignee_agent_id in that transaction (:513). A later reassignment makes the two
-    # differ; the fence is then left to its TTL, never deleted from under its holder.
-    fences.extend((str(item.id), str(item.assignee_agent_id)) for item in items if item.assignee_agent_id)
+    report["checkouts"] += len(released)
+    fences.extend(released)
 
 
 async def _async_sweep() -> dict:
     """Close out non-terminal runs older than the cutoff and release what they held."""
     factory = get_async_session_factory()
     report = {"stalled": 0, "workspace_leases": 0, "checkouts": 0}
-    fences: list[tuple[str, str]] = []
+    fences: list[ReleasedCheckout] = []
     async with factory() as session:
         result = await session.execute(_stalled_candidates(stall_cutoff()))
         for run in result.scalars().all():
@@ -267,7 +197,7 @@ async def _async_sweep() -> dict:
             # run this worker did not claim is not this worker's to release.
             await _release_held(session, run, report, fences)
         await session.commit()
-    await _drop_checkout_fences(fences)
+    await drop_released_fences(fences)
     # Logged unconditionally: a sweep that found nothing and a sweep that did not
     # run must not look the same in the logs.
     logger.info(
@@ -286,7 +216,6 @@ __all__ = [
     "STALL_ERROR",
     "STALL_RELEASE_REASON",
     "STALL_CHECKOUT_REASON",
-    "release_checkouts_for_run",
     "NON_TERMINAL_STATUSES",
     "run_age_anchor",
     "stall_cutoff",

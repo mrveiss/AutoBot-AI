@@ -10,7 +10,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autobot_shared.redis_utils import COMPARE_HOLDER_AND_DELETE_LUA
 from llc.models.activity import ActorType, LLCActivityLog
 from llc.models.enums import ActivityEventType
 from llc.scheduler.liveness_monitor import LivenessMonitor, run_id_label
@@ -59,7 +58,6 @@ def _mock_session(stuck_runs: list, work_item: object | None = None) -> AsyncMoc
 def _make_run(
     status: str = "running",
     minutes_ago: int = 35,
-    work_item_id: str | None = None,
 ) -> MagicMock:
     run = MagicMock()
     run.id = uuid.uuid4()
@@ -68,7 +66,6 @@ def _make_run(
     run.status = status
     run.started_at = datetime.now(tz=timezone.utc) - timedelta(minutes=minutes_ago)
     run.finished_at = None
-    run.work_item_id = uuid.UUID(work_item_id) if work_item_id else None
     return run
 
 
@@ -126,41 +123,6 @@ async def test_stuck_run_marked_timed_out() -> None:
 
     assert run.status == "timed_out"
     assert run.finished_at is not None
-
-
-@pytest.mark.asyncio
-async def test_checkout_lock_released_on_recovery() -> None:
-    """The checkout fence is released, compare-and-delete on the run's agent, when work_item_id is set."""
-    wid = str(uuid.uuid4())
-    run = _make_run(status="running", minutes_ago=40, work_item_id=wid)
-
-    mock_redis = AsyncMock()
-    mock_redis.eval = AsyncMock(return_value=1)
-    # exists() must be falsy or _agent_deliberately_paused() treats the agent as
-    # paused and skips the recovery flow under test.
-    mock_redis.exists = AsyncMock(return_value=0)
-
-    with (
-        patch(
-            "llc.scheduler.liveness_monitor.get_async_redis_client",
-            new_callable=AsyncMock,
-            return_value=mock_redis,
-        ),
-        patch("llc.adapters.get_adapter_for_agent", new_callable=AsyncMock, return_value=None),
-        patch("llc.scheduler.liveness_monitor.get_work_item_service"),
-    ):
-        session = _mock_session([run])
-
-        factory = MagicMock()
-        factory.return_value.__aenter__ = AsyncMock(return_value=session)
-        factory.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        monitor = LivenessMonitor(poll_interval=9999)
-        with patch("llc.scheduler.liveness_monitor.get_async_session_factory", return_value=factory):
-            await monitor._check_once()
-
-    mock_redis.eval.assert_called_once_with(COMPARE_HOLDER_AND_DELETE_LUA, 1, f"llc:checkout:{wid}", run.agent_id)
-    mock_redis.delete.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -312,3 +274,44 @@ async def test_a_failed_audit_undoes_that_run_alone_and_the_other_runs_still_rec
     adapter.cancel.assert_awaited_once_with({}, str(second.id))
     assert session.rollbacks == 1 and session.commits == 1
     assert [row.entity_id for row in _audit_rows(session)] == [second.id]
+
+
+# --- the run's checkouts are released by the run's own key (#19601) -----------------------------
+
+
+@pytest.mark.asyncio
+async def test_recovery_releases_every_checkout_the_run_made_and_their_fences() -> None:
+    import fakeredis
+
+    from llc.tests._run_checkout_world import Item, RoutedSession
+
+    run = _make_run()
+    mine = [Item(run.company_id, run.id), Item(run.company_id, run.id)]
+    theirs = Item(run.company_id, uuid.uuid4())
+    session = RoutedSession([run], [*mine, theirs])
+    fences = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    for item in (*mine, theirs):
+        await fences.set(f"llc:checkout:{item.id}", item.fence)
+    factory = MagicMock()
+    factory.return_value.__aenter__ = AsyncMock(return_value=session)
+    factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("llc.scheduler.liveness_monitor.get_async_session_factory", return_value=factory),
+        patch("llc.scheduler.liveness_monitor.agent_ref_block_reason", AsyncMock(return_value=None)),
+        patch("llc.scheduler.liveness_monitor.get_async_redis_client", AsyncMock(return_value=None)),
+        patch("llc.services.run_checkouts.get_async_redis_client", AsyncMock(return_value=fences)),
+        patch("llc.scheduler.liveness_monitor.get_work_item_service", return_value=MagicMock(create=AsyncMock())),
+        patch("llc.adapters.get_adapter_for_agent", AsyncMock(return_value=None)),
+    ):
+        await LivenessMonitor(poll_interval=9999)._check_once()
+
+    assert run.status == "timed_out"
+    for item in mine:
+        assert item.checkout_run_id is None and item.checkout_locked_at is None and item.status == "blocked"
+        assert await fences.get(f"llc:checkout:{item.id}") is None
+    assert theirs.checkout_run_id is not None and theirs.status == "in_progress"
+    assert await fences.get(f"llc:checkout:{theirs.id}") == theirs.fence
+    released = [r for r in _audit_rows(session) if r.entity_type == "work_item"]
+    assert sorted(r.entity_id for r in released) == sorted(i.id for i in mine)
+    assert {r.log_metadata["reason"] for r in released} == {"liveness_timeout"}
