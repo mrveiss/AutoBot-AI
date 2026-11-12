@@ -79686,6 +79686,18 @@ export interface components {
              */
             truncated: boolean;
             /**
+             * Budget Exhausted
+             * @description True when the per-request scan budget ended before a readable record or the end of data
+             * @default false
+             */
+            budget_exhausted: boolean;
+            /**
+             * Failed
+             * @description True when the section's source could not be read; total is unknown
+             * @default false
+             */
+            failed: boolean;
+            /**
              * Cursor
              * @description Facts section only: pass as `cursor` to continue the scan
              */
@@ -118330,6 +118342,7 @@ export interface operations {
                 offset?: number;
                 /** @description Resume the facts scan (see GraphRequest) */
                 cursor?: string | null;
+                include_buckets?: boolean;
             };
             header?: never;
             path?: never;
