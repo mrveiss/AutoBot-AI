@@ -289,7 +289,8 @@ def test_an_unreadable_shard_meta_is_a_problem_not_a_crash(lane, tmp_path) -> No
     broken = tmp_path / "preboard-shard-2"
     broken.mkdir()
     (broken / "shard-meta.json").write_text('{"shard": 2,', encoding="utf-8")
-    result = lane.report.build_result(support.env(), tmp_path)
+    types_dir = support.write_types(tmp_path / "preboard-types-record")
+    result = lane.report.build_result(support.env(), tmp_path, types_dir)
     assert result["overall"] == "red" and any("preboard-shard-2" in p for p in _problems(result))
 
 

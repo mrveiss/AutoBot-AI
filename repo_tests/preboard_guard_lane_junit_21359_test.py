@@ -241,8 +241,9 @@ def test_summarize_prints_the_commands_after_the_summary(lane, tmp_path, monkeyp
     folder = support.write_shards(tmp_path / "s", [_real_shard()])
     for key, value in support.env().items():
         monkeypatch.setenv(key, value)
+    types = str(support.write_types(tmp_path / "t"))
     out_files = ["--out", str(tmp_path / "r.json"), "--markdown", str(tmp_path / "s.md")]
-    assert lane.main(["summarize", "--shards", str(folder), *out_files]) == 0
+    assert lane.main(["summarize", "--shards", str(folder), "--types", types, *out_files]) == 0
     out = capsys.readouterr().out
     assert "## Pre-board guard lane: green" in out
     assert "\n::notice title=Pre-board guard lane::overall=green;" in out
