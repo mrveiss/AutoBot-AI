@@ -72,6 +72,3 @@ autobot-slm-backend/requirements.txt::redis
 autobot-slm-backend/requirements.txt::sqlalchemy
 autobot-slm-backend/requirements.txt::uvicorn
 autobot-slm-backend/requirements.txt::websockets
-# #18060: the shared floor is now the service side of these two; CI keeps its exact pin until the CI lock follow-up lands.
-autobot-backend/requirements.txt::croniter
-autobot-slm-backend/requirements.txt::croniter
