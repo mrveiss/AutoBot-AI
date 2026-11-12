@@ -104,3 +104,14 @@ def test_a_playbook_restart_keeps_its_tags_inside_the_include() -> None:
         if inc is None:
             continue
         assert isinstance(inc, dict) and inc.get("apply", {}).get("tags") == task.get("tags"), task.get("name")
+
+
+def test_the_self_update_socket_restart_goes_through_the_shared_task() -> None:
+    """#21426: the socket restart in the manager role is the same class of restart as the handlers."""
+    path = _ANSIBLE / "roles" / "slm_manager" / "tasks" / "bind_self_update_socket.yml"
+    mappings = list(_mappings(_load(path)))
+    assert [t.get("name") for t in mappings if _is_direct_restart(t)] == []
+    shared = [t for t in mappings if _shared_include(t)]
+    assert len(shared) == 1
+    assert shared[0]["vars"]["restart_unit_name"] == "{{ slm_self_update_socket_service }}.socket"
+    assert shared[0]["ansible.builtin.include_tasks"]["apply"]["tags"] == ["slm", "service", "systemd"]
