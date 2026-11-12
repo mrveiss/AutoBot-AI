@@ -1,6 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""Fleet updates skip every node that is not fully enrolled: failed, pending, degraded (#21036).
+"""Fleet updates skip a node only on positive evidence its enrollment failed (#21036).
 
 Real sqlite, real ORM. Node ids are fixed so a failure names the node.
 """
@@ -35,8 +35,6 @@ with patch.dict(sys.modules, {"services.database": _fake_db}):
     )
 
 _db = REAL_MODULES["models.database"]
-import models.enrollment_skip as _enrollment  # noqa: E402
-
 with real_modules_swapped():
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -45,13 +43,6 @@ FAILED, COMPLETED = "deployment_failed", "deployment_completed"
 ENROLL_FAILED = ("Enrollment failed for node x: boom", True)
 ENROLL_DONE = ("Enrollment completed for node x", True)
 _FAILED = {"n-failed", "n-completed-then-failed"}
-#: node_id -> the state named in its skip reason (owner decision 2026-11-09: every node not fully enrolled).
-_SKIPPED = {
-    **{n: "failed" for n in _FAILED},
-    "n-pending": "pending",
-    "n-enrolling": "pending",
-    "n-degraded": "degraded",
-}
 #: node_id -> its events in order as (event_type, message).
 _EVENTS = {
     "n-completed": [(COMPLETED, ENROLL_DONE)],
@@ -62,8 +53,6 @@ _EVENTS = {
     "n-selfreg": [],
     "n-degraded": [],
     "n-never-heartbeat": [],
-    "n-pending": [],
-    "n-enrolling": [],
     # a failed UPDATE job is not a failed enrollment
     "n-update-failed": [(COMPLETED, ENROLL_DONE), (FAILED, ("Update job j1 failed", False))],
     # a historical FAILED enrollment event written before the marker existed is not evidence
@@ -81,10 +70,8 @@ async def maker():
     async with factory() as db:
         n = 0
         for node_id, events in _EVENTS.items():
-            status = {"n-degraded": "degraded", "n-pending": "pending", "n-enrolling": "enrolling"}.get(
-                node_id, "online"
-            )
-            beat = None if node_id == "n-never-heartbeat" else datetime.now(timezone.utc)
+            status = "degraded" if node_id == "n-degraded" else "online"
+            beat = None if node_id in ("n-degraded", "n-never-heartbeat") else datetime.now(timezone.utc)
             db.add(
                 _db.Node(
                     node_id=node_id,
@@ -118,33 +105,21 @@ async def test_only_a_latest_failed_enrollment_is_returned(maker):
     assert failed == _FAILED
 
 
-async def test_split_skips_every_unenrolled_node_naming_its_state_and_targets_the_rest(maker):
+async def test_split_targets_everyone_else_and_reports_the_skip(maker):
     async with maker() as db:
         targets, skipped = await _events.split_enrollment_failed(db, list(_EVENTS))
-    assert {s.node_id: s.reason for s in skipped} == {n: _enrollment.skip_reason(st) for n, st in _SKIPPED.items()}
-    assert targets == [n for n in _EVENTS if n not in _SKIPPED]
-    assert {"n-completed", "n-retried", "n-selfreg", "n-historical-failed", "n-update-failed"} <= set(targets)
-
-
-@pytest.mark.parametrize("node_id,state", sorted(_SKIPPED.items()))
-async def test_each_unenrolled_state_is_skipped_with_its_own_reason(maker, node_id, state):
-    async with maker() as db:
-        targets, skipped = await _events.split_enrollment_failed(db, [node_id, "n-completed"])
-    assert targets == ["n-completed"]
-    assert [(s.node_id, s.reason) for s in skipped] == [(node_id, f"skipped: not fully enrolled ({state})")]
-
-
-async def test_a_fully_enrolled_node_is_targeted_and_skips_nothing(maker):
-    async with maker() as db:
-        targets, skipped = await _events.split_enrollment_failed(db, ["n-completed"])
-    assert (targets, skipped) == (["n-completed"], [])
+    assert [(s.node_id, s.reason) for s in skipped] == [(n, _events.ENROLLMENT_SKIP_REASON) for n in sorted(_FAILED)]
+    assert targets == [n for n in _EVENTS if n not in _FAILED]
+    assert {"n-completed", "n-retried", "n-selfreg", "n-degraded", "n-never-heartbeat", "n-historical-failed"} <= set(
+        targets
+    )
 
 
 async def test_empty_target_list_runs_no_query():
     assert await _events.get_enrollment_failed_node_ids(None, []) == set()
 
 
-async def test_collect_outdated_drops_unenrolled_nodes_and_counts_them(maker, monkeypatch):
+async def test_collect_outdated_drops_failed_enrollment_and_counts_it(maker, monkeypatch):
     class _Svc:
         def session(self):
             return maker()
@@ -167,11 +142,10 @@ async def test_collect_outdated_drops_unenrolled_nodes_and_counts_them(maker, mo
 
     ids = await code_sync._collect_outdated_node_ids(job, "a" * 40, _Svc())
 
-    assert set(_SKIPPED).isdisjoint(ids)
-    assert {s.node_id: s.reason for s in job.enrollment_skipped_nodes} == {
-        n: _enrollment.skip_reason(st) for n, st in _SKIPPED.items()
-    }
-    assert set(ids) == set(_EVENTS) - set(_SKIPPED)
+    assert _FAILED.isdisjoint(ids)
+    assert {s.node_id for s in job.enrollment_skipped_nodes} == _FAILED
+    assert all(s.reason == _events.ENROLLMENT_SKIP_REASON for s in job.enrollment_skipped_nodes)
+    assert set(ids) == set(_EVENTS) - _FAILED
 
 
 async def test_an_unmarked_historical_failed_event_does_not_skip(maker):
@@ -180,87 +154,28 @@ async def test_an_unmarked_historical_failed_event_does_not_skip(maker):
     assert failed == set()
 
 
+async def test_degraded_and_never_heartbeated_nodes_stay_targeted_for_the_14297_handling(maker):
+    """The enrollment filter leaves the #11511/#14297 non-operational handling to the deploy loop."""
+    async with maker() as db:
+        targets, _ = await _events.split_enrollment_failed(db, ["n-degraded", "n-never-heartbeat", "n-completed"])
+        nodes = {
+            n.node_id: n for n in (await db.execute(select(_db.Node).where(_db.Node.node_id.in_(targets)))).scalars()
+        }
+    assert targets == ["n-degraded", "n-never-heartbeat", "n-completed"]
+    assert not code_sync._is_node_operational(nodes["n-degraded"])
+    assert not code_sync._is_node_operational(nodes["n-never-heartbeat"])
+    assert code_sync._is_node_operational(nodes["n-completed"])
+
+
 async def test_scheduled_selection_applies_the_same_filter(maker):
     schedule = types.SimpleNamespace(target_type="all", target_nodes=None)
     async with maker() as db:
         picked = {n.node_id for n in await _executor.get_schedule_target_nodes(db, schedule)}
-    assert picked == set(_EVENTS) - set(_SKIPPED)
+    assert picked == set(_EVENTS) - _FAILED
 
 
-async def test_scheduled_specific_selection_also_skips_unenrolled_nodes(maker):
-    schedule = types.SimpleNamespace(
-        target_type="specific", target_nodes=["n-failed", "n-completed", "n-degraded", "n-pending"]
-    )
+async def test_scheduled_specific_selection_also_skips_failed_enrollment(maker):
+    schedule = types.SimpleNamespace(target_type="specific", target_nodes=["n-failed", "n-completed", "n-degraded"])
     async with maker() as db:
         picked = {n.node_id for n in await _executor.get_schedule_target_nodes(db, schedule)}
-    assert picked == {"n-completed"}
-
-
-async def test_a_never_heartbeated_online_node_is_not_skipped(maker):
-    async with maker() as db:
-        targets, skipped = await _events.split_enrollment_failed(db, ["n-never-heartbeat"])
-    assert (targets, skipped) == (["n-never-heartbeat"], [])
-
-
-async def test_collect_outdated_never_drops_the_slm_self_node(maker, monkeypatch):
-    class _Svc:
-        def session(self):
-            return maker()
-
-    async def _no_deps(_component):
-        return False
-
-    async with maker() as db:
-        db.add(
-            _db.Node(
-                node_id="n-slm-self",
-                hostname="n-slm-self",
-                ip_address="slm.example.test",
-                status="pending",
-                last_heartbeat=datetime.now(timezone.utc),
-                code_status="outdated",
-            )
-        )
-        await db.commit()
-    monkeypatch.setattr(code_sync.settings, "external_url", "http://slm.example.test:8000", raising=False)
-    monkeypatch.setattr(code_sync, "select", select)
-    monkeypatch.setattr(code_sync, "Node", _db.Node)
-    monkeypatch.setattr(code_sync, "split_enrollment_failed", _events.split_enrollment_failed)
-    monkeypatch.setattr(code_sync, "_compute_deps_changed", _no_deps)
-    job = code_sync.UpdateAllJob(
-        job_id="j-21036-self",
-        stages=[
-            code_sync.UpdateAllStage(name=n)
-            for n in ("github_fetch", "code_source_pull", "slm_self_update", "fleet_nodes")
-        ],
-    )
-
-    ids = await code_sync._collect_outdated_node_ids(job, "a" * 40, _Svc())
-
-    assert "n-slm-self" in ids
-    assert "n-slm-self" not in {s.node_id for s in job.enrollment_skipped_nodes}
-
-
-async def test_scheduled_run_never_drops_the_slm_self_node(maker, monkeypatch):
-    async with maker() as db:
-        db.add(
-            _db.Node(
-                node_id="n-slm-self",
-                hostname="n-slm-self",
-                ip_address="slm.example.test",
-                status="pending",
-                code_status="outdated",
-            )
-        )
-        await db.commit()
-    monkeypatch.setattr(_executor.settings, "external_url", "http://slm.example.test:8000", raising=False)
-    monkeypatch.setattr(_executor, "select", select)
-    monkeypatch.setattr(_executor, "Node", _db.Node)
-    schedule = types.SimpleNamespace(target_type="all", target_nodes=[])
-
-    async with maker() as db:
-        nodes = await _executor.get_schedule_target_nodes(db, schedule)
-
-    ids = {n.node_id for n in nodes}
-    assert "n-slm-self" in ids
-    assert "n-pending" not in ids
+    assert picked == {"n-completed", "n-degraded"}

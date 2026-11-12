@@ -9573,12 +9573,15 @@ export interface components {
         };
         /**
          * EnrollmentSkip
-         * @description One skipped node and why (the reason names the state).
+         * @description One skipped node and why.
          */
         EnrollmentSkip: {
             /** Node Id */
             node_id: string;
-            /** Reason */
+            /**
+             * Reason
+             * @default skipped: enrollment incomplete (last enrollment failed)
+             */
             reason: string;
         } & {
             [key: string]: unknown;
