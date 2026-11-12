@@ -235,10 +235,9 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
 
   async function _readNextFacts(epoch: number): Promise<void> {
     try {
-      // `include_buckets` is a GET query parameter the generated contract does not list yet, so the query is
-      // built as a value, not an inline literal, which would be an excess-property error until api.ts regenerates.
-      const query = { max_facts: 100, include_buckets: false, cursor: factsCursor.value }
-      const page: unknown = await apiClient.call('get', '/api/knowledge_base/multi-source/graph', { query })
+      const page: unknown = await apiClient.call('get', '/api/knowledge_base/multi-source/graph', {
+        query: { max_facts: 100, include_buckets: false, cursor: factsCursor.value },
+      })
       if (epoch !== loadEpoch) return
       const known = new Set(entities.value.map((entity) => entity.id))
       entities.value = [...entities.value, ..._entitiesOf(page).filter((entity) => entity.id && !known.has(entity.id))]
