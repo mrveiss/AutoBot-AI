@@ -338,13 +338,33 @@ def _idle_job_body(message: str = "No indexing job is currently running") -> dic
     return {"has_active_job": False, "task_id": None, "status": "idle", "message": message}
 
 
+def _queued_job_body(source_id: str) -> dict | None:
+    """This source's own request waiting behind the running job, or None (#20513).
+
+    ``POST /index`` queues ``{source_id, root_path, ...}`` while a job runs (``status:
+    "queued"``, the word its response already uses). A queued request has no task id yet:
+    one is minted when it starts, so ``task_id`` is null until the poll sees it running.
+    """
+    for position, entry in enumerate(list(_index_queue), start=1):
+        if entry.get("source_id") == source_id:
+            return {
+                "has_active_job": True,
+                "task_id": None,
+                "source_id": source_id,
+                "status": "queued",
+                "position": position,
+                "message": f"Queued behind the running job (position {position})",
+            }
+    return None
+
+
 async def _finished_job_body(task_id: str, source_id: str) -> dict:
     """The last job's final state (#1210), or idle when that job belongs to another source (#20513)."""
     task_data = await _load_task_from_redis(task_id)
     if not task_data:
         task_data = dict(indexing_tasks.get(task_id, {}))
     if task_data.get("source_id") != source_id:
-        return _idle_job_body(_NO_JOB_FOR_SOURCE)
+        return _queued_job_body(source_id) or _idle_job_body(_NO_JOB_FOR_SOURCE)
     return {
         "has_active_job": False,
         "task_id": task_id,
@@ -364,7 +384,7 @@ async def _running_job_body(task_id: str, in_memory: dict, source_id: str) -> di
     """
     task_data = await _load_task_from_redis(task_id) or in_memory
     if task_data.get("source_id") != source_id:
-        return _idle_job_body(_NO_JOB_FOR_SOURCE)
+        return _queued_job_body(source_id) or _idle_job_body(_NO_JOB_FOR_SOURCE)
     return {
         "has_active_job": True,
         "task_id": task_id,
@@ -391,10 +411,11 @@ async def get_current_indexing_job(source_id: SourceIdQuery):
     Get the status of the currently running indexing job, if it belongs to ``source_id``.
 
     One job runs at a time across all sources (#20491). A job that belongs to another
-    source is not reported: the answer for this source is idle (#20513).
+    source is not reported: the answer for this source is its own request queued behind
+    that job (``status: "queued"``, ``task_id: null``), else idle (#20513).
 
     Returns:
-    - has_active_job: Whether an indexing job of this source is currently running
+    - has_active_job: Whether an indexing job of this source is running or queued
     - task_id: The current job's task ID (if running or just finished)
     - source_id: The source it indexes (always the requested one when a job is named)
     - status: Current job status
@@ -404,7 +425,7 @@ async def get_current_indexing_job(source_id: SourceIdQuery):
     async with _tasks_lock:
         task_id = _current_indexing_task_id
         if task_id is None:
-            return JSONResponse(_idle_job_body())
+            return JSONResponse(_queued_job_body(source_id) or _idle_job_body())
         existing_task = _active_tasks.get(task_id)
         if existing_task is None or existing_task.done():
             return JSONResponse(await _finished_job_body(task_id, source_id))
