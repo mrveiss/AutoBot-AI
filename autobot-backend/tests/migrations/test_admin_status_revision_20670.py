@@ -36,6 +36,7 @@ START = 1_900_000_000
 async def engine(fresh_db_url):
     await create_all_schema(fresh_db_url)
     engine = create_async_engine(fresh_db_url, connect_args=NOT_UTC)
+    await _create_user(engine, "root", True)  # another active admin: the last one cannot be demoted (#21018)
     yield engine
     await engine.dispose()
 
