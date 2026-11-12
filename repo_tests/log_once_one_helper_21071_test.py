@@ -50,6 +50,7 @@ _HELPER = "autobot_shared/logging_once.py"
 _NAME = re.compile(r"(warned|logged|reported)", re.IGNORECASE)
 _DEF_NAMES = {"_warn_once", "_log_once"}
 _LOG_METHODS = {"debug", "info", "warning", "warn", "error", "critical", "exception", "log"}
+_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 _SKIP = re.compile(r"(^|/)(repo_tests|tests|testkit|node_modules|e2e)/|(_test\.py|/test_[^/]*\.py|conftest\.py)$")
 
 #: Not log-once: the state is reset, or it compares consecutive values, or its scope is the object. Each says why.
@@ -223,8 +224,19 @@ def _only_logs_and_remembers(stmts: list[ast.stmt]) -> bool:
     return any(is_log(st) for st in stmts) and all(is_log(st) or is_noop(st) for st in stmts)
 
 
+def _own_nodes(fn: ast.AST):
+    """*fn* and the nodes that run as part of it: stops at a nested ``def`` / ``async def`` / ``lambda``, whose
+    nodes belong to that function's own visit (``ast.walk`` would count them again for every enclosing one)."""
+    stack = [fn]
+    while stack:
+        node = stack.pop()
+        yield node
+        stack.extend(c for c in ast.iter_child_nodes(node) if not isinstance(c, _SCOPES))
+
+
 def _blocks(fn: ast.AST):
-    for n in ast.walk(fn):
+    """Statement lists of *fn* itself (inside if/for/while/with/try/match and class bodies, not nested functions)."""
+    for n in _own_nodes(fn):
         for field in ("body", "orelse", "finalbody"):
             block = getattr(n, field, None)
             if isinstance(block, list) and block and isinstance(block[0], ast.stmt):
@@ -239,7 +251,7 @@ def _decorator_name(dec: ast.AST) -> str:
 def _is_cache_dedupe(fn: ast.AST) -> bool:
     """``@lru_cache`` / ``@cache`` on a function that logs and returns no value: memoised "log once"."""
     cached = any(_decorator_name(d) in {"lru_cache", "cache"} for d in fn.decorator_list)
-    valued = any(isinstance(n, ast.Return) and n.value is not None for n in ast.walk(fn))
+    valued = any(isinstance(n, ast.Return) and n.value is not None for n in _own_nodes(fn))
     return cached and _logs(fn) and not valued
 
 
@@ -365,6 +377,36 @@ def test_the_detector_sees_the_shapes_by_what_they_do_not_what_they_are_called()
     assert hand_rolled_in(_RENAMED_SET) == ["_s"]
     assert hand_rolled_in(_INSTANCE) == ["_x"]
     assert hand_rolled_in(_INSTANCE_GUARD_RETURN) == ["_x"]
+
+
+_EMIT = "        global _once\n        if not _once:\n            logger.warning('x')\n            _once = True\n"
+_NESTED = "_once = False\ndef outer():\n    def emit():\n" + _EMIT + "    emit()\n"
+_NESTED_ASYNC = _NESTED.replace("def emit", "async def emit")
+_NESTED_IN_CLASS = "_once = False\ndef outer():\n    class K:\n        def emit(self):\n" + "".join(
+    "    " + line for line in _EMIT.splitlines(True)
+)
+_GUARD_G = "def g():\n    global _once\n    if not _once:\n        logger.warning('y')\n        _once = True\n"
+_TWO_FUNCTIONS = _RENAMED + _GUARD_G
+_OUTER_AND_NESTED = (
+    "_once = False\ndef outer():\n    global _once\n    if not _once:\n        logger.warning('y')\n"
+    "        _once = True\n    def emit():\n" + _EMIT
+)
+
+
+def test_a_guard_in_a_nested_function_is_counted_once() -> None:
+    """A nested function's guard was visited for the outer function too, so the flag looked read elsewhere."""
+    for source in (_NESTED, _NESTED_ASYNC, _NESTED_IN_CLASS, _TWO_FUNCTIONS, _OUTER_AND_NESTED):
+        assert hand_rolled_in(source) == ["_once"], source
+
+
+def test_a_flag_read_elsewhere_stays_state_even_when_guarded_in_a_nested_function() -> None:
+    """Control: the nested guard plus a real read (``total != guarded``) is a lifecycle flag, not a log guard."""
+    assert hand_rolled_in(_NESTED + "def g():\n    return _once\n") == []
+
+
+def test_a_nested_functions_return_does_not_make_the_cached_outer_valued() -> None:
+    cached = "import functools\n@functools.lru_cache\ndef outer(k):\n    logger.info('x')\n    def helper():\n        return 1\n"
+    assert hand_rolled_in(cached + "    helper()\n") == ["outer"]
 
 
 def test_the_detector_leaves_ordinary_state_alone() -> None:
