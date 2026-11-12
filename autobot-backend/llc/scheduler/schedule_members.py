@@ -62,4 +62,10 @@ async def reschedule_after_start(kind: str, member_id: Any, reschedule: Callable
     try:
         await reschedule()
     except Exception as exc:
-        logger.error("%s %s ran but rescheduling failed (%s); the reconciler will restore it", kind, member_id, exc)
+        logger.error(
+            "%s %s ran but rescheduling failed (%s); the reconciler will restore it",
+            kind,
+            member_id,
+            exc,
+            exc_info=True,
+        )
