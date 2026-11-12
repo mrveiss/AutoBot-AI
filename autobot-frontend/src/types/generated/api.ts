@@ -23198,6 +23198,12 @@ export interface paths {
          *     "the code graph has not been built" is a different answer from "that node
          *     does not exist", and collapsing them would send an operator hunting for a
          *     typo in their node id.
+         *
+         *     *symbol* resolves a name to its node id first (#21327); several matches come back
+         *     as ``status: ambiguous`` with every candidate and no walk.
+         *
+         *     Every answer carries ``indexed_at_commit`` and, when *expected_commit* is
+         *     given, ``stale`` (#21327).
          */
         get: operations["analyze_impact_api_analytics_codebase_impact_get"];
         put?: never;
@@ -55761,7 +55767,11 @@ export interface paths {
          *     response and is never stored in plaintext — only the secret is kept in
          *     Redis as a lookup key.  Callers must save the token immediately.
          *
-         *     Valid scopes: ``kb``, ``memory``, ``agents``.
+         *     Valid scopes: ``kb``, ``memory``, ``agents``, ``code``.  The ``code``
+         *     scope is admin-equivalent: it reads the code graph (symbols, callers,
+         *     paths) across all indexed sources, like the admin-gated analytics
+         *     routes.  ``code.similar`` reads unowned, public and shared sources and
+         *     refuses another owner's private source.
          */
         post: operations["create_mcp_token_api_mcp_tokens_post"];
         delete?: never;
@@ -69474,7 +69484,7 @@ export interface components {
         CreateTokenRequest: {
             /**
              * Scopes
-             * @description List of scopes: kb, memory, agents
+             * @description List of scopes: kb, memory, agents, code. The code scope grants read access to the code graph across ALL indexed sources (equivalent to the admin-gated analytics routes); code.similar reads unowned, public and shared sources and refuses another owner's private source.
              */
             scopes: string[];
             /**
@@ -139500,11 +139510,15 @@ export interface operations {
     };
     analyze_impact_api_analytics_codebase_impact_get: {
         parameters: {
-            query: {
-                /** @description Graph node id to walk back from */
-                node_id: string;
+            query?: {
+                /** @description Exact graph node id to walk back from */
+                node_id?: string | null;
+                /** @description Symbol name (bare, Class.method or node id) instead of node_id; an ambiguous name returns its candidates, never a guess */
+                symbol?: string | null;
                 /** @description Override the configured hop limit. Omit to use impact_analysis_max_depth. */
                 max_depth?: number | null;
+                /** @description Commit the caller expects the graph to describe; a mismatch is flagged stale in the answer. */
+                expected_commit?: string | null;
             };
             header?: never;
             path?: never;
