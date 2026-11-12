@@ -564,7 +564,7 @@ def build_registry_inventory(nodes: list[Any], local_ip_check: Any) -> dict:
 
     return {
         "all": {
-            "vars": dict(_ALL_VARS),
+            "vars": {**_ALL_VARS, "backend_port": config.port.backend},  # SSOT port, #21400
             "hosts": host_section,
             "children": groups,
         }
