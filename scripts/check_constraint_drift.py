@@ -118,7 +118,12 @@ def manifest_files() -> list[pathlib.Path]:
 
 
 def manifest_violations(files: list[pathlib.Path], specs: dict[str, str]) -> list[str]:
-    """Quoted requirements in packaging manifests whose floor is outside the shared specifier."""
+    """Quoted requirements in packaging manifests whose floor is outside the shared specifier.
+
+    Not covered: upper bounds are not compared (a looser cap passes); parenthesised and ``@ url``
+    requirement spellings are not matched; the "declared in 2+ files but absent from shared.txt" rule
+    applies to requirements files only, not to manifests.
+    """
     out = []
     for f in files:
         for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):

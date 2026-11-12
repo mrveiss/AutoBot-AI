@@ -262,7 +262,8 @@
 
 # #18060: names whose floors live in constraints/shared.txt. `latest`, not `present`: the pip module
 # treats an installed bare name as satisfied without calling pip, so on a re-provision the `-c` would
-# never be consulted. `latest` is bounded here because every name is capped by that file.
+# never be consulted. `latest` installs the newest release satisfying shared.txt; only names with an
+# upper bound there (today numpy) are capped, the floor-only names float upward on each re-provision.
 - name: "TTS Worker | Install the packages constrained by constraints/shared.txt (#18060)"
   ansible.builtin.pip:
     name:

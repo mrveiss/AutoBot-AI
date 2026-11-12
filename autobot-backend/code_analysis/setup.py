@@ -17,6 +17,8 @@ def _ssot_floor(package: str, constraints: str = _SSOT_CONSTRAINTS) -> str:
     """The ``>=`` floor *package* has in constraints/shared.txt, the one place it is stated (#18047).
 
     Raises rather than falling back to a literal: a restated floor is what drifted on every bump.
+    The shared constraints file is therefore required: building this directory outside the repository
+    fails here (the same as the existing openvino behaviour).
     """
     with open(constraints, encoding="utf-8") as f:
         for line in f:
