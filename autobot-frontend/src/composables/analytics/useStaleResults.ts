@@ -15,7 +15,7 @@
  * scan, so it never outlives the data it describes.
  */
 
-import { getCurrentInstance, inject, provide, reactive, type InjectionKey } from 'vue'
+import { getCurrentInstance, inject, provide, reactive, watch, type InjectionKey } from 'vue'
 
 export type StaleResultKind = 'duplicates' | 'dependencies' | 'importTree'
 
@@ -28,8 +28,11 @@ export interface StaleResultsHandle {
 
 export const STALE_RESULTS_KEY: InjectionKey<StaleResultsHandle> = Symbol('codebase-stale-results')
 
-/** Create the page's stale flags and offer them to the components below the caller. */
-export function useStaleResults(): StaleResultsHandle {
+/**
+ * Create the page's stale flags and offer them to the components below the caller.
+ * `currentSource` names the selected source; a different source starts with no flag set.
+ */
+export function useStaleResults(currentSource: () => string): StaleResultsHandle {
   const flags = reactive<Record<StaleResultKind, boolean>>({ duplicates: false, dependencies: false, importTree: false })
   const handle: StaleResultsHandle = {
     flags,
@@ -40,6 +43,9 @@ export function useStaleResults(): StaleResultsHandle {
       flags[kind] = false
     },
   }
+  watch(currentSource, () => {
+    flags.duplicates = flags.dependencies = flags.importTree = false
+  })
   if (getCurrentInstance()) provide(STALE_RESULTS_KEY, handle)
   return handle
 }

@@ -63,4 +63,27 @@ describe('RunStateNotice (#21003)', () => {
     expect(render(null).find('[data-testid="run-state-notice"]').exists()).toBe(false)
     expect(mount(RunStateNotice, { global: { plugins: [i18n] } }).find('[data-testid="run-state-notice"]').exists()).toBe(false)
   })
+
+  it('keys on the contract flag: a partial run shows even for a status the page does not know', () => {
+    const text = render(run({ status: 'something-new' })).text()
+    expect(text).toContain(msg.partialTitle)
+    expect(text).toContain('something-new')
+  })
+
+  it('a flag that says not partial shows nothing, whatever the status', () => {
+    expect(render(run({ status: 'killed', partial: false })).find('[data-testid="run-state-notice"]').exists()).toBe(false)
+  })
+
+  it('an empty status never reads "ended as ."', () => {
+    const text = render(run({ status: '', reason: '' })).text()
+    expect(text).toContain(msg.unfinished)
+    expect(text).not.toContain('ended as .')
+    expect(render(run({ status: '', reason: 'lost' })).text()).toContain(msg.unfinishedWithReason.replace('{reason}', 'lost'))
+  })
+
+  it('a cancelled run says cancelled', () => {
+    const text = render(run({ status: 'cancelled', reason: 'cancelled by user' })).text()
+    expect(text).toContain(msg.status.cancelled)
+    expect(text).toContain('cancelled by user')
+  })
 })

@@ -58,6 +58,7 @@ describe('duplicates fetchers given a 200 {"status":"error"} (#17983)', () => {
   const fetchers = () =>
     useAnalyticsDataFetchers({
       rootPath: ref('/repo'),
+      sourceIdParam: computed(() => 'source_id=s1'),
       sourceIdQuery: computed(() => ''),
       withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=s1`,
       t: (key: string) => key,

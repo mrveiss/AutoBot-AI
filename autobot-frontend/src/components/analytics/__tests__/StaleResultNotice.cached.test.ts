@@ -35,6 +35,7 @@ function host() {
     setup() {
       captured.fetchers = useAnalyticsDataFetchers({
         rootPath: ref('/repo'),
+        sourceIdParam: computed(() => 'source_id=s1'),
         sourceIdQuery: computed(() => ({ source_id: 's1' })),
         withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=s1`,
         t: (key: string) => key,
@@ -69,6 +70,20 @@ describe('stale cached results (#17982)', () => {
     fetchWithAuth.mockResolvedValue(respond({ status: 'success', duplicates: [ROW] }))
     await fetchers.getDuplicatesData()
     await flushPromises()
+    expect(wrapper.find(NOTICE).exists()).toBe(false)
+  })
+
+  it('a failed duplicates scan clears the rows and the notice with them', async () => {
+    fetchWithAuth.mockResolvedValue(respond({ status: 'success', from_cache: true, stale: true, duplicates: [ROW] }))
+    const { wrapper, fetchers } = host()
+    await fetchers.loadCachedDuplicates()
+    await flushPromises()
+    expect(wrapper.findAll(NOTICE)).toHaveLength(1)
+
+    fetchWithAuth.mockResolvedValue({ ok: false, status: 404, json: async () => ({}), text: async () => '{}' })
+    await fetchers.getDuplicatesData()
+    await flushPromises()
+    expect(fetchers.duplicateAnalysis.value).toEqual([])
     expect(wrapper.find(NOTICE).exists()).toBe(false)
   })
 

@@ -18,8 +18,11 @@
  * ends. The notice component reads it by injection.
  */
 
-import { getCurrentInstance, inject, provide, ref, type InjectionKey, type Ref } from 'vue'
+import { getCurrentInstance, inject, provide, ref, watch, type InjectionKey, type Ref } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('useRunState')
 
 /** `running` | `completed` | `failed` | `killed` | `abandoned` | `cancelled`; empty string = none. */
 export interface CodebaseRunState {
@@ -41,39 +44,56 @@ interface RunBodyFields {
 export interface RunStateHandle {
   /** `null` = no run record (data indexed before records existed): nothing says the results are partial. */
   run: Ref<CodebaseRunState | null>
-  /** Take the `run` field off a results body; a body without the field changes nothing. */
-  applyRunFields: (body: unknown) => void
+  /**
+   * Take the `run` field off a results body; a body without the field changes nothing.
+   * `forSource` is the source key the request was made for (default: the current one): a
+   * response for a source that is no longer selected is dropped.
+   */
+  applyRunFields: (body: unknown, forSource?: string) => void
   loadRunState: () => Promise<void>
 }
 
 export const RUN_STATE_KEY: InjectionKey<RunStateHandle> = Symbol('codebase-run-state')
 
-/** Create the page's run state and offer it to the components below the caller. */
-export function useRunState(withSourceId: (url: string) => string): RunStateHandle {
+/**
+ * Create the page's run state and offer it to the components below the caller.
+ *
+ * `currentSource` names the selected source (any stable key; '' = none). When it changes the
+ * previous source's run is dropped and the new source's is read.
+ */
+export function useRunState(withSourceId: (url: string) => string, currentSource: () => string): RunStateHandle {
   const run = ref<CodebaseRunState | null>(null)
 
-  const applyRunFields = (body: unknown) => {
+  const applyRunFields = (body: unknown, forSource: string = currentSource()) => {
+    if (forSource !== currentSource()) return
     if (body && typeof body === 'object' && 'run' in body) {
       run.value = (body as RunBodyFields).run ?? null
     }
   }
 
-  const endpoint = useFetchEndpoint<RunBodyFields, CodebaseRunState>(
+  const endpoint = useFetchEndpoint<RunBodyFields, CodebaseRunState, string>(
     {
       path: '/api/analytics/codebase/index/run-state',
       scopeToSource: true,
       requireSource: true,
       label: 'Index run state',
       pickData: (raw) => raw.run ?? null,
-      onSuccess: (_run, raw) => applyRunFields(raw),
-      onNoData: () => {
-        run.value = null
+      onSuccess: (_run, raw, forSource) => applyRunFields(raw, forSource),
+      onNoData: (forSource) => {
+        if (forSource === currentSource()) run.value = null
       },
+      onError: (message) => logger.warn(`Run state not read: ${message}`),
     },
     { withSourceId },
   )
 
-  const handle: RunStateHandle = { run, applyRunFields, loadRunState: () => endpoint.load() }
+  const loadRunState = () => endpoint.load(undefined, currentSource())
+  watch(currentSource, () => {
+    run.value = null
+    void loadRunState()
+  })
+
+  const handle: RunStateHandle = { run, applyRunFields, loadRunState }
   if (getCurrentInstance()) provide(RUN_STATE_KEY, handle)
   return handle
 }

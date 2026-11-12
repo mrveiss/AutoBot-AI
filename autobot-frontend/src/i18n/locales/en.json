@@ -1683,7 +1683,9 @@
           "killed": "killed",
           "abandoned": "abandoned",
           "cancelled": "cancelled"
-        }
+        },
+        "unfinished": "The latest run did not complete.",
+        "unfinishedWithReason": "The latest run did not complete: {reason}"
       },
       "staleResult": {
         "message": "This result was computed before the source was last synced. It is shown as it was stored and may not match the current code; run the analysis again to refresh it."

@@ -6,12 +6,13 @@
 
   #21003: findings stored by a run that did not finish are shown, never hidden, and this says
   so: how the newest run ended, that the findings are partial, and when the last run that did
-  finish completed. A run still in progress is "updating", not a failure. Renders nothing
-  without a run record (data indexed before records existed) and for a completed run.
+  finish completed. A run still in progress is "updating", not a failure. Shown when the
+  backend flags the run `partial`; nothing without a run record (data indexed before records
+  existed) and nothing for a completed run.
 -->
 <template>
   <BaseAlert
-    v-if="run && run.status !== 'completed'"
+    v-if="run && run.partial"
     :variant="isRunning ? 'info' : 'warning'"
     :title="isRunning ? t('analytics.codebase.runState.runningTitle') : t('analytics.codebase.runState.partialTitle')"
     bordered
@@ -42,6 +43,18 @@ const statusLabels = computed<Record<string, string>>(() => ({
   cancelled: t('analytics.codebase.runState.status.cancelled'),
 }))
 
+// An empty status never reads "ended as ." (#21003).
+const endedLine = (status: string, reason: string): string => {
+  if (!status) {
+    return reason
+      ? t('analytics.codebase.runState.unfinishedWithReason', { reason })
+      : t('analytics.codebase.runState.unfinished')
+  }
+  return reason
+    ? t('analytics.codebase.runState.endedWithReason', { status, reason })
+    : t('analytics.codebase.runState.ended', { status })
+}
+
 const lines = computed(() => {
   const current = run.value
   if (!current) return []
@@ -50,11 +63,7 @@ const lines = computed(() => {
     out.push(t('analytics.codebase.runState.running'))
   } else {
     const status = statusLabels.value[current.status] ?? current.status
-    out.push(
-      current.reason
-        ? t('analytics.codebase.runState.endedWithReason', { status, reason: current.reason })
-        : t('analytics.codebase.runState.ended', { status }),
-    )
+    out.push(endedLine(status, current.reason))
     out.push(t('analytics.codebase.runState.partialFindings'))
   }
   out.push(

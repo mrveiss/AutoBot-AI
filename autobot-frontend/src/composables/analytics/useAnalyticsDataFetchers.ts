@@ -72,8 +72,8 @@ export interface UseAnalyticsDataFetchersDeps {
 
 export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const { rootPath, sourceIdQuery, withSourceId, t, showToast, notify } = deps
-  const runState = useRunState(withSourceId) // #21003: partial/run fields ride on the stats and problems bodies
-  const staleResults = useStaleResults() // #17982: a cached result older than the last sync is flagged
+  const runState = useRunState(withSourceId, () => deps.sourceIdParam.value) // #21003: partial/run fields ride on the stats and problems bodies
+  const staleResults = useStaleResults(() => deps.sourceIdParam.value) // #17982: a cached result older than the last sync is flagged
 
   // --- Task loaders (#1304/#1321) ---
 
@@ -129,6 +129,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   // rows. The list is cleared too: `'failed'` with rows is a state no panel
   // renders, and they would survive behind the failure notice.
   const failDuplicates = () => {
+    staleResults.clear('duplicates')
     duplicateAnalysis.value = []
     duplicateScanState.value = 'failed'
   }
@@ -268,7 +269,8 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   const statsEndpoint = useFetchEndpoint<
     { status: string; stats?: Record<string, unknown> },
-    Record<string, unknown>
+    Record<string, unknown>,
+    string
   >(
     {
       path: '/api/analytics/codebase/stats',
@@ -276,7 +278,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
       label: 'Stats endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.stats ? raw.stats : null,
-      onSuccess: (d, raw) => { codebaseStats.value = d; runState.applyRunFields(raw) },
+      onSuccess: (d, raw, forSource) => { codebaseStats.value = d; runState.applyRunFields(raw, forSource) },
       onNoData: () => {
         codebaseStats.value = null
         logger.debug('No codebase stats - run indexing first')
@@ -287,14 +289,15 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   const problemsEndpoint = useFetchEndpoint<
     { status?: string; problems?: Problem[] },
-    Problem[]
+    Problem[],
+    string
   >(
     {
       path: '/api/analytics/codebase/problems',
       scopeToSource: true, requireSource: true,
       label: 'Problems endpoint',
       pickData: (raw) => (raw.status === 'no_data' ? [] : raw.problems ?? []),
-      onSuccess: (d, raw) => { problemsReport.value = d; runState.applyRunFields(raw) },
+      onSuccess: (d, raw, forSource) => { problemsReport.value = d; runState.applyRunFields(raw, forSource) },
     },
     { withSourceId },
   )
@@ -349,7 +352,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const loadChartData = () => chartEndpoint.load()
   const loadUnifiedReport = () => unifiedEndpoint.load()
   const loadCallGraphData = () => callGraphEndpoint.load()
-  const getCodebaseStats = () => statsEndpoint.load()
+  const getCodebaseStats = () => statsEndpoint.load(undefined, deps.sourceIdParam.value)
   const loadCachedDuplicates = () => cachedDuplicatesEndpoint.load()
   const loadCachedDependencies = () => cachedDependenciesEndpoint.load()
   const loadCachedImportTree = () => cachedImportTreeEndpoint.load()
@@ -395,7 +398,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     loadingProgress.problems = true
     progressStatus.value = t('analytics.codebase.status.analyzingProblems')
     try {
-      await problemsEndpoint.load()
+      await problemsEndpoint.load(undefined, deps.sourceIdParam.value)
     } finally {
       loadingProgress.problems = false
     }
