@@ -58,9 +58,10 @@
       ansible.builtin.assert:
         that: shared_anchor.stat.exists
         fail_msg: >-
-          {{ shared_parent }} (derived from {{ playbook_dir }}) is not the repository this playbook
-          belongs to: it holds no autobot-slm-backend/ansible/roles/_shared/tasks/install_agent_autobot_shared.yml,
-          so the playbook moved to another depth. Fix the derivation, or set code_source_dir.
+          Checked {{ shared_parent }} (derived from {{ playbook_dir }}) for
+          autobot-slm-backend/ansible/roles/_shared/tasks/install_agent_autobot_shared.yml and it is absent.
+          Either this playbook sits at a different depth than the derivation assumes, or the tree under the
+          derived path is not this repository's layout. Fix the derivation, or set code_source_dir.
       when: (code_source_dir | default('', true)) == ''
       run_once: true
 
