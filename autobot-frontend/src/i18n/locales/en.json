@@ -4948,6 +4948,7 @@
   },
   "agent": {
     "title": "Agents",
+    "systemActor": "System",
     "status": "Agent Status",
     "config": "Agent Configuration",
     "orchestrator": "Orchestrator",
@@ -7488,6 +7489,7 @@
       "uptime": "Uptime",
       "success": "Success",
       "recentTasks": "Recent Tasks",
+      "noRecentTasks": "No recent tasks",
       "detailsBtn": "Details",
       "pauseBtn": "Pause",
       "liveActivityFeed": "Live Activity Feed",
