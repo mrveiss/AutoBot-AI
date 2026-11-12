@@ -76,6 +76,7 @@ def _silent(file: str, reason_prefix: str, source_marker: str, why: str) -> Allo
 def _by_design(file: str, reason_prefix: str, source_marker: str, why: str) -> AllowedSkip:
     return AllowedSkip(file, reason_prefix, source_marker, EQUIVALENT_TO_SUITE, BY_DESIGN + why, why)
 
+
 #: ``covered-by-suite-only`` -- the check needs a service or a binary the suite's python-shard job
 #: provides and this workflow does not. The suite's own ``-rs`` shows NO promtool skip (it installs the
 #: binary and sets AUTOBOT_REQUIRE_PROMTOOL=1); for the two ChromaDB modules it shows the "stubbed" skip
