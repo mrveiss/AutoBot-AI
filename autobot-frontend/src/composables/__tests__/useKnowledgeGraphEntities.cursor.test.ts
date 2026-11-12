@@ -56,6 +56,25 @@ describe('facts cursor paging (#20945)', () => {
     expect(queries).toEqual([{ max_facts: 100, include_buckets: false, cursor: '500:0' }])
   })
 
+  it('keeps one relation when two sequential pages carry the same category relation', async () => {
+    const withRelation = (ids: string[], cursor: string | null) => ({
+      data: {
+        entities: ids.map(entity),
+        relations: [{ from: 'cat_a', to: 'cat_b', type: 'contains', strength: 1 }],
+      },
+      stats: { sections: [{ key: 'facts', cursor }] },
+    })
+    vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+      if (url.includes('/memory/entities/all')) return { data: { entities: [] } } as never
+      return withRelation(['a'], '500:0') as never
+    })
+    vi.mocked(apiClient.call).mockResolvedValue(withRelation(['b'], null) as never)
+    const graph = useKnowledgeGraphEntities()
+    await graph.fetchGraphData()
+    await graph.loadMoreFacts()
+    expect(graph.relations.value).toEqual([{ from: 'cat_a', to: 'cat_b', type: 'contains', strength: 1 }])
+  })
+
   it('reports a failed next page without losing the page already shown', async () => {
     vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
       if (url.includes('/memory/entities/all')) return { data: { entities: [] } } as never

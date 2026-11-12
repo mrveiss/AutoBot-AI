@@ -121,6 +121,17 @@ export interface UseKnowledgeGraphEntitiesReturn {
   loadMoreFacts: () => Promise<void>
 }
 
+/** The relations with repeats of one `(from, to, type)` edge dropped, first occurrence kept (#20945). */
+function _dedupeRelations(all: GraphRelation[]): GraphRelation[] {
+  const seen = new Set<string>()
+  return all.filter((r) => {
+    const key = `${r.from}-${r.to}-${r.type}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
   const entities = ref<GraphEntity[]>([])
   const relations = ref<GraphRelation[]>([])
@@ -179,14 +190,7 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
       }
     }
 
-    // Deduplicate relations using a Set for O(1) lookups
-    const seen = new Set<string>()
-    relations.value = allRelations.filter((r) => {
-      const key = `${r.from}-${r.to}-${r.type}`
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
+    relations.value = _dedupeRelations(allRelations)
   }
 
   // --------------------------------------------------------------------------
@@ -233,18 +237,25 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
     return _reason(error) || (i18n.global.t('knowledge.graph.loadFailedNoReason') as string)
   }
 
+  /** Merge a next page into the shown graph; the category tree each response repeats is deduplicated (#20945). */
+  function _mergePage(page: unknown, fresh: GraphEntity[]): void {
+    entities.value = [...entities.value, ...fresh]
+    const body = (page as Record<string, unknown>)?.data as Record<string, unknown> | undefined
+    const added = (body?.relations as GraphRelation[] | undefined) ?? []
+    relations.value = _dedupeRelations([...relations.value, ...added])
+    factsCursor.value = _factsCursorOf(page)
+  }
+
   async function _readNextFacts(epoch: number): Promise<void> {
     try {
+      const requested = factsCursor.value
       const page: unknown = await apiClient.call('get', '/api/knowledge_base/multi-source/graph', {
-        query: { max_facts: 100, include_buckets: false, cursor: factsCursor.value },
+        query: { max_facts: 100, include_buckets: false, cursor: requested },
       })
       if (epoch !== loadEpoch) return
       const known = new Set(entities.value.map((entity) => entity.id))
-      entities.value = [...entities.value, ..._entitiesOf(page).filter((entity) => entity.id && !known.has(entity.id))]
-      const body = (page as Record<string, unknown>)?.data as Record<string, unknown> | undefined
-      const added = (body?.relations as GraphRelation[] | undefined) ?? []
-      relations.value = [...relations.value, ...added]
-      factsCursor.value = _factsCursorOf(page)
+      const fresh = _entitiesOf(page).filter((entity) => entity.id && !known.has(entity.id))
+      _mergePage(page, fresh)
     } catch (error) {
       if (epoch !== loadEpoch) return // a refresh replaced the cursor this read used: its failure is not news
       errorMessage.value = _reasonOrFallback(error)
