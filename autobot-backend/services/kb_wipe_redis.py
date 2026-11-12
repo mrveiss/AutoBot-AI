@@ -39,6 +39,7 @@ KB_WIPE_DATABASES: tuple[str, ...] = ("knowledge",)
 #: The ``kb:`` writers, each classified (grep of backend and shared code; database in brackets):
 #:   WIPED  kb:stats [knowledge, ``knowledge/base.py``], kb:ingest: [knowledge, ``document_ingest.py``],
 #:          kb:rel:out:/kb:rel:in: [knowledge, ``relations.py``], kb:acl_epoch [knowledge, ``acl_epoch.py``],
+#:          kb:membership_epoch: [knowledge, ``autobot_shared/membership_epoch.py``; derived invalidation counter],
 #:          kb:system:facts, kb:category:chat_knowledge [knowledge, ``ownership*.py``], kb:vectorize:pending
 #:          [knowledge, ``background_vectorization.py``], kb:lint:report [knowledge, ``contradiction_detector.py``],
 #:          kb:cache:, kb:stats:category: [knowledge, ``api/knowledge.py``, ``knowledge_category_counts.py``]

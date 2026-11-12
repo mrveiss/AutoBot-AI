@@ -136,7 +136,11 @@ async def _refresh_pending(session: "AsyncSession", pending: "Approval", request
     counts = _count_changes(old.get("plan"), plan)
     details = {"approval_id": str(pending.id), "phase": "plan_refresh", "refreshed_by": requested_by, "counts": counts}
     if not await audit_log(
-        AuditAction.KNOWLEDGE_WIPE.value, user_id=requested_by, resource="knowledge_base", durable=True, details=details
+        AuditAction.KNOWLEDGE_WIPE_REFRESH.value,
+        user_id=requested_by,
+        resource="knowledge_base",
+        durable=True,
+        details=details,
     ):
         raise RuntimeError(f"the audit entry for refreshing approval {pending.id} could not be written; plan unchanged")
     pending.context = new

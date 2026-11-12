@@ -14,6 +14,7 @@ import pytest
 from autobot_shared.approval_four_eyes import FourEyesError
 from services import kb_wipe_action as action
 from services.approval_execution import set_verified_decider
+from services.audit.taxonomy import AuditAction
 
 
 def _pending(requester: str, channel: str):
@@ -55,6 +56,9 @@ async def test_a_refresh_is_recorded_in_a_comment_and_a_durable_audit_entry_nami
 
     kwargs = audit.await_args.kwargs
     assert kwargs["durable"] is True and kwargs["user_id"] == refresher
+    assert audit.await_args.args[0] == "knowledge.wipe.refresh" != AuditAction.KNOWLEDGE_WIPE.value
+    assert kwargs.get("result", "success") == "success"  # the refresh succeeded; it is not a wipe outcome
+    assert (audit.await_args.args[0], kwargs.get("result", "success")) != (AuditAction.KNOWLEDGE_WIPE.value, "success")
     assert kwargs["details"]["phase"] == "plan_refresh" and kwargs["details"]["refreshed_by"] == refresher
     assert kwargs["details"]["counts"] == {"total_keys": [5, 9], "total_vectors": [2, 2]}
     comment = session.add.call_args.args[0]

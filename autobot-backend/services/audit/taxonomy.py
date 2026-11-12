@@ -71,6 +71,7 @@ class AuditAction(str, Enum):
     KNOWLEDGE_QUARANTINE_READ = "knowledge.quarantine.read"  # #19163: an opt-out read of the research quarantine
     KNOWLEDGE_ADMIN_READ = "kb.admin_read"  # #16665: an admin's read of any fact through an explicit read API
     KNOWLEDGE_WIPE = "knowledge.wipe"  # #21048: the knowledge-base wipe, run after an approval
+    KNOWLEDGE_WIPE_REFRESH = "knowledge.wipe.refresh"  # #21048: a pending wipe plan re-proposed; nothing deleted
     API_KEY_CREATE = "api_key.create"  # pragma: allowlist secret -- an action name, not a key
     API_KEY_REVOKE = "api_key.revoke"  # pragma: allowlist secret -- an action name, not a key
     USER_CREATE = "user.create"
