@@ -43,14 +43,14 @@ dns_nameservers:
 
 infrastructure:
   hosts:
-    slm: "{{ hostvars[groups['slm'][0]]['ansible_host'] | default('127.0.0.1') }}"
-    backend: "{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}"
-    frontend: "{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }}"
-    npu: "{{ hostvars[groups['npu'][0]]['ansible_host'] | default('127.0.0.1') }}"
-    database: "{{ hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1') }}"
-    aiml: "{{ hostvars[groups['aiml'][0]]['ansible_host'] | default('127.0.0.1') }}"
-    browser: "{{ hostvars[groups['browser'][0]]['ansible_host'] | default('127.0.0.1') }}"
-    reserved_1: "{{ hostvars[groups['vnc_nodes'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    slm: "{{ (hostvars[groups['slm'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('slm') else '127.0.0.1' }}"
+    backend: "{{ (hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('backend') else '127.0.0.1' }}"
+    frontend: "{{ (hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('frontend') else '127.0.0.1' }}"
+    npu: "{{ (hostvars[groups['npu'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('npu') else '127.0.0.1' }}"
+    database: "{{ (hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('database') else '127.0.0.1' }}"
+    aiml: "{{ (hostvars[groups['aiml'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('aiml') else '127.0.0.1' }}"
+    browser: "{{ (hostvars[groups['browser'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('browser') else '127.0.0.1' }}"
+    reserved_1: "{{ (hostvars[groups['vnc_nodes'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('vnc_nodes') else '127.0.0.1' }}"
     reserved_2: "127.0.0.1"
 
   ports:
