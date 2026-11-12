@@ -19,6 +19,42 @@ from utils import command_utils
 from utils.agent_command_helpers import run_agent_command
 from utils.command_utils import execute_shell_command
 
+#: The deadline each timeout test hands the runner; the same bound limits how long a killed process may take to vanish.
+_DEADLINE_S = 1
+#: Fields after the closing parenthesis of a stat line: state is first, start time is the 20th.
+_STAT_STATE, _STAT_START = 0, 19
+#: A shell snippet that records its own stat line (pid and start time) with builtins only.
+_RECORD_STAT = 'read -r stat < /proc/$$/stat; echo "$stat"'
+
+
+def _stat_fields(stat_line: str) -> list[str]:
+    """The stat fields that follow the command name, which may itself contain spaces."""
+    return stat_line.rpartition(")")[2].split()
+
+
+def _is_gone(pid: int, start: str) -> bool:
+    """True once *pid* is not a running process: absent, a zombie, or reused by a newer process.
+
+    A killed child that nobody has reaped yet is a zombie: dead, but ``os.kill(pid, 0)`` still succeeds.
+    """
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8") as handle:
+            fields = _stat_fields(handle.read())
+    except (FileNotFoundError, ProcessLookupError):
+        return True
+    return fields[_STAT_STATE] == "Z" or fields[_STAT_START] != start
+
+
+async def _gone_within_deadline(pid: int, start: str) -> bool:
+    """Poll until *pid* is gone or the deadline's worth of time has passed; SIGKILL delivery is asynchronous."""
+    loop = asyncio.get_running_loop()
+    give_up = loop.time() + _DEADLINE_S
+    while not await asyncio.to_thread(_is_gone, pid, start):
+        if loop.time() >= give_up:
+            return False
+        await asyncio.sleep(0.02)
+    return True
+
 
 def _alive(pid: int) -> bool:
     try:
@@ -32,23 +68,34 @@ def _read_stripped(path) -> str:
     return path.read_text(encoding="utf-8").strip() if path.exists() else ""
 
 
-async def _pid_from(path) -> int:
+async def _stat_from(path) -> str:
     for _ in range(50):
         text = await asyncio.to_thread(_read_stripped, path)
         if text:
-            return int(text)
+            return text
         await asyncio.sleep(0.05)
     raise AssertionError("the child never wrote its pid")
+
+
+async def _pid_from(path) -> int:
+    return int((await _stat_from(path)).split()[0])
+
+
+async def _identity_from(path) -> tuple[int, str]:
+    """The child's pid and its start time, so a pid reused later is not mistaken for the child."""
+    text = await _stat_from(path)
+    return int(text.split()[0]), _stat_fields(text)[_STAT_START]
 
 
 @pytest.mark.asyncio
 async def test_a_command_with_no_policy_is_killed_at_the_default_deadline(tmp_path):
     pid_file = tmp_path / "pid"
-    with patch.object(command_utils, "DEFAULT_SHELL_TIMEOUT_S", 1):
-        result = await execute_shell_command(f"sh -c 'echo $$ > {pid_file}; sleep 60'")
+    with patch.object(command_utils, "DEFAULT_SHELL_TIMEOUT_S", _DEADLINE_S):
+        result = await execute_shell_command(f"sh -c '{_RECORD_STAT} > {pid_file}; sleep 60'")
     assert result["return_code"] == 124 and result["status"] == "error"
-    assert result["stderr"] == "Command timed out after 1s and was killed"
-    assert not _alive(await _pid_from(pid_file)), "the child outlived the deadline, not only the shell"
+    assert result["stderr"] == f"Command timed out after {_DEADLINE_S}s and was killed"
+    pid, start = await _identity_from(pid_file)
+    assert await _gone_within_deadline(pid, start), "the child outlived the deadline, not only the shell"
 
 
 @pytest.mark.asyncio
@@ -111,13 +158,25 @@ async def test_a_timed_out_command_kills_only_its_own_process_group(tmp_path):
         signalled.append(pgid)
         real_killpg(pgid, sig)
 
-    with patch.object(command_utils, "DEFAULT_SHELL_TIMEOUT_S", 1), patch("os.killpg", recording_killpg):
-        result = await execute_shell_command(f"sh -c 'echo $$ > {pid_file}; sleep 60'")
-    child = await _pid_from(pid_file)
+    with patch.object(command_utils, "DEFAULT_SHELL_TIMEOUT_S", _DEADLINE_S), patch("os.killpg", recording_killpg):
+        result = await execute_shell_command(f"sh -c '{_RECORD_STAT} > {pid_file}; sleep 60'")
+    child, start = await _identity_from(pid_file)
     assert result["timed_out"] is True
     assert signalled and own_group not in signalled and 0 not in signalled
-    assert child != own_group and not _alive(child)  # the shell was its group's leader: pid == pgid
+    assert child != own_group and await _gone_within_deadline(child, start)
     assert os.getpgid(0) == own_group  # and we are still here
+
+
+@pytest.mark.asyncio
+async def test_a_grandchild_the_shell_waits_on_dies_with_the_group(tmp_path):
+    """Killing only the shell would orphan this sleep for its full minute; the group kill ends it within the deadline."""
+    pid_file = tmp_path / "grandchild"
+    script = f'sleep 60 & read -r stat < /proc/$!/stat; echo "$stat" > {pid_file}; wait'
+    with patch.object(command_utils, "DEFAULT_SHELL_TIMEOUT_S", _DEADLINE_S):
+        result = await execute_shell_command(f"sh -c '{script}'")
+    pid, start = await _identity_from(pid_file)
+    assert result["timed_out"] is True
+    assert await _gone_within_deadline(pid, start), "a process the shell started survived the group kill"
 
 
 @pytest.mark.asyncio
