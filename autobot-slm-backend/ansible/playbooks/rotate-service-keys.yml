@@ -206,7 +206,10 @@
 
   tasks:
     - name: Restart backend via systemctl
-      ansible.builtin.include_tasks: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+        apply:
+          tags: [restart]
       vars:
         restart_unit_name: autobot-backend
       tags: [restart]

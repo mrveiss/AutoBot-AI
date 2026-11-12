@@ -8,6 +8,7 @@
     daemon_reload: true
 
 - name: restart ollama
-  ansible.builtin.systemd:
-    name: ollama
-    state: restarted
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: ollama
+  become: true
