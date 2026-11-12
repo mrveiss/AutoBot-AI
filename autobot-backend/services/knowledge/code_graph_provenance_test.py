@@ -31,6 +31,8 @@ from services.knowledge.code_indexer import (
     CodeIndexer,
     CodeIndexResult,
     GraphProvenance,
+    cache_version,
+    grammar_versions_json,
     graph_commits_behind,
     load_graph_provenance,
 )
@@ -102,6 +104,7 @@ def _provenance(**overrides) -> dict:
         "indexed_at_commit": "a" * 40,
         "indexed_at": "2026-08-09T00:00:00+00:00",
         "extractor_version": EXTRACTOR_VERSION,
+        "grammar_versions": grammar_versions_json(),
         "root_dir": "/repo",
         "files_with_extractor": 90,
         "files_total": 100,
@@ -465,7 +468,7 @@ def _cache_file(tmp_path: Path, payload: dict) -> Path:
 
 
 def test_a_cache_written_by_this_version_is_reused(tmp_path):
-    cache = _cache_file(tmp_path, {"a.py": "hash-a", _CACHE_VERSION_KEY: EXTRACTOR_VERSION})
+    cache = _cache_file(tmp_path, {"a.py": "hash-a", _CACHE_VERSION_KEY: cache_version()})
 
     assert _indexer(_FakeCollection(), cache_file=cache)._hash_cache == {"a.py": "hash-a"}
 
@@ -477,7 +480,9 @@ def test_a_version_bump_discards_the_whole_cache(tmp_path):
     that reads this file change" — so without this gate a bumped extractor would
     skip every unchanged file and the graph would stay built by the old one.
     """
-    cache = _cache_file(tmp_path, {"a.py": "hash-a", _CACHE_VERSION_KEY: EXTRACTOR_VERSION - 1})
+    cache = _cache_file(
+        tmp_path, {"a.py": "hash-a", _CACHE_VERSION_KEY: cache_version(extractor_version=EXTRACTOR_VERSION - 1)}
+    )
 
     assert _indexer(_FakeCollection(), cache_file=cache)._hash_cache == {}
 
@@ -497,7 +502,7 @@ def test_the_version_marker_round_trips_and_is_not_a_file_entry(tmp_path):
     indexer._save_cache()
     written = json.loads(cache.read_text(encoding="utf-8"))
 
-    assert written[_CACHE_VERSION_KEY] == EXTRACTOR_VERSION
+    assert written[_CACHE_VERSION_KEY] == cache_version()
     assert _indexer(_FakeCollection(), cache_file=cache)._hash_cache == {"a.py": "hash-a"}
 
 
