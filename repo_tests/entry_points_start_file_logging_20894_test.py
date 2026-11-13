@@ -406,8 +406,25 @@ def test_exemptions_are_not_stale() -> None:
     assert not stale, f"no longer launched -- drop from the exemptions: {stale}"
     small = sorted(p for p in OVERSIZE if (count_lines(_ROOT / p) or 0) <= MAX_LINES)
     assert not small, f"now at or under {MAX_LINES} lines -- wire {_CALL}() and drop from OVERSIZE (#20894): {small}"
-    done = sorted(p for p in OVERSIZE if calls_setup_logging(_parse(_ROOT, p) or ast.Module(body=[], type_ignores=[])))
-    assert not done, f"now call {_CALL}() -- drop from OVERSIZE: {done}"
+    done = completed_exemptions(_ROOT, {"OVERSIZE": OVERSIZE, "CONSOLE_ONLY": CONSOLE_ONLY})
+    assert not done, f"now call {_CALL}() -- drop from the exemption: {done}"
+
+
+def completed_exemptions(root: Path, tables: dict[str, dict[str, str]]) -> list[str]:
+    """`TABLE: path` for each exempted entry that now calls the setup, so its exemption is stale (#20894)."""
+    empty = ast.Module(body=[], type_ignores=[])
+    return sorted(
+        f"{name}: {p}" for name, table in tables.items() for p in table if calls_setup_logging(_parse(root, p) or empty)
+    )
+
+
+def test_control_a_completed_exemption_is_reported_in_either_table(tmp_path: Path) -> None:
+    """Control: an OVERSIZE or CONSOLE_ONLY entry that calls the setup is stale; one that does not is not."""
+    done = f"from {_MANAGER} import {_CALL}\n{_CALL}()\n"
+    _plant(tmp_path, {"a.py": done, "b.py": done, "c.py": "x = 1\n"})
+    tables = {"OVERSIZE": {"a.py": "r", "c.py": "r"}, "CONSOLE_ONLY": {"b.py": "r"}}
+    assert completed_exemptions(tmp_path, tables) == ["CONSOLE_ONLY: b.py", "OVERSIZE: a.py"]
+    assert completed_exemptions(tmp_path, {"CONSOLE_ONLY": {"c.py": "r"}}) == []
 
 
 def _plant(root: Path, files: dict[str, str]) -> list[str]:

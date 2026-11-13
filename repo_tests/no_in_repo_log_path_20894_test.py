@@ -145,7 +145,8 @@ def eager_handlers_on_resolved_dir(text: str) -> int:
         if not isinstance(node, ast.Call):
             continue
         name = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
-        if name in _EAGER_HANDLERS and any(_names(arg) & _RESOLVED_DIR_NAMES for arg in node.args):
+        path_args = [*node.args, *(kw.value for kw in node.keywords if kw.arg == "filename")]
+        if name in _EAGER_HANDLERS and any(_names(arg) & _RESOLVED_DIR_NAMES for arg in path_args):
             count += 1
     return count
 
@@ -171,6 +172,11 @@ def test_the_eager_handler_detector_finds_each_spelling_and_ignores_the_safe_one
         'FirstWriteFileHandler(str(ssot_config.path.logs_path / "a.log"))': 0,
         'logging.FileHandler("/var/log/x.log")': 0,
         "logging.StreamHandler(logs_dir)": 0,
+        'logging.FileHandler(filename=str(ssot_config.path.logs_path / "a.log"))': 1,
+        'RotatingFileHandler(filename=resolve_logs_dir() / "a.log", maxBytes=1)': 1,
+        'logging.FileHandler(filename="/var/log/x.log")': 0,
+        'FirstWriteFileHandler(filename=str(logs_dir / "a.log"))': 0,
+        'logging.FileHandler("/var/log/x.log", mode=str(logs_dir))': 0,
     }
     for source, expected in planted.items():
         assert eager_handlers_on_resolved_dir(source) == expected, source

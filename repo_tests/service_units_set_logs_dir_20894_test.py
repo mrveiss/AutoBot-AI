@@ -23,7 +23,8 @@ from tools.lint._scan_helpers import tracked_paths
 _ROOT = repo_root()
 _VAR = "AUTOBOT_LOGS_DIR"
 _PYTHON_EXEC = re.compile(r"^ExecStart=.*(python|uvicorn|celery)", re.MULTILINE)
-_SET = re.compile(rf"^(Environment=\"?)?{_VAR}=", re.MULTILINE)
+# A blank value counts as unset: the resolver treats `AUTOBOT_LOGS_DIR=` as absent.
+_SET = re.compile(rf"^(Environment=\"?)?{_VAR}=[ \t]*[^\s\"]", re.MULTILINE)
 _VALUE = re.compile(rf"^(?:Environment=)?\"?{_VAR}=([^\"\n]*)", re.MULTILINE)
 _ENVFILE = re.compile(r"^EnvironmentFile=(.+)$", re.MULTILINE)
 _STRICT = re.compile(r"^ProtectSystem=strict\s*$", re.MULTILINE)
@@ -272,6 +273,14 @@ def test_control_a_unit_without_the_variable_is_caught(tmp_path: Path) -> None:
         '[Service]\nEnvironment="AUTOBOT_LOGS_DIR={{ d }}"\nExecStart=/x/python m\n', encoding="utf-8"
     )
     assert _unset(tmp_path, ["roles/bad/templates/svc.service.j2"]) == []
+
+
+def test_control_a_blank_value_does_not_count_as_set() -> None:
+    """Control: `AUTOBOT_LOGS_DIR=` (any spelling) is unset to the resolver; a value is set."""
+    for blank in (f"{_VAR}=\n", f'Environment="{_VAR}="\n', f"Environment={_VAR}=\n", f"{_VAR}=   \n"):
+        assert not _SET.search(blank), blank
+    for value in (f"{_VAR}=/l\n", f'Environment="{_VAR}=/l"\n', f"Environment={_VAR}={{{{ d }}}}\n"):
+        assert _SET.search(value), value
 
 
 def test_every_configured_log_dir_is_writable_under_the_units_sandbox() -> None:

@@ -182,3 +182,33 @@ def test_the_real_loader_path_finds_the_deployed_catalog():
     assert catalog.catalog_path.name == CATALOG_FILENAME
     assert catalog.catalog_path.exists()
     assert catalog.get_catalog_stats()["version"], "loaded the built-ins, which carry no version"
+
+
+def test_two_concurrent_first_uses_load_the_catalog_once():
+    """#20894: the first-use check and the load are one step, so racing readers do not both load."""
+    import threading
+    import time
+
+    catalog = ErrorCatalog()
+    loads: list[int] = []
+
+    def slow_load(catalog_path=None):
+        loads.append(1)
+        time.sleep(0.05)  # long enough for every other thread to reach the check
+        catalog._initialized = True
+        return True
+
+    catalog.load_catalog = slow_load  # type: ignore[method-assign]
+    barrier = threading.Barrier(4)
+
+    def first_use():
+        barrier.wait()
+        catalog.ensure_loaded()
+
+    threads = [threading.Thread(target=first_use) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(loads) == 1, f"the catalog was loaded {len(loads)} times by concurrent first uses"

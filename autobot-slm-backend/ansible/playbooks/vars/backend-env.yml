@@ -15,6 +15,7 @@ backend_group: autobot
 backend_install_dir: "{{ autobot.base_dir }}/autobot-backend"
 backend_code_dir: "{{ autobot.base_dir }}/autobot-backend"
 backend_log_dir: /var/log/autobot
+backend_app_log_dir: "{{ autobot.base_dir }}/logs"  # #20894: AUTOBOT_LOGS_DIR, mirrors roles/backend/defaults (completeness is a guard)
 backend_data_dir: /var/lib/autobot
 backend_host: "0.0.0.0"
 backend_port: 8001

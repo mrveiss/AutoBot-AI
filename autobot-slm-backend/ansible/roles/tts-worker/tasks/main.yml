@@ -100,9 +100,19 @@
     group: "{{ tts_group }}"
   loop:
     - "{{ tts_install_dir }}"
-    - "{{ tts_app_log_dir }}"
     - "{{ tts_models_dir }}"
     - "{{ tts_voices_dir }}"
+  tags: ['tts', 'dirs']
+
+- name: "Ensure the application log directory exists (#20894)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/ensure_app_log_dir.yml
+    apply:
+      tags: ['tts', 'dirs']
+  vars:
+    app_log_dir: "{{ tts_app_log_dir }}"
+    app_log_dir_owner: "{{ tts_user }}"
+    app_log_dir_group: "{{ tts_group }}"
   tags: ['tts', 'dirs']
 
 # #12425: tts_log_dir defaults to the SHARED /var/log/autobot (common role),
