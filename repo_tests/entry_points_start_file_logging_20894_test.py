@@ -542,8 +542,8 @@ def test_control_an_unaliased_dotted_import_counts_and_a_near_miss_does_not() ->
     """Control: `import <manager>` + `<manager>.setup_logging()` is a startup call; importing it without the call,
     or calling the same name on another module, is not."""
     dotted = f"import {_MANAGER}\n{_MANAGER}.{_CALL}()\n"
-    assert calls_setup_logging(ast.parse(dotted))
-    assert calls_setup_logging(ast.parse(f"import {_MANAGER} as lm\nlm.{_CALL}()\n"))
-    assert not calls_setup_logging(ast.parse(f"import {_MANAGER}\n"))
-    assert not calls_setup_logging(ast.parse(f"import {_MANAGER}\nother.{_MANAGER}.{_CALL}()\n"))
-    assert not calls_setup_logging(ast.parse(f"import os.path\n{_MANAGER}.{_CALL}()\n"))
+    assert calls_setup_logging(parse_cache.parse(dotted))
+    assert calls_setup_logging(parse_cache.parse(f"import {_MANAGER} as lm\nlm.{_CALL}()\n"))
+    assert not calls_setup_logging(parse_cache.parse(f"import {_MANAGER}\n"))
+    assert not calls_setup_logging(parse_cache.parse(f"import {_MANAGER}\nother.{_MANAGER}.{_CALL}()\n"))
+    assert not calls_setup_logging(parse_cache.parse(f"import os.path\n{_MANAGER}.{_CALL}()\n"))
