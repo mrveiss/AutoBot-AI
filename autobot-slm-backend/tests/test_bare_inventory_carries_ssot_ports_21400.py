@@ -10,15 +10,18 @@ goes through ``ansible_utils.bare_inventory_args``.
 """
 
 import asyncio
+import importlib.util
 import json
 import re
+import sys
 from pathlib import Path
+
+import pytest
 
 from autobot_shared.ssot_config import config
 from autobot_shared.testfile_names import is_test_filename
 from services import ansible_utils
 from services.ansible_utils import bare_inventory_args
-from services.deployment import DeploymentService
 
 _ROOT = Path(__file__).resolve().parents[1]
 # `"-i", "<host>,"`-shaped argv pairs; the one place allowed to spell one is the shared builder.
@@ -39,8 +42,26 @@ def _ports_in(cmd: list[str]) -> dict:
     return {key: merged[key] for key in _expected()}
 
 
-def _service() -> DeploymentService:
-    service = DeploymentService.__new__(DeploymentService)
+@pytest.fixture()
+def deployment():
+    """conftest stubs ``services.deployment`` (a MagicMock class); load the real file under its own name.
+
+    Loading imports real modules into sys.modules; snapshot and restore so none leak into other tests.
+    """
+    before = dict(sys.modules)
+    spec = importlib.util.spec_from_file_location("_real_deployment_21400", _ROOT / "services" / "deployment.py")
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+        yield module
+    finally:
+        for key in set(sys.modules) - set(before):
+            del sys.modules[key]
+        sys.modules.update(before)
+
+
+def _service(deployment):
+    service = deployment.DeploymentService.__new__(deployment.DeploymentService)
     service._find_ansible_playbook = lambda: "ansible-playbook"
     return service
 
@@ -55,14 +76,16 @@ def test_shared_builder_names_the_host_and_both_ports() -> None:
     assert _ports_in(cmd) == _expected()
 
 
-def test_frontend_role_deploy_command_carries_both_ports_from_the_ssot() -> None:
-    cmd = _service()._build_ansible_base_command(Path("deploy.yml"), "node-a", ["frontend"])
+def test_frontend_role_deploy_command_carries_both_ports_from_the_ssot(deployment) -> None:
+    cmd = _service(deployment)._build_ansible_base_command(Path("deploy.yml"), "node-a", ["frontend"])
     assert "target_roles=frontend" in cmd
     assert _ports_in(cmd) == _expected()
 
 
-def test_enrollment_command_carries_both_ports_from_the_ssot() -> None:
-    cmd = _service()._build_enrollment_command(Path("enroll-node.yml"), "node-a", "n1", "autobot", 22, "http://x")
+def test_enrollment_command_carries_both_ports_from_the_ssot(deployment) -> None:
+    cmd = _service(deployment)._build_enrollment_command(
+        Path("enroll-node.yml"), "node-a", "n1", "autobot", 22, "http://x"
+    )
     assert _ports_in(cmd) == _expected()
 
 
