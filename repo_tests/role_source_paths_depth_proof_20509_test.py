@@ -7,6 +7,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
@@ -116,5 +117,62 @@ def test_the_role_less_callers_name_their_anchor_and_the_tasks_assert_it() -> No
     ):
         text = (root / _SHARED / name).read_text(encoding="utf-8")
         assert f"{var} | length > 0" in text, name
-    play = (root / "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml").read_text(encoding="utf-8")
-    assert play.count("repo_source_root:") >= play.count("_shared/tasks/clear_venv_husks.yml") >= 2
+    play = yaml.load_all(
+        (root / "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml").read_text(encoding="utf-8"),
+        Loader=_PlaybookLoader,
+    )
+    tasks = [task for doc in play for task in _walk_tasks(doc)]
+    includes = [t for t in tasks if _includes(t, "clear_venv_husks.yml")]
+    assert len(includes) >= 2, "control: the walk sees the husk-clearing includes"
+    assert _includes_without_anchor(tasks, "clear_venv_husks.yml") == []
+
+
+class _PlaybookLoader(yaml.SafeLoader):
+    """SafeLoader that reads Ansible's custom tags (``!unsafe``, ``!vault``) as plain data."""
+
+
+_PlaybookLoader.add_multi_constructor("!", lambda loader, suffix, node: None)
+_INCLUDE_KEYS = ("ansible.builtin.include_tasks", "include_tasks", "ansible.builtin.import_tasks", "import_tasks")
+
+
+def _walk_tasks(node):
+    """Every mapping in a playbook document, depth first (plays, blocks and tasks alike)."""
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _walk_tasks(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _walk_tasks(item)
+
+
+def _includes(task: dict, target: str) -> bool:
+    for key in _INCLUDE_KEYS:
+        spec = task.get(key)
+        file = spec.get("file") if isinstance(spec, dict) else spec
+        if isinstance(file, str) and file.endswith("/" + target):
+            return True
+    return False
+
+
+def _includes_without_anchor(tasks, target: str) -> list:
+    """Names of the includes of *target* whose OWN ``vars`` lack ``repo_source_root`` (another task's does not count)."""
+    return [
+        t.get("name", "<unnamed>")
+        for t in tasks
+        if _includes(t, target) and "repo_source_root" not in (t.get("vars") or {})
+    ]
+
+
+def test_contrast_each_include_must_carry_its_own_anchor() -> None:
+    both = yaml.safe_load(
+        "- name: a\n  ansible.builtin.include_tasks: ../x/_shared/tasks/clear_venv_husks.yml\n  vars: {repo_source_root: /r}\n"
+        "- name: b\n  ansible.builtin.include_tasks: ../x/_shared/tasks/clear_venv_husks.yml\n  vars: {repo_source_root: /r}\n"
+    )
+    assert _includes_without_anchor(both, "clear_venv_husks.yml") == []
+    one_missing = yaml.safe_load(
+        "- name: a\n  ansible.builtin.include_tasks: ../x/_shared/tasks/clear_venv_husks.yml\n  vars: {repo_source_root: /r}\n"
+        "- name: b\n  ansible.builtin.include_tasks: ../x/_shared/tasks/clear_venv_husks.yml\n"
+        "- name: unrelated\n  ansible.builtin.set_fact: {repo_source_root: /r}\n  vars: {repo_source_root: /r}\n"
+    )
+    assert _includes_without_anchor(one_missing, "clear_venv_husks.yml") == ["b"]
