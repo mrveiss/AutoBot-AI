@@ -254,9 +254,9 @@ def test_tree_sitter_core_is_mirrored_alongside_tree_sitter_python():
 
 def test_code_quality_runs_the_audit():
     """A guard nothing invokes is documentation, not enforcement."""
-    workflow = (REPO_ROOT / ".github" / "workflows" / "code-quality.yml").read_text(encoding="utf-8")
+    workflow = (REPO_ROOT / ".github" / "workflows" / "_gate-code-quality.yml").read_text(encoding="utf-8")
     assert "check_requirements_ci_drift.py --audit" in workflow, (
-        "code-quality.yml no longer runs the requirements-ci drift audit — the guard "
+        "_gate-code-quality.yml no longer runs the requirements-ci drift audit — the guard "
         "would stop blocking merges while these tests kept passing (#14551)"
     )
     assert _CHECKER.is_file(), f"{_CHECKER} is gone but the workflow still calls it"

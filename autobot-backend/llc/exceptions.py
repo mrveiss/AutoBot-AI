@@ -85,6 +85,24 @@ class AdapterAuthFailed(AdapterRunFailed):
     """
 
 
+class RunKeyIssueFailed(Exception):
+    """The run-scoped API key an agent needs to call the Agent API could not be issued (#20149).
+
+    A woken agent without its key cannot take its task, so the scheduler fails the run with
+    this reason instead of dispatching a keyless agent. The message names the stage only: the
+    underlying error (a database or key-service failure) is logged with its traceback and
+    chained as ``__cause__``, never carried in the text a run record or API caller sees.
+    """
+
+    STAGE = "run key issue"
+
+    def __init__(self, agent_id: str) -> None:
+        self.agent_id = agent_id
+        super().__init__(
+            f"agent {agent_id}: {self.STAGE} failed - the run-scoped API key was not issued, run not dispatched"
+        )
+
+
 class HeartbeatDispatchSkipped(Exception):
     """Raised when a heartbeat is not actually dispatched to any adapter (GH#9951).
 

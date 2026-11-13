@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The npm audit gate must audit what it claims to audit (#16131).
 
-`security.yml` reported "0 advisories at every severity across 1191 deps" while
+`_gate-security.yml` reported "0 advisories at every severity across 1191 deps" while
 scanning **one** of the workspaces that can be audited. The number was true and
 the scope was not, and the summary read as a repository-wide result -- family F:
 the output is correct, complete, and about a different question.
@@ -24,7 +24,7 @@ from repo_tests._reach import declare
 
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
-WORKFLOW = Path(".github/workflows/security.yml")
+WORKFLOW = Path(".github/workflows/_gate-security.yml")
 
 #: Workspaces whose findings have NOT yet been triaged, so the gate reports them
 #: without blocking on them (#16131 AC5). Widening a gate and a backlog of

@@ -83,6 +83,10 @@ Direct Redis vector store operations (advanced).
 }
 ```
 
+`flush` deletes nothing. It requests a knowledge wipe, for an administrator signed in as a user only, and answers
+with the pending approval (`approval_id`, `status`, `action`). The wipe runs only after a human approves it in the
+Approvals inbox and covers the knowledge base's own indexes, keys and collections, not a whole Redis database.
+
 **Input Schema:**
 ```json
 {

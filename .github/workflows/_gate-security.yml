@@ -1,0 +1,654 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Security Scanning workflow
+#
+# Security checks are blocking — failures prevent merge (Issue #2874).
+#
+# #13543 — PER-SCANNER GATING DECISIONS. Every scanner below used to end in
+# `|| true`, so `Dependency Security Scan` and `Static Application Security
+# Testing (SAST)` could go red only on checkout, toolchain setup or dependency
+# install. The names claimed a substantive control; a green tick meant nothing
+# about security. Each scanner now runs its report through
+# `pipeline-scripts/security_scan_gate.py`, which fails the step on findings
+# beyond a RECORDED allowance and writes a severity table to the job summary.
+#
+# The backlog was measured before each decision, not assumed:
+#
+#   | scanner   | backlog measured        | decision                            |
+#   |-----------|-------------------------|-------------------------------------|
+#   | bandit    | 0 findings, all severities, against `.bandit` over the three
+#   |           | scanned trees           | GATES at `any`, no allowance        |
+#   | pip-audit | 4 advisories, all in chromadb==1.5.9 (run 32834864623)
+#   |           |                         | GATES at `any`, 4 named allowances  |
+#   | npm audit | scans EVERY workspace with a lockfile (#16131). Blocking
+#   |           | for autobot-frontend; reporting-only for the rest until
+#   |           | each is triaged. Previously autobot-frontend ONLY (#13400),
+#   |           | while reporting a repository-wide figure. All SEVEN with a
+#   |           | lockfile are now scanned; one blocks, six report (#16131).
+#   |           | re-confirmed by the same run
+#   |           |                         | GATES at `high`, no allowance       |
+#   | safety    | not measurable in CI — unauthenticated `safety check` is
+#   |           | deprecated upstream and needs an API key
+#   |           |                         | REPORT ONLY, stated in the summary  |
+#   | flake8    | 24,256 findings (23,758 E501, 500 E402) over the same trees
+#   |           |                         | REPORT ONLY, stated in the summary  |
+#   | semgrep   | gates already (#6597)   | unchanged                           |
+#
+# A `|| true` on a SCANNER line is fine and deliberate: the scanner's own exit
+# code only says "findings exist", which is the gate's job to judge, and the
+# scanner must still write its report. A `|| true` on a GATE line is the defect
+# this issue is about — `pipeline-scripts/security_scan_gate_test.py` fails the
+# build if one is ever added.
+#
+# ALLOWANCES ARE NAMED, NOT COUNTED. `--allow-id` tolerates one specific
+# advisory; there is deliberately no "tolerate N findings" knob, because four
+# fixed advisories replaced by four new ones passes such a gate without a word.
+# An allowance the scanner no longer reports FAILS the step, so the list is
+# forced to shrink as findings are fixed and cannot rot into a blanket.
+#
+# Do NOT relax a gate to clear a red build. A red here means a real finding
+# reached the tree; add an allowance only by naming the advisory and recording
+# why, exactly as #13400 established.
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
+
+name: Security Scanning (reusable body)
+
+on:
+  workflow_call:
+    inputs:
+      deps:
+        description: "'true' runs the dependency scan (ci.yml passes the deps filter; scheduled runs keep the default)"
+        type: string
+        default: 'true'
+      static_analysis:
+        description: "'true' runs the SAST scan (ci.yml passes the static_analysis filter; scheduled runs keep the default)"
+        type: string
+        default: 'true'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  dependency-security:
+    name: Dependency Security Scan
+    # Always run on schedule (daily security scan); gate on `deps` for push/PR.
+    if: inputs.deps == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v7
+      with:
+        python-version-file: '.python-version'
+        cache: 'pip'
+        cache-dependency-path: |
+          requirements*.txt
+          autobot-backend/requirements*.txt
+
+    - name: Install CI requirements
+      uses: ./.github/actions/install-ci-requirements
+      with:
+        constraints: constraints/shared.txt
+
+    - name: Install Python dependencies
+      run: |
+        # #19426: the scanners live in their OWN venv. pip-audit audits an
+        # installed environment, so installing them beside the project put the
+        # scanners' dependencies in the audited set — safety pins
+        # `filelock<4.0`, which held a vulnerable filelock in place and failed
+        # the audit for a package the project does not choose. The audit below
+        # points pip-audit at the project interpreter via PIPAPI_PYTHON_LOCATION.
+        python -m venv "$RUNNER_TEMP/scanners"
+        "$RUNNER_TEMP/scanners/bin/python" -m pip install --upgrade pip
+        "$RUNNER_TEMP/scanners/bin/python" -m pip install pip-audit safety
+        echo "SCANNER_BIN=$RUNNER_TEMP/scanners/bin" >> "$GITHUB_ENV"
+        echo "PROJECT_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
+
+    # GATES (#13543). pip-audit reports no severity field at all, so the gate
+    # runs at `any` — filtering by a severity the tool never emits would pass
+    # everything through while looking like a threshold.
+    #
+    # MEASURED BACKLOG: 4 advisories, every one of them in `chromadb==1.5.9`
+    # (PYSEC-2026-311, CVE-2026-45830, CVE-2026-45831, CVE-2026-45833). They are
+    # named individually below rather than absorbed by a count, so a FIFTH
+    # advisory — or a different advisory in a different package — turns this step
+    # red on the run it appears. An allowance the scanner has stopped reporting
+    # also fails, so this list must shrink as the fix lands. Bumping chromadb is
+    # tracked as #15052: it is a core RAG dependency and the bump needs its own
+    # verification, not a line in a CI-wiring change.
+    #
+    # #15520 — the PYSEC-2026-3740 (nltk) allowance is retired: nltk 3.10.4 is no longer reported.
+    - name: Python Dependency Audit
+      run: |
+        set -euo pipefail
+        # `|| true` on the SCANNER only: its non-zero exit merely means
+        # "advisories exist", which the gate below is what judges. The report
+        # must still be written, and an absent report is a hard failure there.
+        # #19426: audit the PROJECT interpreter, never the scanner venv.
+        PIPAPI_PYTHON_LOCATION="$PROJECT_PYTHON" \
+          "$SCANNER_BIN/pip-audit" --format=json --output=python-audit.json || true
+        # Control: the report must describe the project interpreter. If
+        # PIPAPI_PYTHON_LOCATION were ignored, pip-audit would audit the scanner
+        # venv and the gate below would judge the wrong set without an error.
+        python3 -c 'import json,sys; n={d["name"].lower() for d in json.load(open("python-audit.json"))["dependencies"]}; bad=[] if "fastapi" in n and "pip-audit" not in n and "safety" not in n else sorted(n)[:20]; sys.exit("::error::pip-audit did not audit the project interpreter (#19426): %s" % bad if bad else 0)'
+        python3 pipeline-scripts/security_scan_gate.py \
+          --format pip-audit \
+          --report python-audit.json \
+          --title "Python dependency audit (pip-audit)" \
+          --fail-on any \
+          --allow-id PYSEC-2026-311 \
+          --allow-id CVE-2026-45830 \
+          --allow-id CVE-2026-45831 \
+          --allow-id CVE-2026-45833
+
+    # REPORT ONLY, and the step name says so (#13543). `safety check` without
+    # credentials is deprecated upstream and cannot be relied on to produce a
+    # verdict in CI, so gating on it would gate on whether an unauthenticated
+    # call happened to succeed. Its advisory source is the same PyPI data
+    # pip-audit already gates on above, so nothing is ungated by this decision —
+    # what changes is that the step no longer reads as a control it is not.
+    - name: Safety Check (report only — does not gate)
+      # #13543: `!cancelled()` so an earlier scanner's GATE failing does not skip
+      # this one. Before the gates existed no scanner could fail, so ordering was
+      # free; now a bandit finding would otherwise hide every later scanner's
+      # result — the same decoupling ci.yml applies between its suites (#13300).
+      if: ${{ !cancelled() }}
+      run: |
+        {
+          echo "## Safety Security Report (report only)"
+          echo
+          echo "**This step does not gate.** Unauthenticated \`safety check\` is deprecated"
+          echo "upstream; the same advisories are gated by pip-audit above (#13543)."
+        } >> "$GITHUB_STEP_SUMMARY"
+        # #19426: safety runs from the scanner venv, so it is fed the PROJECT's
+        # freeze on stdin — run bare it would report on its own venv instead.
+        set -o pipefail
+        "$PROJECT_PYTHON" -m pip freeze | "$SCANNER_BIN/safety" check --stdin --json --output safety-report.json || true
+        "$PROJECT_PYTHON" -m pip freeze | "$SCANNER_BIN/safety" check --stdin || true
+
+    - name: Setup Node.js
+      # #13543: `!cancelled()` so an earlier scanner's GATE failing does not skip
+      # this one. Before the gates existed no scanner could fail, so ordering was
+      # free; now a bandit finding would otherwise hide every later scanner's
+      # result — the same decoupling ci.yml applies between its suites (#13300).
+      if: ${{ !cancelled() }}
+      uses: actions/setup-node@v7
+      with:
+        node-version-file: .nvmrc
+        cache: 'npm'
+        cache-dependency-path: autobot-frontend/package-lock.json
+
+    - name: Install Frontend dependencies
+      # #13543: `!cancelled()` so an earlier scanner's GATE failing does not skip
+      # this one. Before the gates existed no scanner could fail, so ordering was
+      # free; now a bandit finding would otherwise hide every later scanner's
+      # result — the same decoupling ci.yml applies between its suites (#13300).
+      if: ${{ !cancelled() }}
+      # #13410: no CI job runs Cypress (only `test:e2e` needs the binary), so
+      # skip the ~100MB CDN download — a Cypress CDN 504 must never red out a
+      # required check. Local dev `npm ci` is unaffected and still gets it.
+      env:
+        CYPRESS_INSTALL_BINARY: '0'
+      run: |
+        cd autobot-frontend
+        npm ci
+
+    # GATES at high/critical (#13543). Backlog measured at 0 advisories across
+    # every severity over 1191 dependencies when #13400 armed the same lockfile
+    # in frontend-test.yml. The duplication with that job is deliberate: this
+    # workflow also runs on a daily `schedule`, where frontend-test.yml does not.
+    - name: Node.js Dependency Audit
+      # #13543: `!cancelled()` so an earlier scanner's GATE failing does not skip
+      # this one. Before the gates existed no scanner could fail, so ordering was
+      # free; now a bandit finding would otherwise hide every later scanner's
+      # result — the same decoupling ci.yml applies between its suites (#13300).
+      if: ${{ !cancelled() }}
+      run: |
+        set -euo pipefail
+        # Subshell rather than a bare `cd`, so the gate below is invoked on the
+        # canonical repo-root path — a `../` prefix here would be a script
+        # reference that repo-root path checks cannot resolve.
+        # EVERY workspace with a lockfile, discovered rather than listed (#16131).
+        # This step scanned autobot-frontend alone while six others carried a
+        # lockfile, and its summary reported a repository-wide result. The number
+        # was true; the scope was not. A hard-coded list would move the same
+        # defect up one level -- the list, not the tree, deciding what "every
+        # workspace" means -- so the set comes from git.
+        #
+        # repo_tests/npm_audit_covers_its_workspaces_test.py asserts this set
+        # against the tracked tree, so a new workspace fails there rather than
+        # sitting silently outside the scan.
+        # NUL-delimited: an unquoted $(...) word-splits on IFS, so a workspace
+        # whose path contains a space would be torn into fragments, `dirname`
+        # would name a directory that does not exist, and the workspace would
+        # drop out of the audit with no error (#16190).
+        while IFS= read -r -d '' lock; do
+          ws="$(dirname "$lock")"
+          ( cd "$ws" && npm audit --audit-level=moderate --json > npm-audit.json ) || true
+        done < <(git ls-files -z '*package-lock.json' | grep -zv node_modules)
+        # NO ALLOWANCES, AND THAT IS THE LIST DOING ITS JOB (#16089).
+        #
+        # This step carried `--allow-id @redocly/openapi-core` for one advisory
+        # with no reachable fix. The gate then FAILED on it -- not because the
+        # advisory returned, but because the scanner stopped reporting it:
+        #
+        #   allowance(s) ['@redocly/openapi-core'] name findings the scanner no
+        #   longer reports. Remove them; an allowance that matches nothing
+        #   tolerates whatever appears next.
+        #
+        # That is the self-cleaning property the allowance was justified against,
+        # arriving. An entry matching nothing is not harmless -- it silently
+        # admits whatever advisory appears in that package next, and it would
+        # have sat here indefinitely because nothing else asks whether an
+        # allowance is still needed.
+        #
+        # So the list is empty, which is the state to defend. Adding an entry
+        # needs the same evidence the last one did: the advisory has NO reachable
+        # fix (checked against the registry, not the advisory range -- a fix at a
+        # major version behind a third party's dependency range is still a fix),
+        # and it does not ship. Anything else is a bump.
+        # BLOCKING for autobot-frontend, REPORTING for the rest (#16131 AC5).
+        # Widening the scan and a backlog of untriaged findings in one change
+        # lands as a wall of failures nobody can action, and the usual response
+        # to that is to switch the gate off. So the widening lands first and each
+        # workspace becomes blocking as it is triaged. The staging list lives in
+        # repo_tests/npm_audit_covers_its_workspaces_test.py:UNTRIAGED and may
+        # only shrink -- a test fails if it goes stale, so it cannot quietly
+        # become a second permanent scope.
+        python3 pipeline-scripts/security_scan_gate.py \
+          --format npm-audit \
+          --report autobot-frontend/npm-audit.json \
+          --title "Frontend dependency audit (npm audit)" \
+          --fail-on high
+
+        while IFS= read -r -d '' lock; do
+          ws="$(dirname "$lock")"
+          [ "$ws" = "autobot-frontend" ] && continue
+          [ -f "$ws/npm-audit.json" ] || continue
+          echo "::group::npm audit — $ws (reporting only, not yet triaged)"
+          # `if !` rather than `|| true`: the gate is BLOCKED from being neutralised
+          # by a shell `||` (security_scan_gate_test), and rightly so. But
+          # `--fail-on never` does NOT make this call safe on its own -- read_report
+          # raises on an absent or empty report BEFORE --fail-on is read, and a
+          # failed `npm audit` in one untriaged workspace would then abort the whole
+          # step under `set -euo pipefail`, failing the job over a workspace that is
+          # explicitly meant not to block. Reported loudly, and not fatal.
+          if ! python3 pipeline-scripts/security_scan_gate.py --format npm-audit --report "$ws/npm-audit.json" --title "Dependency audit — $ws (reporting)" --fail-on never; then
+            echo "::warning::$ws — the audit report is missing or unreadable, so this workspace was NOT scanned. Not blocking (untriaged), but it is not clean either."
+          fi
+          echo "::endgroup::"
+        done < <(git ls-files -z '*package-lock.json' | grep -zv node_modules)
+
+    - name: Upload Security Reports
+      uses: actions/upload-artifact@v7.0.2
+      if: always()
+      with:
+        name: dependency-security-reports
+        path: |
+          python-audit.json
+          safety-report.json
+          autobot-frontend/npm-audit.json
+          **/npm-audit.json
+        retention-days: 30
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -rf .venv || true
+
+  static-analysis:
+    name: Static Application Security Testing (SAST)
+    # Always run on schedule (daily SAST scan); gate on `python` for push/PR.
+    if: inputs.static_analysis == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v7
+      with:
+        python-version-file: '.python-version'
+        cache: 'pip'
+        cache-dependency-path: |
+          requirements*.txt
+          autobot-backend/requirements*.txt
+
+    - name: Install SAST tools
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install bandit semgrep flake8 pylint
+
+    # GATES (#13543). Backlog measured at 0 findings at every severity, running
+    # `bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/`
+    # — immediately before the gate was armed, so arming it broke no open pull
+    # request and needed no triage campaign. Widened to include
+    # autobot-npu-worker/ (#17087): that tree shipped 3 unpinned
+    # `from_pretrained()` call sites invisible to this gate until now, found
+    # only by a manual local `bandit -r autobot-npu-worker/` run.
+    #
+    # A new finding here is a real one. Fix it, or suppress it at the call site
+    # with a specific-ID `# nosec` and a stated reason, which is the convention
+    # `.bandit` already documents. Do not re-add `|| true`.
+    - name: Bandit Security Linter
+      run: |
+        set -euo pipefail
+        # `|| true` on the SCANNER only — bandit exits non-zero when it finds
+        # anything, and the gate below is what turns that into a verdict.
+        python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ autobot-npu-worker/ -f json -o bandit-report.json || true
+        python3 pipeline-scripts/security_scan_gate.py \
+          --format bandit \
+          --report bandit-report.json \
+          --title "Static analysis (bandit)" \
+          --fail-on any
+
+    - name: Semgrep SAST Scan
+      # #13543: `!cancelled()` so an earlier scanner's GATE failing does not skip
+      # this one. Before the gates existed no scanner could fail, so ordering was
+      # free; now a bandit finding would otherwise hide every later scanner's
+      # result — the same decoupling ci.yml applies between its suites (#13300).
+      if: ${{ !cancelled() }}
+      # Blocking: exits non-zero when ERROR-severity findings are present.
+      # Uses only local .semgrep/rules.yaml — community configs (p/python,
+      # p/secrets) require SEMGREP_APP_TOKEN and are not available in CI.
+      # semgrep.sarif is pre-initialised so the upload step always has a file.
+      run: |
+        set -euo pipefail
+        echo "## Semgrep Security Analysis" >> "$GITHUB_STEP_SUMMARY"
+        # Pre-initialise so the SARIF upload step succeeds even if semgrep exits
+        # early (e.g. config error) before writing its own output file.
+        echo '{"version":"2.1.0","runs":[]}' > semgrep.sarif
+        semgrep \
+          --config=.semgrep/rules.yaml \
+          --severity ERROR \
+          --sarif \
+          --output=semgrep.sarif \
+          --error \
+          autobot-backend/ autobot-slm-backend/ autobot_shared/
+        semgrep \
+          --config=.semgrep/rules.yaml \
+          --json \
+          --output=semgrep-report.json \
+          autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
+
+    - name: Upload Semgrep SARIF to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26  # v4.39.2
+      if: always()
+      with:
+        sarif_file: semgrep.sarif
+        category: semgrep
+
+    # REPORT ONLY, and the step name says so (#13543). Measured backlog over the
+    # same three trees: 24,256 findings, of which 23,758 are E501 and 500 are
+    # E402. Gating that would red every pull request on day one, so the honest
+    # move is to keep it non-blocking, print the count where it is visible, and
+    # say in the summary that the step is not a verdict. Draining the backlog is
+    # its own work, not a `|| true` hidden behind a confident step name.
+    - name: Python Lint Report (report only — does not gate)
+      # #13543: `!cancelled()` so an earlier scanner's GATE failing does not skip
+      # this one. Before the gates existed no scanner could fail, so ordering was
+      # free; now a bandit finding would otherwise hide every later scanner's
+      # result — the same decoupling ci.yml applies between its suites (#13300).
+      if: ${{ !cancelled() }}
+      run: |
+        set -euo pipefail
+        python3 -m flake8 autobot-backend/ autobot-slm-backend/ autobot_shared/ --max-line-length=88 --extend-ignore=E203,W503 \
+          --output-file=flake8-report.txt || true
+        python3 pipeline-scripts/security_scan_gate.py \
+          --format flake8 \
+          --report flake8-report.txt \
+          --title "Python lint report (flake8)" \
+          --fail-on never
+
+    # Secret detection moved to its own ungated `secret-detection` job below
+    # (#16275). The step that stood here grepped three shapes inside these three
+    # directories, so the repository root was never read.
+
+    - name: Upload SAST Reports
+      uses: actions/upload-artifact@v7.0.2
+      if: always()
+      with:
+        name: sast-security-reports
+        path: |
+          bandit-report.json
+          semgrep-report.json
+          semgrep.sarif
+          flake8-report.txt
+        retention-days: 30
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -rf .venv || true
+
+  # #16275: the whole tracked tree, on EVERY event. There is deliberately no
+  # `needs: changes` gate. The committed Fernet key sat in an extensionless root
+  # dotfile that no path filter names, so a gate keyed on file types would skip
+  # exactly the change this job exists to catch. Replaces the SAST job's old
+  # "Secret Detection" step, which grepped three shapes in three directories.
+  secret-detection:
+    # DELIBERATELY UNGATED (#17957). Every other heavy job here is gated on
+    # draft == false, this one must not be: `no_tracked_key_material_test`
+    # asserts secret detection runs on every event with no `needs` and no
+    # `if`. Gating it would let a draft carry key material past the one scan
+    # that looks at the whole tree, and a draft is still a pushed branch.
+    name: Secret Detection (whole tree)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version-file: '.python-version'
+
+    # Pinned, and held equal to the pre-commit hook's `rev` and the baseline's
+    # "version" by repo_tests/no_tracked_key_material_test.py: a scanner version
+    # the baseline was not written with reports a different set of findings.
+    - name: Install detect-secrets
+      run: python -m pip install detect-secrets==1.5.0
+
+    # detect-secrets cannot see a bare key file: its high-entropy plugins read
+    # quoted strings, and it reported nothing for .infra_encryption_key. This
+    # step checks that shape; the next one covers everything else.
+    - name: Raw key material in any tracked file (Fernet keys, PEM private keys)
+      shell: bash
+      run: |
+        set -euo pipefail
+        git ls-files -z | python3 pipeline-scripts/tracked_key_material.py
+
+    - name: detect-secrets over every tracked file, against the audited baseline
+      # `!cancelled()` so a key-material finding above cannot hide this
+      # scanner's result (#13543).
+      if: ${{ !cancelled() }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        committed="${RUNNER_TEMP}/secrets.baseline.committed.json"
+        cp .secrets.baseline "${committed}"
+        # jq programs are single-quoted on purpose: `$f` is a jq variable.
+        # shellcheck disable=SC2016
+        unaudited="$(jq -r '.results | to_entries[] | .key as $f | .value[]
+          | select(.is_secret != false)
+          | "\($f):\(.line_number // "?"): \(.type) (is_secret: \(.is_secret // "unaudited"))"' "${committed}")"
+        # Rescan every git-tracked file with the baseline's own plugin and filter
+        # settings. This rewrites .secrets.baseline in this disposable checkout
+        # only; the verdicts compared below come from the committed copy.
+        detect-secrets scan --baseline .secrets.baseline
+        # A finding is known when the committed baseline holds the same
+        # (file, type, hashed_secret) with the verdict "not a secret". That is
+        # detect-secrets' own identity for a finding, so one that merely moved
+        # lines stays known. Only path, line and type are printed, never a value.
+        # shellcheck disable=SC2016
+        new="$(jq -r --slurpfile committed "${committed}" '
+          ([$committed[0].results | to_entries[] | .key as $f | .value[]
+            | select(.is_secret == false)
+            | {key: "\($f)|\(.type)|\(.hashed_secret)", value: true}] | from_entries) as $audited
+          | .results | to_entries[] | .key as $f | .value[]
+          | select($audited["\($f)|\(.type)|\(.hashed_secret)"] | not)
+          | "\($f):\(.line_number // "?"): \(.type)"' .secrets.baseline)"
+        # A rescan that read nothing reports no new finding, so the comparison
+        # above would pass on a scan that never looked. Its count is asserted
+        # against the committed baseline and the floor declared in the script,
+        # not only printed. Counts only; a crash there fails the step too.
+        status=0
+        floor_report="$(python3 pipeline-scripts/secrets_rescan_floor.py \
+          --rescanned .secrets.baseline --committed "${committed}")" || status=1
+        echo "${floor_report}"
+        {
+          echo "## Secret Detection (whole tree)"
+          echo "${floor_report}"
+        } >> "$GITHUB_STEP_SUMMARY"
+        # An entry marked real, or never audited, fails: a real secret is removed
+        # from the tree, never parked in the baseline.
+        if [ -n "${unaudited}" ]; then
+          while IFS= read -r entry; do
+            echo "::error::baseline entry without a not-a-secret verdict: ${entry}"
+          done <<< "${unaudited}"
+          echo "Baseline entries without a not-a-secret verdict: $(wc -l <<< "${unaudited}")" >> "$GITHUB_STEP_SUMMARY"
+          status=1
+        fi
+        if [ -n "${new}" ]; then
+          while IFS= read -r entry; do
+            echo "::error::potential secret not in the audited baseline: ${entry}"
+          done <<< "${new}"
+          echo "New findings not in the audited baseline: $(wc -l <<< "${new}")" >> "$GITHUB_STEP_SUMMARY"
+          status=1
+        fi
+        exit "${status}"
+
+  compliance-check:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    name: Security Compliance Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Check for Security Files
+      run: |
+        echo "## Security Compliance Check" >> "$GITHUB_STEP_SUMMARY"
+
+        # Check for required security files
+        files=(
+          ".gitignore"
+          "requirements.txt"
+        )
+
+        missing_files=()
+        for file in "${files[@]}"; do
+          if [ ! -e "$file" ]; then
+            missing_files+=("$file")
+          fi
+        done
+
+        if [ ${#missing_files[@]} -eq 0 ]; then
+          echo "All required security files present" >> "$GITHUB_STEP_SUMMARY"
+        else
+          {
+            echo "Missing security files:"
+            printf '%s\n' "${missing_files[@]}"
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Security Best Practices Check
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "## Security Best Practices" >> "$GITHUB_STEP_SUMMARY"
+
+        # Check for security-related imports
+        # shellcheck disable=SC2126
+        security_imports=$(grep -r "hashlib\|secrets\|cryptography\|bcrypt" autobot-backend/ autobot-slm-backend/ autobot_shared/ | wc -l)
+        echo "Security-related imports found: $security_imports" >> "$GITHUB_STEP_SUMMARY"
+
+        # Check for input validation patterns
+        # shellcheck disable=SC2126
+        validation_patterns=$(grep -r "validator\|sanitize\|escape\|validate" autobot-backend/ autobot-slm-backend/ autobot_shared/ | wc -l)
+        echo "Input validation patterns found: $validation_patterns" >> "$GITHUB_STEP_SUMMARY"
+
+        # Check for error handling
+        # shellcheck disable=SC2126
+        error_handling=$(grep -r "try:\|except\|raise" autobot-backend/ autobot-slm-backend/ autobot_shared/ | wc -l)
+        echo "Error handling patterns found: $error_handling" >> "$GITHUB_STEP_SUMMARY"
+
+  security-summary:
+    name: Security Summary Report
+    runs-on: ubuntu-latest
+    needs: [dependency-security, static-analysis, secret-detection, compliance-check]
+    if: always()
+
+    steps:
+    - name: Download all security reports
+      uses: actions/download-artifact@v8
+
+    # #13516: `github.ref_name` / `github.sha` through `env:`. Neither is
+    # attacker-settable here — on `pull_request` these resolve to the PR number,
+    # not the fork's branch name — so this is defence in depth, fixed as a pair.
+    - name: Generate Security Summary
+      env:
+        REF_NAME: ${{ github.ref_name }}
+        COMMIT_SHA: ${{ github.sha }}
+        SECRET_DETECTION_RESULT: ${{ needs.secret-detection.result }}
+      run: |
+        {
+          echo "# Security Scan Summary"
+          echo ""
+          echo "**Scan Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "**Branch:** $REF_NAME"
+          echo "**Commit:** $COMMIT_SHA"
+          echo ""
+        } > security-summary.md
+
+        # Check if reports exist and summarize
+        if [ -d "dependency-security-reports" ]; then
+          {
+            echo "## Dependency Security"
+            echo "- Python audit completed"
+            echo "- Node.js audit completed"
+            echo ""
+          } >> security-summary.md
+        fi
+
+        if [ -d "sast-security-reports" ]; then
+          {
+            echo "## Static Analysis Security Testing"
+            echo "- Bandit security linting completed"
+            echo "- Semgrep security analysis completed"
+            echo ""
+          } >> security-summary.md
+        fi
+
+        {
+          echo "## Secret Detection (whole tree)"
+          echo "- Job result: ${SECRET_DETECTION_RESULT}"
+          echo ""
+        } >> security-summary.md
+
+        {
+          echo "## Recommendations"
+          echo "1. Review all security reports for critical findings"
+          echo "2. Update dependencies with known vulnerabilities"
+          echo "3. Address any SAST findings in critical code paths"
+        } >> security-summary.md
+
+    - name: Upload Security Summary
+      uses: actions/upload-artifact@v7.0.2
+      with:
+        name: security-summary
+        path: security-summary.md
+        retention-days: 90
