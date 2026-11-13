@@ -67,22 +67,54 @@ def test_the_clashing_names_each_mean_one_set_now():
     assert not re.search(r"^\s+frontend:\s*$", ci_text, re.M), "ci.yml carries an inline `frontend` filter again"
 
 
+def step_output_problem(steps: list, filters: dict, step_id: str, key: str) -> str | None:
+    """Why `steps.<step_id>.outputs.<key>` can never carry a value, or None when its producer exists.
+
+    Two kinds of producer. A paths-filter step yields a key only if the filter file it loads defines
+    it. A `run:` step yields one only if its script writes `<key>=` to `$GITHUB_OUTPUT` (#21490).
+    """
+    step = next((s for s in steps if s.get("id") == step_id), None)
+    if step is None:
+        return f"output reads steps.{step_id}, which is not a step of the `changes` job"
+    if DORNY in str(step.get("uses", "")):
+        loaded = step["with"]["filters"].rsplit("/", 1)[-1]
+        if key not in filters[loaded]:
+            return f"steps.{step_id}.outputs.{key}: {loaded} has no key {key!r}; the output would be '' forever"
+        return None
+    script = str(step.get("run", ""))
+    if not script:
+        return f"output reads steps.{step_id}, which is neither a paths-filter step nor a `run:` step"
+    if not re.search(r"(?:^|[\s\"'])" + re.escape(key) + r"=[^\n]*>>\s*\"?\$GITHUB_OUTPUT", script):
+        return f"steps.{step_id}.outputs.{key}: the script never writes `{key}=` to $GITHUB_OUTPUT; the output would be '' forever"
+    return None
+
+
 def test_every_step_output_ci_reads_exists_in_the_filter_file_that_step_loads():
     job = _changes_job()
-    step_files = {
-        s["id"]: s["with"]["filters"].rsplit("/", 1)[-1] for s in job["steps"] if DORNY in str(s.get("uses", ""))
-    }
     filters = _filters()
     text = yaml.safe_dump(job["outputs"])
     refs = set(re.findall(r"steps\.(\w+)\.outputs\.(\w+)", text))
     assert refs, "the `changes` outputs read no step output at all: the scan is vacuous"
-    for step_id, key in sorted(refs):
-        if step_id == "langs":
-            continue  # a bash step, not a filter
-        assert step_id in step_files, f"output reads steps.{step_id}, which is not a dorny step"
-        assert (
-            key in filters[step_files[step_id]]
-        ), f"steps.{step_id}.outputs.{key}: {step_files[step_id]} has no key {key!r}; the output would be '' forever"
+    problems = [step_output_problem(job["steps"], filters, sid, key) for sid, key in sorted(refs)]
+    assert not any(problems), [p for p in problems if p]
+    assert any(DORNY in str(s.get("uses", "")) for s in job["steps"] if s.get("id") in {r[0] for r in refs})
+    assert any("run" in s for s in job["steps"] if s.get("id") in {r[0] for r in refs}), "no run-step output read"
+
+
+_RUN_STEP = {"id": "hold", "run": 'held=false\necho "held=${held}" >> "$GITHUB_OUTPUT"\n'}
+_FILTER_STEP = {"id": "gp", "uses": "dorny/paths-filter@x", "with": {"filters": ".github/filters/a.yml"}}
+
+
+def test_control_run_step_outputs_and_filter_keys_are_verified():
+    steps, filters = [_RUN_STEP, _FILTER_STEP], {"a.yml": {"self": []}}
+    assert step_output_problem(steps, filters, "hold", "held") is None
+    assert step_output_problem(steps, filters, "gp", "self") is None
+    assert "never writes" in step_output_problem(steps, filters, "hold", "nope")
+    suffix_only = [{"id": "hold", "run": 'echo "withheld=true" >> "$GITHUB_OUTPUT"'}]
+    assert "never writes" in step_output_problem(suffix_only, filters, "hold", "held"), "a suffix is not the key"
+    assert step_output_problem(suffix_only, filters, "hold", "withheld") is None
+    assert "not a step" in step_output_problem(steps, filters, "ghost", "held")
+    assert "no key" in step_output_problem(steps, filters, "gp", "typo")
 
 
 def test_every_output_a_gate_reads_is_published_by_changes():
