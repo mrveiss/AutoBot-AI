@@ -55,6 +55,7 @@
     group: "{{ ai_group }}"
   loop:
     - "{{ ai_install_dir }}"
+    - "{{ ai_app_log_dir }}"
     - "{{ ai_log_dir }}"
     - "{{ ai_data_dir }}"
     - "{{ ai_data_dir }}/chromadb"

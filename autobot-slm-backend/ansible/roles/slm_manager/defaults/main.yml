@@ -23,6 +23,9 @@ slm_backend_env_file: "{{ slm_base_dir }}/autobot-backend/.env"
 slm_frontend_dir: "{{ slm_base_dir }}/autobot-slm-frontend"
 slm_shared_dir: "{{ slm_base_dir }}/autobot_shared"
 slm_log_dir: "{{ slm_base_dir }}/logs"
+# AUTOBOT_LOGS_DIR (#20894): the application's own rotating handlers. Distinct from slm_log_dir, where the unit's
+# StandardOutput= appends the same file names; one file written by both would carry duplicates and be orphaned on rotation.
+slm_app_log_dir: "{{ slm_backend_dir }}/logs"
 slm_certs_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
 slm_credentials_dir: /etc/autobot
 slm_credentials_file: slm-secrets.env

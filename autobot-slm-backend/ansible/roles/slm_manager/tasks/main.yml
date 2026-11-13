@@ -114,6 +114,7 @@
     - "{{ slm_frontend_dir }}"
     - "{{ slm_shared_dir }}"
     - "{{ slm_log_dir }}"
+    - "{{ slm_app_log_dir }}"
     - "{{ slm_certs_dir }}"
     - /var/lib/slm
   tags: ['slm', 'directories']

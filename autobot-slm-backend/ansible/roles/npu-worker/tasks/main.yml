@@ -103,6 +103,7 @@
     group: "{{ npu_group }}"
   loop:
     - "{{ npu_install_dir }}"
+    - "{{ npu_app_log_dir }}"
     - "{{ npu_models_dir }}"
 
 # #12425: npu_log_dir defaults to the SHARED /var/log/autobot (common role),

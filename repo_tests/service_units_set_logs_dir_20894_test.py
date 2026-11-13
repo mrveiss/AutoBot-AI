@@ -11,6 +11,7 @@ variable.
 
 from __future__ import annotations
 
+import posixpath
 import re
 from pathlib import Path
 
@@ -113,6 +114,63 @@ def _unwritable(root: Path, units: list[str]) -> list[str]:
                 if not any(value.strip() == r or value.strip().startswith(r + "/") for r in roots):
                     bad.append(f"{unit} -> {value.strip()}")
     return bad
+
+
+_OUTPUT = re.compile(r"^Standard(?:Output|Error)=(?:append|file|truncate):(\S+)", re.MULTILINE)
+_DEFAULT = re.compile(r"^(\w+):\s*(.+?)\s*(?:\s#.*)?$", re.MULTILINE)
+_JINJA = re.compile(r"\{\{\s*([\w.]+)\s*\}\}")
+
+
+def _role_defaults(root: Path, unit: str) -> dict[str, str]:
+    """The `name: value` lines of the unit's role defaults (empty outside a role); `autobot.base_dir` is `<base>`."""
+    path = (root / unit).parent.parent / "defaults" / "main.yml"
+    found = {"autobot.base_dir": "<base>"}
+    if path.is_file():
+        found.update({k: v.strip("\"'") for k, v in _DEFAULT.findall(path.read_text(encoding="utf-8"))})
+    return found
+
+
+def _resolve(value: str, defaults: dict[str, str]) -> str:
+    """Substitute `{{ name }}` from the role defaults until nothing more resolves (a cycle stops at the cap)."""
+    for _ in range(8):
+        value = _JINJA.sub(lambda m: defaults.get(m.group(1), m.group(0)), value)
+    return value.strip().rstrip("/")
+
+
+def _colliding(root: Path, units: list[str]) -> list[str]:
+    """Units whose systemd-appended output directory is the directory `AUTOBOT_LOGS_DIR` resolves to.
+
+    systemd appends `<name>.log` there while the application's rotating handler writes `<name>.log` too: the
+    records duplicate, and after a rotation systemd's descriptor follows the renamed file.
+    """
+    bad: list[str] = []
+    for unit in units:
+        defaults = _role_defaults(root, unit)
+        text = (root / unit).read_text(encoding="utf-8")
+        out = {_resolve(posixpath.dirname(t), defaults) for t in _OUTPUT.findall(text)}
+        for f in [unit, *_env_beside(root, unit)]:
+            apps = {_resolve(v, defaults) for v in _VALUE.findall((root / f).read_text(encoding="utf-8"))}
+            bad += [f"{unit} -> {d}" for d in sorted(apps & out)]
+    return bad
+
+
+def test_application_log_dir_differs_from_the_units_service_output_dir() -> None:
+    bad = _colliding(_ROOT, _python_units(_ROOT))
+    assert not bad, f"{_VAR} equals the dir the unit's StandardOutput=/StandardError= append: writes to: {bad}"
+
+
+def test_control_a_shared_output_and_application_dir_is_caught(tmp_path: Path) -> None:
+    """Control: the same directory (also via a role default) is reported; a distinct application dir is not."""
+    unit, role = "roles/r/templates/svc.service.j2", tmp_path / "roles" / "r"
+    (role / "defaults").mkdir(parents=True)
+    (role / "defaults" / "main.yml").write_text(
+        'out_dir: /var/log/x\napp_dir: "{{ out_dir }}"\nother_dir: "{{ autobot.base_dir }}/logs"\n', encoding="utf-8"
+    )
+    out = "StandardOutput=append:{{ out_dir }}/svc.log\n"
+    _unit(role / "templates", out + f'Environment="{_VAR}={{{{ app_dir }}}}"\n')
+    assert _colliding(tmp_path, [unit]) == [f"{unit} -> /var/log/x"]
+    _unit(role / "templates", out + f'Environment="{_VAR}={{{{ other_dir }}}}"\n')
+    assert _colliding(tmp_path, [unit]) == []
 
 
 def test_every_python_service_unit_sets_the_log_dir() -> None:

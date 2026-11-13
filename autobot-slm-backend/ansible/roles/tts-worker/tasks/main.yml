@@ -100,6 +100,7 @@
     group: "{{ tts_group }}"
   loop:
     - "{{ tts_install_dir }}"
+    - "{{ tts_app_log_dir }}"
     - "{{ tts_models_dir }}"
     - "{{ tts_voices_dir }}"
   tags: ['tts', 'dirs']
