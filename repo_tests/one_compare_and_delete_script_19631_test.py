@@ -31,8 +31,8 @@ the tree has none outside the home today, and a regex wide enough to find one wo
 
 THE ACCEPTANCE CRITERION AS WRITTEN. AC3 asks that ``git grep "redis.call('get', KEYS[1]) == ARGV[1]"`` find only the
 helper file. That cannot hold: compare-and-set scripts (``idempotency._COMPLETE_SCRIPT``,
-``rolling_summary._STORE_IF_LOCKED``) and the multi-key release above contain the same text. This shape guard, with
-the exceptions recorded here, is the proposed replacement; the owner has not yet confirmed it.
+``rolling_summary._STORE_IF_LOCKED``) and the multi-key release above contain the same text. The owner confirmed on
+2026-11-13 (recorded on #19631) that this shape guard, with the exceptions recorded here, replaces AC3's literal grep.
 
 Every file asserted by name is a count, compared in both directions: a new copy fails, and an exception that stops
 matching fails as stale.
