@@ -131,6 +131,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under one root; the test-file share drifts.",
     ),
+    "llc-api-acting-identity": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test route modules are a subset of tracked .py under one root; the test-file share drifts.",
+    ),
     "conftest-stubset-primitives": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

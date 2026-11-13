@@ -73,7 +73,7 @@ async def test_create_label_with_explicit_color(service):
     session.refresh = AsyncMock()
 
     with patch("llc.services.label_service.LLCLabel", return_value=label):
-        result = await service.create(
+        await service.create(
             session,
             company_id=company_id,
             name="feature",
@@ -106,7 +106,7 @@ async def test_delete_raises_not_found(service):
 
 
 @pytest.mark.asyncio
-async def test_assign_labels_work_item_not_found(service):
+async def test_service_assign_labels_work_item_not_found(service):
     session = AsyncMock()
     wi_result = MagicMock()
     wi_result.scalar_one_or_none.return_value = None
@@ -147,7 +147,7 @@ async def test_assign_labels_idempotent(service):
 
 
 @pytest.mark.asyncio
-async def test_remove_label_work_item_not_found(service):
+async def test_service_remove_label_work_item_not_found(service):
     session = AsyncMock()
     wi_result = MagicMock()
     wi_result.scalar_one_or_none.return_value = None
@@ -168,6 +168,7 @@ async def test_remove_label_work_item_not_found(service):
 
 @pytest.fixture
 def app_client():
+    from api.user_management.dependencies import get_current_user
     from llc.api.labels import get_session, router
 
     app = FastAPI()
@@ -188,6 +189,8 @@ def app_client():
         yield mock_session
 
     app.dependency_overrides[get_session] = override_session
+    # The actor is the session's (#20521): a person signed in with a UUID id, as every session carries.
+    app.dependency_overrides[get_current_user] = lambda: {"id": str(uuid.uuid4()), "auth_method": "session"}
 
     return TestClient(app), company_id, label_id, label, mock_session
 

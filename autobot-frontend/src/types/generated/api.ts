@@ -53873,7 +53873,7 @@ export interface paths {
          * @description Manual run cancel (board only).
          *
          *     Sets run status = cancelled, calls adapter.cancel() best-effort,
-         *     and releases the Redis checkout lock when a work item was held.
+         *     and releases every work-item checkout the run made (and their Redis fences).
          */
         post: operations["cancel_run_api_llc_agents__agent_id__runs__run_id__cancel_post"];
         delete?: never;
@@ -60611,11 +60611,6 @@ export interface components {
             company_id: string;
             type: components["schemas"]["ApprovalType"];
             /**
-             * Requested By Agent Id
-             * Format: uuid
-             */
-            requested_by_agent_id: string;
-            /**
              * Payload
              * @default {}
              */
@@ -67024,10 +67019,6 @@ export interface components {
             company_id: string;
             /** Body */
             body: string;
-            /** Author Agent Id */
-            author_agent_id?: string | null;
-            /** Author User Id */
-            author_user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -80549,8 +80540,6 @@ export interface components {
         };
         /** HumanClaimRequest */
         HumanClaimRequest: {
-            /** User Id */
-            user_id?: string | null;
             /** Company Id */
             company_id?: string | null;
         } & {
@@ -80561,8 +80550,6 @@ export interface components {
          * @description The same accepted-and-ignored fields as a claim.
          */
         HumanUnclaimRequest: {
-            /** User Id */
-            user_id?: string | null;
             /** Company Id */
             company_id?: string | null;
         } & {
@@ -84936,8 +84923,6 @@ export interface components {
         LabelAssign: {
             /** Label Ids */
             label_ids: string[];
-            /** Assigned By */
-            assigned_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -84949,8 +84934,6 @@ export interface components {
             color?: string | null;
             /** Description */
             description?: string | null;
-            /** Created By */
-            created_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -95223,7 +95206,7 @@ export interface components {
         };
         /**
          * RelationCreate
-         * @description ``company_id`` and ``created_by_*`` are accepted for compatibility and ignored.
+         * @description ``company_id`` is accepted for compatibility and ignored; the creator is the authenticated caller.
          */
         RelationCreate: {
             /** Company Id */
@@ -95231,10 +95214,6 @@ export interface components {
             /** Target Id */
             target_id: string;
             relation_type: components["schemas"]["WorkItemRelationType"];
-            /** Created By Agent Id */
-            created_by_agent_id?: string | null;
-            /** Created By User Id */
-            created_by_user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -98361,11 +98340,6 @@ export interface components {
             name: string;
             /** Value */
             value: string;
-            /**
-             * Actor
-             * @description Deprecated and ignored: the actor is the authenticated caller (#20102)
-             */
-            actor?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -100906,8 +100880,6 @@ export interface components {
              * Format: uuid
              */
             approval_id: string;
-            /** Decided By */
-            decided_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -108174,8 +108146,6 @@ export interface components {
             assignee_agent_id?: string | null;
             /** Assignee User Id */
             assignee_user_id?: string | null;
-            /** Created By Agent Id */
-            created_by_agent_id?: string | null;
             /** Labels */
             labels?: string[] | null;
             /** Requires Approval Before */
@@ -178991,9 +178961,7 @@ export interface operations {
     };
     revoke_secret_api_llc_secrets__company_id___name__delete: {
         parameters: {
-            query?: {
-                actor?: string | null;
-            };
+            query?: never;
             header?: never;
             path: {
                 name: string;
@@ -182085,8 +182053,6 @@ export interface operations {
         parameters: {
             query: {
                 company_id: string;
-                uploaded_by_agent_id?: string | null;
-                uploaded_by_user_id?: string | null;
             };
             header?: never;
             path: {
@@ -182266,10 +182232,6 @@ export interface operations {
             query?: {
                 /** @description Accepted for compatibility; ignored. */
                 company_id?: string | null;
-                /** @description Accepted for compatibility; ignored. */
-                actor_agent_id?: string | null;
-                /** @description Accepted for compatibility; ignored. */
-                actor_user_id?: string | null;
             };
             header?: never;
             path: {
