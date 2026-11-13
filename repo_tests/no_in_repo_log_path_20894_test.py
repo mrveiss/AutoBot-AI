@@ -131,3 +131,46 @@ def test_the_guard_fails_on_a_planted_violation(tmp_path: Path) -> None:
     scratch.write_text('import os\nLOGS = os.getenv("AUTOBOT_LOGS_DIR", "logs")\n', encoding="utf-8")
     n = count_violations(scratch.read_text(encoding="utf-8"))
     assert n > BASELINE.get("scratch_writer.py", 0)
+
+
+_EAGER_HANDLERS = ("FileHandler", "RotatingFileHandler", "TimedRotatingFileHandler", "WatchedFileHandler")
+_RESOLVED_DIR_NAMES = {"logs_path", "logs_dir", "resolve_logs_dir"}
+
+
+def eager_handlers_on_resolved_dir(text: str) -> int:
+    """Stdlib file handlers built on the resolved log dir: they open the file at construction, so the directory
+    must already exist -- a fresh install has none. `FirstWriteFileHandler` creates it at the first record."""
+    count = 0
+    for node in ast.walk(parse_cache.parse(text)):
+        if not isinstance(node, ast.Call):
+            continue
+        name = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
+        if name in _EAGER_HANDLERS and any(_names(arg) & _RESOLVED_DIR_NAMES for arg in node.args):
+            count += 1
+    return count
+
+
+def test_no_eager_file_handler_on_the_resolved_log_dir() -> None:
+    offenders = {}
+    for rel in REACH.examined(_ROOT):
+        try:
+            n = eager_handlers_on_resolved_dir((_ROOT / rel).read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, SyntaxError):
+            continue  # not parseable Python: nothing to count
+        if n:
+            offenders[rel] = n
+    assert not offenders, f"use autobot_shared.log_dir.FirstWriteFileHandler (creates the directory): {offenders}"
+
+
+def test_the_eager_handler_detector_finds_each_spelling_and_ignores_the_safe_one() -> None:
+    """Control: eager handlers on a resolved dir are counted; FirstWriteFileHandler and other paths are not."""
+    planted = {
+        'logging.FileHandler(str(ssot_config.path.logs_path / "a.log"))': 1,
+        'logging.handlers.RotatingFileHandler(resolve_logs_dir() / "a.log")': 1,
+        'FileHandler(str(logs_dir / "a.log"))': 1,
+        'FirstWriteFileHandler(str(ssot_config.path.logs_path / "a.log"))': 0,
+        'logging.FileHandler("/var/log/x.log")': 0,
+        "logging.StreamHandler(logs_dir)": 0,
+    }
+    for source, expected in planted.items():
+        assert eager_handlers_on_resolved_dir(source) == expected, source
