@@ -160,3 +160,12 @@ def test_helper_fails_and_prints_a_vars_file_free_rerun_when_the_post_did_not_ru
     assert result.returncode == 1
     assert "sudo ansible-playbook" in result.stderr
     assert "@" not in result.stderr.split("rerun:", 1)[1]
+
+
+def test_mark_synced_pins_the_system_python_for_localhost() -> None:
+    """The delegated uri tasks must not run on a discovered deadsnakes python (no cffi)."""
+    script = (repo_root() / _SCRIPT).read_text(encoding="utf-8")
+    assert '-e "ansible_python_interpreter=${CONTROLLER_PYTHON}"' in script
+    assert 'CONTROLLER_PYTHON="/usr/bin/python3"' in script
+    install = (repo_root() / "install.sh").read_text(encoding="utf-8")
+    assert "ansible_python_interpreter: /usr/bin/python3" in install, "install inventory no longer pins it"
