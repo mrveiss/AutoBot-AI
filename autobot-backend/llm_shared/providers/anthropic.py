@@ -13,13 +13,17 @@ API keys are never logged.
 
 Extended thinking (#3258):
   Pass a ``thinking`` dict in ``request.metadata["api_kwargs"]`` to enable
-  chain-of-thought reasoning on supported models (claude-3-7-sonnet and later):
+  chain-of-thought reasoning on supported models (Claude 3.7 Sonnet and later):
 
       api_kwargs = {
-          "thinking": {"type": "enabled", "budget_tokens": 63000},
+          "thinking": {"type": "adaptive"},
+          "output_config": {"effort": "high"},
           "max_tokens": 64000,
-          "extra_headers": {"anthropic-beta": "output-128k-2025-02-19"},
       }
+
+  A pre-4.6 model takes ``{"type": "enabled", "budget_tokens": N}`` instead. A caller-supplied
+  ``enabled`` dict for a model that requires adaptive thinking (``budget_tokens`` is a 400 there)
+  is converted to the adaptive form by ``_build_request_kwargs`` (#20884).
 
   Thinking blocks are stripped from the returned ``content`` unless
   ``preserve_reasoning=True`` is present in ``api_kwargs``.
@@ -43,6 +47,7 @@ import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_claude_models import CLAUDE_MODEL_IDS, requires_adaptive_thinking
 
 # ---------------------------------------------------------------------------
 # Adapter helpers — lazy so tests that don't boot the full app still work.
@@ -115,6 +120,7 @@ from .cache_utils import sorted_for_cache
 logger = get_logger(__name__)
 
 _ANTHROPIC_MODELS = [
+    *CLAUDE_MODEL_IDS,  # the current generation first (#20884)
     ANTHROPIC_CLAUDE_OPUS4_6,
     ANTHROPIC_CLAUDE_SONNET4_6,
     ANTHROPIC_CLAUDE_SONNET4,
@@ -332,6 +338,31 @@ class AnthropicProvider(BaseProvider):
         if request.tool_choice:
             kwargs["tool_choice"] = {"type": request.tool_choice}
 
+    @staticmethod
+    def _normalise_caller_thinking(api_kwargs: Dict[str, Any], model: str) -> None:
+        """Convert a caller's ``enabled`` thinking dict to adaptive when *model* rejects ``budget_tokens`` (#20884)."""
+        thinking = api_kwargs.get("thinking")
+        if not isinstance(thinking, dict) or thinking.get("type") != "enabled":
+            return
+        if not requires_adaptive_thinking(model):
+            return
+        budget = thinking.get("budget_tokens")
+        caller_output_config = api_kwargs.get("output_config")
+        api_kwargs.pop("thinking")
+        _apply_thinking_budget(api_kwargs, model, int(budget) if budget else 0)
+        if not budget and isinstance(caller_output_config, dict) and caller_output_config.get("effort"):
+            api_kwargs["output_config"] = caller_output_config  # no budget to map: the caller's effort stands
+        # Interleaved thinking is automatic on an adaptive model: the caller's beta for it is dropped (#20884).
+        beta = "interleaved-thinking-2025-05-14"
+        if api_kwargs.get("betas"):
+            api_kwargs["betas"] = [b for b in api_kwargs["betas"] if b != beta]
+        headers = api_kwargs.get("extra_headers") or {}
+        if headers.get("anthropic-beta"):
+            kept = [b for b in headers["anthropic-beta"].split(",") if b and b.strip() != beta]
+            api_kwargs["extra_headers"] = {**headers, "anthropic-beta": ",".join(kept)}
+            if not kept:
+                del api_kwargs["extra_headers"]["anthropic-beta"]
+
     def _build_request_kwargs(self, model: str, request: LLMRequest) -> tuple[Dict[str, Any], Dict[str, Any], bool]:
         """Build kwargs and extra_headers for an Anthropic SDK call."""
         system_content, chat_messages = split_system_and_chat(request.messages)
@@ -350,6 +381,7 @@ class AnthropicProvider(BaseProvider):
         thinking_tokens: int | None = api_kwargs.pop("thinking_tokens", None)
         if thinking_tokens and "thinking" not in api_kwargs:
             _apply_thinking_budget(api_kwargs, model, thinking_tokens)
+        self._normalise_caller_thinking(api_kwargs, model)
         preserve_reasoning: bool = bool(api_kwargs.get("preserve_reasoning", False))
         kwargs, extra_headers = _build_api_kwargs(kwargs, api_kwargs)
         kwargs = _route_sampling_kwargs(kwargs)
