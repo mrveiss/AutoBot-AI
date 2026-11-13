@@ -10,19 +10,20 @@
 ask-human defaults from here instead of carrying its own literals.
 """
 
+import logging
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.paths import project_root
 from autobot_shared.status_enums import LLMProvider
 
 logger = get_logger(__name__)
 
 DEFAULT_LLM_PROVIDER = LLMProvider.OLLAMA.value
-_PROVIDER_WARNED = False
 
 
 class ChatGraphSettings(BaseSettings):
@@ -61,17 +62,17 @@ class ChatGraphSettings(BaseSettings):
         failing fast would stop an install that never needed the chat route's registry. The chat route's
         ``configured_provider()`` would raise on it before its try/except, so the typo is replaced by the default.
         """
-        global _PROVIDER_WARNED
         name = str(value).strip().lower()
         if name in {p.value for p in LLMProvider}:
             return name
-        if not _PROVIDER_WARNED:
-            _PROVIDER_WARNED = True
-            allowed = ", ".join(sorted(p.value for p in LLMProvider))
-            logger.warning(
-                "AUTOBOT_LLM_PROVIDER=%r is not a known provider (allowed: %s); using %r",
-                value,
-                allowed,
-                DEFAULT_LLM_PROVIDER,
-            )
+        allowed = ", ".join(sorted(p.value for p in LLMProvider))
+        log_once(
+            logger,
+            logging.WARNING,
+            "unknown_provider",
+            "AUTOBOT_LLM_PROVIDER=%r is not a known provider (allowed: %s); using %r",
+            value,
+            allowed,
+            DEFAULT_LLM_PROVIDER,
+        )
         return DEFAULT_LLM_PROVIDER
