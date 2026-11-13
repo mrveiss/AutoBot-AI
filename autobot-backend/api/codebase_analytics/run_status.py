@@ -41,6 +41,11 @@ terminal                   the same            ignored: the first terminal statu
                                                of a run is final
 ``running``                another             ignored: a run that is still going
                                                owns the record
+``running``, overdue       another, unseen     takes over: the record would be
+                                               presented as ``abandoned``
+                                               (:func:`_is_overdue`), so the run
+                                               holding it is gone
+``running``, overdue       another, seen       ignored: an older run reporting late
 terminal                   another, unseen     takes over: a terminal run sends no
                                                more reports, so an id the record
                                                never saw is a newer run whose
@@ -53,7 +58,9 @@ none                       any                 applied
 ``MAX_SEEN_RUN_IDS`` ids, newest last, added by :func:`record_run_started` and by
 an accepted take-over.  Run ids are uuid4s with no order, so this list is what
 tells a late report of an older run (always listed) from a newer run whose start
-was lost (never listed).  Residual limits: an older run whose start write was
+was lost (never listed).  An overdue ``running`` record is read as terminal for this
+purpose: leaving it in place would drop the newer run's result and keep the source
+partial until the next start.  Residual limits: an older run whose start write was
 *also* lost is indistinguishable from a newer one and takes over; and ids older
 than the cap are forgotten, so a report that late is read as unseen.  A record
 written before the field existed reads as an empty list.
@@ -137,6 +144,11 @@ def _now() -> datetime:
     return datetime.now(tz=timezone.utc)
 
 
+def _as_utc(moment: datetime) -> datetime:
+    """*moment* as an aware datetime: a naive one is read as UTC, the convention of ``parse_utc_iso``."""
+    return moment.replace(tzinfo=timezone.utc) if moment.tzinfo is None else moment
+
+
 async def _read(collection, source_id: str) -> dict:
     result = await collection.get(ids=[run_record_id(source_id)], include=["metadatas"])
     metas = (result or {}).get("metadatas") or []
@@ -217,7 +229,8 @@ def _finish(old: dict, run_id: str, status: str, reason: str) -> dict | None:
     newest, newest_status = old.get("latest_run_id"), old.get("latest_status")
     if newest == run_id and newest_status in TERMINAL_STATUSES:
         return None  # the first terminal status of a run is final
-    if newest and newest != run_id and newest_status == STATUS_RUNNING:
+    still_going = newest_status == STATUS_RUNNING and not _is_overdue(old, _SUBPROCESS_HARD_TIMEOUT, _now())
+    if newest and newest != run_id and still_going:
         logger.warning("Run %s report (%s) ignored: run %s is still running", run_id, status, newest)
         return None
     if newest and newest != run_id and run_id in _decode_seen(old):
@@ -247,7 +260,8 @@ async def record_run_finished(source_id: str | None, run_id: str, status: str, r
     return await _update(source_id, lambda old: _finish(old, run_id, status, reason))
 
 
-def _is_overdue(meta: dict, hard_timeout: int, now: datetime) -> bool:
+def _is_overdue(meta: dict, hard_timeout: float, now: datetime) -> bool:
+    """Whether a ``running`` record began longer ago than the hard timeout plus the abandon grace."""
     started = meta.get("latest_started_at")
     if meta.get("latest_status") != STATUS_RUNNING or not started:
         return False
@@ -286,7 +300,7 @@ async def describe_run_state(
     One read, no write.  ``partial`` is true when the newest run did not
     complete, i.e. the findings in storage may come from an interrupted run.
     ``last_completed_at`` is when the last complete run finished (empty if none
-    ever did).
+    ever did).  A naive ``now`` is read as UTC.
     """
     if not source_id:
         return None
@@ -294,7 +308,7 @@ async def describe_run_state(
     if collection is None:
         return None
     meta = await _read(collection, source_id)
-    return _present(meta, hard_timeout, now or _now()) if meta else None
+    return _present(meta, hard_timeout, _as_utc(now) if now else _now()) if meta else None
 
 
 async def run_response_fields(source_id: str | None) -> dict:

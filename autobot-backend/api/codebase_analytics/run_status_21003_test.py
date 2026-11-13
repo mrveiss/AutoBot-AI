@@ -448,3 +448,54 @@ async def test_a_naive_started_at_is_read_as_utc_not_an_error(collection):
     assert (await _state())["status"] == "abandoned"
     collection.docs["codebase_run_src"]["latest_started_at"] = "garbage"
     assert (await _state())["status"] == "running"
+
+
+def _overdue_running(collection, run_id: str = "run-1") -> None:
+    """A ``running`` record whose start is years past the hard timeout: ``_is_overdue`` reads it as abandoned."""
+    collection.docs["codebase_run_src"] = {
+        "latest_run_id": run_id,
+        "latest_status": "running",
+        "latest_started_at": "2020-01-01T00:00:00+00:00",
+        "seen_run_ids": f'["{run_id}"]',
+    }
+
+
+@pytest.mark.asyncio
+async def test_an_unseen_run_takes_over_an_overdue_running_record(collection):
+    """Pre-fix the overdue run kept the record, so run 2's ``completed`` was refused and the source stayed partial."""
+    _overdue_running(collection)
+    assert (await _state())["status"] == "abandoned"  # the record is already presented as gone
+    assert await record_run_finished("src", "run-2", "completed") is True
+    state = await _state()
+    assert (state["run_id"], state["status"], state["partial"]) == ("run-2", "completed", False)
+    assert state["last_completed_at"] != ""
+    assert run_status._decode_seen(collection.docs["codebase_run_src"]) == ["run-1", "run-2"]
+
+
+@pytest.mark.asyncio
+async def test_a_run_that_is_still_going_keeps_the_record_from_an_unseen_run(collection):
+    """Control for the take-over above: within its limit the running record is not abandoned, so it still refuses."""
+    await record_run_started("src", "run-1")
+    assert await record_run_finished("src", "run-2", "completed") is False
+    state = await _state()
+    assert (state["run_id"], state["status"]) == ("run-1", "running")
+
+
+@pytest.mark.asyncio
+async def test_a_seen_run_cannot_take_over_an_overdue_running_record(collection):
+    """An older run reporting late stays refused even when the newer run is overdue."""
+    _overdue_running(collection, "run-2")
+    collection.docs["codebase_run_src"]["seen_run_ids"] = '["run-1", "run-2"]'
+    assert await record_run_finished("src", "run-1", "completed") is False
+    assert collection.docs["codebase_run_src"]["latest_status"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_a_naive_now_is_read_as_utc_not_an_error(collection):
+    """Pre-fix a naive ``now`` raised ``TypeError`` comparing against the aware start time."""
+    await record_run_started("src", "run-1")
+    base = datetime.now(tz=timezone.utc).replace(tzinfo=None)  # naive, in UTC
+    soon = base + timedelta(seconds=HARD // 2)
+    assert (await describe_run_state("src", HARD, now=soon))["status"] == "running"  # control: within its limit
+    late = base + timedelta(seconds=HARD + run_status.ABANDON_GRACE_SECONDS + 5)
+    assert (await describe_run_state("src", HARD, now=late))["status"] == "abandoned"
