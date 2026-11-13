@@ -103,7 +103,16 @@ def _is_expensive(job_id: str, job: dict) -> bool:
 
 #: The ci.yml gate jobs that run on purpose when held and report "held" (verdict.sh step 2b).
 REPORTING_GATES = frozenset(
-    {"python-suite", "code-quality", "startup-import-smoke", "unit-tests", "smoke-test", "api-wiring", "migration-matrix", "verify-generated-types"}
+    {
+        "python-suite",
+        "code-quality",
+        "startup-import-smoke",
+        "unit-tests",
+        "smoke-test",
+        "api-wiring",
+        "migration-matrix",
+        "verify-generated-types",
+    }
 )
 
 
@@ -144,7 +153,11 @@ def violations(workflows: dict[str, dict], cheap=CHEAP, exempt=EXEMPT_JOBS) -> l
     problems = []
     for name, doc in workflows.items():
         jobs = doc.get("jobs") or {}
-        expensive = [j for j, spec in jobs.items() if _is_expensive(j, spec) and (name, j) not in exempt and not (name == "ci.yml" and j in REPORTING_GATES)]
+        expensive = [
+            j
+            for j, spec in jobs.items()
+            if _is_expensive(j, spec) and (name, j) not in exempt and not (name == "ci.yml" and j in REPORTING_GATES)
+        ]
         if name in cheap:
             if len(jobs) != cheap[name]:
                 problems.append(
@@ -242,7 +255,13 @@ def test_a_held_gate_fails_and_says_held_never_passes():
 
 
 def test_control_the_positive_dependabot_test_is_not_a_hold():
-    wf = {"x.yml": {"jobs": {"big": {"timeout-minutes": 45, "if": "${{ github.event.pull_request.user.login == 'dependabot[bot]' }}"}}}}
+    wf = {
+        "x.yml": {
+            "jobs": {
+                "big": {"timeout-minutes": 45, "if": "${{ github.event.pull_request.user.login == 'dependabot[bot]' }}"}
+            }
+        }
+    }
     assert violations(wf, cheap={})
 
 
@@ -256,7 +275,9 @@ def test_control_changes_outputs_count_only_where_changes_defines_them():
 def test_control_an_always_running_dependent_does_not_inherit_the_hold(condition):
     jobs = {"held": {"if": "${{ github.event.pull_request.user.login != 'dependabot[bot]' }}"}}
     jobs["after"] = {"uses": "./a.yml", "needs": ["held"], "if": condition}
-    assert violations({"x.yml": {"jobs": jobs}}, cheap={}) == ["x.yml: expensive job 'after' is not held for dependabot pull requests (#21490)"]
+    assert violations({"x.yml": {"jobs": jobs}}, cheap={}) == [
+        "x.yml: expensive job 'after' is not held for dependabot pull requests (#21490)"
+    ]
     exempted = violations({"x.yml": {"jobs": jobs}}, cheap={}, exempt={("x.yml", "after"): "reports"})
     assert not any("not held" in problem for problem in exempted)
 
