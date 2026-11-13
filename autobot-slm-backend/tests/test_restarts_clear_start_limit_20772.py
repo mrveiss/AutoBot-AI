@@ -484,10 +484,6 @@ def test_a_restart_wrapped_in_quotes_or_a_subshell_is_found_by_its_clean_name(co
 
 
 @pytest.mark.parametrize(
-    "command",
-    ["systemctl reset-failed x", "systemctl status x", "echo restart x", "systemctl -q", 'sh -c "systemctl status x"'],
-)
-@pytest.mark.parametrize(
     ("command", "expected"),
     [
         ("systemctl restart ssh autobot-backend", ["ssh", "autobot-backend"]),
@@ -506,6 +502,10 @@ def test_every_unit_operand_of_a_restart_is_found(command: str, expected: list) 
     assert _systemctl_restart_units(command) == expected
 
 
+@pytest.mark.parametrize(
+    "command",
+    ["systemctl reset-failed x", "systemctl status x", "echo restart x", "systemctl -q", 'sh -c "systemctl status x"'],
+)
 def test_a_command_that_restarts_nothing_names_no_unit(command: str) -> None:
     assert _systemctl_restart_units(command) == []
 
