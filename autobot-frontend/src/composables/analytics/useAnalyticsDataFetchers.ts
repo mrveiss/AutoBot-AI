@@ -15,9 +15,8 @@
  * `useFetchEndpoint`. Every call-site opts in to source scoping with an
  * explicit `scopeToSource: true`. Domain types live in `./analyticsTypes`.
  * Issue #17758 (owner ruling 2026-09-29): `/api/reporting/report` is NO LONGER
- * the global exception #5112 made it -- a report that aggregates across
- * projects is the cross-project leak that issue removes, so it is per-project
- * like everything else here.
+ * the global exception #5112 made it -- a cross-project report is the leak that
+ * issue removes, so it is per-project like everything else here.
  * Issue #5174: migrated off the deprecated `useAnalyticsEndpoint` alias
  * to the rehomed `@/composables/api/useFetchEndpoint`.
  */
@@ -174,9 +173,8 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/reporting/report',
-      // #17758: per-project; #21463: the route answers 422 without a source
-      scopeToSource: true,
-      requireSource: true,
+      scopeToSource: true, // #17758: per-project, not global
+      requireSource: true, // #21463: the route answers 422 without a source
       label: 'Unified report endpoint',
       pickData: (raw) => (raw.status === 'success' ? raw : null),
       onSuccess: (d) =>
