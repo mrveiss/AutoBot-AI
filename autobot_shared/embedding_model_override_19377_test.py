@@ -122,3 +122,23 @@ def test_a_record_naming_a_chat_model_is_ignored(store, caplog):
     store.value = b'{"model": "phi3:mini", "collection": "kb_phi3", "generation": 3}'
     assert em.active_embedding_space() is None
     assert em.active_embedding_model() == "nomic-embed-text:latest"
+
+
+def test_the_strict_read_raises_on_a_store_error_where_the_lenient_read_falls_back_to_none(store):
+    store.fail = True
+    assert em.active_embedding_space() is None  # the lenient reader hides the error
+    with pytest.raises(RuntimeError, match="could not be read"):
+        em.read_embedding_space_strict()
+
+
+def test_the_strict_read_raises_when_the_store_is_unavailable(monkeypatch):
+    monkeypatch.setattr(em, "_redis", lambda: None)
+    with pytest.raises(RuntimeError):
+        em.read_embedding_space_strict()
+
+
+def test_the_strict_read_ignores_the_cache_and_returns_the_current_record(store, monkeypatch):
+    monkeypatch.setattr(em, "EMBEDDING_OVERRIDE_CACHE_S", 3600.0)
+    assert em.read_embedding_space_strict() is None
+    store.value = b'{"model": "mxbai-embed-large:latest", "collection": "kb_mxbai", "generation": 2}'
+    assert em.read_embedding_space_strict() == em.EmbeddingSpace("mxbai-embed-large:latest", "kb_mxbai", 2)

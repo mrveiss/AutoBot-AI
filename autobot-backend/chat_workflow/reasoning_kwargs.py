@@ -13,11 +13,10 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
+from llm_shared.providers.anthropic_request import thinking_request_kwargs
 from llm_shared.providers.reasoning_effort import map_effort_to_provider_params
 
 logger = get_logger(__name__)
-
-_INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14"
 
 
 async def resolve_reasoning_effort(context: Dict[str, Any]) -> str:
@@ -47,14 +46,9 @@ async def resolve_reasoning_effort(context: Dict[str, Any]) -> str:
     return "auto"
 
 
-def _thinking_kwargs(budget_tokens: int) -> Dict[str, Any]:
-    """Anthropic extended-thinking request kwargs for *budget_tokens*."""
-    return {
-        "thinking": {"type": "enabled", "budget_tokens": budget_tokens},
-        "max_tokens": max(budget_tokens + 1000, 8192),
-        "temperature": 1,
-        "betas": [_INTERLEAVED_THINKING_BETA],
-    }
+def _thinking_kwargs(model: str, budget_tokens: int) -> Dict[str, Any]:
+    """Anthropic thinking request kwargs for *model*: adaptive or fixed-budget, as the SSOT says (#20884)."""
+    return {**thinking_request_kwargs(model, budget_tokens), "temperature": 1}
 
 
 async def build_reasoning_api_kwargs(context: Dict[str, Any], selected_model: str) -> Dict[str, Any] | None:
@@ -67,7 +61,7 @@ async def build_reasoning_api_kwargs(context: Dict[str, Any], selected_model: st
     if context.get("thinking_mode_enabled") and is_claude:
         budget_tokens = int(context.get("thinking_budget_tokens", 10000))
         logger.info("[#8993] Thinking mode enabled for model=%s budget_tokens=%d", selected_model, budget_tokens)
-        return _thinking_kwargs(budget_tokens)
+        return _thinking_kwargs(selected_model, budget_tokens)
 
     effort = await resolve_reasoning_effort(context)
     if not effort or effort == "auto":
@@ -80,5 +74,5 @@ async def build_reasoning_api_kwargs(context: Dict[str, Any], selected_model: st
     )
     thinking_tokens = effort_params.get("thinking_tokens")
     if thinking_tokens and is_claude:
-        return _thinking_kwargs(thinking_tokens)
+        return _thinking_kwargs(selected_model, thinking_tokens)
     return effort_params

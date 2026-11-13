@@ -54,6 +54,7 @@ removed it. The guard is what replaces it.
 
 from typing import Dict
 
+from autobot_shared.ssot_claude_models import CLAUDE_FABLE, CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET
 from autobot_shared.ssot_constants import (
     ANTHROPIC_CLAUDE3_HAIKU,
     ANTHROPIC_CLAUDE3_HAIKU_DATED,
@@ -107,6 +108,13 @@ from autobot_shared.ssot_constants import (
 )
 
 MODEL_PRICING_PER_1M_TOKENS: Dict[str, Dict[str, float]] = {
+    # #20884: the current Claude generation (ids in ssot_claude_models). Haiku is its base tier
+    # (0.10/0.50); the source also lists 0.50/2.50 above 100K context, which this flat schema
+    # cannot express. Cache prices are not in this schema (cache read is in the provider baseline).
+    CLAUDE_FABLE: {"input": 10.00, "output": 50.00},
+    CLAUDE_OPUS: {"input": 4.00, "output": 20.00},
+    CLAUDE_SONNET: {"input": 2.00, "output": 10.00},
+    CLAUDE_HAIKU: {"input": 0.10, "output": 0.50},
     ANTHROPIC_CLAUDE_OPUS4: {"input": 15.00, "output": 75.00},
     ANTHROPIC_CLAUDE_HAIKU4_5: {"input": 0.80, "output": 4.00},
     ANTHROPIC_CLAUDE_SONNET4: {"input": 3.00, "output": 15.00},

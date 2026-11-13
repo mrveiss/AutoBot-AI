@@ -245,7 +245,7 @@ def get_provider_model_id(
         provider: Provider name (e.g. ``"anthropic"``).
 
     Returns:
-        The string the provider API expects (e.g. ``"claude-sonnet-4-6"``).
+        The string the provider API expects (a pinned ID such as ``autobot_shared.ssot_claude_models.CLAUDE_SONNET``).
     """
     canonical = resolve_model_name(model)
     reg = _load_registry()
