@@ -11,13 +11,18 @@ task or handler anywhere under ``ansible/`` restarts a unit through the ``system
 directly, unless the site is on ``_DIRECT_RESTARTS`` with its reason.
 """
 
+import functools
 import re
 from pathlib import Path
 
 import pytest
 import yaml
 from repo_tests._ansible_restart_unit import is_direct_restart, shared_include
+from repo_tests._paths import repo_root
 
+from tools.lint._scan_helpers import tracked_paths
+
+_ANSIBLE_REL = "autobot-slm-backend/ansible"
 _ANSIBLE = Path(__file__).resolve().parents[1] / "ansible"
 _PLAYBOOK = _ANSIBLE / "playbooks" / "update-all-nodes.yml"
 _SHARED = _ANSIBLE / "_shared" / "tasks" / "restart_unit.yml"
@@ -332,9 +337,31 @@ def test_a_compound_command_yields_every_restart_it_makes() -> None:
 
 def test_no_restart_anywhere_under_ansible_skips_the_shared_task_unless_justified() -> None:
     sites = _direct_restart_sites()
-    assert len(sites) >= len(_DIRECT_RESTARTS), "control: the finder sees the allow-listed sites"
     unlisted = [s for s in sites if s not in _DIRECT_RESTARTS]
     assert not unlisted, f"direct restarts that clear no start-limit park and are not on the allow-list: {unlisted}"
+
+
+# Population at pin: 325 YAML files, 7823 mappings. A floor well under both (growth is ordinary) fails the
+# sweep when it stops reaching a directory, which a count of findings cannot: the allow-listed sites alone keep
+# that count up while a new directory's direct restarts escape inspection.
+_FILES_FLOOR, _MAPPINGS_FLOOR = 250, 6000
+_SWEEP_EXCLUDED_DIRS = {"tests", "_shared"}
+
+
+@functools.lru_cache(maxsize=1)
+def _mappings_visited() -> int:
+    return sum(1 for path in _all_yaml() for _ in _mappings(_load(path)))
+
+
+def test_the_sweep_parses_every_tracked_ansible_yaml_it_does_not_exclude() -> None:
+    """Reach is measured on what the sweep PARSED, independently enumerated from git, not on what it found."""
+    root = repo_root()
+    tracked = {r for r in tracked_paths(root, _ANSIBLE_REL) if r.endswith((".yml", ".yaml"))}
+    kept = {r for r in tracked if not _SWEEP_EXCLUDED_DIRS & set(Path(r).relative_to(_ANSIBLE_REL).parts)}
+    examined = {p.relative_to(root).as_posix() for p in _all_yaml()}
+    assert not kept - examined, f"tracked ansible YAML the restart sweep never parses: {sorted(kept - examined)}"
+    assert len(examined) >= _FILES_FLOOR, f"the sweep parsed {len(examined)} files; expected at least {_FILES_FLOOR}"
+    assert _mappings_visited() >= _MAPPINGS_FLOOR, f"the sweep visited {_mappings_visited()} mappings"
 
 
 def test_the_allow_list_has_no_stale_entry() -> None:
