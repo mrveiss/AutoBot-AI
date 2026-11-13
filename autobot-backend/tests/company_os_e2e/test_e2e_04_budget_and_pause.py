@@ -44,19 +44,18 @@ def _exhaust(api, agent_id: str) -> None:
     """Spend the token budget to exactly its limit, then prove one more event is refused.
 
     The limit is set relative to what is ALREADY spent (a run that took the key spends tokens of its
-    own), and the spend is exactly the remainder: the event that crosses the limit is refused with
-    402 and rolled back, so the stored row never reads over-limit; it reads exhausted at remaining 0.
+    own), and the spend is exactly the remainder, in ONE ingest whose response is asserted: the ingest
+    answers 200 only once its charge is committed (#21332), so there is nothing to re-read and retry.
+    The event that crosses the limit is refused with 402 but its spend is committed first
+    (`_persist_then_stop`, #20202), so the stored row reads over-limit; the row reads exhausted at remaining <= 0.
     """
     spent = int(api.call("GET", f"/budget/{agent_id}")["tokens_spent"])
     api.call(
         "PATCH", f"/budget/{agent_id}/limit", json={"budget_mode": "tokens", "token_limit": spent + HEADROOM_TOKENS}
     )
-    for _ in range(3):
-        left = _remaining(api, agent_id)
-        if left <= 0:
-            break
-        event = {"tokens_in": left, "tokens_out": 0, "model": MODEL}
-        api.call("POST", f"/budget/{agent_id}/ingest", json=event)
+    left = _remaining(api, agent_id)
+    assert left > 0, f"no headroom after setting the limit: {api.call('GET', f'/budget/{agent_id}')}"
+    api.call("POST", f"/budget/{agent_id}/ingest", json={"tokens_in": left, "tokens_out": 0, "model": MODEL})
     assert (
         _remaining(api, agent_id) <= 0
     ), f"budget row does not read exhausted: {api.call('GET', f'/budget/{agent_id}')}"

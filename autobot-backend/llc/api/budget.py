@@ -306,6 +306,10 @@ async def ingest_cost(
         # about one service call from the day the condition was introduced.
         logger.warning("Unpriced model in cost ingest for agent %s: %s", agent_id, exc)
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # `get_async_session` commits in its teardown, which FastAPI (>=0.118) runs AFTER the response has been
+    # sent: the caller can read a 200 before the charge is visible to another session, read the old
+    # remainder and charge it again (#21332). The 200 says "recorded", so commit before producing it.
+    await session.commit()
     return IngestResponse(cost=cost)
 
 
@@ -402,6 +406,9 @@ async def update_limit(
         )
         .values(**values)
     )
+    # Commit before the cache is dropped and before the response: the dependency's own commit runs after the
+    # response is sent, so a reader that re-populated the cache (or a caller reading back) saw the old limit (#21332).
+    await session.commit()
     await session.refresh(row)
 
     # Drop the tracker cache so readers (watchdog, check_budget) see the new
