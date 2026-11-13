@@ -1161,6 +1161,7 @@ async def upload_attachment(
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    uploader = str(verified_user_id(_current_user))  # the session's, never the query (#20521); before the body is read
     try:
         row = await _attachment_service().upload(
             session,
@@ -1169,7 +1170,7 @@ async def upload_attachment(
             filename=require_safe_upload(file.filename),  # #19088: gate before the body is read
             content_type=file.content_type or "application/octet-stream",
             content=await file.read(),
-            uploaded_by_user_id=str(verified_user_id(_current_user)),  # the session's, never the query (#20521)
+            uploaded_by_user_id=uploader,
         )
     except (AttachmentTooLarge, ValueError) as exc:  # #17302: ValueError was an uncaught 500
         logger.warning("Attachment upload refused for %s: %s", work_item_id, exc)
