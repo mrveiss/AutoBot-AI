@@ -37,6 +37,7 @@ import tomllib
 from pathlib import Path
 
 import yaml
+from repo_tests._compose_files import COMPOSE_FILES
 from repo_tests._paths import repo_root
 from repo_tests.service_units_set_logs_dir_20894_test import _python_units
 
@@ -95,9 +96,13 @@ UNIT_TARGETS: dict[str, str | None] = {
 #: Every Python docker-compose service -> the tracked source it runs ("file::service" keys).
 _COMPOSE = "docker-compose.yml"
 _OVERRIDE = "docker-compose.override.example.yml"
+_MCP_WORKER = "autobot-backend/services/mcp_bridge_workers/worker_entrypoint.py"
 COMPOSE_TARGETS: dict[str, str | None] = {
     f"{_OVERRIDE}::autobot-backend": "autobot-backend/main.py",
     f"{_OVERRIDE}::autobot-slm": "autobot-slm-backend/main.py",
+    "docker/mcp-bridges.yml::mcp-filesystem": _MCP_WORKER,
+    "docker/mcp-bridges.yml::mcp-browser": _MCP_WORKER,
+    "docker/mcp-bridges.yml::mcp-vnc": _MCP_WORKER,
     f"{_COMPOSE}::autobot-backend": "autobot-backend/main.py",
     f"{_COMPOSE}::autobot-worker": "autobot-backend/celery_app.py",
     f"{_COMPOSE}::autobot-celery-beat": "autobot-backend/celery_app.py",
@@ -285,8 +290,8 @@ _PY_TOKEN = re.compile(r"^python[\d.]*$")
 
 
 def compose_python_services(root: Path) -> set[str]:
-    """``file::service`` for every tracked compose service whose command/entrypoint runs python."""
-    return compose_python_services_in(root, tracked_paths(root, "*docker-compose*.yml"))
+    """``file::service`` for every compose service (the shared compose enumeration) whose command/entrypoint runs python."""
+    return compose_python_services_in(root, list(COMPOSE_FILES.examined(root)))
 
 
 def compose_python_services_in(root: Path, paths: list[str]) -> set[str]:
