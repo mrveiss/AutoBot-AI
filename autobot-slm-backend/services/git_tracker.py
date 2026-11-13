@@ -304,6 +304,21 @@ async def update_latest_version_setting(
     logger.info("Updated slm_agent_latest_commit to: %s", commit_hash[:12])
 
 
+async def refresh_latest_for_source(db: AsyncSession, repo_path: str, branch: str) -> None:
+    """Point slm_agent_latest_commit at the head of the branch just assigned as code source (#18663).
+
+    Until a source is assigned the version checker tracks DEFAULT_BRANCH, so a node stamped from a
+    checkout of another branch reads outdated until the next poll. Assigning re-reads the head of
+    the branch actually tracked, through the same tracker the poll uses. A path that is not a
+    local git checkout (a remote source node) is left to the poll.
+    """
+    if not _is_git_repo(repo_path):
+        return
+    result = await get_git_tracker(repo_path=repo_path, branch=branch).check_for_updates()
+    if result["remote_commit"]:
+        await update_latest_version_setting(db, result["remote_commit"])
+
+
 async def version_check_task(
     interval: int = VERSION_CHECK_INTERVAL,
 ) -> None:
