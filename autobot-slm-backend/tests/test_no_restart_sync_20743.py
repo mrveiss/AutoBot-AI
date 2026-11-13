@@ -103,7 +103,7 @@ def test_every_restart_handler_the_updater_can_notify_checks_the_variable() -> N
         for role in roles
         if (_ANSIBLE / "roles" / role / "handlers" / "main.yml").is_file()
         for h in _handlers(role)
-        if "restarted" in json.dumps(h)
+        if "restarted" in json.dumps(h) or "restart_unit.yml" in json.dumps(h)  # #20772: the shared restart
     ]
     assert len(restarting) >= 25, "control: the finder sees the restart handlers"
     unguarded = [

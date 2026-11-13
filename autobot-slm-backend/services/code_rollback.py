@@ -115,6 +115,8 @@ async def _run_stages(cs, job, db_service_ref, target: CommitInfo) -> None:
     _skip_pull_stage(cs, job)
     cs._mark_progress(job)
     outdated = await cs._collect_outdated_node_ids(job, target.commit, db_service_ref)
+    if job.status == "failed":  # #21334: could not determine, not "nothing outdated"
+        return
     slm_fired = await cs._run_slm_stage(job, target.commit, outdated, db_service_ref)
     cs._mark_progress(job)
     if job.status == "failed":

@@ -117,9 +117,9 @@
         daemon_reload: true
 
     - name: Restart backend service
-      ansible.builtin.systemd:
-        name: autobot-backend
-        state: restarted
+      ansible.builtin.include_tasks: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+      vars:
+        restart_unit_name: autobot-backend
 
     - name: Wait for backend to start
       ansible.builtin.wait_for:
@@ -150,7 +150,7 @@
 
   handlers:
     - name: restart backend
-      ansible.builtin.systemd:
-        name: autobot-backend
-        state: restarted
-        daemon_reload: true
+      ansible.builtin.include_tasks: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+      vars:
+        restart_unit_name: autobot-backend
+        restart_unit_daemon_reload: true

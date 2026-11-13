@@ -56,7 +56,7 @@ import yaml
 
 from autobot_shared.role_group_ownership import declared_and_detected, withhold_unowned_groups
 from autobot_shared.ssot_config import config
-from services.ansible_extra_vars import dump_extra_vars
+from services.ansible_extra_vars import dump_extra_vars, port_vars
 
 logger = logging.getLogger(__name__)
 
@@ -564,7 +564,7 @@ def build_registry_inventory(nodes: list[Any], local_ip_check: Any) -> dict:
 
     return {
         "all": {
-            "vars": dict(_ALL_VARS),
+            "vars": {**_ALL_VARS, **port_vars(config)},  # #21400
             "hosts": host_section,
             "children": groups,
         }

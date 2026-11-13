@@ -201,14 +201,17 @@
 
   vars:
     backend_health_url: >-
-      {{ backend_protocol | default('https') }}://{{ ansible_host }}:{{ backend_port | default(8443) }}/api/health
+      {{ backend_protocol | default('https') }}://{{ ansible_host }}:{{ backend_nginx_port | default(8443) }}/api/health
     startup_delay: 10
 
   tasks:
     - name: Restart backend via systemctl
-      ansible.builtin.systemd:
-        name: autobot-backend
-        state: restarted
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+        apply:
+          tags: [restart]
+      vars:
+        restart_unit_name: autobot-backend
       tags: [restart]
 
     - name: Wait for backend startup

@@ -9,6 +9,6 @@
 
 - name: restart tts-worker
   when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
-  ansible.builtin.systemd:
-    name: autobot-tts-worker
-    state: restarted
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: autobot-tts-worker

@@ -275,12 +275,20 @@
     # ==========================================================
     # Start Grafana Service
     # ==========================================================
-    - name: "Service | Enable and start Grafana"
+    - name: "Service | Enable Grafana"
       ansible.builtin.systemd:
         name: grafana-server
         enabled: true
-        state: restarted
-        daemon_reload: true
+      tags: ['service']
+
+    - name: "Service | Restart Grafana"
+      ansible.builtin.include_tasks:
+        file: _shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+        apply:
+          tags: ['service']
+      vars:
+        restart_unit_name: grafana-server
+        restart_unit_daemon_reload: true
       tags: ['service']
 
     - name: "Service | Wait for Grafana to be ready"

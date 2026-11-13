@@ -413,9 +413,9 @@
         daemon_reload: true
 
     - name: restart redis-stack
-      systemd:
-        name: redis-stack-server
-        state: restarted
+      ansible.builtin.include_tasks: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+      vars:
+        restart_unit_name: redis-stack-server
 
   post_tasks:
     - name: Display database deployment summary
