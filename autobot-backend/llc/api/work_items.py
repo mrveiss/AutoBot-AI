@@ -63,7 +63,6 @@ from ..services.attachment_service import (
     AttachmentTooLarge,
 )
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
-from ..services.work_item_own_task import release_agent_fence
 from ..services.work_item_service import (
     CheckoutConflict,
     CoWorkingPermissionError,
@@ -577,7 +576,6 @@ async def release_work_item(
     try:
         item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id)
         await session.commit()
-        await release_agent_fence(work_item_id, body.agent_id)  # the agent's fence only, in one atomic step
         return await _item_to_dict(item, session)
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)

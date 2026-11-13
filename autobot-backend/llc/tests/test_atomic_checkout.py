@@ -153,7 +153,7 @@ class TestAtomicCheckout:
 
 class TestRelease:
     async def test_release_clears_checkout_fields(self, service, mock_session):
-        """Service clears DB checkout fields; Redis deletion happens in the route after commit."""
+        """Service clears DB checkout fields; the fence drop is queued to run when the caller's commit lands."""
         agent_id = str(uuid.uuid4())
         item = _make_item(
             checkout_run_id="run-123",
