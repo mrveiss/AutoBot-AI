@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 import auth_service_opt_in
 from auth_service_opt_in import service_opt_in
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_once import reset_log_once
 from services.audit.taxonomy import AuditAction
 
 KEY = {"X-Internal-API-Key": "k"}
@@ -113,7 +114,7 @@ def test_a_non_admin_gets_the_same_403_everywhere(client, as_user):
 
 
 def test_a_proxied_call_whose_session_does_not_verify_names_the_likely_cause_once(client, key_valid, caplog, as_user):
-    auth_service_opt_in._key_without_session_warned = False
+    reset_log_once()
     with as_user(None), caplog.at_level(logging.WARNING):
         client.get("/gated", headers={**KEY, "Authorization": "Bearer unverifiable"})
         client.get("/gated", headers={**KEY, "Authorization": "Bearer unverifiable"})

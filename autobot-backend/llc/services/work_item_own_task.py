@@ -29,6 +29,11 @@ logger = get_logger(__name__)
 _CHECKOUT_KEY_PREFIX = "llc:checkout:"
 
 
+def checkout_fence_key(item_id: uuid.UUID | str) -> str:
+    """The Redis key of a work item's checkout fence."""
+    return f"{_CHECKOUT_KEY_PREFIX}{item_id}"
+
+
 def _past_its_reviewer(item: LLCWorkItem, acting_user: uuid.UUID, new_status: Optional[WorkItemStatus]) -> bool:
     """An item in review, with a reviewer who is someone else, is not finished by moving it to done."""
     reviewer = item.reviewer_user_id
@@ -171,6 +176,12 @@ def fence_agent(value: str) -> str:
     return value.split(_FENCE_GENERATION_SEP, 1)[0]
 
 
+def fence_generation(value: str) -> Optional[str]:
+    """The checkout generation (the run id) a fence value carries, or ``None`` for an untagged one."""
+    _agent, sep, generation = value.partition(_FENCE_GENERATION_SEP)
+    return generation if sep else None
+
+
 def _checkout_holder(item: LLCWorkItem) -> Optional[str]:
     """The item's fence value: ``user:<id>`` for a claim, the generation-tagged agent id for a checkout."""
     if item.assignee_user_id:
@@ -185,7 +196,7 @@ async def _delete_fence(item_id: uuid.UUID, holder: str) -> None:
     try:
         redis = await get_async_redis_client()
         if redis is not None:
-            await delete_if_value(redis, f"{_CHECKOUT_KEY_PREFIX}{item_id}", holder)
+            await delete_if_value(redis, checkout_fence_key(item_id), holder)
     except Exception:
         logger.warning("Checkout fence of work item %s was not released; it expires on its TTL", item_id, exc_info=True)
 

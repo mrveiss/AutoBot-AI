@@ -28,6 +28,9 @@ UNSCOPED = frozenset(
         # #19982: every tracked non-changelog file, since the product name can be misspelled into an
         # edition in any component; the population is the whole tree, so no prefix describes it.
         "autobot-has-no-pro-name",
+        # #21048: every tracked file, since an automatic caller of the KB setup script could live in any
+        # component; the population is the whole tree, so no prefix describes it.
+        "kb-wipe-never-invoked",
         # Whole tree (#18940): every tracked test file, wherever a test lives; the population is
         # the test suite itself, so a roots= list would only go stale as tests move.
         "isolated-git-env",
@@ -56,6 +59,9 @@ UNSCOPED = frozenset(
         # depth -- a new package root can appear anywhere, so no roots= list could name it.
         "dependabot-package-roots",
         "ansible-inventory-shell-sweep",
+        # #21343: items are variable names and (variable, variable) pairs parsed from YAML, not paths.
+        "inventory-variable-cycle-variables-21343",
+        "inventory-variable-cycle-references-21343",
         "audio-extension-allowlist",
         "blanket-skip-test-module-sweep",
         # #19324: an extension filter (*.py, *.sh, *.yml, .env*, ...) over the whole tree, not a set of prefixes.
@@ -64,6 +70,9 @@ UNSCOPED = frozenset(
         "ceiling-table-sweep-19544",
         # #19279: requirements files live in every package directory; a glob, not a set of prefixes.
         "landing-page-declared-dependencies",
+        # #21071: every tracked non-test .py, wherever a hand-rolled log-once flag could be written; no prefix
+        # describes it.
+        "log-once-hand-rolled-sweep-21071",
         "chromadb-bind-host-override-candidates",
         "chromadb-bind-launch-sites",
         "chromadb-compose-port-sites",

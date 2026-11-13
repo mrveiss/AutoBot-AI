@@ -5164,9 +5164,10 @@ export interface paths {
         put?: never;
         /**
          * Clear All Knowledge
-         * @description Clear all entries from the knowledge base - DESTRUCTIVE OPERATION.
+         * @description Request a wipe of the knowledge base - it deletes nothing (#21048, #17038).
          *
-         *     Issue #744: Requires admin authentication.
+         *     Requires an admin who is a user. Creates (or reuses) a pending wipe approval and returns its reference;
+         *     the wipe runs only after a human approves it in the Approvals inbox, and is never auto-approved.
          */
         post: operations["clear_all_knowledge_api_knowledge_base_clear_all_post"];
         delete?: never;
@@ -13664,8 +13665,8 @@ export interface paths {
          * Mcp Redis Vector Operations
          * @description MCP tool: Direct Redis vector store operations.
          *
-         *     Issue #744: Requires authenticated user. Admin operations (flush, reindex)
-         *     should be further restricted at the application level.
+         *     Issue #744: Requires authenticated user. ``flush`` deletes nothing (#21048, #17038): it requests a knowledge
+         *     wipe, for an admin user only, and the wipe runs after a human approves it.
          */
         post: operations["mcp_redis_vector_operations_api_knowledge_mcp_redis_vector_operations_post"];
         delete?: never;
@@ -19719,6 +19720,46 @@ export interface paths {
          * @description Propose an owner -- a request, not an execution. Refused unless the session is ownerless and the user exists.
          */
         post: operations["propose_chat_session_owner_api_admin_ownerless_chat_sessions_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/knowledge-wipe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Knowledge Wipe Plan
+         * @description Read only: the databases and indexes a wipe would delete.
+         */
+        get: operations["knowledge_wipe_plan_api_admin_knowledge_wipe_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/knowledge-wipe/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Knowledge Wipe
+         * @description Propose the wipe -- a request, not an execution.
+         */
+        post: operations["propose_knowledge_wipe_api_admin_knowledge_wipe_requests_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -53832,7 +53873,7 @@ export interface paths {
          * @description Manual run cancel (board only).
          *
          *     Sets run status = cancelled, calls adapter.cancel() best-effort,
-         *     and releases the Redis checkout lock when a work item was held.
+         *     and releases every work-item checkout the run made (and their Redis fences).
          */
         post: operations["cancel_run_api_llc_agents__agent_id__runs__run_id__cancel_post"];
         delete?: never;
@@ -57868,7 +57909,7 @@ export interface components {
             capabilities?: string | null;
             /**
              * Model
-             * @description Model override. Supported: 'claude-sonnet-4-6' (default), 'claude-haiku-4-5-20251001'. Use Haiku for execution-only assistant agents.
+             * @description Model override. Supported: 'claude-sonnet-5-5' (default), 'claude-haiku-5-5'; the tier aliases 'sonnet' and 'haiku' name them. Use Haiku for execution-only assistant agents.
              */
             model?: string | null;
             /**
@@ -60569,11 +60610,6 @@ export interface components {
              */
             company_id: string;
             type: components["schemas"]["ApprovalType"];
-            /**
-             * Requested By Agent Id
-             * Format: uuid
-             */
-            requested_by_agent_id: string;
             /**
              * Payload
              * @default {}
@@ -65610,13 +65646,14 @@ export interface components {
          * ClearAllResponse
          * @description Shape of ``POST /api/knowledge_base/clear_all``.
          *
-         *     DESTRUCTIVE operation. ``items_removed`` counts fact rows, not
-         *     vectors — vector store is cleared as part of ``kb.clear_all()``.
+         *     The route deletes nothing (#21048, #17038): it proposes a knowledge wipe, and the wipe runs only after a
+         *     human approves it. ``approval_id`` names the pending approval; ``items_removed`` and ``items_before`` stay
+         *     for compatibility and are 0 because nothing was removed by this request.
          */
         ClearAllResponse: {
             /**
              * Status
-             * @description 'success' | 'error'
+             * @description Approval status of the wipe request, 'pending' until a human decides
              */
             status: string;
             /**
@@ -65634,6 +65671,16 @@ export interface components {
              * @default
              */
             message: string;
+            /**
+             * Approval Id
+             * @description Id of the pending wipe approval in the Approvals inbox
+             */
+            approval_id?: string | null;
+            /**
+             * Action
+             * @description The approval action the wipe runs under
+             */
+            action?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -66972,10 +67019,6 @@ export interface components {
             company_id: string;
             /** Body */
             body: string;
-            /** Author Agent Id */
-            author_agent_id?: string | null;
-            /** Author User Id */
-            author_user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -80497,8 +80540,6 @@ export interface components {
         };
         /** HumanClaimRequest */
         HumanClaimRequest: {
-            /** User Id */
-            user_id?: string | null;
             /** Company Id */
             company_id?: string | null;
         } & {
@@ -80509,8 +80550,6 @@ export interface components {
          * @description The same accepted-and-ignored fields as a claim.
          */
         HumanUnclaimRequest: {
-            /** User Id */
-            user_id?: string | null;
             /** Company Id */
             company_id?: string | null;
         } & {
@@ -84884,8 +84923,6 @@ export interface components {
         LabelAssign: {
             /** Label Ids */
             label_ids: string[];
-            /** Assigned By */
-            assigned_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -84897,8 +84934,6 @@ export interface components {
             color?: string | null;
             /** Description */
             description?: string | null;
-            /** Created By */
-            created_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -95171,7 +95206,7 @@ export interface components {
         };
         /**
          * RelationCreate
-         * @description ``company_id`` and ``created_by_*`` are accepted for compatibility and ignored.
+         * @description ``company_id`` is accepted for compatibility and ignored; the creator is the authenticated caller.
          */
         RelationCreate: {
             /** Company Id */
@@ -95179,10 +95214,6 @@ export interface components {
             /** Target Id */
             target_id: string;
             relation_type: components["schemas"]["WorkItemRelationType"];
-            /** Created By Agent Id */
-            created_by_agent_id?: string | null;
-            /** Created By User Id */
-            created_by_user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -98309,11 +98340,6 @@ export interface components {
             name: string;
             /** Value */
             value: string;
-            /**
-             * Actor
-             * @description Deprecated and ignored: the actor is the authenticated caller (#20102)
-             */
-            actor?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -100854,8 +100880,6 @@ export interface components {
              * Format: uuid
              */
             approval_id: string;
-            /** Decided By */
-            decided_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -108122,8 +108146,6 @@ export interface components {
             assignee_agent_id?: string | null;
             /** Assignee User Id */
             assignee_user_id?: string | null;
-            /** Created By Agent Id */
-            created_by_agent_id?: string | null;
             /** Labels */
             labels?: string[] | null;
             /** Requires Approval Before */
@@ -135180,6 +135202,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    knowledge_wipe_plan_api_admin_knowledge_wipe_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    propose_knowledge_wipe_api_admin_knowledge_wipe_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -178895,9 +178961,7 @@ export interface operations {
     };
     revoke_secret_api_llc_secrets__company_id___name__delete: {
         parameters: {
-            query?: {
-                actor?: string | null;
-            };
+            query?: never;
             header?: never;
             path: {
                 name: string;
@@ -181989,8 +182053,6 @@ export interface operations {
         parameters: {
             query: {
                 company_id: string;
-                uploaded_by_agent_id?: string | null;
-                uploaded_by_user_id?: string | null;
             };
             header?: never;
             path: {
@@ -182170,10 +182232,6 @@ export interface operations {
             query?: {
                 /** @description Accepted for compatibility; ignored. */
                 company_id?: string | null;
-                /** @description Accepted for compatibility; ignored. */
-                actor_agent_id?: string | null;
-                /** @description Accepted for compatibility; ignored. */
-                actor_user_id?: string | null;
             };
             header?: never;
             path: {

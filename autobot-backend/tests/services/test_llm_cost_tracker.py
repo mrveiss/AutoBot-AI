@@ -33,6 +33,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from autobot_shared.local_models import LOCAL_MODEL_NAMES
+from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET
 from constants.model_constants import (
     ANTHROPIC_CLAUDE_HAIKU4_5,
     ANTHROPIC_CLAUDE_OPUS4,
@@ -58,6 +59,9 @@ def _price(model_id: str, inp: float, out: float) -> ModelPricing:
 #: names it; it is not a trimmed copy of the real one, and no test may assume a
 #: model it does not put in here itself.
 _CATALOGUE = {
+    CLAUDE_OPUS.lower(): _price(CLAUDE_OPUS, 4.0, 20.0),
+    CLAUDE_SONNET.lower(): _price(CLAUDE_SONNET, 2.0, 10.0),
+    CLAUDE_HAIKU.lower(): _price(CLAUDE_HAIKU, 0.1, 0.5),
     ANTHROPIC_CLAUDE_OPUS4.lower(): _price(ANTHROPIC_CLAUDE_OPUS4, 15.0, 75.0),
     ANTHROPIC_CLAUDE_SONNET4.lower(): _price(ANTHROPIC_CLAUDE_SONNET4, 3.0, 15.0),
     ANTHROPIC_CLAUDE_HAIKU4_5.lower(): _price(ANTHROPIC_CLAUDE_HAIKU4_5, 1.0, 5.0),
@@ -144,7 +148,7 @@ class TestUnknownModelFallback:
 
     def test_an_unknown_sonnet_variant_is_priced_as_sonnet(self):
         _populate()
-        entry = _CATALOGUE[ANTHROPIC_CLAUDE_SONNET4.lower()]
+        entry = _CATALOGUE[CLAUDE_SONNET.lower()]
         cost = self.tracker.calculate_cost("claude-sonnet-5-future", 1_000_000, 1_000_000)
         assert cost == round(entry.input_per_1m + entry.output_per_1m, 6)
 
@@ -156,15 +160,15 @@ class TestUnknownModelFallback:
         Sonnet's rate -- 5x under, silently.
         """
         _populate()
-        opus = _CATALOGUE[ANTHROPIC_CLAUDE_OPUS4.lower()]
-        sonnet = _CATALOGUE[ANTHROPIC_CLAUDE_SONNET4.lower()]
+        opus = _CATALOGUE[CLAUDE_OPUS.lower()]
+        sonnet = _CATALOGUE[CLAUDE_SONNET.lower()]
         cost = self.tracker.calculate_cost("claude-opus-5-future", 1_000_000, 0)
         assert cost == round(opus.input_per_1m, 6)
         assert cost != round(sonnet.input_per_1m, 6)
 
     def test_an_unknown_haiku_variant_is_priced_as_haiku(self):
         _populate()
-        entry = _CATALOGUE[ANTHROPIC_CLAUDE_HAIKU4_5.lower()]
+        entry = _CATALOGUE[CLAUDE_HAIKU.lower()]
         cost = self.tracker.calculate_cost("claude-haiku-9-future", 1_000_000, 0)
         assert cost == round(entry.input_per_1m, 6)
 

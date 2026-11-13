@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.logging_once import reset_log_once
 from llc.models.enums import RoutineStatus
 from llc.scheduler import schedule_reconcile as rec
 from llc.scheduler.routine_scheduler import RoutineScheduler
@@ -153,7 +154,7 @@ async def test_agent_query_excludes_off_statuses_and_blank_cron():
 @pytest.mark.asyncio
 async def test_bad_cron_is_logged_and_does_not_stop_the_rest(caplog):
     redis = _FakeRedis()
-    rec._reported_bad_crons.clear()
+    reset_log_once()
     p_agents = patch.object(
         rec,
         "_enabled_agents",

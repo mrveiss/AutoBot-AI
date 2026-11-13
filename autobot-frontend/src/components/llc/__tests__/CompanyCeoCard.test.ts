@@ -20,42 +20,8 @@ vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ get, put, delete: del }
 vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }))
-// The kit's select menu is built on reka-ui, whose popper does not run in jsdom. A minimal
-// stand-in keeps the kit component real and makes its options clickable.
-vi.mock('reka-ui', async () => {
-  const { defineComponent, h, inject, provide } = await import('vue')
-  const passthrough = (name: string) =>
-    defineComponent({ name, setup: (_, { slots }) => () => h('div', slots.default?.()) })
-  const SelectRoot = defineComponent({
-    name: 'SelectRoot',
-    props: { modelValue: { type: String, default: '' } },
-    emits: ['update:modelValue'],
-    setup(_, { slots, emit }) {
-      provide('pick', (v: string) => emit('update:modelValue', v))
-      return () => h('div', slots.default?.())
-    },
-  })
-  const SelectItem = defineComponent({
-    name: 'SelectItem',
-    props: { value: { type: String, required: true } },
-    setup(props, { slots }) {
-      const pick = inject<(v: string) => void>('pick')!
-      return () => h('button', { type: 'button', 'data-option': props.value, onClick: () => pick(props.value) }, slots.default?.())
-    },
-  })
-  const SelectTrigger = defineComponent({
-    name: 'SelectTrigger',
-    setup: (_, { slots, attrs }) => () => h('button', { type: 'button', 'data-trigger': '', ...attrs }, slots.default?.()),
-  })
-  const names = [
-    'SelectContent', 'SelectItemText', 'SelectPortal', 'SelectValue', 'SelectViewport',
-    'PopoverContent', 'PopoverPortal', 'PopoverRoot', 'PopoverTrigger',
-    'TabsContent', 'TabsList', 'TabsRoot', 'TabsTrigger',
-    'AccordionContent', 'AccordionHeader', 'AccordionItem', 'AccordionRoot', 'AccordionTrigger',
-    'DropdownMenuContent', 'DropdownMenuItem', 'DropdownMenuPortal', 'DropdownMenuRoot', 'DropdownMenuSeparator', 'DropdownMenuTrigger',
-  ]
-  return Object.fromEntries([['SelectRoot', SelectRoot], ['SelectItem', SelectItem], ['SelectTrigger', SelectTrigger], ...names.map((n) => [n, passthrough(n)])])
-})
+// The kit's select menu is built on reka-ui, whose popper does not run in jsdom (shared stand-in).
+vi.mock('reka-ui', async () => (await import('@/test/rekaSelectStub')).rekaSelectStub())
 
 import CompanyCeoCard from '../CompanyCeoCard.vue'
 

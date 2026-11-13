@@ -146,6 +146,19 @@ REACH_ROOTS = {
     "repo_tests/generated_type_names_not_redeclared_19334_test.py": ("autobot-frontend/src",),
     "repo_tests/github_api_single_module_15411_test.py": ("pipeline-scripts", "scripts"),
     "repo_tests/hardcoded_ui_literal_ratchet_12732_test.py": ("autobot-frontend/src/", "autobot-slm-frontend/src/"),
+    "repo_tests/hosted_model_literal_guard_15501_test.py": (
+        "autobot-backend",
+        "autobot-frontend",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "autobot-plugins",
+        "autobot-slm-backend",
+        "autobot-slm-frontend",
+        "autobot_shared",
+        "docs",
+        "libs",
+        "plugins",
+    ),
     "repo_tests/icon_rule_sets_font_size_only_19875_test.py": ("autobot-frontend/src",),
     "repo_tests/infra_scripts_no_backend_imports_18288_test.py": ("autobot-infrastructure",),
     "repo_tests/inline_lazy_singleton_20889_test.py": (
@@ -196,6 +209,7 @@ REACH_ROOTS = {
         "autobot-slm-frontend/src",
     ),
     "repo_tests/knowledge_metadata_parse_canonical_18220_test.py": ("autobot-backend/api",),
+    "repo_tests/llc_acting_identity_from_credential_20521_test.py": ("autobot-backend/llc/api",),
     "repo_tests/migration_gate_filter_covers_what_its_tests_import_test.py": ("autobot-backend/tests/migrations",),
     "repo_tests/model_revision_pinning_enforced_17804_test.py": (
         "autobot-backend",
@@ -320,6 +334,7 @@ REACH_ROOTS = {
         "autobot-slm-backend",
         "docs",
         "install.sh",
+        "scripts/deployment",
     ),
     "repo_tests/opt_autobot_literal_ratchet_18880_test.py": ("autobot-slm-backend/ansible",),
     "repo_tests/optimization_taxonomies_13049_test.py": (
