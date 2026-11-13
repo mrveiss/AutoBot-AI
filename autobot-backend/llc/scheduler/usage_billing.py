@@ -53,3 +53,9 @@ def budget_session_scope() -> AsyncContextManager[Any]:
     one of the two, so nothing is charged twice.
     """
     return async_session_scope(get_async_session_factory())
+
+
+def agent_company_and_model(agent: dict[str, Any]) -> tuple[str, str]:
+    """The company id and model a run's cost is charged under (adapter config first, then the agent's own)."""
+    model = (agent.get("adapter_config") or {}).get("model") or agent.get("model") or ""
+    return str(agent.get("company_id") or ""), model

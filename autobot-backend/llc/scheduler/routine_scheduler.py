@@ -209,9 +209,7 @@ class RoutineScheduler:
         A failure is logged, not raised: the retry path would fire the routine a second time
         for a run that already exists (#20117, shared with the agent path).
         """
-        await reschedule_after_start(
-            "Routine", routine_id, lambda: self._zadd_next_fire(routine_id, cron_schedule, croniter)
-        )
+        await reschedule_after_start("Routine", self._zadd_next_fire, routine_id, cron_schedule, croniter)
 
     async def _zadd_next_fire(self, routine_id: Any, cron_schedule: Optional[str], croniter: Any) -> None:
         redis = await get_async_redis_client()
