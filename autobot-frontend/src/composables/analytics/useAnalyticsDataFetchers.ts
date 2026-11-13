@@ -278,7 +278,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
       label: 'Stats endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.stats ? raw.stats : null,
-      onSuccess: (d, raw, forSource) => { codebaseStats.value = d; runState.applyRunFields(raw, forSource) },
+      onSuccess: (d, raw, forSource) => { if (forSource === deps.sourceIdParam.value) codebaseStats.value = d; runState.applyRunFields(raw, forSource) },
       onNoData: () => {
         codebaseStats.value = null
         logger.debug('No codebase stats - run indexing first')
@@ -297,7 +297,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
       scopeToSource: true, requireSource: true,
       label: 'Problems endpoint',
       pickData: (raw) => (raw.status === 'no_data' ? [] : raw.problems ?? []),
-      onSuccess: (d, raw, forSource) => { problemsReport.value = d; runState.applyRunFields(raw, forSource) },
+      onSuccess: (d, raw, forSource) => { if (forSource === deps.sourceIdParam.value) problemsReport.value = d; runState.applyRunFields(raw, forSource) },
     },
     { withSourceId },
   )
