@@ -57,6 +57,10 @@ const UNCOSTED = {
 
 function respond(cost: unknown = COSTED, rate: unknown = { hourly_rate: '120.000000', currency: 'EUR' }): void {
   get.mockImplementation((url: string) => {
+    // #21241: the workflows panel also reads the company's workflows and the viewer's standing. The
+    // company list URL contains '/workflows', which the role routes below match on, so both go first.
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
+    if (url.endsWith('/members')) return Promise.resolve({ members: [], viewer_grantable_roles: [], viewer_can_manage: true })
     // Order matters: the cost URL also contains '/workflows'.
     if (url.includes('/cost')) return Promise.resolve(cost)
     if (url.includes('/rate')) return Promise.resolve(rate)
