@@ -309,8 +309,25 @@ def inventory_groups(root: pathlib.Path) -> dict[str, set]:
     return found
 
 
+def _is_play_file(text: str) -> bool:
+    """True when the document is a top-level YAML list, the shape of a playbook.
+
+    A ``hosts:`` key in group_vars, host_vars, role defaults or any other data file is data, not a play
+    target (#21343: ``hosts: *infrastructure_hosts`` in a group_vars file was read as a group name). Those files
+    are top-level mappings, so the first content line is a ``key:`` and never a ``- `` list item.
+    """
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped in ("---", "..."):
+            continue
+        return line.startswith("-")
+    return False
+
+
 def _host_patterns(text: str) -> list[tuple[int, str]]:
-    """Return ``(line_no, pattern)`` for each play's ``hosts:`` declaration."""
+    """Return ``(line_no, pattern)`` for each play's ``hosts:`` declaration; data files have none."""
+    if not _is_play_file(text):
+        return []
     return [
         (line_no, match.group("pattern").strip("\"'"))
         for line_no, line in enumerate(text.splitlines(), 1)
