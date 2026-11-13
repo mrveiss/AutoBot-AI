@@ -115,4 +115,38 @@ describe('useOrgPeopleSources (#21469)', () => {
     expect(s.teamsAttempted.value).toBe(true)
     expect(s.loading.value).toBe(false)
   })
+
+  it('issues both requests one microtask after the entry, so a caller snapshotting right after it counts them', async () => {
+    get.mockImplementation((url: string) => Promise.resolve(answer(url)))
+    const s = setup()
+    void s.load()
+    await Promise.resolve()
+
+    expect(get).toHaveBeenCalledTimes(2)
+    await flushPromises()
+    get.mockClear()
+    await s.load()
+    expect(get).not.toHaveBeenCalled()
+  })
+
+  it('ends in the failed state, retryably, when the company resolution rejects', async () => {
+    get.mockImplementation((url: string) => Promise.resolve(answer(url)))
+    let fail = true
+    const s = useOrgPeopleSources({
+      api: { get } as unknown as PeopleSourcesApi,
+      resolveCompanyId: () => (fail ? Promise.reject(new Error('store down')) : Promise.resolve(current)),
+      companyId: () => current,
+    })
+    await s.load()
+    expect(get).not.toHaveBeenCalled()
+    expect(s.contactsFailed.value).toBe(true)
+    expect(s.teamsFailed.value).toBe(true)
+    expect(s.teamsAttempted.value).toBe(true)
+    expect(s.loading.value).toBe(false)
+
+    fail = false
+    await s.load()
+    expect(s.contacts.value).toEqual([contact])
+    expect(s.contactsFailed.value).toBe(false)
+  })
 })

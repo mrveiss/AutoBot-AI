@@ -90,22 +90,6 @@ export function useOrgPeopleSources(deps: OrgPeopleSourcesDeps) {
     teamsFailed.value = false
   }
 
-  /**
-   * Resolve the company. A rejection is not "no company": both sources are unanswered, which is
-   * not "empty" either, so it ends in the failed state (the retry is the next `load`).
-   */
-  async function resolveOrFail(): Promise<string> {
-    try {
-      return (await deps.resolveCompanyId()) || ''
-    } catch (err: unknown) {
-      logger.error('Failed to resolve the company for the people sources:', err)
-      contactsFailed.value = true
-      teamsFailed.value = true
-      teamsAttempted.value = true
-      return ''
-    }
-  }
-
   async function fetchSources(cid: string): Promise<void> {
     const [contactsResult, teamsResult] = await Promise.allSettled([
       planRequest(deps.api, 'get', INVOLVED, { company_id: cid }),
@@ -126,11 +110,15 @@ export function useOrgPeopleSources(deps: OrgPeopleSourcesDeps) {
     // pass the check above and double-fire every request.
     loading.value = true
     try {
-      const cid = await resolveOrFail()
+      // The resolver is awaited directly, with no async wrapper around it: a wrapper adds a microtask
+      // hop, which moves the two requests past the point a caller that snapshots right after the
+      // fire-and-forget entry (the role lens spec) counts them from.
+      const cid = await deps.resolveCompanyId()
       if (cid) await fetchSources(cid)
     } catch (err: unknown) {
-      // A synchronous throw from the api or the apply step must end in the same visible failed state,
-      // not an unhandled rejection at the fire-and-forget call sites.
+      // A rejected company resolution is not "no company", and a throw from the api or the apply step
+      // is not "no people": each ends in the same visible failed state, never an unhandled rejection
+      // at the fire-and-forget call sites.
       logger.error('Failed to load the people sources:', err)
       contactsFailed.value = true
       teamsFailed.value = true
