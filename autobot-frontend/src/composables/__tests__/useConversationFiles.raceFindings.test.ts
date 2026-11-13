@@ -8,7 +8,9 @@ const rawRequest = vi.fn()
 const get = vi.fn()
 const del = vi.fn()
 const call = vi.fn()
-vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ rawRequest, get, delete: del, call, put: vi.fn() }) }))
+const post = vi.fn()
+const put = vi.fn()
+vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ rawRequest, get, delete: del, call, post, put }) }))
 vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api' }))
 vi.mock('@/i18n', () => ({
   default: { global: { t: (key: string, params: Record<string, unknown> = {}) => `${key}|${JSON.stringify(params)}` } },
@@ -135,5 +137,94 @@ describe('bulk delete (#21337)', () => {
     expect(await f.deleteSelectedFiles()).toBe(false)
     expect(f.error.value).toBe('not yours')
     expect(Array.from(f.selectedFileIds.value)).toEqual(['a'])
+  })
+})
+
+describe('a failure after a conversation switch stays out of the new conversation (#21337)', () => {
+  const failure = { response: { status: 403, data: { detail: 'old conversation failure' } } }
+  /** Load s1, then hold the NEXT list reload pending; `switchAndRelease` moves to s2 and lets it finish. */
+  const setup = async () => {
+    const session = ref('s1')
+    get.mockImplementation(async () => listing(entry('a', 'text/plain'), entry('b', 'text/plain')))
+    const f = useConversationFiles(session)
+    await f.loadFiles()
+    let release: () => void = () => {}
+    get.mockImplementation(() => new Promise((r) => { release = () => r(listing()) }))
+    const switchAndRelease = async () => { session.value = 's2'; f.resetForSession(); release(); await Promise.resolve() }
+    return { f, session, switchAndRelease }
+  }
+  beforeEach(() => { get.mockReset(); del.mockReset(); call.mockReset(); post.mockReset(); put.mockReset() })
+
+  it('bulk delete: the reload outliving the conversation does not write the old failure', async () => {
+    const { f, switchAndRelease } = await setup()
+    f.toggleFileSelection('a'); f.toggleFileSelection('b')
+    call.mockRejectedValueOnce(failure).mockResolvedValueOnce({})
+    const pending = f.deleteSelectedFiles()
+    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2))
+    await switchAndRelease()
+    expect(await pending).toBe(false)
+    expect(f.error.value).toBeNull()
+  })
+
+  it('single delete: a failure after the switch is not shown in the new conversation', async () => {
+    const { f, session } = await setup()
+    let fail: (e: unknown) => void = () => {}
+    del.mockImplementation(() => new Promise((_r, rej) => { fail = rej }))
+    const pending = f.deleteFile('a')
+    session.value = 's2'; f.resetForSession()
+    fail(failure)
+    expect(await pending).toBe(false)
+    expect(f.error.value).toBeNull()
+  })
+
+  it('single delete: success after the switch leaves the new conversation list alone', async () => {
+    const { f, session } = await setup()
+    let done: (v: unknown) => void = () => {}
+    del.mockImplementation(() => new Promise((r) => { done = r }))
+    const pending = f.deleteFile('a')
+    session.value = 's2'; f.resetForSession()
+    get.mockImplementation(async () => listing(entry('a', 'text/plain')))
+    await f.loadFiles()
+    done({})
+    expect(await pending).toBe(true)
+    expect(f.files.value.map((x) => x.file_id)).toEqual(['a'])
+  })
+
+  it.each([
+    ['createFile', post, (f: ReturnType<typeof useConversationFiles>) => f.createFile('n.txt')],
+    ['copyFile', post, (f: ReturnType<typeof useConversationFiles>) => f.copyFile('a')],
+    ['renameFile', put, (f: ReturnType<typeof useConversationFiles>) => f.renameFile('a', 'z.txt')],
+    ['updateFileContent', put, (f: ReturnType<typeof useConversationFiles>) => f.updateFileContent('a', 'x')],
+  ])('%s: a failure after the switch is not shown in the new conversation', async (_name, verb, run) => {
+    const { f, session } = await setup()
+    let fail: (e: unknown) => void = () => {}
+    verb.mockImplementation(() => new Promise((_r, rej) => { fail = rej }))
+    const pending = run(f)
+    session.value = 's2'; f.resetForSession()
+    fail(failure)
+    expect(await pending).toBe(false)
+    expect(f.error.value).toBeNull()
+  })
+
+  it('getFileContent: a failure after the switch is not shown in the new conversation', async () => {
+    const { f, session } = await setup()
+    let fail: (e: unknown) => void = () => {}
+    get.mockImplementation(() => new Promise((_r, rej) => { fail = rej }))
+    const pending = f.getFileContent('a')
+    session.value = 's2'; f.resetForSession()
+    fail(failure)
+    expect(await pending).toBeNull()
+    expect(f.error.value).toBeNull()
+  })
+
+  it('downloadFile: a failure after the switch is not shown in the new conversation', async () => {
+    const { f, session } = await setup()
+    let fail: (e: unknown) => void = () => {}
+    rawRequest.mockImplementation(() => new Promise((_r, rej) => { fail = rej }))
+    const pending = f.downloadFile('a')
+    session.value = 's2'; f.resetForSession()
+    fail(failure)
+    await pending
+    expect(f.error.value).toBeNull()
   })
 })
