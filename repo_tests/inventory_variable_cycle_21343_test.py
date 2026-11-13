@@ -24,17 +24,15 @@ import re
 
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
-_ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
-_GROUP_VARS = sorted((_ANSIBLE / "inventory" / "group_vars").glob("*.yml"))
-_ROLE_VARS = sorted(_ANSIBLE.glob("roles/*/defaults/*.yml")) + sorted(_ANSIBLE.glob("roles/*/vars/*.yml"))
-_INVENTORIES = sorted((_ANSIBLE / "inventory").glob("*.yml")) + [_ANSIBLE / "inventory.yml"]
+_ROOT = repo_root()
+_ANSIBLE = _ROOT / "autobot-slm-backend" / "ansible"
 
-#: Floors on the REACH of the sweep (measured on the tree this guard landed on, kept below it).
+#: Floors on the number of SOURCE FILES read (shrink guards; the variable and reference floors are the
+#: `declare(...)` calls below, because they bound a sweep of the tree).
 _MIN_VAR_FILES = 40
 _MIN_INVENTORY_FILES = 5
-_MIN_VARIABLES = 600
-_MIN_EDGES = 150
 _JINJA = re.compile(r"\{\{(.*?)\}\}|\{%(.*?)%\}", re.S)
 _NAME = re.compile(r"(?<![\w.'\"])([A-Za-z_]\w*)")
 #: `vars['x']`, `vars["x"]` and `lookup('vars', 'x')` read a variable by NAME, which `_NAME` cannot see.
@@ -125,8 +123,52 @@ def _cycles(graph: dict[str, set[str]]) -> list[list[str]]:
     return [c for name in sorted(graph) if (c := _cycle_from(graph, name))]
 
 
+def _sources(root) -> tuple[list, list]:
+    """(variable files, inventory files) under *root*; empty lists when the tree has none."""
+    ansible = root / "autobot-slm-backend" / "ansible"
+    variables = sorted(ansible.glob("inventory/group_vars/*.yml"))
+    variables += sorted(ansible.glob("roles/*/defaults/*.yml")) + sorted(ansible.glob("roles/*/vars/*.yml"))
+    inventories = sorted(ansible.glob("inventory/*.yml"))
+    inventories += [ansible / "inventory.yml"] if (ansible / "inventory.yml").is_file() else []
+    return variables, inventories
+
+
+def _graph_of(root) -> dict[str, set[str]]:
+    variables, inventories = _sources(root)
+    return _graph([_load(p) for p in variables], [_load(p) for p in inventories])
+
+
 def _repo_graph() -> dict[str, set[str]]:
-    return _graph([_load(p) for p in [*_GROUP_VARS, *_ROLE_VARS]], [_load(p) for p in _INVENTORIES])
+    return _graph_of(_ROOT)
+
+
+def _variables(root) -> list[str]:
+    return sorted(_graph_of(root)) if _sources(root)[0] else []
+
+
+def _reference_pairs(root) -> list[str]:
+    graph = _graph_of(root) if _sources(root)[0] else {}
+    return sorted(f"{src} -> {dst}" for src, targets in graph.items() for dst in targets)
+
+
+#: MEASURED 2026-11-13 against this tree: 744 variable names (every group_vars / role defaults / role vars
+#: top-level key, plus the `ansible_host` pseudo-node) and 198 references between them. `growth` is about 8%
+#: and 15% of those: a new role default or group var moves them on unrelated PRs, so they are not pinned to
+#: equality. Items are names and pairs, not paths, so there is no `roots=` (recorded in `_reach_unscoped`).
+VARIABLES = declare(
+    "inventory-variable-cycle-variables-21343",
+    discover=_variables,
+    floor=700,
+    growth=60,
+    what="Ansible variables in group_vars and role defaults/vars",
+)
+REFERENCES = declare(
+    "inventory-variable-cycle-references-21343",
+    discover=_reference_pairs,
+    floor=180,
+    growth=30,
+    what="references between Ansible variables",
+)
 
 
 def _edges(graph: dict[str, set[str]]) -> int:
@@ -136,10 +178,13 @@ def _edges(graph: dict[str, set[str]]) -> int:
 def test_the_sweep_reaches_what_it_claims_to() -> None:
     """Reach before findings: an empty or shrunken walk must fail, not pass."""
     graph = _repo_graph()
-    assert len([*_GROUP_VARS, *_ROLE_VARS]) >= _MIN_VAR_FILES, "variable files examined fell below the floor"
-    assert len(_INVENTORIES) >= _MIN_INVENTORY_FILES, "inventory files examined fell below the floor"
-    assert len(graph) >= _MIN_VARIABLES, f"only {len(graph)} variables examined (floor {_MIN_VARIABLES})"
-    assert _edges(graph) >= _MIN_EDGES, f"only {_edges(graph)} references examined (floor {_MIN_EDGES})"
+    variables, inventories = _sources(_ROOT)
+    assert len(variables) >= _MIN_VAR_FILES, "variable files examined fell below the floor"
+    assert len(inventories) >= _MIN_INVENTORY_FILES, "inventory files examined fell below the floor"
+    VARIABLES.examined(_ROOT)
+    REFERENCES.examined(_ROOT)
+    VARIABLES.completed(len(graph))
+    REFERENCES.completed(_edges(graph))
     assert "infrastructure_hosts" in graph["infrastructure"], "known edge infrastructure -> infrastructure_hosts"
     assert (
         "model_storage_directories" in graph["model_storage"]
