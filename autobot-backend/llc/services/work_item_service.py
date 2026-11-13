@@ -35,6 +35,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_value
 from autobot_shared.ssot_constants import QueryDefaults
 
 from ..models.activity import ActorType
@@ -612,9 +613,8 @@ class WorkItemService(LLCServiceBase):
         )
 
         # Only once the release is audited: a failed audit rolls the DB back and the lock must survive it.
-        redis = await get_async_redis_client()
-        if redis is not None:
-            await redis.delete(f"llc:checkout:{work_item_id}")
+        if (redis := await get_async_redis_client()) is not None:
+            await delete_if_value(redis, f"llc:checkout:{work_item_id}", f"user:{user_id}")  # the claim's own
 
         return item
 

@@ -19,6 +19,7 @@ import uuid
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_utils import delete_if_value
 
 from .core import AutoBotMemoryGraphCore
 from .owner_scope import (
@@ -58,16 +59,6 @@ end
 redis.call('SET', KEYS[1], ARGV[1])
 redis.call('JSON.SET', KEYS[2], '$', ARGV[2])
 return ARGV[1]
-"""
-
-
-#: KEYS[1] name index; ARGV[1] the id the caller believes owns it. Deletes only on a match,
-#: atomically, so a re-claim landing after a read cannot lose its live claim.
-RELEASE_IF_OWNER_LUA = """
-if redis.call('GET', KEYS[1]) == ARGV[1] then
-    return redis.call('DEL', KEYS[1])
-end
-return 0
 """
 
 
@@ -158,7 +149,7 @@ def _require_readable(existing: Dict[str, Any], owner: OwnerScope) -> None:
 
 async def release_name(graph: AutoBotMemoryGraphCore, name: str, entity_id: str) -> None:
     """Drop the name index entry, but only if it still points at ``entity_id`` (atomic)."""
-    await graph.redis_client.eval(RELEASE_IF_OWNER_LUA, 1, name_index_key(name), entity_id)
+    await delete_if_value(graph.redis_client, name_index_key(name), entity_id)
 
 
 async def strict_search_by_name(

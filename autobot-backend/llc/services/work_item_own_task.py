@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.redis_utils import delete_if_holder, delete_if_value
 
 from ..models.enums import AssigneeType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
@@ -144,6 +144,16 @@ def ensure_fence_safe_agent_id(agent_id: str) -> str:
     return agent_id
 
 
+def canonical_agent_id(agent_id: str) -> str:
+    """*agent_id* as the canonical UUID string (lower case, hyphenated); ``ValueError`` when it is not a UUID.
+
+    The checkout row stores the agent as a UUID and every release compares ``str(UUID)``, so a fence written from
+    an uppercase, unhyphenated or ``urn:`` spelling would name a holder no release could match (#19631). Applied
+    once, where a request names the agent (``FenceSafeAgentId``); every other caller passes ``str(UUID)`` already.
+    """
+    return str(uuid.UUID(agent_id))
+
+
 def checkout_fence_value(agent_id: str, run_id: Optional[str]) -> str:
     """The fence value of one agent checkout: the agent id tagged with the checkout generation (``checkout_run_id``).
 
@@ -158,6 +168,21 @@ async def drop_fence(redis: Any, key: str, value: str, acquired: bool) -> None:
     """Take back a fence THIS call acquired, while it still names *value*; a fence it did not take is left alone."""
     if acquired:
         await delete_if_value(redis, key, value)
+
+
+async def release_agent_fence(item_id: str, agent_id: str) -> None:
+    """Delete the item's fence while it names *agent_id* in any generation; another holder's fence is left alone.
+
+    The release for a caller that knows the agent but not the checkout generation (the release route). Like
+    ``_delete_fence``, a Redis failure is logged and never raised: the release is already committed and the fence
+    expires on its TTL.
+    """
+    try:
+        redis = await get_async_redis_client()
+        if redis is not None:
+            await delete_if_holder(redis, checkout_fence_key(item_id), agent_id)
+    except Exception:
+        logger.warning("Checkout fence of work item %s was not released; it expires on its TTL", item_id, exc_info=True)
 
 
 def fence_agent(value: str) -> str:
