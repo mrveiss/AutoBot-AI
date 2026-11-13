@@ -55,7 +55,7 @@ from __future__ import annotations
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value, expire_if_value
+from autobot_shared.redis_utils import MS_PER_SECOND, delete_if_value, expire_if_value
 from services.audit.audit import AuditCategory, AuditEvent, emit
 
 logger = get_logger(__name__)
@@ -112,7 +112,7 @@ async def renew_claim(task_id: str, agent_id: str, ttl: int = _DEFAULT_TTL) -> b
         _emit_audit("task.renew", agent_id, task_id, outcome="redis_unavailable")
         return True  # fail-open
     try:
-        renewed = await expire_if_value(redis, _key(task_id), agent_id, ttl * 1000)
+        renewed = await expire_if_value(redis, _key(task_id), agent_id, ttl * MS_PER_SECOND)
         if not renewed:
             logger.warning(
                 "task_claim: renew failed (claim lost?) task=%s agent=%s",
