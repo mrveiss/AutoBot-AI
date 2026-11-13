@@ -41,7 +41,7 @@ from pathlib import Path
 
 from autobot_shared.frontmatter import split_frontmatter
 from autobot_shared.generated_file_output import write_atomically
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from autobot_shared.paths import project_root, scrubbed_git_env
 
 logger = get_logger(__name__)
@@ -286,7 +286,11 @@ def _handle_agent_file(
         reason = "nothing to optimize" if options.strip_code_blocks or options.strip_verbose else "section not found"
         print(f"  (unchanged) {agent_file.name}: {reason}")
         return _counts(
-            lines_before=lines, lines_after=lines, bytes_before=len(original), bytes_after=len(original), cache_misses=misses
+            lines_before=lines,
+            lines_after=lines,
+            bytes_before=len(original),
+            bytes_after=len(original),
+            cache_misses=misses,
         )
 
     lines_before, lines_after = report_change(agent_file, original, optimized, apply_changes)
@@ -486,8 +490,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Write the previewed changes to disk. Without this flag nothing on disk is touched.",
     )
-    parser.add_argument("--strip-code-blocks", action="store_true", help="Replace fenced code blocks with a placeholder.")
-    parser.add_argument("--strip-verbose", action="store_true", help="Replace '## Examples' sections (use with caution).")
+    parser.add_argument(
+        "--strip-code-blocks", action="store_true", help="Replace fenced code blocks with a placeholder."
+    )
+    parser.add_argument(
+        "--strip-verbose", action="store_true", help="Replace '## Examples' sections (use with caution)."
+    )
     parser.add_argument("--no-collapse-policy", action="store_true", help="Skip the policy-section collapse.")
     parser.add_argument("--cache", action="store_true", help="Skip files unchanged since the last --apply run.")
     parser.add_argument("--force", action="store_true", help="With --cache: reprocess even cached files.")
@@ -495,7 +503,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--git-backup", action="store_true", help="With --apply: tag before writing, commit after.")
     parser.add_argument("--restore", nargs="?", const="", metavar="TAG", help="Restore from a backup tag (latest).")
     parser.add_argument("--list-backups", action="store_true", help="List the backup tags.")
-    parser.add_argument("--agent-dir", type=Path, default=Path(".claude/agents"), help="Agent dir under the project root.")
+    parser.add_argument(
+        "--agent-dir", type=Path, default=Path(".claude/agents"), help="Agent dir under the project root."
+    )
     return parser
 
 
@@ -572,4 +582,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     exit(main())

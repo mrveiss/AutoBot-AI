@@ -26,7 +26,7 @@ import logging
 import sys
 from pathlib import Path
 
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
@@ -181,4 +181,5 @@ def main():
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     main()
