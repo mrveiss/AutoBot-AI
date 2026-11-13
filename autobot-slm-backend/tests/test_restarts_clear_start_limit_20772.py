@@ -184,11 +184,27 @@ def test_every_play_site_restart_keeps_its_tags_inside_the_include() -> None:
     assert _tagged_includes_without_apply() == []
 
 
+def _lacks_apply_in(fixture: str) -> list:
+    tasks = _mappings_in_context(yaml.safe_load(fixture))
+    return [_lacks_apply(t, shared_include(t)) for t, _ in tasks if shared_include(t)]
+
+
 def test_the_tag_check_sees_a_missing_apply() -> None:
     """Control: the finder is not blind; it reports a fixture include whose tags are not applied."""
     fixture = "- ansible.builtin.include_tasks: _shared/tasks/restart_unit.yml\n  tags: [restart]\n"
-    tasks = list(_mappings_in_context(yaml.load(fixture, Loader=_Loader)))  # noqa: S506
-    assert [_lacks_apply(t, shared_include(t)) for t, _ in tasks if shared_include(t)] == [True]
+    assert _lacks_apply_in(fixture) == [True]
+
+
+def test_the_tag_check_accepts_an_include_that_applies_its_tags() -> None:
+    """Contrast: a fixture include whose ``apply.tags`` match its own tags is not reported, so a detector that
+    rejects every include would fail here."""
+    fixture = (
+        "- ansible.builtin.include_tasks:\n    file: _shared/tasks/restart_unit.yml\n"
+        "    apply:\n      tags: [restart]\n"
+        "  tags: [restart]\n"
+    )
+    assert _lacks_apply_in(fixture) == [False]
+    assert _lacks_apply_in(fixture.replace("      tags: [restart]", "      tags: [other]")) == [True]
 
 
 def test_the_loader_reads_every_document_of_a_multi_document_file(tmp_path: Path) -> None:
