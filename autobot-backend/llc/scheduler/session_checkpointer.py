@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -120,8 +121,8 @@ class SessionCheckpointer(PollLoopScheduler):
 
 #: How many times startup recovery asks for the lease while Redis does not answer, and the pause between asks.
 #: The default spans the lease TTL, so a worker that finds Redis down at boot still recovers once it is back.
-RECOVERY_LEASE_ATTEMPTS = _resolve_int_env("AUTOBOT_LLC_RECOVERY_LEASE_ATTEMPTS", 6)
-RECOVERY_LEASE_RETRY_SECONDS = _resolve_int_env("AUTOBOT_LLC_RECOVERY_LEASE_RETRY_SECONDS", 5)
+RECOVERY_LEASE_ATTEMPTS = env_int_clamped("AUTOBOT_LLC_RECOVERY_LEASE_ATTEMPTS", 6, min_v=1, max_v=60)
+RECOVERY_LEASE_RETRY_SECONDS = env_int_clamped("AUTOBOT_LLC_RECOVERY_LEASE_RETRY_SECONDS", 5, min_v=1, max_v=60)
 
 
 def recovery_lease() -> LeaderLease:
@@ -181,7 +182,12 @@ async def _interrupt_run(session, run: LLCHeartbeatRun) -> list[ReleasedCheckout
 
 
 async def _recover_runs(session, runs: list[LLCHeartbeatRun]) -> None:  # noqa: ANN001 - AsyncSession
-    """Interrupt each run in its own savepoint, commit, and only then drop the released fences and re-queue."""
+    """Interrupt each run in its own savepoint, commit, and only then drop the released fences and re-queue.
+
+    A run whose interrupt or release fails rolls back to its savepoint: it stays ``running``, its locks are not
+    dropped and its agent is not re-queued. It keeps its agent busy until the liveness monitor times it out,
+    which is the backstop.
+    """
     redis = await get_async_redis_client()
     now_ts = time.time()
     released: list[ReleasedCheckout] = []
