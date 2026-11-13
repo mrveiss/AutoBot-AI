@@ -311,7 +311,7 @@ def _anchor_holds(playbook_dir: str) -> bool:
 def test_the_anchor_holds_for_both_callers_fails_at_another_depth_and_skips_an_explicit_source() -> None:
     tasks = _shared_block()["block"]
     locate = next(t for t in tasks if "Find this task file" in t["name"])
-    anchor = next(t for t in tasks if "derived source tree" in t["name"])
+    anchor = next(t for t in tasks if "Fail when the derived source tree" in t["name"])
     assert anchor["ansible.builtin.assert"]["that"] == "shared_anchor.stat.exists"
     assert locate["register"] == "shared_anchor" and tasks.index(locate) < tasks.index(anchor)
     assert locate["when"] == anchor["when"] == "(code_source_dir | default('', true)) == ''"

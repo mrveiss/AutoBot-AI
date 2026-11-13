@@ -331,7 +331,35 @@ _DIRECT_RESTARTS = {
 
 
 _COMMAND_MODULES = ("command", "ansible.builtin.command", "shell", "ansible.builtin.shell")
-_SYSTEMCTL_RESTART = re.compile(r"systemctl\s+(?:--?\S+\s+)*(?:try-)?restart\s+(?:--\s+)?([^\s;&|]+)")
+_COMMAND_SEPARATORS = re.compile(r"[;&|]+")
+_RESTART_VERBS = ("restart", "try-restart")
+#: Shell characters that wrap a command word or a unit: quotes, a subshell ``(``/``$(``, a backtick.
+_WRAPPERS = "\"'()$`"
+
+
+def _systemctl_restart_units(text: str) -> list:
+    """Units of every ``systemctl [options] [try-]restart [--] <unit>`` in *text*, by tokens (no backtracking).
+
+    A command ends at ``;``, ``&`` or ``|``. After the ``systemctl`` word come any option tokens (those starting
+    with ``-``), then the verb, an optional ``--`` and the unit. Wrapping shell characters are stripped from the
+    start of the command word (``"systemctl``, ``$(systemctl``) and from the unit's ends (``x"``, ``x)``), so
+    ``sh -c "systemctl restart x"`` reports ``x``.
+    """
+    units = []
+    for command in _COMMAND_SEPARATORS.split(text):
+        tokens = command.split()
+        for at, token in enumerate(tokens):
+            word = token.lstrip(_WRAPPERS)
+            if word != "systemctl" and not word.endswith("/systemctl"):
+                continue
+            verb = at + 1
+            while verb < len(tokens) and tokens[verb].startswith("-"):
+                verb += 1
+            unit = verb + 1
+            if unit < len(tokens) and tokens[verb] in _RESTART_VERBS:
+                named = tokens[unit + 1] if tokens[unit] == "--" and unit + 1 < len(tokens) else tokens[unit]
+                units.append(named.lstrip("\"'`").rstrip(_WRAPPERS))
+    return units
 
 
 def _all_yaml() -> list:
@@ -348,7 +376,7 @@ def _command_restart_units(node: dict) -> list:
         text = spec.get("cmd") or spec.get("argv") if isinstance(spec, dict) else spec
         text = " ".join(map(str, text)) if isinstance(text, list) else text
         if isinstance(text, str):
-            units += _SYSTEMCTL_RESTART.findall(text)
+            units += _systemctl_restart_units(text)
     return units
 
 
@@ -380,6 +408,36 @@ def test_a_compound_command_yields_every_restart_it_makes() -> None:
         "ssh"
     ]
     assert _command_restart_units({"ansible.builtin.command": "systemctl status ssh"}) == []
+
+
+def test_the_restart_detection_is_linear_on_an_adversarial_command() -> None:
+    """The old option pattern backtracked exponentially on ``systemctl`` followed by many ``-! -`` (CodeQL py/redos)."""
+    assert _systemctl_restart_units("systemctl " + "-! -" * 100_000) == []
+    assert _systemctl_restart_units("systemctl -q --user restart x.service") == ["x.service"]
+    assert _systemctl_restart_units("systemctl reset-failed x") == []
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'sh -c "systemctl restart x"',
+        "sh -c 'systemctl restart x'",
+        "$(systemctl restart x)",
+        "`systemctl restart x`",
+        "(systemctl restart x)",
+        'echo "systemctl restart x"',
+    ],
+)
+def test_a_restart_wrapped_in_quotes_or_a_subshell_is_found_by_its_clean_name(command: str) -> None:
+    assert _systemctl_restart_units(command) == ["x"]
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["systemctl reset-failed x", "systemctl status x", "echo restart x", "systemctl -q", 'sh -c "systemctl status x"'],
+)
+def test_a_command_that_restarts_nothing_names_no_unit(command: str) -> None:
+    assert _systemctl_restart_units(command) == []
 
 
 def test_no_restart_anywhere_under_ansible_skips_the_shared_task_unless_justified() -> None:
