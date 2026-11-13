@@ -40,6 +40,7 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests.service_units_set_logs_dir_20894_test import _python_units
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._file_size_guard import count_lines
 from tools.lint._scan_helpers import tracked_paths
 
@@ -168,7 +169,7 @@ def _is_test(path: str) -> bool:
 
 def _parse(root: Path, path: str) -> ast.Module | None:
     try:
-        return ast.parse((root / path).read_text(encoding="utf-8"))
+        return parse_cache.parse((root / path).read_text(encoding="utf-8"))
     except SyntaxError:
         return None
 
