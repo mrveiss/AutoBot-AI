@@ -151,6 +151,42 @@ def test_a_helper_that_values_the_field_is_followed() -> None:
     assert (finding.function, finding.field, finding.how) == ("route", "created_by", "attr")
 
 
+def test_a_helper_call_binds_to_the_module_function_not_a_same_named_method() -> None:
+    helper = "def _save(b):\n    return b.created_by\n\n"
+    method = "class Store:\n    def _save(self, b):\n        return None\n\n"
+    (finding,) = _found(_MODEL + method + helper + _ROUTE.format(stmt="_save(body)"))
+    assert (finding.function, finding.field, finding.how) == ("route", "created_by", "attr")
+    only_method = "class Store:\n    def _save(self, b):\n        return None\n\n"
+    assert [f.how for f in _found(_MODEL + only_method + _ROUTE.format(stmt="_save(body)"))] == ["whole"]
+    nested = _ROUTE.format(stmt="def _save(b):\n        return b.created_by\n    _save(body)")
+    assert [f.field for f in _found(_MODEL + nested)] == ["created_by"]
+
+
+_ALIASED_ROUTE = (
+    "from pkg.models import CommentCreate as Body\n"
+    + '@router.post("/x")\nasync def route(body: Body):\n    return 1\n'
+)
+
+
+def _census(model: str) -> tuple[set, set]:
+    trees = parse_all({"routes.py": _ALIASED_ROUTE, "pkg/models.py": model})
+    models = collect_models(trees.values())
+    routes = {"routes.py": trees["routes.py"]}
+    return declared_actor_fields(routes, models), unresolved_annotations(routes, models)
+
+
+def test_the_census_reads_an_aliased_request_model_as_the_class_it_names() -> None:
+    model = "class CommentCreate(BaseModel):\n    body: str\n    author_user_id: str | None = None\n"
+    declared, unresolved = _census(model)
+    assert declared == {("CommentCreate", "author_user_id")}
+    assert "Body" not in unresolved
+
+
+def test_the_census_of_an_aliased_model_without_the_field_is_empty() -> None:
+    declared, unresolved = _census("class CommentCreate(BaseModel):\n    body: str\n")
+    assert declared == set() and "Body" not in unresolved
+
+
 def test_an_inherited_actor_field_is_found() -> None:
     child = "class Child(Body):\n    extra: int = 0\n\n"
     source = _MODEL + child + "@router.post('/y')\nasync def r(b: Child):\n    use(b.created_by)\n"

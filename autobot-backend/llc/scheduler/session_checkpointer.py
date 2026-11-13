@@ -191,6 +191,7 @@ async def _recover_runs(session, runs: list[LLCHeartbeatRun]) -> None:  # noqa: 
     redis = await get_async_redis_client()
     now_ts = time.time()
     released: list[ReleasedCheckout] = []
+    requeue: list[str] = []
     for run in runs:
         run_id, agent_id = run.id, run.agent_id  # read while loaded: a savepoint rollback expires the run
         try:
@@ -201,7 +202,7 @@ async def _recover_runs(session, runs: list[LLCHeartbeatRun]) -> None:  # noqa: 
             logger.exception("Recovery failed for run %s — rolled back to its savepoint", run_id)
             continue
         released.extend(batch)
-        await _requeue_agent(redis, agent_id, now_ts)
+        requeue.append(agent_id)
         logger.info("SessionCheckpointer: recovered run %s for agent %s", run_id, agent_id)
     try:
         await session.commit()
@@ -210,6 +211,8 @@ async def _recover_runs(session, runs: list[LLCHeartbeatRun]) -> None:  # noqa: 
         await session.rollback()
     else:
         await drop_released_fences(released)  # only once the DB release is durable
+        for agent_id in requeue:  # a poller that sees the wake-up must find the item ready
+            await _requeue_agent(redis, agent_id, now_ts)
 
 
 async def recover_incomplete_runs() -> None:

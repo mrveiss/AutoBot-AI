@@ -339,3 +339,25 @@ async def test_a_run_whose_release_fails_is_rolled_back_and_not_requeued_or_unfe
     requeued = {agent for call in queue.zadd.call_args_list for agent in call.args[1]}
     assert requeued == {"agent-good"}
     assert good.status == "interrupted"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_commit_re_queues_no_agent() -> None:
+    """The wake-up follows the commit: when the release did not become durable, nothing is re-queued."""
+    from llc.tests._run_checkout_world import RoutedSession
+
+    run = _make_run(agent_id="agent-a")
+    session = RoutedSession([run], [])
+    session.commit = AsyncMock(side_effect=RuntimeError("commit failed"))
+    factory = MagicMock()
+    factory.return_value.__aenter__ = AsyncMock(return_value=session)
+    factory.return_value.__aexit__ = AsyncMock(return_value=False)
+    queue = AsyncMock()
+    with (
+        patch("llc.scheduler.session_checkpointer.recovery_lease", return_value=_lease()),
+        patch("llc.scheduler.session_checkpointer.get_async_session_factory", return_value=factory),
+        patch("llc.scheduler.session_checkpointer.get_async_redis_client", AsyncMock(return_value=queue)),
+    ):
+        await recover_incomplete_runs()
+
+    queue.zadd.assert_not_awaited()

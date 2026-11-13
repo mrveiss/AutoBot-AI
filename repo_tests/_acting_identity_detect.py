@@ -259,16 +259,40 @@ def _scalar_param_uses(func, defs) -> Iterator[tuple[str, str]]:  # noqa: ANN001
             yield "param", arg.arg
 
 
+_FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
+
+
+def _nested_defs(func: ast.AST) -> dict[str, ast.AST]:
+    """The functions defined inside *func* (a helper the route closes over)."""
+    return {n.name: n for n in ast.walk(func) if isinstance(n, _FUNCTIONS) and n is not func}
+
+
+def _aliases(tree: ast.AST) -> dict[str, str]:
+    """``from m import Name as Alias`` -> ``{"Alias": "Name"}``."""
+    return {a.asname: a.name for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) for a in n.names if a.asname}
+
+
+def _route_annotation_names(tree: ast.AST) -> set[str]:
+    """Every name a route parameter's annotation mentions, an import alias read as the class it names."""
+    aliases = _aliases(tree)
+    names: set[str] = set()
+    for func in filter(_is_route, ast.walk(tree)):
+        for arg in _args(func):
+            names |= {aliases.get(n, n) for n in _annotation_names(arg.annotation)}
+    return names
+
+
 def findings_in(
     path: str, tree: ast.AST, models: Mapping[str, set[str]], modules: Mapping[str, ast.AST] | None = None
 ) -> list[Finding]:
     """Every use, in one module's routes, of a request field or parameter naming the actor."""
     models = _scoped_models(tree, models, modules or {})
     found: list[Finding] = []
-    defs = {n.name: n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    module_defs = {n.name: n for n in getattr(tree, "body", []) if isinstance(n, _FUNCTIONS)}
     for func in ast.walk(tree):
         if not _is_route(func):
             continue
+        defs = {**module_defs, **_nested_defs(func)}
         uses = [*_model_param_uses(func, models, defs), *_scalar_param_uses(func, defs)]
         found.extend(Finding(path, func.name, field, how) for how, field in uses)
     return sorted(set(found))
@@ -282,8 +306,7 @@ def declared_actor_fields(trees: Mapping[str, ast.AST], models: Mapping[str, set
     """
     bound: set[str] = set()
     for tree in trees.values():
-        for func in filter(_is_route, ast.walk(tree)):
-            bound |= set().union(*(_annotation_names(a.annotation) for a in _args(func))) & set(models)
+        bound |= _route_annotation_names(tree) & set(models)
     return {(c, f) for c in bound for f in models[c] if ACTOR_NAME.search(f)}
 
 
@@ -291,9 +314,7 @@ def unresolved_annotations(trees: Mapping[str, ast.AST], models: Mapping[str, se
     """Capitalised annotation names on route parameters that no scanned class resolves: the boundary."""
     names: set[str] = set()
     for tree in trees.values():
-        for func in filter(_is_route, ast.walk(tree)):
-            for arg in _args(func):
-                names |= {n for n in _annotation_names(arg.annotation) if n[:1].isupper()}
+        names |= {n for n in _route_annotation_names(tree) if n[:1].isupper()}
     return names - set(models)
 
 
