@@ -17,6 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import fakeredis.aioredis
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from llc.api import work_items as work_items_api
@@ -86,6 +88,15 @@ async def test_release_agent_fence_keeps_another_holders_fence(redis):
         with patch.object(own_task, "get_async_redis_client", new=AsyncMock(return_value=redis)):
             await own_task.release_agent_fence(item_id, _AGENT)
         assert await redis.get(_key(item_id)) == value
+
+
+async def test_release_agent_fence_logs_a_redis_failure_and_does_not_raise(caplog):
+    """The release is already committed: a failed fence drop is logged like ``_delete_fence`` and the TTL ends it."""
+    redis = MagicMock(eval=AsyncMock(side_effect=ConnectionError("redis down")))
+    with patch.object(own_task, "get_async_redis_client", new=AsyncMock(return_value=redis)):
+        await own_task.release_agent_fence("wid", _AGENT)  # does not raise
+    redis.eval.assert_awaited_once()
+    assert "expires on its TTL" in caplog.text
 
 
 async def test_release_agent_fence_without_redis_is_a_no_op():
@@ -200,3 +211,26 @@ async def test_human_to_agent_release_does_not_read_then_delete_from_the_client(
     redis.get.assert_not_awaited()
     redis.delete.assert_not_awaited()
     redis.eval.assert_awaited_once()
+
+
+def _client() -> TestClient:
+    """The smallest app that reaches the request models: the work-item router, with identity and session stubbed."""
+    from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
+    from llc.deps import get_session  # noqa: PLC0415
+
+    app = FastAPI()
+    app.include_router(work_items_api.router)
+
+    async def _session():
+        yield AsyncMock()
+
+    app.dependency_overrides[get_session] = _session
+    app.dependency_overrides[get_current_user] = lambda: {"id": _USER, "user_id": _USER, "auth_method": "session"}
+    app.dependency_overrides[require_org_context] = lambda: SimpleNamespace(org_id=_ORG, user_id=_USER)
+    return TestClient(app)
+
+
+@pytest.mark.parametrize("route", ["checkout", "release"])
+def test_the_route_answers_422_to_an_agent_id_that_is_not_an_agent_uuid(route):
+    response = _client().post(f"/work-items/{uuid.uuid4()}/{route}", json={"agent_id": "agent-1"})
+    assert response.status_code == 422

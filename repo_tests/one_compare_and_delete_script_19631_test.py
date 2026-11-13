@@ -19,6 +19,7 @@ WHAT IT DOES NOT MATCH, and why each is a recorded exception rather than a priva
   ``local`` and transition a state, no plain release.
 * ``desktop_control_lock._RELEASE_LUA_SCRIPT``: decodes a JSON record and compares its ``owner`` field.
 * ``work_claims_lua`` release / renew: ownership is structural (the key embeds the holder) and the payload is JSON.
+* ``pending_claim.drop_pending_slot``: deliberately unconditional on session close (an owner decision recorded on #19631).
 * ``session_state.PERSIST_IF_VERSION_LUA``: a version compare-and-set on a JSON record.
 * Counters and floors (``session_lease._GENERATION_LUA``, ``password_epoch``): a ``GET`` feeding an ``INCR``.
 * ``code_intelligence/redis_optimizer.py``: a generated example string, not a script the process runs.

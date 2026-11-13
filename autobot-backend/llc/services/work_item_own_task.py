@@ -173,12 +173,16 @@ async def drop_fence(redis: Any, key: str, value: str, acquired: bool) -> None:
 async def release_agent_fence(item_id: str, agent_id: str) -> None:
     """Delete the item's fence while it names *agent_id* in any generation; another holder's fence is left alone.
 
-    The release for a caller that knows the agent but not the checkout generation (the release route). A Redis
-    failure propagates: the caller decides whether a fence left to its TTL is fatal.
+    The release for a caller that knows the agent but not the checkout generation (the release route). Like
+    ``_delete_fence``, a Redis failure is logged and never raised: the release is already committed and the fence
+    expires on its TTL.
     """
-    redis = await get_async_redis_client()
-    if redis is not None:
-        await delete_if_holder(redis, f"{_CHECKOUT_KEY_PREFIX}{item_id}", agent_id)
+    try:
+        redis = await get_async_redis_client()
+        if redis is not None:
+            await delete_if_holder(redis, checkout_fence_key(item_id), agent_id)
+    except Exception:
+        logger.warning("Checkout fence of work item %s was not released; it expires on its TTL", item_id, exc_info=True)
 
 
 def fence_agent(value: str) -> str:
