@@ -98,7 +98,9 @@ def test_narrowed_dirs_find_every_unit_the_whole_tree_sweep_finds() -> None:
 def test_control_an_uncovered_dir_is_reported() -> None:
     """Control: a unit in a directory no pattern names is flagged, one in a named directory is not."""
     patterns = _filter_patterns()
-    assert not _is_covered("some/new/dir/svc.service.j2", patterns)
+    # A plain `.service`: the filter's `**/*.j2` (#20884) covers every `.j2` anywhere, so only a non-`.j2` path
+    # can sit in a directory no pattern names.
+    assert not _is_covered("some/new/dir/svc.service", patterns)
     assert _is_covered("autobot-slm-backend/ansible/roles/redis/templates/svc.service.j2", patterns)
 
 
