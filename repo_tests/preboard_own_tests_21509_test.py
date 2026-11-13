@@ -145,37 +145,89 @@ def test_the_result_job_needs_own_tests_and_the_job_merges_the_pinned_base(jobs)
     assert jobs["own-tests"]["steps"][1]["with"] == {"python-version-file": ".python-version"}
 
 
-def _pytest_positionals(script: str) -> list[str]:
-    """The arguments each ``-m pytest`` invocation in *script* names before its first option."""
-    tokens = shlex.split(script.replace("\\\n", " "))
+_FILES_ARG = '"${FILES[@]}"'
+#: Options own-tests uses that take a separate value, and flags that take none. An option outside both
+#: (and not ``--name=value``) fails the parse, so a new one has to be classified here.
+_VALUE_OPTIONS = {"-n", "--dist", "-m", "-o"}
+_FLAG_OPTIONS = {"-q", "-rs"}
+_PYTEST_NAMES = {"pytest", "py.test"}
+_SHELL_ENDS = {"||", "&&", ";", "|"}
+
+
+def _lines(script: str) -> list[list[str]]:
+    """Each logical line of *script* as tokens, quotes kept (so a quoted array expansion stays recognisable)."""
+    joined = script.replace("\\\n", " ")
+    lines = [line for line in joined.splitlines() if line.strip() and not line.strip().startswith("#")]
+    return [shlex.split(line, posix=False) for line in lines]
+
+
+def _positionals(tokens: list[str]) -> list[str]:
+    """Every non-option token of one invocation, skipping option values; an unclassified option fails."""
     found: list[str] = []
-    for i in range(len(tokens) - 2):
-        if tokens[i : i + 2] == ["-m", "pytest"]:
-            rest = tokens[i + 2 :]
-            found += rest[: next((j for j, t in enumerate(rest) if t.startswith("-")), len(rest))]
+    i = 0
+    while i < len(tokens) and tokens[i] not in _SHELL_ENDS:
+        token = tokens[i]
+        if token in _VALUE_OPTIONS:
+            i += 1
+        elif token.startswith("--") and "=" in token or token in _FLAG_OPTIONS:
+            pass
+        elif token.startswith("-"):
+            raise AssertionError(f"option {token!r} is not classified in the own-tests guard")
+        else:
+            found.append(token)
+        i += 1
     return found
 
 
-def _roots_named(script: str, lane) -> list[str]:
-    roots = (*lane.GUARD_ROOTS, *lane.PRODUCT_ROOTS)
-    return [a for a in _pytest_positionals(script) if any(a.rstrip("/") == r or a.startswith(f"{r}/") for r in roots)]
+def _pytest_positionals(script: str) -> list[str]:
+    """The positional arguments of every ``pytest`` / ``py.test`` / ``-m pytest`` invocation in *script*."""
+    found: list[str] = []
+    for tokens in _lines(script):
+        for i, token in enumerate(tokens):
+            if token in _PYTEST_NAMES:
+                found += _positionals(tokens[i + 1 :])
+    return found
 
 
-def test_own_tests_takes_its_files_from_the_selection_and_names_no_root(jobs, lane) -> None:
+def _not_the_selection(script: str) -> list[str]:
+    """The pytest arguments that are not exactly the literal array expansion of the selection list."""
+    return [a for a in _pytest_positionals(script) if a != _FILES_ARG]
+
+
+def test_own_tests_takes_its_files_from_the_selection_and_names_no_root(jobs) -> None:
     body = _runs(jobs["own-tests"])
     assert "preboard_guard_lane.py changed-tests" in body and "main.txt" in body and "slm.txt" in body
-    assert len(_pytest_positionals(body)) == 2, "each session takes exactly its selection file list"
-    assert not _roots_named(body, lane), "a test root is an argument of pytest in own-tests"
+    assert _pytest_positionals(body) == [_FILES_ARG, _FILES_ARG], "each session takes exactly its selection list"
+    assert not _not_the_selection(body)
     assert any(s.get("id") == "suite" for s in jobs["own-tests"]["steps"]), "the SLM step reads the suite step's output"
 
 
-@pytest.mark.parametrize("root", ["repo_tests", "autobot-backend/", "autobot-slm-backend/services/x_test.py"])
-def test_a_literal_root_as_a_pytest_argument_is_caught_but_the_script_path_is_not(lane, root) -> None:
-    clean = "python3 pipeline-scripts/preboard_guard_lane.py changed-tests --out-dir o\n"
-    clean += 'python -m pytest "${FILES[@]}" -q\n'
-    assert not _roots_named(clean, lane)
-    assert _roots_named(f"python -m pytest {root} \\\n  -n auto -q\n", lane) == [root]
-    assert _roots_named(f'python -m pytest "${{FILES[@]}}" {root}\n', lane) == [root]
+_CLEAN = (
+    "python3 pipeline-scripts/preboard_guard_lane.py changed-tests --out-dir o\n" 'python -m pytest "${FILES[@]}" -q\n'
+)
+
+
+@pytest.mark.parametrize(
+    "script,bad",
+    [
+        ("python -m pytest repo_tests \\\n  -n auto -q\n", ["repo_tests"]),
+        ('python -m pytest "${FILES[@]}" repo_tests\n', ["repo_tests"]),
+        ('python -m pytest "${FILES[@]}" -n auto repo_tests\n', ["repo_tests"]),
+        ("pytest repo_tests\n", ["repo_tests"]),
+        ("py.test autobot-backend/\n", ["autobot-backend/"]),
+        ('python -m pytest "$ROOT" -q\n', ['"$ROOT"']),
+        ("python -m pytest ${FILES[@]} -q\n", ["${FILES[@]}"]),
+        ("python -m pytest autobot-slm-backend/services/x_test.py -q\n", ["autobot-slm-backend/services/x_test.py"]),
+    ],
+)
+def test_a_pytest_argument_other_than_the_selection_is_caught_but_the_script_path_is_not(script, bad) -> None:
+    assert not _not_the_selection(_CLEAN)
+    assert _not_the_selection(script) == bad
+
+
+def test_an_option_nobody_classified_fails_the_parse() -> None:
+    with pytest.raises(AssertionError, match="not classified"):
+        _pytest_positionals('python -m pytest "${FILES[@]}" --maxfail 1\n')
 
 
 def test_own_tests_runs_with_the_suites_xdist_and_marker_options(jobs) -> None:
