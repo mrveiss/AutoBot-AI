@@ -57,7 +57,13 @@ function statusOf(err: unknown): number | undefined {
   return hit ? Number(hit[1]) : undefined
 }
 
-export function useCompanyWorkflows(companyId: () => string) {
+export interface CompanyWorkflowsOptions {
+  /** Whether a company change loads the list by itself (default: always). A caller whose list is
+   * shown only in one mode returns false elsewhere and calls `load()` on entering that mode. */
+  autoLoad?: () => boolean
+}
+
+export function useCompanyWorkflows(companyId: () => string, options: CompanyWorkflowsOptions = {}) {
   const api = useApiClient()
   const workflows = ref<CompanyWorkflow[]>([])
   const state = ref<WorkflowsState>('loading')
@@ -138,10 +144,13 @@ export function useCompanyWorkflows(companyId: () => string) {
     errorMessage.value = ''
     pending.value = false
     state.value = 'loading'
-    void load()
+    if (options.autoLoad?.() ?? true) void load()
   })
 
   const isEmpty = computed(() => state.value === 'ready' && workflows.value.length === 0)
 
   return { workflows, state, errorMessage, pending, isEmpty, load, create, attach, detach, attachable }
 }
+
+/** One company's workflows service: what the Roles panel, the org chart form and the create modal share. */
+export type CompanyWorkflowsService = ReturnType<typeof useCompanyWorkflows>

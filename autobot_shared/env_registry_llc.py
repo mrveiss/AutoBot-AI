@@ -139,6 +139,38 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_RECOVERY_LEASE_ATTEMPTS",
+        type=int,
+        default=6,
+        description=(
+            "How many times startup recovery of interrupted agent runs asks for its leader lease while "
+            "Redis gives no answer (#19601). A definite answer, including another worker holding the "
+            "lease, ends the wait at once; only silence is retried. The default spans the lease TTL, so a"
+            " worker that finds Redis down at boot still recovers once it is back. After the last attempt"
+            " recovery is skipped and the liveness monitor is the backstop."
+        ),
+        component="orchestrator",
+        range=(1, 60),
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_RECOVERY_LEASE_RETRY_SECONDS",
+        type=int,
+        default=5,
+        description=(
+            "Seconds between two asks for the startup-recovery leader lease while Redis gives no answer "
+            "(#19601). Recovery runs in the background-services phase, so waiting never delays the app "
+            "becoming ready."
+        ),
+        component="orchestrator",
+        range=(1, 60),
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_LLC_DISPOSAL_EXECUTION_WINDOW_DAYS",
         type=float,
         default=7.0,
