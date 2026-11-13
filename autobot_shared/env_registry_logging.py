@@ -80,6 +80,15 @@ register_env_var(
 )
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_LOG_ONCE_MAX_KEYS",
+        type=int,
+        default=1024,
+        description="Maximum keys the shared log-once helper remembers before forgetting the least recent (#21071).",
+        component="logging",
+    )
+)
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_LOG_VIEWER_URL",
         type=str,
         default="http://localhost:5341",

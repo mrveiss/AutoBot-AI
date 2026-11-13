@@ -78,6 +78,9 @@ UNSCOPED = frozenset(
         "ceiling-table-sweep-19544",
         # #19279: requirements files live in every package directory; a glob, not a set of prefixes.
         "landing-page-declared-dependencies",
+        # #21071: every tracked non-test .py, wherever a hand-rolled log-once flag could be written; no prefix
+        # describes it.
+        "log-once-hand-rolled-sweep-21071",
         "chromadb-bind-host-override-candidates",
         "chromadb-bind-launch-sites",
         "chromadb-compose-port-sites",

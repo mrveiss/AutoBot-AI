@@ -13,8 +13,10 @@ Updated in Issue #453 to use real Ollama integration.
 """
 
 import asyncio
+import logging
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
@@ -166,21 +168,19 @@ class MockPalm:
     # ``palm`` global below), so a warning in __init__ would fire on every import and be
     # pure noise. The actionable signal is when the mock is actually *used* on a request
     # path — so the warning lives in the methods (get_quota_status / generate_text) instead.
-    _mock_use_warned = False
-
     def __init__(self):
         """Initialize MockPalm (a no-op mock stub; see class note and _warn_mock_use)."""
 
     @classmethod
     def _warn_mock_use(cls) -> None:
         """Warn once per process when MockPalm is actually exercised on a request path."""
-        if cls._mock_use_warned:
-            return
-        cls._mock_use_warned = True
-        logger.warning(
+        log_once(
+            logger,
+            logging.WARNING,
+            "mock_palm_use",
             "MockPalm is being USED to serve a request — this is a MOCK stub with no real "
             "Google AI calls and exists for backward compatibility only. "
-            "Configure GOOGLE_API_KEY and use a real Vertex/Gemini provider for production."
+            "Configure GOOGLE_API_KEY and use a real Vertex/Gemini provider for production.",
         )
 
     async def get_quota_status(self):

@@ -34,8 +34,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.logging_once import reset_log_once
 from security.enforcement_mode import DEGRADED_ENFORCEMENT_MODE
 from security.session_ownership import SessionOwnershipValidator
+from services import feature_flags as feature_flags_module
 from services.feature_flags import EnforcementMode, EnforcementModeUnavailable
 
 
@@ -156,7 +158,7 @@ class TestTheFlagStoreReportsFailureInsteadOfInventingAnAnswer:
         redis.get = AsyncMock(return_value=None)
         flags = FeatureFlags.__new__(FeatureFlags)
         flags._get_redis = AsyncMock(return_value=redis)
-        flags._enforcement_default_logged = False
+        reset_log_once(feature_flags_module.logger)
 
         assert await flags.get_enforcement_mode() == PROVISIONED_ENFORCEMENT_MODE_DEFAULT
         assert PROVISIONED_ENFORCEMENT_MODE_DEFAULT != EnforcementMode.DISABLED

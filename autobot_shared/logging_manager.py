@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Dict
 
 from autobot_shared.env_utils import env_flag, env_float, env_int_clamped
 from autobot_shared.log_dir import FirstWriteFileHandler, resolve_logs_dir
+from autobot_shared.logging_once import first_time
 from autobot_shared.stream_logging import build_stderr_handler, build_stdout_handler
 
 if TYPE_CHECKING:
@@ -188,18 +189,14 @@ class _ConfigManagerFallback:
         return default
 
 
-_warned_config_keys: set[str] = set()
-
-
 def _warn_config_fallback(key: str, value: object, default: object) -> None:
     """Say once per key, on stderr, that *key* held an unusable value (#19288).
 
     Written straight to stderr, never through a logger: this runs while a logger is being built,
     so logging here would re-enter get_logger. Only the value's type is shown, never the value.
     """
-    if key in _warned_config_keys:
+    if not first_time(__name__, key):
         return
-    _warned_config_keys.add(key)
     sys.stderr.write(
         f"autobot logging: config {key!r} is a {type(value).__name__}, not usable; using default {default!r}\n"
     )
@@ -211,9 +208,8 @@ def _warn_file_logging_off(path: Path, exc: OSError) -> None:
     Straight to stderr for the same reason as ``_warn_config_fallback``: a logger is being built.
     """
     key = f"file:{path}"
-    if key in _warned_config_keys:
+    if not first_time(__name__, key):
         return
-    _warned_config_keys.add(key)
     sys.stderr.write(f"autobot logging: cannot write logs at {str(path)!r} ({exc.strerror}); logging to console only\n")
 
 

@@ -31,6 +31,7 @@ import tempfile
 from pathlib import Path
 from typing import Callable
 
+from autobot_shared.logging_once import log_once
 from autobot_shared.paths import install_base_dir
 
 LOGS_DIR_ENV = "AUTOBOT_LOGS_DIR"
@@ -39,7 +40,6 @@ DEPRECATED_LOGS_DIR_ENV = "AUTOBOT_LOG_DIR"
 #: Unset: there is no single deploy path (each route sets its own), so the resolver decides.
 LOGS_DIR_DEFAULT = ""
 _STATE_HOME_ENV = "XDG_STATE_HOME"
-_warned_alias = False
 
 #: Called with the path that could not be created or opened, and the error, at the first write.
 UnwritableCallback = Callable[[Path, OSError], None]
@@ -61,15 +61,18 @@ def _state_home() -> Path:
 
 def _configured() -> str:
     """The env value in force: the one name, else the deprecated alias (warned once)."""
-    global _warned_alias
     value = os.environ.get(LOGS_DIR_ENV, LOGS_DIR_DEFAULT).strip()
     if value:
         return value
     legacy = os.environ.get(DEPRECATED_LOGS_DIR_ENV, "").strip()
-    if legacy and not _warned_alias:
-        _warned_alias = True
-        logging.getLogger(__name__).warning(
-            "%s is deprecated; set %s instead (#20894)", DEPRECATED_LOGS_DIR_ENV, LOGS_DIR_ENV
+    if legacy:
+        log_once(
+            logging.getLogger(__name__),
+            logging.WARNING,
+            DEPRECATED_LOGS_DIR_ENV,
+            "%s is deprecated; set %s instead (#20894)",
+            DEPRECATED_LOGS_DIR_ENV,
+            LOGS_DIR_ENV,
         )
     return legacy
 

@@ -25,6 +25,7 @@ import pytest
 from autobot_shared import logging_manager
 from autobot_shared.log_dir import FirstWriteFileHandler
 from autobot_shared.logging_manager import LoggingManager
+from autobot_shared.logging_once import reset_log_once
 
 _READ_ONLY = OSError(errno.EROFS, "Read-only file system")
 
@@ -32,7 +33,7 @@ _READ_ONLY = OSError(errno.EROFS, "Read-only file system")
 @pytest.fixture(autouse=True)
 def _isolated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
     monkeypatch.setenv("AUTOBOT_LOGS_DIR", str(tmp_path / "logs"))
-    monkeypatch.setattr(logging_manager, "_warned_config_keys", set())
+    reset_log_once()
     monkeypatch.setattr(LoggingManager, "_initialized", False)
     monkeypatch.setattr(LoggingManager, "_file_logging_disabled", False)
     # The degrade is about a service after startup: file logging on (#20894, setup_logging()).

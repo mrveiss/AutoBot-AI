@@ -13,6 +13,7 @@ import pytest
 
 from autobot_shared import log_dir
 from autobot_shared.log_dir import resolve_logs_dir
+from autobot_shared.logging_once import reset_log_once
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -21,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in (log_dir.LOGS_DIR_ENV, log_dir.DEPRECATED_LOGS_DIR_ENV):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(log_dir, "_warned_alias", False)
+    reset_log_once()
 
 
 def test_unset_resolves_outside_the_repo_and_the_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

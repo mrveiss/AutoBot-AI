@@ -24,6 +24,7 @@ Related to Issue #760 Phase 2.
 
 import asyncio
 import json
+import logging
 import os
 import ssl
 import time
@@ -36,6 +37,7 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 from autobot_shared.auth.jwt_core import encode_jwt
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.ssot_config import config
 from autobot_shared.ws_no_redirect import connect_no_redirect
 from constants.ttl_constants import TTL_5_MINUTES
@@ -119,19 +121,14 @@ _WS_AUTH_FAIL_THRESHOLD: int = 3
 _COLOCATED_DEFAULT = f"http://{config.vm.slm}:{config.port.slm}"
 DEFAULT_SLM_URL: str = config.slm_url or _COLOCATED_DEFAULT
 
-# Warn at most once per process — the module is imported by several packages
-# simultaneously, which previously caused the same warning to fire 3×.
-_slm_url_warned: bool = False
-
 
 def _warn_slm_url_once(url: str) -> None:
-    """Emit the SLM_URL diagnostic warning exactly once per process."""
-    global _slm_url_warned
-    if _slm_url_warned:
-        return
-    _slm_url_warned = True
+    """Emit the SLM_URL diagnostic warning once per process (several packages import this module)."""
     if not config.slm_url:
-        logger.warning(
+        log_once(
+            logger,
+            logging.WARNING,
+            "slm_url_default",
             "SLM_URL not set — defaulting to co-located address %s. "
             "Set SLM_URL explicitly for non-co-located deployments.",
             url,

@@ -29,6 +29,7 @@ import pytest
 
 from autobot_shared import logging_manager
 from autobot_shared.logging_manager import LoggingManager
+from autobot_shared.logging_once import reset_log_once
 
 _ROTATING = logging.handlers.RotatingFileHandler  # captured: a test patches the module attribute
 _CAP = 2000
@@ -46,7 +47,7 @@ class _Config:
 @pytest.fixture(autouse=True)
 def _isolated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
     monkeypatch.setenv("AUTOBOT_LOGS_DIR", str(tmp_path / "logs"))
-    monkeypatch.setattr(logging_manager, "_warned_config_keys", set())
+    reset_log_once()
     monkeypatch.setattr(LoggingManager, "_file_handlers", {})
     monkeypatch.setattr(LoggingManager, "_loggers", {})
     # Sharing is about a service after startup: file logging on (#20894, setup_logging()).

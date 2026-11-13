@@ -18,12 +18,13 @@ import pytest
 from autobot_shared import logging_manager
 from autobot_shared.log_dir import FirstWriteFileHandler
 from autobot_shared.logging_manager import LoggingManager, setup_logging
+from autobot_shared.logging_once import reset_log_once
 
 
 @pytest.fixture(autouse=True)
 def _isolated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
     monkeypatch.setenv("AUTOBOT_LOGS_DIR", str(tmp_path / "logs"))
-    monkeypatch.setattr(logging_manager, "_warned_config_keys", set())
+    reset_log_once()
     monkeypatch.setattr(LoggingManager, "_loggers", {})
     monkeypatch.setattr(LoggingManager, "_managed", {})
     monkeypatch.setattr(LoggingManager, "_file_handlers", {})

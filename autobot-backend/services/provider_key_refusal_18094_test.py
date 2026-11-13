@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.logging_once import reset_log_once
 from services import provider_key_vault as pkv
 
 _ENV_VALUE = "env-rotated-out-5f4dcc3b"  # pragma: allowlist secret
@@ -28,7 +29,7 @@ _NAME = "FLUX_API_KEY"  # pragma: allowlist secret
 def _clean(monkeypatch):
     monkeypatch.setattr(pkv, "_hydrated_keys", {})
     monkeypatch.setattr(pkv, "_unreadable_keys", set())
-    monkeypatch.setattr(pkv, "_env_fallback_logged", set())
+    reset_log_once()
     monkeypatch.setattr(pkv, "_vault_state", pkv.VAULT_REACHABLE)  # empty vault; lazy-path tests set their own
 
 
