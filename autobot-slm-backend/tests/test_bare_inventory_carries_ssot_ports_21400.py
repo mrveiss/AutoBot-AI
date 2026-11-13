@@ -22,10 +22,10 @@ from services.deployment import DeploymentService
 
 _ROOT = Path(__file__).resolve().parents[1]
 # `"-i", "<host>,"`-shaped argv pairs; the one place allowed to spell one is the shared builder.
-_BARE_LITERAL = re.compile(r"""["']-i["'],\s*f?["'][^"'\n]*,["']""")
+_BARE_LITERAL = re.compile(r"""["']-i["'],\s*f?["']([^"'\n]*),["']""")
 # One fixed `localhost,` provisioning run of a role that reads neither port (python_interpreter): the file
-# may spell exactly this many bare-inventory pairs, so a second one added there is still caught.
-_FIXED_LOCALHOST = {"api/code_sync.py": 1}
+# may spell exactly these bare-inventory hosts, so a second one, or one naming another host, is still caught.
+_FIXED_LOCALHOST = {"api/code_sync.py": ["localhost"]}
 
 
 def _ports_in(cmd: list[str]) -> dict:
@@ -89,6 +89,18 @@ def test_single_host_playbook_command_carries_both_ports(monkeypatch, tmp_path) 
     assert _ports_in(captured) == _expected()
 
 
+def _bare_offenders(rel: str, text: str) -> list[str]:
+    """The bare ``-i "<host>,"`` spellings in *text* beyond the file's permitted hosts (host and count)."""
+    unmatched = list(_FIXED_LOCALHOST.get(rel, []))
+    offenders = []
+    for match in _BARE_LITERAL.finditer(text):
+        if match.group(1) in unmatched:
+            unmatched.remove(match.group(1))
+        else:
+            offenders.append(f"{rel}: {match.group(0)}")
+    return offenders + [f"{rel}: expected a bare inventory for {host!r}, found none" for host in unmatched]
+
+
 def test_no_command_builder_spells_a_bare_inventory_outside_the_shared_builder() -> None:
     """Matches the ``"-i", "<x>,"`` spelling in Python sources only; a bare inventory built another way is not seen."""
     offenders = []
@@ -98,7 +110,16 @@ def test_no_command_builder_spells_a_bare_inventory_outside_the_shared_builder()
             continue
         if rel == "services/ansible_utils.py":
             continue
-        found = [m.group(0) for m in _BARE_LITERAL.finditer(path.read_text(encoding="utf-8", errors="replace"))]
-        if len(found) != _FIXED_LOCALHOST.get(rel, 0):
-            offenders += [f"{rel}: {text}" for text in found] or [f"{rel}: expected {_FIXED_LOCALHOST[rel]}, found 0"]
+        offenders += _bare_offenders(rel, path.read_text(encoding="utf-8", errors="replace"))
     assert offenders == [], f"bare `-i host,` built outside bare_inventory_args: {offenders}"
+
+
+def test_contrast_the_permitted_localhost_run_passes_and_any_other_host_or_a_second_is_rejected() -> None:
+    local = 'cmd += ["--tags", "x", "-i", "localhost,", "--connection", "local"]'
+    assert _bare_offenders("api/code_sync.py", local) == []
+    remote = 'cmd += ["-i", "10.0.0.5,"]'
+    assert _bare_offenders("api/code_sync.py", local + remote) != []
+    assert _bare_offenders("api/code_sync.py", remote) != [], "a remote host takes the place of the permitted one"
+    assert _bare_offenders("api/code_sync.py", local + local) != [], "a second localhost run is still caught"
+    assert _bare_offenders("api/other.py", local) != [], "the exemption belongs to the one file"
+    assert _bare_offenders("api/code_sync.py", 'cmd += ["-i", f"{host},"]') != []
