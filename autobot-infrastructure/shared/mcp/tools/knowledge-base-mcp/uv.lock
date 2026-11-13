@@ -51,8 +51,8 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "idna", specifier = ">=3.15" },
     { name = "mcp", specifier = ">=2.3.0" },
-    { name = "pydantic", specifier = ">=2.14.2" },
-    { name = "python-multipart", specifier = ">=0.0.32" },
+    { name = "pydantic", specifier = ">=2.14.3" },
+    { name = "python-multipart", specifier = ">=0.0.33" },
 ]
 
 [[package]]
