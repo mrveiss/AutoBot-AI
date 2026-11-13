@@ -7,7 +7,10 @@
 A lookup that feeds an operator-visible verdict ("nothing to update") must not turn
 an error into an empty result. Expected operational failures are reported as
 "could not determine"; anything else is a programming error and propagates.
+``mark_stage_failed`` is where an update-all stage and its job record that verdict.
 """
+
+from typing import Any
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -29,3 +32,13 @@ def operational_failure_reason(what: str, exc: BaseException) -> str:
         raise exc
     logger.warning("Could not determine %s: %s", what, exc)
     return f"Could not determine {what}: {type(exc).__name__}"
+
+
+def mark_stage_failed(job: Any, stage: Any, reason: str, failed_status: str, now: Any) -> None:
+    """Mark *stage* and its *job* failed with one reason (capped at 300 characters)."""
+    stage.status = failed_status
+    stage.message = reason[:300]
+    stage.completed_at = now
+    job.status = "failed"
+    job.failure_reason = reason[:300]
+    job.completed_at = now

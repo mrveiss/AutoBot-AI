@@ -102,7 +102,7 @@ from models.schemas import (
 from services.ansible_utils import ansible_run_failure, parse_unreachable_hosts, summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
-from services.collection_errors import operational_failure_reason
+from services.collection_errors import mark_stage_failed, operational_failure_reason
 from services.database import get_db
 from services.deploy_activity import read_deploy_activity
 from services.deploy_artifacts import (
@@ -4897,12 +4897,7 @@ def _fail_fleet_stage(
     reason: str,
 ) -> None:
     """Mark *stage* and its job failed with one reason string (any update-all stage)."""
-    stage.status = _StageStatus.FAILED
-    stage.message = reason[:300]
-    stage.completed_at = utc_timestamp()
-    job.status = "failed"
-    job.failure_reason = reason[:300]
-    job.completed_at = utc_timestamp()
+    mark_stage_failed(job, stage, reason, _StageStatus.FAILED, utc_timestamp())
 
 
 _NON_OPERATIONAL_STATUSES = frozenset({"degraded", "offline", "error", "pending", "enrolling", "decommissioned"})
