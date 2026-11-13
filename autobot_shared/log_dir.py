@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """The ONE log-directory resolver (#20894): logs are never written inside the source tree.
 
-Stdlib-only on purpose: ``logging_manager`` runs before ``ssot_config`` can initialise, so it
-cannot import config, yet it, ``ssot_config`` and ``ssot_constants`` must all answer the same.
+Imports only the standard library, ``autobot_shared.paths`` and ``autobot_shared.logging_once``, never config:
+``logging_manager`` runs before ``ssot_config`` can initialise, yet it, ``ssot_config`` and ``ssot_constants``
+must all answer the same.
 
 Order:
   1. ``AUTOBOT_LOGS_DIR`` -- the single env name. Every deploy route sets it to the path that
@@ -45,10 +46,17 @@ _STATE_HOME_ENV = "XDG_STATE_HOME"
 UnwritableCallback = Callable[[Path, OSError], None]
 
 
+def _temp_base() -> Path:
+    """The temp directory by name only: ``tempfile.gettempdir()`` would create, write and delete a probe file."""
+    named = next((v for v in (os.environ.get(n, "") for n in ("TMPDIR", "TEMP", "TMP")) if os.path.isabs(v)), "")
+    return Path(named or tempfile.tempdir or os.path.join(os.sep, "tmp"))
+
+
 def _state_home() -> Path:
     """``$XDG_STATE_HOME`` when it is an absolute path (the spec), else ``~/.local/state``.
 
-    With no resolvable home (``Path.home()`` raises ``RuntimeError``) a per-user temp directory.
+    With no resolvable home (``Path.home()`` raises ``RuntimeError``) a per-user directory under the
+    temp directory named by the environment, chosen without probing the disk.
     """
     configured = os.environ.get(_STATE_HOME_ENV, "")
     if configured and os.path.isabs(configured):
@@ -56,7 +64,7 @@ def _state_home() -> Path:
     try:
         return Path.home() / ".local" / "state"
     except RuntimeError:  # no resolvable home (a bare container user): never raise at import
-        return Path(tempfile.gettempdir()) / f"autobot-state-{os.getuid() if hasattr(os, 'getuid') else 0}"
+        return _temp_base() / f"autobot-state-{os.getuid() if hasattr(os, 'getuid') else 0}"
 
 
 def _configured() -> str:

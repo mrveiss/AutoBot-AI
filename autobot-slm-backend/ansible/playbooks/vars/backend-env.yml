@@ -9,13 +9,15 @@
 # backend_workers is deliberately NOT set here (#17856): roles/backend/defaults owns it (4) and
 # inventory/group_vars/slm.yml overrides it for the co-located box; a play-level include_vars
 # would shadow both.
+# backend_app_log_dir is deliberately NOT set here either (#20894): a vars file outranks the inventory, so an
+# operator's override would be lost; deploy-backend-env.yml derives it only when undefined, and the update
+# path takes it from the role defaults (include_role puts them in scope).
 ---
 backend_user: autobot
 backend_group: autobot
 backend_install_dir: "{{ autobot.base_dir }}/autobot-backend"
 backend_code_dir: "{{ autobot.base_dir }}/autobot-backend"
 backend_log_dir: /var/log/autobot
-backend_app_log_dir: "{{ autobot.base_dir }}/logs"  # #20894: AUTOBOT_LOGS_DIR, mirrors roles/backend/defaults (completeness is a guard)
 backend_data_dir: /var/lib/autobot
 backend_host: "0.0.0.0"
 backend_port: 8001

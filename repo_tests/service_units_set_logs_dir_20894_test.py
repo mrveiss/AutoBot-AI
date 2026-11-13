@@ -15,6 +15,7 @@ import posixpath
 import re
 from pathlib import Path
 
+import yaml
 from repo_tests._paths import repo_root
 from repo_tests.python_filter_covers_its_guards_test import _filter_patterns, _is_covered
 
@@ -329,21 +330,49 @@ def test_control_a_sibling_env_template_the_unit_never_loads_does_not_count(tmp_
     assert _unset(tmp_path, [unit]) == []
 
 
-_COMPOSE_SETTING = re.compile(rf"^\s*-\s*{_VAR}=(.*)$", re.MULTILINE)
 _COMPOSE_OVERRIDABLE = re.compile(rf"^\$\{{{_VAR}:-[^}}]+\}}$")
+
+
+def _compose_values(text: str) -> list[str]:
+    """Every `AUTOBOT_LOGS_DIR` value a Compose file gives a service, whether `environment:` is a list or a mapping."""
+    values: list[str] = []
+    top = yaml.safe_load(text) or {}
+    for service in (top.get("services") or {}).values():
+        env = (service or {}).get("environment") or []
+        if isinstance(env, dict):
+            values += [str(v if v is not None else "") for k, v in env.items() if k == _VAR]
+        else:
+            values += [e.partition("=")[2] for e in env if isinstance(e, str) and e.partition("=")[0].strip() == _VAR]
+    return values
 
 
 def _fixed_compose_settings(text: str) -> list[str]:
     """`AUTOBOT_LOGS_DIR=` values in a compose file that ignore an operator-supplied value."""
-    return [v for v in _COMPOSE_SETTING.findall(text) if not _COMPOSE_OVERRIDABLE.match(v.strip())]
+    return [v for v in _compose_values(text) if not _COMPOSE_OVERRIDABLE.match(v.strip())]
 
 
 def test_compose_services_let_the_operator_override_the_log_dir() -> None:
     text = (_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
-    assert _COMPOSE_SETTING.search(text), "docker-compose.yml no longer sets the variable: discovery broke"
+    assert _compose_values(text), "docker-compose.yml no longer sets the variable: discovery broke"
     assert not _fixed_compose_settings(text), f"literal {_VAR} ignores the operator's value; use ${{{_VAR}:-/app/logs}}"
 
 
 def test_control_a_literal_compose_value_is_caught() -> None:
-    assert _fixed_compose_settings(f"    environment:\n      - {_VAR}=/app/logs\n") == ["/app/logs"]
-    assert _fixed_compose_settings(f"      - {_VAR}=${{{_VAR}:-/app/logs}}\n") == []
+    assert _fixed_compose_settings(f"services:\n  a:\n    environment:\n      - {_VAR}=/app/logs\n") == ["/app/logs"]
+    assert _fixed_compose_settings(f"services:\n  a:\n    environment:\n      - {_VAR}=${{{_VAR}:-/app/logs}}\n") == []
+
+
+def test_control_mapping_style_compose_values_are_checked_too() -> None:
+    """Control: a literal in `environment: {KEY: value}` is caught, an overridable one and other keys are not, and
+    one service keeping an overridable list-style value does not hide another service's literal mapping value."""
+    literal = f"services:\n  a:\n    environment:\n      {_VAR}: /app/logs\n"
+    overridable = f'services:\n  a:\n    environment:\n      {_VAR}: "${{{_VAR}:-/app/logs}}"\n'
+    other = "services:\n  a:\n    environment:\n      OTHER: /app/logs\n"
+    both = (
+        f"services:\n  a:\n    environment:\n      - {_VAR}=${{{_VAR}:-/app/logs}}\n"
+        f"  b:\n    environment:\n      {_VAR}: /app/logs\n"
+    )
+    assert _fixed_compose_settings(literal) == ["/app/logs"]
+    assert _fixed_compose_settings(overridable) == []
+    assert _fixed_compose_settings(other) == []
+    assert _fixed_compose_settings(both) == ["/app/logs"]

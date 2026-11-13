@@ -70,12 +70,15 @@ def _is_in_tree_join(node: ast.AST) -> bool:
 
 
 def _is_logs_default(node: ast.AST) -> bool:
-    """`getenv(NAME, "logs")` / `environ.get(NAME, "logs")`."""
+    """`getenv(NAME, "logs")` / `environ.get(NAME, "logs")`, the default positional or as `default=`."""
     if not (
         isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in ("getenv", "get")
     ):
         return False
-    return len(node.args) >= 2 and _is_logs(node.args[1]) and _env_like(node.func)
+    default = (
+        node.args[1] if len(node.args) >= 2 else next((k.value for k in node.keywords if k.arg == "default"), None)
+    )
+    return default is not None and _is_logs(default) and _env_like(node.func)
 
 
 def _env_like(func: ast.Attribute) -> bool:
@@ -180,3 +183,17 @@ def test_the_eager_handler_detector_finds_each_spelling_and_ignores_the_safe_one
     }
     for source, expected in planted.items():
         assert eager_handlers_on_resolved_dir(source) == expected, source
+
+
+def test_control_a_keyword_default_is_counted_and_a_safe_default_is_not() -> None:
+    """Control: `getenv(NAME, default="logs")` selects the in-tree fallback like the positional spelling."""
+    planted = {
+        'os.getenv("AUTOBOT_LOGS_DIR", default="logs")': 1,
+        'os.getenv("AUTOBOT_LOGS_DIR", "logs")': 1,
+        'os.getenv("AUTOBOT_LOGS_DIR", default="/var/log/autobot")': 0,
+        'os.getenv("AUTOBOT_LOGS_DIR", default=None)': 0,
+        'os.getenv("AUTOBOT_LOGS_DIR")': 0,
+        'cfg.get("AUTOBOT_LOGS_DIR", default="logs")': 0,  # not an environment read
+    }
+    for source, expected in planted.items():
+        assert count_violations(source) == expected, source

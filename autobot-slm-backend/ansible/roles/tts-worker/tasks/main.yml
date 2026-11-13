@@ -108,12 +108,12 @@
   ansible.builtin.include_tasks:
     file: ../../../_shared/tasks/ensure_app_log_dir.yml
     apply:
-      tags: ['tts', 'dirs']
+      tags: ['tts', 'config', 'dirs']
   vars:
     app_log_dir: "{{ tts_app_log_dir }}"
     app_log_dir_owner: "{{ tts_user }}"
     app_log_dir_group: "{{ tts_group }}"
-  tags: ['tts', 'dirs']
+  tags: ['tts', 'config', 'dirs']
 
 # #12425: tts_log_dir defaults to the SHARED /var/log/autobot (common role),
 # not a TTS-exclusive path — re-chowning it to tts_user/tts_group above (as

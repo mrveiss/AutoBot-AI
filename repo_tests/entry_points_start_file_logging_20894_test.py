@@ -213,7 +213,8 @@ def _bound_in(nodes: list[ast.AST]) -> tuple[set[str], set[str]]:
         elif isinstance(node, ast.ImportFrom) and node.module == "autobot_shared":
             modules |= {a.asname or a.name for a in node.names if a.name == "logging_manager"}
         elif isinstance(node, ast.Import):
-            modules |= {a.asname for a in node.names if a.name == _MANAGER and a.asname}
+            # `import a.b as m` binds m; the unaliased `import a.b` is reached by its dotted name
+            modules |= {a.asname or a.name for a in node.names if a.name == _MANAGER}
     return funcs, modules
 
 
@@ -255,12 +256,16 @@ def _is_setup_call(node: ast.AST, funcs: set[str], modules: set[str]) -> bool:
     func = node.func
     if isinstance(func, ast.Name):
         return func.id in funcs
-    return (
-        isinstance(func, ast.Attribute)
-        and func.attr == _CALL
-        and isinstance(func.value, ast.Name)
-        and func.value.id in modules
-    )
+    return isinstance(func, ast.Attribute) and func.attr == _CALL and _dotted(func.value) in modules
+
+
+def _dotted(node: ast.AST) -> str:
+    """``a.b.c`` for a Name/Attribute chain, else an empty string (which is never a bound module)."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute) and (head := _dotted(node.value)):
+        return f"{head}.{node.attr}"
+    return ""
 
 
 def calls_setup_logging(tree: ast.Module) -> bool:
@@ -531,3 +536,14 @@ def test_control_an_import_before_the_path_install_is_caught() -> None:
     assert not installs_paths_before_importing_shared(late, "main", "_install")
     assert installs_paths_before_importing_shared(early, "main", "_install")
     assert not installs_paths_before_importing_shared("def main():\n    pass\n", "main", "_install")
+
+
+def test_control_an_unaliased_dotted_import_counts_and_a_near_miss_does_not() -> None:
+    """Control: `import <manager>` + `<manager>.setup_logging()` is a startup call; importing it without the call,
+    or calling the same name on another module, is not."""
+    dotted = f"import {_MANAGER}\n{_MANAGER}.{_CALL}()\n"
+    assert calls_setup_logging(ast.parse(dotted))
+    assert calls_setup_logging(ast.parse(f"import {_MANAGER} as lm\nlm.{_CALL}()\n"))
+    assert not calls_setup_logging(ast.parse(f"import {_MANAGER}\n"))
+    assert not calls_setup_logging(ast.parse(f"import {_MANAGER}\nother.{_MANAGER}.{_CALL}()\n"))
+    assert not calls_setup_logging(ast.parse(f"import os.path\n{_MANAGER}.{_CALL}()\n"))

@@ -45,6 +45,26 @@ def test_no_resolvable_home_falls_back_to_a_temp_dir_instead_of_raising(monkeypa
     assert not resolved.is_relative_to(REPO_ROOT)
 
 
+def test_the_no_home_fallback_names_the_temp_dir_without_probing_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``tempfile.gettempdir()`` writes and deletes a probe file; the fallback must not call it."""
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+
+    def _no_home() -> Path:
+        raise RuntimeError("Could not determine home directory")
+
+    def _probe() -> str:
+        raise AssertionError("gettempdir() probes the disk")
+
+    monkeypatch.setattr(Path, "home", staticmethod(_no_home))
+    monkeypatch.setattr(log_dir.tempfile, "gettempdir", _probe)
+    assert resolve_logs_dir().parent.parent.parent == tmp_path  # <tmp>/autobot-state-<uid>/autobot/logs
+    monkeypatch.setenv("TMPDIR", "relative/not/absolute")  # near miss: a relative name is not used
+    assert resolve_logs_dir().is_absolute()
+
+
 def test_unset_is_the_xdg_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     assert resolve_logs_dir() == tmp_path / "state" / "autobot" / "logs"

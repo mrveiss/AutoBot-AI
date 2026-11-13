@@ -19,11 +19,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
 import yaml
-from jinja2 import Environment, nodes
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
+from repo_tests._template_required_names import required_names
 
 _ROOT = repo_root()
 _ANSIBLE = "autobot-slm-backend/ansible"
@@ -70,18 +69,34 @@ _KNOWN_GAPS: dict[str, frozenset[str]] = {
 
 
 def _entry_files(root: Path) -> list[Path]:
-    """Every file that can hold a template task: role task files, playbooks, and the playbooks at the tree root."""
+    """Every file that can hold a template task: role task files (nested too), playbooks, and the tree root's."""
     base = root / _ANSIBLE
     files = [
-        p for role in sorted((base / "roles").iterdir()) if (role / "tasks").is_dir() for p in _yml(role / "tasks")
+        p for role in sorted((base / "roles").iterdir()) if (role / "tasks").is_dir() for p in _yaml(role / "tasks")
     ]
     if (base / "playbooks").is_dir():
-        files += _yml(base / "playbooks")
+        files += _yml(base / "playbooks")  # not recursive: `playbooks/vars/` holds variable files, not tasks
     return files + _yml(base)
 
 
+_YAML_SUFFIXES = (".yml", ".yaml")
+
+
 def _yml(directory: Path) -> list[Path]:
-    return sorted(p for p in directory.iterdir() if p.is_file() and p.suffix == ".yml")
+    return sorted(p for p in directory.iterdir() if p.is_file() and p.suffix in _YAML_SUFFIXES)
+
+
+def _yaml(directory: Path) -> list[Path]:
+    """Task files at any depth, under either suffix: a renderer in `tasks/env/main.yml` or `env.yaml` is an entry."""
+    return sorted(p for p in directory.rglob("*") if p.is_file() and p.suffix in _YAML_SUFFIXES)
+
+
+def _role_of(file: Path) -> Path | None:
+    """The role directory a task file belongs to (at any depth under `tasks/`), else None for a playbook."""
+    for parent in file.parents:
+        if parent.name == "tasks" and parent.parent.parent.name == "roles":
+            return parent.parent
+    return None
 
 
 def _walk(tasks: object) -> list[dict]:
@@ -115,7 +130,8 @@ def _src_path(task: dict, file: Path) -> Path | None:
     if not isinstance(spec, dict) or "src" not in spec:
         return None
     src = str(spec["src"])
-    role_templates = file.parent.parent / "templates" / src if file.parent.name == "tasks" else None
+    role = _role_of(file)
+    role_templates = role / "templates" / src if role else None
     for candidate in (role_templates, file.parent / src):
         if candidate is not None and candidate.is_file():
             return candidate.resolve()
@@ -192,15 +208,18 @@ def _assigned(tasks: list[dict]) -> set[str]:
     return names
 
 
+def _target(task: dict, path: Path) -> Path | None:
+    """The task file an `include_tasks`/`import_tasks` task pulls in (None for anything else or a templated name)."""
+    spec = _action(task, _INCLUDE_ACTIONS)
+    name = spec.get("file") if isinstance(spec, dict) else spec
+    if not isinstance(name, str) or "{{" in name:
+        return None
+    target = (path.parent / name).resolve()
+    return target if target.is_file() else None
+
+
 def _included(path: Path) -> list[Path]:
-    out = []
-    for task in _tasks(path):
-        spec = _action(task, _INCLUDE_ACTIONS)
-        name = spec.get("file") if isinstance(spec, dict) else spec
-        target = (path.parent / str(name)).resolve() if isinstance(name, str) and "{{" not in name else None
-        if target is not None and target.is_file():
-            out.append(target)
-    return out
+    return [t for task in _tasks(path) if (t := _target(task, path))]
 
 
 def _closure(path: Path) -> set[Path]:
@@ -214,14 +233,42 @@ def _closure(path: Path) -> set[Path]:
     return seen
 
 
+def _assigned_in(files: set[Path]) -> set[str]:
+    return set().union(*(_assigned(_tasks(f)) for f in files)) if files else set()
+
+
+def _caller_names(file: Path, role: Path) -> set[str]:
+    """Names set by the files that reach *file* in its role, only by what runs BEFORE the include of it.
+
+    `main.yml` sets facts and includes `code_only.yml`: those facts are in scope there. A sibling that never
+    includes the entry (or runs after it) is not on its path, so what it sets is not.
+    """
+    names: set[str] = set()
+    seen = {file.resolve()}
+    todo = [file.resolve()]
+    while todo:
+        current = todo.pop()
+        for caller in _yaml(role / "tasks"):
+            tasks = _tasks(caller)
+            hits = [i for i, t in enumerate(tasks) if _target(t, caller) == current]
+            if not hits or caller.resolve() in seen:
+                continue
+            seen.add(caller.resolve())
+            before = tasks[: hits[0]]
+            names |= _assigned(before)
+            names |= _assigned_in({c for t in before if (x := _target(t, caller)) for c in _closure(x)})
+            todo.append(caller.resolve())
+    return names
+
+
 def defined_for(file: Path) -> set[str]:
-    """Names in scope when `file` renders: role defaults and vars, play `vars_files`/`vars`, and what its tasks set."""
-    names: set[str] = set(_SUPPLIED)
-    files = _closure(file)
-    if file.parent.name == "tasks":  # a role entry: every task file of the role shares its defaults and facts
-        role = file.parent.parent
+    """Names in scope when `file` renders: role defaults and vars, play `vars_files`/`vars`, and what its own
+    include chain sets (the files it includes, and what runs before the include of it in the files that reach it)."""
+    names: set[str] = set(_SUPPLIED) | _assigned_in(_closure(file))
+    role = _role_of(file)
+    if role:  # role defaults and vars are shared by every file of the role
         names |= _keys(role / "defaults" / "main.yml") | _keys(role / "vars" / "main.yml")
-        files |= {c for sibling in _yml(file.parent) for c in _closure(sibling)}
+        names |= _caller_names(file, role)
     else:  # a playbook: its vars_files (relative to the playbook) and play-level vars
         for play in _docs(file):
             if not isinstance(play, dict):
@@ -229,66 +276,7 @@ def defined_for(file: Path) -> set[str]:
             names |= set(play.get("vars") or {})
             for vars_file in play.get("vars_files") or []:
                 names |= _keys((file.parent / str(vars_file)).resolve())
-    for f in files:
-        names |= _assigned(_tasks(f))
     return names
-
-
-def _climb(node: nodes.Node, parents: dict[int, nodes.Node]) -> nodes.Node:
-    """The expression a read belongs to: `x.stat.exists` and `x['k']` are reads of `x`, so step up through them."""
-    while isinstance(parents.get(id(node)), (nodes.Getattr, nodes.Getitem)) and parents[id(node)].node is node:
-        node = parents[id(node)]
-    return node
-
-
-def _guards(read: nodes.Name, parents: dict[int, nodes.Node]) -> bool:
-    """True when this one read cannot fail on an undefined name: `| default(...)` or an `is defined` test."""
-    top = _climb(read, parents)
-    parent = parents.get(id(top))
-    is_default = isinstance(parent, nodes.Filter) and parent.name in ("default", "d") and parent.node is top
-    return is_default or (isinstance(parent, nodes.Test) and parent.name == "defined" and parent.node is top)
-
-
-def _established(test: nodes.Node, name: str, parents: dict[int, nodes.Node]) -> bool:
-    """An `if` test establishes `name` when it reads it under a default or an `is defined` test."""
-    return any(n.name == name and _guards(n, parents) for n in test.find_all(nodes.Name))
-
-
-def _under_establishing_if(read: nodes.Name, parents: dict[int, nodes.Node]) -> bool:
-    """True when the read is in the body of an `if`/`elif` whose test establishes the name (not its test or else)."""
-    child: nodes.Node = read
-    while (parent := parents.get(id(child))) is not None:
-        if (
-            isinstance(parent, nodes.If)
-            and any(child is n for n in parent.body)
-            and _established(parent.test, read.name, parents)
-        ):
-            return True
-        child = parent
-    return False
-
-
-def required_names(text: str) -> set[str]:
-    """Variables the template cannot render without: some read of the name is neither guarded nor under a guarding `if`.
-
-    Decided per read, not per name: one guarded read does not excuse an unguarded read elsewhere.
-    """
-    tree = Environment().parse(
-        text
-    )  # parsing needs no filter table; `meta.find_undeclared_variables` compiles and does
-    stored = {n.name for n in tree.find_all(nodes.Name) if n.ctx == "store"}  # `{% set %}` and `{% for %}` targets
-    parents: dict[int, nodes.Node] = {}
-    for parent in tree.find_all(nodes.Node):
-        for child in parent.iter_child_nodes():
-            parents[id(child)] = parent
-    return {
-        n.name
-        for n in tree.find_all(nodes.Name)
-        if n.ctx == "load"
-        and n.name not in stored
-        and not _guards(n, parents)
-        and not _under_establishing_if(n, parents)
-    }
 
 
 def undefined_for(file: Path, template: Path) -> set[str]:
@@ -467,22 +455,38 @@ def test_control_a_template_task_without_its_template_is_reported(tmp_path: Path
     assert unresolvable(tmp_path) == [f"{_ANSIBLE}/roles/other/tasks/main.yml -> t.env.j2"]
 
 
-@pytest.mark.parametrize(
-    ("text", "required"),
-    [
-        ("{{ x }}", {"x"}),
-        ("{{ x | default('a') }}", set()),
-        ("{% if x is defined %}{{ x }}{% endif %}", set()),
-        ("{% if x | default('') | length > 0 %}A={{ x }}{% endif %}", set()),
-        ("{{ x.stat.exists | default(false) }}", set()),
-        ("{{ x['k'] | default(1) }}", set()),
-        ("{% if x is defined %}{% else %}{{ x }}{% endif %}", {"x"}),  # the else branch is not established
-        ("{% if x is defined %}{{ x }}{% endif %}{{ x }}", {"x"}),  # one guarded read, one unguarded read
-        ("{{ x | default(1) }}{{ x }}", {"x"}),
-        ("{% if y %}{{ x }}{% endif %}", {"x", "y"}),  # an if on another name establishes nothing
-        ("{% if x is defined %}{{ x }}{% elif y | default('') %}{{ y }}{% endif %}", set()),
-        ("{% for i in items %}{{ i }}{% endfor %}", {"items"}),
-    ],
-)
-def test_control_the_required_rule_is_decided_per_read(text: str, required: set[str]) -> None:
-    assert required_names(text) == required
+def test_control_a_nested_or_yaml_renderer_is_an_entry_and_needs_the_directory_task(tmp_path: Path) -> None:
+    """Control: a renderer in `tasks/env/main.yml` or `tasks/env.yaml` is discovered; a top-level one still is."""
+    base = tmp_path / _ANSIBLE
+    _plant(base, {"roles/r/templates/t.env.j2": _TEMPLATE, "roles/r/tasks/main.yml": "- debug: {}\n"})
+    assert renderings(tmp_path) == []  # near miss: a role that renders nothing has no entry
+    _plant(base, {"roles/r/tasks/env/main.yml": _RENDER.format(src="t.env.j2")})
+    _plant(base, {"roles/r/tasks/env.yaml": _RENDER.format(src="t.env.j2")})
+    found = sorted(str(f.relative_to(tmp_path)) for f, _, _ in renderings(tmp_path))
+    assert found == [f"{_ANSIBLE}/roles/r/tasks/env.yaml", f"{_ANSIBLE}/roles/r/tasks/env/main.yml"]
+    assert all("svc_app_log_dir" not in _ensured(f) for f, _, _ in renderings(tmp_path))
+
+
+def test_control_only_the_entrys_own_include_chain_defines_names(tmp_path: Path) -> None:
+    """Control: a sibling that sets the variable counts only when the entry includes it, or the file that reaches
+    the entry sets it before including it."""
+    base = tmp_path / _ANSIBLE
+    render = _RENDER.format(src="t.env.j2")
+    _plant(base, {"roles/r/templates/t.env.j2": _TEMPLATE, "roles/r/tasks/env_only.yml": render})
+    _plant(base, {"roles/r/tasks/sibling.yml": "- set_fact:\n    known: 1\n    svc_app_log_dir: /l\n"})
+    file, template, _ = renderings(tmp_path)[0]
+    assert undefined_for(file, template) == {"known", "svc_app_log_dir"}  # the unreferenced sibling does not count
+    inc = "- include_tasks: {}\n"
+    _plant(base, {"roles/r/tasks/env_only.yml": inc.format("sibling.yml") + render})  # the entry includes it
+    assert undefined_for(file, template) == set()
+    _plant(base, {"roles/r/tasks/env_only.yml": render})
+    _plant(
+        base,
+        {"roles/r/tasks/main.yml": "- set_fact:\n    known: 1\n    svc_app_log_dir: /l\n" + inc.format("env_only.yml")},
+    )
+    assert undefined_for(file, template) == set()  # the caller sets them before including the entry
+    _plant(
+        base,
+        {"roles/r/tasks/main.yml": inc.format("env_only.yml") + "- set_fact:\n    known: 1\n    svc_app_log_dir: /l\n"},
+    )
+    assert undefined_for(file, template) == {"known", "svc_app_log_dir"}  # set only AFTER the include: not in scope
