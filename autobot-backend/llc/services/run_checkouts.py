@@ -23,14 +23,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.redis_utils import decode_redis_value, delete_if_value
 
 from ..models.activity import ActorType
 from ..models.enums import ActivityEventType, LLCRunStatus, WorkItemStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..models.work_item import LLCWorkItem
 from .activity_log import LLCActivityLogService
-from .work_item_own_task import checkout_fence_key, checkout_fence_value
+from .work_item_own_task import checkout_fence_key, fence_generation
 
 logger = get_logger(__name__)
 
@@ -47,7 +47,7 @@ class ReleasedCheckout:
 
     item: LLCWorkItem
     fence_key: str
-    fence_value: Optional[str]
+    generation: str  #: the run id the fence is tagged with; the fence is dropped only while it carries it
     moved: bool = False  #: the item was still ``in_progress`` and was returned to ``ReleaseWhy.then``
 
 
@@ -66,13 +66,6 @@ def checkouts_held_by(run_id: uuid.UUID | str, company_id: uuid.UUID | str) -> S
         .where(LLCWorkItem.checkout_run_id == str(run_id), LLCWorkItem.company_id == uuid.UUID(str(company_id)))
         .with_for_update()
     )
-
-
-def _fence_of(item: LLCWorkItem) -> Optional[str]:
-    """The fence value this checkout wrote: its agent tagged with the run (the checkout generation)."""
-    if not item.assignee_agent_id:
-        return None
-    return checkout_fence_value(str(item.assignee_agent_id), item.checkout_run_id)
 
 
 @dataclass(frozen=True)
@@ -109,7 +102,7 @@ def _return_status(item: LLCWorkItem, then: WorkItemStatus) -> bool:
 async def _release_one(session: AsyncSession, item: LLCWorkItem, run_id, why: ReleaseWhy) -> ReleasedCheckout:
     """Clear one checkout, return an unfinished item to the queue and record both, in the caller's transaction."""
     held, was = item.checkout_run_id, WorkItemStatus(item.status).value
-    released = ReleasedCheckout(item, checkout_fence_key(item.id), _fence_of(item), _return_status(item, why.then))
+    released = ReleasedCheckout(item, checkout_fence_key(item.id), held, _return_status(item, why.then))
     item.checkout_run_id = None
     item.checkout_locked_at = None
     item.version += 1
@@ -146,34 +139,51 @@ async def release_checkouts_for_run(
     drop, stays up to the checkout TTL while the database already says the item is free. ``checkout`` checks
     the fence before the row, so another agent's checkout of that item is refused until the TTL expires; the
     same agent is not. The fence is a fast path, the database authoritative, and the window is bounded.
+
+    The run's own status write (cancelled, stalled, interrupted) is flushed first, so it holds the run row's
+    lock before the checkouts are selected and a claim racing it cannot slip in unreleased.
     """
+    # The session runs with autoflush off: write the caller's terminal status now, so the run row is locked
+    # (a concurrent claim's FOR SHARE in ``live_run_id`` then waits) before the checkouts are selected.
+    await session.flush()
     run_id = str(run.id)
     result = await session.execute(checkouts_held_by(run_id, run.company_id))
     held = [item for item in result.scalars().all() if item.checkout_run_id == run_id]
     return [await _release_one(session, item, run_id, why) for item in held]
 
 
+async def _drop_if_generation(redis, fence: ReleasedCheckout) -> None:  # noqa: ANN001 - a Redis client
+    """Drop the fence when it is tagged with the released run, whoever the holder it names is.
+
+    The holder is read from the fence, not derived from the item's current assignee: an item reassigned while
+    checked out still carries the fence its first holder wrote. The delete is a compare-and-delete on the value
+    just read, so a newer checkout landing in between keeps its fence.
+    """
+    value = decode_redis_value(await redis.get(fence.fence_key))
+    if value is not None and fence_generation(value) == fence.generation:
+        await delete_if_value(redis, fence.fence_key, value)
+
+
 async def drop_released_fences(released: list[ReleasedCheckout]) -> None:
     """Drop each released item's Redis fence, after the DB release has committed.
 
     The fence (``llc:checkout:{id}``, value = agent tagged with the run) is a fast path in front of the row
-    lock, not the lock itself, and it carries its own TTL. A fence now naming another value belongs to a newer
-    checkout and is left alone -- decided in one atomic compare-and-delete. Nothing here may fail the caller:
-    the DB release is authoritative, and a fence left behind expires on its TTL.
+    lock, not the lock itself, and it carries its own TTL. A fence tagged with another run belongs to a newer
+    checkout and is left alone. Nothing here may fail the caller: the DB release is authoritative, and a fence
+    left behind expires on its TTL.
     """
-    fences = [r for r in released if r.fence_value]
-    if not fences:
+    if not released:
         return
     try:
         redis = await get_async_redis_client()
     except Exception as exc:
-        logger.warning("No Redis client for %d released checkout fence(s): %s", len(fences), exc)
+        logger.warning("No Redis client for %d released checkout fence(s): %s", len(released), exc)
         return
     if redis is None:
         return
-    for fence in fences:
+    for fence in released:
         try:
-            await delete_if_value(redis, fence.fence_key, fence.fence_value)
+            await _drop_if_generation(redis, fence)
         except Exception as exc:
             logger.warning("Could not drop checkout fence %s: %s", fence.fence_key, exc)
 

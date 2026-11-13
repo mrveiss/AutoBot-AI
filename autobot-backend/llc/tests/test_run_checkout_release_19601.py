@@ -119,6 +119,45 @@ async def test_only_the_fence_of_the_released_generation_is_dropped(fences) -> N
     assert await fences.get(released[1].fence_key) is not None
 
 
+@pytest.mark.asyncio
+async def test_a_reassigned_item_still_gets_the_fence_its_first_holder_wrote_dropped(fences) -> None:  # noqa: ANN001
+    """Agent A checked out under the run; the item was then reassigned to B. The fence names A, not B."""
+    run = _run()
+    item = Item(_COMPANY, run.id)
+    first_holder = uuid.uuid4()
+    await fences.set(f"llc:checkout:{item.id}", f"{first_holder}#{run.id}")
+    item.assignee_agent_id = uuid.uuid4()  # the reassignment, with the checkout still held
+
+    released = await release_checkouts_for_run(
+        RoutedSession([run], [item]), run, ReleaseWhy("cancelled", "run_cancel", log=Recorder())
+    )
+    await drop_released_fences(released)
+
+    assert await fences.get(f"llc:checkout:{item.id}") is None, "the new assignee must not wait out the old fence"
+
+
+@pytest.mark.asyncio
+async def test_the_run_row_is_written_before_its_checkouts_are_selected() -> None:
+    """Autoflush is off: the terminal status must reach the database (taking the run's row lock) first."""
+    events: list[str] = []
+
+    class Ordered(RoutedSession):
+        async def flush(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            events.append("flush")
+            await super().flush(*args, **kwargs)
+
+        async def execute(self, statement, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+            events.append("select")
+            return await super().execute(statement, *args, **kwargs)
+
+    run = _run()
+    await release_checkouts_for_run(
+        Ordered([run], [Item(_COMPANY, run.id)]), run, ReleaseWhy("cancelled", "run_cancel", log=Recorder())
+    )
+
+    assert events[:2] == ["flush", "select"]
+
+
 def _user_ctx(run: LLCHeartbeatRun) -> MagicMock:
     ctx = MagicMock()
     ctx.org_id = run.company_id

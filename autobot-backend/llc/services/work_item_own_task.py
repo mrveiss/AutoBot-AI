@@ -165,6 +165,12 @@ def fence_agent(value: str) -> str:
     return value.split(_FENCE_GENERATION_SEP, 1)[0]
 
 
+def fence_generation(value: str) -> Optional[str]:
+    """The checkout generation (the run id) a fence value carries, or ``None`` for an untagged one."""
+    _agent, sep, generation = value.partition(_FENCE_GENERATION_SEP)
+    return generation if sep else None
+
+
 def _checkout_holder(item: LLCWorkItem) -> Optional[str]:
     """The item's fence value: ``user:<id>`` for a claim, the generation-tagged agent id for a checkout."""
     if item.assignee_user_id:

@@ -550,12 +550,13 @@ async def test_one_failing_fence_does_not_stop_the_next(sweep, world, monkeypatc
         return True
 
     monkeypatch.setattr(run_checkouts, "delete_if_value", flaky)
+    await world.fences.set("llc:checkout:a", "agent-a#run")
     await world.fences.set("llc:checkout:b", "agent-b#run")
 
     await run_checkouts.drop_released_fences(
         [
-            ReleasedCheckout(None, "llc:checkout:a", "agent-a#run"),
-            ReleasedCheckout(None, "llc:checkout:b", "agent-b#run"),
+            ReleasedCheckout(None, "llc:checkout:a", "run"),
+            ReleasedCheckout(None, "llc:checkout:b", "run"),
         ]
     )
 
