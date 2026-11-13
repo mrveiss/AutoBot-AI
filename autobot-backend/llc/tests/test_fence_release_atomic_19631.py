@@ -117,6 +117,16 @@ async def test_release_agent_fence_matches_a_fence_written_under_a_raw_spelling(
     assert await redis.get(_key(item_id)) == f"{_OTHER_AGENT.upper()}#run-1"
 
 
+async def test_release_agent_fence_releases_a_fence_a_client_returns_as_bytes():
+    """A client without ``decode_responses`` returns the holder as bytes; the release still matches and drops it."""
+    raw = fakeredis.aioredis.FakeRedis(decode_responses=False)
+    item_id = str(uuid.uuid4())
+    await raw.set(_key(item_id), f"{_AGENT}#run-1")
+    assert isinstance(await raw.get(_key(item_id)), bytes)
+    await _drop(raw, item_id, _AGENT, "run-1")
+    assert await raw.get(_key(item_id)) is None
+
+
 async def test_release_agent_fence_with_an_absent_fence_deletes_nothing_and_does_not_raise(redis):
     item_id = str(uuid.uuid4())
     await _drop(redis, item_id, _AGENT, "run-1")

@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.redis_utils import decode_redis_value, delete_if_value
 
 from ..models.enums import AssigneeType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
@@ -184,7 +184,7 @@ async def release_agent_fence(item_id: Any, agent_id: str, generation: Optional[
         if redis is None:
             return
         key = checkout_fence_key(item_id)
-        value = await redis.get(key)
+        value = decode_redis_value(await redis.get(key))
         if value is not None and fence_agent(value) == agent_id and fence_generation(value) == generation:
             await delete_if_value(redis, key, value)
     except Exception:
