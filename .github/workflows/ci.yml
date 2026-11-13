@@ -83,7 +83,10 @@ jobs:
     outputs:
       # ready: the run is not a draft pull request. Work behind a required gate is held back
       # until then; the gate itself fails with the reason (D4, #18208).
-      ready: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+      ready: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && steps.hold.outputs.held != 'true') }}
+      # held (#21490): a dependabot pull request that is neither a `train-*` head nor labelled `ci:full`.
+      # It starts no expensive work; every gate reports it as held (fails, never passes) in its summary.
+      held: ${{ steps.hold.outputs.held }}
       # D8: python-suite on merge_group is parity -- it runs only when Python changed.
       run_python_suite: ${{ steps.gp.outputs.self == 'true' || steps.suite.outputs.python == 'true' }}
       run_frontend_tests: ${{ steps.gp.outputs.self == 'true' || steps.fe.outputs.frontend == 'true' }}
@@ -122,6 +125,41 @@ jobs:
       npm_structured_thinking: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.npm_structured_thinking == 'true' }}
       run_slm_frontend: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.slm_frontend == 'true' }}
     steps:
+      # #21490: decide first, from the PULL REQUEST AUTHOR -- `github.actor` becomes the human who
+      # re-runs it. Labels are read from the event payload, so `ci:full` takes effect on the next run
+      # the event starts (push, reopen, ready for review), not when the label is applied.
+      - name: Hold dependabot pull requests
+        id: hold
+        env:
+          EVENT: ${{ github.event_name }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        # FAILS OPEN. A broken hold step must degrade to "run everything", never "block everything":
+        # a failure here fails `changes` and with it every gate of every pull request. So no `set -e`,
+        # and an unreadable label list (jq missing, malformed payload) means NOT held, plus a warning.
+        # Watch item: this step needs `jq` (present on the hosted runner image).
+        run: |
+          set -uo pipefail
+          held=false
+          if [ "${EVENT}" = "pull_request" ] && [ "${AUTHOR}" = "dependabot[bot]" ] \
+             && [[ "${HEAD_REF}" != train-* ]]; then
+            if full=$(jq -r 'if index("ci:full") then "yes" else "no" end' <<<"${LABELS}" 2>/dev/null) \
+               && [ -n "${full}" ]; then
+              [ "${full}" = "no" ] && held=true
+            else
+              echo "::warning title=hold::cannot read the pull request labels; not holding this dependabot run (#21490)"
+            fi
+          fi
+          echo "held=${held}" >> "$GITHUB_OUTPUT"
+          if [ "${held}" = "true" ]; then
+            {
+              echo "### Held: dependabot pull request (#21490)"
+              echo "The expensive work was NOT run and every required gate reports it as held, not passed."
+              echo "It runs on a \`train-*\` branch, or here once the \`ci:full\` label is on the PR and a new run starts."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - uses: actions/checkout@v7
 
       # One dorny step per filter file, each with a distinct id. `base` is the merge group's
@@ -863,10 +901,11 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} ${{ needs.python-shard.result == 'success' && 'All 8 python-suite shards passed.' || format('python-shard={0}', needs.python-shard.result) }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          held: ${{ needs.changes.outputs.held }}
 
   frontend-tests:
     needs: [changes, short-check]
-    if: needs.changes.outputs.run_frontend_tests == 'true'
+    if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.run_frontend_tests == 'true' }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
@@ -970,6 +1009,7 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-code-quality=${{ needs.run-code-quality.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          held: ${{ needs.changes.outputs.held }}
 
   run-startup-import-smoke:
     needs: [changes, short-check]
@@ -1007,6 +1047,7 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-startup-import-smoke=${{ needs.run-startup-import-smoke.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          held: ${{ needs.changes.outputs.held }}
 
   run-frontend-test:
     needs: [changes, short-check]
@@ -1045,6 +1086,7 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-frontend-test=${{ needs.run-frontend-test.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          held: ${{ needs.changes.outputs.held }}
 
   run-docker-smoke:
     needs: [changes, short-check]
@@ -1083,6 +1125,7 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-docker-smoke=${{ needs.run-docker-smoke.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          held: ${{ needs.changes.outputs.held }}
 
   run-api-wiring:
     needs: [changes, short-check]
@@ -1120,6 +1163,7 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-api-wiring=${{ needs.run-api-wiring.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          held: ${{ needs.changes.outputs.held }}
 
   run-migration-gate:
     needs: [changes, short-check]
@@ -1158,6 +1202,7 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-migration-gate=${{ needs.run-migration-gate.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          held: ${{ needs.changes.outputs.held }}
 
   run-generated-types:
     needs: [changes, short-check]
@@ -1213,6 +1258,7 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-generated-types=${{ needs.run-generated-types.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          held: ${{ needs.changes.outputs.held }}
 
   # Never filtered and never draft-gated: it carries the SPDX and symlink checks, which must cover EVERY pull
   # request including docs-only drafts (#17957). Only the repo-wide sweep inside is scoped, by `sweep`.
@@ -1260,7 +1306,7 @@ jobs:
 
   run-security:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.run_security == 'true' }}
+    if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.run_security == 'true' }}
     uses: ./.github/workflows/_gate-security.yml
     permissions:
       contents: read
@@ -1271,7 +1317,7 @@ jobs:
 
   run-codeql:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.codeql_languages != '[]' }}
+    if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.codeql_languages != '[]' }}
     uses: ./.github/workflows/_gate-codeql.yml
     permissions:
       contents: read
@@ -1281,7 +1327,7 @@ jobs:
 
   run-ai-security-review:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.run_ai_review == 'true' }}
+    if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.run_ai_review == 'true' }}
     uses: ./.github/workflows/_gate-ai-security-review.yml
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -1291,7 +1337,7 @@ jobs:
 
   run-npm-package-tests:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.run_npm == 'true' }}
+    if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.run_npm == 'true' }}
     uses: ./.github/workflows/_gate-npm-package-tests.yml
     permissions:
       contents: read
@@ -1303,7 +1349,7 @@ jobs:
 
   run-slm-frontend:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.run_slm_frontend == 'true' }}
+    if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.run_slm_frontend == 'true' }}
     uses: ./.github/workflows/_gate-slm-frontend.yml
     permissions:
       contents: read

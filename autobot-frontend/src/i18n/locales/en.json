@@ -1669,6 +1669,30 @@
         "high": "High",
         "medium": "Medium",
         "low": "Low"
+      },
+      "runState": {
+        "runningTitle": "Indexing is in progress",
+        "partialTitle": "The latest indexing run did not finish",
+        "running": "The results below are updating while the run is in progress. They may change when it finishes.",
+        "ended": "The latest run ended as {status}.",
+        "endedWithReason": "The latest run ended as {status}: {reason}",
+        "partialFindings": "The findings shown are partial: they may come from the interrupted run.",
+        "lastCompleted": "The last completed run finished on {when}.",
+        "neverCompleted": "No run has completed for this source yet.",
+        "status": {
+          "failed": "failed",
+          "killed": "killed",
+          "abandoned": "abandoned",
+          "cancelled": "cancelled"
+        },
+        "unfinished": "The latest run did not complete.",
+        "unfinishedWithReason": "The latest run did not complete: {reason}",
+        "unreadTitle": "The state of the latest indexing run could not be read",
+        "unread": "Whether the findings shown come from a run that finished is not known. They may be partial.",
+        "retry": "Retry"
+      },
+      "staleResult": {
+        "message": "This result was computed before the source was last synced. It is shown as it was stored and may not match the current code; run the analysis again to refresh it."
       }
     },
     "patterns": {

@@ -47,9 +47,10 @@ OPS_SUFFIXES: tuple[str, ...] = ("/tasks/clear-stuck",)
 #: re-asserted by the caller. Decision recorded on #20513.
 TASK_MARKER = "{task_id}"
 
-#: Indexing job controls whose scoping is the second #20513 PR (needs #20491's changes to
-#: ``useIndexingJob`` first). Named, with the reason, so they are a tracked gap and not a hole.
-DEFERRED_TO_PR2: frozenset[str] = frozenset({"/index/current", "/index/cancel"})
+#: Indexing job controls whose scoping is still to do (``/index/current`` now requires its source).
+#: ``/index/cancel`` mutates the one running job, so its scoping travels with the auth test that posts it
+#: bare and with the frontend cancel flow. Named, with the reason, so it is a tracked gap and not a hole.
+DEFERRED_TO_PR2: frozenset[str] = frozenset({"/index/cancel"})
 
 #: Takes EXACTLY ONE of ``source_id`` and ``root_path`` in its body (dev mode keeps ``root_path``).
 EXACTLY_ONE_BODY: frozenset[tuple[str, str]] = frozenset({("POST", "/index")})
@@ -60,7 +61,7 @@ EXACTLY_ONE_BODY: frozenset[tuple[str, str]] = frozenset({("POST", "/index")})
 #: that call and no other.
 DEFERRED_CALLERS: frozenset[tuple[str, str, str]] = frozenset(
     {
-        # Owned by #20513 itself (its second PR, with /index/current and /index/cancel in DEFERRED_TO_PR2).
+        # Owned by #20513 itself (its second PR, with /index/cancel in DEFERRED_TO_PR2).
         ("autobot-frontend/src/composables/analytics/useIndexingJob.ts", "index", "_sendIndexRequest("),
     }
 )

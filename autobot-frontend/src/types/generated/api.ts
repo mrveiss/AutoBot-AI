@@ -21295,12 +21295,16 @@ export interface paths {
         };
         /**
          * Get Current Indexing Job
-         * @description Get the status of the currently running indexing job (if any)
+         * @description Get the status of the currently running indexing job, if it belongs to ``source_id``.
+         *
+         *     One job runs at a time across all sources (#20491). A job that belongs to another
+         *     source is not reported: the answer for this source is its own request queued behind
+         *     that job (``status: "queued"``, ``task_id: null``), else idle (#20513).
          *
          *     Returns:
-         *     - has_active_job: Whether an indexing job is currently running
-         *     - task_id: The current job's task ID (if running)
-         *     - source_id: The source it indexes: one job runs at a time across all sources (#20491)
+         *     - has_active_job: Whether an indexing job of this source is running or queued
+         *     - task_id: The current job's task ID (if running or just finished)
+         *     - source_id: The source it indexes (always the requested one when a job is named)
          *     - status: Current job status
          *     - progress: Current progress details
          */
@@ -21459,6 +21463,31 @@ export interface paths {
          * @description Real code problems per source (#1710); ``file_category`` (#20493) narrows to e.g. ``code``/``test``.
          */
         get: operations["get_codebase_problems_api_analytics_codebase_problems_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analytics/codebase/index/run-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Index Run State
+         * @description Return how the source's newest indexing run ended and when the last complete one finished.
+         *
+         *     ``run`` is ``null`` (and ``partial`` false) for a source with no recorded run.
+         *     ``partial`` is true when the newest run did not complete: the findings in
+         *     storage may be from an interrupted run and must be shown labelled.
+         *     A run left ``running`` past its hard timeout is reported ``abandoned``.
+         */
+        get: operations["get_index_run_state_api_analytics_codebase_index_run_state_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -137097,7 +137126,10 @@ export interface operations {
     };
     get_current_indexing_job_api_analytics_codebase_index_current_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -137111,6 +137143,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -137247,6 +137288,38 @@ export interface operations {
                 source_id: string;
                 problem_type?: string | null;
                 file_category?: components["schemas"]["ProblemCategory"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_index_run_state_api_analytics_codebase_index_run_state_get: {
+        parameters: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;

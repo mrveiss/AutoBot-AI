@@ -13,15 +13,23 @@
  * Issue #1579: Extracted from CodebaseAnalytics.vue
  */
 
-import { ref, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { jobBelongsToSource } from './indexingJobSource'
+import { createPollSession } from './pollSession'
+import { endedRunOutcome, type RunStateHandle } from './useRunState'
 
 const logger = createLogger('useIndexingJob')
+
+/**
+ * Polls that may answer `idle` while this page is still waiting for a request it queued itself
+ * before the wait is given up (the request is not visible to the backend until it is queued).
+ */
+export const IDLE_POLLS_BEFORE_GIVING_UP = 5
 
 interface JobPhase {
   id: string
@@ -57,6 +65,8 @@ export interface UseIndexingJobDeps {
   progressStatus: Ref<string>
   /** Currently selected code source (if any). */
   selectedSource: Ref<{ id: string } | null>
+  /** Names the selected source (the key `useRunState` receives); a change drops the old source's job. */
+  sourceKey: () => string
   /** Helper that appends ?source_id= to a URL. */
   withSourceId: (url: string) => string
   /** Toast notification helper. */
@@ -70,6 +80,8 @@ export interface UseIndexingJobDeps {
   duplicateAnalysis: Ref<unknown[]>
   hardcodeAnalysis: Ref<unknown[]>
   chartData: Ref<unknown | null>
+  /** How the newest run ended (#21003): re-read when a job ends and when the page opens. */
+  runState: Pick<RunStateHandle, 'loadRunState' | 'run' | 'readFailed'>
   /** Show knowledge-base opt-in banner after successful indexing. */
   showKnowledgeBaseOptIn: Ref<boolean>
   /** Callback invoked after a successful index completion to run follow-up scans. */
@@ -87,35 +99,46 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
 
   // --- Endpoints (#5257) ---------------------------------------------------
   // Shared by pollJobStatus + checkCurrentIndexingJob (same URL, different
-  // response-handling). `/index/current` and `/index/cancel` are NOT
-  // source-scoped (backend has a single module-level current-task slot).
+  // response-handling). `/index/current` is scoped to the selected source (#20513):
+  // the backend holds one current-task slot for all sources and answers idle when
+  // that job belongs to another. `/index/cancel` is NOT source-scoped: it acts on
+  // the one running job (the backend left it deferred).
 
   interface CurrentJobRaw {
     has_active_job?: boolean
     task_id?: string
     source_id?: string | null
     status?: string
+    position?: number
     progress?: { step?: string; percent?: number }
     error?: string
   }
 
-  const currentJobEndpoint = useFetchEndpoint<CurrentJobRaw, CurrentJobRaw>({
-    path: '/api/analytics/codebase/index/current',
-    pickData: (r) => r, // caller reads endpoint.data.value directly
-    label: 'Current indexing job',
-  })
+  const currentJobEndpoint = useFetchEndpoint<CurrentJobRaw, CurrentJobRaw>(
+    {
+      path: '/api/analytics/codebase/index/current',
+      scopeToSource: true,
+      requireSource: true,
+      pickData: (r) => r, // caller reads endpoint.data.value directly
+      label: 'Current indexing job',
+    },
+    { withSourceId: deps.withSourceId },
+  )
 
+  // The request context is the source key the request was made for: a late answer for a source
+  // that is no longer selected is dropped (the shared refs hold the new source's state).
   const problemsPollEndpoint = useFetchEndpoint<
     { problems?: unknown[] },
-    unknown[]
+    unknown[],
+    string
   >(
     {
       path: '/api/analytics/codebase/problems',
       scopeToSource: true,
       requireSource: true,
       pickData: (r) => r.problems ?? [],
-      onSuccess: (list) => {
-        deps.problemsReport.value = list
+      onSuccess: (list, _raw, forSource) => {
+        if (forSource === deps.sourceKey()) deps.problemsReport.value = list
       },
     },
     { withSourceId: deps.withSourceId },
@@ -123,15 +146,16 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
 
   const statsPollEndpoint = useFetchEndpoint<
     { stats?: Record<string, unknown> },
-    Record<string, unknown>
+    Record<string, unknown>,
+    string
   >(
     {
       path: '/api/analytics/codebase/stats',
       scopeToSource: true,
       requireSource: true,
       pickData: (r) => r.stats ?? null,
-      onSuccess: (stats) => {
-        deps.codebaseStats.value = stats
+      onSuccess: (stats, _raw, forSource) => {
+        if (forSource === deps.sourceKey()) deps.codebaseStats.value = stats
       },
     },
     { withSourceId: deps.withSourceId },
@@ -154,8 +178,33 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     { intervalMs: 2000 }
   )
 
+  // A polling session starts not having seen its own job; `queued` or an active job for this
+  // source sets it, and only then is a bare `idle` the end of the job rather than a wait.
+  let sawOwnJob = false
+  let idlePolls = 0
+  // Ended by a source switch and by every restart of polling: a poll or follow-up that was
+  // already in flight resumes after its `await` and must not write the old session's answer.
+  const pollSession = createPollSession()
+
   const startJobPolling = () => {
+    pollSession.renew()
+    sawOwnJob = false
+    idlePolls = 0
     _startJobPoller('')
+  }
+
+  /** This source's own request is queued behind another source's job (#20513): wait, do not finish. */
+  const _showQueued = (data: CurrentJobRaw) => {
+    sawOwnJob = true
+    idlePolls = 0
+    // A job tracked until now has ended and the slot holds another source's job: keeping its id
+    // would leave Stop enabled, and the cancel route is not source-scoped.
+    if (currentJobId.value) deps.progressPercent.value = 0
+    else pollSession.noteWait(deps.runState.run.value?.run_id ?? null) // the run before this request
+    currentJobId.value = null
+    jobPhases.value = jobBatches.value = jobStats.value = null
+    deps.analyzing.value = true
+    deps.progressStatus.value = deps.t('analytics.codebase.status.queued', { position: data.position })
   }
 
   // --- Internal helpers ---
@@ -190,11 +239,27 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     status: string,
     error?: string,
   ) => {
+    const waitedFrom = pollSession.waitBaseline()
+    pollSession.renew() // the job is ended once: a poll still in flight is stale and cannot end it again
+    const isStale = pollSession.guard()
+    const taskId = currentJobId.value
+    const tracked = sawOwnJob || !!taskId
     deps.analyzing.value = false
     stopJobPolling()
     jobPhases.value = null
     jobBatches.value = null
     jobStats.value = null
+    // #21003: how the run ended decides whether the stored findings are labelled partial.
+    const runStateRead = deps.runState.loadRunState()
+    if (status === 'idle' && tracked) {
+      // The slot of a job that ended is cleared, so `idle` says only that it is over: how it
+      // ended is on the run record. An unread record resolves nothing.
+      await runStateRead
+      if (isStale()) return
+      const ended = endedRunOutcome(deps.runState.readFailed.value ? null : deps.runState.run.value, taskId, waitedFrom)
+      status = ended?.status ?? status
+      error = ended ? ended.error : error
+    }
 
     if (status === 'completed') {
       deps.progressStatus.value = deps.t('analytics.codebase.status.indexingCompleted')
@@ -210,24 +275,35 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
       deps.progressStatus.value = deps.t('analytics.codebase.status.indexingFailed', { error: errMsg })
       deps.notify(deps.t('analytics.codebase.notify.indexingFailed', { error: errMsg }), 'error')
     }
+    if (isStale()) return // the page moved on while the follow-up ran: its job id is not ours to clear
     currentJobId.value = null
+    await runStateRead
   }
 
   const pollJobStatus = async () => {
+    const isStale = pollSession.guard()
     await currentJobEndpoint.load()
+    if (isStale()) return
     if (currentJobEndpoint.error.value) {
       logger.warn('Job polling error:', currentJobEndpoint.error.value)
       return
     }
     const data = currentJobEndpoint.data.value
     if (!data) return
-    // #20491: this page's queued job may still be behind another source's; keep waiting for it.
+    // The backend answers only for the requested source (#20513), so this is a second check.
     if (!jobBelongsToSource(data.source_id, deps.selectedSource.value?.id)) return
 
     currentJobStatus.value = data.status ?? null
-    if (data.has_active_job) {
+    if (data.status === 'queued') {
+      _showQueued(data)
+    } else if (data.has_active_job) {
+      sawOwnJob = true
+      idlePolls = 0
+      if (data.task_id) currentJobId.value = data.task_id
       _updateActiveJobProgress(data as Record<string, unknown>)
       await pollIntermediateResults()
+    } else if (data.status === 'idle' && !sawOwnJob && !currentJobId.value && ++idlePolls <= IDLE_POLLS_BEFORE_GIVING_UP) {
+      logger.debug('Waiting for the queued job to appear')
     } else {
       await _handleJobFinished(data.status ?? '', data.error)
     }
@@ -236,13 +312,18 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
   const pollIntermediateResults = async () => {
     // Silent: both endpoints write to deps refs via onSuccess, and errors
     // are logged internally by the composable.
-    await Promise.all([problemsPollEndpoint.load(), statsPollEndpoint.load()])
+    const forSource = deps.sourceKey()
+    await Promise.all([problemsPollEndpoint.load(undefined, forSource), statsPollEndpoint.load(undefined, forSource)])
   }
 
   // --- Public API ---
 
-  const checkCurrentIndexingJob = async () => {
-    await currentJobEndpoint.load()
+  const checkCurrentIndexingJob = async (readRunState = true) => {
+    const isStale = pollSession.guard()
+    // #21003: opening the page reads how the newest run ended (a GET; it starts nothing).
+    // A source switch passes false: `useRunState` re-reads it itself on that switch.
+    await Promise.all([currentJobEndpoint.load(), readRunState ? deps.runState.loadRunState() : undefined])
+    if (isStale()) return
     if (currentJobEndpoint.error.value) {
       logger.warn(
         'Could not check for running job:',
@@ -254,7 +335,12 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     if (!data) return
     if (!jobBelongsToSource(data.source_id, deps.selectedSource.value?.id)) return
 
-    if (data.has_active_job) {
+    if (data.status === 'queued') {
+      // Queued behind another source's job: no job of ours exists yet, so no task id, no
+      // "already running" notice and no progress figure; keep polling until it starts.
+      startJobPolling()
+      _showQueued(data)
+    } else if (data.has_active_job) {
       currentJobId.value = data.task_id ?? null
       currentJobStatus.value = data.status ?? null
       deps.analyzing.value = true
@@ -281,7 +367,9 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
       return
     }
 
+    const isStale = pollSession.guard()
     await cancelEndpoint.load()
+    if (isStale()) return // the page moved to another source: its state is not the cancelled job's
     if (cancelEndpoint.error.value) {
       deps.notify(
         deps.t('analytics.codebase.notify.cancelError', {
@@ -312,6 +400,24 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     }
   }
 
+  // A job, a queued request and a polling session belong to ONE source: on a switch drop them
+  // (so Stop cannot hit the old source's running job) and discover the new source's, as page open does.
+  watch(deps.sourceKey, () => {
+    pollSession.renew()
+    stopJobPolling()
+    currentJobId.value = null
+    currentJobStatus.value = null
+    jobPhases.value = null
+    jobBatches.value = null
+    jobStats.value = null
+    sawOwnJob = false
+    idlePolls = 0
+    deps.analyzing.value = false
+    deps.progressPercent.value = 0
+    deps.progressStatus.value = deps.t('analytics.codebase.status.ready')
+    void checkCurrentIndexingJob(false)
+  })
+
   /**
    * Send an index request with retry on 502/503.
    *
@@ -329,6 +435,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
   const _sendIndexRequest = async (
     endpoint: string,
     body: string,
+    isStale: () => boolean,
   ): Promise<Response> => {
     const maxRetries = 2
     let response: Response | null = null
@@ -341,10 +448,12 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
       if (response.status !== 502 && response.status !== 503) break
       if (attempt < maxRetries) {
         const delay = (attempt + 1) * 3
-        deps.progressStatus.value = deps.t(
-          'analytics.codebase.status.backendRetrying',
-          { delay },
-        )
+        if (!isStale()) {
+          deps.progressStatus.value = deps.t(
+            'analytics.codebase.status.backendRetrying',
+            { delay },
+          )
+        }
         logger.warn(
           `Index request got ${response.status}, retrying (${attempt + 1}/${maxRetries})`,
         )
@@ -405,6 +514,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
 
   /** Main entry point: start indexing the codebase. */
   const indexCodebase = async () => {
+    const isStale = pollSession.guard()
     if (currentJobId.value) {
       deps.notify(
         deps.t('analytics.codebase.notify.indexingAlreadyRunning'),
@@ -430,6 +540,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
 
     try {
       const backendUrl = await appConfig.getServiceUrl('backend')
+      if (isStale()) return // switched before the request was built: it would index the new source
       const requestBody = JSON.stringify(
         deps.selectedSource.value
           ? { source_id: deps.selectedSource.value.id }
@@ -438,16 +549,20 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
       const response = await _sendIndexRequest(
         `${backendUrl}/api/analytics/codebase/index`,
         requestBody,
+        isStale,
       )
       const data = await response.json()
+      if (isStale()) return
 
       if (_handleIndexResponseStatus(data)) return
 
       deps.progressPercent.value = 5
       await pollJobStatus()
+      if (isStale()) return
       startJobPolling()
     } catch (error: unknown) {
       logger.error('Indexing failed:', error)
+      if (isStale()) return
       const errorMessage = error instanceof Error ? error.message : String(error)
       deps.progressStatus.value = deps.t(
         'analytics.codebase.status.indexingFailedToStart',

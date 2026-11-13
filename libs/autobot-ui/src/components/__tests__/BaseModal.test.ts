@@ -71,6 +71,29 @@ describe('BaseModal', () => {
     })
   })
 
+  describe('role', () => {
+    it('is a dialog by default', async () => {
+      // fails if the default of the `role` prop changes
+      const wrapper = mountModal()
+      await flushPromises()
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+      expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('renders an alertdialog when asked, labelled and modal as before', async () => {
+      // fails if `role` is not bound on the dialog element (the old literal ignored it)
+      const wrapper = mountModal({ role: 'alertdialog' })
+      await flushPromises()
+      const dialog = wrapper.find('[role="alertdialog"]')
+      expect(dialog.exists()).toBe(true)
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+      expect(dialog.attributes('aria-modal')).toBe('true')
+      expect(wrapper.find('h3').attributes('id')).toBe(dialog.attributes('aria-labelledby'))
+      wrapper.unmount()
+    })
+  })
+
   describe('aria labelling', () => {
     it('wires aria-labelledby/aria-describedby to the actual header/content element ids', async () => {
       // fails if titleId/descriptionId stop being applied to the h3 / content
