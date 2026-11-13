@@ -12,7 +12,6 @@ directly, unless the site is on ``_DIRECT_RESTARTS`` with its reason.
 """
 
 import functools
-import re
 from pathlib import Path
 
 import pytest
@@ -331,23 +330,77 @@ _DIRECT_RESTARTS = {
 
 
 _COMMAND_MODULES = ("command", "ansible.builtin.command", "shell", "ansible.builtin.shell")
-_COMMAND_SEPARATORS = re.compile(r"[;&|]+")
+_COMMAND_SEPARATORS = ";&|\r\n"
 _RESTART_VERBS = ("restart", "try-restart")
 #: Shell characters that wrap a command word or a unit: quotes, a subshell ``(``/``$(``, a backtick.
 _WRAPPERS = "\"'()$`"
 
 
-def _systemctl_restart_units(text: str) -> list:
-    """Units of every ``systemctl [options] [try-]restart [--] <unit>`` in *text*, by tokens (no backtracking).
+def _commands(text: str) -> list:
+    """*text* split at ``;``, ``&``, ``|`` and newlines that are outside a ``{{ ... }}`` template."""
+    commands, depth, start, at = [], 0, 0, 0
+    while at < len(text):
+        if text.startswith("{{", at):
+            depth, at = depth + 1, at + 2
+        elif text.startswith("}}", at):
+            depth, at = max(0, depth - 1), at + 2
+        else:
+            if depth == 0 and text[at] in _COMMAND_SEPARATORS:
+                commands.append(text[start:at])
+                start = at + 1
+            at += 1
+    return commands + [text[start:]]
 
-    A command ends at ``;``, ``&`` or ``|``. After the ``systemctl`` word come any option tokens (those starting
-    with ``-``), then the verb, an optional ``--`` and the unit. Wrapping shell characters are stripped from the
-    start of the command word (``"systemctl``, ``$(systemctl``) and from the unit's ends (``x"``, ``x)``), so
-    ``sh -c "systemctl restart x"`` reports ``x``.
+
+def _tokens(command: str) -> list:
+    """Whitespace tokens, with a ``{{ ... }}`` template kept whole as one token."""
+    tokens, open_template = [], False
+    for token in command.split():
+        if open_template:
+            tokens[-1] += " " + token
+        else:
+            tokens.append(token)
+        if "{{" in token and "}}" not in token:
+            open_template = True
+        elif "}}" in token:
+            open_template = False
+    return tokens
+
+
+def _ends_the_operands(token: str) -> bool:
+    """A comment, or a redirection (``>``, ``2>``, ``<``): what follows is not a unit."""
+    redirect = token.lstrip("0123456789")
+    return token.startswith("#") or redirect[:1] in (">", "<")
+
+
+def _unit_operands(tokens: list) -> list:
+    """The unit names among the tokens after the verb: options skipped, everything after ``--`` an operand."""
+    units, options_done = [], False
+    for token in tokens:
+        word = token.lstrip(_WRAPPERS)
+        if word == "systemctl" or word.endswith("/systemctl") or _ends_the_operands(token):
+            break
+        if token == "--" and not options_done:
+            options_done = True
+        elif options_done or not token.startswith("-"):
+            name = token.lstrip("\"'`").rstrip(_WRAPPERS)
+            if name:
+                units.append(name)
+    return units
+
+
+def _systemctl_restart_units(text: str) -> list:
+    """Units of every ``systemctl [options] [try-]restart [options] [--] <unit>...`` in *text*, by tokens.
+
+    A command ends at ``;``, ``&``, ``|`` or a newline. After the ``systemctl`` word come any option tokens (those
+    starting with ``-``), then the verb, then EVERY unit operand up to the end of the command (``restart a b``
+    restarts both). Wrapping shell characters are stripped from the start of the command word (``"systemctl``,
+    ``$(systemctl``) and from the unit's ends (``x"``, ``x)``), so ``sh -c "systemctl restart x"`` reports ``x``.
+    No regex with a quantified group: the work is linear in the length of the text.
     """
     units = []
-    for command in _COMMAND_SEPARATORS.split(text):
-        tokens = command.split()
+    for command in _commands(text):
+        tokens = _tokens(command)
         for at, token in enumerate(tokens):
             word = token.lstrip(_WRAPPERS)
             if word != "systemctl" and not word.endswith("/systemctl"):
@@ -355,10 +408,8 @@ def _systemctl_restart_units(text: str) -> list:
             verb = at + 1
             while verb < len(tokens) and tokens[verb].startswith("-"):
                 verb += 1
-            unit = verb + 1
-            if unit < len(tokens) and tokens[verb] in _RESTART_VERBS:
-                named = tokens[unit + 1] if tokens[unit] == "--" and unit + 1 < len(tokens) else tokens[unit]
-                units.append(named.lstrip("\"'`").rstrip(_WRAPPERS))
+            if verb < len(tokens) and tokens[verb] in _RESTART_VERBS:
+                units += _unit_operands(tokens[verb + 1 :])
     return units
 
 
@@ -436,6 +487,25 @@ def test_a_restart_wrapped_in_quotes_or_a_subshell_is_found_by_its_clean_name(co
     "command",
     ["systemctl reset-failed x", "systemctl status x", "echo restart x", "systemctl -q", 'sh -c "systemctl status x"'],
 )
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("systemctl restart ssh autobot-backend", ["ssh", "autobot-backend"]),
+        ("systemctl --no-block restart a --no-block b", ["a", "b"]),
+        ("systemctl restart -- a b", ["a", "b"]),
+        ('sh -c "systemctl restart a b"', ["a", "b"]),
+        ("systemctl restart a > /dev/null 2>&1", ["a"]),
+        ("systemctl restart a # b", ["a"]),
+        ("systemctl restart a\necho b", ["a"]),
+        ("systemctl restart a systemctl restart b", ["a", "b"]),
+        ("sudo systemctl restart {{ redis_service_name }}", ["{{ redis_service_name }}"]),
+        ("systemctl restart {{ x | default('y') }} b", ["{{ x | default('y') }}", "b"]),
+    ],
+)
+def test_every_unit_operand_of_a_restart_is_found(command: str, expected: list) -> None:
+    assert _systemctl_restart_units(command) == expected
+
+
 def test_a_command_that_restarts_nothing_names_no_unit(command: str) -> None:
     assert _systemctl_restart_units(command) == []
 
