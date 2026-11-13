@@ -363,13 +363,29 @@ async def test_a_stalled_run_releases_its_checkout_and_its_lease_and_is_marked_s
     assert lease.released_at is not None
     assert item.checkout_run_id is None and item.checkout_locked_at is None
     assert item.version == 2
-    assert item.status == "ready", "a stalled run's unfinished item is claimable again (#19601 AC3)"
-    assert entry_status(world) == ("in_progress", "ready")
+    assert item.status == "blocked", "a stalled run's unfinished item is parked for a person, not offered again"
+    assert entry_status(world) == ("in_progress", "blocked")
     assert await world.fences.get(fence) is None, "the Redis fence must not outlive the checkout"
     [entry] = world.audit.entries
     assert entry["entity_id"] == str(item.id)
     assert entry["metadata"]["reason"] == "stalled"
     assert entry["metadata"]["heartbeat_run_id"] == str(run.id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["in_review", "blocked", "done", "cancelled"])
+async def test_an_item_in_another_status_keeps_it_when_its_run_stalls(sweep, world, status):
+    """Only an item still in progress is parked; one that moved on after the checkout is not touched."""
+    run, item = _Run(), _item(None)
+    item.checkout_run_id, item.status = str(run.id), status
+    world.runs.append(run)
+    world.items.append(item)
+
+    await sweep._async_sweep()
+
+    assert item.status == status and item.checkout_run_id is None
+    [entry] = world.audit.entries
+    assert "status" not in entry["after"]
 
 
 @pytest.mark.asyncio

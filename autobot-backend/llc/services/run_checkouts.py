@@ -95,10 +95,14 @@ def _return_status(item: LLCWorkItem, then: WorkItemStatus) -> bool:
     ``stamp_agent_checkout`` makes when a run checks the item out, so it is deliberately absent from
     ``_ALLOWED_TRANSITIONS`` (a person cannot move an item back to ``ready`` from ``in_progress``). An item in
     review, blocked, done or cancelled changed state on its own after the checkout and keeps that state.
+
+    The undo also clears ``checkout_intent``, which belongs to the claim that is ending. ``started_at`` is left
+    as it is: the first claim time stays the start of the work, however many runs it takes.
     """
     if item.status != WorkItemStatus.IN_PROGRESS:
         return False
     item.status = then
+    item.checkout_intent = None
     return True
 
 

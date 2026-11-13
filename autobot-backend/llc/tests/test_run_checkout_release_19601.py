@@ -171,7 +171,7 @@ async def test_a_cancel_by_a_credential_that_is_not_a_person_is_the_systems_act(
 
 
 @pytest.mark.asyncio
-async def test_an_unfinished_item_goes_back_to_ready_with_its_assignee_and_is_offered_again() -> None:
+async def test_a_cancelled_runs_unfinished_item_goes_back_to_ready_with_its_assignee_and_is_offered_again() -> None:
     run = _run()
     item = Item(_COMPANY, run.id)
     agent = item.assignee_agent_id
@@ -217,11 +217,14 @@ async def test_a_caller_may_park_unfinished_items_somewhere_else_but_only_those(
     run = _run()
     working, reviewed = Item(_COMPANY, run.id), Item(_COMPANY, run.id)
     reviewed.status = "in_review"
+    working.checkout_intent = reviewed.checkout_intent = "implement"
     why = ReleaseWhy("liveness_timeout", "liveness", log=Recorder(), then=WorkItemStatus.BLOCKED)
 
     released = await release_checkouts_for_run(RoutedSession([run], [working, reviewed]), run, why)
 
     assert (working.status, reviewed.status) == (WorkItemStatus.BLOCKED, "in_review")
+    assert working.checkout_intent is None, "the undo ends the claim's intent"
+    assert reviewed.checkout_intent == "implement", "an item that moved on is not undone"
     assert [r.moved for r in released] == [True, False]
 
 

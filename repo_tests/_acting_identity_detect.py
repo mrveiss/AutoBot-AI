@@ -119,7 +119,7 @@ def _annotation_names(annotation: ast.AST | None) -> set[str]:
 def _string_annotation_names(text: str) -> set[str]:
     try:
         return _annotation_names(ast.parse(text, mode="eval").body)
-    except SyntaxError:
+    except (SyntaxError, ValueError):
         return set()
 
 

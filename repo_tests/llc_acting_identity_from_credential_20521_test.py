@@ -58,7 +58,8 @@ _SUBJECTS = {
     (f"{_API}/review_gate_policies.py", "update_review_gate_policy", "reviewer_role"): "policy data: the review role",
 }
 
-#: Declared actor-named request fields the detector must SEE (and that are deliberately never valued).
+#: Declared actor-named request fields the detector must SEE: the first is never valued, the second is valued
+#: and recorded in `_SUBJECTS` (who is being asked, not who is acting).
 _KNOWN_SHIMS = {
     ("ApprovalDecision", "decided_by_agent_id"),
     ("HandoffToHumanRequest", "reviewer_user_id"),

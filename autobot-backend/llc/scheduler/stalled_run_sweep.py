@@ -35,7 +35,11 @@ itself acquired, and nothing else:
 2. **Work-item checkouts** -- every ``LLCWorkItem`` whose ``checkout_run_id`` is the
    run, released by ``llc.services.run_checkouts`` (the one release a cancel and the
    liveness monitor use as well, #19601): ``checkout_run_id`` and ``checkout_locked_at`` cleared, ``version`` bumped,
-   one ``work_item.updated`` activity entry each with ``reason="stalled"``. After the
+   one ``work_item.updated`` activity entry each with ``reason="stalled"``. An item still ``in_progress`` is
+   parked as ``blocked``, not offered again (a run that reported nothing for the whole stall window needs a
+   person to look at what it was doing; offering the item back would let the same claim and stall repeat for
+   ever). An item in any other status keeps it. The activity entry is the signal for that person; unlike the
+   liveness monitor, the sweep files no recovery item. After the
    commit, the item's ``llc:checkout:{id}`` Redis fence is dropped when it still
    names the checkout's holder.
 
@@ -62,7 +66,7 @@ from sqlalchemy import func, select
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.worker_loop import run_in_worker_loop
-from llc.models.enums import LLCRunStatus
+from llc.models.enums import LLCRunStatus, WorkItemStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.services.run_checkouts import (
     NON_TERMINAL_STATUSES,
@@ -103,8 +107,10 @@ STALL_RELEASE_REASON = "run stalled: workspace released by the stalled-run sweep
 #: it had none (#16817 AC4).
 STALL_CHECKOUT_REASON = LLCRunStatus.STALLED.value
 
-#: Why and by whom a stalled run's checkouts are released: the system, on the sweep's own decision.
-_STALL_RELEASE = ReleaseWhy(reason=STALL_CHECKOUT_REASON, source="stalled_run_sweep")
+#: Why and by whom a stalled run's checkouts are released: the system, on the sweep's own decision. Like a
+#: liveness timeout, a stall parks the unfinished item as BLOCKED for a person; only a cancel and startup
+#: recovery return it to READY.
+_STALL_RELEASE = ReleaseWhy(reason=STALL_CHECKOUT_REASON, source="stalled_run_sweep", then=WorkItemStatus.BLOCKED)
 
 
 @shared_task(
