@@ -4,12 +4,11 @@
 
 BOUNDARY: every path in `git ls-files`. A tracked path matching a pattern below is a test or tool
 run's output committed by accident. `logs/` and `*.log` are here because a test run once left
-`logs/backend.log` in 72 base checkouts (#20894). ONE pattern list: add to `FORBIDDEN_PATTERNS`.
+`logs/backend.log` in 72 base checkouts (#20894). ONE list: add to `FORBIDDEN_DIRS` / `FORBIDDEN_SUFFIXES`.
 """
 
 from __future__ import annotations
 
-import fnmatch
 from pathlib import Path
 
 from repo_tests._paths import repo_root
@@ -36,25 +35,30 @@ REACH = declare(
     what="every tracked path, swept for a committed cache or log file",
 )
 
-#: (label, fnmatch pattern on the full tracked path). A directory pattern matches at any depth.
-FORBIDDEN_PATTERNS: tuple[tuple[str, str], ...] = (
-    ("python bytecode dir", "*/__pycache__/*"),
-    ("python bytecode dir", "__pycache__/*"),
-    ("python bytecode", "*.pyc"),
-    ("tool cache dir", "*/.pytest_cache/*"),
-    ("tool cache dir", ".pytest_cache/*"),
-    ("tool cache dir", "*/.mypy_cache/*"),
-    ("tool cache dir", ".mypy_cache/*"),
-    ("tool cache dir", "*/.ruff_cache/*"),
-    ("tool cache dir", ".ruff_cache/*"),
-    ("log directory (#20894)", "logs/*"),
-    ("log directory (#20894)", "*/logs/*"),
-    ("log file (#20894)", "*.log"),
+#: (label, directory name). A tracked path with a directory of this name at any depth is a violation.
+#: Names and suffixes, not path globs: this guard reads the whole tracked tree, which no path filter can
+#: name, so it declares no glob into a tree (#15900).
+FORBIDDEN_DIRS: tuple[tuple[str, str], ...] = (
+    ("python bytecode dir", "__pycache__"),
+    ("tool cache dir", ".pytest_cache"),
+    ("tool cache dir", ".mypy_cache"),
+    ("tool cache dir", ".ruff_cache"),
+    ("log directory (#20894)", "logs"),
+)
+#: (label, file suffix). A tracked path ending in one of these is a violation.
+FORBIDDEN_SUFFIXES: tuple[tuple[str, str], ...] = (
+    ("python bytecode", ".pyc"),
+    ("log file (#20894)", ".log"),
 )
 
 
 def violations(paths: list[str]) -> list[tuple[str, str]]:
-    return [(p, label) for p in paths for label, pat in FORBIDDEN_PATTERNS if fnmatch.fnmatchcase(p, pat)]
+    found = []
+    for path in paths:
+        directories = path.split("/")[:-1]
+        found += [(path, label) for label, name in FORBIDDEN_DIRS if name in directories]
+        found += [(path, label) for label, suffix in FORBIDDEN_SUFFIXES if path.endswith(suffix)]
+    return found
 
 
 def test_no_tracked_cache_or_log_file() -> None:
@@ -64,5 +68,7 @@ def test_no_tracked_cache_or_log_file() -> None:
 
 def test_control_logs_and_log_files_are_caught() -> None:
     """The list must fire on the #20894 cases, else the guard above proves nothing."""
-    hits = {p for p, _ in violations(["logs/example.log", "a/b/x.log", "svc/logs/app.txt", "ok/readme.md"])}
+    hits = {
+        p for p, _ in violations(["logs/example.log", "a/b/x.log", "svc/logs/app.txt", "ok/readme.md", "docs/logs"])
+    }
     assert hits == {"logs/example.log", "a/b/x.log", "svc/logs/app.txt"}
