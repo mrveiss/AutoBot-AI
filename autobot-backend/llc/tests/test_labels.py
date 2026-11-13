@@ -17,6 +17,7 @@ from llc.services.label_service import (  # noqa: E402
     LLCLabelService,
     WorkItemNotFound,
 )
+from user_management.services import TenantContext
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -168,7 +169,7 @@ async def test_service_remove_label_work_item_not_found(service):
 
 @pytest.fixture
 def app_client():
-    from api.user_management.dependencies import get_current_user
+    from api.user_management.dependencies import get_current_user, require_org_context
     from llc.api.labels import get_session, router
 
     app = FastAPI()
@@ -190,7 +191,12 @@ def app_client():
 
     app.dependency_overrides[get_session] = override_session
     # The actor is the session's (#20521): a person signed in with a UUID id, as every session carries.
-    app.dependency_overrides[get_current_user] = lambda: {"id": str(uuid.uuid4()), "auth_method": "session"}
+    user_id = uuid.uuid4()
+    app.dependency_overrides[get_current_user] = lambda: {"id": str(user_id), "auth_method": "session"}
+    # ...and a member of the company in the path: without this the tenant dependency queries real memberships.
+    app.dependency_overrides[require_org_context] = lambda: TenantContext(
+        org_id=uuid.UUID(company_id), user_id=user_id, is_platform_admin=False
+    )
 
     return TestClient(app), company_id, label_id, label, mock_session
 
