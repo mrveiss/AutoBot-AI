@@ -14,6 +14,7 @@ from sqlalchemy import and_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, get_tenant_context, require_org_context
+from autobot_shared.db_session import commit_and_run_post_commit
 from autobot_shared.logging_manager import get_logger
 from llc.config import DEFAULT_BUDGET_LIMIT
 from llc.deps import assert_company_access, load_authorized
@@ -210,6 +211,8 @@ async def provision_budget(
         response.status_code = status.HTTP_202_ACCEPTED
         return await _file_raise(session, row, {"budget_limit": body.budget_limit}, ctx)
 
+    # Every write route commits before it answers: the dependency's own commit runs after the response (#21332).
+    await commit_and_run_post_commit(session)
     remaining, is_over, alert = _derive_status(row)
     return _build_response(row, remaining, is_over, alert)
 
@@ -306,6 +309,10 @@ async def ingest_cost(
         # about one service call from the day the condition was introduced.
         logger.warning("Unpriced model in cost ingest for agent %s: %s", agent_id, exc)
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # `get_async_session` commits in its teardown, which FastAPI (>=0.118) runs AFTER the response has been
+    # sent: the caller can read a 200 before the charge is visible to another session, read the old
+    # remainder and charge it again (#21332). The 200 says "recorded", so commit before producing it.
+    await commit_and_run_post_commit(session)
     return IngestResponse(cost=cost)
 
 
@@ -332,7 +339,10 @@ async def _require_limit_admin(session: AsyncSession, row: LLCAgentBudget, ctx: 
 async def _file_raise(
     session: AsyncSession, row: LLCAgentBudget, fields: Dict[str, Any], ctx: TenantContext
 ) -> BudgetRaisePending:
-    """File *fields* as a pending BUDGET_OVERRIDE requested by the verified caller (#8214)."""
+    """File *fields* as a pending BUDGET_OVERRIDE requested by the verified caller (#8214).
+
+    `file_budget_raise` commits the approval itself, so the 202 branches need no commit of their own (#21332).
+    """
     if ctx.user_id is None:  # the request must name a verified requester, never the string "None"
         raise HTTPException(status_code=403, detail="The budget change cannot be attributed to a verified user")
     return await file_budget_raise(session, ApprovalService(), row, override_payload(row.agent_id, fields), ctx.user_id)
@@ -402,6 +412,9 @@ async def update_limit(
         )
         .values(**values)
     )
+    # Commit before the cache is dropped and before the response: the dependency's own commit runs after the
+    # response is sent, so a reader that re-populated the cache (or a caller reading back) saw the old limit (#21332).
+    await commit_and_run_post_commit(session)
     await session.refresh(row)
 
     # Drop the tracker cache so readers (watchdog, check_budget) see the new
