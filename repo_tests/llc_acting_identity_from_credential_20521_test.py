@@ -95,7 +95,9 @@ REACH = declare(
     discover=_population,
     what="route modules",
     roots=(_API,),
-    floor=45,  # population 53 at pin; window (33, 53). New guard: no base declaration to compute from (#19676)
+    # population 55 at pin (57 tracked .py under the root, minus the 2 test-named); window [35, 55], pinned mid-window.
+    # New guard: no base declaration to compute from (#19676)
+    floor=45,
     growth=20,
 )
 
@@ -211,6 +213,41 @@ def test_an_actor_named_query_parameter_that_is_used_is_found() -> None:
 )
 def test_a_field_that_is_only_looked_at_is_not_a_use(label: str, stmt: str) -> None:
     assert _found(_MODEL + _ROUTE.format(stmt=stmt)) == [], label
+
+
+def test_a_value_passed_on_into_another_call_inside_a_log_call_is_a_use() -> None:
+    """The nearest enclosing call decides: ``svc.create`` receives the caller-supplied actor, whatever wraps it."""
+    logged = 'logger.info("created %s", body.created_by)'
+    passed = 'logger.info("created %s", svc.create(created_by=body.created_by))'
+    assert _found(_MODEL + _ROUTE.format(stmt=logged)) == []
+    assert [f.how for f in _found(_MODEL + _ROUTE.format(stmt=passed))] == ["attr"]
+    assert [f.how for f in _found(_MODEL + _ROUTE.format(stmt='logger.info("%s", str(body.created_by))'))] == ["attr"]
+
+
+_CLEAN_MODEL = "class Body(BaseModel):\n    name: str\n"
+_ACTOR_ROUTE = _MODEL + _ROUTE.format(stmt="svc.create(created_by=body.created_by)")
+_CLEAN_ROUTE = _CLEAN_MODEL + _ROUTE.format(stmt="svc.create(body.name)")
+
+
+@pytest.mark.parametrize("actor_first", [True, False])
+def test_same_named_models_in_two_modules_are_kept_apart(actor_first: bool) -> None:
+    """Whichever module is read last, only the route whose own ``Body`` declares the actor is reported."""
+    pair = {"actor.py": _ACTOR_ROUTE, "clean.py": _CLEAN_ROUTE}
+    sources = dict(pair if actor_first else reversed(pair.items()))
+    assert {f.path for f in scan(sources)} == {"actor.py"}
+
+
+@pytest.mark.parametrize("actor_first", [True, False])
+def test_an_imported_name_resolves_to_the_module_it_is_imported_from(actor_first: bool) -> None:
+    """Two model modules define ``Body``; each route reads the one it imports, not the last one parsed."""
+    models = {"pkg/actor_models.py": _MODEL, "pkg/clean_models.py": _CLEAN_MODEL}
+    models = dict(models if actor_first else reversed(models.items()))
+    route = '@router.post("/x")\nasync def route(body: Body):\n    svc.create(created_by=body.created_by)\n'
+    sources = {
+        "uses_actor.py": "from pkg.actor_models import Body\n" + route,
+        "uses_clean.py": "from pkg.clean_models import Body\n" + route,
+    }
+    assert {f.path for f in scan(sources, models)} == {"uses_actor.py"}
 
 
 def test_a_helper_that_only_compares_and_logs_is_not_a_use() -> None:

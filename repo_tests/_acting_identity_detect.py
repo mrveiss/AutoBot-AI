@@ -27,7 +27,9 @@ agent to assign, the member to add) than its actor, and a name alone cannot tell
 Boundary, stated where it is read: models are found by CLASS NAME across every module handed in,
 which is the whole ``llc/api`` package plus the model modules its routes import; a request model defined
 outside them is not seen. The test module pins that boundary by listing the annotation names no scanned
-class resolves.
+class resolves. Two classes may share a name: a route resolves the one defined in its own module, else the one
+its ``from <module> import <Name>`` names, else (an import that cannot be matched to a scanned module) the
+union of every class of that name -- which can report a route that uses the clean one, never miss one.
 """
 
 from __future__ import annotations
@@ -68,18 +70,54 @@ def _own_fields(node: ast.ClassDef) -> set[str]:
     return {s.target.id for s in node.body if isinstance(s, ast.AnnAssign) and isinstance(s.target, ast.Name)}
 
 
-def collect_models(trees: Iterable[ast.AST]) -> dict[str, set[str]]:
-    """Every class's declared field names, its same-package bases' included, keyed by class name."""
-    classes = {n.name: n for t in trees for n in ast.walk(t) if isinstance(n, ast.ClassDef)}
+def collect_models(trees: Iterable[ast.AST], outer: Mapping[str, set[str]] | None = None) -> dict[str, set[str]]:
+    """Every class's declared field names, its bases' included, keyed by class name.
+
+    Classes of one name in *trees* are unioned. A base not defined in *trees* is read from *outer* (the models
+    of the other modules), so a class may inherit across modules.
+    """
+    classes: dict[str, list[ast.ClassDef]] = {}
+    for tree in trees:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                classes.setdefault(node.name, []).append(node)
 
     def fields(name: str, seen: frozenset[str] = frozenset()) -> set[str]:
-        node = classes.get(name)
-        if node is None or name in seen:
+        nodes = classes.get(name)
+        if nodes is None:
+            return set((outer or {}).get(name, ()))
+        if name in seen:
             return set()
-        inherited = [fields(b, seen | {name}) for b in _bases(node)]
-        return _own_fields(node).union(*inherited)
+        found: set[str] = set()
+        for node in nodes:
+            found |= _own_fields(node).union(*(fields(b, seen | {name}) for b in _bases(node)))
+        return found
 
     return {name: fields(name) for name in classes}
+
+
+def _module_matches(path: str, module: str) -> bool:
+    """Whether the scanned file *path* is the module an ``import`` names (a relative import's dots are dropped)."""
+    dotted = path[:-3].replace("/", ".") if path.endswith(".py") else path
+    dotted = dotted.removesuffix(".__init__")
+    return dotted == module or dotted.endswith("." + module)
+
+
+def _scoped_models(
+    tree: ast.AST, models: Mapping[str, set[str]], modules: Mapping[str, ast.AST]
+) -> dict[str, set[str]]:
+    """The models one module sees: the global census, its imports resolved to the module they name, then its own."""
+    scoped = dict(models)
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.ImportFrom) and node.module):
+            continue
+        sources = [t for p, t in modules.items() if _module_matches(p, node.module)]
+        imported = collect_models(sources, models) if sources else {}
+        for alias in node.names:
+            if alias.name in imported:
+                scoped[alias.asname or alias.name] = imported[alias.name]
+    scoped.update(collect_models([tree], scoped))
+    return scoped
 
 
 def _is_route(func: ast.AST) -> bool:
@@ -129,12 +167,22 @@ def _args(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.arg]:
 
 
 def _in_log_call(node: ast.AST, parents: Mapping[ast.AST, ast.AST]) -> bool:
+    """Whether the NEAREST enclosing call is a logger's.
+
+    A value passed on into another call inside a log call -- ``logger.info("%s", svc.create(by=body.by))`` -- is
+    not logged as it is: it reaches that call, so it is a use. ``logger.info("%s", str(body.by))`` is reported
+    too: the detector cannot tell a formatter from a service, and reporting is the safer error.
+    """
     while node in parents:
         node = parents[node]
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in _LOG_METHODS:
-            root = node.func.value
-            if isinstance(root, ast.Name) and root.id in _LOG_NAMES:
-                return True
+        if isinstance(node, ast.Call):
+            func = node.func
+            return (
+                isinstance(func, ast.Attribute)
+                and func.attr in _LOG_METHODS
+                and isinstance(func.value, ast.Name)
+                and func.value.id in _LOG_NAMES
+            )
     return False
 
 
@@ -211,8 +259,11 @@ def _scalar_param_uses(func, defs) -> Iterator[tuple[str, str]]:  # noqa: ANN001
             yield "param", arg.arg
 
 
-def findings_in(path: str, tree: ast.AST, models: Mapping[str, set[str]]) -> list[Finding]:
+def findings_in(
+    path: str, tree: ast.AST, models: Mapping[str, set[str]], modules: Mapping[str, ast.AST] | None = None
+) -> list[Finding]:
     """Every use, in one module's routes, of a request field or parameter naming the actor."""
+    models = _scoped_models(tree, models, modules or {})
     found: list[Finding] = []
     defs = {n.name: n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
     for func in ast.walk(tree):
@@ -257,5 +308,6 @@ def scan(sources: Mapping[str, str], model_sources: Mapping[str, str] | None = N
     routes import but are not themselves scanned for routes.
     """
     trees = parse_all(sources)
-    models = collect_models([*trees.values(), *parse_all(model_sources or {}).values()])
-    return sorted(f for path, tree in trees.items() for f in findings_in(path, tree, models))
+    modules = {**parse_all(model_sources or {}), **trees}
+    models = collect_models(modules.values())
+    return sorted(f for path, tree in trees.items() for f in findings_in(path, tree, models, modules))
