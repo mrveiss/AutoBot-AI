@@ -52,7 +52,6 @@ _service = service_dep(ApprovalService)
 class ApprovalRequest(BaseModel):
     company_id: uuid.UUID
     type: ApprovalType
-    requested_by_agent_id: uuid.UUID
     payload: Dict[str, Any] = {}
 
 
@@ -111,8 +110,8 @@ async def request_approval(
                 company_id=body.company_id,
                 gate_type=body.type,
                 payload=body.payload,
-                requested_by=_recorded_requester(body, ctx),
-                actor_user_id=ctx.user_id,  # the verified caller, not the claimed requester
+                requested_by=_recorded_requester(ctx),  # the verified caller; the body names no requester (#20521)
+                actor_user_id=ctx.user_id,
             )
     except ApprovalHookError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -252,16 +251,17 @@ def _refuse_unrequestable(body: ApprovalRequest) -> None:
         raise HTTPException(status_code=422, detail="A hire approval is requested through the agent-hires route")
 
 
-def _recorded_requester(body: ApprovalRequest, ctx: TenantContext) -> uuid.UUID:
-    """Who the approval records as having asked: the verified caller for a type the four-eyes rule covers (#8214).
+def _recorded_requester(ctx: TenantContext) -> uuid.UUID:
+    """Who the approval records as having asked: the verified caller, for every type (#20521, #8214).
 
-    The body's ``requested_by_agent_id`` is the caller's claim; letting it name someone else would let the one
-    who asked also approve with a second admin present. Other types keep the claim, and so does a caller with
-    no user id (an agent credential), which cannot decide an approval anyway.
+    A requester the body could name would let the one who asked also approve with a second admin present, and
+    would let any caller put another person's name on a request. A credential with no user id is refused the
+    way ``_common.actor_id`` refuses it on every other route that records the caller (401): the agent keys are
+    accepted only on the agent API, so this route has no agent identity it could record.
     """
-    if body.type == ApprovalType.BUDGET_OVERRIDE and ctx.user_id is not None:
-        return ctx.user_id
-    return body.requested_by_agent_id
+    if ctx.user_id is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return ctx.user_id
 
 
 def _verified_decider(ctx: TenantContext, body: ApprovalDecision) -> uuid.UUID:

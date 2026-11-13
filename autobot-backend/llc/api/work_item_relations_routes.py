@@ -7,9 +7,9 @@
 Moved out of ``work_items.py`` (at its size ceiling); the paths are unchanged.
 
 Scope and identity come from the verified caller, never the request: the company
-is ``ctx.org_id`` and the acting user is ``actor_id(current_user)``. ``company_id``,
-``created_by_*`` and ``actor_*`` are still accepted so an existing client does not
-start failing with a 422, and are ignored.
+is ``ctx.org_id`` and the acting user is ``actor_id(current_user)``. ``company_id`` is
+still accepted so an existing client does not start failing with a 422, and is ignored;
+a creator or actor sent in the body or query is not a field, so it is dropped.
 """
 
 import uuid
@@ -43,13 +43,11 @@ _REL_NOT_FOUND = "Relation not found"
 
 
 class RelationCreate(BaseModel):
-    """``company_id`` and ``created_by_*`` are accepted for compatibility and ignored."""
+    """``company_id`` is accepted for compatibility and ignored; the creator is the authenticated caller."""
 
     company_id: Optional[str] = None
     target_id: str
     relation_type: WorkItemRelationType
-    created_by_agent_id: Optional[str] = None
-    created_by_user_id: Optional[str] = None
 
 
 def _relation_service() -> WorkItemRelationService:
@@ -128,8 +126,6 @@ async def remove_relation(
     work_item_id: str,
     relation_id: str,
     company_id: Optional[str] = Query(None, description="Accepted for compatibility; ignored."),
-    actor_agent_id: Optional[str] = Query(None, description="Accepted for compatibility; ignored."),
-    actor_user_id: Optional[str] = Query(None, description="Accepted for compatibility; ignored."),
     session: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),

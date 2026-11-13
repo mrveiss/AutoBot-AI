@@ -178,13 +178,27 @@ def test_declared_entries_describe_the_live_references() -> None:
     )
 
 
-REMEASURE_REL = "repo_tests/unconnected_code_remeasure_20910.txt"
+#: The frozen one-time re-measures, one list per ruling (#20910, #21428): the ONLY baseline additions ever allowed
+#: against a base. Adding a list here is a decision a reviewer sees; every list is also held to "never grows".
+REMEASURE_RELS = (
+    "repo_tests/unconnected_code_remeasure_20910.txt",
+    "repo_tests/unconnected_code_remeasure_21428.txt",
+)
 
 
 def _remeasure_keys(text: str) -> set[str]:
-    """The frozen one-time re-measure (#20910): comment lines dropped."""
+    """The keys of one frozen one-time re-measure list (#20910, #21428): comment lines dropped."""
     # rstrip: a key ending in a space (a route with an empty path) loses it to the whitespace hook in this file
     return {cl.text.rstrip() for cl in code_lines(text) if cl.text}
+
+
+def _frozen_text(rel: str) -> str:
+    return (repo_root() / rel).read_text(encoding="utf-8")
+
+
+def _frozen_keys() -> set[str]:
+    """Every key named by any frozen re-measure list in the working tree."""
+    return set().union(*(_remeasure_keys(_frozen_text(rel)) for rel in REMEASURE_RELS))
 
 
 def _additions_beyond_the_base(current: dict[str, str], base: str, frozen: set[str]) -> list[str]:
@@ -197,18 +211,21 @@ def test_the_baseline_only_shrinks_against_the_base() -> None:
     base = base_text(repo_root(), uc.BASELINE_REL)
     if base is None:
         return  # this file is new at the base: the baseline is being introduced, not raised
-    frozen = _remeasure_keys((repo_root() / REMEASURE_REL).read_text(encoding="utf-8"))
-    added = _additions_beyond_the_base(_baseline(), base, frozen)
+    added = _additions_beyond_the_base(_baseline(), base, _frozen_keys())
     assert not added, f"#20512: baseline entries were added against the base: {added}. Wire the code in instead."
 
 
-def test_the_frozen_remeasure_never_grows_against_the_base() -> None:
-    base = base_text(repo_root(), REMEASURE_REL)
+def _frozen_additions(now: str, base: str | None) -> list[str]:
+    """Keys a frozen list names now that it did not at the base; a list new at the base is introduced, not grown."""
     if base is None:
-        return  # introduced by the change that makes the re-measure
-    now = _remeasure_keys((repo_root() / REMEASURE_REL).read_text(encoding="utf-8"))
-    grown = sorted(now - _remeasure_keys(base))
-    assert not grown, f"#20910: the frozen one-time re-measure gained entries: {grown}"
+        return []  # introduced by the change that makes the re-measure
+    return sorted(_remeasure_keys(now) - _remeasure_keys(base))
+
+
+@pytest.mark.parametrize("rel", REMEASURE_RELS)
+def test_the_frozen_remeasure_never_grows_against_the_base(rel: str) -> None:
+    grown = _frozen_additions(_frozen_text(rel), base_text(repo_root(), rel))
+    assert not grown, f"#20910, #21428: the frozen one-time re-measure {rel} gained entries: {grown}"
 
 
 def _stale_frozen_keys(frozen: set[str], baseline_keys) -> list[str]:
@@ -217,13 +234,11 @@ def _stale_frozen_keys(frozen: set[str], baseline_keys) -> list[str]:
     return sorted(k for k in frozen if k not in present)
 
 
-def test_every_frozen_remeasure_key_is_still_in_the_baseline() -> None:
+@pytest.mark.parametrize("rel", REMEASURE_RELS)
+def test_every_frozen_remeasure_key_is_still_in_the_baseline(rel: str) -> None:
     """The frozen list shrinks with the baseline: a stale key would let a later re-addition of it pass."""
-    frozen = _remeasure_keys((repo_root() / REMEASURE_REL).read_text(encoding="utf-8"))
-    stale = _stale_frozen_keys(frozen, _baseline())
-    assert (
-        not stale
-    ), f"#20910: frozen re-measure keys no longer in the baseline; delete them from {REMEASURE_REL}: {stale}"
+    stale = _stale_frozen_keys(_remeasure_keys(_frozen_text(rel)), _baseline())
+    assert not stale, f"#20910, #21428: frozen keys no longer in the baseline; delete them from {rel}: {stale}"
 
 
 def test_a_wired_route_cannot_be_re_added_through_a_stale_frozen_key() -> None:
@@ -239,6 +254,28 @@ def test_a_new_entry_linked_to_a_remeasure_issue_is_refused() -> None:
     planted = {"route:a.py:GET /x": "#10603", "route:new.py:GET /y": "#20970"}
     assert _additions_beyond_the_base(planted, base, frozen=set()) == ["route:new.py:GET /y"]
     assert _additions_beyond_the_base(planted, base, frozen={"route:new.py:GET /y"}) == []
+
+
+def test_an_addition_named_in_no_frozen_list_is_refused_whichever_list_names_the_others() -> None:
+    """Two lists excuse their own keys only: a third key, even one linked to a frozen list's issue, is an addition."""
+    base = "route:a.py:GET /x\t#10603\n"
+    planted = {
+        "route:a.py:GET /x": "#10603",
+        "route:old.py:GET /y": "#20970",
+        "route:newer.py:GET /z": "#21459",
+        "route:smuggled.py:GET /w": "#21459",
+    }
+    frozen = _remeasure_keys("# first list\nroute:old.py:GET /y\n") | _remeasure_keys("route:newer.py:GET /z\n")
+    assert _additions_beyond_the_base(planted, base, frozen) == ["route:smuggled.py:GET /w"]
+    assert _additions_beyond_the_base(planted, base, set()) == sorted(set(planted) - {"route:a.py:GET /x"})
+
+
+def test_a_frozen_list_that_gained_a_line_against_its_base_is_refused() -> None:
+    base = "# header\nroute:a.py:GET /x\nroute:b.py:GET /y\n"
+    assert _frozen_additions("# header\nroute:b.py:GET /y\n", base) == []  # shrinking is fine
+    assert _frozen_additions(base + "route:c.py:GET /z\n", base) == ["route:c.py:GET /z"]
+    # a list new at the base is introduced, not grown
+    assert _frozen_additions(base + "route:c.py:GET /z\n", None) == []
 
 
 def test_the_baseline_states_what_it_cannot_see() -> None:

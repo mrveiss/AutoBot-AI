@@ -49,6 +49,7 @@ function member(viewerRole: string | null, canManage = viewerRole === 'owner' ||
 
 function respond(members: unknown): void {
   get.mockImplementation((url: string) => {
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
     if (url.includes('/members')) return typeof members === 'function' ? (members as () => unknown)() : Promise.resolve(members)
     if (url.includes('/tool-nodes')) return Promise.resolve({ nodes: TOOLS })
     if (url.includes('/process-nodes')) return Promise.resolve({ nodes: PROCESSES })
