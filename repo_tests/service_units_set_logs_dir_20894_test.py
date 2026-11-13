@@ -43,6 +43,7 @@ _UNIT_DIRS = (
 _UNIT_SUFFIXES = (".service", ".service.j2")
 _ENV_SUFFIXES = (".env", ".env.j2")
 _MIN_PYTHON_UNITS = 15  # live count when written: 15; a drop below this means discovery broke
+_MIN_COLLISION_CHECKED = 6  # live count when written: 8 units set the variable AND append output, both resolved
 
 
 def _python_units(root: Path) -> list[str]:
@@ -118,7 +119,8 @@ def _unwritable(root: Path, units: list[str]) -> list[str]:
     return bad
 
 
-_OUTPUT = re.compile(r"^Standard(?:Output|Error)=(?:append|file|truncate):(\S+)", re.MULTILINE)
+# The path is a `_TOKEN`: `{{ log_dir }}/x.log` holds spaces, and a bare `\S+` stopped at the first `{{`.
+_OUTPUT = re.compile(r"^Standard(?:Output|Error)=(?:append|file|truncate):((?:\{\{.*?\}\}|\S)+)", re.MULTILINE)
 _DEFAULT = re.compile(r"^(\w+):\s*(.+?)\s*(?:\s#.*)?$", re.MULTILINE)
 _JINJA = re.compile(r"\{\{\s*([\w.]+)\s*\}\}")
 
@@ -139,6 +141,15 @@ def _resolve(value: str, defaults: dict[str, str]) -> str:
     return value.strip().rstrip("/")
 
 
+def _unit_dirs(root: Path, unit: str) -> tuple[set[str], set[str]]:
+    """(directories systemd appends the unit's output to, directories `AUTOBOT_LOGS_DIR` resolves to)."""
+    defaults = _role_defaults(root, unit)
+    out = {_resolve(posixpath.dirname(t), defaults) for t in _OUTPUT.findall((root / unit).read_text(encoding="utf-8"))}
+    files = [unit, *_env_beside(root, unit)]
+    apps = {_resolve(v, defaults) for f in files for v in _VALUE.findall((root / f).read_text(encoding="utf-8"))}
+    return out, apps
+
+
 def _colliding(root: Path, units: list[str]) -> list[str]:
     """Units whose systemd-appended output directory is the directory `AUTOBOT_LOGS_DIR` resolves to.
 
@@ -147,18 +158,34 @@ def _colliding(root: Path, units: list[str]) -> list[str]:
     """
     bad: list[str] = []
     for unit in units:
-        defaults = _role_defaults(root, unit)
-        text = (root / unit).read_text(encoding="utf-8")
-        out = {_resolve(posixpath.dirname(t), defaults) for t in _OUTPUT.findall(text)}
-        for f in [unit, *_env_beside(root, unit)]:
-            apps = {_resolve(v, defaults) for v in _VALUE.findall((root / f).read_text(encoding="utf-8"))}
-            bad += [f"{unit} -> {d}" for d in sorted(apps & out)]
+        out, apps = _unit_dirs(root, unit)
+        bad += [f"{unit} -> {d}" for d in sorted(apps & out)]
     return bad
+
+
+def _unresolved(root: Path, units: list[str]) -> tuple[list[str], int]:
+    """(units that set the variable and append output but leave a `{{ }}` unresolved, units fully resolved)."""
+    bad, resolved = [], 0
+    for unit in units:
+        out, apps = _unit_dirs(root, unit)
+        if not (out and apps):
+            continue
+        left = sorted(d for d in out | apps if "{{" in d or not d)
+        bad += [f"{unit} -> {d!r}" for d in left]
+        resolved += not left
+    return bad, resolved
 
 
 def test_application_log_dir_differs_from_the_units_service_output_dir() -> None:
     bad = _colliding(_ROOT, _python_units(_ROOT))
     assert not bad, f"{_VAR} equals the dir the unit's StandardOutput=/StandardError= append: writes to: {bad}"
+
+
+def test_the_collision_check_resolves_both_directories_of_every_unit_it_covers() -> None:
+    """Reach: a directory left as `{{ x }}` compares unequal to anything, so an unresolved unit passed silently."""
+    bad, resolved = _unresolved(_ROOT, _python_units(_ROOT))
+    assert not bad, f"directory(ies) the collision check could not resolve (add the role default): {bad}"
+    assert resolved >= _MIN_COLLISION_CHECKED, f"only {resolved} unit(s) had both directories resolved"
 
 
 def test_control_a_shared_output_and_application_dir_is_caught(tmp_path: Path) -> None:
@@ -173,6 +200,8 @@ def test_control_a_shared_output_and_application_dir_is_caught(tmp_path: Path) -
     assert _colliding(tmp_path, [unit]) == [f"{unit} -> /var/log/x"]
     _unit(role / "templates", out + f'Environment="{_VAR}={{{{ other_dir }}}}"\n')
     assert _colliding(tmp_path, [unit]) == []
+    _unit(role / "templates", out + f'Environment="{_VAR}={{{{ undefined_dir }}}}"\n')
+    assert _unresolved(tmp_path, [unit]) == ([f"{unit} -> '{{{{ undefined_dir }}}}'"], 0)
 
 
 def test_every_python_service_unit_sets_the_log_dir() -> None:
