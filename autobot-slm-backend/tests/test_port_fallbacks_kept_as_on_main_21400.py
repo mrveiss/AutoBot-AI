@@ -18,12 +18,12 @@ import pytest
 _ANSIBLE = Path(__file__).resolve().parents[1] / "ansible"
 _FALLBACK = "default(8443)"
 _SITES = [
-    # The frontend upstream port is one role variable (paired with the proxy scheme, see
-    # test_frontend_upstream_port_matches_the_scheme_21400.py); its definition holds the fallback.
-    ("roles/frontend/defaults/main.yml", "(backend_port | default(8443))", 2),
+    # The scheme-paired backend port is defined once (see test_frontend_upstream_port_matches_the_scheme_21400.py);
+    # its definition holds the fallback, and its consumers read the variable.
+    ("_shared/vars/backend_scheme_port.yml", "(backend_port | default(8443))", 2),
+    ("playbooks/rotate-service-keys.yml", ":{{ backend_scheme_port }}/api/health", 1),
     ("roles/frontend/templates/nginx-frontend.conf.j2", "{{ frontend_upstream_backend_port }} max_fails=", 1),
     ("roles/frontend/tasks/main.yml", ":{{ frontend_upstream_backend_port }}", 1),
-    ("playbooks/rotate-service-keys.yml", ":{{ backend_nginx_port | default(8443) }}/api/health", 1),
     ("playbooks/toggle-enforcement.yml", ":{{ backend_nginx_port | default(8443) }}/api/health", 1),
     ("playbooks/deploy-backend-remote.yml", ':{{ backend_nginx_port | default(8443) }}"', 1),
     # Read through the backend host's own vars (the host that supplies the address), fallback kept (#21400).

@@ -199,9 +199,12 @@
   gather_facts: false
   become: true
 
+  vars_files:
+    - ../_shared/vars/backend_scheme_port.yml  # #21400: the port that matches backend_protocol
+
   vars:
     backend_health_url: >-
-      {{ backend_protocol | default('https') }}://{{ ansible_host }}:{{ backend_nginx_port | default(8443) }}/api/health
+      {{ backend_protocol | default('https') }}://{{ ansible_host }}:{{ backend_scheme_port }}/api/health
     startup_delay: 10
 
   tasks:

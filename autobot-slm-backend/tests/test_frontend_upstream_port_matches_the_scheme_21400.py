@@ -18,7 +18,9 @@ import yaml
 from autobot_shared.ssot_config import config
 from services.ansible_extra_vars import port_vars
 
-_ROLE = Path(__file__).resolve().parents[1] / "ansible" / "roles" / "frontend"
+_ANSIBLE = Path(__file__).resolve().parents[1] / "ansible"
+_ROLE = _ANSIBLE / "roles" / "frontend"
+_SHARED_VARS = "_shared/vars/backend_scheme_port.yml"
 
 
 def _render(expression: str, **variables) -> str:
@@ -28,10 +30,11 @@ def _render(expression: str, **variables) -> str:
 
 
 def _upstream_port(**variables) -> str:
-    expression = yaml.safe_load((_ROLE / "defaults" / "main.yml").read_text(encoding="utf-8"))[
-        "frontend_upstream_backend_port"
-    ]
-    return _render(expression, **variables)
+    """What the frontend role renders: its default reads the shared variable, which is rendered from its file."""
+    shared = yaml.safe_load((_ANSIBLE / _SHARED_VARS).read_text(encoding="utf-8"))["backend_scheme_port"]
+    default = yaml.safe_load((_ROLE / "defaults" / "main.yml").read_text(encoding="utf-8"))
+    assert default["frontend_upstream_backend_port"] == "{{ backend_scheme_port }}"
+    return _render(shared, **variables)
 
 
 def _scheme(**variables) -> str:
@@ -77,3 +80,35 @@ def test_the_template_and_the_summary_read_the_paired_variable_and_the_scheme_de
     assert ":{{ frontend_upstream_backend_port }} max_fails=" in template
     assert template.count("proxy_pass {{ backend_protocol | default('https') }}://autobot_backend;") >= 1
     assert "{{ backend_port | default(8443) }} max_fails=" not in template
+
+
+def _health_url(**variables) -> str:
+    plays = yaml.safe_load((_ANSIBLE / "playbooks" / "rotate-service-keys.yml").read_text(encoding="utf-8"))
+    play = next(p for p in plays if p.get("name", "").startswith("Phase 3"))
+    assert play["vars_files"] == ["../" + _SHARED_VARS]
+    url = play["vars"]["backend_health_url"]
+    assert "{{ backend_scheme_port }}" in url and "backend_nginx_port" not in url and "backend_port" not in url
+    return _render(url, ansible_host="h", backend_scheme_port=_upstream_port(**variables), **variables)
+
+
+@pytest.mark.parametrize(
+    ("label", "variables", "expected"),
+    [
+        ("nothing defined (main)", {}, "https://h:8443/api/health"),
+        ("the SSOT ports", dict(_SSOT), f"https://h:{_SSOT['backend_nginx_port']}/api/health"),
+        (
+            "production.yml's backend group: plain port paired with http (main rendered :8001)",
+            {**_SSOT, "backend_protocol": "http"},
+            f"http://h:{_SSOT['backend_port']}/api/health",
+        ),
+    ],
+)
+def test_the_key_rotation_health_url_pairs_its_port_with_its_scheme(label, variables, expected) -> None:
+    assert _health_url(**variables) == expected, label
+
+
+def test_the_role_loads_the_shared_definition_before_it_uses_it() -> None:
+    tasks = yaml.safe_load((_ROLE / "tasks" / "main.yml").read_text(encoding="utf-8"))
+    load = next(i for i, t in enumerate(tasks) if "ansible.builtin.include_vars" in t)
+    assert tasks[load]["ansible.builtin.include_vars"]["file"].endswith("/../../_shared/vars/backend_scheme_port.yml")
+    assert "always" in tasks[load]["tags"] and load == 0

@@ -4,6 +4,12 @@
 # Frontend role - User frontend (autobot-frontend) deployment
 # Serves production build via nginx + SSL on Frontend VM (.21)
 
+# #21400: the backend port that matches the proxy scheme, defined once for every consumer.
+- name: "Frontend | Load the scheme-matched backend port"
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/../../_shared/vars/backend_scheme_port.yml"
+  tags: ['always']
+
 # ============================================================
 # Phase 1 CLEAN - remove legacy/wrong-node dirs  (#926 Phase 4)
 # ============================================================
