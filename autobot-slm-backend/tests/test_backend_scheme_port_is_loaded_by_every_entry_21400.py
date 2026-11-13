@@ -47,6 +47,17 @@ def _is_reader(task: dict) -> bool:
     return not _is_loader(task) and any(token in json.dumps(task) for token in _READ_TOKENS)
 
 
+def loads_not_run_under_any_tag(tasks) -> list:
+    """Names of load tasks (the loader include, or an ``include_vars`` of the shared file) not tagged ``always``.
+
+    Without ``always`` an update launched with ``--tags`` skips the load, and the task that renders the nginx
+    config reads an undefined variable: the same failure by another route.
+    """
+    return [
+        t.get("name", "<unnamed>") for t in _flatten(tasks) if _is_loader(t) and "always" not in (t.get("tags") or [])
+    ]
+
+
 def readers_without_a_load(tasks) -> list:
     """Names of tasks that read the variable (or render its template) before any task has loaded it."""
     loaded, missing = False, []
@@ -95,6 +106,17 @@ def test_every_role_task_file_that_reads_the_variable_loads_it_first() -> None:
         reading.append(path.name)
         assert readers_without_a_load(_load(path)) == [], f"{path.relative_to(_ANSIBLE)} reads it before loading it"
     assert {"main.yml", "code_only.yml"} <= set(reading), f"control: the walk sees the role's readers, saw {reading}"
+
+
+def test_every_load_site_runs_under_any_tag_selection() -> None:
+    sites = []
+    for path in _yaml_files():
+        if not _is_task_file(path) and path.relative_to(_ANSIBLE).parts[0] != "playbooks":
+            continue
+        tasks = _load(path)
+        sites += [(path.name, t.get("name")) for t in _flatten(tasks) if _is_loader(t)]
+        assert loads_not_run_under_any_tag(tasks) == [], f"{path.relative_to(_ANSIBLE)}: a load without tags: [always]"
+    assert {"main.yml", "code_only.yml", _LOADER} <= {name for name, _ in sites}, f"control: sites seen {sites}"
 
 
 def test_every_play_that_reads_the_variable_lists_the_shared_file() -> None:
@@ -168,6 +190,19 @@ def test_contrast_an_entry_that_does_not_load_the_variable_fails_loudly() -> Non
         "- name: Configure nginx\n  ansible.builtin.template:\n    src: nginx-frontend.conf.j2\n"
     )
     assert readers_without_a_load(loaded) == []
+    untagged = yaml.safe_load(
+        "- name: Load\n  ansible.builtin.include_tasks: ../../../_shared/tasks/load_backend_scheme_port.yml\n"
+    )
+    assert loads_not_run_under_any_tag(untagged) == ["Load"]
+    untagged_vars = yaml.safe_load(
+        "- name: V\n  ansible.builtin.include_vars:\n    file: x/backend_scheme_port.yml\n  tags: [frontend]\n"
+    )
+    assert loads_not_run_under_any_tag(untagged_vars) == ["V"]
+    tagged = yaml.safe_load(
+        "- name: Load\n  ansible.builtin.include_tasks: ../../../_shared/tasks/load_backend_scheme_port.yml\n"
+        "  tags: ['always']\n"
+    )
+    assert loads_not_run_under_any_tag(tagged) == []
     late = yaml.safe_load(
         "- name: Configure nginx\n  ansible.builtin.template:\n    src: nginx-frontend.conf.j2\n"
         "- name: Load\n  ansible.builtin.include_vars:\n    file: x/backend_scheme_port.yml\n"
