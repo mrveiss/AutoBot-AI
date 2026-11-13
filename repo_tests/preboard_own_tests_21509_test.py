@@ -20,6 +20,7 @@ proved by the first lane run on a real member (the last criterion of #21509).
 from __future__ import annotations
 
 import json
+import shlex
 from typing import Any
 
 import pytest
@@ -144,13 +145,37 @@ def test_the_result_job_needs_own_tests_and_the_job_merges_the_pinned_base(jobs)
     assert jobs["own-tests"]["steps"][1]["with"] == {"python-version-file": ".python-version"}
 
 
+def _pytest_positionals(script: str) -> list[str]:
+    """The arguments each ``-m pytest`` invocation in *script* names before its first option."""
+    tokens = shlex.split(script.replace("\\\n", " "))
+    found: list[str] = []
+    for i in range(len(tokens) - 2):
+        if tokens[i : i + 2] == ["-m", "pytest"]:
+            rest = tokens[i + 2 :]
+            found += rest[: next((j for j, t in enumerate(rest) if t.startswith("-")), len(rest))]
+    return found
+
+
+def _roots_named(script: str, lane) -> list[str]:
+    roots = (*lane.GUARD_ROOTS, *lane.PRODUCT_ROOTS)
+    return [a for a in _pytest_positionals(script) if any(a.rstrip("/") == r or a.startswith(f"{r}/") for r in roots)]
+
+
 def test_own_tests_takes_its_files_from_the_selection_and_names_no_root(jobs, lane) -> None:
     body = _runs(jobs["own-tests"])
     assert "preboard_guard_lane.py changed-tests" in body and "main.txt" in body and "slm.txt" in body
-    names = {r for r in (*lane.GUARD_ROOTS, *lane.PRODUCT_ROOTS)}
-    assert not [n for n in names if f" {n} " in body or f" {n}/" in body], "a test root is written in own-tests"
-    assert "repo_tests" not in body, "repo_tests is left to the guard shards"
+    assert len(_pytest_positionals(body)) == 2, "each session takes exactly its selection file list"
+    assert not _roots_named(body, lane), "a test root is an argument of pytest in own-tests"
     assert any(s.get("id") == "suite" for s in jobs["own-tests"]["steps"]), "the SLM step reads the suite step's output"
+
+
+@pytest.mark.parametrize("root", ["repo_tests", "autobot-backend/", "autobot-slm-backend/services/x_test.py"])
+def test_a_literal_root_as_a_pytest_argument_is_caught_but_the_script_path_is_not(lane, root) -> None:
+    clean = "python3 pipeline-scripts/preboard_guard_lane.py changed-tests --out-dir o\n"
+    clean += 'python -m pytest "${FILES[@]}" -q\n'
+    assert not _roots_named(clean, lane)
+    assert _roots_named(f"python -m pytest {root} \\\n  -n auto -q\n", lane) == [root]
+    assert _roots_named(f'python -m pytest "${{FILES[@]}}" {root}\n', lane) == [root]
 
 
 def test_own_tests_runs_with_the_suites_xdist_and_marker_options(jobs) -> None:

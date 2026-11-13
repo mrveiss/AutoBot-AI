@@ -311,7 +311,7 @@ jobs:
             -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
             -q -rs || rc=$?
           if [ "$rc" -eq 5 ]; then
-            echo "::notice::every selected test is deselected by the marker selection (pytest exit 5)"
+            echo "::notice::pytest exit 5, no test ran from: ${FILES[*]} (every test deselected by the marker selection, or none collected)"
             exit 0
           fi
           exit "$rc"
@@ -330,7 +330,7 @@ jobs:
             -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
             -q -rs || rc=$?
           if [ "$rc" -eq 5 ]; then
-            echo "::notice::every selected test is deselected by the marker selection (pytest exit 5)"
+            echo "::notice::pytest exit 5, no test ran from: ${FILES[*]} (every test deselected by the marker selection, or none collected)"
             exit 0
           fi
           exit "$rc"

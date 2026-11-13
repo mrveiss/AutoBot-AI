@@ -204,7 +204,7 @@ def test_the_summary_lists_every_skipped_test_with_its_reason_and_standing(lane,
     ],
 )
 def test_the_verdict_table(lane, guards, types, expected) -> None:
-    assert lane.report.lane_verdict(guards, types) == expected
+    assert lane.report.lane_verdict(guards, types, "success") == expected
 
 
 def test_only_green_and_green_with_skips_exit_zero(lane, tmp_path, monkeypatch) -> None:

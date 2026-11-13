@@ -185,7 +185,7 @@ def guards_status(needs_result: str, problems: list[str], counts: dict[str, int]
     return "success_with_skips" if counts["allowed_skips"] else "success"
 
 
-def lane_verdict(guards: str, types: str, own_tests: str = "success") -> str:
+def lane_verdict(guards: str, types: str, own_tests: str) -> str:
     """``cancelled`` beats everything; ``green_with_skips`` is never reported as ``green``."""
     if "cancelled" in (guards, types, own_tests):
         return "cancelled"
