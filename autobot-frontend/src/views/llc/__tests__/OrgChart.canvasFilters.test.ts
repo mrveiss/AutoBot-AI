@@ -153,6 +153,8 @@ interface Fixture {
 
 function mockApi({ people = PEOPLE, teams = TEAMS, tools = TOOLS, processes = PROCESSES }: Fixture = {}): void {
   get.mockImplementation((url: string) => {
+    // #21242: the canvas lists the company's workflows on entry; answer it explicitly.
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
     if (url === '/api/llc/companies/c1/org-chart') return Promise.resolve({ nodes: structuredClone(people) })
     if (url === '/api/llc/companies/c1/work-items/executor-rollup') return Promise.resolve({ cells: [] })
     if (url === '/api/llc/companies/c1/process-nodes') return Promise.resolve({ nodes: structuredClone(processes) })

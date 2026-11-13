@@ -235,7 +235,6 @@ class SprintResponse(BaseModel):
 
 class SprintCloseRequest(BaseModel):
     approval_id: uuid.UUID
-    decided_by: Optional[uuid.UUID] = None  # deprecated and ignored: the decider is the authenticated caller
 
 
 # ------------------------------------------------------------------ Portfolio routes
