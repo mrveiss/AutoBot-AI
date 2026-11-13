@@ -20,6 +20,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import first_time
 from autobot_shared.singleton_factory import lazy_singleton
 from memory import MemoryManager, TaskPriority
 
@@ -204,7 +205,6 @@ class TakeoverManager:
         self._redis = _redis  # None = use get_async_redis_client(); set in tests
         # H1: per-process latch -- see _redis_client()'s docstring.
         self._redis_available: bool | None = None
-        self._redis_warning_logged = False
 
         # In-process fallback state (used when Redis unavailable)
         self._fb_pending: Dict[str, TakeoverTicket] = {}
@@ -249,12 +249,12 @@ class TakeoverManager:
             return None
         r = await self._get_redis()
         if r is None:
-            if not self._redis_warning_logged:
+            # Once per process (#21071): the manager is a lazy singleton, so the shared registry is its scope.
+            if first_time(logger.name, "redis_unavailable"):
                 logger.warning(
                     "TakeoverManager: Redis unavailable — degrading to in-process state "
                     "(cross-worker visibility disabled; single-worker mode only)"
                 )
-                self._redis_warning_logged = True
             self._redis_available = False
             return None
         if self._redis_available is None:
