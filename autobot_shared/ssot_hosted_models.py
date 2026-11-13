@@ -36,9 +36,8 @@ from pydantic import Field
 from pydantic_settings import SettingsConfigDict
 
 from autobot_shared import ssot_config
+from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET
 from autobot_shared.ssot_constants import (
-    ANTHROPIC_CLAUDE_HAIKU4_5,
-    ANTHROPIC_CLAUDE_SONNET4_6,
     GOOGLE_GEMINI20_FLASH,
     GOOGLE_GEMINI25_FLASH,
     GROQ_LLAMA31_8B,
@@ -72,7 +71,7 @@ TIERS: tuple[str, ...] = ("default", "light")
 
 HOSTED_PROVIDER_DEFAULT_MODELS: dict[str, dict[str, str]] = {
     "openai": {"default": OPENAI_GPT4O_MINI, "light": OPENAI_GPT41_NANO},
-    "anthropic": {"default": ANTHROPIC_CLAUDE_SONNET4_6, "light": ANTHROPIC_CLAUDE_HAIKU4_5},
+    "anthropic": {"default": CLAUDE_SONNET, "light": CLAUDE_HAIKU},
     "groq": {"default": GROQ_LLAMA31_8B, "light": GROQ_LLAMA31_8B},
     "mistral": {"default": MISTRAL_SMALL_LATEST, "light": MISTRAL_NEMO},
     "vertexai": {"default": GOOGLE_GEMINI25_FLASH, "light": GOOGLE_GEMINI20_FLASH},

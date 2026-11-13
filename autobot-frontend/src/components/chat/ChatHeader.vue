@@ -27,6 +27,14 @@
         class="hidden sm:flex"
         v-bind="contextWindowProps"
       />
+      <span
+        v-else-if="contextWindowProps?.loadError"
+        class="hidden sm:inline text-xs text-warning"
+        role="status"
+        :title="contextWindowProps.loadError"
+      >
+        {{ $t('chat.contextWindow.unavailable') }}
+      </span>
 
       <!-- Custom Actions Slot -->
       <slot name="actions"></slot>
@@ -81,6 +89,7 @@ interface ContextWindowProps {
   isWarning: boolean
   isCritical: boolean
   hasData: boolean
+  loadError?: string | null
 }
 
 interface Props {

@@ -22,7 +22,6 @@ BASELINE: dict[str, int] = {
     "autobot-backend/api/analytics_evolution.py": 3,
     "autobot-backend/api/codebase_analytics/progress_tracker.py": 1,
     "autobot-backend/api/error_monitoring.py": 2,
-    "autobot-backend/api/knowledge.py": 2,
     "autobot-backend/api/knowledge_grounding.py": 1,
     "autobot-backend/api/system.py": 1,
     "autobot-backend/initialization/router_registry/feature_routers.py": 1,
