@@ -8,9 +8,11 @@ Runs every LLC_CHECKPOINT_INTERVAL_SECONDS (default 30). For each running
 heartbeat run writes Redis key ``llc:session:checkpoint:{run_id}`` with TTL.
 
 On startup, :func:`recover_incomplete_runs` is called BEFORE the heartbeat
-scheduler begins dispatching.  For each ``status='running'`` run it:
+scheduler begins dispatching.  For each ``status='running'`` run that started before the liveness
+cutoff it:
   1. Marks run ``interrupted``
-  2. Releases ``llc:checkout:{work_item_id}`` lock
+  2. Releases every work-item checkout the run made (the DB row and its Redis fence), returning an
+     unfinished item to ``ready`` with its assignee
   3. Re-queues agent in ``llc:heartbeat:schedule`` sorted set at score=now
 """
 
@@ -20,6 +22,7 @@ import time
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
@@ -30,6 +33,7 @@ from ..models.enums import LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..services.run_checkouts import ReleasedCheckout, ReleaseWhy, drop_released_fences, release_checkouts_for_run
 from .base import PollLoopScheduler
+from .liveness_monitor import liveness_cutoff
 
 logger = get_logger(__name__)
 
@@ -128,12 +132,40 @@ def recovery_lease() -> LeaderLease:
     return LeaderLease(key=RECOVERY_LEASE_KEY, label="LLC session recovery")
 
 
-async def recover_incomplete_runs() -> None:
-    """Find ``status='running'`` runs at startup and re-queue them for recovery.
+async def _runs_to_recover(session: AsyncSession) -> list[LLCHeartbeatRun]:
+    """The ``running`` runs old enough to be dead: started before the liveness cutoff, the monitor's own rule.
 
-    Idempotent: safe to call multiple times.  Only finds runs with
-    ``status='running'`` so already-interrupted runs are skipped on a second
-    call. Only the worker holding :func:`recovery_lease` recovers; the others skip.
+    A younger row may be served by a live worker; the liveness monitor handles it when it ages past the cutoff.
+    """
+    result = await session.execute(
+        select(LLCHeartbeatRun).where(
+            LLCHeartbeatRun.status == "running",
+            LLCHeartbeatRun.started_at < liveness_cutoff(),
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def _requeue_agent(redis, agent_id: str, score: float) -> None:  # noqa: ANN001 - a Redis client or None
+    """Put the agent on the heartbeat schedule at *score*; best-effort, a failure is logged and swallowed."""
+    if redis is None:
+        return
+    try:
+        await redis.zadd(_SCHEDULE_KEY, {agent_id: score})
+    except Exception:
+        logger.debug("Redis ZADD re-queue failed for agent %s (swallowed)", agent_id)
+
+
+async def recover_incomplete_runs() -> None:
+    """Interrupt the ``running`` runs that started before the liveness cutoff, at startup, and re-queue their agents.
+
+    Does: mark each such run ``interrupted``, release every checkout it made (an unfinished item goes back to
+    ``ready`` with its assignee) and re-queue the agent. Does not: touch a ``running`` run younger than the
+    cutoff (the liveness monitor takes it if it ages), or tell a dead worker's run from a live one's -- a run
+    has no owner field, so an old run that a live worker still serves is recovered too.
+
+    Idempotent: already-interrupted runs are skipped on a second call. Only the worker holding
+    :func:`recovery_lease` recovers; the others skip.
     """
     if not await recovery_lease().update_leadership():
         logger.info("SessionCheckpointer: recovery lease not acquired (another worker or no Redis), skipping")
@@ -141,8 +173,7 @@ async def recover_incomplete_runs() -> None:
     factory = get_async_session_factory()
     try:
         async with factory() as session:
-            result = await session.execute(select(LLCHeartbeatRun).where(LLCHeartbeatRun.status == "running"))
-            runs = list(result.scalars().all())
+            runs = await _runs_to_recover(session)
 
             if not runs:
                 logger.info("SessionCheckpointer: no incomplete runs to recover")
@@ -164,11 +195,7 @@ async def recover_incomplete_runs() -> None:
 
                     released.extend(await release_checkouts_for_run(session, run, _RECOVERY_RELEASE))
 
-                    if redis is not None:
-                        try:
-                            await redis.zadd(_SCHEDULE_KEY, {run.agent_id: now_ts})
-                        except Exception:
-                            logger.debug("Redis ZADD re-queue failed for agent %s (swallowed)", run.agent_id)
+                    await _requeue_agent(redis, run.agent_id, now_ts)
 
                     logger.info(
                         "SessionCheckpointer: recovered run %s for agent %s",

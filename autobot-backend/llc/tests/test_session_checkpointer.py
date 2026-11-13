@@ -6,6 +6,7 @@
 
 import json
 import uuid
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -22,6 +23,7 @@ def _make_run(
     status: str = "running",
     work_item_id: str | None = None,
     agent_id: str = "agent-001",
+    age: timedelta = timedelta(hours=1),
 ) -> MagicMock:
     run = MagicMock()
     run.id = uuid.uuid4()
@@ -32,6 +34,7 @@ def _make_run(
     run.external_run_id = None
     run.context_snapshot = None
     run.finished_at = None
+    run.started_at = datetime.now(timezone.utc) - age
     return run
 
 
@@ -124,6 +127,63 @@ async def test_recover_incomplete_runs_marks_interrupted_releases_checkouts_requ
     zadd_args = mock_redis.zadd.call_args[0]
     assert zadd_args[0] == "llc:heartbeat:schedule"
     assert run.agent_id in zadd_args[1]
+
+
+async def _recover_with(runs: list, items: list) -> tuple:
+    """Run startup recovery over *runs*/*items* (queried by age, as SQL would); return the Redis re-queue mock."""
+    import fakeredis
+
+    from llc.tests._run_checkout_world import AgedRoutedSession
+
+    factory = MagicMock()
+    factory.return_value.__aenter__ = AsyncMock(return_value=AgedRoutedSession(runs, items))
+    factory.return_value.__aexit__ = AsyncMock(return_value=False)
+    queue = AsyncMock()
+    with (
+        patch("llc.scheduler.session_checkpointer.recovery_lease", return_value=_lease()),
+        patch("llc.scheduler.session_checkpointer.get_async_session_factory", return_value=factory),
+        patch("llc.scheduler.session_checkpointer.get_async_redis_client", AsyncMock(return_value=queue)),
+        patch(
+            "llc.services.run_checkouts.get_async_redis_client",
+            AsyncMock(return_value=fakeredis.aioredis.FakeRedis(decode_responses=True)),
+        ),
+        patch("llc.services.run_checkouts._activity_log", MagicMock(record=AsyncMock())),
+    ):
+        await recover_incomplete_runs()
+    return queue
+
+
+@pytest.mark.asyncio
+async def test_a_running_run_younger_than_the_liveness_cutoff_is_left_alone() -> None:
+    """A live worker may be serving it: no status change, no release, the agent is not re-queued."""
+    from llc.tests._run_checkout_world import Item
+
+    young = _make_run(age=timedelta(minutes=1))
+    old = _make_run(age=timedelta(hours=1), agent_id="agent-old")
+    held, theirs = Item(young.company_id, young.id), Item(old.company_id, old.id)
+
+    queue = await _recover_with([young, old], [held, theirs])
+
+    assert young.status == "running" and young.finished_at is None
+    assert held.checkout_run_id == str(young.id) and held.status == "in_progress"
+    assert old.status == "interrupted" and theirs.checkout_run_id is None and theirs.status == "ready"
+    queue.zadd.assert_called_once()
+    assert set(queue.zadd.call_args[0][1]) == {"agent-old"}
+
+
+@pytest.mark.asyncio
+async def test_the_recovery_age_is_the_liveness_monitors_cutoff() -> None:
+    """One definition of "dead": the run query binds the instant the monitor's own cutoff gives."""
+    from llc.scheduler.liveness_monitor import liveness_cutoff
+    from llc.scheduler.session_checkpointer import _runs_to_recover
+    from llc.tests._run_checkout_world import AgedRoutedSession, bound_values
+
+    session = AgedRoutedSession([], [])
+    await _runs_to_recover(session)
+
+    [cutoff] = [v for v in bound_values(session.statements[0]) if isinstance(v, datetime)]
+    assert abs(liveness_cutoff() - cutoff) < timedelta(seconds=5)
+    assert "running" in bound_values(session.statements[0])
 
 
 @pytest.mark.asyncio

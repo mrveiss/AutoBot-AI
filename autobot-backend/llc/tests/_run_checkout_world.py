@@ -65,6 +65,22 @@ class RoutedSession(FakeAsyncSession):
         return FakeResult([])
 
 
+class AgedRoutedSession(RoutedSession):
+    """A :class:`RoutedSession` that also applies a run query's ``started_at < cutoff`` bound.
+
+    Only for code that selects runs by age: a run is returned when its ``started_at`` is before the datetime
+    the statement binds, so a run younger than the cutoff is not recovered by this fake any more than by SQL.
+    """
+
+    async def execute(self, statement: Any, *args: Any, **kwargs: Any) -> FakeResult:
+        result = await super().execute(statement, *args, **kwargs)
+        described = getattr(statement, "column_descriptions", None)
+        if not described or described[0]["entity"].__name__ != "LLCHeartbeatRun":
+            return result
+        cutoff = next(v for v in bound_values(statement) if isinstance(v, datetime))
+        return FakeResult([r for r in self.runs if r.started_at < cutoff])
+
+
 class Recorder:
     """The activity log: keeps each entry written."""
 
