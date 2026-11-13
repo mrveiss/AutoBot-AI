@@ -57868,7 +57868,7 @@ export interface components {
             capabilities?: string | null;
             /**
              * Model
-             * @description Model override. Supported: 'claude-sonnet-4-6' (default), 'claude-haiku-4-5-20251001'. Use Haiku for execution-only assistant agents.
+             * @description Model override. Supported: 'claude-sonnet-5-5' (default), 'claude-haiku-5-5'; the tier aliases 'sonnet' and 'haiku' name them. Use Haiku for execution-only assistant agents.
              */
             model?: string | null;
             /**
