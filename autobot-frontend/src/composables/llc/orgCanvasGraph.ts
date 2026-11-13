@@ -262,6 +262,20 @@ export interface ProcessNodeSource {
   workflow_id: string
 }
 
+/**
+ * Accept only rows that actually carry the three strings a process node is made of. A response of
+ * another shape — a misrouted mock, a changed contract — would otherwise be rendered as nonsense
+ * nodes on the canvas rather than as nothing.
+ */
+export function isProcessNodeSource(row: unknown): row is ProcessNodeSource {
+  const r = row as Partial<ProcessNodeSource> | null | undefined
+  return (
+    typeof r?.role_id === 'string' &&
+    typeof r?.role_name === 'string' &&
+    typeof r?.workflow_id === 'string'
+  )
+}
+
 /** Prefix that marks a canvas node as a process, so a click can be routed. */
 export const PROCESS_NODE_PREFIX = 'process:'
 
