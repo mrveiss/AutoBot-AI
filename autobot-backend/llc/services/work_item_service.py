@@ -614,7 +614,7 @@ class WorkItemService(LLCServiceBase):
         # Only once the release is audited: a failed audit rolls the DB back and the lock must survive it.
         redis = await get_async_redis_client()
         if redis is not None:
-            await redis.delete(f"llc:checkout:{work_item_id}")
+            await drop_fence(redis, f"llc:checkout:{work_item_id}", f"user:{user_id}", acquired=True)  # the claim's own
 
         return item
 

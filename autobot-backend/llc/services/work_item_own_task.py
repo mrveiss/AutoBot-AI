@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.redis_utils import delete_if_holder, delete_if_value
 
 from ..models.enums import AssigneeType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
@@ -153,6 +153,17 @@ async def drop_fence(redis: Any, key: str, value: str, acquired: bool) -> None:
     """Take back a fence THIS call acquired, while it still names *value*; a fence it did not take is left alone."""
     if acquired:
         await delete_if_value(redis, key, value)
+
+
+async def release_agent_fence(item_id: str, agent_id: str) -> None:
+    """Delete the item's fence while it names *agent_id* in any generation; another holder's fence is left alone.
+
+    The release for a caller that knows the agent but not the checkout generation (the release route). A Redis
+    failure propagates: the caller decides whether a fence left to its TTL is fatal.
+    """
+    redis = await get_async_redis_client()
+    if redis is not None:
+        await delete_if_holder(redis, f"{_CHECKOUT_KEY_PREFIX}{item_id}", agent_id)
 
 
 def fence_agent(value: str) -> str:
