@@ -59,6 +59,9 @@ UNSCOPED = frozenset(
         # depth -- a new package root can appear anywhere, so no roots= list could name it.
         "dependabot-package-roots",
         "ansible-inventory-shell-sweep",
+        # #21343: items are variable names and (variable, variable) pairs parsed from YAML, not paths.
+        "inventory-variable-cycle-variables-21343",
+        "inventory-variable-cycle-references-21343",
         "audio-extension-allowlist",
         "blanket-skip-test-module-sweep",
         # #19324: an extension filter (*.py, *.sh, *.yml, .env*, ...) over the whole tree, not a set of prefixes.
