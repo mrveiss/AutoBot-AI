@@ -28,9 +28,10 @@ from llc.services import work_item_own_task as own_task
 from llc.services import work_item_service as wis
 from llc.services.handoff import HandoffService
 
-_USER = str(uuid.uuid4())
+# Constants (not uuid4) because they feed parametrize ids: every xdist worker must collect identical ids.
+_USER = "5799065e-4061-4af8-bee7-64e65f1a2b91"
 _NEW_USER = str(uuid.uuid4())
-_AGENT = str(uuid.uuid4())
+_AGENT = "b3c1e7a2-9d4f-4c68-a1f5-2e8d6b0c7a43"
 _OTHER_AGENT = str(uuid.uuid4())
 _ORG = uuid.uuid4()
 
