@@ -19,24 +19,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import BaseModal from '../BaseModal.vue'
+import { FOCUSABLE_SELECTOR as FOCUSABLE } from '../../composables/useFocusTrap'
 
 const BODY_SLOTS = {
   default: '<button class="body-btn">Body</button>',
   actions: '<button class="cancel">Cancel</button><button class="confirm">OK</button>',
 }
 
-const FOCUSABLE =
-  'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
-
 let wrapper: VueWrapper | undefined
 let opener: HTMLButtonElement
 
-/** Mount closed with an opener focused, real Transition, Teleport real unless `stubTeleport`. */
-function mountClosed(
-  props: Record<string, unknown> = {},
-  slots: Record<string, string> = BODY_SLOTS,
-  stubTeleport = false,
-): VueWrapper {
+/** Mount closed with an opener focused; the Transition and the Teleport are both real. */
+function mountClosed(props: Record<string, unknown> = {}, slots: Record<string, string> = BODY_SLOTS): VueWrapper {
   opener = document.createElement('button')
   opener.textContent = 'Open'
   document.body.appendChild(opener)
@@ -44,7 +38,7 @@ function mountClosed(
   wrapper = mount(BaseModal, {
     props: { modelValue: false, title: 'Dialog title', ...props },
     slots,
-    global: { stubs: { transition: false, ...(stubTeleport ? { Teleport: true } : {}) } },
+    global: { stubs: { transition: false } },
     attachTo: document.body,
   })
   return wrapper
@@ -114,7 +108,11 @@ describe('BaseModal with the real Teleport (#21179)', () => {
     mountClosed()
     await wrapper!.setProps({ modelValue: true })
     await vi.waitFor(() => expect(dialogEl()).not.toBeNull())
-    return dialogEl()!
+    const dialog = dialogEl()!
+    // Initial focus lands when the enter transition ends. Wait for it, so a late `after-enter` cannot
+    // move focus after a test has set it, or after the close has restored it.
+    await vi.waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true))
+    return dialog
   }
 
   it('renders the dialog under document.body, outside the wrapper', async () => {
@@ -156,7 +154,7 @@ describe('BaseModal with the real Teleport (#21179)', () => {
   })
 
   it('returns focus to the opener once it has closed and left the document', async () => {
-    // fails if useFocusRestore is unwired,
+    // fails if useFocusRestore is unwired
     const dialog = await openDialog()
     dialog.querySelector<HTMLElement>('.body-btn')!.focus()
     expect(document.activeElement).not.toBe(opener)

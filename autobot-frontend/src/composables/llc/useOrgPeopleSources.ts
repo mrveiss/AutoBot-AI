@@ -16,16 +16,17 @@
  */
 import { ref } from 'vue'
 import type { CompanyTeam, ContactSource } from '@/composables/llc/orgPeople'
+import { planRequest, type PlanResponse } from '@/composables/llc/workflowPlanRequest'
+import type { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useOrgPeopleSources')
 
-/** The two groups `GET /api/llc/contacts/{company_id}/involved` answers with (#13998). */
-type InvolvedGroups = Partial<Record<'with_role' | 'unassigned', ContactSource[]>>
+// Both routes are read through the generated contract (#13998, #13938), not a hand-declared shape.
+const INVOLVED = '/api/llc/contacts/{company_id}/involved'
+const TEAMS = '/api/llc/companies/{company_id}/teams'
 
-export interface PeopleSourcesApi {
-  get(url: string): Promise<unknown>
-}
+export type PeopleSourcesApi = ReturnType<typeof useApiClient>
 
 export interface OrgPeopleSourcesDeps {
   api: PeopleSourcesApi
@@ -57,7 +58,7 @@ export function useOrgPeopleSources(deps: OrgPeopleSourcesDeps) {
   const teamsAttempted = ref(false)
   const loading = ref(false)
 
-  function applyContacts(result: PromiseSettledResult<unknown>): void {
+  function applyContacts(result: PromiseSettledResult<PlanResponse<typeof INVOLVED, 'get'>>): void {
     if (result.status === 'rejected') {
       // A failed fetch must never be reported as "this company has no people".
       // Absence of data and absence of an answer are different claims (#14064).
@@ -69,22 +70,23 @@ export function useOrgPeopleSources(deps: OrgPeopleSourcesDeps) {
     // people the department carries from before the directory was shared.
     // Merging them here would assert an involvement nobody recorded, so the
     // second group is tracked by id and labelled rather than blended in.
-    const body = result.value as InvolvedGroups | null | undefined
-    const withRole = Array.isArray(body?.with_role) ? body.with_role : []
-    const unassigned = Array.isArray(body?.unassigned) ? body.unassigned : []
+    const body = result.value
+    const withRole: ContactSource[] = Array.isArray(body?.with_role) ? body.with_role : []
+    const unassigned: ContactSource[] = Array.isArray(body?.unassigned) ? body.unassigned : []
     contacts.value = [...withRole, ...unassigned]
     unassignedContactIds.value = new Set(unassigned.map((c) => c.id))
     contactsFailed.value = false
   }
 
-  function applyTeams(result: PromiseSettledResult<unknown>): void {
+  function applyTeams(result: PromiseSettledResult<PlanResponse<typeof TEAMS, 'get'>>): void {
     if (result.status === 'rejected') {
       teamsFailed.value = true
       logger.error('Failed to fetch company teams:', result.reason)
       return
     }
-    const body = result.value as { teams?: CompanyTeam[] } | null | undefined
-    teams.value = Array.isArray(body?.teams) ? body.teams : []
+    const body = result.value
+    const list: CompanyTeam[] = Array.isArray(body?.teams) ? body.teams : []
+    teams.value = list
     teamsFailed.value = false
   }
 
@@ -106,8 +108,8 @@ export function useOrgPeopleSources(deps: OrgPeopleSourcesDeps) {
 
   async function fetchSources(cid: string): Promise<void> {
     const [contactsResult, teamsResult] = await Promise.allSettled([
-      deps.api.get(`/api/llc/contacts/${cid}/involved`),
-      deps.api.get(`/api/llc/companies/${cid}/teams`),
+      planRequest(deps.api, 'get', INVOLVED, { company_id: cid }),
+      planRequest(deps.api, 'get', TEAMS, { company_id: cid }),
     ])
     // A switched company owns the state now; its answer is not this one's.
     if (deps.companyId() && cid !== deps.companyId()) return
@@ -126,6 +128,13 @@ export function useOrgPeopleSources(deps: OrgPeopleSourcesDeps) {
     try {
       const cid = await resolveOrFail()
       if (cid) await fetchSources(cid)
+    } catch (err: unknown) {
+      // A synchronous throw from the api or the apply step must end in the same visible failed state,
+      // not an unhandled rejection at the fire-and-forget call sites.
+      logger.error('Failed to load the people sources:', err)
+      contactsFailed.value = true
+      teamsFailed.value = true
+      teamsAttempted.value = true
     } finally {
       loading.value = false
     }

@@ -32,6 +32,11 @@ const meta = {
       control: 'boolean',
       description: 'Enable scrollable content area',
     },
+    role: {
+      control: 'select',
+      options: ['dialog', 'alertdialog'],
+      description: 'ARIA role: alertdialog for a confirmation of a destructive action',
+    },
   },
 } as Meta<typeof BaseModal>;
 

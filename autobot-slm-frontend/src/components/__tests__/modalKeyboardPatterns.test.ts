@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { FOCUSABLE_SELECTOR as FOCUSABLE } from '@autobot/ui'
 import type { Component } from 'vue'
 import en from '@/locales/en.json'
 import RestartConfirmDialog from '@/components/orchestration/RestartConfirmDialog.vue'
@@ -48,9 +49,6 @@ vi.mock('@/composables/useRoles', () => ({
 }))
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
-
-const FOCUSABLE =
-  'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
 
 interface Pattern {
   name: string
@@ -111,6 +109,9 @@ describe.each(PATTERNS)('modal keyboard behaviour -- $name', (pattern) => {
     await wrapper.setProps(pattern.open)
     await flushPromises()
     const dialog = wrapper.find('[role="dialog"]').element as HTMLElement
+    // The dialog moves focus in once its enter transition ends; a focus set before that can be
+    // overridden by it, and a close before it would see a late focus after the restore.
+    await vi.waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true))
     dialog.querySelectorAll<HTMLElement>(FOCUSABLE)[0].focus()
     return dialog
   }
@@ -192,6 +193,7 @@ describe('modal keyboard behaviour -- locked: RestartConfirmDialog while process
     })
     await flushPromises()
     const dialog = wrapper.find('[role="dialog"]').element as HTMLElement
+    await vi.waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true))
     dialog.setAttribute('tabindex', '-1')
     dialog.focus()
     dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
@@ -210,7 +212,9 @@ describe('modal keyboard behaviour -- locked: RestartConfirmDialog while process
 describe('modal keyboard behaviour -- nested confirm: RoleManagementModal remove', () => {
   let wrapper: VueWrapper | undefined
 
-  const dialogs = () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="dialog"]'))
+  // The role dialog and its destructive confirm differ in role (the confirm is an alertdialog).
+  const roleDialogs = () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="dialog"]'))
+  const confirmDialogs = () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="alertdialog"]'))
   const press = (el: Element, init: KeyboardEventInit) =>
     el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
 
@@ -222,16 +226,22 @@ describe('modal keyboard behaviour -- nested confirm: RoleManagementModal remove
       attachTo: document.body,
     })
     await flushPromises()
+    // The role dialog moves focus in when its enter transition ends; the confirm's restore must not
+    // be overtaken by that late focus, so it has landed before anything here touches focus.
+    await vi.waitFor(() => expect(roleDialogs()[0].contains(document.activeElement)).toBe(true))
     const removeButton = document.body.querySelector<HTMLElement>(
       `[aria-label="${en.roleManagementModal.removeRoleAria.replace('{roleName}', 'redis')}"]`,
     )!
-    expect(dialogs()).toHaveLength(1)
+    expect(roleDialogs()).toHaveLength(1)
+    expect(confirmDialogs()).toHaveLength(0)
     removeButton.focus()
     removeButton.click()
     await flushPromises()
-    expect(dialogs()).toHaveLength(2)
-    const confirm = dialogs()[1]
-    confirm.querySelectorAll<HTMLElement>(FOCUSABLE)[0].focus()
+    expect(roleDialogs()).toHaveLength(1)
+    expect(confirmDialogs()).toHaveLength(1)
+    const confirm = confirmDialogs()[0]
+    // The confirm's own enter transition then moves focus onto its first control.
+    await vi.waitFor(() => expect(confirm.contains(document.activeElement)).toBe(true))
     return { removeButton, confirm }
   }
 
@@ -245,8 +255,9 @@ describe('modal keyboard behaviour -- nested confirm: RoleManagementModal remove
     document.body.replaceChildren()
   })
 
-  it('is a dialog of its own, named by the question it asks', async () => {
+  it('is an alertdialog of its own, named by the question it asks', async () => {
     const { confirm } = await openConfirm()
+    expect(confirm.getAttribute('role')).toBe('alertdialog')
     expect(confirm.getAttribute('aria-modal')).toBe('true')
     const label = document.getElementById(confirm.getAttribute('aria-labelledby')!)
     expect(label?.textContent).toContain(en.roleManagementModal.removeValue0.replace('{value0}', 'redis'))
@@ -279,7 +290,8 @@ describe('modal keyboard behaviour -- nested confirm: RoleManagementModal remove
     await flushPromises()
 
     // The confirm leaves through its transition, so wait for it rather than for one tick.
-    await vi.waitFor(() => expect(dialogs()).toHaveLength(1))
+    await vi.waitFor(() => expect(confirmDialogs()).toHaveLength(0))
+    expect(roleDialogs()).toHaveLength(1)
     expect(wrapper!.emitted('close')).toBeUndefined()
     await vi.waitFor(() => expect(document.activeElement).toBe(removeButton))
   })

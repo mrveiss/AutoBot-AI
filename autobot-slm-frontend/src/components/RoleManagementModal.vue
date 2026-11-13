@@ -275,6 +275,7 @@ function getStatusClass(status: string): string {
       :model-value="showRemoveConfirm"
       :title="$t('roleManagementModal.removeValue0', { value0: roleToRemove })"
       size="sm"
+      role="alertdialog"
       :close-label="$t('roleManagementModal.cancel')"
       @close="cancelRemove"
     >
