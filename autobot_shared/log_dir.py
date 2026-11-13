@@ -62,10 +62,10 @@ def _state_home() -> Path:
 def _configured() -> str:
     """The env value in force: the one name, else the deprecated alias (warned once)."""
     global _warned_alias
-    value = os.environ.get(LOGS_DIR_ENV, LOGS_DIR_DEFAULT)
+    value = os.environ.get(LOGS_DIR_ENV, LOGS_DIR_DEFAULT).strip()
     if value:
         return value
-    legacy = os.environ.get(DEPRECATED_LOGS_DIR_ENV, "")
+    legacy = os.environ.get(DEPRECATED_LOGS_DIR_ENV, "").strip()
     if legacy and not _warned_alias:
         _warned_alias = True
         logging.getLogger(__name__).warning(
@@ -79,7 +79,7 @@ def resolve_logs_dir(configured: str | None = None) -> Path:
 
     *configured* is a value already read from the environment (``PathConfig.logs_dir``); None reads it.
     """
-    value = _configured() if configured is None else configured
+    value = (_configured() if configured is None else configured).strip()
     if not value:
         return _state_home() / "autobot" / "logs"
     path = Path(value).expanduser()

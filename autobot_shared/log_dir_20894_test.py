@@ -78,6 +78,18 @@ def test_the_deprecated_alias_is_read_and_warns_once(
     assert len(warnings) == 1
 
 
+@pytest.mark.parametrize("blank", ["", " ", "\t ", "\n"])
+def test_a_blank_value_is_absent_not_a_relative_directory(
+    blank: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(log_dir.LOGS_DIR_ENV, blank)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    assert resolve_logs_dir() == tmp_path / "autobot" / "logs"
+    monkeypatch.setenv(log_dir.DEPRECATED_LOGS_DIR_ENV, blank)  # the alias is treated the same way
+    assert resolve_logs_dir() == tmp_path / "autobot" / "logs"
+    assert resolve_logs_dir(blank) == tmp_path / "autobot" / "logs"
+
+
 def test_the_one_name_wins_over_the_alias(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(log_dir.LOGS_DIR_ENV, str(tmp_path / "new"))
     monkeypatch.setenv(log_dir.DEPRECATED_LOGS_DIR_ENV, str(tmp_path / "old"))
