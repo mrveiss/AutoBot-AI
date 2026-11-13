@@ -78,7 +78,7 @@ def _triggers(doc: dict) -> dict:
 
 def pull_request_workflows(directory=WORKFLOW_DIR) -> dict[str, dict]:
     found = {}
-    for path in sorted(directory.glob("*.yml")):
+    for path in sorted(p for p in directory.iterdir() if p.suffix == ".yml"):
         doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         if "pull_request" in _triggers(doc):
             found[path.name] = doc
