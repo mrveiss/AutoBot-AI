@@ -167,8 +167,10 @@ describe('RolesView operations (#14221 step 6b)', () => {
     const panel = wrapper.findComponent(RoleWorkflowsPanel).element
     const workflowGets = () => get.mock.calls.filter(([url]) => String(url).startsWith('/api/llc/workflows/')).length
     const memberGets = () => get.mock.calls.filter(([url]) => String(url).endsWith('/members')).length
-    const [workflowsBefore, membersBefore] = [workflowGets(), memberGets()]
+    const holderGets = () => get.mock.calls.filter(([url]) => String(url).includes('/holders')).length
+    const [workflowsBefore, membersBefore, holdersBefore] = [workflowGets(), memberGets(), holderGets()]
     expect(workflowsBefore).toBeGreaterThan(0)
+    expect(holdersBefore).toBeGreaterThan(0)
 
     await wrapper.get('[data-testid="role-workflows-picker"] [data-option="wf-2"]').trigger('click')
     await wrapper.get('[data-testid="role-workflows-attach"]').trigger('click')
@@ -176,7 +178,7 @@ describe('RolesView operations (#14221 step 6b)', () => {
 
     expect(post).toHaveBeenCalledTimes(1)
     // The role detail was reloaded (holders GET), the panel was not remounted: same element, no new requests.
-    expect(get.mock.calls.some(([url]) => String(url).includes('/holders'))).toBe(true)
+    expect(holderGets()).toBe(holdersBefore + 1)
     expect(wrapper.findComponent(RoleWorkflowsPanel).element).toBe(panel)
     expect(workflowGets()).toBe(workflowsBefore)
     expect(memberGets()).toBe(membersBefore)
