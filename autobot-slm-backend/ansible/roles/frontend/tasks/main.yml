@@ -6,8 +6,7 @@
 
 # #21400: the backend port that matches the proxy scheme, defined once for every consumer.
 - name: "Frontend | Load the scheme-matched backend port"
-  ansible.builtin.include_vars:
-    file: "{{ role_path }}/../../_shared/vars/backend_scheme_port.yml"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/load_backend_scheme_port.yml
   tags: ['always']
 
 # ============================================================

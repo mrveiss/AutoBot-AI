@@ -31,7 +31,8 @@ nginx_http_port: 80
 # _build_infra_vars() in setup_wizard.py at provisioning time
 #
 # #21400: the port nginx's backend upstream renders is the one the proxy scheme listens on. It is defined once,
-# in _shared/vars/backend_scheme_port.yml, which this role loads as its first task.
+# in _shared/vars/backend_scheme_port.yml; every task file of this role that reads it includes
+# _shared/tasks/load_backend_scheme_port.yml first.
 frontend_upstream_backend_port: "{{ backend_scheme_port }}"
 
 # #10348: default to EMPTY = relative same-origin /api. nginx serves the SPA and

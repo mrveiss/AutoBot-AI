@@ -9,8 +9,8 @@
 # result is 8443, and with only the plain port defined it is that port, as before the ports were defined.
 #
 # ONE definition, loaded explicitly by each consumer (an inventory's group_vars are not there on a bare-host
-# run): `vars_files` in a playbook, `include_vars` in a role. Consumers: roles/frontend (nginx upstream) and
-# playbooks/rotate-service-keys.yml (backend health URL).
+# run): `vars_files` in a playbook, _shared/tasks/load_backend_scheme_port.yml in a role task file. Consumers:
+# roles/frontend (nginx upstream) and playbooks/rotate-service-keys.yml (backend health URL).
 backend_scheme_port: >-
   {{ (backend_port | default(8443))
   if (backend_protocol | default('https')) == 'http'

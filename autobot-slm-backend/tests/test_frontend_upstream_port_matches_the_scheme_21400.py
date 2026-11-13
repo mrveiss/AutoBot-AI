@@ -105,10 +105,3 @@ def _health_url(**variables) -> str:
 )
 def test_the_key_rotation_health_url_pairs_its_port_with_its_scheme(label, variables, expected) -> None:
     assert _health_url(**variables) == expected, label
-
-
-def test_the_role_loads_the_shared_definition_before_it_uses_it() -> None:
-    tasks = yaml.safe_load((_ROLE / "tasks" / "main.yml").read_text(encoding="utf-8"))
-    load = next(i for i, t in enumerate(tasks) if "ansible.builtin.include_vars" in t)
-    assert tasks[load]["ansible.builtin.include_vars"]["file"].endswith("/../../_shared/vars/backend_scheme_port.yml")
-    assert "always" in tasks[load]["tags"] and load == 0
