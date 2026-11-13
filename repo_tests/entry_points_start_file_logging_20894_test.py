@@ -203,11 +203,11 @@ def _imports_manager(tree: ast.Module) -> bool:
     return False
 
 
-def _bound_names(tree: ast.Module) -> tuple[set[str], set[str]]:
-    """Names bound to the manager's ``setup_logging``, and names bound to the manager module itself."""
+def _bound_in(nodes: list[ast.AST]) -> tuple[set[str], set[str]]:
+    """Names bound to the manager's ``setup_logging``, and to the manager module, by imports among *nodes*."""
     funcs: set[str] = set()
     modules: set[str] = set()
-    for node in ast.walk(tree):
+    for node in nodes:
         if isinstance(node, ast.ImportFrom) and node.module == _MANAGER:
             funcs |= {a.asname or a.name for a in node.names if a.name == _CALL}
         elif isinstance(node, ast.ImportFrom) and node.module == "autobot_shared":
@@ -269,10 +269,11 @@ def calls_setup_logging(tree: ast.Module) -> bool:
     Reachable means: a call at module level or in the ``__main__`` block; or in a top-level function that
     those reference by name (called or passed, one level deep), that a signal/startup decorator
     registers, or that is an app factory (``create_app``/``lifespan``). A call in a def nothing
-    references, or in a nested def, does not count (#20894).
+    references, or in a nested def, does not count. An import binds ``setup_logging`` only in its own
+    lexical scope: module level, or the function that holds it, never a sibling's (#20894).
     """
-    funcs, modules = _bound_names(tree)
     startup = _walk_no_defs(_startup_statements(tree))
+    funcs, modules = _bound_in(startup)  # module scope: visible to startup and to every function
     if any(_is_setup_call(n, funcs, modules) for n in startup):
         return True
     referenced = {n.id for n in startup if isinstance(n, ast.Name)}
@@ -281,7 +282,9 @@ def calls_setup_logging(tree: ast.Module) -> bool:
             continue
         if fn.name not in referenced and not _is_handler(fn):
             continue
-        if any(_is_setup_call(n, funcs, modules) for n in _walk_no_defs(fn.body)):
+        body = _walk_no_defs(fn.body)
+        local_funcs, local_modules = _bound_in(body)  # a function's own imports are visible only inside it
+        if any(_is_setup_call(n, funcs | local_funcs, modules | local_modules) for n in body):
             return True
     return False
 
@@ -428,6 +431,7 @@ def test_control_a_launched_target_without_the_call_is_reported(tmp_path: Path) 
             "svc/ops.py": "def main():\n    pass\n",
             "svc/ok.py": f"from {_MANAGER} import {_CALL}\napp = FastAPI()\n{_CALL}()\n",
             "svc/lazy.py": f"def main():\n    from {_MANAGER} import {_CALL}\n    {_CALL}()\napp = Celery('x')\nmain()\n",
+            "svc/leaky.py": f"app = FastAPI()\n{_CALL}()\ndef helper():\n    from {_MANAGER} import {_CALL}\n",
             "svc/uncalled.py": f"from {_MANAGER} import {_CALL}\napp = FastAPI()\ndef unused():\n    {_CALL}()\n",
             "svc/handler.py": (
                 f"from {_MANAGER} import {_CALL}\napp = Celery('x')\n"
@@ -450,6 +454,7 @@ def test_control_a_launched_target_without_the_call_is_reported(tmp_path: Path) 
         "scripts/own_fn.py",
         "svc/app.py",
         "svc/compose_target.py",
+        "svc/leaky.py",
         "svc/ops.py",
         "svc/uncalled.py",
         "svc/unit_target.py",
@@ -478,3 +483,34 @@ def test_control_a_new_compose_service_without_the_call_is_reported(tmp_path: Pa
     assert compose_python_services_in(tmp_path, ["docker-compose.yml"]) == {"docker-compose.yml::web"}
     entries = entry_points(tmp_path, [], {}, {"docker-compose.yml::web": "web.py"})
     assert missing_call(tmp_path, entries, set()) == ["web.py"]
+
+
+def installs_paths_before_importing_shared(source: str, func: str, installer: str) -> bool:
+    """In *func*, the call to *installer* precedes the first ``autobot_shared`` import.
+
+    A function-level import of ``autobot_shared`` only resolves from a direct launch (``python3 script.py``,
+    whose ``sys.path`` holds the script's directory, not the repo root) after the paths are installed.
+    """
+    fn = next(n for n in ast.walk(parse_cache.parse(source)) if isinstance(n, ast.FunctionDef) and n.name == func)
+    inner = _walk_no_defs(fn.body)
+    imports = [
+        n.lineno for n in inner if isinstance(n, ast.ImportFrom) and (n.module or "").startswith("autobot_shared")
+    ]
+    installs = [
+        n.lineno for n in inner if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == installer
+    ]
+    return bool(imports) and bool(installs) and min(installs) < min(imports)
+
+
+def test_index_documentation_installs_import_paths_before_its_shared_import() -> None:
+    source = (_ROOT / "tools/index_documentation.py").read_text(encoding="utf-8")
+    assert installs_paths_before_importing_shared(source, "main", "_install_import_paths")
+
+
+def test_control_an_import_before_the_path_install_is_caught() -> None:
+    body = "def main():\n    {a}\n    {b}\n"
+    late = body.format(a=f"from {_MANAGER} import {_CALL}", b="_install()")
+    early = body.format(a="_install()", b=f"from {_MANAGER} import {_CALL}")
+    assert not installs_paths_before_importing_shared(late, "main", "_install")
+    assert installs_paths_before_importing_shared(early, "main", "_install")
+    assert not installs_paths_before_importing_shared("def main():\n    pass\n", "main", "_install")
