@@ -415,6 +415,8 @@ python:
   - 'pytest.ini'
   # #16568: workflow_types_gate_16568_test.py reads the required gate body (called by ci.yml) by concrete literal.
   - '.github/workflows/_gate-generated-types.yml'
+  # #20552: short_check_stages_ci_20552_test.py reads issue-triage.yml's `structure` job condition by concrete literal.
+  - '.github/workflows/issue-triage.yml'
   # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`
   # table names files under this tree by concrete literal (baseline keys are
   # (filename, type, hashed_secret) triples) -- the same filter-gap shape as

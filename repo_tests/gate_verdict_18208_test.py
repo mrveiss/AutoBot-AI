@@ -13,30 +13,13 @@ branch, so a reorder that lets a draft pass, or lets a skipped suite read as ver
 """
 
 import re
-import subprocess
 
 import pytest
 import yaml
+from repo_tests._gate_verdict_driver import BASE, SCRIPT
+from repo_tests._gate_verdict_driver import run_verdict as _run
+from repo_tests._gate_verdict_driver import run_verdict_env
 from repo_tests._paths import repo_root
-
-SCRIPT = repo_root() / ".github" / "actions" / "gate-verdict" / "verdict.sh"
-
-BASE = {
-    "GATE_CONTEXT": "python-suite",
-    "GATE_CHANGES_RESULT": "success",
-    "GATE_APPLIES": "true",
-    "GATE_WORK_OK": "true",
-    "GATE_WORK_DETAIL": "python-shard=success",
-    "GATE_EVENT": "pull_request",
-    "GATE_DRAFT": "false",
-    "GATE_DRAFT_GATED": "true",
-}
-
-
-def _run(**override):
-    env = {"PATH": "/usr/bin:/bin", **BASE, **override}
-    proc = subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True, check=False)
-    return proc.returncode, proc.stdout + proc.stderr
 
 
 def test_the_script_exists_and_is_executable_shaped():
@@ -102,10 +85,7 @@ def test_a_skipped_or_failed_suite_that_applies_is_not_evidence(detail):
 )
 def test_a_missing_input_is_an_error_not_a_pass(missing):
     env = {k: v for k, v in BASE.items() if k != missing}
-    proc = subprocess.run(
-        ["bash", str(SCRIPT)], env={"PATH": "/usr/bin:/bin", **env}, capture_output=True, text=True, check=False
-    )
-    assert proc.returncode != 0
+    assert run_verdict_env(env).returncode != 0
 
 
 # --- ci.yml wiring of the gates (review of #19621) ---------------------------------------------
