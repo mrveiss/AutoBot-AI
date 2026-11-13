@@ -328,8 +328,9 @@ REPORTING_FILE = "autobot-frontend/src/composables/analytics/useAnalyticsDataFet
 
 def test_the_unified_report_caller_is_examined_and_skips_the_request_without_a_source():
     """#21463: ``/api/reporting/report`` requires a source; the caller must be seen by the scan and be scoped."""
-    examined, violations = scan_text((repo_root() / REPORTING_FILE).read_text(encoding="utf-8"), REPORTING_FILE)
-    reporting = (repo_root() / REPORTING_FILE).read_text(encoding="utf-8").count("/api/reporting/report")
+    text = (repo_root() / REPORTING_FILE).read_text(encoding="utf-8")
+    examined, violations = scan_text(text, REPORTING_FILE)
+    reporting = text.count("/api/reporting/report")
     assert reporting >= 1, "the unified report caller moved; point this test at it"
     assert examined >= 1 and not violations, violations
 
