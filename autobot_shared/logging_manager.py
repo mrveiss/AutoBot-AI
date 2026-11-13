@@ -8,7 +8,6 @@ Standardizes logging configuration across all components
 """
 
 import logging
-import logging.handlers
 import os
 import sys
 import threading
@@ -18,6 +17,7 @@ from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, Dict
 
 from autobot_shared.env_utils import env_flag, env_float, env_int_clamped
+from autobot_shared.log_dir import FirstWriteFileHandler, resolve_logs_dir
 from autobot_shared.logging_once import first_time
 from autobot_shared.stream_logging import build_stderr_handler, build_stdout_handler
 
@@ -256,8 +256,7 @@ def _log_file_path(log_type: str) -> str:
     configured = _configured_log_file(log_type)
     if configured is not None:
         return configured
-    logs_dir = os.getenv("AUTOBOT_LOGS_DIR", "logs")
-    return f"{logs_dir}/{log_type}.log"
+    return str(resolve_logs_dir() / f"{log_type}.log")
 
 
 def _known_level(value: object) -> int | None:
@@ -303,7 +302,12 @@ class LoggingManager:
     # One rotating handler per log file per process (#20139), keyed by absolute path. Handlers on one
     # file that do not share a lock each see the file over the cap after another has renamed it, and
     # rotate again: one rotation shifts the backups once per handler. Guarded by ``_lock``.
-    _file_handlers: Dict[str, logging.Handler] = {}
+    _file_handlers: Dict[str, FirstWriteFileHandler] = {}
+    # Off until a service's startup calls setup_logging() (#20894): before that a logger writes to the
+    # console only (journald/docker capture it), so importing a module that logs creates no file.
+    _file_logging_enabled = False
+    # Every logger this manager gave handlers, with its log type: setup_logging() adds the file handler.
+    _managed: Dict[str, tuple[logging.Logger, str]] = {}
     # Set by set_level(): wins over the configured level for every logger, existing and future.
     _level_override: int | None = None
     # Re-entrant: get_logger() holds this lock while the lazy config-manager
@@ -345,9 +349,9 @@ class LoggingManager:
 
             # Don't add handlers if already configured
             if not logger.handlers:
-                handler = cls._get_file_handler(log_type)
-                if handler:
-                    logger.addHandler(handler)
+                cls._managed[logger_key] = (logger, log_type)
+                if cls._file_logging_enabled:
+                    cls._attach_file_handler(logger, log_type)
 
                 # Console handler is intentionally unconditional (#12506).
                 # This used to be gated on `_get_config_manager().get_nested(
@@ -396,28 +400,39 @@ class LoggingManager:
     def _setup_logging_internal(cls) -> None:
         """Setup basic logging configuration (internal, called under lock).
 
-        A logs directory that cannot be created (a ``ProtectSystem=strict`` unit whose working
-        directory is read-only, #19628) turns file logging off with one stderr warning: every logger
-        still gets its console handlers, which journald captures, instead of the import that asked
-        for a logger raising.
+        Touches nothing on disk (#20894): the logs directory is created by the file handler at the
+        first record, so importing a module that asks for a logger writes nothing. A logs directory
+        that cannot be created then (a ``ProtectSystem=strict`` unit whose working directory is
+        read-only, #19628) turns file logging off with one stderr warning -- see ``_file_unwritable``.
         """
-        logs_dir = Path(os.getenv("AUTOBOT_LOGS_DIR", "logs"))
-        backup_dir_name = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")  # ssot-config-exempt: pre-init logging
-        try:
-            logs_dir.mkdir(exist_ok=True)
-            (logs_dir / backup_dir_name).mkdir(exist_ok=True)
-        except OSError as exc:
-            cls._file_logging_disabled = True
-            _warn_file_logging_off(logs_dir, exc)
-
         cls._initialized = True
 
     @classmethod
+    def _file_unwritable(cls, path: Path, exc: OSError) -> None:
+        """A file handler's first write failed: warn once; a logs directory that cannot be created
+        turns file logging off for every log type, a single unopenable file only for its own."""
+        if path == resolve_logs_dir():
+            cls._file_logging_disabled = True
+        _warn_file_logging_off(path, exc)
+
+    @classmethod
     def _setup_logging(cls) -> None:
-        """Setup basic logging configuration (thread-safe public method)"""
+        """Start file logging for every logger made so far and every later one; idempotent (#20894)."""
         with cls._lock:
             if not cls._initialized:
                 cls._setup_logging_internal()
+            if cls._file_logging_enabled:
+                return
+            cls._file_logging_enabled = True
+            for logger, log_type in cls._managed.values():
+                cls._attach_file_handler(logger, log_type)
+
+    @classmethod
+    def _attach_file_handler(cls, logger: logging.Logger, log_type: str) -> None:
+        """Give *logger* the shared file handler for *log_type*, once (called under ``_lock``)."""
+        handler = cls._get_file_handler(log_type)
+        if handler is not None and handler not in logger.handlers:
+            logger.addHandler(handler)
 
     @classmethod
     def _get_file_handler(cls, log_type: str) -> logging.Handler | None:
@@ -428,7 +443,8 @@ class LoggingManager:
         stderr warning instead of raising here, at the import of whichever module asked for a logger.
         """
         # No _file_logging_disabled short-cut here: a log file configured outside the logs dir may
-        # still be writable, and a failing one is caught per file below (#19628 review).
+        # still be writable; a failing one turns off only its own handler, at its first write
+        # (#19628 review, #20894).
         log_file = _log_file_path(log_type)
 
         # Use rotating file handler to prevent large log files
@@ -436,14 +452,14 @@ class LoggingManager:
         backup_count = _config_non_negative_int("logging.rotation.backup_count", _DEFAULT_BACKUP_COUNT)
 
         key = os.path.abspath(log_file)
-        if key in cls._file_handlers:
-            return cls._file_handlers[key]
-        try:
-            Path(log_file).parent.mkdir(parents=True, exist_ok=True)
-            handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
-        except OSError as exc:
-            _warn_file_logging_off(Path(log_file), exc)
-            return None
+        cached = cls._file_handlers.get(key)
+        if cached is not None:
+            # Also one whose first write failed: it is the path's disabled marker (it writes nothing and
+            # warned once), so a later logger shares it instead of rebuilding and warning again (#20894).
+            return cached
+        handler = FirstWriteFileHandler(
+            log_file, max_bytes=max_bytes, backup_count=backup_count, on_unwritable=cls._file_unwritable
+        )
         handler.setFormatter(cls._get_formatter())
         cls._file_handlers[key] = handler
         return handler
@@ -496,10 +512,11 @@ class LoggingManager:
             log_file = _configured_log_file(lt)
             if log_file and os.path.exists(log_file):
                 # Create backup using environment-configurable paths
-                logs_dir = os.getenv("AUTOBOT_LOGS_DIR", "logs")
+                logs_dir = resolve_logs_dir()
                 backup_dir = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")
                 backup_path = f"{logs_dir}/{backup_dir}/{lt}_{int(__import__('time').time())}.log"
                 try:
+                    Path(logs_dir, backup_dir).mkdir(parents=True, exist_ok=True)  # created when first used
                     os.rename(log_file, backup_path)
                     _logger.info("Rotated %s to %s", log_file, backup_path)
                 except OSError as e:
@@ -558,7 +575,11 @@ def get_audit_channel_logger(name: str) -> logging.Logger:
     return get_logger(name, "audit")
 
 
-# Maintain backward compatibility with existing logging setup
 def setup_logging() -> None:
-    """Setup logging - backward compatibility function"""
+    """Start file logging: the ONE call every service entry point makes at startup (#20894).
+
+    Until it runs, loggers write to the console only, so importing a module never creates a log file.
+    It attaches the file handler to every logger already made and to every later one. Idempotent.
+    Enforced for every entry point by repo_tests/entry_points_start_file_logging_20894_test.py.
+    """
     LoggingManager._setup_logging()

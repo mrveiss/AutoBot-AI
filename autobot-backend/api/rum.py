@@ -54,6 +54,7 @@ from api.schemas_workflows import (
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.env_registry import env
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.log_dir import FirstWriteFileHandler
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import sanitize_log_value
 from autobot_shared.time_utils import parse_utc_iso
@@ -187,14 +188,11 @@ def setup_rum_logger():
     rum_logger.setLevel(getattr(logging, rum_config["log_level"].upper(), logging.INFO))
 
     # Use centralized path management
-    from utils.paths_manager import ensure_log_directory, get_rum_log_path
+    from utils.paths_manager import get_rum_log_path
 
-    # Ensure logs directory exists
-    ensure_log_directory()
-
-    # Create file handler for RUM logs using centralized path
-    rum_log_path = get_rum_log_path()
-    handler = logging.FileHandler(rum_log_path)
+    # The directory and file are created at the first RUM record, never at import (#20894); a read-only
+    # logs dir turns this handler off instead of failing the router import.
+    handler = FirstWriteFileHandler(str(get_rum_log_path()))
     formatter = logging.Formatter("%(asctime)s - RUM - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
     handler.setFormatter(formatter)
 
