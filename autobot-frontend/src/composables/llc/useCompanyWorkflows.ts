@@ -145,3 +145,6 @@ export function useCompanyWorkflows(companyId: () => string) {
 
   return { workflows, state, errorMessage, pending, isEmpty, load, create, attach, detach, attachable }
 }
+
+/** One company's workflows service: what the Roles panel, the org chart form and the create modal share. */
+export type CompanyWorkflowsService = ReturnType<typeof useCompanyWorkflows>

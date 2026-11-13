@@ -17,10 +17,10 @@
   or name through this surface, and this view must not invent a place to put
   one.
 
-  Every mutation here is admin-only server-side (llc/services/authz.py). The UI
-  does not hide the controls based on a locally-guessed role: a client-side
-  guess that disagrees with the server produces a worse experience than a clear
-  403, and duplicating the rule invites the two copies to drift.
+  Every mutation here is admin-only server-side (llc/services/authz.py). The
+  workflow controls show only when the server's members response says the
+  viewer may manage the company (`viewer_can_manage`, #21241), never from a
+  locally-guessed role; the other panels still answer a refusal with its 403.
 -->
 <template>
   <div class="roles-view">
@@ -154,17 +154,12 @@
               @remove="revokePermission"
             />
 
-            <RoleAttachmentPanel
-              panel-key="workflows"
-              :title="t('llcRoles.workflows')"
-              :items="workflows"
-              :add-label="t('llcRoles.attach')"
-              :remove-label="t('llcRoles.detach')"
-              :empty-label="t('llcRoles.noWorkflows')"
-              :placeholder="t('llcRoles.workflowPlaceholder')"
+            <RoleWorkflowsPanel
+              :company-id="companyId"
+              :role-id="selectedRole.id"
+              :attached="workflows"
               :busy="isMutating"
-              @add="attachWorkflow"
-              @remove="detachWorkflow"
+              @changed="loadDetail"
             />
 
             <!-- #14607: the rate the role's steps are costed against. It sits
@@ -338,6 +333,7 @@ import { useApiClient } from '@/plugins/api'
 import type { components } from '@/types/generated/api'
 import { createLogger } from '@/utils/debugUtils'
 import RoleAttachmentPanel from '@/components/llc/RoleAttachmentPanel.vue'
+import RoleWorkflowsPanel from '@/components/llc/RoleWorkflowsPanel.vue'
 import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal } from '@autobot/ui'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
 
@@ -785,20 +781,6 @@ async function revokePermission(permission: string): Promise<void> {
   await mutate(
     () => api.delete(`${detailBase()}/permissions/${encodeURIComponent(permission)}`),
     'llcRoles.errorRevoke',
-  )
-}
-
-async function attachWorkflow(workflowId: string): Promise<void> {
-  await mutate(
-    () => api.post(`${detailBase()}/workflows`, { workflow_id: workflowId }),
-    'llcRoles.errorAttach',
-  )
-}
-
-async function detachWorkflow(workflowId: string): Promise<void> {
-  await mutate(
-    () => api.delete(`${detailBase()}/workflows/${encodeURIComponent(workflowId)}`),
-    'llcRoles.errorDetach',
   )
 }
 

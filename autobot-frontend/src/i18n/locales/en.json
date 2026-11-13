@@ -9444,6 +9444,26 @@
         "error": "Something went wrong and delivery could not be confirmed. Refresh to see whether the claim is still held."
       }
     },
+    "workflows": {
+      "newWorkflow": "New workflow",
+      "createTitle": "New workflow",
+      "fieldId": "Workflow id",
+      "idHint": "A short id that is unique within this company, for example quarterly-review.",
+      "fieldName": "Name (optional)",
+      "working": "Working…",
+      "createAndAttach": "Create and attach",
+      "attachCreated": "Attach to role",
+      "createForbidden": "Only a company owner or admin can create workflows.",
+      "createFailed": "Could not create that workflow.",
+      "attachCreatedFailed": "Workflow {id} was created but could not be attached: {detail}. It is in the list, so you can attach it again.",
+      "pickerLabel": "Workflow to attach",
+      "pickerPlaceholder": "Choose a workflow…",
+      "loading": "Loading workflows…",
+      "unavailable": "Workflows could not be loaded. This is a loading problem, not an empty list.",
+      "nothingAttachable": "This company has no workflows yet. Create one to attach it.",
+      "allAttached": "Every workflow in this company is already attached to this role.",
+      "standingUnavailable": "Your role could not be loaded, so the workflow controls are hidden."
+    },
     "workflowPlanner": {
       "title": "Workflow Planner",
       "plans": "Plans",
