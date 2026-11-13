@@ -102,6 +102,38 @@ def test_every_updater_role_handler_restarts_only_through_the_shared_task() -> N
     assert not direct, f"these handlers do not clear a start-limit park: {direct}"
 
 
+#: Keywords ansible-core 2.17 refuses on an ``include_tasks`` (`TaskInclude.VALID_INCLUDE_KEYWORDS` has none of
+#: them; `preprocess_data` raises "'become' is not a valid attribute for a TaskInclude"). The shared task sets
+#: `become` itself, so a caller never needs it.
+_PRIVILEGE_KEYWORDS = frozenset({"become", "become_user", "become_method", "become_flags", "become_exe"})
+
+
+def _includes_with_privilege_keywords(docs: list) -> list:
+    return [
+        (t.get("name"), sorted(_PRIVILEGE_KEYWORDS & set(t)))
+        for t in _mappings(docs)
+        if any(k in t for k in ("ansible.builtin.include_tasks", "include_tasks")) and _PRIVILEGE_KEYWORDS & set(t)
+    ]
+
+
+def test_no_include_tasks_carries_a_privilege_keyword() -> None:
+    """Parsing fails outright on one (the playbook or the handler file never loads), so no CI job would show it."""
+    found = [
+        (p.relative_to(_ANSIBLE).as_posix(), *hit)
+        for p in _all_yaml()
+        for hit in _includes_with_privilege_keywords(_load(p))
+    ]
+    assert found == [], f"include_tasks with become: ansible-core rejects it, the shared task sets it: {found}"
+
+
+def test_the_privilege_keyword_check_sees_a_rejected_include_and_passes_a_valid_one() -> None:
+    bad = yaml.safe_load("- name: a\n  ansible.builtin.include_tasks: _shared/tasks/restart_unit.yml\n  become: true\n")
+    ok = yaml.safe_load("- name: a\n  ansible.builtin.include_tasks: _shared/tasks/restart_unit.yml\n  vars: {x: 1}\n")
+    plain = yaml.safe_load("- name: a\n  ansible.builtin.command: id\n  become: true\n")
+    assert _includes_with_privilege_keywords(bad) == [("a", ["become"])]
+    assert _includes_with_privilege_keywords(ok) == [] == _includes_with_privilege_keywords(plain)
+
+
 def test_every_shared_include_names_its_unit() -> None:
     sources = _all_yaml()
     includes = [t for src in sources for t in _mappings(_load(src)) if shared_include(t)]
