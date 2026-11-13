@@ -47,6 +47,8 @@ const PEOPLE = [
 
 function respond(viewerRole: string): void {
   get.mockImplementation((url: string) => {
+    // #21242: the canvas lists the company's workflows on entry; answer it explicitly.
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
     if (url.endsWith('/members')) {
       return Promise.resolve({ members: [{ user_id: 'u1', display_name: 'Ada', role: 'member' }], viewer_can_manage: viewerRole === 'owner' })
     }
