@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING
 from celery.signals import worker_ready
 
 from autobot_shared.env_utils import env_float
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
 
@@ -307,4 +307,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     sys.exit(main())
