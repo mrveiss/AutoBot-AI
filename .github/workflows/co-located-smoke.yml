@@ -74,7 +74,14 @@ permissions:
 jobs:
   # Classes (c) + (d): pytest-shaped regression pins. Fast, no containers.
   authz-and-selection:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # #21490: a dependabot pull request does not start this on its own; a `train-*` head or the
+    # `ci:full` label (read when the run starts) lets it run.
+    if: >-
+      ${{ github.event_name != 'pull_request'
+          || (github.event.pull_request.draft == false
+              && (github.event.pull_request.user.login != 'dependabot[bot]'
+                  || startsWith(github.event.pull_request.head.ref, 'train-')
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -126,7 +133,14 @@ jobs:
   # Classes (a) + (b): live co-located compose stack (frontend at /, SLM at
   # /slm — the same single-host topology as bare-metal co-located installs).
   colocated-stack:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # #21490: a dependabot pull request does not start this on its own; a `train-*` head or the
+    # `ci:full` label (read when the run starts) lets it run.
+    if: >-
+      ${{ github.event_name != 'pull_request'
+          || (github.event.pull_request.draft == false
+              && (github.event.pull_request.user.login != 'dependabot[bot]'
+                  || startsWith(github.event.pull_request.head.ref, 'train-')
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

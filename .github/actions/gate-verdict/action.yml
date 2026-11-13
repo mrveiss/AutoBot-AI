@@ -35,6 +35,10 @@ inputs:
     description: "'true' when the pull request is a draft."
     required: false
     default: 'false'
+  held:
+    description: "'true' when the pull request is a dependabot one held back from the full suite (#21490)."
+    required: false
+    default: 'false'
   draft-gated:
     description: "'false' for the one context that runs on drafts (verify-precommit-config, #17957)."
     required: false
@@ -53,5 +57,6 @@ runs:
         GATE_WORK_DETAIL: ${{ inputs.work-detail }}
         GATE_EVENT: ${{ inputs.event }}
         GATE_DRAFT: ${{ inputs.draft }}
+        GATE_HELD: ${{ inputs.held }}
         GATE_DRAFT_GATED: ${{ inputs.draft-gated }}
       run: bash "${{ github.action_path }}/verdict.sh"
