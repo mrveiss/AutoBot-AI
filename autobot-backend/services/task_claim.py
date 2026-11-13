@@ -13,8 +13,8 @@ Key layout:
 
 Claim lifecycle:
   1. claim_task()    -- SET NX EX; returns True only to the first caller.
-  2. renew_claim()   -- Lua EXPIRE guard; keeps TTL alive while agent works.
-  3. release_claim() -- Lua DEL-if-owner; prevents stealing the delete.
+  2. renew_claim()   -- expire_if_value; keeps TTL alive while agent works.
+  3. release_claim() -- delete_if_value; prevents stealing the delete.
 
 All three fail open: when Redis is unreachable or errors they return True, the
 value success returns, so a caller cannot tell a real grant, renewal or release
@@ -55,30 +55,13 @@ from __future__ import annotations
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_value, expire_if_value
 from services.audit.audit import AuditCategory, AuditEvent, emit
 
 logger = get_logger(__name__)
 
 _CLAIM_KEY_TPL = "task:claim:{task_id}"
 _DEFAULT_TTL = 300  # seconds — covers a full heartbeat run with margin
-
-# Lua: release only if the caller still owns the key.
-_RELEASE_LUA = """
-if redis.call('get', KEYS[1]) == ARGV[1] then
-    return redis.call('del', KEYS[1])
-else
-    return 0
-end
-"""
-
-# Lua: extend TTL only if the caller still owns the key.
-_RENEW_LUA = """
-if redis.call('get', KEYS[1]) == ARGV[1] then
-    return redis.call('expire', KEYS[1], ARGV[2])
-else
-    return 0
-end
-"""
 
 
 def _key(task_id: str) -> str:
@@ -129,9 +112,7 @@ async def renew_claim(task_id: str, agent_id: str, ttl: int = _DEFAULT_TTL) -> b
         _emit_audit("task.renew", agent_id, task_id, outcome="redis_unavailable")
         return True  # fail-open
     try:
-        script = redis.register_script(_RENEW_LUA)
-        result = await script(keys=[_key(task_id)], args=[agent_id, str(ttl)])
-        renewed = bool(result)
+        renewed = await expire_if_value(redis, _key(task_id), agent_id, ttl * 1000)
         if not renewed:
             logger.warning(
                 "task_claim: renew failed (claim lost?) task=%s agent=%s",
@@ -158,9 +139,7 @@ async def release_claim(task_id: str, agent_id: str) -> bool:
         _emit_audit("task.release", agent_id, task_id, outcome="redis_unavailable")
         return True  # fail-open
     try:
-        script = redis.register_script(_RELEASE_LUA)
-        result = await script(keys=[_key(task_id)], args=[agent_id])
-        released = bool(result)
+        released = await delete_if_value(redis, _key(task_id), agent_id)
         logger.debug(
             "task_claim: release task=%s agent=%s released=%s",
             task_id,
