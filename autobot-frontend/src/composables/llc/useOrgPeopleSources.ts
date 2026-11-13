@@ -20,10 +20,8 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useOrgPeopleSources')
 
-interface InvolvedResponse {
-  with_role: ContactSource[]
-  unassigned: ContactSource[]
-}
+/** The two groups `GET /api/llc/contacts/{company_id}/involved` answers with (#13998). */
+type InvolvedGroups = Partial<Record<'with_role' | 'unassigned', ContactSource[]>>
 
 export interface PeopleSourcesApi {
   get(url: string): Promise<unknown>
@@ -71,7 +69,7 @@ export function useOrgPeopleSources(deps: OrgPeopleSourcesDeps) {
     // people the department carries from before the directory was shared.
     // Merging them here would assert an involvement nobody recorded, so the
     // second group is tracked by id and labelled rather than blended in.
-    const body = result.value as Partial<InvolvedResponse> | null | undefined
+    const body = result.value as InvolvedGroups | null | undefined
     const withRole = Array.isArray(body?.with_role) ? body.with_role : []
     const unassigned = Array.isArray(body?.unassigned) ? body.unassigned : []
     contacts.value = [...withRole, ...unassigned]
