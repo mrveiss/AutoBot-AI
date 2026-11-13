@@ -37,12 +37,23 @@ DEAD_KEY = "mesh:reembed_dead"
 ATTEMPTS_KEY = "mesh:reembed_attempts"
 LEASE_KEY = "mesh:reembed:leader"
 
+
+def interval_s_from_env() -> int:
+    """Seconds between drain passes, read from the environment now."""
+    return env_int("AUTOBOT_MESH_REEMBED_INTERVAL_S", REEMBED_INTERVAL_DEFAULT_S)
+
+
+def lease_ttl_ms_from_env() -> int:
+    """Lease TTL read from the environment now; unset, it follows the interval as read now (#21102)."""
+    return env_int("AUTOBOT_MESH_REEMBED_LEASE_TTL_MS", reembed_lease_ttl_default_ms(interval_s_from_env()))
+
+
 ENABLED = env_flag("AUTOBOT_MESH_REEMBED_ENABLED", True)
-INTERVAL_S = env_int("AUTOBOT_MESH_REEMBED_INTERVAL_S", REEMBED_INTERVAL_DEFAULT_S)
+INTERVAL_S = interval_s_from_env()
 BATCH = env_int("AUTOBOT_MESH_REEMBED_BATCH", 100)
 # The lease outlives the interval plus a worst-case drain (BATCH items), and drain() also refreshes it
 # as it goes, so a second worker never takes it mid-drain and re-queues this worker's in-flight items.
-LEASE_TTL_MS = env_int("AUTOBOT_MESH_REEMBED_LEASE_TTL_MS", reembed_lease_ttl_default_ms(INTERVAL_S))
+LEASE_TTL_MS = lease_ttl_ms_from_env()
 MAX_ATTEMPTS = env_int("AUTOBOT_MESH_REEMBED_MAX_ATTEMPTS", 3)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
