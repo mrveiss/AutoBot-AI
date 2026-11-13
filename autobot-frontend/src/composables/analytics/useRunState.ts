@@ -45,15 +45,41 @@ export interface RunStateHandle {
   /** `null` = no run record (data indexed before records existed): nothing says the results are partial. */
   run: Ref<CodebaseRunState | null>
   /**
+   * The last run-state read of the selected source failed, and nothing has answered since: `run`
+   * is then what was known before (or `null`), NOT "no run record". Cleared by the next answer.
+   */
+  readFailed: Ref<boolean>
+  /**
    * Take the `run` field off a results body; a body without the field changes nothing.
    * `forSource` is the source key the request was made for (default: the current one): a
-   * response for a source that is no longer selected is dropped.
+   * response for a source that is no longer selected is dropped. A `running` snapshot of a run
+   * already known to have ended is dropped too: the first terminal status of a run is final.
    */
   applyRunFields: (body: unknown, forSource?: string) => void
+  /** Read the run state; also the retry after a failed read. */
   loadRunState: () => Promise<void>
 }
 
 export const RUN_STATE_KEY: InjectionKey<RunStateHandle> = Symbol('codebase-run-state')
+
+/**
+ * How a job that has left the task slot ended, read off the run record (a run's id is its task
+ * id). `null` when the record does not say: no record, a run still `running`, or the record of
+ * another run than `taskId`. With no `taskId` (a queued request whose job was never seen) the
+ * newest run is taken, unless it is still `baselineRunId`, the run already newest when the wait
+ * began: the request then never ran, and that record is an earlier run's outcome.
+ * `killed` and `abandoned` are failures to the job poller; their reason is the error.
+ */
+export function endedRunOutcome(
+  run: CodebaseRunState | null,
+  taskId: string | null,
+  baselineRunId: string | null = null,
+): { status: string; error?: string } | null {
+  if (!run || !run.status || run.status === 'running') return null
+  if (taskId ? run.run_id !== taskId : run.run_id === baselineRunId) return null
+  if (run.status === 'completed' || run.status === 'cancelled') return { status: run.status }
+  return { status: 'failed', error: run.reason || run.status }
+}
 
 /**
  * Create the page's run state and offer it to the components below the caller.
@@ -63,11 +89,18 @@ export const RUN_STATE_KEY: InjectionKey<RunStateHandle> = Symbol('codebase-run-
  */
 export function useRunState(withSourceId: (url: string) => string, currentSource: () => string): RunStateHandle {
   const run = ref<CodebaseRunState | null>(null)
+  const readFailed = ref(false)
 
   const applyRunFields = (body: unknown, forSource: string = currentSource()) => {
     if (forSource !== currentSource()) return
     if (body && typeof body === 'object' && 'run' in body) {
-      run.value = (body as RunBodyFields).run ?? null
+      const incoming = (body as RunBodyFields).run ?? null
+      const known = run.value
+      // The requests are not ordered: a snapshot taken while the run was going can arrive last.
+      const staleRunning = !!known && !!incoming && known.run_id === incoming.run_id &&
+        known.status !== 'running' && incoming.status === 'running'
+      if (!staleRunning) run.value = incoming
+      if (incoming) readFailed.value = false // `run: null` on a results body may itself be a failed label read
     }
   }
 
@@ -80,9 +113,14 @@ export function useRunState(withSourceId: (url: string) => string, currentSource
       pickData: (raw) => raw.run ?? null,
       onSuccess: (_run, raw, forSource) => applyRunFields(raw, forSource),
       onNoData: (forSource) => {
-        if (forSource === currentSource()) run.value = null
+        if (forSource !== currentSource()) return
+        run.value = null
+        readFailed.value = false
       },
-      onError: (message) => logger.warn(`Run state not read: ${message}`),
+      onError: (message, _err, forSource) => {
+        logger.warn(`Run state not read: ${message}`)
+        if (forSource === currentSource()) readFailed.value = true
+      },
     },
     { withSourceId },
   )
@@ -90,10 +128,11 @@ export function useRunState(withSourceId: (url: string) => string, currentSource
   const loadRunState = () => endpoint.load(undefined, currentSource())
   watch(currentSource, () => {
     run.value = null
+    readFailed.value = false
     void loadRunState()
   })
 
-  const handle: RunStateHandle = { run, applyRunFields, loadRunState }
+  const handle: RunStateHandle = { run, readFailed, applyRunFields, loadRunState }
   if (getCurrentInstance()) provide(RUN_STATE_KEY, handle)
   return handle
 }

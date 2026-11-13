@@ -21,7 +21,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { jobBelongsToSource } from './indexingJobSource'
 import { createPollSession } from './pollSession'
-import type { RunStateHandle } from './useRunState'
+import { endedRunOutcome, type RunStateHandle } from './useRunState'
 
 const logger = createLogger('useIndexingJob')
 
@@ -81,7 +81,7 @@ export interface UseIndexingJobDeps {
   hardcodeAnalysis: Ref<unknown[]>
   chartData: Ref<unknown | null>
   /** How the newest run ended (#21003): re-read when a job ends and when the page opens. */
-  runState: Pick<RunStateHandle, 'loadRunState'>
+  runState: Pick<RunStateHandle, 'loadRunState' | 'run' | 'readFailed'>
   /** Show knowledge-base opt-in banner after successful indexing. */
   showKnowledgeBaseOptIn: Ref<boolean>
   /** Callback invoked after a successful index completion to run follow-up scans. */
@@ -197,6 +197,12 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
   const _showQueued = (data: CurrentJobRaw) => {
     sawOwnJob = true
     idlePolls = 0
+    // A job tracked until now has ended and the slot holds another source's job: keeping its id
+    // would leave Stop enabled, and the cancel route is not source-scoped.
+    if (currentJobId.value) deps.progressPercent.value = 0
+    else pollSession.noteWait(deps.runState.run.value?.run_id ?? null) // the run before this request
+    currentJobId.value = null
+    jobPhases.value = jobBatches.value = jobStats.value = null
     deps.analyzing.value = true
     deps.progressStatus.value = deps.t('analytics.codebase.status.queued', { position: data.position })
   }
@@ -233,7 +239,11 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     status: string,
     error?: string,
   ) => {
+    const waitedFrom = pollSession.waitBaseline()
+    pollSession.renew() // the job is ended once: a poll still in flight is stale and cannot end it again
     const isStale = pollSession.guard()
+    const taskId = currentJobId.value
+    const tracked = sawOwnJob || !!taskId
     deps.analyzing.value = false
     stopJobPolling()
     jobPhases.value = null
@@ -241,6 +251,15 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     jobStats.value = null
     // #21003: how the run ended decides whether the stored findings are labelled partial.
     const runStateRead = deps.runState.loadRunState()
+    if (status === 'idle' && tracked) {
+      // The slot of a job that ended is cleared, so `idle` says only that it is over: how it
+      // ended is on the run record. An unread record resolves nothing.
+      await runStateRead
+      if (isStale()) return
+      const ended = endedRunOutcome(deps.runState.readFailed.value ? null : deps.runState.run.value, taskId, waitedFrom)
+      status = ended?.status ?? status
+      error = ended ? ended.error : error
+    }
 
     if (status === 'completed') {
       deps.progressStatus.value = deps.t('analytics.codebase.status.indexingCompleted')

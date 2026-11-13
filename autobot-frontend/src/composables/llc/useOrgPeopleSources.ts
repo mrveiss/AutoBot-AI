@@ -57,6 +57,9 @@ export function useOrgPeopleSources(deps: OrgPeopleSourcesDeps) {
   // would prove it has actually completed (#14064's failure shape).
   const teamsAttempted = ref(false)
   const loading = ref(false)
+  // The company the lists above belong to. `loaded` alone cannot say that: the view outlives a company
+  // switch (the sidebar re-targets the same route), so the cache is only valid for this id.
+  let ownerCompanyId = ''
 
   function applyContacts(result: PromiseSettledResult<PlanResponse<typeof INVOLVED, 'get'>>): void {
     if (result.status === 'rejected') {
@@ -104,8 +107,20 @@ export function useOrgPeopleSources(deps: OrgPeopleSourcesDeps) {
     loaded.value = !contactsFailed.value && !teamsFailed.value
   }
 
+  /** Hand the state to `cid`: another company's people and flags are never shown under it. */
+  function adoptCompany(cid: string): void {
+    ownerCompanyId = cid
+    contacts.value = []
+    unassignedContactIds.value = new Set()
+    teams.value = []
+    contactsFailed.value = false
+    teamsFailed.value = false
+    teamsAttempted.value = false
+    loaded.value = false
+  }
+
   async function load(): Promise<void> {
-    if (loaded.value || loading.value) return
+    if (loading.value) return
     // Claim the guard BEFORE the first await: two clicks in one tick would both
     // pass the check above and double-fire every request.
     loading.value = true
@@ -114,12 +129,17 @@ export function useOrgPeopleSources(deps: OrgPeopleSourcesDeps) {
       // hop, which moves the two requests past the point a caller that snapshots right after the
       // fire-and-forget entry (the role lens spec) counts them from.
       const cid = await deps.resolveCompanyId()
-      if (cid) await fetchSources(cid)
+      if (!cid || (loaded.value && cid === ownerCompanyId)) return
+      // Synchronous, straight after the first await: the requests below start in this same turn.
+      if (cid !== ownerCompanyId) adoptCompany(cid)
+      await fetchSources(cid)
     } catch (err: unknown) {
       // A rejected company resolution is not "no company", and a throw from the api or the apply step
       // is not "no people": each ends in the same visible failed state, never an unhandled rejection
       // at the fire-and-forget call sites.
       logger.error('Failed to load the people sources:', err)
+      // A cached answer for the company in view stays; only a state with no answer is marked failed.
+      if (loaded.value) return
       contactsFailed.value = true
       teamsFailed.value = true
       teamsAttempted.value = true

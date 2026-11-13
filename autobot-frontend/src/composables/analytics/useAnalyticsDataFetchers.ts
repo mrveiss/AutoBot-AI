@@ -116,12 +116,12 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const duplicateAnalysis = ref<DuplicateCode[]>([])
   // #17983: a failed scan is its own state, never "0 duplicates found"
   const duplicateScanState = ref<DuplicateScanState>('not_scanned')
-  const applyDuplicates = (raw: unknown) => {
-    staleResults.clear('duplicates') // only the cached route re-marks it, after this
+  const showDuplicates = (raw: unknown) => {
     const reading = readDuplicatePayload(raw)
     duplicateAnalysis.value = reading.duplicates
     duplicateScanState.value = reading.state
   }
+  const applyDuplicates = (raw: unknown) => { staleResults.clear('duplicates'); showDuplicates(raw) } // a full scan: never stale
   // #17983: the OTHER way a scan fails. `applyDuplicates` runs only on a 2xx,
   // so a 404 (duplicates.py, unresolvable source) throws instead and used to
   // leave the state untouched -- a stale `'done'` holding the PREVIOUS source's
@@ -305,17 +305,19 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   // #20493: the code-smell panel and its export share this one load.
   const smells = useCodeSmellProblems(withSourceId)
 
-  const cachedDuplicatesEndpoint = useFetchEndpoint<unknown, unknown>(
+  // The request context of the three cached loaders is the source asked for: the flag of the
+  // selected source is not set or cleared by a late answer for the previous one (#17982).
+  const cachedDuplicatesEndpoint = useFetchEndpoint<unknown, unknown, string>(
     { path: '/api/analytics/codebase/duplicates/cached', scopeToSource: true, requireSource: true,
       label: 'Cached duplicates endpoint', pickData: (raw) => raw, onError: failDuplicates,
-      onSuccess: (raw) => { applyDuplicates(raw); staleResults.markFromCached('duplicates', raw) },
-      onNoData: () => { duplicateAnalysis.value = []; duplicateScanState.value = 'not_scanned' } },
+      onSuccess: (raw, _body, forSource) => { showDuplicates(raw); staleResults.markFromCached('duplicates', raw, forSource) },
+      onNoData: (forSource) => { duplicateAnalysis.value = []; duplicateScanState.value = 'not_scanned'; staleResults.clear('duplicates', forSource) } },
     { withSourceId },
   )
 
   const cachedDependenciesEndpoint = useFetchEndpoint<
     { status: string; dependency_data?: unknown },
-    DependencyGraph
+    DependencyGraph, string
   >(
     {
       path: '/api/analytics/codebase/analytics/dependencies/cached',
@@ -325,14 +327,14 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
         raw.status === 'success' && raw.dependency_data
           ? (raw.dependency_data as DependencyGraph)
           : null,
-      onSuccess: (d, raw) => { dependencyData.value = d; staleResults.markFromCached('dependencies', raw) }, onNoData: () => { dependencyData.value = null; staleResults.clear('dependencies') },
+      onSuccess: (d, raw, forSource) => { dependencyData.value = d; staleResults.markFromCached('dependencies', raw, forSource) }, onNoData: (forSource) => { dependencyData.value = null; staleResults.clear('dependencies', forSource) },
     },
     { withSourceId },
   )
 
   const cachedImportTreeEndpoint = useFetchEndpoint<
     { status: string; import_tree?: unknown },
-    ImportTreeNode[]
+    ImportTreeNode[], string
   >(
     {
       path: '/api/analytics/codebase/analytics/import-tree/cached',
@@ -342,7 +344,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
         raw.status === 'success' && raw.import_tree
           ? (raw.import_tree as ImportTreeNode[])
           : null,
-      onSuccess: (d, raw) => { importTreeData.value = d; staleResults.markFromCached('importTree', raw) }, onNoData: () => { importTreeData.value = null; staleResults.clear('importTree') },
+      onSuccess: (d, raw, forSource) => { importTreeData.value = d; staleResults.markFromCached('importTree', raw, forSource) }, onNoData: (forSource) => { importTreeData.value = null; staleResults.clear('importTree', forSource) },
     },
     { withSourceId },
   )
@@ -353,9 +355,9 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const loadUnifiedReport = () => unifiedEndpoint.load()
   const loadCallGraphData = () => callGraphEndpoint.load()
   const getCodebaseStats = () => statsEndpoint.load(undefined, deps.sourceIdParam.value)
-  const loadCachedDuplicates = () => cachedDuplicatesEndpoint.load()
-  const loadCachedDependencies = () => cachedDependenciesEndpoint.load()
-  const loadCachedImportTree = () => cachedImportTreeEndpoint.load()
+  const loadCachedDuplicates = () => cachedDuplicatesEndpoint.load(undefined, deps.sourceIdParam.value)
+  const loadCachedDependencies = () => cachedDependenciesEndpoint.load(undefined, deps.sourceIdParam.value)
+  const loadCachedImportTree = () => cachedImportTreeEndpoint.load(undefined, deps.sourceIdParam.value)
   // #17758: both routes now REQUIRE source_id -- omitting it is a 422, not a
   // repo-wide scan. `useTaskLoader.load(body, query)` takes the query record,
   // and `sourceIdQuery` is the same one the `*/cached` fetchers already send.

@@ -101,12 +101,15 @@
       icon="search"
       :message="$t('analytics.duplicates.notScanned')"
     />
-    <EmptyState
-      v-else-if="!loading"
-      icon="check-circle"
-      :message="$t('analytics.duplicates.emptyMessage')"
-      variant="success"
-    />
+    <!-- #17982: "none found" from a cached result older than the last sync says so too -->
+    <template v-else-if="!loading">
+      <StaleResultNotice kind="duplicates" />
+      <EmptyState
+        icon="check-circle"
+        :message="$t('analytics.duplicates.emptyMessage')"
+        variant="success"
+      />
+    </template>
   </div>
 </template>
 

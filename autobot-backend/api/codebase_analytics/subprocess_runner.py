@@ -29,7 +29,6 @@ from .indexing_executor import (
 from .progress_tracker import _load_task_from_redis
 from .run_status import (
     STATUS_CANCELLED,
-    STATUS_COMPLETED,
     STATUS_FAILED,
     STATUS_KILLED,
     TERMINAL_STATUSES,
@@ -44,17 +43,29 @@ from .run_status import (
 logger = get_logger(__name__)
 
 
-async def _record_completed_if_done(task_id: str, source_id: str | None) -> None:
-    """Backstop (#21003): a task the worker marked ``completed`` is recorded ``completed``.
+#: Reasons recorded for a terminal status recovered from the task state.  They are served to
+#: readers, so they name the outcome only; the task's error text stays in the task state and the log.
+_RECOVERED_REASONS = {
+    STATUS_FAILED: "indexing failed",
+    STATUS_KILLED: "indexing worker was killed",
+    STATUS_CANCELLED: "cancelled by user",
+}
 
-    The worker records its own completion, but the Redis state can say ``completed``
-    while that record write never landed (or the hard timeout fired in between).
+
+async def _record_terminal_if_done(task_id: str, source_id: str | None) -> bool:
+    """Backstop (#21003): a task left in a terminal state is recorded with that status.
+
+    The worker records its own outcome, but the Redis state can say ``completed``
+    or ``failed`` while that record write never landed (or the hard timeout fired
+    in between); the record would stay ``running`` and later read ``abandoned``.
     ``record_run_finished`` keeps the first terminal status of a run, so this is
-    idempotent when the record is already right.
+    idempotent when the record is already right.  True when the task was terminal.
     """
-    task_data = await _load_task_from_redis(task_id) or {}
-    if task_data.get("status") == STATUS_COMPLETED:
-        await record_run_finished(source_id, task_id, STATUS_COMPLETED)
+    status = (await _load_task_from_redis(task_id) or {}).get("status")
+    if status not in TERMINAL_STATUSES:
+        return False
+    await record_run_finished(source_id, task_id, status, _RECOVERED_REASONS.get(status, ""))
+    return True
 
 
 async def _mark_crashed(task_id, returncode, mark_task_failed_fn, save_task_fn, source_id, kill_reason) -> None:
@@ -80,7 +91,7 @@ async def _handle_subprocess_crash(
 
     Only updates state if the subprocess did not already write a terminal
     status (completed/failed/cancelled) before crashing.  A task already
-    ``completed`` is recorded ``completed`` instead (#21003 backstop).
+    terminal is recorded with that status instead (#21003 backstop).
 
     Parameters
     ----------
@@ -93,10 +104,7 @@ async def _handle_subprocess_crash(
         timeout), when it did; otherwise the exit code is the reason.
     """
     logger.error("[Task %s] Indexing subprocess crashed (exit code %d)", task_id, returncode)
-    task_data = await _load_task_from_redis(task_id) or {}
-    if task_data.get("status") == STATUS_COMPLETED:
-        await record_run_finished(source_id, task_id, STATUS_COMPLETED)
-    elif task_data.get("status") not in TERMINAL_STATUSES:
+    if not await _record_terminal_if_done(task_id, source_id):
         await _mark_crashed(task_id, returncode, mark_task_failed_fn, save_task_fn, source_id, kill_reason)
 
 
@@ -197,7 +205,7 @@ async def _wait_for_exit(proc, task_id: str, source_id: str | None, kill_reasons
     except asyncio.CancelledError:
         logger.warning("[Task %s] Indexing cancelled; killing the worker", task_id)
         await _kill_worker(proc)
-        await record_run_finished(source_id, task_id, STATUS_CANCELLED, "cancelled by user")
+        await record_run_finished(source_id, task_id, STATUS_CANCELLED, _RECOVERED_REASONS[STATUS_CANCELLED])
         raise
 
 
@@ -269,4 +277,4 @@ async def _run_indexing_subprocess(
         )
     else:
         logger.info("[Task %s] Subprocess completed successfully (rc=0)", task_id)
-        await _record_completed_if_done(task_id, source_id)
+        await _record_terminal_if_done(task_id, source_id)

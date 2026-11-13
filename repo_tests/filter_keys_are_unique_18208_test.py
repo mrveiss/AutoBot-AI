@@ -84,7 +84,7 @@ def step_output_problem(steps: list, filters: dict, step_id: str, key: str) -> s
     script = str(step.get("run", ""))
     if not script:
         return f"output reads steps.{step_id}, which is neither a paths-filter step nor a `run:` step"
-    if not re.search(rf"{re.escape(key)}=[^\n]*>>\s*\"?\$GITHUB_OUTPUT", script):
+    if not re.search(r"(?:^|[\s\"'])" + re.escape(key) + r"=[^\n]*>>\s*\"?\$GITHUB_OUTPUT", script):
         return f"steps.{step_id}.outputs.{key}: the script never writes `{key}=` to $GITHUB_OUTPUT; the output would be '' forever"
     return None
 
@@ -110,6 +110,9 @@ def test_control_run_step_outputs_and_filter_keys_are_verified():
     assert step_output_problem(steps, filters, "hold", "held") is None
     assert step_output_problem(steps, filters, "gp", "self") is None
     assert "never writes" in step_output_problem(steps, filters, "hold", "nope")
+    suffix_only = [{"id": "hold", "run": 'echo "withheld=true" >> "$GITHUB_OUTPUT"'}]
+    assert "never writes" in step_output_problem(suffix_only, filters, "hold", "held"), "a suffix is not the key"
+    assert step_output_problem(suffix_only, filters, "hold", "withheld") is None
     assert "not a step" in step_output_problem(steps, filters, "ghost", "held")
     assert "no key" in step_output_problem(steps, filters, "gp", "typo")
 

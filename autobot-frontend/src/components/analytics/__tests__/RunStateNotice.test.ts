@@ -6,7 +6,7 @@
 /**
  * RunStateNotice: results of a run that did not finish are shown, labelled partial (#21003).
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
@@ -29,10 +29,11 @@ const run = (over: Partial<CodebaseRunState>): CodebaseRunState => ({
   ...over,
 })
 
-function render(value: CodebaseRunState | null) {
-  const handle: RunStateHandle = { run: ref(value), applyRunFields: () => {}, loadRunState: async () => {} }
+function render(value: CodebaseRunState | null, readFailed = false, loadRunState: () => Promise<void> = async () => {}) {
+  const handle: RunStateHandle = { run: ref(value), readFailed: ref(readFailed), applyRunFields: () => {}, loadRunState }
   return mount(RunStateNotice, { global: { plugins: [i18n], provide: { [RUN_STATE_KEY as symbol]: handle } } })
 }
+const UNREAD = '[data-testid="run-state-unread-notice"]'
 
 describe('RunStateNotice (#21003)', () => {
   it('a killed run: says it did not finish, why, that the findings are partial, and the last completed run', () => {
@@ -79,6 +80,24 @@ describe('RunStateNotice (#21003)', () => {
     expect(text).toContain(msg.unfinished)
     expect(text).not.toContain('ended as .')
     expect(render(run({ status: '', reason: 'lost' })).text()).toContain(msg.unfinishedWithReason.replace('{reason}', 'lost'))
+  })
+
+  it('a run state that could not be read says so and offers a retry; it is not "no run record"', async () => {
+    const loadRunState = vi.fn(async () => {})
+    const wrapper = render(null, true, loadRunState)
+    expect(wrapper.find(UNREAD).exists()).toBe(true)
+    expect(wrapper.text()).toContain(msg.unreadTitle)
+    expect(wrapper.text()).toContain(msg.unread)
+    await wrapper.find('[data-testid="run-state-retry"]').trigger('click')
+    expect(loadRunState).toHaveBeenCalledTimes(1)
+    expect(render(null).find(UNREAD).exists()).toBe(false) // control: a read that answered "no record" shows nothing
+  })
+
+  it('a failed re-read keeps the partial notice already shown, and flags a run last known complete', () => {
+    const partial = render(run({}), true)
+    expect(partial.find('[data-testid="run-state-notice"]').exists()).toBe(true)
+    expect(partial.find(UNREAD).exists()).toBe(false)
+    expect(render(run({ status: 'completed', partial: false }), true).find(UNREAD).exists()).toBe(true)
   })
 
   it('a cancelled run says cancelled', () => {

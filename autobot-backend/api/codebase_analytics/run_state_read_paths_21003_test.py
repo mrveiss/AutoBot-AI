@@ -10,10 +10,12 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
 from api.codebase_analytics import run_status
 from api.codebase_analytics.endpoints import report as report_mod
+from api.codebase_analytics.endpoints import run_state as run_state_mod
 from api.codebase_analytics.endpoints import stats as stats_mod
 from api.codebase_analytics.run_status import (
     partial_report_banner,
@@ -148,6 +150,42 @@ async def test_a_labelled_request_reads_the_record_once(run_store):
     before = run_store.reads
     await handler(source_id="src")
     assert run_store.reads == before + 1
+
+
+@pytest.mark.asyncio
+async def test_the_run_state_is_read_before_the_findings_so_a_run_completing_meanwhile_stays_partial(run_store):
+    """Pre-fix the state was read after the handler: findings from before the last writes were labelled complete."""
+    await record_run_started("src", "run-1")
+
+    @with_run_state
+    async def handler(source_id):
+        await record_run_finished(source_id, "run-1", "completed")  # the run ends while the findings are read
+        return {"status": "success"}
+
+    body = json.loads((await handler(source_id="src")).body)
+    assert (body["partial"], body["run"]["status"]) == (True, "running")
+    assert (await run_response_fields("src"))["partial"] is False  # control: the next request sees it complete
+
+
+@pytest.mark.asyncio
+async def test_the_run_state_route_answers_503_when_the_record_cannot_be_read(run_store):
+    """Pre-fix an unreadable record answered ``run: null``, which the page read as "no run" and dropped its notice."""
+    await _killed_after_a_completed_run()
+    body = json.loads((await run_state_mod.get_index_run_state(source_id="src")).body)
+    assert (body["partial"], body["run"]["status"]) == (True, "killed")  # control: a readable record is served
+    run_store.get = AsyncMock(side_effect=RuntimeError("store down"))
+    with pytest.raises(HTTPException) as unreadable:
+        await run_state_mod.get_index_run_state(source_id="src")
+    with patch.object(run_status, "get_code_collection_async", AsyncMock(return_value=None)):
+        with pytest.raises(HTTPException) as unopenable:
+            await run_state_mod.get_index_run_state(source_id="src")
+    assert (unreadable.value.status_code, unopenable.value.status_code) == (503, 503)
+
+
+@pytest.mark.asyncio
+async def test_the_run_state_route_answers_run_null_for_a_source_with_no_record(run_store):
+    body = json.loads((await run_state_mod.get_index_run_state(source_id="other")).body)
+    assert (body["status"], body["source_id"], body["partial"], body["run"]) == ("success", "other", False, None)
 
 
 def test_every_route_that_serves_findings_is_labelled():
