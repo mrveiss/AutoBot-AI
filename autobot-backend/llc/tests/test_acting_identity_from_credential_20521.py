@@ -46,7 +46,7 @@ def _approval() -> SimpleNamespace:
         company_id=_ORG,
         approval_type="strategy",
         status="pending",
-        requested_by_agent=_ME,
+        requested_by_agent=str(_ME),  # the column is a String(255)
         context={},
         decided_by_user=None,
         decided_at=None,
