@@ -512,8 +512,8 @@ class ErrorCatalog:
                 retry_after=data.get("retry_after"),
                 details=data.get("details"),
             )
+        self.source = SOURCE_BUILTIN_FALLBACK  # before the flag: the unlocked fast path reads `source` on seeing it
         self._initialized = True
-        self.source = SOURCE_BUILTIN_FALLBACK
         # #12969: "not found" without saying WHERE it looked is why this sat
         # unexamined in two separate log sweeps. ERROR, not WARNING: the
         # deployed catalog being present and unread is a misconfiguration, and
@@ -561,8 +561,8 @@ class ErrorCatalog:
 
             self._catalog_path = catalog_path
             self._parse_catalog()
-            self._initialized = True
             self.source = SOURCE_YAML
+            self._initialized = True
 
             logger.info(
                 "Loaded error catalog: %d errors from %s",

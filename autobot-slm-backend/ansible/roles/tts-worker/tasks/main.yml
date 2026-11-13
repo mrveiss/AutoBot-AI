@@ -117,7 +117,7 @@
 
 # #12425: tts_log_dir defaults to the SHARED /var/log/autobot (common role),
 # not a TTS-exclusive path — re-chowning it to tts_user/tts_group above (as
-# the other three, genuinely TTS-exclusive dirs correctly are) clobbered
+# the genuinely TTS-exclusive dirs created above and by the shared log-dir task correctly are) clobbered
 # common's autobot:autobot ownership on every run of this role, leaving the
 # `autobot` service user (autobot-slm-backend) unable to create its own
 # self-update-ansible.log. Converge to the SAME canonical ownership the

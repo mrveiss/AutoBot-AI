@@ -23,13 +23,10 @@
 - name: "Ensure the application log directory exists (#20894)"
   ansible.builtin.include_tasks:
     file: ../../../_shared/tasks/ensure_app_log_dir.yml
-    apply:
-      tags: ['npu', 'deploy']
   vars:
     app_log_dir: "{{ npu_app_log_dir }}"
     app_log_dir_owner: "{{ npu_user }}"
     app_log_dir_group: "{{ npu_group }}"
-  tags: ['npu', 'deploy']
 
 - name: Deploy NPU worker script
   ansible.builtin.template:

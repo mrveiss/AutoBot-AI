@@ -129,12 +129,12 @@
   ansible.builtin.include_tasks:
     file: ../../../_shared/tasks/ensure_app_log_dir.yml
     apply:
-      tags: ['slm', 'backend', 'systemd', 'directories']
+      tags: ['slm', 'backend', 'systemd']
   vars:
     app_log_dir: "{{ slm_app_log_dir }}"
     app_log_dir_owner: "{{ slm_user }}"
     app_log_dir_group: "{{ slm_group }}"
-  tags: ['slm', 'backend', 'systemd', 'directories']
+  tags: ['slm', 'backend', 'systemd']
 
 - name: "SLM | Deploy backend systemd service"
   ansible.builtin.template:

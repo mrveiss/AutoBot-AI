@@ -86,12 +86,12 @@
   ansible.builtin.include_tasks:
     file: ../../../_shared/tasks/ensure_app_log_dir.yml
     apply:
-      tags: ['backend', 'config', 'env']
+      tags: ['backend', 'env']
   vars:
     app_log_dir: "{{ backend_app_log_dir }}"
     app_log_dir_owner: "{{ backend_user }}"
     app_log_dir_group: "{{ backend_group }}"
-  tags: ['backend', 'config', 'env']
+  tags: ['backend', 'env']
 
 - name: "Backend | Render .env from template (#12871)"
   ansible.builtin.template:

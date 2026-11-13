@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 from jinja2 import Environment, nodes
 from repo_tests._paths import repo_root
@@ -35,7 +36,8 @@ _INCLUDE_ACTIONS = (
     "ansible.builtin.import_tasks",
     "import_tasks",
 )
-_MIN_ENTRIES = 12  # live count when written: 12 (task file, template) renderings; a drop means discovery broke
+# Measured population when written: 12 (task file, template) renderings; the floor sits mid-window ([6, 12]).
+_MIN_ENTRIES = 9
 
 #: Names no entry defines because the controller supplies them: inventory structure and gathered facts.
 #: `slm_backend_port` is declared once, in inventory/group_vars/all.yml (#20600), which every play sees.
@@ -57,14 +59,11 @@ _SUPPLIED = frozenset(
 _KNOWN_GAPS: dict[str, frozenset[str]] = {
     f"{_ANSIBLE}/playbooks/deploy-backend-env.yml": frozenset(
         {
-            "autobot_admin_password",
             "backend_chromadb_auth_token",
             "backend_frontend_tls_enabled",
-            "backend_postgres_password",
             "backend_prometheus_scrape_token",
             "frontend_http_port",
             "frontend_tls_port",
-            "tls_ca_cert",
         }
     ),
 }
@@ -133,6 +132,37 @@ def renderings(root: Path) -> list[tuple[Path, Path, str]]:
             if match:
                 found.append((file, template, match.group(1)))
     return found
+
+
+def _log_dir_template_names(root: Path) -> set[str]:
+    """File names of the role templates that set `AUTOBOT_LOGS_DIR` to an application directory variable."""
+    roles = root / _ANSIBLE / "roles"
+    found = set()
+    for template in roles.glob("*/templates/*") if roles.is_dir() else []:
+        if template.is_file() and _APP_DIR.search(template.read_text(encoding="utf-8")):
+            found.add(template.name)
+    return found
+
+
+def unresolvable(root: Path) -> list[str]:
+    """Template tasks naming a log-directory template that is not found beside them: they render nothing readable."""
+    names = _log_dir_template_names(root)
+    found = []
+    for file in _entry_files(root):
+        for task in _tasks(file):
+            spec = _action(task, _TEMPLATE_ACTIONS)
+            if (
+                isinstance(spec, dict)
+                and Path(str(spec.get("src", ""))).name in names
+                and _src_path(task, file) is None
+            ):
+                found.append(f"{file.relative_to(root)} -> {spec['src']}")
+    return sorted(found)
+
+
+#: Renderings of a log-directory template whose file does not exist where the task looks (#21496). SHRINKS ONLY:
+#: a new one fails the test, and a listed one that resolves (or is removed) fails as stale.
+_UNRESOLVABLE = frozenset({f"{_ANSIBLE}/roles/backend_services/tasks/main.yml -> backend.env.j2"})
 
 
 REACH = declare(
@@ -204,31 +234,61 @@ def defined_for(file: Path) -> set[str]:
     return names
 
 
+def _climb(node: nodes.Node, parents: dict[int, nodes.Node]) -> nodes.Node:
+    """The expression a read belongs to: `x.stat.exists` and `x['k']` are reads of `x`, so step up through them."""
+    while isinstance(parents.get(id(node)), (nodes.Getattr, nodes.Getitem)) and parents[id(node)].node is node:
+        node = parents[id(node)]
+    return node
+
+
+def _guards(read: nodes.Name, parents: dict[int, nodes.Node]) -> bool:
+    """True when this one read cannot fail on an undefined name: `| default(...)` or an `is defined` test."""
+    top = _climb(read, parents)
+    parent = parents.get(id(top))
+    is_default = isinstance(parent, nodes.Filter) and parent.name in ("default", "d") and parent.node is top
+    return is_default or (isinstance(parent, nodes.Test) and parent.name == "defined" and parent.node is top)
+
+
+def _established(test: nodes.Node, name: str, parents: dict[int, nodes.Node]) -> bool:
+    """An `if` test establishes `name` when it reads it under a default or an `is defined` test."""
+    return any(n.name == name and _guards(n, parents) for n in test.find_all(nodes.Name))
+
+
+def _under_establishing_if(read: nodes.Name, parents: dict[int, nodes.Node]) -> bool:
+    """True when the read is in the body of an `if`/`elif` whose test establishes the name (not its test or else)."""
+    child: nodes.Node = read
+    while (parent := parents.get(id(child))) is not None:
+        if (
+            isinstance(parent, nodes.If)
+            and any(child is n for n in parent.body)
+            and _established(parent.test, read.name, parents)
+        ):
+            return True
+        child = parent
+    return False
+
+
 def required_names(text: str) -> set[str]:
-    """Variables the template cannot render without: undeclared, and read somewhere without a `default`/`is defined`."""
+    """Variables the template cannot render without: some read of the name is neither guarded nor under a guarding `if`.
+
+    Decided per read, not per name: one guarded read does not excuse an unguarded read elsewhere.
+    """
     tree = Environment().parse(
         text
     )  # parsing needs no filter table; `meta.find_undeclared_variables` compiles and does
-    undeclared = {n.name for n in tree.find_all(nodes.Name) if n.ctx == "load"} - {
-        n.name for n in tree.find_all(nodes.Name) if n.ctx == "store"  # `{% set %}` and `{% for %}` targets
-    }
-    tested: set[str] = set()
+    stored = {n.name for n in tree.find_all(nodes.Name) if n.ctx == "store"}  # `{% set %}` and `{% for %}` targets
     parents: dict[int, nodes.Node] = {}
     for parent in tree.find_all(nodes.Node):
         for child in parent.iter_child_nodes():
             parents[id(child)] = parent
-    unguarded: set[str] = set()
-    for name in tree.find_all(nodes.Name):
-        if name.name not in undeclared:
-            continue
-        parent = parents.get(id(name))
-        is_default = isinstance(parent, nodes.Filter) and parent.name in ("default", "d") and parent.node is name
-        is_test = isinstance(parent, nodes.Test) and parent.name == "defined" and parent.node is name
-        if is_test:
-            tested.add(name.name)
-        elif not is_default:
-            unguarded.add(name.name)
-    return unguarded - tested  # a name tested `is defined` is optional: its other reads sit under that test
+    return {
+        n.name
+        for n in tree.find_all(nodes.Name)
+        if n.ctx == "load"
+        and n.name not in stored
+        and not _guards(n, parents)
+        and not _under_establishing_if(n, parents)
+    }
 
 
 def undefined_for(file: Path, template: Path) -> set[str]:
@@ -390,3 +450,39 @@ def test_control_an_entry_without_the_shared_directory_task_is_reported(
     other = include.replace("svc_app_log_dir", "another_dir")  # ensuring a different directory does not count
     _plant(base, {"roles/r/tasks/main.yml": other + _RENDER.format(src="t.env.j2")})
     assert var not in _ensured(file)
+
+
+def test_every_unresolvable_rendering_is_listed_and_every_listed_one_still_is() -> None:
+    """A renderer whose template file is missing is reported, not skipped: a new one fails, a fixed one is stale."""
+    found = frozenset(unresolvable(_ROOT))
+    assert found == _UNRESOLVABLE, f"new: {sorted(found - _UNRESOLVABLE)}; stale: {sorted(_UNRESOLVABLE - found)}"
+
+
+def test_control_a_template_task_without_its_template_is_reported(tmp_path: Path) -> None:
+    """Control: `src` names a log-directory template that the task's role does not ship."""
+    base = tmp_path / _ANSIBLE
+    _plant(base, {"roles/r/templates/t.env.j2": _TEMPLATE, "roles/r/tasks/main.yml": _RENDER.format(src="t.env.j2")})
+    _plant(base, {"roles/other/tasks/main.yml": _RENDER.format(src="t.env.j2")})
+    _plant(base, {"roles/other/tasks/unrelated.yml": _RENDER.format(src="not-a-log-template.j2")})
+    assert unresolvable(tmp_path) == [f"{_ANSIBLE}/roles/other/tasks/main.yml -> t.env.j2"]
+
+
+@pytest.mark.parametrize(
+    ("text", "required"),
+    [
+        ("{{ x }}", {"x"}),
+        ("{{ x | default('a') }}", set()),
+        ("{% if x is defined %}{{ x }}{% endif %}", set()),
+        ("{% if x | default('') | length > 0 %}A={{ x }}{% endif %}", set()),
+        ("{{ x.stat.exists | default(false) }}", set()),
+        ("{{ x['k'] | default(1) }}", set()),
+        ("{% if x is defined %}{% else %}{{ x }}{% endif %}", {"x"}),  # the else branch is not established
+        ("{% if x is defined %}{{ x }}{% endif %}{{ x }}", {"x"}),  # one guarded read, one unguarded read
+        ("{{ x | default(1) }}{{ x }}", {"x"}),
+        ("{% if y %}{{ x }}{% endif %}", {"x", "y"}),  # an if on another name establishes nothing
+        ("{% if x is defined %}{{ x }}{% elif y | default('') %}{{ y }}{% endif %}", set()),
+        ("{% for i in items %}{{ i }}{% endfor %}", {"items"}),
+    ],
+)
+def test_control_the_required_rule_is_decided_per_read(text: str, required: set[str]) -> None:
+    assert required_names(text) == required
