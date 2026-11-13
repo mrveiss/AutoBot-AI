@@ -27,7 +27,14 @@ _SITES = [
     ("playbooks/rotate-service-keys.yml", ":{{ backend_nginx_port | default(8443) }}/api/health", 1),
     ("playbooks/toggle-enforcement.yml", ":{{ backend_nginx_port | default(8443) }}/api/health", 1),
     ("playbooks/deploy-backend-remote.yml", ':{{ backend_nginx_port | default(8443) }}"', 1),
-    ("playbooks/health-check.yml", ":{{ backend_nginx_port | default(8443) }}/api", 3),
+    # Read through the backend host's own vars (the host that supplies the address), fallback kept (#21400).
+    ("playbooks/health-check.yml", ":{{ hostvars[_backend_host[0]]['backend_nginx_port'] | default(8443) }}/api", 2),
+    (
+        "playbooks/health-check.yml",
+        ":{{ (hostvars[_backend_host[0]]['backend_nginx_port'] | default(8443)) "
+        "if _backend_host | length > 0 else 8443 }}/api",
+        1,
+    ),
 ]
 _BARE_USE = re.compile(r"\{\{\s*backend_(?:nginx_)?port\s*\}\}")
 
