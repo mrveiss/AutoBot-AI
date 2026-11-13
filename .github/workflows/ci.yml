@@ -135,12 +135,21 @@ jobs:
           AUTHOR: ${{ github.event.pull_request.user.login }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        # FAILS OPEN. A broken hold step must degrade to "run everything", never "block everything":
+        # a failure here fails `changes` and with it every gate of every pull request. So no `set -e`,
+        # and an unreadable label list (jq missing, malformed payload) means NOT held, plus a warning.
+        # Watch item: this step needs `jq` (present on the hosted runner image).
         run: |
-          set -euo pipefail
+          set -uo pipefail
           held=false
           if [ "${EVENT}" = "pull_request" ] && [ "${AUTHOR}" = "dependabot[bot]" ] \
-             && [[ "${HEAD_REF}" != train-* ]] && ! jq -e 'index("ci:full")' <<<"${LABELS}" >/dev/null; then
-            held=true
+             && [[ "${HEAD_REF}" != train-* ]]; then
+            if full=$(jq -r 'if index("ci:full") then "yes" else "no" end' <<<"${LABELS}" 2>/dev/null) \
+               && [ -n "${full}" ]; then
+              [ "${full}" = "no" ] && held=true
+            else
+              echo "::warning title=hold::cannot read the pull request labels; not holding this dependabot run (#21490)"
+            fi
           fi
           echo "held=${held}" >> "$GITHUB_OUTPUT"
           if [ "${held}" = "true" ]; then

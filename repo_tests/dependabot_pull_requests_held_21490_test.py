@@ -31,7 +31,12 @@ WORKFLOW_DIR = repo_root() / ".github" / "workflows"
 _MIN_WORKFLOWS = 25
 _EXPENSIVE_MINUTES = 20
 _EXPENSIVE_NAME = re.compile(r"e2e|end-to-end|smoke|matrix|docker", re.IGNORECASE)
-_HOLD_MARKER = re.compile(r"dependabot\[bot\]|needs\.changes\.outputs\.(?:ready|held)")
+#: The NEGATIVE forms only: `user.login != 'dependabot[bot]'` is a hold, `== 'dependabot[bot]'` runs a job
+#: ONLY for dependabot. The `changes` outputs count only in a workflow whose `changes` job defines them.
+_NOT_DEPENDABOT = re.compile(r"user\.login\s*!=\s*'dependabot\[bot\]'")
+_CHANGES_HOLD = re.compile(r"needs\.changes\.outputs\.held\s*!=\s*'true'|needs\.changes\.outputs\.ready\s*==\s*'true'")
+#: A dependent that runs whatever its dependency did is not held by inheriting.
+_ALWAYS_RUNS = re.compile(r"always\(\)|cancelled\(\)|failure\(\)")
 
 #: Workflows with no expensive job, by name -> job count. A new job makes the count differ and
 #: forces a look at whether the workflow is still cheap.
@@ -64,6 +69,7 @@ CHEAP: dict[str, int] = {
 
 #: (workflow, job) -> why an expensive-looking job is not held.
 EXEMPT_JOBS: dict[tuple[str, str], str] = {
+    ("ci.yml", "run-auto-fix-types"): "runs only when run-generated-types FAILED; that job is skipped when held",
     (
         "ci.yml",
         "run-precommit",
@@ -95,13 +101,38 @@ def _is_expensive(job_id: str, job: dict) -> bool:
     )
 
 
-def _held_jobs(jobs: dict) -> set[str]:
-    held = {j for j, spec in jobs.items() if _HOLD_MARKER.search(str(spec.get("if", "")))}
+#: The ci.yml gate jobs that run on purpose when held and report "held" (verdict.sh step 2b).
+REPORTING_GATES = frozenset(
+    {"python-suite", "code-quality", "startup-import-smoke", "unit-tests", "smoke-test", "api-wiring", "migration-matrix", "verify-generated-types"}
+)
+
+
+def _has_changes_hold_outputs(jobs: dict) -> bool:
+    outputs = (jobs.get("changes") or {}).get("outputs") or {}
+    return "ready" in outputs or "held" in outputs
+
+
+def classify(jobs: dict) -> dict[str, str]:
+    """job -> "direct" (own negative condition) or "inherited" (needs a held job and is skippable)."""
+    changes_ok = _has_changes_hold_outputs(jobs)
+    kind = {}
+    for j, spec in jobs.items():
+        cond = str(spec.get("if", ""))
+        if _NOT_DEPENDABOT.search(cond) or (changes_ok and _CHANGES_HOLD.search(cond)):
+            kind[j] = "direct"
     while True:
-        more = {j for j, spec in jobs.items() if j not in held and set(_needs(spec)) & held}
+        more = {
+            j: "inherited"
+            for j, spec in jobs.items()
+            if j not in kind and set(_needs(spec)) & set(kind) and not _ALWAYS_RUNS.search(str(spec.get("if", "")))
+        }
         if not more:
-            return held
-        held |= more
+            return kind
+        kind.update(more)
+
+
+def _held_jobs(jobs: dict) -> set[str]:
+    return set(classify(jobs))
 
 
 def _needs(spec: dict) -> list:
@@ -113,7 +144,7 @@ def violations(workflows: dict[str, dict], cheap=CHEAP, exempt=EXEMPT_JOBS) -> l
     problems = []
     for name, doc in workflows.items():
         jobs = doc.get("jobs") or {}
-        expensive = [j for j, spec in jobs.items() if _is_expensive(j, spec) and (name, j) not in exempt]
+        expensive = [j for j, spec in jobs.items() if _is_expensive(j, spec) and (name, j) not in exempt and not (name == "ci.yml" and j in REPORTING_GATES)]
         if name in cheap:
             if len(jobs) != cheap[name]:
                 problems.append(
@@ -175,6 +206,7 @@ _UNGATED = {
 _GATED = {
     "x.yml": {
         "jobs": {
+            "changes": {"outputs": {"held": "x"}},
             "run-big": {"uses": "./a.yml", "if": "${{ needs.changes.outputs.held != 'true' }}"},
             "slow": {"timeout-minutes": 45, "if": "${{ github.event.pull_request.user.login != 'dependabot[bot]' }}"},
             "after": {"uses": "./b.yml", "needs": ["slow"]},
@@ -207,3 +239,28 @@ def test_a_held_gate_fails_and_says_held_never_passes():
     assert run_verdict(GATE_APPLIES="false", GATE_WORK_OK="false")[0] == 0
     # a held flag on a push event is inert
     assert run_verdict(GATE_HELD="true", GATE_EVENT="push")[0] == 0
+
+
+def test_control_the_positive_dependabot_test_is_not_a_hold():
+    wf = {"x.yml": {"jobs": {"big": {"timeout-minutes": 45, "if": "${{ github.event.pull_request.user.login == 'dependabot[bot]' }}"}}}}
+    assert violations(wf, cheap={})
+
+
+def test_control_changes_outputs_count_only_where_changes_defines_them():
+    big = {"timeout-minutes": 45, "if": "${{ needs.changes.outputs.ready == 'true' }}", "needs": ["changes"]}
+    assert violations({"x.yml": {"jobs": {"changes": {"outputs": {}}, "big": big}}}, cheap={})
+    assert violations({"x.yml": {"jobs": {"changes": {"outputs": {"ready": "x"}}, "big": big}}}, cheap={}) == []
+
+
+@pytest.mark.parametrize("condition", ["always()", "${{ !cancelled() }}", "${{ failure() }}"])
+def test_control_an_always_running_dependent_does_not_inherit_the_hold(condition):
+    jobs = {"held": {"if": "${{ github.event.pull_request.user.login != 'dependabot[bot]' }}"}}
+    jobs["after"] = {"uses": "./a.yml", "needs": ["held"], "if": condition}
+    assert violations({"x.yml": {"jobs": jobs}}, cheap={}) == ["x.yml: expensive job 'after' is not held for dependabot pull requests (#21490)"]
+    exempted = violations({"x.yml": {"jobs": jobs}}, cheap={}, exempt={("x.yml", "after"): "reports"})
+    assert not any("not held" in problem for problem in exempted)
+
+
+def test_the_reporting_gates_are_real_ci_jobs_that_always_run():
+    jobs = pull_request_workflows()["ci.yml"]["jobs"]
+    assert all(g in jobs and jobs[g].get("if") == "always()" for g in REPORTING_GATES)
