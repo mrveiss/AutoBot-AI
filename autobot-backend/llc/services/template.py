@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.ssot_claude_models import resolve_claude_models
 from llc.models.enums import ActivityEventType
 from llc.models.template import (
     TemplateCategory,
@@ -33,6 +34,7 @@ from llc.models.template import (
 
 from .activity_log import ActorType, LLCActivityLogService
 from .base import LLCServiceBase
+from .built_in_template_path import select_built_in_template
 from .template_entity_import import import_template_entities
 
 logger = logging.getLogger(__name__)
@@ -623,20 +625,15 @@ def _load_built_in_template(template_key: str) -> Dict[str, Any]:
             f"numbers, hyphens, and underscores"
         )
 
-    template_path = _BUILT_IN_TEMPLATES_DIR / f"{template_key}.json"
-
-    # Verify resolved path is within the built-in templates directory
-    resolved_path = template_path.resolve()
-    base_path = _BUILT_IN_TEMPLATES_DIR.resolve()
-    if base_path not in resolved_path.parents and resolved_path != base_path:
-        raise BuiltInTemplateNotFoundError(f"Template path outside allowed directory: {template_key}")
-
-    if not resolved_path.exists():
+    try:
+        resolved_path = select_built_in_template(_BUILT_IN_TEMPLATES_DIR, template_key)
+    except ValueError as exc:
+        raise BuiltInTemplateNotFoundError(f"Template path outside allowed directory: {template_key}") from exc
+    if resolved_path is None:
         raise BuiltInTemplateNotFoundError(f"Built-in template '{template_key}' not found")
 
     try:
-        with open(resolved_path, encoding="utf-8") as f:
-            return json.load(f)
+        return resolve_claude_models(json.loads(resolved_path.read_text(encoding="utf-8")))
     except Exception as exc:
         logger.exception("Failed to load built-in template: %s", resolved_path)
         raise BuiltInTemplateNotFoundError(f"Failed to load template '{template_key}'") from exc

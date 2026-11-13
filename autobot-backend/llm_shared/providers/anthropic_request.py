@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from constants.model_constants import ANTHROPIC_CLAUDE_OPUS4_6
+from autobot_shared.ssot_claude_models import requires_adaptive_thinking
 
 # #15016: anthropic>=1.0 removed these three from messages.create()/.stream();
 # passing one as a keyword now raises TypeError. The API still honours them
@@ -34,10 +34,7 @@ from constants.model_constants import ANTHROPIC_CLAUDE_OPUS4_6
 # value is routed there instead of being dropped.
 _REMOVED_SAMPLING_KWARGS = ("temperature", "top_p", "top_k")
 
-# Models the SDK itself flags as deprecated for thinking.type="enabled" in
-# favour of "adaptive" (mirrors anthropic's own
-# MODELS_TO_WARN_WITH_THINKING_ENABLED, restricted to models this repo uses).
-_MODELS_REQUIRING_ADAPTIVE_THINKING = frozenset({ANTHROPIC_CLAUDE_OPUS4_6})
+# Which models take adaptive thinking is decided by autobot_shared.ssot_claude_models (#20884).
 
 # budget_tokens -> output_config.effort tiers for models that require adaptive
 # thinking; mirrors the low/medium/high buckets reasoning_effort.py already
@@ -82,17 +79,24 @@ def _thinking_budget_to_effort(budget_tokens: int) -> str:
 def _apply_thinking_budget(api_kwargs: Dict[str, Any], model: str, thinking_tokens: int) -> None:
     """Expand a thinking-token budget into the SDK's ``thinking`` kwarg, in place.
 
-    Models in ``_MODELS_REQUIRING_ADAPTIVE_THINKING`` (#15016) get adaptive
+    Models for which ``requires_adaptive_thinking`` holds (#15016, #20884) get adaptive
     thinking plus an ``output_config`` effort tier instead of ``budget_tokens``;
     every other model keeps the fixed-budget form it still accepts.
     """
-    if model in _MODELS_REQUIRING_ADAPTIVE_THINKING:
+    if requires_adaptive_thinking(model):
         api_kwargs["thinking"] = {"type": "adaptive"}
         api_kwargs["output_config"] = {"effort": _thinking_budget_to_effort(thinking_tokens)}
     else:
         api_kwargs["thinking"] = {"type": "enabled", "budget_tokens": thinking_tokens}
         api_kwargs.setdefault("betas", ["interleaved-thinking-2025-05-14"])
     api_kwargs.setdefault("max_tokens", max(thinking_tokens + 1000, 8192))
+
+
+def thinking_request_kwargs(model: str, thinking_tokens: int) -> Dict[str, Any]:
+    """The ``thinking`` request kwargs for *model* and a token budget: the one builder every sender uses (#20884)."""
+    kwargs: Dict[str, Any] = {}
+    _apply_thinking_budget(kwargs, model, thinking_tokens)
+    return kwargs
 
 
 def _build_api_kwargs(
@@ -138,10 +142,10 @@ def _build_api_kwargs(
 
 
 __all__ = [
-    "_MODELS_REQUIRING_ADAPTIVE_THINKING",
     "_REMOVED_SAMPLING_KWARGS",
     "_THINKING_EFFORT_TIERS",
     "_apply_thinking_budget",
+    "thinking_request_kwargs",
     "_build_api_kwargs",
     "_route_sampling_kwargs",
     "_thinking_budget_to_effort",
