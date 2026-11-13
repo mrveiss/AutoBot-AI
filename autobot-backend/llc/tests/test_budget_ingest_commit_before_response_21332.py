@@ -22,10 +22,18 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from llc.api.budget import IngestRequest, UpdateLimitRequest, ingest_cost, update_limit
+from llc.api.budget import (
+    IngestRequest,
+    ProvisionBudgetRequest,
+    UpdateLimitRequest,
+    ingest_cost,
+    provision_budget,
+    update_limit,
+)
 from llc.models.budget import LLCAgentBudget
 from llc.models.enums import BudgetMode
 from llc.tests import _e2e_harness as harness
+from models.agent_org import AgentOrgNode, OrgRole
 from user_management.services import TenantContext
 
 SLUG = "ingest-agent"
@@ -42,6 +50,16 @@ async def factory(tmp_path) -> AsyncIterator[async_sessionmaker[AsyncSession]]: 
         engine, expire_on_commit=False, class_=AsyncSession
     )
     await engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _no_redis():
+    """The tracker cache and the alert publish are Redis; the test is about the database commit only."""
+    with (
+        patch("llc.services.budget._tracker", AsyncMock()),
+        patch("llc.services.budget.BudgetService._emit_alert", AsyncMock()),
+    ):
+        yield
 
 
 @pytest_asyncio.fixture
@@ -97,6 +115,31 @@ async def test_a_limit_change_is_visible_to_another_session_the_moment_it_answer
         async with factory() as session:
             await update_limit(SLUG, body, _Response(), session, {}, _ctx(company))
             assert await _read(factory, LLCAgentBudget.token_limit) == 5000
+
+
+@pytest.mark.asyncio
+async def test_a_provisioned_budget_is_visible_to_another_session_the_moment_it_answers(
+    factory,
+) -> None:  # noqa: ANN001
+    company_id, agent = str(uuid.uuid4()), "provisioned-agent"
+    async with factory() as seed:
+        seed.add(
+            AgentOrgNode(
+                id=uuid.uuid4(),
+                agent_id=agent,
+                name="Agent",
+                org_role=OrgRole.WORKER.value,
+                company_id=uuid.UUID(company_id),
+            )
+        )
+        await seed.commit()
+    async with factory() as session:
+        await provision_budget(agent, ProvisionBudgetRequest(), _Response(), session, {}, _ctx(company_id))
+        async with factory() as other:
+            found = (
+                await other.execute(select(LLCAgentBudget.agent_id).where(LLCAgentBudget.agent_id == agent))
+            ).scalar_one_or_none()
+        assert found == agent
 
 
 class _Response:

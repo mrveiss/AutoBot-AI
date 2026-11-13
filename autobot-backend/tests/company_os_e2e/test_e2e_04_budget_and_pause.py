@@ -46,8 +46,8 @@ def _exhaust(api, agent_id: str) -> None:
     The limit is set relative to what is ALREADY spent (a run that took the key spends tokens of its
     own), and the spend is exactly the remainder, in ONE ingest whose response is asserted: the ingest
     answers 200 only once its charge is committed (#21332), so there is nothing to re-read and retry.
-    The event that crosses the limit is refused with 402 but its spend is committed first
-    (`_persist_then_stop`, #20202), so the stored row reads over-limit; the row reads exhausted at remaining <= 0.
+    The service blocks only when spent > limit, so the ingest of exactly the remainder answers 200 and leaves the
+    row at remaining 0; the NEXT event is the one refused with 402 (its spend is committed first, #20202).
     """
     spent = int(api.call("GET", f"/budget/{agent_id}")["tokens_spent"])
     api.call(
