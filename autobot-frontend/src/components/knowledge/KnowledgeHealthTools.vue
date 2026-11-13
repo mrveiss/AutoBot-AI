@@ -144,7 +144,7 @@ const isClearing = ref(false)
 interface ClearAllResponse {
   status?: string
   message?: string
-  items_removed?: number
+  approval_id?: string
 }
 
 const refreshStats = async () => {
@@ -201,9 +201,10 @@ const clearAllKnowledge = async () => {
   isClearing.value = true
   try {
     const response = await ApiClient.post<ClearAllResponse>(`${getApiBase()}/knowledge_base/clear_all`, {})
-    if (response.status === 'success') {
-      await store.refreshStats()
-      logger.info(`Cleared knowledge base: ${response.items_removed ?? 0} entries removed`)
+    // #21048: the route only proposes the wipe; nothing is removed until an admin approves it
+    if (response.approval_id) {
+      showNotice(t('knowledge.advanced.clearRequested'))
+      logger.info(`Knowledge wipe requested, awaiting approval ${response.approval_id}`)
     } else {
       throw new Error(response.message || 'Failed to clear knowledge base')
     }

@@ -10,6 +10,7 @@ script (``fresh_setup``) drives real Redis flush/index-drop calls and a real
 import importlib.util
 import pathlib
 import sys
+import types
 
 import pytest
 
@@ -56,6 +57,8 @@ class FakeKnowledgeBase:
     and reject anything they would reject.
     """
 
+    redis_index_name = "llama_index"
+
     async def add_document_from_file(self, file_path: str, category: str = "general", metadata=None):
         return {"status": "success"}
 
@@ -81,3 +84,130 @@ async def test_test_knowledge_base_reads_a_decoded_ft_info_reply(caplog):
 
     assert result is True
     assert "Vector dimension: 768" in caplog.text
+
+
+class _Plan:
+    """A plan shaped like ``plan_kb_wipe``'s, for the script's two entry modes."""
+
+    value = {
+        "databases": [{"database": "knowledge", "keys": 3, "indexes": [], "note": "Not atomic"}],
+        "chroma_collections": [{"name": "autobot_memory", "vectors": 8}],
+        "total_keys": 3,
+        "total_vectors": 8,
+    }
+
+
+async def _plan():
+    return _Plan.value
+
+
+def _stub_wipe_action(monkeypatch):
+    """Stand in for the backend's ``services.kb_wipe_action`` -- an infra test never imports the backend (#18288)."""
+    stub = types.SimpleNamespace(plan_kb_wipe=_plan)
+    monkeypatch.setitem(sys.modules, "services.kb_wipe_action", stub)
+
+
+@pytest.mark.asyncio
+async def test_dry_run_lists_the_plan_and_neither_proposes_nor_deletes(monkeypatch, caplog):
+    """#21048: ``--dry-run`` only reads; no approval is raised and no delete command is issued."""
+    _stub_wipe_action(monkeypatch)
+    proposed = []
+
+    async def fake_propose(plan):
+        proposed.append(plan)
+        return "id"
+
+    monkeypatch.setattr(fresh_kb_setup, "_propose_wipe", fake_propose)
+    with caplog.at_level("INFO", logger=fresh_kb_setup.logger.name):
+        assert await fresh_kb_setup.fresh_setup(dry_run=True) is True
+    assert proposed == [] and "Database knowledge: 3 keys" in caplog.text
+    assert "Chroma collection autobot_memory: 8 vectors" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_bare_run_only_requests_approval(monkeypatch):
+    """#21048: running the script proposes the wipe through the approval gate and deletes nothing itself."""
+    _stub_wipe_action(monkeypatch)
+    proposed = []
+
+    async def fake_propose(plan):
+        proposed.append(plan)
+        return "approval-1"
+
+    monkeypatch.setattr(fresh_kb_setup, "_propose_wipe", fake_propose)
+    assert await fresh_kb_setup.fresh_setup() is True
+    assert proposed == [_Plan.value]
+
+
+def test_the_script_has_no_delete_calls_left():
+    source = _MODULE_PATH.read_text(encoding="utf-8")
+    assert "flushdb" not in source and "DROPINDEX" not in source and "flushall" not in source.lower()
+
+
+@pytest.mark.asyncio
+async def test_initialize_reads_the_knowledge_database_never_main(monkeypatch):
+    """#21121: the smoke test reads FT._LIST where the KB keeps its index, so a ``main`` read fails here."""
+    asked = []
+    clients = {"knowledge": FakeRedis(), "main": types.SimpleNamespace(execute_command=lambda *a: [])}
+
+    def fake_client(database="main", **_):
+        asked.append(database)
+        return clients[database]
+
+    class _KB(FakeKnowledgeBase):
+        embedding_model_name, redis_db, redis_index_name = "m", 1, "llama_index"
+
+    async def fake_kb():
+        return _KB()
+
+    monkeypatch.setattr(fresh_kb_setup, "get_redis_client", fake_client)
+    monkeypatch.setitem(sys.modules, "knowledge_factory", types.SimpleNamespace(get_knowledge_base_async=fake_kb))
+    assert await fresh_kb_setup.fresh_setup(initialize=True) is True
+    assert asked == ["knowledge"]
+
+
+@pytest.mark.asyncio
+async def test_initialize_aborts_before_ingesting_when_the_knowledge_redis_is_unavailable(monkeypatch, caplog):
+    """A ``None`` client (Redis disabled or unreachable) stops the run early with a clear error, before any ingest."""
+    built = []
+
+    async def fake_kb():
+        built.append("kb")
+        return FakeKnowledgeBase()
+
+    monkeypatch.setattr(fresh_kb_setup, "get_redis_client", lambda database="main", **_: None)
+    monkeypatch.setitem(sys.modules, "knowledge_factory", types.SimpleNamespace(get_knowledge_base_async=fake_kb))
+    with caplog.at_level("ERROR", logger=fresh_kb_setup.logger.name):
+        assert await fresh_kb_setup.fresh_setup(initialize=True) is False
+    assert built == [] and "unavailable" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_smoke_test_inspects_the_kb_index_not_the_first_one_listed(caplog):
+    """#21121: FT.INFO runs on ``kb.redis_index_name``; a different first index is not a pass."""
+
+    class TwoIndexes(FakeRedis):
+        def execute_command(self, *args):
+            self.asked = getattr(self, "asked", []) + [args]
+            if args[0] == "FT._LIST":
+                return ["other_index", "llama_index"]
+            return super().execute_command(*args)
+
+    redis = TwoIndexes()
+    with caplog.at_level("INFO", logger=fresh_kb_setup.logger.name):
+        assert await fresh_kb_setup._test_knowledge_base(FakeKnowledgeBase(), redis) is True
+    assert ("FT.INFO", "llama_index") in redis.asked and ("FT.INFO", "other_index") not in redis.asked
+
+
+@pytest.mark.asyncio
+async def test_smoke_test_fails_when_the_kb_index_is_missing():
+    class OtherOnly(FakeRedis):
+        def execute_command(self, *args):
+            return ["other_index"] if args[0] == "FT._LIST" else super().execute_command(*args)
+
+    assert await fresh_kb_setup._test_knowledge_base(FakeKnowledgeBase(), OtherOnly()) is False
+
+
+def test_dry_run_with_initialize_is_an_argument_error():
+    with pytest.raises(SystemExit):
+        fresh_kb_setup._parse_args(["--dry-run", "--initialize"])

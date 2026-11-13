@@ -3196,7 +3196,8 @@
       "confirmClearAll": "Are you sure you want to clear ALL knowledge base entries?\n\nThis will permanently delete all documents, commands, and manual pages.\nThis action CANNOT be undone.",
       "confirmClearFinal": "FINAL CONFIRMATION:\n\nType \"DELETE ALL\" in the next dialog to proceed with clearing the entire knowledge base.",
       "promptDeleteAll": "Type \"DELETE ALL\" to confirm (case sensitive):",
-      "clearCancelled": "Clear Operation Cancelled"
+      "clearCancelled": "Clear Operation Cancelled",
+      "clearRequested": "Wipe requested. Nothing is deleted until an administrator approves it in the Approvals inbox."
     },
     "batchToolbar": {
       "documentsSelected": "{count} document(s) selected",
