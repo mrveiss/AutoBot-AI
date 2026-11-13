@@ -22,7 +22,6 @@
  */
 
 import { ref, reactive, computed, watch, type Ref, type ComputedRef } from 'vue'
-import appConfig from '@/config/AppConfig.js'
 import { useBackgroundTask } from '@/composables/useBackgroundTask'
 import { useTaskLoader } from '@/composables/useTaskLoader'
 import { useAnalyticsScanRunner } from '@/composables/useAnalyticsScanRunner'
@@ -33,6 +32,9 @@ import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { readDuplicatePayload, type DuplicateScanState } from './duplicatePayload'
 import { useCodeSmellProblems } from './useCodeSmellProblems'
 import { toDeclarationPanelRows } from './declarationPanelRows'
+import { loadProjectRoot } from './projectRoot'
+import { useRunState } from './useRunState'
+import { useStaleResults } from './useStaleResults'
 import { runTimed } from '@/composables/api/useTimedNotify'
 import {
   type Problem,
@@ -69,6 +71,8 @@ export interface UseAnalyticsDataFetchersDeps {
 
 export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const { rootPath, sourceIdQuery, withSourceId, t, showToast, notify } = deps
+  const runState = useRunState(withSourceId, () => deps.sourceIdParam.value) // #21003: partial/run fields ride on the stats and problems bodies
+  const staleResults = useStaleResults(() => deps.sourceIdParam.value) // #17982: a cached result older than the last sync is flagged
 
   // --- Task loaders (#1304/#1321) ---
 
@@ -113,6 +117,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   // #17983: a failed scan is its own state, never "0 duplicates found"
   const duplicateScanState = ref<DuplicateScanState>('not_scanned')
   const applyDuplicates = (raw: unknown) => {
+    staleResults.clear('duplicates') // only the cached route re-marks it, after this
     const reading = readDuplicatePayload(raw)
     duplicateAnalysis.value = reading.duplicates
     duplicateScanState.value = reading.state
@@ -123,6 +128,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   // rows. The list is cleared too: `'failed'` with rows is a state no panel
   // renders, and they would survive behind the failure notice.
   const failDuplicates = () => {
+    staleResults.clear('duplicates')
     duplicateAnalysis.value = []
     duplicateScanState.value = 'failed'
   }
@@ -263,7 +269,8 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   const statsEndpoint = useFetchEndpoint<
     { status: string; stats?: Record<string, unknown> },
-    Record<string, unknown>
+    Record<string, unknown>,
+    string
   >(
     {
       path: '/api/analytics/codebase/stats',
@@ -271,7 +278,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
       label: 'Stats endpoint',
       pickData: (raw) =>
         raw.status === 'success' && raw.stats ? raw.stats : null,
-      onSuccess: (d) => { codebaseStats.value = d },
+      onSuccess: (d, raw, forSource) => { if (forSource === deps.sourceIdParam.value) codebaseStats.value = d; runState.applyRunFields(raw, forSource) },
       onNoData: () => {
         codebaseStats.value = null
         logger.debug('No codebase stats - run indexing first')
@@ -282,14 +289,15 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   const problemsEndpoint = useFetchEndpoint<
     { status?: string; problems?: Problem[] },
-    Problem[]
+    Problem[],
+    string
   >(
     {
       path: '/api/analytics/codebase/problems',
       scopeToSource: true, requireSource: true,
       label: 'Problems endpoint',
       pickData: (raw) => (raw.status === 'no_data' ? [] : raw.problems ?? []),
-      onSuccess: (d) => { problemsReport.value = d },
+      onSuccess: (d, raw, forSource) => { if (forSource === deps.sourceIdParam.value) problemsReport.value = d; runState.applyRunFields(raw, forSource) },
     },
     { withSourceId },
   )
@@ -299,7 +307,8 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   const cachedDuplicatesEndpoint = useFetchEndpoint<unknown, unknown>(
     { path: '/api/analytics/codebase/duplicates/cached', scopeToSource: true, requireSource: true,
-      label: 'Cached duplicates endpoint', pickData: (raw) => raw, onSuccess: applyDuplicates, onError: failDuplicates,
+      label: 'Cached duplicates endpoint', pickData: (raw) => raw, onError: failDuplicates,
+      onSuccess: (raw) => { applyDuplicates(raw); staleResults.markFromCached('duplicates', raw) },
       onNoData: () => { duplicateAnalysis.value = []; duplicateScanState.value = 'not_scanned' } },
     { withSourceId },
   )
@@ -316,7 +325,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
         raw.status === 'success' && raw.dependency_data
           ? (raw.dependency_data as DependencyGraph)
           : null,
-      onSuccess: (d) => { dependencyData.value = d }, onNoData: () => { dependencyData.value = null },
+      onSuccess: (d, raw) => { dependencyData.value = d; staleResults.markFromCached('dependencies', raw) }, onNoData: () => { dependencyData.value = null; staleResults.clear('dependencies') },
     },
     { withSourceId },
   )
@@ -333,7 +342,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
         raw.status === 'success' && raw.import_tree
           ? (raw.import_tree as ImportTreeNode[])
           : null,
-      onSuccess: (d) => { importTreeData.value = d }, onNoData: () => { importTreeData.value = null },
+      onSuccess: (d, raw) => { importTreeData.value = d; staleResults.markFromCached('importTree', raw) }, onNoData: () => { importTreeData.value = null; staleResults.clear('importTree') },
     },
     { withSourceId },
   )
@@ -343,15 +352,15 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const loadChartData = () => chartEndpoint.load()
   const loadUnifiedReport = () => unifiedEndpoint.load()
   const loadCallGraphData = () => callGraphEndpoint.load()
-  const getCodebaseStats = () => statsEndpoint.load()
+  const getCodebaseStats = () => statsEndpoint.load(undefined, deps.sourceIdParam.value)
   const loadCachedDuplicates = () => cachedDuplicatesEndpoint.load()
   const loadCachedDependencies = () => cachedDependenciesEndpoint.load()
   const loadCachedImportTree = () => cachedImportTreeEndpoint.load()
   // #17758: both routes now REQUIRE source_id -- omitting it is a 422, not a
   // repo-wide scan. `useTaskLoader.load(body, query)` takes the query record,
   // and `sourceIdQuery` is the same one the `*/cached` fetchers already send.
-  const loadDependencyData = () => _loadDependencyTask(undefined, sourceIdQuery.value)
-  const loadImportTreeData = () => _loadImportTreeTask(undefined, sourceIdQuery.value)
+  const loadDependencyData = () => { staleResults.clear('dependencies'); return _loadDependencyTask(undefined, sourceIdQuery.value) }
+  const loadImportTreeData = () => { staleResults.clear('importTree'); return _loadImportTreeTask(undefined, sourceIdQuery.value) }
 
   const loadDeclarations = async () => {
     loadingProgress.declarations = true
@@ -389,7 +398,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     loadingProgress.problems = true
     progressStatus.value = t('analytics.codebase.status.analyzingProblems')
     try {
-      await problemsEndpoint.load()
+      await problemsEndpoint.load(undefined, deps.sourceIdParam.value)
     } finally {
       loadingProgress.problems = false
     }
@@ -503,27 +512,6 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   const declarationsForPanel = computed(() => toDeclarationPanelRows(declarationAnalysis.value))
 
-  // --- Config load ---
-
-  const loadProjectRoot = async () => {
-    const saved = localStorage.getItem('codebase-analytics-path')
-    if (saved) {
-      logger.debug('Using saved path from localStorage:', saved)
-      return
-    }
-    try {
-      const projectRoot = await appConfig.getProjectRoot()
-      if (projectRoot) {
-        rootPath.value = projectRoot
-      } else {
-        logger.warn('Project root not found in config, using default')
-      }
-    } catch (error: unknown) {
-      logger.error('Failed to load project root:', error)
-      progressStatus.value = t('analytics.codebase.status.enterProjectPath')
-    }
-  }
-
   // --- Scan orchestration ---
 
   const buildScanList = (useFullScans: boolean) => [
@@ -625,6 +613,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     duplicateScanState,
     declarationAnalysis,
     hardcodeAnalysis,
+    runState,
     // A failed load must not render as an empty ("none found") section.
     problemsError: problemsEndpoint.error, declarationsError: declarationsSilent.error, hardcodesError: hardcodesSilent.error,
     chartData: chartEndpoint.data,
@@ -661,7 +650,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     loadHardcodes,
     loadDependencyData,
     loadImportTreeData,
-    loadProjectRoot,
+    loadProjectRoot: () => loadProjectRoot({ rootPath, progressStatus, t }),
     getCodebaseStats,
     getProblemsReport,
     getDeclarationsData,

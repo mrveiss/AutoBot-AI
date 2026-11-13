@@ -68,6 +68,17 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_INDEXING_ABANDON_GRACE_SECONDS",
+        type=int,
+        default=300,
+        description="Seconds past the hard timeout before a still-running indexing run reads as abandoned.",
+        component="analytics",
+        range=(30, 86400),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_INDEXING_HARD_TIMEOUT",
         type=int,
         default=1800,
