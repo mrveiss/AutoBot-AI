@@ -62,7 +62,7 @@ export { LOCALE_ENDONYMS, localeOptions } from './src/utils/locales'
 export type { LocaleOption } from './src/utils/locales'
 
 export { default as BaseModal } from './src/components/BaseModal.vue'
-export type { ModalSize } from './src/components/BaseModal.vue'
+export type { ModalSize, ModalRole } from './src/components/BaseModal.vue'
 
 export { default as BaseDrawer } from './src/components/BaseDrawer.vue'
 
