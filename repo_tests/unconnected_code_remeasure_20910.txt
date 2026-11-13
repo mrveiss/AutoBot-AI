@@ -1,6 +1,6 @@
 # The one-time re-measure of #20910: the route-detector and frontend-extractor fixes newly flagged these routes, which were
-# always unconnected. They are the ONLY baseline additions ever allowed against a base; every later change stays shrink-only,
-# whatever issue an entry links. This list is frozen: it may not gain a line against the base (unconnected_code_gate_20512_test.py).
+# always unconnected. They are the only baseline additions allowed against a base, apart from those a later one-time re-measure's own
+# frozen list names (see unconnected_code_gate_20512_test.py); every other change stays shrink-only, whatever issue an entry links. This list is frozen: it may not gain a line against the base (unconnected_code_gate_20512_test.py).
 route:autobot-backend/api/a2a.py:GET /agent-card
 route:autobot-backend/api/a2a.py:GET /capabilities
 route:autobot-backend/api/a2a.py:GET /stats
