@@ -49,6 +49,7 @@ def _error_catalog_state() -> tuple[bool, dict]:
     already answers "is error handling healthy".
     """
     catalog = get_error_catalog_instance()
+    catalog.ensure_loaded()  # import loads nothing (#20894): an unloaded catalog reports "unloaded"
     on_deployed_catalog = catalog.source == SOURCE_YAML
     return on_deployed_catalog, {
         "error_catalog_source": catalog.source,

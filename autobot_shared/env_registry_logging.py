@@ -17,6 +17,7 @@ Registration contract (import side effect, ordering): see ``env_registry`` (#164
 from __future__ import annotations
 
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
+from autobot_shared.log_dir import LOGS_DIR_DEFAULT
 
 register_env_var(
     EnvVarSpec(
@@ -31,8 +32,13 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_LOGS_DIR",
         type=str,
-        default="logs",
-        description="Primary directory for application log files.",
+        default=LOGS_DIR_DEFAULT,  # the one declared default, shared with ssot_config.PathConfig (#20894)
+        description=(
+            "Primary directory for application log files (#20894). Every deploy route sets it (ansible env "
+            "templates and units, docker-compose's /app/logs volume). Unset: $XDG_STATE_HOME/autobot/logs "
+            "(~/.local/state/autobot/logs); never inside the source tree. A relative value is anchored at "
+            "AUTOBOT_BASE_DIR, never the cwd. AUTOBOT_LOG_DIR is a deprecated alias."
+        ),
         component="logging",
     )
 )

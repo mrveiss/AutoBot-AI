@@ -35,6 +35,10 @@ ExecStart={{ backend_code_dir }}/venv/bin/python \
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
+# #20894: AUTOBOT_LOGS_DIR (backend.env.j2) is backend_app_log_dir; ProtectSystem=strict leaves it read-only
+# otherwise. The service-output directory is created by the backend role's tasks; the application directory by
+# the common role, so it is optional (-) rather than a reason for the unit not to start.
+ReadWritePaths={{ backend_log_dir }} -{{ backend_app_log_dir }}
 PrivateTmp=true
 PrivateDevices=true
 ProtectKernelTunables=true

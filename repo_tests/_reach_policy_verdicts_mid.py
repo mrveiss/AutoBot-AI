@@ -14,6 +14,11 @@ ABSOLUTE = "ABSOLUTE"
 CONVERTIBLE = "CONVERTIBLE"
 
 MID: dict[str, tuple[str, str, str]] = {
+    "ansible-log-dir-templates-complete-20894": (
+        ABSOLUTE,
+        "NOT_PATHS",
+        "Renderings, not paths: one id per (task file, template) pair, a template counted once per renderer.",
+    ),
     "defined-twice-18094-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

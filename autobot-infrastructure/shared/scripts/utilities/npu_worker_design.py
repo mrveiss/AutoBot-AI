@@ -23,7 +23,7 @@ from enum import Enum
 from typing import Any, Dict
 
 from autobot_shared.generated_file_output import report_output, write_atomically
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from autobot_shared.paths import project_root
 
 logger = get_logger(__name__)
@@ -336,9 +336,7 @@ class NPUWorkerArchitecture:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the CLI parser. Dry-run is the default; --apply opts into writing."""
-    parser = argparse.ArgumentParser(
-        description="Generate NPU_WORKER_ARCHITECTURE.json (safe by default: dry-run)."
-    )
+    parser = argparse.ArgumentParser(description="Generate NPU_WORKER_ARCHITECTURE.json (safe by default: dry-run).")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--dry-run",
@@ -383,4 +381,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     exit(main())

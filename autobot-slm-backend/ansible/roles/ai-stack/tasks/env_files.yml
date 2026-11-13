@@ -166,6 +166,17 @@
       | rejectattr('rc', 'equalto', 1) | list | length > 0
   tags: ['ai', 'config']
 
+- name: "Ensure the application log directory exists (#20894)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/ensure_app_log_dir.yml
+    apply:
+      tags: ['ai', 'config']
+  vars:
+    app_log_dir: "{{ ai_app_log_dir }}"
+    app_log_dir_owner: "{{ ai_user }}"
+    app_log_dir_group: "{{ ai_group }}"
+  tags: ['ai', 'config']
+
 - name: "AI Stack | Deploy /etc/autobot/autobot-ai-stack.env"
   ansible.builtin.template:
     src: ai-stack.env.j2

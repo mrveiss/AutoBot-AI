@@ -38,6 +38,9 @@ Environment="PYTHONUNBUFFERED=1"
 # Tell it explicitly — it already is /opt/autobot here, but that must be
 # said, not assumed.
 Environment="AUTOBOT_PROJECT_ROOT={{ slm_base_dir }}"
+# #20894: without it the log directory resolves to the service user's XDG state dir. The application directory,
+# not slm_log_dir where StandardOutput= appends the same file names (see the role defaults).
+Environment="AUTOBOT_LOGS_DIR={{ slm_app_log_dir }}"
 # #18281: where the backend keeps its secrets store and who runs it, for the secrets-store backup.
 # Rendered from the backend role's own variables so ansible is the one source.
 Environment="SLM_BACKEND_DATA_DIR={{ backend_data_dir | default(slm_backend_data_dir_fallback) }}"

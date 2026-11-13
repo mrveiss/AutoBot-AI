@@ -36,7 +36,7 @@ for _entry in (str(_REPO_ROOT), str(_BACKEND_DIR)):
     if _entry not in sys.path:
         sys.path.insert(0, _entry)
 
-from autobot_shared.logging_manager import get_logger  # noqa: E402
+from autobot_shared.logging_manager import get_logger, setup_logging  # noqa: E402
 from autobot_shared.network_constants import ServiceURLs  # noqa: E402
 
 logger = get_logger(__name__)
@@ -185,8 +185,9 @@ def check_route_registration(results: CheckResults, prefix: str) -> None:
     name = "route registration"
     expected = f"{API_MOUNT_PREFIX}{prefix}{EXECUTE_PATH}"
     try:
-        from api.workflow import router as workflow_router
         from fastapi import FastAPI
+
+        from api.workflow import router as workflow_router
     except ImportError as exc:
         results.record_skip(name, f"backend imports unavailable ({exc})")
         return
@@ -220,4 +221,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     sys.exit(main())
