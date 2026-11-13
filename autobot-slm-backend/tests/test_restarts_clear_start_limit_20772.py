@@ -331,7 +331,29 @@ _DIRECT_RESTARTS = {
 
 
 _COMMAND_MODULES = ("command", "ansible.builtin.command", "shell", "ansible.builtin.shell")
-_SYSTEMCTL_RESTART = re.compile(r"systemctl\s+(?:--?\S+\s+)*(?:try-)?restart\s+(?:--\s+)?([^\s;&|]+)")
+_COMMAND_SEPARATORS = re.compile(r"[;&|]+")
+_RESTART_VERBS = ("restart", "try-restart")
+
+
+def _systemctl_restart_units(text: str) -> list:
+    """Units of every ``systemctl [options] [try-]restart [--] <unit>`` in *text*, by tokens (no backtracking).
+
+    A command ends at ``;``, ``&`` or ``|``. After the ``systemctl`` word come any option tokens (those starting
+    with ``-``), then the verb, an optional ``--`` and the unit.
+    """
+    units = []
+    for command in _COMMAND_SEPARATORS.split(text):
+        tokens = command.split()
+        for at, token in enumerate(tokens):
+            if token != "systemctl" and not token.endswith("/systemctl"):
+                continue
+            verb = at + 1
+            while verb < len(tokens) and tokens[verb].startswith("-"):
+                verb += 1
+            unit = verb + 1
+            if unit < len(tokens) and tokens[verb] in _RESTART_VERBS:
+                units.append(tokens[unit + 1] if tokens[unit] == "--" and unit + 1 < len(tokens) else tokens[unit])
+    return units
 
 
 def _all_yaml() -> list:
@@ -348,7 +370,7 @@ def _command_restart_units(node: dict) -> list:
         text = spec.get("cmd") or spec.get("argv") if isinstance(spec, dict) else spec
         text = " ".join(map(str, text)) if isinstance(text, list) else text
         if isinstance(text, str):
-            units += _SYSTEMCTL_RESTART.findall(text)
+            units += _systemctl_restart_units(text)
     return units
 
 
@@ -380,6 +402,13 @@ def test_a_compound_command_yields_every_restart_it_makes() -> None:
         "ssh"
     ]
     assert _command_restart_units({"ansible.builtin.command": "systemctl status ssh"}) == []
+
+
+def test_the_restart_detection_is_linear_on_an_adversarial_command() -> None:
+    """The old option pattern backtracked exponentially on ``systemctl`` followed by many ``-! -`` (CodeQL py/redos)."""
+    assert _systemctl_restart_units("systemctl " + "-! -" * 100_000) == []
+    assert _systemctl_restart_units("systemctl -q --user restart x.service") == ["x.service"]
+    assert _systemctl_restart_units("systemctl reset-failed x") == []
 
 
 def test_no_restart_anywhere_under_ansible_skips_the_shared_task_unless_justified() -> None:
