@@ -45,6 +45,7 @@ from fastapi import (
     Query,
     Request,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.knowledge_chunked_upload import router as chunked_upload_router
 from api.knowledge_office_upload import OFFICE_EXTENSIONS, extract_office_upload, verified_upload_extension
@@ -62,6 +63,7 @@ from api.schemas_knowledge import (
     WatchFolderStatsResponse,
 )
 from api.system_health import ComponentHealth, KnownProbes, register_health_probe
+from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -126,6 +128,7 @@ from knowledge.upload_rejections import no_text_rejection as _no_text_rejection
 from knowledge_factory import get_or_create_knowledge_base
 from security.upload_filename_policy import is_safe_file, require_safe_upload
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
+from services.kb_wipe_request import request_kb_wipe
 from services.knowledge.stats_service import fetch_kb_core_stats  # Issue #11554 canonical stats
 from utils.path_validation import contains_path_traversal
 
@@ -1947,21 +1950,6 @@ async def search_man_pages(
     }
 
 
-async def _clear_kb_via_redis(kb) -> int:
-    """Clear knowledge base via Redis fallback (Issue #398: extracted)."""
-    if not (hasattr(kb, "redis") and kb.redis):
-        logger.error("No clear method available for knowledge base implementation")
-        raise HTTPException(status_code=500, detail="Knowledge base clearing not supported")
-
-    keys = await kb.redis.keys("fact:*")
-    if keys:
-        await kb.redis.delete(*keys)
-    index_keys = await kb.redis.keys("index:*")
-    if index_keys:
-        await kb.redis.delete(*index_keys)
-    return len(keys) if keys else 0
-
-
 @router.post("/clear_all", response_model=ClearAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1972,59 +1960,15 @@ async def clear_all_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
     req: Request = None,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
 ):
-    """Clear all entries from the knowledge base - DESTRUCTIVE OPERATION.
+    """Request a wipe of the knowledge base - it deletes nothing (#21048, #17038).
 
-    Issue #744: Requires admin authentication.
+    Requires an admin who is a user. Creates (or reuses) a pending wipe approval and returns its reference;
+    the wipe runs only after a human approves it in the Approvals inbox, and is never auto-approved.
     """
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        # Issue #5407: KB instance not initialized.
-        logger.warning("clear_all_knowledge: KB uninitialized - returning error status")
-        from knowledge.metrics import autobot_kb_degradation_total
-
-        autobot_kb_degradation_total.labels(endpoint="clear_all", reason="kb_uninit").inc()
-        return {
-            "status": "error",
-            "items_removed": 0,
-            "message": "Knowledge base not initialized - please check logs for errors",
-        }
-
-    logger.warning("Starting DESTRUCTIVE operation: clearing all knowledge base entries")
-    try:
-        stats_before = await kb.get_stats()
-        items_before = stats_before.get("total_facts", 0)
-    except Exception:
-        items_before = 0
-
-    if hasattr(kb, "clear_all"):
-        result = await kb.clear_all()
-        items_removed = result.get("items_removed", items_before)
-    else:
-        try:
-            items_removed = await _clear_kb_via_redis(kb)
-        except Exception as e:
-            logger.error("Error during knowledge base clearing: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to clear")
-
-    logger.warning("Knowledge base cleared. Removed %s entries.", items_removed)
-    _user = get_auth_middleware().get_user_from_request(req)
-    audit_record(
-        user_id=str((_user or {}).get("user_id", "unknown")),
-        action=AuditAction.KNOWLEDGE_REMOVE,
-        resource_type="knowledge_doc",
-        resource_id="all",
-        ip_address=req.client.host if req and req.client else "unknown",
-        session_id=None,
-        outcome="success",
-        metadata={"items_removed": items_removed},
-    )
-    return {
-        "status": "success",
-        "items_removed": items_removed,
-        "items_before": items_before,
-        "message": f"Successfully cleared knowledge base. Removed {items_removed} entries.",
-    }
+    return await request_kb_wipe(current_user, session)
 
 
 # Legacy endpoints for backward compatibility
