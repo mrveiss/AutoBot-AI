@@ -19,6 +19,7 @@ without a sweep, and keeping it that way is what lets these run at pre-push unma
 
 from __future__ import annotations
 
+from repo_tests import _reach_policy_verdicts as _verdicts_home
 from repo_tests._reach_policy import (
     ABSOLUTE,
     ALLOWANCE_VERDICTS,
@@ -92,4 +93,19 @@ def test_the_table_is_not_empty() -> None:
         f"only {len(ALLOWANCE_VERDICTS)} verdicts recorded; the sweep that fills this started "
         f"from 52 allowance-carrying declarations, so a number this small means entries were "
         f"dropped rather than converted"
+    )
+
+
+def test_no_verdict_name_is_recorded_in_two_modules() -> None:
+    """The table is split over several modules (600-line ceiling, #21206) and merged with `{**a, **b}`.
+
+    A dict merge lets a later module's row silently replace an earlier one's, so a name present in two
+    modules would hide the first decision instead of failing. Count the rows per module and compare with
+    the merged table: any shortfall is a name recorded twice.
+    """
+    parts = (_verdicts_home._A_TO_M, _verdicts_home.MID, _verdicts_home.N_TO_Z)
+    assert all(parts), "a verdict module is empty; a vacuous split would pass the count below"
+    assert sum(len(part) for part in parts) == len(ALLOWANCE_VERDICTS), (
+        "a declaration name is recorded in more than one verdict module: "
+        f"{sorted(name for name in ALLOWANCE_VERDICTS if sum(name in part for part in parts) > 1)}"
     )
