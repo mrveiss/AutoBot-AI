@@ -260,3 +260,12 @@ def test_the_codebase_analytics_shape_resolves_and_leaves_an_uncalled_route_flag
         f"route:{_PKG}/endpoints/stats.py:GET /embedding-stats",
         f"route:{_PKG}/endpoints/ownership.py:GET /expertise",
     }
+
+
+def test_the_real_package_router_mounts_are_seen_21428() -> None:
+    """The three package shapes on the live tree: a hub two re-exports down, a `router.py` hub, a router in `__init__`."""
+    root = repo_root()
+    mounts = routes.Audit(root, scripts_root=root).registry_prefixes("autobot-backend")
+    assert "/analytics/codebase" in mounts["autobot-backend/api/codebase_analytics/endpoints/charts.py"]
+    assert "/redis" in mounts["autobot-backend/api/redis_mcp/router.py"]
+    assert "" in mounts["autobot-backend/llc/api/__init__.py"]

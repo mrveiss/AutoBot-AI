@@ -19,6 +19,12 @@ This follows the chain by reading source, composing the prefix at every level::
 The child's own prefix is NOT in the returned value (callers add it from the child's file), the same
 contract as ``router_prefixes.module_included_router_files``.
 
+SCOPE
+-----
+Registry entries that name a PACKAGE only. A module entry whose router includes others through
+``from pkg import module`` + ``module.router`` (``api.analytics``, ``api.a2a``) is still unresolved here; that
+and the shared resolver's gaps are tracked in #21467.
+
 WHY THIS LIVES IN THE GATE AND NOT IN ``router_prefixes``
 ---------------------------------------------------------
 The shared resolver is read by the blocking ``api-wiring`` audit, the analytics endpoint inventory
@@ -28,12 +34,23 @@ that includes the package router's own prefix, which this module deliberately le
 it re-measures all of them, and none can be re-measured from this gate's change. This reads the shared
 grammar (``file_router_prefix``, ``include_router_prefixes``, ``INCLUDE_ROUTER_NAME_RE``) and adds only the
 walk the shared resolver lacks. Moving the walk into the shared resolver must re-measure those consumers
-first (#21428).
+first (#21467).
+
+``autobot_shared/api_routing/mount_graph.py`` already walks ``include_router`` with ``ast``, but it does not
+serve here: its import table binds only imported names that contain "router", so ``from .endpoints import
+charts`` followed by ``charts.router`` is never bound to the module ``charts`` that this walk needs.
 
 WHAT THIS CANNOT SEE
 --------------------
 * A router that is not bound by a ``from <module> import <name>`` (``import pkg.mod as m``, a router built
   in a function, one looked up by ``getattr`` or ``importlib``).
+* A hub or ``__init__`` whose router variable is not named ``router``, or is not built by ``router =
+  APIRouter(`` at the start of a line: it yields no mounts, so its routes fall back to the loose forms.
+* A backslash-continued ``from ... import`` line: the names after the continuation are lost.
+* ``include_router(router=x.router)`` (the keyword form): the router it names is not seen.
+* The text of ``include_router(`` is read wherever it appears: an include inside ``if``/``try``/a function
+  counts as unconditional, and one in a comment or docstring counts.
+* ``from .sub import router`` binds ``sub/router.py`` before ``sub/__init__.py`` when both exist.
 * An include whose prefix is a variable or an f-string: ``include_router_prefixes`` reads only literals.
 * A router included at the same name twice with and without a prefix: the prefixed form wins.
 * A module that declares several routers, with different prefixes: the first ``APIRouter(prefix=)`` is used.
