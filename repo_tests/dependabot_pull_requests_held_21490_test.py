@@ -31,10 +31,22 @@ WORKFLOW_DIR = repo_root() / ".github" / "workflows"
 _MIN_WORKFLOWS = 25
 _EXPENSIVE_MINUTES = 20
 _EXPENSIVE_NAME = re.compile(r"e2e|end-to-end|smoke|matrix|docker", re.IGNORECASE)
-#: The NEGATIVE forms only: `user.login != 'dependabot[bot]'` is a hold, `== 'dependabot[bot]'` runs a job
-#: ONLY for dependabot. The `changes` outputs count only in a workflow whose `changes` job defines them.
-_NOT_DEPENDABOT = re.compile(r"user\.login\s*!=\s*'dependabot\[bot\]'")
-_CHANGES_HOLD = re.compile(r"needs\.changes\.outputs\.held\s*!=\s*'true'|needs\.changes\.outputs\.ready\s*==\s*'true'")
+#: How the held scenario (a pull request by dependabot, not a `train-*` head, no `ci:full` label) reads each
+#: atom of an `if:`. Anything not listed is UNKNOWN, so a job is
+#: held only when its whole condition is definitely False with every unknown term left unknown (three-valued
+#: logic, so `!unknown` is unknown too). That rejects `a || hold` and a hold sitting in a branch that does not
+#: gate the job. `== 'dependabot[bot]'` is True here: such a job
+#: runs for dependabot.
+_ATOMS_FALSE = (
+    re.compile(r"github\.event\.pull_request\.user\.login\s*!=\s*'dependabot\[bot\]'"),
+    re.compile(r"startsWith\(github\.event\.pull_request\.head\.ref,\s*'train-'\)"),
+    re.compile(r"contains\(github\.event\.pull_request\.labels\.\*\.name,\s*'ci:full'\)"),
+    re.compile(r"github\.event_name\s*!=\s*'pull_request'"),
+)
+_CHANGES_ATOMS = {
+    "held": re.compile(r"needs\.changes\.outputs\.held\s*!=\s*'true'"),
+    "ready": re.compile(r"needs\.changes\.outputs\.ready\s*==\s*'true'"),
+}
 #: A dependent that runs whatever its dependency did is not held by inheriting.
 _ALWAYS_RUNS = re.compile(r"always\(\)|cancelled\(\)|failure\(\)")
 
@@ -116,19 +128,110 @@ REPORTING_GATES = frozenset(
 )
 
 
-def _has_changes_hold_outputs(jobs: dict) -> bool:
-    outputs = (jobs.get("changes") or {}).get("outputs") or {}
-    return "ready" in outputs or "held" in outputs
+def _tokens(expr: str) -> list[str]:
+    """`&&`, `||`, `!`, grouping parentheses and atoms; a call such as `startsWith(a, 'b')` is one atom."""
+    out, i, buf = [], 0, ""
+
+    def flush() -> None:
+        nonlocal buf
+        if buf.strip():
+            out.append(buf.strip())
+        buf = ""
+
+    while i < len(expr):
+        c = expr[i]
+        if c == "'":
+            j = expr.index("'", i + 1)
+            buf += expr[i : j + 1]
+            i = j + 1
+        elif expr.startswith(("&&", "||"), i):
+            flush()
+            out.append(expr[i : i + 2])
+            i += 2
+        elif c == "(" and re.search(r"[\w.]$", buf.rstrip()) and buf.strip():
+            depth, j = 0, i
+            while True:
+                depth += {"(": 1, ")": -1}.get(expr[j], 0) if expr[j] != "'" else 0
+                if expr[j] == "'":
+                    j = expr.index("'", j + 1)
+                j += 1
+                if depth == 0:
+                    break
+            buf += expr[i:j]
+            i = j
+        elif c in "()" or (c == "!" and not expr.startswith("!=", i)):
+            flush()
+            out.append(c)
+            i += 1
+        else:
+            buf += c
+            i += 1
+    flush()
+    return out
+
+
+def _atom_value(atom: str, defined: frozenset) -> bool | None:
+    atom = " ".join(atom.split())
+    if any(p.fullmatch(atom) for p in _ATOMS_FALSE):
+        return False
+    if any(name in defined and p.fullmatch(atom) for name, p in _CHANGES_ATOMS.items()):
+        return False
+    return True if atom == "true" else None
+
+
+def condition_value(condition: str, defined: frozenset = frozenset()) -> bool | None:
+    """The `if:` under the held scenario: False = skipped for it, True = runs, None = cannot tell."""
+    expr = condition.strip()
+    if expr.startswith("${{") and expr.endswith("}}"):
+        expr = expr[3:-2]
+    toks, pos = _tokens(expr), [0]
+
+    def peek() -> str:
+        return toks[pos[0]] if pos[0] < len(toks) else ""
+
+    def take() -> str:
+        pos[0] += 1
+        return toks[pos[0] - 1]
+
+    def p_or() -> bool | None:
+        values = [p_and()]
+        while peek() == "||":
+            take()
+            values.append(p_and())
+        return True if True in values else None if None in values else False
+
+    def p_and() -> bool | None:
+        values = [p_not()]
+        while peek() == "&&":
+            take()
+            values.append(p_not())
+        return False if False in values else None if None in values else True
+
+    def p_not() -> bool | None:
+        if peek() == "!":
+            take()
+            inner = p_not()
+            return None if inner is None else not inner
+        if peek() == "(":
+            take()
+            value = p_or()
+            take()  # ")"
+            return value
+        return _atom_value(take(), defined)
+
+    return p_or() if toks else True
+
+
+def _changes_outputs(jobs: dict) -> frozenset:
+    return frozenset((jobs.get("changes") or {}).get("outputs") or {})
 
 
 def classify(jobs: dict) -> dict[str, str]:
-    """job -> "direct" (own negative condition) or "inherited" (needs a held job and is skippable)."""
-    changes_ok = _has_changes_hold_outputs(jobs)
-    kind = {}
-    for j, spec in jobs.items():
-        cond = str(spec.get("if", ""))
-        if _NOT_DEPENDABOT.search(cond) or (changes_ok and _CHANGES_HOLD.search(cond)):
-            kind[j] = "direct"
+    """job -> "direct" (its own condition skips it for a held run) or "inherited" (needs a held job and is skippable)."""
+    defined = _changes_outputs(jobs)
+    kind = {
+        j: "direct" for j, spec in jobs.items() if "if" in spec and condition_value(str(spec["if"]), defined) is False
+    }
     while True:
         more = {
             j: "inherited"
@@ -285,3 +388,34 @@ def test_control_an_always_running_dependent_does_not_inherit_the_hold(condition
 def test_the_reporting_gates_are_real_ci_jobs_that_always_run():
     jobs = pull_request_workflows()["ci.yml"]["jobs"]
     assert all(g in jobs and jobs[g].get("if") == "always()" for g in REPORTING_GATES)
+
+
+_HOLD = "github.event.pull_request.user.login != 'dependabot[bot]'"
+_TRAIN = "startsWith(github.event.pull_request.head.ref, 'train-')"
+
+
+@pytest.mark.parametrize(
+    "condition, held",
+    [
+        (f"${{{{ {_HOLD} }}}}", True),
+        (f"${{{{ true && {_HOLD} }}}}", True),
+        (f"${{{{ {_HOLD} || {_TRAIN} }}}}", True),
+        (f"${{{{ github.event_name != 'pull_request' || (a.b == false && ({_HOLD} || {_TRAIN})) }}}}", True),
+        (f"${{{{ !({_HOLD}) }}}}", False),
+        (f"${{{{ x.y == 'z' || {_HOLD} }}}}", False),
+        (f"${{{{ always() || {_HOLD} }}}}", False),
+        (f"${{{{ (x.y == 'z' || {_HOLD}) && w.v == 'q' }}}}", False),
+        ("${{ github.event.pull_request.user.login == 'dependabot[bot]' }}", False),
+        ("${{ x.y == 'z' }}", False),
+        ("${{ !cancelled() }}", False),
+    ],
+)
+def test_control_only_a_conjunct_hold_is_effective(condition, held):
+    assert (condition_value(condition) is False) is held
+
+
+def test_control_a_changes_output_is_a_hold_only_where_changes_defines_that_output():
+    cond = "${{ needs.changes.outputs.held != 'true' }}"
+    assert condition_value(cond, frozenset({"held"})) is False
+    assert condition_value(cond, frozenset({"ready"})) is not False, "reads `held`, but changes defines only `ready`"
+    assert condition_value("${{ needs.changes.outputs.ready == 'true' }}", frozenset({"ready"})) is False
