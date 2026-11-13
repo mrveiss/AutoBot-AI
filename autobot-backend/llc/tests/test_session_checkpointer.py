@@ -133,10 +133,10 @@ async def _recover_with(runs: list, items: list) -> tuple:
     """Run startup recovery over *runs*/*items* (queried by age, as SQL would); return the Redis re-queue mock."""
     import fakeredis
 
-    from llc.tests._run_checkout_world import AgedRoutedSession
+    from llc.tests._run_checkout_world import RoutedSession
 
     factory = MagicMock()
-    factory.return_value.__aenter__ = AsyncMock(return_value=AgedRoutedSession(runs, items))
+    factory.return_value.__aenter__ = AsyncMock(return_value=RoutedSession(runs, items, by_age=True))
     factory.return_value.__aexit__ = AsyncMock(return_value=False)
     queue = AsyncMock()
     with (
@@ -176,9 +176,9 @@ async def test_the_recovery_age_is_the_liveness_monitors_cutoff() -> None:
     """One definition of "dead": the run query binds the instant the monitor's own cutoff gives."""
     from llc.scheduler.liveness_monitor import liveness_cutoff
     from llc.scheduler.session_checkpointer import _runs_to_recover
-    from llc.tests._run_checkout_world import AgedRoutedSession, bound_values
+    from llc.tests._run_checkout_world import RoutedSession, bound_values
 
-    session = AgedRoutedSession([], [])
+    session = RoutedSession([], [], by_age=True)
     await _runs_to_recover(session)
 
     [cutoff] = [v for v in bound_values(session.statements[0]) if isinstance(v, datetime)]
