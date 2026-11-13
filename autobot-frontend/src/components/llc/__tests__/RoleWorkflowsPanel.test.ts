@@ -81,7 +81,7 @@ const optionButtons = (w: Wrapper) => w.findAll('[data-testid="role-workflows-pi
 async function createFromModal(wrapper: Wrapper, id: string) {
   await wrapper.get('[data-testid="role-workflows-new"]').trigger('click')
   await wrapper.get('[data-testid="workflow-create-id"] input').setValue(id)
-  await wrapper.get('[data-testid="workflow-create-submit"]').trigger('click')
+  await wrapper.get('[data-testid="workflow-create-form"]').trigger('submit')
   await flushPromises()
 }
 
@@ -104,6 +104,21 @@ describe('RoleWorkflowsPanel (#21241)', () => {
 
     expect(post).toHaveBeenCalledWith('/api/llc/roles/c1/r1/workflows', { workflow_id: 'wf-b' })
     expect(wrapper.emitted('changed')).toHaveLength(1)
+  })
+
+  it('reports a write in flight to the page as busy, and clears it when the write ends', async () => {
+    const gate = deferred<void>()
+    post.mockReturnValueOnce(gate.promise)
+    const wrapper = await mountPanel(['wf-a'])
+    await optionButtons(wrapper)[1].trigger('click')
+    await wrapper.get('[data-testid="role-workflows-attach"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.emitted('busy')).toEqual([[true]])
+
+    gate.resolve()
+    await flushPromises()
+    expect(wrapper.emitted('busy')).toEqual([[true], [false]])
   })
 
   it('cannot attach until a workflow is picked', async () => {
@@ -228,7 +243,7 @@ describe('RoleWorkflowsPanel (#21241)', () => {
     const wrapper = await mountPanel(['wf-a'])
     await wrapper.get('[data-testid="role-workflows-new"]').trigger('click')
     await wrapper.get('[data-testid="workflow-create-id"] input').setValue('wf-new')
-    await wrapper.get('[data-testid="workflow-create-submit"]').trigger('click')
+    await wrapper.get('[data-testid="workflow-create-form"]').trigger('submit')
     await flushPromises()
 
     await wrapper.setProps({ companyId: 'c2', roleId: 'r9' })

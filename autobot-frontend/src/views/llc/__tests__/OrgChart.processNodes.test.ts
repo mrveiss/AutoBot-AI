@@ -212,6 +212,7 @@ describe('OrgChart process nodes (#13963)', () => {
     // `peopleUnavailable` precedent. An absent source rendering as "no org
     // chart" is the failure this guards.
     get.mockImplementation((url: string) => {
+      if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
       if (url.includes('/process-nodes')) return Promise.reject(new Error('HTTP 500: boom'))
       if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
       return Promise.resolve({ nodes: [] })
@@ -231,6 +232,7 @@ describe('OrgChart process nodes (#13963)', () => {
     // failure must not permanently hide this company's processes.
     let attempt = 0
     get.mockImplementation((url: string) => {
+      if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
       if (url.includes('/process-nodes')) {
         attempt += 1
         return attempt === 1

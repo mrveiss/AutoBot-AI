@@ -307,7 +307,7 @@ describe('OrgChart process attach/detach (#14549)', () => {
 
     await wrapper.get('[data-testid="process-attach-new-workflow"]').trigger('click')
     await wrapper.get('[data-testid="workflow-create-id"] input').setValue('wf-fresh')
-    await wrapper.get('[data-testid="workflow-create-submit"]').trigger('click')
+    await wrapper.get('[data-testid="workflow-create-form"]').trigger('submit')
     await flushPromises()
 
     // Created only: the org chart form has no role to attach to until one is chosen.

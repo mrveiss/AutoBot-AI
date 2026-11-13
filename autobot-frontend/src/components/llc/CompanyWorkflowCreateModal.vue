@@ -16,7 +16,7 @@
   mid-flight writes nothing into the new company's form.
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseAlert, BaseButton, BaseInput, BaseModal } from '@autobot/ui'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
@@ -39,6 +39,8 @@ const emit = defineEmits<{
 const logger = createLogger('CompanyWorkflowCreateModal')
 const { t } = useI18n()
 
+/** Ties the footer's submit button to the form, so Enter in a field and the button are one submit. */
+const formId = `workflow-create-${useId()}`
 const workflowId = ref('')
 const name = ref('')
 const submitting = ref(false)
@@ -136,7 +138,7 @@ async function submit(): Promise<void> {
     :locked="submitting"
     @close="emit('close')"
   >
-    <form class="flex flex-col gap-4" data-testid="workflow-create-form" @submit.prevent="submit">
+    <form :id="formId" class="flex flex-col gap-4" data-testid="workflow-create-form" @submit.prevent="submit">
       <BaseInput
         v-model="workflowId"
         type="text"
@@ -160,7 +162,7 @@ async function submit(): Promise<void> {
 
     <template #actions>
       <BaseButton variant="secondary" :disabled="submitting" @click="emit('close')">{{ t('common.cancel') }}</BaseButton>
-      <BaseButton variant="primary" :disabled="!canSubmit" data-testid="workflow-create-submit" @click="submit">
+      <BaseButton variant="primary" type="submit" :form="formId" :disabled="!canSubmit" data-testid="workflow-create-submit">
         {{ submitLabel }}
       </BaseButton>
     </template>

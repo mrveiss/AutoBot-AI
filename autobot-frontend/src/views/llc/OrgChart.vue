@@ -26,6 +26,7 @@ import {
   orgLayoutKey,
   orgUnitRoots,
   teamMemberOrgNodeId,
+  isProcessNodeSource,
   workflowIdFromProcessNode,
   ORG_GROUP_PREFIX,
 } from '@/composables/llc/orgCanvasGraph'
@@ -204,8 +205,11 @@ const attachableRoles = ref<AttachableRole[]>([])
 const attachRolesFailed = ref(false)
 const rolesLoaded = ref(false)
 // #21242: the company's workflows (attach select, create modal, attach/detach), loaded with the canvas.
-const workflowsSvc = useCompanyWorkflows(() => companyId.value ?? '')
-// One in-flight flag for both mutations, like RolesView.vue's `isMutating`: no second attach/detach meanwhile.
+const workflowsSvc = useCompanyWorkflows(() => companyId.value ?? '', {
+  autoLoad: () => viewMode.value === 'canvas',
+})
+// One flag for both mutations, mirroring RolesView.vue's `isMutating`: a
+// second attach/detach cannot fire while the first is still in flight.
 const {
   roleId: attachRoleId,
   workflowId: attachWorkflowId,
@@ -601,8 +605,8 @@ const resolveCompanyIdOnce = shareInFlight(() => resolveCompanyId())
 async function fetchProcessNodes() {
   if (processNodesLoaded.value) return
   let cid = ''
-  // A company switched while the request was out owns these flags now.
-  const stale = () => !!companyId.value && cid !== companyId.value
+  // A switched company owns the flags now; an unresolved one (cid '') never does (#21242).
+  const stale = () => cid !== '' && !!companyId.value && cid !== companyId.value
   try {
     cid = await resolveCompanyIdOnce()
     if (!cid) {
@@ -613,27 +617,22 @@ async function fetchProcessNodes() {
       `/api/llc/companies/${cid}/process-nodes`,
     )
     if (stale()) return
-    // Accept only rows that actually carry the three strings a process node is
-    // made of. A response of another shape — a misrouted mock, a changed
-    // contract — would otherwise be rendered as nonsense nodes on the canvas
-    // rather than as nothing.
     const rows = Array.isArray(resp?.nodes) ? resp.nodes : []
-    processNodes.value = rows.filter(
-      (row): row is ProcessNodeSource =>
-        typeof row?.role_id === 'string' &&
-        typeof row?.role_name === 'string' &&
-        typeof row?.workflow_id === 'string',
-    )
-    processNodesFailed.value = false
-    processNodesLoaded.value = true
-    processNodesAttempted.value = true
+    processNodes.value = rows.filter(isProcessNodeSource)
+    settleProcessNodes(true)
   } catch (err: unknown) {
     logger.error('Failed to fetch process nodes:', err instanceof Error ? err.message : String(err))
     if (stale()) return
     processNodes.value = []
-    processNodesFailed.value = true
-    processNodesAttempted.value = true
+    settleProcessNodes(false)
   }
+}
+
+/** Record how the process-nodes request ended; only an answer is cached as loaded. */
+function settleProcessNodes(answered: boolean) {
+  processNodesFailed.value = !answered
+  processNodesLoaded.value = answered
+  processNodesAttempted.value = true
 }
 
 /**

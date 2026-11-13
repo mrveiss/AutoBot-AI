@@ -83,7 +83,7 @@
 
           <p v-if="isDetailLoading" class="roles-state">{{ t('llcRoles.loading') }}</p>
 
-          <template v-else>
+          <template v-if="!isDetailLoading">
             <section class="roles-section">
               <h4 class="roles-section-title">{{ t('llcRoles.holders') }}</h4>
               <p v-if="holders.length === 0" class="roles-section-empty">
@@ -153,15 +153,20 @@
               @add="grantPermission"
               @remove="revokePermission"
             />
+          </template>
 
-            <RoleWorkflowsPanel
-              :company-id="companyId"
-              :role-id="selectedRole.id"
-              :attached="workflows"
-              :busy="isMutating"
-              @changed="loadDetail"
-            />
+          <!-- Outside the loading branch so a detail reload does not remount it; it reports writes as `busy`. -->
+          <RoleWorkflowsPanel
+            v-show="!isDetailLoading"
+            :company-id="companyId"
+            :role-id="selectedRole.id"
+            :attached="workflows"
+            :busy="isMutating"
+            @busy="(b: boolean) => { workflowBusy = b; if (b) errorMessage = '' }"
+            @changed="loadDetail"
+          />
 
+          <template v-if="!isDetailLoading">
             <!-- #14607: the rate the role's steps are costed against. It sits
                  with the role's other attachments because it belongs to the
                  role, not to whoever currently holds it. -->
@@ -459,8 +464,10 @@ const HOLDER_TYPES = ['user', 'agent', 'contact'] as const
 const newHolderType = ref<(typeof HOLDER_TYPES)[number]>('user')
 const newHolderId = ref('')
 // One flag for every mutation: the panels disable together, so a second call
-// cannot start against a list the first is about to replace.
-const isMutating = ref(false)
+// cannot start against a list the first is about to replace. The workflows panel's own writes count.
+const mutating = ref(false)
+const workflowBusy = ref(false)
+const isMutating = computed(() => mutating.value || workflowBusy.value)
 // Monotonic ticket for detail loads. Two loads can be in flight when a user
 // switches role while a post-mutation reload is still running; without this the
 // slower one wins and writes the previous role's holders and permissions into
@@ -732,7 +739,7 @@ async function createRole(): Promise<void> {
  */
 async function mutate(call: () => Promise<unknown>, fallbackKey: string): Promise<void> {
   if (isMutating.value) return
-  isMutating.value = true
+  mutating.value = true
   errorMessage.value = ''
   try {
     await call()
@@ -741,7 +748,7 @@ async function mutate(call: () => Promise<unknown>, fallbackKey: string): Promis
     logger.error('Role mutation failed', error)
     errorMessage.value = describeError(error, fallbackKey)
   } finally {
-    isMutating.value = false
+    mutating.value = false
   }
 }
 

@@ -13,7 +13,7 @@
   shown before it writes state.
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseAlert, BaseButton, BaseSelectMenu } from '@autobot/ui'
 import { useApiClient } from '@/plugins/api'
@@ -30,7 +30,11 @@ const props = defineProps<{
   /** A role mutation elsewhere on the page is in flight. */
   busy: boolean
 }>()
-const emit = defineEmits<{ (e: 'changed'): void }>()
+const emit = defineEmits<{
+  (e: 'changed'): void
+  /** A write of this panel is in flight (true) or over (false): the page folds it into its own busy flag. */
+  (e: 'busy', busy: boolean): void
+}>()
 
 const { t } = useI18n()
 const api = useApiClient()
@@ -55,6 +59,9 @@ onMounted(() => {
   void service.load()
   void members.load()
 })
+watch(pending, (busy) => emit('busy', busy))
+// Unmounted mid-write: the page must not stay locked by a flag nobody will clear.
+onBeforeUnmount(() => emit('busy', false))
 
 // Another company or role: nothing chosen or reported for the old one carries over.
 watch(
@@ -175,7 +182,7 @@ function onCreated(_id: string, attachedNow: boolean): void {
 
     <CompanyWorkflowCreateModal
       v-if="viewerCanManage"
-      v-model="showCreate"
+      :model-value="showCreate"
       :company-id="companyId"
       :role-id="roleId"
       :service="service"

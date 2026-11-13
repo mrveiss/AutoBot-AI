@@ -43,8 +43,9 @@ async function fill(wrapper: Wrapper, id: string, name = '') {
   if (name) await wrapper.get('[data-testid="workflow-create-name"] input').setValue(name)
 }
 
+// The footer button submits the form by its `form` attribute, and Enter in a field submits the same form.
 async function submit(wrapper: Wrapper) {
-  await wrapper.get('[data-testid="workflow-create-submit"]').trigger('click')
+  await wrapper.get('[data-testid="workflow-create-form"]').trigger('submit')
   await flushPromises()
 }
 
@@ -128,6 +129,21 @@ describe('CompanyWorkflowCreateModal (#21241)', () => {
     await submit(wrapper)
 
     expect(wrapper.get('[data-testid="workflow-create-error"]').text()).toContain('workflow exists')
+  })
+
+  it('submits once through the form its footer submit button is bound to (so Enter in a field submits too)', async () => {
+    const wrapper = mountModal()
+    await fill(wrapper, 'wf-new')
+    const button = wrapper.get('[data-testid="workflow-create-submit"]')
+    const form = wrapper.get('[data-testid="workflow-create-form"]')
+
+    expect(button.attributes('type')).toBe('submit')
+    expect(button.attributes('form')).toBe(form.attributes('id'))
+    // One path only: the form's submit. A click handler besides it would create twice per press.
+    await form.trigger('submit')
+    await flushPromises()
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(attach).toHaveBeenCalledTimes(1)
   })
 
   it('cannot be submitted without an id', async () => {

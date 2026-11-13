@@ -161,6 +161,51 @@ describe('RolesView operations (#14221 step 6b)', () => {
     expect(del).toHaveBeenCalledWith('/api/llc/roles/c1/r1/workflows/wf-1')
   })
 
+  it('keeps the workflows panel mounted across a role reload: no second workflows or standing request, controls stay', async () => {
+    respond()
+    const wrapper = await mountView()
+    const panel = wrapper.findComponent(RoleWorkflowsPanel).element
+    const workflowGets = () => get.mock.calls.filter(([url]) => String(url).startsWith('/api/llc/workflows/')).length
+    const memberGets = () => get.mock.calls.filter(([url]) => String(url).endsWith('/members')).length
+    const [workflowsBefore, membersBefore] = [workflowGets(), memberGets()]
+    expect(workflowsBefore).toBeGreaterThan(0)
+
+    await wrapper.get('[data-testid="role-workflows-picker"] [data-option="wf-2"]').trigger('click')
+    await wrapper.get('[data-testid="role-workflows-attach"]').trigger('click')
+    await flushPromises()
+
+    expect(post).toHaveBeenCalledTimes(1)
+    // The role detail was reloaded (holders GET), the panel was not remounted: same element, no new requests.
+    expect(get.mock.calls.some(([url]) => String(url).includes('/holders'))).toBe(true)
+    expect(wrapper.findComponent(RoleWorkflowsPanel).element).toBe(panel)
+    expect(workflowGets()).toBe(workflowsBefore)
+    expect(memberGets()).toBe(membersBefore)
+    expect(wrapper.find('[data-testid="role-workflows-controls"]').exists()).toBe(true)
+  })
+
+  it('locks the other panels while a workflow write is in flight, and unlocks them after', async () => {
+    respond()
+    let finish!: () => void
+    post.mockImplementation(() => new Promise<void>((r) => (finish = () => r())))
+    const wrapper = await mountView()
+    expect(panelFor(wrapper, en.llcRoles.permissions).props('busy')).toBe(false)
+
+    await wrapper.get('[data-testid="role-workflows-picker"] [data-option="wf-2"]').trigger('click')
+    await wrapper.get('[data-testid="role-workflows-attach"]').trigger('click')
+    await flushPromises()
+
+    expect(panelFor(wrapper, en.llcRoles.permissions).props('busy')).toBe(true)
+    expect(panelFor(wrapper, en.llcRoles.tools).props('busy')).toBe(true)
+    // And a permission write started now is refused by the view, as any overlapping mutation is.
+    panelFor(wrapper, en.llcRoles.permissions).vm.$emit('add', 'knowledge.write')
+    await flushPromises()
+    expect(post).toHaveBeenCalledTimes(1)
+
+    finish()
+    await flushPromises()
+    expect(panelFor(wrapper, en.llcRoles.permissions).props('busy')).toBe(false)
+  })
+
   it('encodes a value that would otherwise break the path', async () => {
     // A namespaced tool or a permission with a slash must not silently address
     // a different endpoint.

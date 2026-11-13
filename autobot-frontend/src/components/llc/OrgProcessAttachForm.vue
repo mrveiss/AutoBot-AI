@@ -107,7 +107,7 @@ function onCreated(id: string): void {
       {{ t('llc.workflows.newWorkflow') }}
     </BaseButton>
     <CompanyWorkflowCreateModal
-      v-model="showCreate"
+      :model-value="showCreate"
       :company-id="companyId"
       :service="service"
       @close="showCreate = false"
