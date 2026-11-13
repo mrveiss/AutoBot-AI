@@ -95,6 +95,7 @@ REACH = declare(
     discover=_population,
     what="route modules",
     roots=(_API,),
+    floor=45,  # population 53 at pin; window (33, 53). New guard: no base declaration to compute from (#19676)
     growth=20,
 )
 
