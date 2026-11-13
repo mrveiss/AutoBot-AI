@@ -149,4 +149,68 @@ describe('useOrgPeopleSources (#21469)', () => {
     expect(s.contacts.value).toEqual([contact])
     expect(s.contactsFailed.value).toBe(false)
   })
+
+  describe('the cache belongs to one company', () => {
+    const contactB = { id: 'p2', full_name: 'Bob', role_title: null, email: null, phone: null }
+    const answerB = (url: string) =>
+      url.endsWith('/involved')
+        ? { with_role: [contactB], unassigned: [] }
+        : { teams: [{ id: 't2', name: 'Other', member_user_ids: [] }] }
+
+    async function loadedForC1() {
+      get.mockImplementation((url: string) => Promise.resolve(answer(url)))
+      const s = setup()
+      await s.load()
+      get.mockClear()
+      return s
+    }
+
+    it('loads the new company after a switch and never shows the previous company people meanwhile', async () => {
+      const s = await loadedForC1()
+      expect(s.contacts.value).toEqual([contact])
+
+      current = 'c2'
+      const held = [deferred<unknown>(), deferred<unknown>()]
+      get.mockImplementationOnce(() => held[0].promise).mockImplementationOnce(() => held[1].promise)
+      const second = s.load()
+      await flushPromises()
+
+      expect(get).toHaveBeenCalledTimes(2)
+      expect(get).toHaveBeenCalledWith('/api/llc/contacts/c2/involved')
+      expect(get).toHaveBeenCalledWith('/api/llc/companies/c2/teams')
+      expect(s.contacts.value).toEqual([])
+      expect(s.teams.value).toEqual([])
+      expect(s.teamsAttempted.value).toBe(false)
+
+      held[0].resolve(answerB('/involved'))
+      held[1].resolve(answerB('/teams'))
+      await second
+      expect(s.contacts.value).toEqual([contactB])
+      expect(s.teams.value).toEqual([{ id: 't2', name: 'Other', member_user_ids: [] }])
+    })
+
+    it('still issues nothing for a second load of the same company', async () => {
+      const s = await loadedForC1()
+      await s.load()
+      expect(get).not.toHaveBeenCalled()
+      expect(s.contacts.value).toEqual([contact])
+    })
+
+    it('shows nothing of the previous company when the new one fails, and retries', async () => {
+      const s = await loadedForC1()
+      current = 'c2'
+      get.mockImplementation(() => Promise.reject(new Error('down')))
+      await s.load()
+
+      expect(s.contacts.value).toEqual([])
+      expect(s.teams.value).toEqual([])
+      expect(s.contactsFailed.value).toBe(true)
+      expect(s.teamsFailed.value).toBe(true)
+
+      get.mockImplementation((url: string) => Promise.resolve(answerB(url)))
+      await s.load()
+      expect(s.contacts.value).toEqual([contactB])
+      expect(s.contactsFailed.value).toBe(false)
+    })
+  })
 })
