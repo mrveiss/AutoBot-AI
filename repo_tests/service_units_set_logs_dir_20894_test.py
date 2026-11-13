@@ -229,3 +229,23 @@ def test_control_a_sibling_env_template_the_unit_never_loads_does_not_count(tmp_
     assert _unset(tmp_path, [unit]) == [unit]
     _unit(role / "templates", "", env_file="EnvironmentFile=-/etc/autobot/svc.env\n")
     assert _unset(tmp_path, [unit]) == []
+
+
+_COMPOSE_SETTING = re.compile(rf"^\s*-\s*{_VAR}=(.*)$", re.MULTILINE)
+_COMPOSE_OVERRIDABLE = re.compile(rf"^\$\{{{_VAR}:-[^}}]+\}}$")
+
+
+def _fixed_compose_settings(text: str) -> list[str]:
+    """`AUTOBOT_LOGS_DIR=` values in a compose file that ignore an operator-supplied value."""
+    return [v for v in _COMPOSE_SETTING.findall(text) if not _COMPOSE_OVERRIDABLE.match(v.strip())]
+
+
+def test_compose_services_let_the_operator_override_the_log_dir() -> None:
+    text = (_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert _COMPOSE_SETTING.search(text), "docker-compose.yml no longer sets the variable: discovery broke"
+    assert not _fixed_compose_settings(text), f"literal {_VAR} ignores the operator's value; use ${{{_VAR}:-/app/logs}}"
+
+
+def test_control_a_literal_compose_value_is_caught() -> None:
+    assert _fixed_compose_settings(f"    environment:\n      - {_VAR}=/app/logs\n") == ["/app/logs"]
+    assert _fixed_compose_settings(f"      - {_VAR}=${{{_VAR}:-/app/logs}}\n") == []
