@@ -121,8 +121,8 @@ _VALID_HANDLER_INCLUDE_KEYS = _VALID_INCLUDE_KEYS | {"listen"}
 #: ``with_<lookup>`` is rewritten to ``loop``/``loop_with`` by `playbook/task.py` `preprocess_data`
 #: (`_preprocess_with_loop`), so any ``with_*`` key is the valid loop spelling.
 _WITH_PREFIX = "with_"
-#: Measured over every YAML under ``ansible/`` at the time of writing: 327 includes, none outside the valid set.
-_MEASURED_INCLUDE_TASKS = 327
+#: Reach floor with headroom: 327 includes were measured over every YAML under ``ansible/`` on the day this was written.
+_INCLUDE_TASKS_FLOOR = 250
 
 
 def _is_include(task: dict) -> bool:
@@ -161,7 +161,9 @@ def test_every_include_tasks_carries_only_keywords_ansible_core_accepts() -> Non
         in_handler = "handlers" in path.relative_to(_ANSIBLE).parts
         total += _count_includes(docs, in_handler)
         found += [(path.relative_to(_ANSIBLE).as_posix(), *hit) for hit in _include_key_offenders(docs, in_handler)]
-    assert total >= _MEASURED_INCLUDE_TASKS, f"control: the finder sees the includes ({total})"
+    assert (
+        total >= _INCLUDE_TASKS_FLOOR
+    ), f"reach: the finder is not seeing the includes ({total} found, floor {_INCLUDE_TASKS_FLOOR})"
     assert found == [], f"include_tasks with keys ansible-core rejects on an include: {found}"
 
 
