@@ -49,6 +49,8 @@ PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/opt/autobot/autobot-user-backend/data
+# #20894: AUTOBOT_LOGS_DIR above; ProtectSystem=strict leaves it read-only otherwise
+ReadWritePaths=/opt/autobot/autobot-user-backend/logs
 
 [Install]
 WantedBy=multi-user.target

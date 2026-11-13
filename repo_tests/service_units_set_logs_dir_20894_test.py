@@ -23,6 +23,13 @@ _ROOT = repo_root()
 _VAR = "AUTOBOT_LOGS_DIR"
 _PYTHON_EXEC = re.compile(r"^ExecStart=.*(python|uvicorn|celery)", re.MULTILINE)
 _SET = re.compile(rf"^(Environment=\"?)?{_VAR}=", re.MULTILINE)
+_VALUE = re.compile(rf"^(?:Environment=)?\"?{_VAR}=([^\"\n]*)", re.MULTILINE)
+_ENVFILE = re.compile(r"^EnvironmentFile=(.+)$", re.MULTILINE)
+_STRICT = re.compile(r"^ProtectSystem=strict\s*$", re.MULTILINE)
+_TOKEN = re.compile(r"(?:\{\{.*?\}\}|\S)+")  # one path; a `{{ jinja }}` expression holds spaces
+_RWP = re.compile(r"^ReadWritePaths=(.+)$", re.MULTILINE)
+_LOGS_DIRECTORY = re.compile(r"^LogsDirectory=(.+)$", re.MULTILINE)
+_STATE_DIRECTORY = re.compile(r"^StateDirectory=(.+)$", re.MULTILINE)
 # Concrete template directories (not root-relative `*.service` sweeps) so the python filter in
 # .github/filters/python-paths.yml names every tree this guard reads; a unit outside them fails
 # `test_narrowed_dirs_find_every_unit_the_whole_tree_sweep_finds` instead of going un-run.
@@ -42,19 +49,70 @@ def _python_units(root: Path) -> list[str]:
     return sorted(p for p in units if _PYTHON_EXEC.search((root / p).read_text(encoding="utf-8")))
 
 
+def _norm(value: str) -> str:
+    """A path as written in a unit or a task: quotes and the optional leading `-` (ignore-missing) dropped."""
+    return value.strip().strip("\"'").lstrip("-").strip()
+
+
+def _tasks_files(root: Path, env: str) -> list[str]:
+    """The role's task files, which say where an env template is deployed to (empty outside a role)."""
+    tasks = (root / env).parent.parent / "tasks"
+    return sorted(str(p.relative_to(root)) for p in tasks.glob("*.yml")) if tasks.is_dir() else []
+
+
+def _env_dests(root: Path, env: str) -> set[str]:
+    """Every `dest:` the role's tasks give the env template (the `src:` line is followed by its `dest:`)."""
+    dests: set[str] = set()
+    for task_file in _tasks_files(root, env):
+        lines = (root / task_file).read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            if "src:" not in line or _norm(line.partition("src:")[2]) != Path(env).name:
+                continue
+            for follow in lines[i + 1 : i + 7]:
+                if follow.strip().startswith("dest:"):
+                    dests.add(_norm(follow.partition("dest:")[2]))
+    return dests
+
+
 def _env_beside(root: Path, unit: str) -> list[str]:
+    """Env templates beside the unit that the unit really loads: an `EnvironmentFile=` names where one deploys."""
+    loaded = {_norm(m) for m in _ENVFILE.findall((root / unit).read_text(encoding="utf-8"))}
     templates = (root / unit).parent
-    return [str(p.relative_to(root)) for p in templates.iterdir() if p.name.endswith(_ENV_SUFFIXES)]
+    beside = [str(p.relative_to(root)) for p in templates.iterdir() if p.name.endswith(_ENV_SUFFIXES)]
+    return sorted(e for e in beside if _env_dests(root, e) & loaded)
 
 
 def _unset(root: Path, units: list[str]) -> list[str]:
-    """Units that neither set the variable themselves nor have an env template beside them that does."""
+    """Units that neither set the variable themselves nor load an env template beside them that does."""
     missing: list[str] = []
     for unit in units:
         files = [unit, *_env_beside(root, unit)]
         if not any(_SET.search((root / f).read_text(encoding="utf-8")) for f in files):
             missing.append(unit)
     return missing
+
+
+def _writable_roots(text: str) -> list[str]:
+    """Paths a `ProtectSystem=strict` unit may write: ReadWritePaths= tokens, LogsDirectory=, StateDirectory=."""
+    roots = [_norm(tok).lstrip("+") for line in _RWP.findall(text) for tok in _TOKEN.findall(line)]
+    roots += [f"/var/log/{n}" for line in _LOGS_DIRECTORY.findall(text) for n in line.split()]
+    roots += [f"/var/lib/{n}" for line in _STATE_DIRECTORY.findall(text) for n in line.split()]
+    return [r.rstrip("/") for r in roots]
+
+
+def _unwritable(root: Path, units: list[str]) -> list[str]:
+    """Units whose configured log directory a `ProtectSystem=strict` sandbox leaves read-only."""
+    bad: list[str] = []
+    for unit in units:
+        text = (root / unit).read_text(encoding="utf-8")
+        if not _STRICT.search(text):
+            continue
+        roots = _writable_roots(text)
+        for f in [unit, *_env_beside(root, unit)]:
+            for value in _VALUE.findall((root / f).read_text(encoding="utf-8")):
+                if not any(value.strip() == r or value.strip().startswith(r + "/") for r in roots):
+                    bad.append(f"{unit} -> {value.strip()}")
+    return bad
 
 
 def test_every_python_service_unit_sets_the_log_dir() -> None:
@@ -67,7 +125,8 @@ def test_every_python_service_unit_sets_the_log_dir() -> None:
 def _swept_files(root: Path) -> list[str]:
     """Every unit and env template the sweep reads: the discovered units plus the env templates beside them."""
     files = set(_python_units(root))
-    files |= {e for u in list(files) for e in _env_beside(root, u)}
+    envs = {e for u in list(files) for e in _env_beside(root, u)}
+    files |= envs | {t for e in envs for t in _tasks_files(root, e)}
     return sorted(files)
 
 
@@ -108,7 +167,13 @@ def test_control_a_unit_without_the_variable_is_caught(tmp_path: Path) -> None:
     """Control: the detector reports a unit that omits the variable and passes one that sets it."""
     bad = tmp_path / "roles" / "bad" / "templates"
     bad.mkdir(parents=True)
-    (bad / "svc.service.j2").write_text("[Service]\nExecStart=/x/venv/bin/uvicorn main:app\n", encoding="utf-8")
+    (bad.parent / "tasks").mkdir()
+    (bad.parent / "tasks" / "main.yml").write_text(
+        "- template:\n    src: svc.env.j2\n    dest: /etc/svc.env\n", encoding="utf-8"
+    )
+    (bad / "svc.service.j2").write_text(
+        "[Service]\nExecStart=/x/venv/bin/uvicorn main:app\nEnvironmentFile=/etc/svc.env\n", encoding="utf-8"
+    )
     (bad / "svc.env.j2").write_text("REDIS_HOST=h\n", encoding="utf-8")
     assert _unset(tmp_path, ["roles/bad/templates/svc.service.j2"]) == ["roles/bad/templates/svc.service.j2"]
     (bad / "svc.env.j2").write_text("REDIS_HOST=h\nAUTOBOT_LOGS_DIR={{ d }}\n", encoding="utf-8")
@@ -118,3 +183,49 @@ def test_control_a_unit_without_the_variable_is_caught(tmp_path: Path) -> None:
         '[Service]\nEnvironment="AUTOBOT_LOGS_DIR={{ d }}"\nExecStart=/x/python m\n', encoding="utf-8"
     )
     assert _unset(tmp_path, ["roles/bad/templates/svc.service.j2"]) == []
+
+
+def test_every_configured_log_dir_is_writable_under_the_units_sandbox() -> None:
+    """`ProtectSystem=strict` makes every path read-only but ReadWritePaths/LogsDirectory/StateDirectory."""
+    bad = _unwritable(_ROOT, _python_units(_ROOT))
+    assert not bad, f"{_VAR} points where the unit's sandbox forbids writing: {bad}"
+
+
+def _unit(directory: Path, body: str, env_file: str = "") -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "svc.service.j2").write_text(
+        f"[Service]\nExecStart=/x/uvicorn m:a\n{env_file}{body}", encoding="utf-8"
+    )
+
+
+def test_control_a_read_only_log_dir_is_caught(tmp_path: Path) -> None:
+    """Control: strict sandboxing with the dir outside every writable path is reported; each grant clears it."""
+    unit = "t/svc.service.j2"
+    body = f"Environment={_VAR}=/opt/x/logs\nProtectSystem=strict\n"
+    _unit(tmp_path / "t", body + "ReadWritePaths=/opt/x/data\n")
+    assert _unwritable(tmp_path, [unit]) == [f"{unit} -> /opt/x/logs"]
+    for grant in ("ReadWritePaths=/opt/x/logs\n", "ReadWritePaths=/opt/x\n", "ReadWritePaths=-/opt/x/logs\n"):
+        _unit(tmp_path / "t", body + grant)
+        assert _unwritable(tmp_path, [unit]) == [], grant
+    _unit(tmp_path / "t", f"Environment={_VAR}=/var/log/autobot\nProtectSystem=strict\nLogsDirectory=autobot\n")
+    assert _unwritable(tmp_path, [unit]) == []
+    _unit(tmp_path / "t", f"Environment={_VAR}=/opt/x/logs\n")  # no sandbox: nothing to forbid
+    assert _unwritable(tmp_path, [unit]) == []
+
+
+def test_control_a_sibling_env_template_the_unit_never_loads_does_not_count(tmp_path: Path) -> None:
+    """Control: a beside-env that sets the variable satisfies the unit only if an EnvironmentFile= names its dest."""
+    role = tmp_path / "roles" / "r"
+    (role / "tasks").mkdir(parents=True)
+    (role / "tasks" / "main.yml").write_text(
+        "- template:\n    src: svc.env.j2\n    dest: /etc/autobot/svc.env\n", encoding="utf-8"
+    )
+    (role / "templates").mkdir()
+    (role / "templates" / "svc.env.j2").write_text("AUTOBOT_LOGS_DIR=/l\n", encoding="utf-8")
+    unit = "roles/r/templates/svc.service.j2"
+    _unit(role / "templates", "")
+    assert _unset(tmp_path, [unit]) == [unit]  # sibling sets it, but the unit never loads it
+    _unit(role / "templates", "", env_file="EnvironmentFile=-/etc/autobot/other.env\n")
+    assert _unset(tmp_path, [unit]) == [unit]
+    _unit(role / "templates", "", env_file="EnvironmentFile=-/etc/autobot/svc.env\n")
+    assert _unset(tmp_path, [unit]) == []
