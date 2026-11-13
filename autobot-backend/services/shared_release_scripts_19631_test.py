@@ -13,7 +13,9 @@ import autobot_shared.leader_lease as leader_lease
 import services.task_claim as task_claim
 from autobot_memory_graph.entity_upsert import name_index_key, release_name
 from autobot_shared.idempotency import _marker, release_key
+from chat_history import rolling_summary
 from llc.sync import outbound_sync
+from services.agent_terminal import interpretation_turn
 
 pytestmark = pytest.mark.asyncio
 
@@ -92,3 +94,31 @@ async def test_outbound_sync_refresh_extends_only_its_own_key(monkeypatch, redis
     await redis.set(key, service._worker_id, px=SHORT_LEASE_MS)
     assert await service._try_acquire_or_refresh() is True
     assert await redis.pttl(key) > SHORT_LEASE_MS
+
+
+async def test_rolling_summary_lock_release_and_extend_need_the_token(redis):
+    lock = rolling_summary._RefreshLock(redis, "sid")
+    assert await lock.acquire()
+
+    await redis.set(lock.key, "another-holder")  # the lock lapsed and a second refresh took it
+    assert await lock.extend() is False
+    await lock.release()
+    assert await redis.get(lock.key) == "another-holder"
+
+    await redis.set(lock.key, lock.token, px=SHORT_LEASE_MS)
+    assert await lock.extend() is True
+    assert await redis.pttl(lock.key) > SHORT_LEASE_MS
+    await lock.release()
+    assert await redis.get(lock.key) is None
+
+
+async def test_interpretation_turn_release_keeps_done_and_a_newer_turns_token(redis):
+    key = interpretation_turn.interpretation_key("sid", "cmd")
+    for held in (interpretation_turn.DONE, interpretation_turn.TURN_PREFIX + "newer"):
+        await redis.set(key, held)
+        await interpretation_turn.release_turn(redis, "sid", "cmd", "mine")
+        assert await redis.get(key) == held
+
+    await redis.set(key, interpretation_turn.TURN_PREFIX + "mine")
+    await interpretation_turn.release_turn(redis, "sid", "cmd", "mine")
+    assert await redis.get(key) is None
