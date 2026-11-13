@@ -130,13 +130,13 @@ async def test_recover_incomplete_runs_marks_interrupted_releases_checkouts_requ
 
 
 async def _recover_with(runs: list, items: list) -> tuple:
-    """Run startup recovery over *runs*/*items* (queried by age, as SQL would); return the Redis re-queue mock."""
+    """Run startup recovery over *runs*/*items* ; return the Redis re-queue mock."""
     import fakeredis
 
     from llc.tests._run_checkout_world import RoutedSession
 
     factory = MagicMock()
-    factory.return_value.__aenter__ = AsyncMock(return_value=RoutedSession(runs, items, by_age=True))
+    factory.return_value.__aenter__ = AsyncMock(return_value=RoutedSession(runs, items))
     factory.return_value.__aexit__ = AsyncMock(return_value=False)
     queue = AsyncMock()
     with (
@@ -154,8 +154,8 @@ async def _recover_with(runs: list, items: list) -> tuple:
 
 
 @pytest.mark.asyncio
-async def test_a_running_run_younger_than_the_liveness_cutoff_is_left_alone() -> None:
-    """A live worker may be serving it: no status change, no release, the agent is not re-queued."""
+async def test_a_full_restart_recovers_every_running_run_young_or_old() -> None:
+    """Every in-flight run died with the workers: a run started a minute ago is recovered at once, not after 30."""
     from llc.tests._run_checkout_world import Item
 
     young = _make_run(age=timedelta(minutes=1))
@@ -164,26 +164,11 @@ async def test_a_running_run_younger_than_the_liveness_cutoff_is_left_alone() ->
 
     queue = await _recover_with([young, old], [held, theirs])
 
-    assert young.status == "running" and young.finished_at is None
-    assert held.checkout_run_id == str(young.id) and held.status == "in_progress"
-    assert old.status == "interrupted" and theirs.checkout_run_id is None and theirs.status == "ready"
-    queue.zadd.assert_called_once()
-    assert set(queue.zadd.call_args[0][1]) == {"agent-old"}
-
-
-@pytest.mark.asyncio
-async def test_the_recovery_age_is_the_liveness_monitors_cutoff() -> None:
-    """One definition of "dead": the run query binds the instant the monitor's own cutoff gives."""
-    from llc.scheduler.liveness_monitor import liveness_cutoff
-    from llc.scheduler.session_checkpointer import _runs_to_recover
-    from llc.tests._run_checkout_world import RoutedSession, bound_values
-
-    session = RoutedSession([], [], by_age=True)
-    await _runs_to_recover(session)
-
-    [cutoff] = [v for v in bound_values(session.statements[0]) if isinstance(v, datetime)]
-    assert abs(liveness_cutoff() - cutoff) < timedelta(seconds=5)
-    assert "running" in bound_values(session.statements[0])
+    for run, item in ((young, held), (old, theirs)):
+        assert run.status == "interrupted" and run.finished_at is not None
+        assert item.checkout_run_id is None and item.status == "ready"
+    requeued = {agent for call in queue.zadd.call_args_list for agent in call.args[1]}
+    assert requeued == {young.agent_id, "agent-old"}
 
 
 @pytest.mark.asyncio

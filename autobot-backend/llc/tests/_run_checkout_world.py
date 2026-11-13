@@ -47,24 +47,17 @@ def bound_values(statement: Any) -> list:
 
 
 class RoutedSession(FakeAsyncSession):
-    """Answers ``LLCHeartbeatRun`` statements with *runs* and ``LLCWorkItem`` ones by ``checkout_run_id``.
+    """Answers ``LLCHeartbeatRun`` statements with *runs* and ``LLCWorkItem`` ones by ``checkout_run_id``."""
 
-    With ``by_age`` a run query's ``started_at < cutoff`` bound is applied too: a run is returned only when its
-    ``started_at`` is before the datetime the statement binds, as the SQL would.
-    """
-
-    def __init__(self, runs: list, items: list, by_age: bool = False) -> None:
+    def __init__(self, runs: list, items: list) -> None:
         super().__init__(assign_ids=uuid.uuid4, default_result=FakeResult([]))
-        self.runs, self.items, self.by_age = runs, items, by_age
+        self.runs, self.items = runs, items
 
     async def execute(self, statement: Any, *args: Any, **kwargs: Any) -> FakeResult:
         self.statements.append(statement)
         described = getattr(statement, "column_descriptions", None)
         entity = described[0]["entity"].__name__ if described else None
         if entity == "LLCHeartbeatRun":
-            if self.by_age:
-                cutoff = next(v for v in bound_values(statement) if isinstance(v, datetime))
-                return FakeResult([r for r in self.runs if r.started_at < cutoff])
             return FakeResult(self.runs)
         if entity == "LLCWorkItem":
             bound = bound_values(statement)

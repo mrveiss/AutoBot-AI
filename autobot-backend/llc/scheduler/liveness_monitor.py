@@ -67,14 +67,6 @@ def _liveness_release(log: LLCActivityLogService) -> ReleaseWhy:
 _POLL_INTERVAL_SECONDS = 60
 
 
-def liveness_cutoff(now: Optional[datetime] = None) -> datetime:
-    """The instant before which a ``running`` run's ``started_at`` counts as dead: the one definition of "stuck".
-
-    Public because startup recovery asks the same question: it must not take a run this monitor would not yet.
-    """
-    return (now or datetime.now(tz=timezone.utc)) - timedelta(minutes=_DEFAULT_TIMEOUT_MINUTES)
-
-
 class LivenessMonitor(PollLoopScheduler):
     """Periodic monitor that detects and recovers stuck heartbeat runs."""
 
@@ -114,11 +106,13 @@ class LivenessMonitor(PollLoopScheduler):
 
     async def _find_stuck_runs(self, session: AsyncSession) -> list:
         """Return all runs where status=running and started_at is too old."""
+        now = datetime.now(tz=timezone.utc)
+
         # Per-agent timeout comes from adapter_config.timeout_minutes if available.
         # The fallback default is _DEFAULT_TIMEOUT_MINUTES.
         # We use a single query with the default cutoff; the per-agent override is
         # checked inside _recover() when adapter_config is available.
-        cutoff = liveness_cutoff()
+        cutoff = now - timedelta(minutes=_DEFAULT_TIMEOUT_MINUTES)
 
         result = await session.execute(
             select(LLCHeartbeatRun).where(

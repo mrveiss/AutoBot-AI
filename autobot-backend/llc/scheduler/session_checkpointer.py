@@ -8,8 +8,7 @@ Runs every LLC_CHECKPOINT_INTERVAL_SECONDS (default 30). For each running
 heartbeat run writes Redis key ``llc:session:checkpoint:{run_id}`` with TTL.
 
 On startup, :func:`recover_incomplete_runs` is called BEFORE the heartbeat
-scheduler begins dispatching.  For each ``status='running'`` run that started before the liveness
-cutoff it:
+scheduler begins dispatching.  For each ``status='running'`` run it:
   1. Marks run ``interrupted``
   2. Releases every work-item checkout the run made (the DB row and its Redis fence), returning an
      unfinished item to ``ready`` with its assignee
@@ -22,7 +21,6 @@ import time
 from datetime import datetime, timezone
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
@@ -33,7 +31,6 @@ from ..models.enums import LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..services.run_checkouts import ReleasedCheckout, ReleaseWhy, drop_released_fences, release_checkouts_for_run
 from .base import PollLoopScheduler
-from .liveness_monitor import liveness_cutoff
 
 logger = get_logger(__name__)
 
@@ -132,20 +129,6 @@ def recovery_lease() -> LeaderLease:
     return LeaderLease(key=RECOVERY_LEASE_KEY, label="LLC session recovery")
 
 
-async def _runs_to_recover(session: AsyncSession) -> list[LLCHeartbeatRun]:
-    """The ``running`` runs old enough to be dead: started before the liveness cutoff, the monitor's own rule.
-
-    A younger row may be served by a live worker; the liveness monitor handles it when it ages past the cutoff.
-    """
-    result = await session.execute(
-        select(LLCHeartbeatRun).where(
-            LLCHeartbeatRun.status == "running",
-            LLCHeartbeatRun.started_at < liveness_cutoff(),
-        )
-    )
-    return list(result.scalars().all())
-
-
 async def _requeue_agent(redis, agent_id: str, score: float) -> None:  # noqa: ANN001 - a Redis client or None
     """Put the agent on the heartbeat schedule at *score*; best-effort, a failure is logged and swallowed."""
     if redis is None:
@@ -157,15 +140,22 @@ async def _requeue_agent(redis, agent_id: str, score: float) -> None:  # noqa: A
 
 
 async def recover_incomplete_runs() -> None:
-    """Interrupt the ``running`` runs that started before the liveness cutoff, at startup, and re-queue their agents.
+    """Interrupt every ``running`` run at startup, release its checkouts, and re-queue its agent.
 
-    Does: mark each such run ``interrupted``, release every checkout it made (an unfinished item goes back to
-    ``ready`` with its assignee) and re-queue the agent. Does not: touch a ``running`` run younger than the
-    cutoff (the liveness monitor takes it if it ages), or tell a dead worker's run from a live one's -- a run
-    has no owner field, so an old run that a live worker still serves is recovered too.
+    Does: mark each ``running`` run ``interrupted``, release every checkout it made (an unfinished item goes
+    back to ``ready`` with its assignee, so the agent is offered it at its next heartbeat) and re-queue the
+    agent. After a full restart every in-flight run is dead (its adapter task lived in the worker), so no age
+    bound is applied: an idle agent would otherwise wait for the liveness monitor.
 
     Idempotent: already-interrupted runs are skipped on a second call. Only the worker holding
-    :func:`recovery_lease` recovers; the others skip.
+    :func:`recovery_lease` recovers; the others skip (strictly safer than before, when every worker ran it).
+
+    Rare case, bounded but not closed: a worker that respawns after the lease TTL while another worker still
+    executes a run takes that live run too (a run has no owner field). Its item returns to ``ready`` and the
+    agent's next run may check it out again. The original executor's later writes are NOT refused when its
+    run no longer holds the checkout: the agent API's status move, comment, attachment and work-product
+    writes, the heartbeat report, and the service-level release check only the company or the assignee,
+    never ``checkout_run_id`` or the fence value. Run ownership is the proper fix (#21440).
     """
     if not await recovery_lease().update_leadership():
         logger.info("SessionCheckpointer: recovery lease not acquired (another worker or no Redis), skipping")
@@ -173,7 +163,8 @@ async def recover_incomplete_runs() -> None:
     factory = get_async_session_factory()
     try:
         async with factory() as session:
-            runs = await _runs_to_recover(session)
+            result = await session.execute(select(LLCHeartbeatRun).where(LLCHeartbeatRun.status == "running"))
+            runs = list(result.scalars().all())
 
             if not runs:
                 logger.info("SessionCheckpointer: no incomplete runs to recover")
