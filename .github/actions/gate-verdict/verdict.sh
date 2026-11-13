@@ -7,6 +7,7 @@
 #
 #   1. detection did not succeed        -> FAIL  (cannot tell whether the gate applies)
 #   2. draft pull request               -> FAIL  "draft: mark ready for review" (D4)
+#   2b. held dependabot pull request    -> FAIL  "held": the work was not run, so nothing is verified (#21490)
 #   3. the gate does not apply          -> PASS  "not affected"
 #   4. the work finished and passed     -> PASS
 #   5. anything else                    -> FAIL  (failed, cancelled, skipped, timed out)
@@ -27,6 +28,7 @@ set -euo pipefail
 : "${GATE_EVENT:?GATE_EVENT is required}"
 GATE_DRAFT="${GATE_DRAFT:-false}"
 GATE_DRAFT_GATED="${GATE_DRAFT_GATED:-true}"
+GATE_HELD="${GATE_HELD:-false}"
 GATE_WORK_DETAIL="${GATE_WORK_DETAIL:-}"
 
 echo "context=${GATE_CONTEXT} changes=${GATE_CHANGES_RESULT} applies=${GATE_APPLIES} work_ok=${GATE_WORK_OK} event=${GATE_EVENT} draft=${GATE_DRAFT}"
@@ -41,6 +43,14 @@ if [ "${GATE_DRAFT_GATED}" = "true" ] && [ "${GATE_EVENT}" = "pull_request" ] &&
   echo "This pull request is a draft, so the work behind '${GATE_CONTEXT}' was not run."
   echo "Marking it ready for review starts a new run. Re-running THIS run replays the draft"
   echo "payload and fails here again (#18106): start the run for the current state instead."
+  exit 1
+fi
+
+if [ "${GATE_HELD}" = "true" ] && [ "${GATE_EVENT}" = "pull_request" ]; then
+  echo "::error title=${GATE_CONTEXT}::held: dependabot pull request, the work behind this context was not run"
+  echo "A dependabot pull request does not start the full suite on its own (#21490), so nothing behind"
+  echo "'${GATE_CONTEXT}' was verified. It is neither passed nor skipped. It runs on a merge-train branch,"
+  echo "or when the pull request carries the 'ci:full' label and a new run starts."
   exit 1
 fi
 

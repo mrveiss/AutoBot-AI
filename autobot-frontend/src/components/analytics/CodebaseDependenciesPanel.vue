@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { defineAsyncComponent } from 'vue'
 import TruncationNotice from './TruncationNotice.vue'
+import StaleResultNotice from './StaleResultNotice.vue'
 import { useShowMore, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -108,6 +109,8 @@ const emit = defineEmits<{
         <Icon :name="dependencyLoading ? 'spinner' : 'sync-alt'" :spin="dependencyLoading" />
       </button>
     </div>
+
+    <StaleResultNotice kind="dependencies" />
 
     <div v-if="dependencyLoading" class="charts-loading">
       <Icon name="spinner" :spin="true" />
@@ -228,6 +231,8 @@ const emit = defineEmits<{
         {{ importTreeLoading ? $t('analytics.codebase.actions.loading') : $t('analytics.codebase.actions.refresh') }}
       </button>
     </div>
+
+    <StaleResultNotice kind="importTree" />
 
     <!-- Error state -->
     <div v-if="importTreeError" class="section-error">

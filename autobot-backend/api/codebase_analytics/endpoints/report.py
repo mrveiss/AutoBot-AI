@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
 from fastapi import APIRouter
-from fastapi.responses import PlainTextResponse
 
 from api.codebase_analytics.problem_severity import PROBLEM_SEVERITY_ORDER
 from api.source_scope import SourceIdQuery, require_source_id
@@ -57,6 +56,7 @@ from ..duplicate_detector import (  # noqa: F401
 )
 from ..models import APIEndpointAnalysis
 from ..problem_dedup import dedupe_same_location_problems
+from ..run_status import report_response, run_response_fields
 from ..storage import get_code_collection
 from .duplicates import _run_standard_analysis
 from .scan_responses import ScanUnavailable
@@ -2228,12 +2228,5 @@ async def generate_analysis_report(
         source_id=source_id,
         scan_root=source_root,
     )
-    report = _render_report(problems, analyses)
-    return PlainTextResponse(
-        content=report,
-        media_type="text/markdown; charset=utf-8",
-        headers={
-            "Content-Disposition": 'attachment; filename="code-analysis-report.md"',
-            "X-Source-Id": source_id,
-        },
-    )
+    # #21003: a report built from an interrupted run says so, in its body and its headers.
+    return report_response(_render_report(problems, analyses), await run_response_fields(source_id), source_id)

@@ -45,7 +45,7 @@ import {
   groupPeopleByTeam,
   UNGROUPED_TEAM_ID,
 } from '@/composables/llc/orgPeople'
-import type { CompanyTeam, ContactEditPatch, ContactSource } from '@/composables/llc/orgPeople'
+import type { ContactEditPatch } from '@/composables/llc/orgPeople'
 import ExecutorRollupPanel from '@/components/llc/ExecutorRollupPanel.vue'
 import { buildExecutorRollupMatrix } from '@/composables/llc/executorRollup'
 import type { ExecutorRollupCell, ExecutorRollupMatrix } from '@/composables/llc/executorRollup'
@@ -63,6 +63,7 @@ import {
 } from '@/composables/llc/orgCanvasFilters'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
 import { useCompanyWorkflows } from '@/composables/llc/useCompanyWorkflows'
+import { useOrgPeopleSources } from '@/composables/llc/useOrgPeopleSources'
 import { useOrgProcessAttachment } from '@/composables/llc/useOrgProcessAttachment'
 import { BaseDrawer } from '@autobot/ui'
 
@@ -105,26 +106,19 @@ const VIEW_MODE_LABEL_KEY: Record<OrgViewMode, string> = { tree: 'llc.orgChart.v
 const viewMode = ref<OrgViewMode>(route?.query?.view === 'planner' ? 'planner' : 'tree')
 const activeTabId = ref<string>(ALL_UNITS_TAB)
 
-// GH#13938: contacts and teams are fetched only when the People list is first
-// opened. The org chart's own mount stays a single request, and a terminate
-// reload keeps reloading exactly the hierarchy it changed.
-const contacts = ref<ContactSource[]>([])
-// #13998: ids of contacts this department carries with no role to explain them.
-// Kept separate from `contacts` so the list the org chart builds stays one
-// list, while the People view can still label the difference honestly.
-const unassignedContactIds = ref<Set<string>>(new Set())
-const teams = ref<CompanyTeam[]>([])
-const peopleLoaded = ref(false)
-// A source that did not answer — kept apart from a source that answered
-// "nothing", so the list never states a fact it does not know (#14064).
-const contactsFailed = ref(false)
-const teamsFailed = ref(false)
-// #14596: distinguishes "the teams request has not answered yet" from "it
-// answered with zero teams" — `teams.value` is `[]` in both cases, and the
-// canvas must never say "this company has no teams" before the request that
-// would prove it has actually completed (#14064's failure shape).
-const teamsAttempted = ref(false)
-const peopleLoading = ref(false)
+// GH#13938/#21469: contacts and teams are fetched only when the People list is first opened; the
+// sources, their failed-vs-empty flags and the retry live in `useOrgPeopleSources`.
+const {
+  contacts,
+  unassignedContactIds,
+  teams,
+  contactsFailed,
+  teamsFailed,
+  teamsAttempted,
+  loading: peopleLoading,
+  load: loadPeopleSources,
+  reload: reloadPeopleSources,
+} = useOrgPeopleSources({ api, resolveCompanyId: () => resolveCompanyIdOnce(), companyId: () => companyId.value ?? '' })
 // #14603: contact editing, from the People list. `savingContactId` is the
 // contact id a PATCH is in flight for — never a plain boolean, so the row
 // the People list is not saving stays interactive. Single-flight per the
@@ -390,73 +384,6 @@ const toolLensCounts = computed(() =>
 const teamFilterName = computed(
   () => availableTeamFilters.value.find((team) => team.id === teamFilter.value)?.name ?? teamFilter.value,
 )
-
-/**
- * Load the two sources the People list needs beyond the org chart.
- *
- * Each is independent: a company with no contacts must still get its teams,
- * and a teams endpoint failure must not blank the people. `Promise.allSettled`
- * keeps a partial answer partial instead of turning it into an empty list.
- */
-async function loadPeopleSources(): Promise<void> {
-  if (peopleLoaded.value || peopleLoading.value) return
-  // Claim the guard BEFORE the first await: two clicks in one tick would both
-  // pass the check above and double-fire every request.
-  peopleLoading.value = true
-  const cid = await resolveCompanyIdOnce()
-  if (!cid) {
-    peopleLoading.value = false
-    return
-  }
-  const [contactsResult, teamsResult] = await Promise.allSettled([
-    api.get<{ with_role: ContactSource[]; unassigned: ContactSource[] }>(
-      `/api/llc/contacts/${cid}/involved`,
-    ),
-    api.get<{ teams: CompanyTeam[] }>(`/api/llc/companies/${cid}/teams`),
-  ])
-  if (contactsResult.status === 'fulfilled') {
-    // Two groups, one list to draw: people whose presence a role explains, and
-    // people the department carries from before the directory was shared.
-    // Merging them here would assert an involvement nobody recorded, so the
-    // second group is tracked by id and labelled rather than blended in.
-    const withRole = Array.isArray(contactsResult.value?.with_role)
-      ? contactsResult.value.with_role
-      : []
-    const unassigned = Array.isArray(contactsResult.value?.unassigned)
-      ? contactsResult.value.unassigned
-      : []
-    contacts.value = [...withRole, ...unassigned]
-    unassignedContactIds.value = new Set(unassigned.map((c) => c.id))
-    contactsFailed.value = false
-  } else {
-    // A failed fetch must never be reported as "this company has no people".
-    // Absence of data and absence of an answer are different claims (#14064).
-    contactsFailed.value = true
-    logger.error('Failed to fetch contacts:', contactsResult.reason)
-  }
-  if (teamsResult.status === 'fulfilled') {
-    teams.value = Array.isArray(teamsResult.value?.teams) ? teamsResult.value.teams : []
-    teamsFailed.value = false
-  } else {
-    teamsFailed.value = true
-    logger.error('Failed to fetch company teams:', teamsResult.reason)
-  }
-  teamsAttempted.value = true
-  // Only a complete answer is cached; a partial one retries on re-entry.
-  peopleLoaded.value = !contactsFailed.value && !teamsFailed.value
-  peopleLoading.value = false
-}
-
-/**
- * Force the People sources to actually re-fetch (#14603) — mirrors
- * `reloadProcessNodes`/`reloadToolNodes`. `peopleLoaded` guards the lazy
- * fetch above, so a contact save has to clear it first or the "refetch"
- * would hit the guard and silently keep showing the pre-edit row.
- */
-async function reloadPeopleSources(): Promise<void> {
-  peopleLoaded.value = false
-  await loadPeopleSources()
-}
 
 /**
  * Save an edited contact from the People list (#14603).

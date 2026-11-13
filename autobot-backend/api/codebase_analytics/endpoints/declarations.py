@@ -9,13 +9,13 @@ Code declarations endpoints
 import asyncio
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 
 from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
 
+from ..run_status import with_run_state
 from ..storage import get_code_collection
 from .store_state import index_state, store_unavailable
 
@@ -83,6 +83,7 @@ def _build_declarations_response(all_declarations: list, storage_type: str, stat
     operation="get_code_declarations",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_code_declarations(
     source_id: SourceIdQuery,
     declaration_type: str | None = None,
@@ -100,4 +101,4 @@ async def get_code_declarations(
     except Exception as store_error:
         logger.error("declarations: the code index store read failed: %s", store_error)
         raise store_unavailable() from store_error
-    return JSONResponse({**_build_declarations_response(all_declarations, storage_type, state), "source_id": source_id})
+    return {**_build_declarations_response(all_declarations, storage_type, state), "source_id": source_id}
