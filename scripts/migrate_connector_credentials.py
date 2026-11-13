@@ -23,7 +23,7 @@ _BACKEND = Path(__file__).parent.parent / "autobot-backend"
 if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from autobot_shared.redis_client import get_redis_client
 from knowledge.connectors.credential_store import get_credential_store
 from knowledge.connectors.job_state import JOB_KEY_SUFFIX
@@ -156,4 +156,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     main()

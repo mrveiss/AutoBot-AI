@@ -1,0 +1,23 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The application log directory a unit's AUTOBOT_LOGS_DIR names (#20894), in ONE place.
+#
+# Without it the rotating file handler cannot open its file and file logging turns off with one stderr line while
+# the console keeps working. Every task file that installs or restarts such a unit includes this, so the updater's
+# code-only and self-update paths create the directory too, not only the full provision, and so does a host whose
+# `<service>_app_log_dir` is overridden.
+#
+# Caller sets: app_log_dir, app_log_dir_owner, app_log_dir_group. The caller passes `apply: tags` (and `tags:`),
+# as the surrounding file does, so an include reached under `--tags` still runs this.
+# `become` is on the inner task: include_tasks accepts none (ansible-core 2.17).
+- name: "Ensure the application log directory exists (#20894)"
+  ansible.builtin.file:
+    path: "{{ app_log_dir }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ app_log_dir_owner }}"
+    group: "{{ app_log_dir_group }}"
+  become: true

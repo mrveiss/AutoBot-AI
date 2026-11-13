@@ -51,8 +51,8 @@ LOG_LEVEL_KEYWORDS = {"CRITICAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG"}
 # Issue #380: Module-level frozenset for protected log files
 _PROTECTED_LOG_FILES = frozenset({"system.log", "backend.log", "frontend.log"})
 
-# Log directory
-LOG_DIR = Path(__file__).parent.parent.parent / "logs"
+# Log directory (#20894: the one resolver, never the source tree)
+LOG_DIR = PATH.LOGS_DIR
 
 
 def _validate_log_path(filename: str) -> Path:
