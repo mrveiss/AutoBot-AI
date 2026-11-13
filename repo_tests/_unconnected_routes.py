@@ -26,9 +26,10 @@ WHAT A CALLER IS
 WHAT THIS CANNOT SEE
 --------------------
 * **Static prefix resolution.** The route's mount path is the registry prefix and the router's
-  own prefix, combined every way the script combines them. The union is deliberately loose, so a
-  route whose real path differs from every candidate can read as called by an unrelated caller
-  (it errs toward "connected", never toward a false failure).
+  own prefix, combined every way the script combines them; a package entry's router chain
+  (``__init__`` -> ``router.py`` -> ``endpoints/*.py``) is followed by ``_unconnected_mounts`` (#21428).
+  The union is deliberately loose, so a route whose real path differs from every candidate can read as
+  called by an unrelated caller (it errs toward "connected", never toward a false failure).
 * **A caller that builds its path at runtime** (``f"/api/{resource}/{id}"`` from a table) shows
   as a wildcard or not at all. A wildcard segment matches any single segment.
 * **A route whose mounted path starts with a parameter** (a router mounted at the root, ``/{id}/x``): no
@@ -54,6 +55,7 @@ from types import ModuleType
 
 from repo_tests._unconnected_clients import client_calls
 from repo_tests._unconnected_common import Tree
+from repo_tests._unconnected_mounts import package_mounts
 
 ROUTE_ROOTS = ("autobot-backend", "autobot-slm-backend")
 FRONTENDS = ("autobot-frontend/src", "autobot-slm-frontend/src")
@@ -87,6 +89,12 @@ def load_script(root: Path, name: str) -> ModuleType:
         if name in modules_before:  # a module already installed under this name is put back, not left replaced
             sys.modules[name] = modules_before[name]
     return module
+
+
+def _merge_prefixes(by_abs: dict[str, list[str]], file: Path, prefixes: list[str]) -> None:
+    """Add *prefixes* to the mounts known for *file*, keeping the order and dropping repeats."""
+    known = by_abs.setdefault(str(file), [])
+    known.extend(p for p in prefixes if p not in known)
 
 
 class Audit:
@@ -128,8 +136,10 @@ class Audit:
             if not module_file.is_file():
                 continue
             for child, prefixes in routing.module_included_router_files(base, module_file, prefix).items():
-                known = by_abs.setdefault(str(child), [])
-                known.extend(p for p in prefixes if p not in known)
+                _merge_prefixes(by_abs, child, prefixes)
+        # a registry entry naming a package: its router is built by a module of the package, not its __init__ (#21428)
+        for child, prefixes in package_mounts(base, routing, entries).items():
+            _merge_prefixes(by_abs, child, prefixes)
         return {Path(p).relative_to(self.root).as_posix(): ps for p, ps in by_abs.items()}
 
 

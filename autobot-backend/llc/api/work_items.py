@@ -81,8 +81,7 @@ from .work_item_comments import require_work_item_id, serialize_comment
 
 
 class HumanClaimRequest(BaseModel):
-    user_id: Optional[str] = None  # accepted, ignored: claimant and tenant are the session's (#13999)
-    company_id: Optional[str] = None
+    company_id: Optional[str] = None  # accepted, ignored: claimant and tenant are the session's (#13999)
 
 
 class HumanUnclaimRequest(HumanClaimRequest):
@@ -146,7 +145,6 @@ class WorkItemCreate(BaseModel):
     goal_id: Optional[str] = None
     assignee_agent_id: Optional[str] = None
     assignee_user_id: Optional[str] = None
-    created_by_agent_id: Optional[str] = None
     labels: Optional[List[str]] = None
     # GH#11140: declarative approval-gated action categories (plan-time visibility).
     requires_approval_before: Optional[List[str]] = None
@@ -192,8 +190,6 @@ class TransitionRequest(BaseModel):
 class CommentCreate(BaseModel):
     company_id: str
     body: str
-    author_agent_id: Optional[str] = None
-    author_user_id: Optional[str] = None
 
 
 class LinkPrRequest(BaseModel):
@@ -401,7 +397,6 @@ async def create_work_item(
             goal_id=body.goal_id,
             assignee_agent_id=body.assignee_agent_id,
             assignee_user_id=body.assignee_user_id,
-            created_by_agent_id=body.created_by_agent_id,
             created_by_user_id=str(verified_user_id(_current_user)),  # never the body: it decides who owns the task
             labels=body.labels,
             requires_approval_before=body.requires_approval_before,
@@ -796,8 +791,8 @@ async def add_comment(
         work_item_id=work_item_id,
         company_id=str(ctx.org_id),
         body=body.body,
-        author_agent_id=body.author_agent_id,
-        author_user_id=body.author_user_id,
+        author_agent_id=None,
+        author_user_id=str(verified_user_id(_current_user)),  # the session's, never the body (#20521)
     )
     # GH#9624/#19582: add_comment queued the comment and @mention wakes; they dispatch on this commit.
     await session.commit()
@@ -1158,8 +1153,6 @@ async def upload_attachment(
     work_item_id: str,
     company_id: str = Query(...),
     file: UploadFile = File(...),
-    uploaded_by_agent_id: Optional[str] = Query(None),
-    uploaded_by_user_id: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -1168,6 +1161,7 @@ async def upload_attachment(
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    uploader = str(verified_user_id(_current_user))  # the session's, never the query (#20521); before the body is read
     try:
         row = await _attachment_service().upload(
             session,
@@ -1176,8 +1170,7 @@ async def upload_attachment(
             filename=require_safe_upload(file.filename),  # #19088: gate before the body is read
             content_type=file.content_type or "application/octet-stream",
             content=await file.read(),
-            uploaded_by_agent_id=uploaded_by_agent_id,
-            uploaded_by_user_id=uploaded_by_user_id,
+            uploaded_by_user_id=uploader,
         )
     except (AttachmentTooLarge, ValueError) as exc:  # #17302: ValueError was an uncaught 500
         logger.warning("Attachment upload refused for %s: %s", work_item_id, exc)
