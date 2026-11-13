@@ -27,6 +27,7 @@ import sys
 
 import pytest
 import yaml
+from repo_tests._github_expressions import evaluate, strip_expression_braces
 from repo_tests._paths import repo_root
 
 _ROOT = repo_root()
@@ -36,10 +37,11 @@ _WORKFLOW_TS = "autobot-frontend/src/types/_generated/workflow.ts"
 # (called by ci.yml); its path filters live in .github/filters/gate-paths.yml.
 _VERIFY = _ROOT / ".github" / "workflows" / "_gate-generated-types.yml"
 _FILTERS = _ROOT / ".github" / "filters" / "gate-paths.yml"
-_AUTOFIX = _ROOT / ".github" / "workflows" / "auto-fix-generated-types.yml"
+_CI = _ROOT / ".github" / "workflows" / "ci.yml"
 _ACTION = _ROOT / ".github" / "actions" / "generated-types-autofix" / "action.yml"
 _GEN_SCRIPT_REL = "autobot-infrastructure/shared/scripts/gen_frontend_types.py"
-_REQUIRED_PATHS = ("autobot-frontend/src/types/_generated/**", _GEN_SCRIPT_REL)
+_WORKFLOW_TS_GLOB = "autobot-frontend/src/types/_generated/**"
+_REQUIRED_PATHS = (_WORKFLOW_TS_GLOB, _GEN_SCRIPT_REL)
 
 
 def _load_generator():
@@ -125,10 +127,89 @@ def test_the_generators_python_sources_are_under_watched_trees():
     assert unwatched == set(), f"generator sources that cannot trigger the required gate: {unwatched}"
 
 
+def _as_list(value) -> list:
+    return [value] if isinstance(value, str) else list(value)
+
+
+_NOT_CANCELLED = "!cancelled() && "
+
+
+def _context(ready="true", types="true", slm="true", result="success", event="pull_request") -> dict:
+    changes = {"outputs": {"ready": ready, "run_types": types, "run_slm_types": slm}}
+    return {
+        "needs": {"changes": changes, "run-generated-types": {"result": result}},
+        "github": {"event_name": event},
+    }
+
+
+def _holds(condition: str, context: dict) -> bool:
+    return bool(evaluate(strip_expression_braces(condition), context))
+
+
+def _autofix_holds(condition: str, context: dict) -> bool | None:
+    """The auto-fix `if` for `context`, or None if it lacks the `!cancelled()` conjunct.
+
+    The evaluator has no status functions, and a function call is not a value to evaluate, so the
+    conjunct is asserted by its presence here and the remaining clauses are evaluated.
+    """
+    body = strip_expression_braces(condition)
+    if not body.startswith(_NOT_CANCELLED):
+        return None
+    return bool(evaluate(body.removeprefix(_NOT_CANCELLED), context))
+
+
+def _generated_types_runs_when_affected(condition: str) -> bool:
+    expected = [
+        (dict(), True),
+        (dict(types="false", slm="true"), True),
+        (dict(types="true", slm="false"), True),
+        (dict(types="false", slm="false"), False),
+        (dict(ready="false"), False),
+    ]
+    return all(_holds(condition, _context(**state)) is want for state, want in expected)
+
+
+def _autofix_runs_only_after_a_failed_gate(condition: str) -> bool:
+    expected = [
+        (dict(result="failure"), True),
+        (dict(result="success"), False),
+        (dict(result="skipped"), False),
+        (dict(result="cancelled"), False),
+        (dict(result="failure", event="push"), False),
+    ]
+    return all(_autofix_holds(condition, _context(**state)) is want for state, want in expected)
+
+
+def _autofix_follows_the_types_gate(jobs: dict, filters: dict, path: str) -> bool:
+    """True when `path` runs the types gate (a `types` match) and a failed gate runs the auto-fix."""
+    gen, fix = jobs["run-generated-types"], jobs["run-auto-fix-types"]
+    return (
+        path in filters["types"]
+        and "steps.gp.outputs.types" in jobs["changes"]["outputs"]["run_types"]
+        and _generated_types_runs_when_affected(gen["if"])
+        and "run-generated-types" in _as_list(fix["needs"])
+        and _autofix_runs_only_after_a_failed_gate(fix["if"])
+        and fix["uses"].endswith("/auto-fix-generated-types.yml")
+    )
+
+
 def test_the_autofix_regenerates_and_reports_workflow_ts():
-    paths = yaml.safe_load(_AUTOFIX.read_text(encoding="utf-8"))[True]["pull_request"]["paths"]
+    """#20552: the auto-fix no longer has its own `pull_request.paths`; verify's paths are its trigger.
+
+    The chain: a `types` filter match sets `run_types`, `run-generated-types` runs on it, and
+    `run-auto-fix-types` runs when that job FAILED. Then the action's steps regenerate, then report.
+    """
+    filters = yaml.safe_load(_FILTERS.read_text(encoding="utf-8"))
+    jobs = yaml.safe_load(_CI.read_text(encoding="utf-8"))["jobs"]
     for path in _REQUIRED_PATHS:
-        assert path in paths, f"auto-fix trigger paths lack {path}"
+        assert _autofix_follows_the_types_gate(jobs, filters, path), f"{path} cannot reach the auto-fix"
+    assert not _autofix_follows_the_types_gate(jobs, filters, "README.md"), "control: an unwatched path reaches it"
+    for job, clause in (("run-generated-types", "run_types == 'true'"), ("run-auto-fix-types", "== 'failure'")):
+        inverted = {**jobs[job], "if": jobs[job]["if"].replace(clause, clause.replace("==", "!="), 1)}
+        assert inverted["if"] != jobs[job]["if"], f"control: {clause} is not in {job}"
+        assert not _autofix_follows_the_types_gate({**jobs, job: inverted}, filters, _WORKFLOW_TS_GLOB), job
+    always = {**jobs["run-auto-fix-types"], "if": "${{ always() }}"}
+    assert not _autofix_follows_the_types_gate({**jobs, "run-auto-fix-types": always}, filters, _WORKFLOW_TS_GLOB)
     steps = yaml.safe_load(_ACTION.read_text(encoding="utf-8"))["runs"]["steps"]
     regen = next(i for i, s in enumerate(steps) if _GEN_SCRIPT_REL in s.get("run", ""))
     report = next(i for i, s in enumerate(steps) if "GENERATED=" in s.get("run", ""))
