@@ -8,6 +8,9 @@ Each provider carried one; two went stale for years (#18210). The table in
 autobot_shared/ssot_hosted_models.py is the one place a hosted default is written. This
 reads every string literal in the provider modules and fails on one that equals a model name
 from the table or from autobot_shared/ssot_constants.py.
+
+Scope note: the non-Python extensions (.json/.sh/.ts/.vue/.yaml/.yml) are scanned only in the concrete
+trees listed in ``_SCAN_TREES``, so a pinned id added elsewhere in those file types is not scanned.
 """
 
 from __future__ import annotations
@@ -15,8 +18,10 @@ from __future__ import annotations
 import ast
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 from tools.lint import _parse_cache as parse_cache
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _PROVIDERS = ["openai", "anthropic", "groq", "mistral", "vertexai", "openrouter", "huggingface", "bedrock", "bootstrap"]
 _VENDOR_PREFIXES = ("OPENAI_", "ANTHROPIC_", "GOOGLE_", "GROQ_", "MISTRAL_", "DEEPSEEK_")
@@ -141,3 +146,218 @@ def test_the_default_position_check_has_contrast():
         ["claude-3-5-sonnet", "gpt-4o", "gemini-2.5-flash", "qwen3.5:9b"]
     )
     assert _default_position_literals(ignored) == []
+
+
+# ---------------------------------------------------------------------------
+# #20884: a pinned Claude ID is written once, in autobot_shared/ssot_claude_models.py. Pinned IDs
+# had spread through code, config, templates, the frontend and the docs, all a generation stale.
+# This extends the guards above from "provider modules" to every tracked file of the types below.
+#
+# SCOPE (declared, #15897): tracked *.py *.j2 *.toml *.env.example under _SCAN_ROOTS, the config/data/frontend-source trees
+# in _SCAN_TREES, and docs/*.md. Tests,
+# node_modules and the historical areas in _HISTORICAL are not read. A ratchet: each file below holds
+# at most the count recorded, and a count that fell must be lowered here (the number only falls).
+# ---------------------------------------------------------------------------
+
+#: A pinned id (``claude-sonnet-5-5``, or the version-first ``claude-3-opus-20240229``) or a quoted tier-only literal (``'claude-sonnet'``): the latter is how a
+#: frontend or table once mapped every model of a tier to one window or price (#20884).
+_CLAUDE_ID = re.compile(
+    r"""claude-(?:opus|sonnet|haiku|fable)-\d|claude-\d(?:-\d)?-(?:opus|sonnet|haiku)|['"`]claude-(?:opus|sonnet|haiku|fable)['"`]"""
+)
+_SCAN_ROOTS = (
+    "autobot-backend",
+    "autobot-frontend",
+    "autobot-slm-backend",
+    "autobot-slm-frontend",
+    "autobot-infrastructure",
+    "autobot-npu-worker",
+    "autobot-plugins",
+    "autobot_shared",
+    "plugins",
+    "libs",
+    "docs",
+)
+#: Extensions read under EVERY root. The python filter already fires on each (``.py``, and the globs it gained for
+#: ``.j2`` / ``.toml`` / ``.env.example``), so a change to one runs this guard.
+_SCAN_EXTS = ("py", "j2", "toml", "env.example")
+#: The remaining types are read only under the trees that hold them. ``*.ts`` / ``*.vue`` under the frontend source
+#: tree are on the filter already; the three backend trees were added to it for this guard (#20884). A bare ``*.json`` or
+#: ``*.yaml`` under every root is NOT declared: that would be a sweep into trees the filter misses, which the shrink-only
+#: record of glob-declared debt forbids growing (#15900). A new tree is added here AND to ``python-paths.yml``.
+_SCAN_TREES = (
+    "autobot-backend/config/*.yaml",
+    "autobot-backend/config/*.yml",
+    "autobot-backend/config/*.json",
+    "autobot-backend/llc/*.json",
+    "autobot-backend/resources/*.yaml",
+    "autobot-frontend/src/*.ts",
+    "autobot-frontend/src/*.vue",
+    "autobot-plugins/*.ts",
+    "autobot-plugins/*.vue",
+    "autobot-plugins/*.json",
+)
+_SCAN_PATTERNS = (*(f"{r}/*.{e}" for r in _SCAN_ROOTS if r != "docs" for e in _SCAN_EXTS), *_SCAN_TREES, "docs/*.md")
+_TEST_PART = re.compile(
+    r"(^|/)(tests?|test_[^/]*|[^/]*_test\.py|[^/]*\.(test|spec)\.ts|conftest\.py|node_modules|__tests__)(/|$)"
+)
+_HISTORICAL = ("docs/reports/", "docs/design/mockups/")
+_PRICING = "pricing data: rows keyed by model id, not a default"
+_CLAUDE_HOMES: dict[str, str] = {
+    "autobot_shared/ssot_claude_models.py": "the SSOT",
+    "autobot_shared/ssot_constants.py": "model-name constants for every vendor (history, pricing keys)",
+    "autobot_shared/model_pricing.py": _PRICING,
+    "autobot-backend/config/llm_models.yaml": "the per-model parameter registry",
+    "autobot-backend/config/context_windows.yaml": "the per-model context-window table",
+}
+#: file -> (most instances allowed, why they remain). Each is a follow-up, not a decision to keep.
+_CLAUDE_BASELINE: dict[str, tuple[int, str]] = {
+    "autobot-backend/llm_shared/model_param_registry.py": (1, "docstring usage example"),
+    "autobot-backend/services/llm_cost_tracker.py": (
+        5,
+        "substring keys of the price fallback (each maps to a current SSOT row, none states a price or window) and a docstring example",
+    ),
+    "docs/api/USAGE_METERING_API.md": (1, "prose naming the substring-pattern heuristic"),
+    "autobot-backend/llm_shared/pricing/crosscheck.py": (2, "prose: describes how external catalogues spell a model"),
+    "autobot-backend/llm_shared/pricing/anthropic_source.py": (
+        8,
+        "older 3.x/4.x baseline rows keyed by literal; the current generation is read from model_pricing",
+    ),
+    "autobot-backend/llm_shared/pricing/vertexai_source.py": (
+        5,
+        "Vertex versioned ids; the 5.x Vertex ids are not known",
+    ),
+    "autobot-backend/llm_shared/providers/vertexai.py": (5, "Vertex versioned ids; the 5.x Vertex ids are not known"),
+    "autobot-backend/llm_shared/providers/bedrock.py": (
+        9,
+        "Bedrock's own ids (anthropic.claude-3-...), a catalogue of that vendor",
+    ),
+    "autobot-backend/migrations/versions/20260525_042_agent_org_nodes_haiku_tier.py": (2, "migration history, frozen"),
+    "autobot_shared/ssot_hosted_models.py": (
+        4,
+        "Bedrock's own ids (anthropic.claude-...-v1:0), not the first-party ids",
+    ),
+    "autobot-frontend/src/types/generated/api.ts": (2, "generated from the OpenAPI text; regenerated, not edited"),
+    # Version-first (Claude 3.x) ids, counted since the matcher learned that order (#20884 review); each is a follow-up.
+    "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": (
+        3,
+        "a model <select> listing Claude 3 values",
+    ),
+    "autobot-frontend/src/constants/providerFallbackEvents.ts": (1, "doc-comment example"),
+    "autobot_shared/ssot_config.py": (2, "docstring examples"),
+    "docs/api/COMPREHENSIVE_API_DOCUMENTATION.md": (2, "prose/examples naming a Claude 3 id"),
+    "docs/api/public-api-reference.md": (2, "prose/examples naming a Claude 3 id"),
+    "docs/architecture/DISTRIBUTED_ARCHITECTURE.md": (3, "prose/examples naming a Claude 3 id"),
+    "docs/architecture/SSOT_CONFIGURATION_ARCHITECTURE.md": (1, "prose/examples naming a Claude 3 id"),
+    "docs/developer/04-configuration.md": (2, "prose/examples naming a Claude 3 id"),
+    "docs/developer/DEVELOPER_SETUP.md": (1, "prose/examples naming a Claude 3 id"),
+    "docs/developer/HARDCODING_PREVENTION.md": (1, "prose/examples naming a Claude 3 id"),
+    "docs/guides/chat-ollama-configuration.md": (1, "prose/examples naming a Claude 3 id"),
+}
+
+
+def _claude_scan_files(root) -> list[str]:
+    try:
+        paths = tracked_paths(root, *_SCAN_PATTERNS)
+    except EmptyEnumeration:
+        return []
+    return [p for p in paths if not _TEST_PART.search(p) and not p.startswith(_HISTORICAL)]
+
+
+REACH_CLAUDE_IDS = declare(
+    "claude-model-id-literal-sites",
+    discover=_claude_scan_files,
+    what="files scanned for a pinned Claude model id",
+    roots=_SCAN_ROOTS,
+    floor=5851,  # mid-window: population 6051, window [5651, 6051]
+    growth=400,
+)
+
+
+def claude_id_counts(sources: dict[str, str]) -> dict[str, int]:
+    """path -> number of pinned Claude ids in its text (only paths with at least one)."""
+    counts = {path: len(_CLAUDE_ID.findall(text)) for path, text in sources.items()}
+    return {path: n for path, n in counts.items() if n}
+
+
+def _claude_tree_counts() -> dict[str, int]:
+    root = repo_root()
+    sources = {
+        rel: (root / rel).read_text(encoding="utf-8", errors="replace") for rel in REACH_CLAUDE_IDS.examined(root)
+    }
+    return claude_id_counts(sources)
+
+
+def _claude_violations(counts: dict[str, int]) -> list[str]:
+    out = []
+    for path, n in sorted(counts.items()):
+        if path in _CLAUDE_HOMES:
+            continue
+        allowed = _CLAUDE_BASELINE.get(path, (0, ""))[0]
+        if n > allowed:
+            out.append(f"{path}: {n} pinned Claude id(s), {allowed} allowed")
+    return out
+
+
+def test_no_file_outside_the_ssot_homes_pins_a_claude_model_id():
+    violations = _claude_violations(_claude_tree_counts())
+    assert not violations, (
+        "read the id from autobot_shared.ssot_claude_models (or write a tier alias: opus/sonnet/haiku/fable) (#20884):\n  "
+        + "\n  ".join(violations)
+    )
+
+
+def test_the_claude_baseline_only_falls():
+    counts = _claude_tree_counts()
+    stale = [
+        f"{p}: baseline {n}, now {counts.get(p, 0)}" for p, (n, _) in _CLAUDE_BASELINE.items() if counts.get(p, 0) < n
+    ]
+    assert not stale, "lower these baseline entries, the ratchet only falls (#20884):\n  " + "\n  ".join(stale)
+
+
+def test_claude_homes_are_all_real_files():
+    root = repo_root()
+    assert all((root / p).is_file() for p in _CLAUDE_HOMES), "a home path in _CLAUDE_HOMES no longer exists"
+
+
+def test_the_claude_matcher_catches_a_planted_second_definition_and_ignores_aliases():
+    control = {"autobot-backend/x.py": 'MODEL = "claude-sonnet-5-5"\n', "docs/y.md": "use `claude-opus-9`"}
+    assert _claude_violations(claude_id_counts(control)) == [
+        "autobot-backend/x.py: 1 pinned Claude id(s), 0 allowed",
+        "docs/y.md: 1 pinned Claude id(s), 0 allowed",
+    ]
+    tier_only = {"f.ts": "const W = { 'claude-sonnet': 200_000, \"claude-opus\": 1 }"}
+    assert claude_id_counts(tier_only) == {"f.ts": 2}
+    legacy_order = {"g.py": 'M = "claude-3-opus-20240229"\nN = "claude-3-5-sonnet-20241022"\n'}
+    assert claude_id_counts(legacy_order) == {"g.py": 2}
+    clean = {"a.py": 'MODEL = "sonnet"\nx = CLAUDE_SONNET\n', "b.md": "claude-sonnet (no digit) and claude-code"}
+    assert claude_id_counts(clean) == {}
+    # the sweep sees real files: the SSOT itself must register, or the matcher/enumeration is broken
+    assert "autobot_shared/ssot_claude_models.py" in _claude_tree_counts()
+
+
+#: Every type the guard ever read, for the control below: the narrowed sweep must find what a sweep of all of them finds.
+_ALL_EXTS = (".py", ".ts", ".vue", ".json", ".yml", ".yaml", ".j2", ".toml", ".sh", ".env.example")
+
+
+def _unfiltered_counts() -> dict[str, int]:
+    """path -> pinned-id count over every tracked file of ``_ALL_EXTS`` under the roots and ``docs/*.md``, unfiltered."""
+    root = repo_root()
+    wanted = [
+        p
+        for p in tracked_paths(root, "*")
+        if (p.split("/", 1)[0] in _SCAN_ROOTS and p.endswith(_ALL_EXTS) and p.split("/", 1)[0] != "docs")
+        or (p.startswith("docs/") and p.endswith(".md"))
+    ]
+    wanted = [p for p in wanted if not _TEST_PART.search(p) and not p.startswith(_HISTORICAL)]
+    return claude_id_counts({p: (root / p).read_text(encoding="utf-8", errors="replace") for p in wanted})
+
+
+def test_the_narrowed_sweep_finds_the_same_files_as_the_unfiltered_sweep():
+    """Narrowing the trees must not hide a pinned id: same files, same counts as a sweep with no tree filter (#20884)."""
+    narrowed, full = _claude_tree_counts(), _unfiltered_counts()
+    missed = {p: n for p, n in full.items() if narrowed.get(p) != n}
+    assert not missed, (
+        "a pinned Claude id sits outside the trees _SCAN_TREES reads; add its tree there AND to python-paths.yml:\n  "
+        + "\n  ".join(f"{p}: {n}" for p, n in sorted(missed.items()))
+    )
+    assert len(narrowed) == len(full) > 20
