@@ -44,7 +44,8 @@ function tr(key: string): string {
  */
 function failureText(err: unknown, fallback: string): string {
   const t = (key: string, params?: Record<string, unknown>) => i18n.global.t(key, params ?? {})
-  return describeApiRefusal(err, t) ?? extractApiErrorMessage(err, fallback)
+  // An empty message (e.g. `new Error('')`) is no message: the translated fallback applies (#21185).
+  return describeApiRefusal(err, t) ?? (extractApiErrorMessage(err, fallback) || fallback)
 }
 
 /**
@@ -409,18 +410,36 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
     }
   }
 
+  /** Delete each id in the session that started the bulk delete; returns the ids that were deleted and the first failure (#21337). */
+  const deleteEach = async (ids: string[], session: string): Promise<{ deleted: string[]; failure: unknown }> => {
+    const deleted: string[] = []
+    let failure: unknown = null
+    for (const fid of ids) {
+      try {
+        await api.call('delete', '/api/conversation-files/conversation/{session_id}/files/{file_id}', { path: { session_id: session, file_id: fid } })
+        deleted.push(fid)
+      } catch (err: unknown) {
+        failure ??= err
+        logger.error('Bulk delete error:', err)
+      }
+    }
+    return { deleted, failure }
+  }
+
   const deleteSelectedFiles = async (): Promise<boolean> => {
     const ids = Array.from(fileSelection.selected.value)
     if (ids.length === 0) return false
     error.value = null
+    const session = currentSessionId()
     return wrap(async () => {
-      for (const fid of ids) {
-        try { await api.delete<unknown>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/files/${fid}`) } catch { /* continue */ }
-      }
-      dropPreviewOf(ids)
-      fileSelection.clear()
+      const { deleted, failure } = await deleteEach(ids, session)
+      // A switch mid-loop already reset the new conversation's state; only report into the session that asked.
+      if (currentSessionId() !== session) return failure === null
+      dropPreviewOf(deleted)
+      deleted.forEach(fid => fileSelection.deselectByKey(fid))
       await loadFiles()
-      return true
+      if (failure !== null) error.value = failureText(failure, tr('deleteFailed'))
+      return failure === null
     })
   }
 
