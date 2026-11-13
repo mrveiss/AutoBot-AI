@@ -338,3 +338,18 @@ env_registry.register_env_var(
         component="orchestrator",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_NOTIFICATION_ROUTER_LOCK_TTL_SECONDS",
+        type=int,
+        default=30,
+        description=(
+            "Seconds the notification router's single-instance lock lives without a renewal (#21456). The "
+            "running router renews it every third of this period, so it lapses only when its holder stops "
+            "renewing; another worker may then take over routing."
+        ),
+        range=(3, 3600),
+        component="orchestrator",
+    )
+)

@@ -21,15 +21,20 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
+import os
+import socket
+import time
 import uuid
 from typing import Optional
 
+from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_value, expire_if_value
 
 from .publisher import LLCEvent, LLCWebSocketPublisher
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _PATTERNS = [
     "llc:company:*",
@@ -90,6 +95,19 @@ def _event_payload(data: dict) -> dict:
 
 _RECONNECT_DELAY = 5  # seconds between reconnect attempts
 
+_ROUTER_LOCK_KEY = "llc:notification_router:leader"
+# Seconds the lock lives without a renewal (#21456). The running router renews it every
+# ``_RENEW_INTERVAL`` seconds, so it lapses only when its holder stops renewing.
+_ROUTER_LOCK_TTL = env_int_clamped("AUTOBOT_LLC_NOTIFICATION_ROUTER_LOCK_TTL_SECONDS", 30, min_v=3, max_v=3600)
+_ROUTER_LOCK_TTL_MS = _ROUTER_LOCK_TTL * 1000  # expire_if_value takes milliseconds
+_RENEWALS_PER_TTL = 3  # renew attempts that fit in one TTL, so one failed attempt leaves two retries
+_RENEW_INTERVAL = _ROUTER_LOCK_TTL / _RENEWALS_PER_TTL
+
+
+def _new_lock_token() -> str:
+    """A value naming ONE router instance: host, process and a random suffix (the lease-holder shape)."""
+    return "%s-%d:%s" % (socket.gethostname(), os.getpid(), uuid.uuid4().hex[:8])
+
 
 class LLCNotificationRouter:
     """Subscribes to llc:* Redis pub/sub and fans out events to WebSocket clients.
@@ -102,42 +120,113 @@ class LLCNotificationRouter:
     def __init__(self, publisher: Optional[LLCWebSocketPublisher] = None) -> None:
         self._publisher = publisher or LLCWebSocketPublisher()
         self._task: Optional[asyncio.Task] = None
+        self._renew_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
+        self._token = _new_lock_token()
+        self._holds_lock = False
+        self._last_renewed = 0.0  # time.monotonic() of the last acquire or successful renew
 
     async def start(self) -> None:
         if self._task and not self._task.done():
             return
         # Acquire a distributed lock before subscribing so only one uvicorn
-        # worker runs the router, preventing 4× duplicate events (GH#8547).
-        try:
-            redis = await get_async_redis_client(database="main")
-            if redis is not None:
-                acquired = await redis.set(_ROUTER_LOCK_KEY, "1", nx=True, ex=_ROUTER_LOCK_TTL)
-                if not acquired:
-                    logger.info("LLC notification router: lock held by another worker, skipping")
-                    return
-        except Exception as exc:
-            logger.warning("LLC notification router: lock check failed (%s), starting anyway", exc)
-
+        # worker runs the router, preventing 4x duplicate events (GH#8547).
+        if not await self._acquire_lock():
+            return
         self._stop_event.clear()
         self._task = asyncio.create_task(self._run(), name="llc-notification-router")
+        if self._holds_lock:
+            self._renew_task = asyncio.create_task(self._renew_loop(), name="llc-notification-router-renew")
         logger.info("LLC notification router started")
 
     async def stop(self) -> None:
         self._stop_event.set()
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+        await self._cancel_task(self._renew_task)
+        self._renew_task = None
+        await self._cancel_task(self._task)
+        await self._release_lock()
+        logger.info("LLC notification router stopped")
+
+    @staticmethod
+    async def _cancel_task(task: Optional[asyncio.Task]) -> None:
+        if task is None:
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    async def _acquire_lock(self) -> bool:
+        """True when this instance may route: it took the lock, or the lock could not be consulted.
+
+        False only when another worker holds the lock. With no Redis, or on a Redis error, the router
+        starts unlocked (as before) and holds nothing, so it renews and releases nothing.
+        """
+        try:
+            redis = await get_async_redis_client(database="main")
+            if redis is None:
+                return True
+            if not await redis.set(_ROUTER_LOCK_KEY, self._token, nx=True, ex=_ROUTER_LOCK_TTL):
+                logger.info("LLC notification router: lock held by another worker, skipping")
+                return False
+            self._holds_lock = True
+            self._last_renewed = time.monotonic()
+        except Exception as exc:
+            logger.warning("LLC notification router: lock check failed (%s), starting anyway", exc)
+        return True
+
+    async def _release_lock(self) -> None:
+        """Delete the lock only while it still holds this instance's token (compare-and-delete).
+
+        A Redis failure leaves the lock to its TTL; it is logged, never raised.
+        """
+        if not self._holds_lock:
+            return
+        self._holds_lock = False
         try:
             redis = await get_async_redis_client(database="main")
             if redis is not None:
-                await redis.delete(_ROUTER_LOCK_KEY)
+                await delete_if_value(redis, _ROUTER_LOCK_KEY, self._token)
         except Exception:
-            pass
-        logger.info("LLC notification router stopped")
+            logger.warning(
+                "LLC notification router: lock release failed, leaving it to expire in <=%ds",
+                _ROUTER_LOCK_TTL,
+                exc_info=True,
+            )
+
+    async def _renew_step(self) -> bool:
+        """One owner-checked renewal; False once the lock is lost.
+
+        Lost means the key is gone or holds another token, or no renewal has succeeded for a whole TTL (a
+        Redis error is retried next tick until then: past the TTL the key has expired on the server anyway).
+        """
+        try:
+            redis = await get_async_redis_client(database="main")
+            if redis is None:
+                raise RuntimeError("Redis unavailable")
+            held = await expire_if_value(redis, _ROUTER_LOCK_KEY, self._token, _ROUTER_LOCK_TTL_MS)
+        except Exception:
+            logger.warning("LLC notification router: lock renewal failed, retrying", exc_info=True)
+            return time.monotonic() - self._last_renewed < _ROUTER_LOCK_TTL
+        if held:
+            self._last_renewed = time.monotonic()
+        return held
+
+    async def _renew_loop(self) -> None:
+        while True:
+            await asyncio.sleep(_RENEW_INTERVAL)
+            if not await self._renew_step():
+                self._yield_to_other_router()
+                return
+
+    def _yield_to_other_router(self) -> None:
+        """Stop routing after the lock was lost, without deleting the key (it is not ours any more)."""
+        logger.error("LLC notification router: lock lost to another holder or expired, stopping routing")
+        self._holds_lock = False
+        self._stop_event.set()
+        if self._task:
+            self._task.cancel()
 
     async def _run(self) -> None:
         while not self._stop_event.is_set():
@@ -217,9 +306,6 @@ class LLCNotificationRouter:
 
 
 _router_instance: Optional[LLCNotificationRouter] = None
-
-_ROUTER_LOCK_KEY = "llc:notification_router:leader"
-_ROUTER_LOCK_TTL = 30  # seconds; renewed by the running task
 
 
 def get_llc_notification_router() -> LLCNotificationRouter:
