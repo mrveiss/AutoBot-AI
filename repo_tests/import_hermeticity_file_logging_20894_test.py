@@ -10,7 +10,10 @@ the sweep passing would say nothing about log files.
 import tempfile
 from pathlib import Path
 
+import pytest
 from repo_tests.import_hermeticity_test import _probe, _sandbox
+
+from autobot_shared.log_dir import DEPRECATED_LOGS_DIR_ENV, LOGS_DIR_ENV
 
 _LOGS_AT_IMPORT = (
     "from autobot_shared.logging_manager import get_logger{extra}\n"
@@ -36,3 +39,12 @@ def test_control_file_logging_switched_on_at_import_fails_the_sweep() -> None:
     ok, detail = _probe_planted("planted_file_logging_at_import", source)
     assert not ok, "a file handler writing at import was reported hermetic"
     assert "HERMETIC_VIOLATION" in detail, f"failed, but not as a hermeticity violation: {detail}"
+
+
+@pytest.mark.parametrize("name", [LOGS_DIR_ENV, DEPRECATED_LOGS_DIR_ENV])
+def test_the_probe_does_not_inherit_a_log_dir_override(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Control: the probe tests the DEFAULT, so neither override name reaches the imported module."""
+    monkeypatch.setenv(name, "/inherited/override")
+    source = f"import os\nassert {name!r} not in os.environ, 'the probe inherited ' + {name!r}\n"
+    ok, detail = _probe_planted("planted_reads_log_dir_override", source)
+    assert ok, detail
