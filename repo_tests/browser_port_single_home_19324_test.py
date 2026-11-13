@@ -113,7 +113,7 @@ _PINNED: dict[str, tuple[str, ...]] = {
         r"^    browser_port: (\d+)\b",
         r"^        playwright_port: (\d+)\b",
     ),
-    "autobot-slm-backend/ansible/inventory/group_vars/infrastructure.yml": (r"^    browser: (\d+)\b",),
+    "autobot-slm-backend/ansible/inventory/group_vars/infrastructure.yml": (r"^  browser: (\d+)\b",),
     "autobot-slm-backend/ansible/inventory/group_vars/browser.yml": (
         r"^      port: (\d+)  # #19324",
         r"^    port: (\d+)  # #19324",
