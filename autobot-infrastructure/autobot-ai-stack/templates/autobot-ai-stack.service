@@ -58,7 +58,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/opt/autobot/autobot-ai-stack/data
 ReadWritePaths=/opt/autobot/autobot-ai-stack/cache
-ReadWritePaths=/opt/autobot/autobot-ai-stack/logs
+ReadWritePaths=-/opt/autobot/autobot-ai-stack/logs
 
 # Logging
 StandardOutput=journal
