@@ -120,33 +120,71 @@ async def test_failed_id_is_not_retried_in_the_same_drain(redis, docs):
     assert await redis.hget(rc.ATTEMPTS_KEY, "a.md") == "1"
 
 
+class _VirtualClockLease:
+    """The slice of Redis a ``LeaderLease`` uses (``set NX PX``, compare-and-extend ``eval``) on a clock the
+    test advances by hand, so no real time passes and the expiry is exact (#21102)."""
+
+    def __init__(self):
+        self.now_ms = 0
+        self._owner = None
+        self._expires_ms = 0
+
+    def _holder(self):
+        return self._owner if self.now_ms < self._expires_ms else None
+
+    async def set(self, key, worker_id, nx, px):
+        if self._holder() is not None:
+            return None
+        self._owner, self._expires_ms = worker_id, self.now_ms + px
+        return True
+
+    async def eval(self, script, numkeys, key, worker_id, ttl_ms):
+        if self._holder() != worker_id:
+            return 0
+        self._expires_ms = self.now_ms + int(ttl_ms)
+        return 1
+
+
+async def _long_drain(redis, docs, *, refresh_per_item):
+    """Drain 6 items of 100 ms each under a 400 ms lease; return what a rival polling every 25 ms won."""
+    items, step_ms, poll_ms = 6, 100, 25
+    clock = _VirtualClockLease()
+    stolen = []
+
+    async def lease_client(database="main"):
+        return clock
+
+    async def slow(path):
+        for _ in range(step_ms // poll_ms):
+            clock.now_ms += poll_ms
+            stolen.append(await rival.lease.try_acquire_or_refresh())
+
+    first = _consumer(redis, docs, slow)
+    rival = _consumer(redis, docs, AsyncMock())
+    for consumer in (first, rival):
+        consumer.lease.ttl_ms = step_ms * 4  # shorter than the whole drain (items * step_ms)
+        consumer.lease._client_factory = lease_client
+    if not refresh_per_item:
+        first.lease.hold_or_refresh = AsyncMock(return_value=True)  # the drain never extends the lease
+    await redis.rpush(rc.QUEUE_KEY, *["a.md"] * items)
+    assert await first.lease.update_leadership() is True
+    assert await first.drain() == items
+    return stolen
+
+
 @pytest.mark.asyncio
 async def test_lease_stays_held_across_a_long_drain(redis, docs):
     """The drain outlasts the lease TTL; refreshing as it goes keeps a rival worker out."""
-    items, step_s = 6, 0.1
-
-    async def slow(path):
-        await asyncio.sleep(step_s)
-
-    first = _consumer(redis, docs, slow)
-    first.lease.ttl_ms = int(step_s * 4 * 1000)  # shorter than the whole drain (items * step_s)
-    rival = _consumer(redis, docs, AsyncMock())
-    rival.lease.ttl_ms = first.lease.ttl_ms
-    await redis.rpush(rc.QUEUE_KEY, *["a.md"] * items)
-    assert await first.lease.update_leadership() is True
-    stolen = []
-
-    async def poll_rival():
-        while True:
-            stolen.append(await rival.lease.try_acquire_or_refresh())
-            await asyncio.sleep(step_s / 4)
-
-    watcher = asyncio.create_task(poll_rival())
-    try:
-        assert await first.drain() == items
-    finally:
-        watcher.cancel()
+    stolen = await _long_drain(redis, docs, refresh_per_item=True)
+    assert len(stolen) >= 1, "the rival never polled, so nothing was tested"
     assert not any(stolen)
+
+
+@pytest.mark.asyncio
+async def test_rival_takes_the_lease_when_the_drain_does_not_refresh_it(redis, docs):
+    """Control: without the per-item refresh the same drain loses the lease, so the test above can fail."""
+    stolen = await _long_drain(redis, docs, refresh_per_item=False)
+    assert any(stolen)
 
 
 def test_lease_ttl_outlives_the_interval():
