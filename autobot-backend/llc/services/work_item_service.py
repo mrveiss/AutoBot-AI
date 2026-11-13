@@ -69,6 +69,7 @@ from .work_item_own_task import (
     is_own_task,
     other_checkout_holder,
     refuse_past_reviewer,
+    release_checkout,
     stamp_agent_checkout,
     stamp_and_release,
 )
@@ -492,9 +493,7 @@ class WorkItemService(LLCServiceBase):
             raise ValueError(f"Work item {work_item_id} not found")
         if item.assignee_agent_id and str(item.assignee_agent_id) != agent_id:
             raise ValueError(f"Agent {agent_id} does not hold checkout for work item {work_item_id}")
-        item.checkout_run_id = None
-        item.checkout_locked_at = None
-        item.version += 1
+        release_checkout(session, item, agent_id)
         await session.flush()
         return item
 
