@@ -279,7 +279,7 @@ _DIRECT_RESTARTS = {
 
 
 _COMMAND_MODULES = ("command", "ansible.builtin.command", "shell", "ansible.builtin.shell")
-_SYSTEMCTL_RESTART = re.compile(r"systemctl\s+(?:--?\S+\s+)*(?:try-)?restart\s+(?:--\s+)?(\S+)")
+_SYSTEMCTL_RESTART = re.compile(r"systemctl\s+(?:--?\S+\s+)*(?:try-)?restart\s+(?:--\s+)?([^\s;&|]+)")
 
 
 def _all_yaml() -> list:
@@ -287,16 +287,17 @@ def _all_yaml() -> list:
     return sorted(p for p in found if not {"tests", "_shared"} & set(p.relative_to(_ANSIBLE).parts))
 
 
-def _command_restart_unit(node: dict):
-    """The unit of a ``systemctl [try-]restart <unit>`` run through command/shell, else None."""
+def _command_restart_units(node: dict) -> list:
+    """Every unit of a ``systemctl [try-]restart <unit>`` run through command/shell, in order; a compound
+    command (``a && b``, ``a; b``) yields one per restart."""
+    units = []
     for module in _COMMAND_MODULES:
         spec = node.get(module)
         text = spec.get("cmd") or spec.get("argv") if isinstance(spec, dict) else spec
         text = " ".join(map(str, text)) if isinstance(text, list) else text
-        hit = _SYSTEMCTL_RESTART.search(text) if isinstance(text, str) else None
-        if hit:
-            return hit.group(1)
-    return None
+        if isinstance(text, str):
+            units += _SYSTEMCTL_RESTART.findall(text)
+    return units
 
 
 def _direct_restart_sites() -> list:
@@ -316,10 +317,17 @@ def _direct_restart_sites() -> list:
                 spec = node.get(module)
                 if isinstance(spec, dict) and spec.get("state") == "restarted":
                     found.append((rel, str(spec.get("name"))))
-            unit = _command_restart_unit(node)
-            if unit:
-                found.append((rel, unit))
+            found.extend((rel, unit) for unit in _command_restart_units(node))
     return found
+
+
+def test_a_compound_command_yields_every_restart_it_makes() -> None:
+    node = {"ansible.builtin.shell": "systemctl restart ssh && systemctl --no-block try-restart autobot-backend; true"}
+    assert _command_restart_units(node) == ["ssh", "autobot-backend"]
+    assert _command_restart_units({"ansible.builtin.command": {"argv": ["systemctl", "restart", "--", "ssh"]}}) == [
+        "ssh"
+    ]
+    assert _command_restart_units({"ansible.builtin.command": "systemctl status ssh"}) == []
 
 
 def test_no_restart_anywhere_under_ansible_skips_the_shared_task_unless_justified() -> None:
