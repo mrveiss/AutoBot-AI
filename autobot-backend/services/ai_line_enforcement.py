@@ -30,10 +30,10 @@ category, and an approval that cannot be recorded still leaves the action un-run
 
 from __future__ import annotations
 
-import functools
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -56,6 +56,7 @@ from autobot_shared.ai_lines import (
     resolve_scope,
 )
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.secret_redaction import redact_nested
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.status_enums import CommandRisk
@@ -223,11 +224,13 @@ def _fingerprint_key() -> bytes:
     return _PROCESS_KEY
 
 
-@functools.lru_cache(maxsize=1)
 def _warn_random_key_once() -> None:
-    logger.error(
+    log_once(
+        logger,
+        logging.ERROR,
+        "random_process_key",
         "AUTOBOT_JWT_SECRET (and SECRET_KEY) are unset: AI-line approvals are bound with a random per-process key "
-        "and must be given again after a restart"
+        "and must be given again after a restart",
     )
 
 
