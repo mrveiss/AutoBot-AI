@@ -70,6 +70,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "Tracked Python only, a subset of all tracked files; the non-Python share grows at its own rate, "
         "so a share of all tracked files would sink with nothing wrong.",
     ),
+    "log-once-hand-rolled-sweep-21071": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python only, a subset of all tracked Python; the test share grows at its own rate, "
+        "so a share of the tracked files would sink with nothing wrong.",
+    ),
     "migration-gate-test-import-sweep": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
