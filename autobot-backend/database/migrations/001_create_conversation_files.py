@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from conversation_file_quota_owner_schema import ensure_quota_owner_schema
@@ -533,6 +533,7 @@ async def rollback_migration():
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
