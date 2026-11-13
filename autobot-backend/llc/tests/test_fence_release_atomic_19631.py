@@ -12,6 +12,7 @@ test of #19607.
 
 import asyncio
 import uuid
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -153,6 +154,25 @@ def test_a_request_refuses_an_agent_id_that_is_not_an_agent_uuid(value):
     for model in (work_items_api.CheckoutRequest, work_items_api.ReleaseRequest):
         with pytest.raises(ValidationError):
             model(agent_id=value)
+
+
+async def test_a_refused_checkout_keeps_a_fence_a_new_holder_took_while_it_ran(redis):
+    """The checkout took the fence, its TTL lapsed and a person took the key before the refusal dropped it."""
+    item_id = str(uuid.uuid4())
+    item = MagicMock(
+        id=uuid.UUID(item_id), checkout_run_id=None, assignee_agent_id=None,
+        assignee_user_id=uuid.UUID(_USER), checkout_locked_at=datetime.now(timezone.utc),
+    )  # fmt: skip
+
+    async def execute(*_args, **_kwargs):
+        await redis.set(_key(item_id), f"user:{_NEW_USER}")
+        return MagicMock(scalar_one_or_none=MagicMock(return_value=item))
+
+    service = wis.WorkItemService(activity_log=MagicMock(record=AsyncMock()))
+    with patch.object(wis, "get_async_redis_client", new=AsyncMock(return_value=redis)):
+        with pytest.raises(wis.CheckoutConflict):
+            await service.checkout(MagicMock(execute=execute), item_id, _AGENT, run_id="run-1")
+    assert await redis.get(_key(item_id)) == f"user:{_NEW_USER}"
 
 
 async def _agent_to_human(redis, item_id: str) -> None:
