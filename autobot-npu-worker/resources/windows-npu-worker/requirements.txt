@@ -51,7 +51,7 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
                           # siblings now that #15298 aligned this file's transformers pin with
                           # theirs -- the old 0.15.0 floor existed only to avoid narrowing the
                           # range for this file's formerly older, independent transformers>=4.36.0.
-sentencepiece>=0.2.2
+sentencepiece>=0.2.3
 sentence-transformers
 einops>=0.8.2
 
