@@ -7,7 +7,7 @@
 adapter_config schema::
 
     {
-        "model": "claude-sonnet-4-6",
+        "model": "sonnet",   # a tier alias or a pinned ID (autobot_shared.ssot_claude_models)
         "max_turns": 10,
         "allowed_tools": ["Bash", "Read"],
         "output_dir": "/tmp",

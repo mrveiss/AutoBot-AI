@@ -22,8 +22,8 @@
       <label class="field">
         <span class="field-label">{{ t('hireAgent.model') }}</span>
         <select v-model="model" class="field-input">
-          <option value="claude-sonnet-4-6">{{ t('hireAgent.modelSonnet') }}</option>
-          <option value="claude-haiku-4-5-20251001">{{ t('hireAgent.modelHaiku') }}</option>
+          <option value="sonnet">{{ t('hireAgent.modelSonnet') }}</option>
+          <option value="haiku">{{ t('hireAgent.modelHaiku') }}</option>
         </select>
       </label>
 
@@ -80,7 +80,8 @@ const logger = createLogger('HireAgentModal')
 const api = useApiClient()
 
 const agentName = ref('')
-const model = ref('claude-sonnet-4-6')
+// A tier alias; the backend resolves it to the pinned model ID (autobot_shared/ssot_claude_models.py, #20884).
+const model = ref('sonnet')
 const orgRole = ref('worker')
 const adapterType = ref('')
 // #15907: off by default -- the 2026-09-28 ruling keeps a hire off the heartbeat

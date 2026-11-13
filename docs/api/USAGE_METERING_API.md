@@ -132,7 +132,7 @@ series, and per-model breakdown for a configurable rolling window.
       "output_tokens": 310000,
       "call_count": 5412
     },
-    "claude-sonnet-4-20250514": {
+    "<sonnet-model-id>": {
       "cost_usd": 4.1456,
       "input_tokens": 334567,
       "output_tokens": 146789,
@@ -280,7 +280,7 @@ admin role required.
   "recent_requests": [
     {
       "provider": "anthropic",
-      "model": "claude-sonnet-4-20250514",
+      "model": "<sonnet-model-id>",
       "input_tokens": 210,
       "output_tokens": 80,
       "cost_usd": 0.001830,
@@ -427,7 +427,7 @@ Content-Disposition: attachment; filename=usage_20260414.csv
 
 ```
 timestamp,provider,model,user_id,session_id,agent_id,input_tokens,output_tokens,cost_usd,latency_ms,success
-2026-04-14T10:28:44.112233,anthropic,claude-sonnet-4-20250514,alice,sess_abc123,,210,80,0.001830,834.5,True
+2026-04-14T10:28:44.112233,anthropic,<sonnet-model-id>,alice,sess_abc123,,210,80,0.001830,834.5,True
 2026-04-14T10:27:01.445566,openai,gpt-4o,bob,,,512,128,0.002560,1245.0,True
 ```
 
@@ -478,16 +478,10 @@ The result is rounded to 6 decimal places and stored as USD.
 Pricing is sourced from provider published rates. The table lives in
 `MODEL_PRICING_PER_1M_TOKENS`; all values are **USD per 1 million tokens**.
 
-**Anthropic:**
-
-| Model key | Input $/M | Output $/M |
-|-----------|-----------|------------|
-| `claude-opus-4-...` | 15.00 | 75.00 |
-| `claude-sonnet-4-20250514` | 3.00 | 15.00 |
-| `claude-3-5-sonnet-...` | 3.00 | 15.00 |
-| `claude-haiku-4-5-...` | 0.80 | 4.00 |
-| `claude-3-5-haiku-...` | 0.80 | 4.00 |
-| `claude-3-haiku-...` | 0.25 | 1.25 |
+**Anthropic:** not restated here. The current Claude IDs are written once, in
+`autobot_shared/ssot_claude_models.py`, and their prices live in
+`MODEL_PRICING_PER_1M_TOKENS` (`autobot_shared/model_pricing.py`); read the rows there. A copy in
+this document is what went a generation stale (#20884).
 
 **OpenAI:**
 

@@ -82,6 +82,11 @@ python:
   - 'autobot-monitoring/prometheus.yml'
   - 'autobot-monitoring/grafana/provisioning/datasources/prometheus.yml'
   - 'autobot-backend/config/llm_models.yaml'
+  # #20884: claude_model_id_ssot_20884_test.py holds this table to the Claude ID SSOT; the pinned-ID
+  # scan in hosted_model_literal_guard_15501_test.py names the workflow and usage-metering docs in its baseline.
+  - 'autobot-backend/config/context_windows.yaml'
+  - 'docs/developer/CLAUDE_WORKFLOW.md'
+  - 'docs/api/USAGE_METERING_API.md'
   - 'autobot-infrastructure/shared/config/permission_rules.yaml'
   # #18556: the guard scans the whole repo by basename (pathspec *<name>), so an unallowed copy can
   # land anywhere: one glob per guarded basename, not just the listed trees.
@@ -519,6 +524,31 @@ python:
   # image's dimensions and size. A change confined to the image -- replacing it
   # with one of the wrong shape -- is exactly what the guard exists to catch.
   - 'docs/assets/social-preview.png'
+  # #20884: `hosted_model_literal_guard_15501_test.py` declares `*.env.example`, `*.toml`, `*.j2`
+  # and top-level `docs/*.md` in its scan scope (_SCAN_EXTS / _SCAN_PATTERNS). Exactly those
+  # globs, so a change confined to one of them runs the guard. `docs/*.md` is TOP-LEVEL only,
+  # NOT `docs/**` (the #17930 owner decision above).
+  - '**/*.env.example'
+  - '**/*.toml'
+  - '**/*.j2'
+  # #20884: the config / template / knowledge trees the guard's `_SCAN_TREES` reads for a pinned id (concrete
+  # trees, not every `*.json` / `*.yaml` in the repo).
+  - 'autobot-backend/config/**'
+  - 'autobot-backend/llc/**/*.json'
+  - 'autobot-backend/resources/**/*.yaml'
+  - 'autobot-plugins/**'
+  - 'docs/*.md'
+  # #20884: nested docs the same guard holds to a per-file count of version-first Claude ids (its baseline).
+  # Concrete files, not `docs/**` (the #17930 owner decision above).
+  - 'docs/api/COMPREHENSIVE_API_DOCUMENTATION.md'
+  - 'docs/api/public-api-reference.md'
+  - 'docs/architecture/DISTRIBUTED_ARCHITECTURE.md'
+  - 'docs/architecture/SSOT_CONFIGURATION_ARCHITECTURE.md'
+  - 'docs/developer/04-configuration.md'
+  - 'docs/developer/DEVELOPER_SETUP.md'
+  - 'docs/developer/HARDCODING_PREVENTION.md'
+  - 'docs/guides/chat-ollama-configuration.md'
+
 
 # Retired with #18208: these workflow files no longer exist (their gates are `_gate-*.yml` bodies called by
 # ci.yml, whose `self` filter in gate-paths.yml forces every gate when one changes), so no change can touch them.
