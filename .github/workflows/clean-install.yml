@@ -4,7 +4,7 @@ name: Clean install
 # fresh Ubuntu runner, then prove the SLM is usable. Two runs:
 #   no-tty -- the piped one-liner with no terminal, the auto-generated-password path (#17929);
 #   tty    -- under a pty, the two prompts answered as a person would.
-# A failure names its step: install, health, login or node.
+# A failure names its step: install, health, login, node or synced.
 #
 # Scheduled and dispatched runs execute the command extracted from INSTALL.md
 # (scripts/ci/install_oneliner.py) verbatim, so they install main exactly as a reader's copy does.
