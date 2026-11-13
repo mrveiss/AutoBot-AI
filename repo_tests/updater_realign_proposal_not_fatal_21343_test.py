@@ -221,7 +221,7 @@ def test_the_backend_health_wait_uses_the_same_port_variable() -> None:
 def test_every_infrastructure_host_entry_uses_the_guarded_group_idiom() -> None:
     """The idiom all.yml uses for vnc_nodes: index `hostvars[groups[x][0]]` only when `groups.get(x)` is non-empty."""
     path = _ANSIBLE / "inventory" / "group_vars" / "infrastructure.yml"
-    hosts = yaml.safe_load(path.read_text(encoding="utf-8"))["infrastructure"]["hosts"]
+    hosts = yaml.safe_load(path.read_text(encoding="utf-8"))["infrastructure_hosts"]
     pattern = re.compile(
         r"\{\{ \(hostvars\[groups\['(\w+)'\]\[0\]\]\['ansible_host'\] \| default\('127\.0\.0\.1'\)\) "
         r"if groups\.get\('\1'\) else '127\.0\.0\.1' \}\}$"
