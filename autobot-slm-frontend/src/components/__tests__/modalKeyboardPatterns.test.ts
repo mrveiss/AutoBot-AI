@@ -14,9 +14,37 @@ import en from '@/locales/en.json'
 import RestartConfirmDialog from '@/components/orchestration/RestartConfirmDialog.vue'
 import ScheduleModal from '@/components/ScheduleModal.vue'
 import ServiceLogsModal from '@/components/fleet/ServiceLogsModal.vue'
+import RoleManagementModal from '@/components/RoleManagementModal.vue'
 
 vi.mock('@/composables/useSlmApi', () => ({
   useSlmApi: () => ({ getServiceLogs: vi.fn(async () => ({ logs: 'journal line' })) }),
+}))
+
+// RoleManagementModal reads its roles through useRoles; one manual role gives it a Remove button.
+vi.mock('@/composables/useRoles', () => ({
+  useRoles: () => ({
+    roles: [],
+    fetchRoles: vi.fn(async () => undefined),
+    getNodeRoles: vi.fn(async () => ({
+      node_id: 'node-1',
+      detected_roles: [],
+      role_versions: {},
+      listening_ports: [],
+      roles: [
+        {
+          role_name: 'redis',
+          assignment_type: 'manual',
+          status: 'active',
+          current_version: null,
+          last_synced_at: null,
+          last_error: null,
+        },
+      ],
+    })),
+    assignRole: vi.fn(),
+    removeRole: vi.fn(),
+    syncRole: vi.fn(),
+  }),
 }))
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
@@ -171,5 +199,88 @@ describe('modal keyboard behaviour -- locked: RestartConfirmDialog while process
     expect(wrapper.emitted('cancel')).toBeUndefined()
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
     expect(dialog.contains(document.activeElement)).toBe(true)
+  })
+})
+
+// RoleManagementModal's Remove confirmation sits on top of the role dialog (#14777). It is a dialog
+// of its own, so it traps focus, closes on Escape WITHOUT closing the role dialog behind it, and
+// hands focus back to the Remove button. Teleport is real here: the two dialogs are siblings under
+// <body> as in the app, not nested in the DOM, so the role dialog's key handlers never see the
+// confirm's keys.
+describe('modal keyboard behaviour -- nested confirm: RoleManagementModal remove', () => {
+  let wrapper: VueWrapper | undefined
+
+  const dialogs = () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="dialog"]'))
+  const press = (el: Element, init: KeyboardEventInit) =>
+    el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+
+  /** Open the role dialog, focus its Remove button and click it; returns the button and the confirm. */
+  async function openConfirm(): Promise<{ removeButton: HTMLElement; confirm: HTMLElement }> {
+    wrapper = mount(RoleManagementModal, {
+      props: { nodeId: 'node-1', hostname: 'host-1' },
+      global: { plugins: [i18n], stubs: { Transition: false } },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const removeButton = document.body.querySelector<HTMLElement>(
+      `[aria-label="${en.roleManagementModal.removeRoleAria.replace('{roleName}', 'redis')}"]`,
+    )!
+    expect(dialogs()).toHaveLength(1)
+    removeButton.focus()
+    removeButton.click()
+    await flushPromises()
+    expect(dialogs()).toHaveLength(2)
+    const confirm = dialogs()[1]
+    confirm.querySelectorAll<HTMLElement>(FOCUSABLE)[0].focus()
+    return { removeButton, confirm }
+  }
+
+  beforeEach(() => {
+    document.body.replaceChildren()
+  })
+
+  afterEach(() => {
+    wrapper?.unmount()
+    wrapper = undefined
+    document.body.replaceChildren()
+  })
+
+  it('is a dialog of its own, named by the question it asks', async () => {
+    const { confirm } = await openConfirm()
+    expect(confirm.getAttribute('aria-modal')).toBe('true')
+    const label = document.getElementById(confirm.getAttribute('aria-labelledby')!)
+    expect(label?.textContent).toContain(en.roleManagementModal.removeValue0.replace('{value0}', 'redis'))
+  })
+
+  it('traps Tab and Shift+Tab inside the confirm', async () => {
+    const { confirm } = await openConfirm()
+    const focusables = Array.from(confirm.querySelectorAll<HTMLElement>(FOCUSABLE))
+    expect(focusables.length).toBeGreaterThanOrEqual(2)
+    const first = focusables[0]
+    const last = focusables[focusables.length - 1]
+
+    last.focus()
+    const forward = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    last.dispatchEvent(forward)
+    expect(forward.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(first)
+
+    const backward = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+    first.dispatchEvent(backward)
+    expect(backward.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(last)
+  })
+
+  it('closes only the confirm on Escape and gives focus back to the Remove button', async () => {
+    const { removeButton, confirm } = await openConfirm()
+    expect(confirm.contains(document.activeElement)).toBe(true)
+
+    press(document.activeElement!, { key: 'Escape' })
+    await flushPromises()
+
+    // The confirm leaves through its transition, so wait for it rather than for one tick.
+    await vi.waitFor(() => expect(dialogs()).toHaveLength(1))
+    expect(wrapper!.emitted('close')).toBeUndefined()
+    await vi.waitFor(() => expect(document.activeElement).toBe(removeButton))
   })
 })

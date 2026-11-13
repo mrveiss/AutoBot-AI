@@ -260,35 +260,6 @@ function getStatusClass(status: string): string {
         </div>
       </section>
 
-      <!-- Remove Confirmation Dialog (Issue #1041) -->
-      <div v-if="showRemoveConfirm" class="confirm-overlay">
-        <div class="confirm-dialog" role="alertdialog" aria-labelledby="confirm-title">
-          <h4 id="confirm-title">{{ $t('roleManagementModal.removeValue0', { value0: roleToRemove }) }}</h4>
-          <p v-if="isDataBearingRole" class="confirm-warning">
-            {{ $t('roleManagementModal.thisRoleMayContain') }}
-          </p>
-          <p v-else class="confirm-text">
-            {{ $t('roleManagementModal.thisWillStopAnd') }}
-          </p>
-          <div class="confirm-actions">
-            <BaseButton size="sm"
-              v-if="isDataBearingRole"
-              @click="confirmRemove(true)"
-            >
-              {{ $t('roleManagementModal.backupAmpRemove') }}
-            </BaseButton>
-            <BaseButton variant="error" size="sm"
-              @click="confirmRemove(false)"
-            >
-              {{ isDataBearingRole ? $t('roleManagementModal.removeWithoutBackup') : $t('roleManagementModal.remove') }}
-            </BaseButton>
-            <BaseButton variant="secondary" size="sm" @click="cancelRemove">
-              {{ $t('roleManagementModal.cancel') }}
-            </BaseButton>
-          </div>
-        </div>
-      </div>
-
       <!-- Sync / Status Message -->
       <div v-if="syncMessage" class="sync-message" role="status">
         {{ syncMessage }}
@@ -298,6 +269,33 @@ function getStatusClass(status: string): string {
     <template #actions>
       <BaseButton variant="secondary" @click="emit('close')">{{ $t('roleManagementModal.close') }}</BaseButton>
     </template>
+    <!-- Remove Confirmation Dialog (Issue #1041, #14777): its own kit modal, so it traps focus, closes on
+         Escape (without closing the role dialog behind it) and gives focus back to the Remove button. -->
+    <BaseModal
+      :model-value="showRemoveConfirm"
+      :title="$t('roleManagementModal.removeValue0', { value0: roleToRemove })"
+      size="sm"
+      :close-label="$t('roleManagementModal.cancel')"
+      @close="cancelRemove"
+    >
+      <p v-if="isDataBearingRole" class="confirm-warning">
+        {{ $t('roleManagementModal.thisRoleMayContain') }}
+      </p>
+      <p v-else class="confirm-text">
+        {{ $t('roleManagementModal.thisWillStopAnd') }}
+      </p>
+      <template #actions>
+        <BaseButton v-if="isDataBearingRole" size="sm" @click="confirmRemove(true)">
+          {{ $t('roleManagementModal.backupAmpRemove') }}
+        </BaseButton>
+        <BaseButton variant="error" size="sm" @click="confirmRemove(false)">
+          {{ isDataBearingRole ? $t('roleManagementModal.removeWithoutBackup') : $t('roleManagementModal.remove') }}
+        </BaseButton>
+        <BaseButton variant="secondary" size="sm" @click="cancelRemove">
+          {{ $t('roleManagementModal.cancel') }}
+        </BaseButton>
+      </template>
+    </BaseModal>
   </BaseModal>
 </template>
 
@@ -453,21 +451,7 @@ function getStatusClass(status: string): string {
   color: var(--info-color);
 }
 
-/* Removal confirmation dialog (Issue #1041) */
-.confirm-overlay {
-  margin-top: var(--spacing-4);
-  padding: var(--spacing-4);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--error-color);
-  border-radius: var(--radius-md);
-}
-
-.confirm-dialog h4 {
-  margin: 0 0 var(--spacing-2) 0;
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-}
-
+/* Removal confirmation dialog (Issue #1041): body text; the shell is the kit BaseModal (#14777) */
 .confirm-warning {
   margin: 0 0 var(--spacing-3) 0;
   color: var(--warning-color);
@@ -478,12 +462,6 @@ function getStatusClass(status: string): string {
   margin: 0 0 var(--spacing-3) 0;
   color: var(--text-muted);
   font-size: 13px;
-}
-
-.confirm-actions {
-  display: flex;
-  gap: var(--spacing-2);
-  flex-wrap: wrap;
 }
 
 /* Screen reader only utility (Issue #754) */
