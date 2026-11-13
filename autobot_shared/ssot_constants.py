@@ -8,7 +8,6 @@ Consolidated Constants - Single Source of Truth
 ================================================
 
 All AutoBot constants consolidated from 12 domain-specific files.
-
 This module replaces:
   - autobot-backend/constants/api_constants.py
   - autobot-backend/constants/error_constants.py
@@ -67,6 +66,7 @@ ERR_INVALID_TOKEN = "Invalid token"  # nosec B105  # user-facing error message s
 # ============================================================================
 
 from autobot_shared.category_defaults import CategoryDefaults  # noqa: F401 -- split out (#19335)
+from autobot_shared.log_dir import resolve_logs_dir
 from autobot_shared.paths import infrastructure_dir  # #20578
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATION_MODEL
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL, DEFAULT_LLM_MODEL
@@ -331,7 +331,7 @@ class PathConstants:
     PROJECT_ROOT: Path = CANONICAL_PROJECT_ROOT  # #13149: was Path(__file__).parent.parent
     CONFIG_DIR: Path = infrastructure_dir(fallback_root=CANONICAL_PROJECT_ROOT) / "shared" / "config"  # #20578
     DATA_DIR: Path = PROJECT_ROOT / "data"
-    LOGS_DIR: Path = PROJECT_ROOT / "logs"
+    LOGS_DIR: Path = resolve_logs_dir()  # #20894: never inside the source tree
     DOCS_DIR: Path = PROJECT_ROOT / "docs"
     BACKEND_DIR: Path = PROJECT_ROOT / "autobot-backend"
     STATIC_DIR: Path = PROJECT_ROOT / "autobot-backend" / "static"

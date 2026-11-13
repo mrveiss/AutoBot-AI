@@ -11,12 +11,11 @@ Issue #730 - Plugin SDK example.
 
 import json
 import logging
-import os
-import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from autobot_shared.log_dir import resolve_logs_dir
 from plugin_sdk.base import BasePlugin, PluginManifest
 from plugin_sdk.hooks import Hook, HookRegistry
 
@@ -24,11 +23,8 @@ logger = logging.getLogger(__name__)
 
 
 def _default_log_path() -> Path:
-    """Per-deployment log path, never a shared /tmp name (#13967)."""
-    base = os.environ.get("AUTOBOT_LOG_DIR")
-    if base:
-        return Path(base) / "plugin_events.log"
-    return Path(tempfile.gettempdir()) / f"autobot-plugins-{os.getuid()}" / "plugin_events.log"
+    """Per-deployment log path through the one log-dir resolver (#13967, #20894)."""
+    return resolve_logs_dir() / "plugin_events.log"
 
 
 class LoggerPlugin(BasePlugin):

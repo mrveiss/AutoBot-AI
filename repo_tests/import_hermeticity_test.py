@@ -63,7 +63,10 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.import_hermeticity_known_offenders import DOES_NOT_IMPORT, HAS_IMPORT_EFFECT
 
+from autobot_shared.log_dir import DEPRECATED_LOGS_DIR_ENV, LOGS_DIR_ENV
+
 _REPO_ROOT = repo_root()
+_LOG_DIR_ENVS = (LOGS_DIR_ENV, DEPRECATED_LOGS_DIR_ENV)
 _WORKFLOW = ".github/workflows/import-hermeticity-sweep.yml"
 _BASELINE_FILE = "repo_tests/import_hermeticity_known_offenders.py"
 
@@ -156,6 +159,7 @@ def _probe(path_entry: str, module: str, *, sandbox_dir: str) -> tuple[bool, str
         k: v
         for k, v in os.environ.items()
         if not k.startswith(("GIT_", "PYTHON"))  # inherited state must not decide the answer
+        and k not in _LOG_DIR_ENVS  # an inherited override would stand in for the default under test (#20894)
     }
     env["PYTHONPATH"] = os.pathsep.join([sandbox_dir, path_entry, str(_REPO_ROOT)])
     env["PYTHONDONTWRITEBYTECODE"] = "1"
