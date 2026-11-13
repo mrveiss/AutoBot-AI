@@ -29,7 +29,9 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function mountModal(roleId: string | undefined = 'r1') {
+function mountModal(withRole = true) {
+  // Not a default parameter: `undefined` would silently become the default role.
+  const roleId = withRole ? 'r1' : undefined
   return mount(CompanyWorkflowCreateModal, {
     props: { modelValue: true, companyId: 'c1', roleId, service: { create, attach } as never },
     global: { plugins: [i18n], stubs: { teleport: true } },
@@ -83,7 +85,7 @@ describe('CompanyWorkflowCreateModal (#21241)', () => {
   })
 
   it('only creates when no role is given, and says so', async () => {
-    const wrapper = mountModal(undefined)
+    const wrapper = mountModal(false)
     await fill(wrapper, 'wf-new')
     await submit(wrapper)
 
@@ -171,6 +173,21 @@ describe('CompanyWorkflowCreateModal (#21241)', () => {
     expect(wrapper.emitted('created')).toBeUndefined()
     expect(wrapper.find('[data-testid="workflow-create-error"]').exists()).toBe(false)
     expect((wrapper.get('[data-testid="workflow-create-id"] input').element as HTMLInputElement).value).toBe('')
+  })
+
+  it('attaches nothing when the form is unmounted while the create is in flight', async () => {
+    const gate = deferred<{ workflow_id: string }>()
+    create.mockReturnValueOnce(gate.promise)
+    const wrapper = mountModal()
+    await fill(wrapper, 'wf-new')
+    await submit(wrapper)
+
+    wrapper.unmount()
+    gate.resolve({ workflow_id: 'wf-new' })
+    await flushPromises()
+
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(attach).not.toHaveBeenCalled()
   })
 
   it('emits nothing when the role changes while the attach is in flight', async () => {

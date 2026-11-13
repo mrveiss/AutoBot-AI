@@ -13,10 +13,10 @@
   Create succeeds and attach fails: the workflow exists (it is already in the picker) and is not
   created again on retry; the form keeps its id and offers the attach alone. Everything after an
   await checks that the company and role captured before it are still the ones shown, so a switch
-  mid-flight writes nothing into the new company's form.
+  mid-flight writes nothing into the new company's form; a form unmounted mid-flight writes nothing at all.
 -->
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseAlert, BaseButton, BaseInput, BaseModal } from '@autobot/ui'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
@@ -47,6 +47,12 @@ const submitting = ref(false)
 const error = ref('')
 /** Set once the create succeeded, so a retry attaches instead of creating a duplicate. */
 const createdId = ref('')
+/** An unmounted form no longer follows its props (the parent can drop it on a company switch), so its
+ * in-flight submit must not read them as "still current". */
+let unmounted = false
+onBeforeUnmount(() => {
+  unmounted = true
+})
 
 const trimmedId = computed(() => workflowId.value.trim())
 const canSubmit = computed(() => !!trimmedId.value && !submitting.value)
@@ -110,7 +116,7 @@ async function submit(): Promise<void> {
   if (!canSubmit.value) return
   const company = props.companyId
   const role = props.roleId
-  const current = () => company === props.companyId && role === props.roleId
+  const current = () => !unmounted && company === props.companyId && role === props.roleId
   submitting.value = true
   error.value = ''
   try {
