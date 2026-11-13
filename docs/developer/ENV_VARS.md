@@ -252,6 +252,7 @@ appears outside the known overlays.
 | `AUTOBOT_IDEMPOTENCY_TTL_SECONDS` | backend | int | `86400` | How long a completed creation stays replayable for its Idempotency-Key. Long enough to outlive any retry an agent or proxy makes, short enough that the keyspace stays bounded (autobot_shared/idempotency.py, #15778). |
 | `AUTOBOT_IDLE_NOTICE_TIMEOUT_SECONDS` | agents | float | `300.0` | Bound on `wait_for_idle()`'s one-shot subscription (#16949): how long it waits for a peer to go idle before raising `IdleWaitExpiredError` instead of waiting forever. Raising it tolerates a longer-running peer before giving up; lowering it fails a stuck wait sooner (protocols/idle_notice.py). |
 | `AUTOBOT_IMESSAGE_ENABLED` | gateway | bool | false | Opt in to the iMessage gateway adapter. Off by default: it is macOS-only and needs Full Disk Access to the Messages database. |
+| `AUTOBOT_INDEXING_ABANDON_GRACE_SECONDS` | analytics | int | `300` | Seconds past the hard timeout before a still-running indexing run reads as abandoned. Range: 30–86400. |
 | `AUTOBOT_INDEXING_HARD_TIMEOUT` | analytics | int | `1800` | Seconds a codebase indexing subprocess may run in total before it is killed. Range: 60–86400. |
 | `AUTOBOT_INDEXING_PROGRESS_TIMEOUT` | analytics | int | `300` | Seconds a codebase indexing subprocess may show no progress before it is killed. Range: 30–14400. |
 | `AUTOBOT_INDEXING_WATCHDOG_INTERVAL` | analytics | int | `30` | Seconds between the indexing watchdog's progress checks. Range: 1–300. |
@@ -330,7 +331,7 @@ appears outside the known overlays.
 | `AUTOBOT_LLM_TRACING_ALLOW_EXTERNAL` | security | bool | false | Allow an LLM tracing destination on a public address that is not listed in AUTOBOT_LLM_TRACING_ALLOWED_ORIGINS (#19933). Off: a tracing key alone never moves prompt metadata off the install, and the destination is refused at startup. On: a public destination is allowed; private, loopback and link-local ones are still refused. |
 | `AUTOBOT_LLM_TRACING_INCLUDE_CONTENT` | security | bool | false | Send prompt and response text to an enabled LLM tracing destination (#19933). Off: only metadata (ids, model, token usage, latency) is sent. On: the text is sent after the outbound credential redaction. |
 | `AUTOBOT_LOGS_BACKUP_DIR` | logging | str | `'backup'` | Directory where rotated log archives are written. |
-| `AUTOBOT_LOGS_DIR` | logging | str | `'logs'` | Primary directory for application log files. |
+| `AUTOBOT_LOGS_DIR` | logging | str | `""` | Primary directory for application log files (#20894). Every deploy route sets it (ansible env templates and units, docker-compose's /app/logs volume). Unset: $XDG_STATE_HOME/autobot/logs (~/.local/state/autobot/logs); never inside the source tree. A relative value is anchored at AUTOBOT_BASE_DIR, never the cwd. AUTOBOT_LOG_DIR is a deprecated alias. |
 | `AUTOBOT_LOG_FLOOD_ENABLED` | logging | bool | true | Bound how many identical WARNING/ERROR records one call site may emit per window (#15774). |
 | `AUTOBOT_LOG_FLOOD_MAX_KEYS` | logging | int | `2048` | Maximum distinct call sites tracked by the log-flood guard before least-recent eviction. |
 | `AUTOBOT_LOG_FLOOD_THRESHOLD` | logging | int | `5` | Records one log call site may emit per flood window before the rest are suppressed. |

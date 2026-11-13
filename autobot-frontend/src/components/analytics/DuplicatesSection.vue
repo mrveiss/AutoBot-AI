@@ -19,6 +19,7 @@
       <span>{{ $t('analytics.codebase.actions.loading') }}</span>
     </div>
     <div v-else-if="duplicates && duplicates.length > 0" class="section-content">
+      <StaleResultNotice kind="duplicates" />
       <!-- Similarity Summary Cards -->
       <div class="summary-cards">
         <div class="summary-card total">
@@ -100,12 +101,15 @@
       icon="search"
       :message="$t('analytics.duplicates.notScanned')"
     />
-    <EmptyState
-      v-else-if="!loading"
-      icon="check-circle"
-      :message="$t('analytics.duplicates.emptyMessage')"
-      variant="success"
-    />
+    <!-- #17982: "none found" from a cached result older than the last sync says so too -->
+    <template v-else-if="!loading">
+      <StaleResultNotice kind="duplicates" />
+      <EmptyState
+        icon="check-circle"
+        :message="$t('analytics.duplicates.emptyMessage')"
+        variant="success"
+      />
+    </template>
   </div>
 </template>
 
@@ -125,6 +129,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { useShowMore } from '@autobot/ui'
 import TruncationNotice from './TruncationNotice.vue'
+import StaleResultNotice from './StaleResultNotice.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
