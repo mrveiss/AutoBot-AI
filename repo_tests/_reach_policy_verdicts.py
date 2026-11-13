@@ -282,6 +282,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test infrastructure Python, against all tracked .py under autobot-infrastructure; drifts.",
     ),
+    "kb-wipe-never-invoked": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every tracked file, so a caller of the KB setup script in any component is seen (#21048); files are "
+        "added in every PR, so an exact floor would fail any new file.",
+    ),
     "kb-admin-read-bypass": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -350,6 +356,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test Python, shell, YAML, Jinja, env and unit files under six roots plus the root .env profiles, a "
         "subset of tracked files; the test share and the other extensions grow at their own rate.",
+    ),
+    "claude-model-id-literal-sites": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked source, config and doc files of ten extensions under eleven roots, a subset of all tracked files; "
+        "the test share and the other roots grow at their own rate, so a share of the whole sinks with nothing wrong.",
     ),
 }
 
