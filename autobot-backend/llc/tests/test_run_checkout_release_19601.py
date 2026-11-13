@@ -69,6 +69,22 @@ async def test_release_clears_every_item_the_run_checked_out_and_no_other() -> N
 
 
 @pytest.mark.asyncio
+async def test_an_item_of_another_organisational_unit_with_the_runs_id_is_left_untouched() -> None:
+    run = _run()
+    mine, foreign = Item(_COMPANY, run.id), Item(uuid.uuid4(), run.id)
+    session = RoutedSession([run], [mine, foreign])
+    log = Recorder()
+
+    released = await release_checkouts_for_run(session, run, ReleaseWhy("cancelled", "run_cancel", log=log))
+
+    assert {r.item.id for r in released} == {mine.id}
+    assert (mine.checkout_run_id, mine.version) == (None, 2)
+    assert foreign.checkout_run_id == str(run.id) and foreign.checkout_locked_at is not None
+    assert foreign.version == 1
+    assert len(log.entries) == 1
+
+
+@pytest.mark.asyncio
 async def test_each_release_records_the_true_reason_and_actor() -> None:
     run = _run()
     item = Item(_COMPANY, run.id)
