@@ -114,6 +114,7 @@ async def _upsert_code_source(db: AsyncSession, data: CodeSourceAssign) -> NodeC
 
     Helper for assign_code_source (#829).
     """
+    # Deactivate any existing code-source
     existing_result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active.is_(True)))
     for existing in existing_result.scalars().all():
         existing.is_active = False
