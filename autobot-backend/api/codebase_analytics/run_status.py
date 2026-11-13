@@ -347,10 +347,13 @@ def with_run_state(handler):
     redirect, a download) is passed through untouched, ``background`` included.
     The handler must receive ``source_id`` (by name or by position).
 
-    The run state is read BEFORE the handler reads the findings.  A run records
-    ``completed`` only after its last write, so a state read first can only err
-    towards ``partial``; read afterwards, a run that completed in between would
-    label findings from before its last writes as complete.
+    The run state is read BEFORE the handler reads the findings.  This closes one
+    race: a run records ``completed`` only after its last write, so when a run
+    completes between the two reads the body says ``partial`` (read afterwards, it
+    would label findings from before the last writes as complete).  One window
+    remains: a reindex that STARTS between the two reads deletes the source's
+    findings first, so the handler can read thin findings under the previous
+    run's ``completed``.  The next request reads ``running`` and is labelled.
     """
     signature = inspect.signature(handler)
 

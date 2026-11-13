@@ -200,6 +200,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     // A job tracked until now has ended and the slot holds another source's job: keeping its id
     // would leave Stop enabled, and the cancel route is not source-scoped.
     if (currentJobId.value) deps.progressPercent.value = 0
+    else pollSession.noteWait(deps.runState.run.value?.run_id ?? null) // the run before this request
     currentJobId.value = null
     jobPhases.value = jobBatches.value = jobStats.value = null
     deps.analyzing.value = true
@@ -238,6 +239,8 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     status: string,
     error?: string,
   ) => {
+    const waitedFrom = pollSession.waitBaseline()
+    pollSession.renew() // the job is ended once: a poll still in flight is stale and cannot end it again
     const isStale = pollSession.guard()
     const taskId = currentJobId.value
     const tracked = sawOwnJob || !!taskId
@@ -253,9 +256,9 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
       // ended is on the run record. An unread record resolves nothing.
       await runStateRead
       if (isStale()) return
-      const ended = endedRunOutcome(deps.runState.readFailed.value ? null : deps.runState.run.value, taskId)
+      const ended = endedRunOutcome(deps.runState.readFailed.value ? null : deps.runState.run.value, taskId, waitedFrom)
       status = ended?.status ?? status
-      error = ended?.error
+      error = ended ? ended.error : error
     }
 
     if (status === 'completed') {

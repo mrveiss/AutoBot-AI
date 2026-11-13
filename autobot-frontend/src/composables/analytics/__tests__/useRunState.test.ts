@@ -161,6 +161,14 @@ describe('useRunState (#21003)', () => {
       expect(endedRunOutcome(of({ status: 'running' }), 'r2')).toBeNull()
       expect(endedRunOutcome(of({ status: 'completed' }), 'other')).toBeNull()
     })
+
+    it('with no task id, a record still naming the run that was newest when the wait began says nothing', () => {
+      const done = of({ status: 'completed', reason: '' })
+      expect(endedRunOutcome(done, null, 'r2')).toBeNull() // the queued request never ran
+      expect(endedRunOutcome(done, null, 'earlier')).toEqual({ status: 'completed' }) // a newer run: the request's own
+      expect(endedRunOutcome(done, null)).toEqual({ status: 'completed' }) // nothing was known when the wait began
+      expect(endedRunOutcome(done, 'r2', 'r2')).toEqual({ status: 'completed' }) // a seen task id is matched by id alone
+    })
   })
 
   describe('source switch', () => {

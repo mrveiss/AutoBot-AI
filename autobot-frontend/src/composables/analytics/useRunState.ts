@@ -65,15 +65,18 @@ export const RUN_STATE_KEY: InjectionKey<RunStateHandle> = Symbol('codebase-run-
 /**
  * How a job that has left the task slot ended, read off the run record (a run's id is its task
  * id). `null` when the record does not say: no record, a run still `running`, or the record of
- * another run than `taskId` (`null` = the job's id was never seen, so the newest run is taken).
+ * another run than `taskId`. With no `taskId` (a queued request whose job was never seen) the
+ * newest run is taken, unless it is still `baselineRunId`, the run already newest when the wait
+ * began: the request then never ran, and that record is an earlier run's outcome.
  * `killed` and `abandoned` are failures to the job poller; their reason is the error.
  */
 export function endedRunOutcome(
   run: CodebaseRunState | null,
   taskId: string | null,
+  baselineRunId: string | null = null,
 ): { status: string; error?: string } | null {
   if (!run || !run.status || run.status === 'running') return null
-  if (taskId && run.run_id !== taskId) return null
+  if (taskId ? run.run_id !== taskId : run.run_id === baselineRunId) return null
   if (run.status === 'completed' || run.status === 'cancelled') return { status: run.status }
   return { status: 'failed', error: run.reason || run.status }
 }

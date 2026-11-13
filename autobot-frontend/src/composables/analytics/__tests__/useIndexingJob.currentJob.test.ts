@@ -234,6 +234,44 @@ describe('a tracked job that left the task slot answers idle: its outcome is rea
     }
   })
 
+  it('queued then idle with the record that was already newest when the wait began: the request never ran, nothing is announced', async () => {
+    fetchWithAuth.mockResolvedValueOnce(respond(QUEUED))
+    const known = { run: ref<CodebaseRunState | null>(record({ run_id: 'earlier' })), readFailed: ref(false) }
+    const { job, deps, loadRunState } = build(scoped, vi.fn(async () => {}), undefined, known) // the read answers the same record
+    await job.pollJobStatus()
+    await job.pollJobStatus() // the queued request is gone and no job was ever seen
+    expect(loadRunState).toHaveBeenCalledTimes(1)
+    expect(deps.onIndexComplete).not.toHaveBeenCalled()
+    expect(deps.notify).not.toHaveBeenCalled()
+    expect([deps.analyzing.value, deps.showKnowledgeBaseOptIn.value]).toEqual([false, false])
+  })
+
+  it('an idle answer carrying its own error keeps it when the record resolves nothing', async () => {
+    fetchWithAuth.mockResolvedValueOnce(respond(RUNNING)).mockResolvedValue(respond({ ...IDLE, error: 'worker lost' }))
+    const { job, deps } = reading(null)
+    await job.pollJobStatus()
+    await job.pollJobStatus()
+    expect(deps.notify).toHaveBeenCalledTimes(1)
+    expect(deps.notify).toHaveBeenCalledWith('analytics.codebase.notify.indexingFailed', 'error')
+  })
+
+  it('a poll answered late, after another poll already ended the job, does not end it a second time', async () => {
+    fetchWithAuth.mockResolvedValueOnce(respond(RUNNING))
+    const { job, deps, loadRunState } = reading(record({}))
+    await job.pollJobStatus() // t9 is tracked
+    let release: (response: unknown) => void = () => {}
+    fetchWithAuth.mockImplementationOnce(() => new Promise((resolve) => { release = resolve }))
+    const slow = job.pollJobStatus() // its answer is held
+    await new Promise<void>((r) => setTimeout(r, 0)) // the held request has been sent
+    await job.pollJobStatus() // a later poll answers idle first: the job is ended and announced
+    expect(deps.onIndexComplete).toHaveBeenCalledTimes(1)
+    release(respond(IDLE))
+    await slow
+    expect(deps.onIndexComplete).toHaveBeenCalledTimes(1)
+    expect(deps.notify).toHaveBeenCalledTimes(1)
+    expect(loadRunState).toHaveBeenCalledTimes(1)
+  })
+
   it('control: a wait that was given up (no job ever seen) announces nothing, whatever the record says', async () => {
     const { job, deps } = reading(record({}))
     for (let i = 0; i <= IDLE_POLLS_BEFORE_GIVING_UP; i++) await job.pollJobStatus()
