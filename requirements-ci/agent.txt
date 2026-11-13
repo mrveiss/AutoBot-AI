@@ -1,5 +1,5 @@
 # Task queue and agent communication
-celery==5.6.3
+celery==5.7.0
 kombu==5.6.2
 
 # MCP protocol for skill subprocesses (Issue #731). Floor mirrored from
