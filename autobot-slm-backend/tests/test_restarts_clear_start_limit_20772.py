@@ -107,36 +107,81 @@ def test_every_updater_role_handler_restarts_only_through_the_shared_task() -> N
     assert not direct, f"these handlers do not clear a start-limit park: {direct}"
 
 
-#: Keywords ansible-core 2.17 refuses on an ``include_tasks`` (`TaskInclude.VALID_INCLUDE_KEYWORDS` has none of
-#: them; `preprocess_data` raises "'become' is not a valid attribute for a TaskInclude"). The shared task sets
-#: `become` itself, so a caller never needs it.
-_PRIVILEGE_KEYWORDS = frozenset({"become", "become_user", "become_method", "become_flags", "become_exe"})
+_INCLUDE_TASKS_KEYS = ("ansible.builtin.include_tasks", "include_tasks")
+#: Task keys ansible-core 2.17.14 accepts on an ``include_tasks``: `playbook/task_include.py`
+#: `TaskInclude.VALID_INCLUDE_KEYWORDS`. Any other key (``become``, ``delegate_to``, ``failed_when``,
+#: ``changed_when``, ``notify``, ``environment``, ...) raises "is not a valid attribute for a TaskInclude"
+#: when the task list is loaded. ``apply`` is an argument of the include (`TaskInclude.OTHER_ARGS`), not a task key.
+_VALID_INCLUDE_KEYS = frozenset(
+    {"action", "args", "collections", "debugger", "ignore_errors", "loop", "loop_control", "loop_with", "name"}
+    | {"no_log", "register", "run_once", "tags", "timeout", "vars", "when"}
+)
+#: A handler include also takes ``listen``: `playbook/handler_task_include.py` `HandlerTaskInclude`.
+_VALID_HANDLER_INCLUDE_KEYS = _VALID_INCLUDE_KEYS | {"listen"}
+#: ``with_<lookup>`` is rewritten to ``loop``/``loop_with`` by `playbook/task.py` `preprocess_data`
+#: (`_preprocess_with_loop`), so any ``with_*`` key is the valid loop spelling.
+_WITH_PREFIX = "with_"
+#: Measured over every YAML under ``ansible/`` at the time of writing: 327 includes, none outside the valid set.
+_MEASURED_INCLUDE_TASKS = 327
 
 
-def _includes_with_privilege_keywords(docs: list) -> list:
+def _is_include(task: dict) -> bool:
+    return any(k in task for k in _INCLUDE_TASKS_KEYS)
+
+
+def _invalid_include_keys(task: dict, in_handler: bool) -> list:
+    valid = _VALID_HANDLER_INCLUDE_KEYS if in_handler else _VALID_INCLUDE_KEYS
+    return sorted(
+        k for k in task if k not in valid and k not in _INCLUDE_TASKS_KEYS and not str(k).startswith(_WITH_PREFIX)
+    )
+
+
+def _include_key_offenders(docs, in_handler: bool = False) -> list:
+    """(name, invalid keys) of every ``include_tasks`` in ``docs`` that carries a key ansible-core rejects."""
     return [
-        (t.get("name"), sorted(_PRIVILEGE_KEYWORDS & set(t)))
-        for t in _mappings(docs)
-        if any(k in t for k in ("ansible.builtin.include_tasks", "include_tasks")) and _PRIVILEGE_KEYWORDS & set(t)
+        (t.get("name"), bad)
+        for t, handler in _mappings_in_context(docs, in_handler)
+        if _is_include(t) and (bad := _invalid_include_keys(t, handler))
     ]
 
 
-def test_no_include_tasks_carries_a_privilege_keyword() -> None:
-    """Parsing fails outright on one (the playbook or the handler file never loads), so no CI job would show it."""
-    found = [
-        (p.relative_to(_ANSIBLE).as_posix(), *hit)
-        for p in _all_yaml()
-        for hit in _includes_with_privilege_keywords(_load(p))
-    ]
-    assert found == [], f"include_tasks with become: ansible-core rejects it, the shared task sets it: {found}"
+def _count_includes(docs, in_handler: bool = False) -> int:
+    return sum(1 for t, _ in _mappings_in_context(docs, in_handler) if _is_include(t))
 
 
-def test_the_privilege_keyword_check_sees_a_rejected_include_and_passes_a_valid_one() -> None:
-    bad = yaml.safe_load("- name: a\n  ansible.builtin.include_tasks: _shared/tasks/restart_unit.yml\n  become: true\n")
-    ok = yaml.safe_load("- name: a\n  ansible.builtin.include_tasks: _shared/tasks/restart_unit.yml\n  vars: {x: 1}\n")
+def _every_yaml() -> list:
+    return sorted(p for ext in ("yml", "yaml") for p in _ANSIBLE.rglob(f"*.{ext}"))
+
+
+def test_every_include_tasks_carries_only_keywords_ansible_core_accepts() -> None:
+    """A rejected key fails the load of the playbook or handler file, and no CI job parses these (#17917)."""
+    found, total = [], 0
+    for path in _every_yaml():
+        docs = _load(path)
+        in_handler = "handlers" in path.relative_to(_ANSIBLE).parts
+        total += _count_includes(docs, in_handler)
+        found += [(path.relative_to(_ANSIBLE).as_posix(), *hit) for hit in _include_key_offenders(docs, in_handler)]
+    assert total >= _MEASURED_INCLUDE_TASKS, f"control: the finder sees the includes ({total})"
+    assert found == [], f"include_tasks with keys ansible-core rejects on an include: {found}"
+
+
+def _fixture_offenders(extra: str, handler: bool = False) -> list:
+    task = f"- name: a\n  ansible.builtin.include_tasks: x.yml\n{extra}"
+    return _include_key_offenders(yaml.safe_load(task), handler)
+
+
+def test_the_include_key_check_reports_keys_outside_the_valid_set() -> None:
+    assert _fixture_offenders("  delegate_to: h\n") == [("a", ["delegate_to"])]
+    assert _fixture_offenders("  failed_when: false\n") == [("a", ["failed_when"])]
+    assert _fixture_offenders("  become: true\n") == [("a", ["become"])]
+    assert _fixture_offenders("  listen: x\n") == [("a", ["listen"])], "listen is for a handler include only"
+
+
+def test_the_include_key_check_passes_valid_includes() -> None:
+    assert _fixture_offenders("  listen: x\n", handler=True) == []
+    assert _fixture_offenders("  with_items: [a, b]\n  vars: {x: 1}\n  tags: [t]\n  when: y\n") == []
     plain = yaml.safe_load("- name: a\n  ansible.builtin.command: id\n  become: true\n")
-    assert _includes_with_privilege_keywords(bad) == [("a", ["become"])]
-    assert _includes_with_privilege_keywords(ok) == [] == _includes_with_privilege_keywords(plain)
+    assert _include_key_offenders(plain) == [] and _count_includes(plain) == 0
 
 
 def test_every_shared_include_names_its_unit() -> None:
