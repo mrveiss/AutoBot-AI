@@ -28,6 +28,7 @@ from constants.model_constants import (
     OPENAI_GPT4_TURBO_PREVIEW,
     OPENAI_GPT4_VISION_PREVIEW,
 )
+from context_window_lookup import known_context_window_tokens
 from llm_shared.providers.anthropic import _route_sampling_kwargs
 from memory import MemoryManager, TaskPriority
 from modern_ai_local_mapping import ai_response_fields, build_chat_messages
@@ -38,7 +39,6 @@ task_tracker = _get_task_tracker()
 from utils.service_registry import get_service_url
 
 logger = get_logger(__name__)
-
 
 # Issue #380: Module-level frozenset for error filtering
 _ERROR_FINISH_REASONS = frozenset({"error", "timeout"})
@@ -725,7 +725,7 @@ class ModernAIIntegration:
             supports_streaming=True,
             rate_limit_per_minute=50,
             cost_per_token=0.000015,
-            metadata={"context_window": 200000},
+            metadata={"context_window": known_context_window_tokens(ANTHROPIC_CLAUDE3_OPUS_DATED)},
         )
 
     def _create_gemini_config(self) -> AIModelConfig:

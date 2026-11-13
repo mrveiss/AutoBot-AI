@@ -173,7 +173,7 @@ Computed properties (`remaining`, `is_over_limit`, `alert_triggered`) are mode-a
      -d '{
        "tokens_in": 1000,
        "tokens_out": 500,
-       "model": "claude-sonnet-4-6"
+       "model": "<pinned model id>"
      }'
    ```
 
