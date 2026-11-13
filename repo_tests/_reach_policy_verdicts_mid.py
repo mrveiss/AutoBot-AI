@@ -77,6 +77,18 @@ MID: dict[str, tuple[str, str, str]] = {
         "Ansible YAML is a subset of all tracked YAML under the SLM backend; templates, scripts and "
         "docs beside it grow independently, so a share of the tree sinks with nothing wrong.",
     ),
+    "inventory-variable-cycle-variables-21343": (
+        ABSOLUTE,
+        "NOT_PATHS",
+        "Variable names parsed from YAML: one id per top-level key in group_vars and role defaults/vars. "
+        "No file enumeration counts keys, so there is no reference to take a fraction of.",
+    ),
+    "inventory-variable-cycle-references-21343": (
+        ABSOLUTE,
+        "NOT_PATHS",
+        "Variable-to-variable references parsed from the templates in those files; a parsed object, not a "
+        "path, so no co-moving reference exists.",
+    ),
     "ansible-inventory-shell-sweep": (
         ABSOLUTE,
         "FRACTION_IS_COARSER",
