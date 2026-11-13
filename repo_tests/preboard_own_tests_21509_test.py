@@ -28,6 +28,8 @@ import yaml
 from repo_tests import _preboard_guard_lane_support as support
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 _ROOT = repo_root()
 _WORKFLOW = _ROOT / ".github" / "workflows" / "dispatch-preboard-guards.yml"
 _SUITE = _ROOT / ".github" / "workflows" / "ci.yml"
@@ -156,8 +158,7 @@ _SHELL_ENDS = {"||", "&&", ";", "|"}
 
 def _lines(script: str) -> list[list[str]]:
     """Each logical line of *script* as tokens, quotes kept (so a quoted array expansion stays recognisable)."""
-    joined = script.replace("\\\n", " ")
-    lines = [line for line in joined.splitlines() if line.strip() and not line.strip().startswith("#")]
+    lines = [c.text for c in code_lines(script, name="step.sh", join_continuations=True) if c.text.strip()]
     return [shlex.split(line, posix=False) for line in lines]
 
 
@@ -202,8 +203,12 @@ def test_own_tests_takes_its_files_from_the_selection_and_names_no_root(jobs) ->
     assert any(s.get("id") == "suite" for s in jobs["own-tests"]["steps"]), "the SLM step reads the suite step's output"
 
 
-_CLEAN = (
-    "python3 pipeline-scripts/preboard_guard_lane.py changed-tests --out-dir o\n" 'python -m pytest "${FILES[@]}" -q\n'
+_CLEAN = "\n".join(
+    [
+        "python3 pipeline-scripts/preboard_guard_lane.py changed-tests --out-dir o",
+        'python -m pytest "${FILES[@]}" -q',
+        "",
+    ]
 )
 
 
