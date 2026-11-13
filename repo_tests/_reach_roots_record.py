@@ -328,6 +328,7 @@ REACH_ROOTS = {
         "autobot-slm-backend",
         "docs",
         "install.sh",
+        "scripts/deployment",
     ),
     "repo_tests/opt_autobot_literal_ratchet_18880_test.py": ("autobot-slm-backend/ansible",),
     "repo_tests/optimization_taxonomies_13049_test.py": (
