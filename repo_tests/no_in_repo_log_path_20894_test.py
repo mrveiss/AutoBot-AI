@@ -16,6 +16,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.no_in_repo_log_path_20894_baseline import BASELINE
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -25,13 +26,7 @@ _TEST_PARTS = ("/tests/", "repo_tests/")
 
 
 def _is_test(path: str) -> bool:
-    name = path.rsplit("/", 1)[-1]
-    return (
-        name.endswith("_test.py")
-        or name.startswith("test_")
-        or name == "conftest.py"
-        or any(part in f"/{path}" for part in _TEST_PARTS)
-    )
+    return is_test_filename(path) or any(part in f"/{path}" for part in _TEST_PARTS)
 
 
 def _python_files(root: Path) -> list[str]:

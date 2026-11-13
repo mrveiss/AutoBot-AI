@@ -40,6 +40,7 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests.service_units_set_logs_dir_20894_test import _python_units
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._file_size_guard import count_lines
 from tools.lint._scan_helpers import tracked_paths
@@ -157,14 +158,7 @@ CONSOLE_ONLY: dict[str, str] = {
 
 
 def _is_test(path: str) -> bool:
-    name = path.rsplit("/", 1)[-1]
-    return (
-        name.endswith("_test.py")
-        or name.startswith("test_")
-        or name == "conftest.py"
-        or path.startswith(("tests/", "repo_tests/"))
-        or "/tests/" in path
-    )
+    return is_test_filename(path) or path.startswith(("tests/", "repo_tests/")) or "/tests/" in path
 
 
 def _parse(root: Path, path: str) -> ast.Module | None:
