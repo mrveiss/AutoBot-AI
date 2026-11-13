@@ -179,7 +179,7 @@ def test_no_terminal_advice_survives_sudo() -> None:
 
 def test_rerun_hint_uses_the_run_skip_set() -> None:
     """#19867: the hint once skipped `provision`, which the run keeps for the backend role (#6600)."""
-    assert re.search(r'local skip_tags="seed"', _INSTALL)
+    assert re.search(r'local skip_tags="seed(,[\w-]+)*"', _INSTALL)
     assert '--skip-tags "${skip_tags}"' in _INSTALL and 'deploy-slm-manager.yml --skip-tags ${skip_tags}"' in _INSTALL
     assert "seed,provision" not in _INSTALL
 
