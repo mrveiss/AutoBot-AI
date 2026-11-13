@@ -15,6 +15,7 @@ scheduler begins dispatching.  For each ``status='running'`` run it:
   3. Re-queues agent in ``llc:heartbeat:schedule`` sorted set at score=now
 """
 
+import asyncio
 import json
 import os
 import time
@@ -117,6 +118,12 @@ class SessionCheckpointer(PollLoopScheduler):
         await redis.set(key, payload, ex=LLC_CHECKPOINT_TTL_SECONDS)
 
 
+#: How many times startup recovery asks for the lease while Redis does not answer, and the pause between asks.
+#: The default spans the lease TTL, so a worker that finds Redis down at boot still recovers once it is back.
+RECOVERY_LEASE_ATTEMPTS = _resolve_int_env("AUTOBOT_LLC_RECOVERY_LEASE_ATTEMPTS", 6)
+RECOVERY_LEASE_RETRY_SECONDS = _resolve_int_env("AUTOBOT_LLC_RECOVERY_LEASE_RETRY_SECONDS", 5)
+
+
 def recovery_lease() -> LeaderLease:
     """The lease that lets one worker run startup recovery.
 
@@ -139,6 +146,66 @@ async def _requeue_agent(redis, agent_id: str, score: float) -> None:  # noqa: A
         logger.debug("Redis ZADD re-queue failed for agent %s (swallowed)", agent_id)
 
 
+async def _acquire_recovery_lease() -> bool:
+    """True when this worker holds the recovery lease; False when another worker does, or Redis never answered.
+
+    "Another worker holds it" is a definite answer and ends the wait. "Redis did not answer" is not: it is asked
+    again, a bounded number of times, so a Redis that is briefly down at boot does not cost the restart its
+    recovery. One holder at a time is still the lease's guarantee, so retrying cannot recover concurrently.
+    """
+    lease = recovery_lease()
+    for attempt in range(1, RECOVERY_LEASE_ATTEMPTS + 1):
+        try:
+            state = await lease.hold_or_refresh()
+        except Exception as exc:
+            logger.warning("SessionCheckpointer: recovery lease check failed: %s", exc)
+            state = None
+        if state is not None:
+            return state
+        if attempt < RECOVERY_LEASE_ATTEMPTS:
+            await asyncio.sleep(RECOVERY_LEASE_RETRY_SECONDS)
+    logger.error(
+        "SessionCheckpointer: recovery lease unavailable after %d attempt(s) (Redis did not answer); "
+        "running runs are left to the liveness monitor",
+        RECOVERY_LEASE_ATTEMPTS,
+    )
+    return False
+
+
+async def _interrupt_run(session, run: LLCHeartbeatRun) -> list[ReleasedCheckout]:  # noqa: ANN001 - AsyncSession
+    """Mark *run* interrupted and release every checkout it made, in the caller's (savepoint) transaction."""
+    run.status = LLCRunStatus.INTERRUPTED.value
+    run.finished_at = datetime.now(tz=timezone.utc)
+    session.add(run)
+    return await release_checkouts_for_run(session, run, _RECOVERY_RELEASE)
+
+
+async def _recover_runs(session, runs: list[LLCHeartbeatRun]) -> None:  # noqa: ANN001 - AsyncSession
+    """Interrupt each run in its own savepoint, commit, and only then drop the released fences and re-queue."""
+    redis = await get_async_redis_client()
+    now_ts = time.time()
+    released: list[ReleasedCheckout] = []
+    for run in runs:
+        run_id, agent_id = run.id, run.agent_id  # read while loaded: a savepoint rollback expires the run
+        try:
+            async with session.begin_nested():  # all of a run's release, or none of it
+                batch = await _interrupt_run(session, run)
+        except Exception:
+            # The run stays ``running`` (and its checkouts held), so the next startup recovers it again.
+            logger.exception("Recovery failed for run %s — rolled back to its savepoint", run_id)
+            continue
+        released.extend(batch)
+        await _requeue_agent(redis, agent_id, now_ts)
+        logger.info("SessionCheckpointer: recovered run %s for agent %s", run_id, agent_id)
+    try:
+        await session.commit()
+    except Exception:
+        logger.exception("SessionCheckpointer: commit failed during recovery (swallowed)")
+        await session.rollback()
+    else:
+        await drop_released_fences(released)  # only once the DB release is durable
+
+
 async def recover_incomplete_runs() -> None:
     """Interrupt every ``running`` run at startup, release its checkouts, and re-queue its agent.
 
@@ -157,8 +224,8 @@ async def recover_incomplete_runs() -> None:
     writes, the heartbeat report, and the service-level release check only the company or the assignee,
     never ``checkout_run_id`` or the fence value. Run ownership is the proper fix (#21440).
     """
-    if not await recovery_lease().update_leadership():
-        logger.info("SessionCheckpointer: recovery lease not acquired (another worker or no Redis), skipping")
+    if not await _acquire_recovery_lease():
+        logger.info("SessionCheckpointer: recovery lease not acquired (another worker holds it), skipping")
         return
     factory = get_async_session_factory()
     try:
@@ -171,37 +238,6 @@ async def recover_incomplete_runs() -> None:
                 return
 
             logger.info("SessionCheckpointer: recovering %d incomplete run(s)", len(runs))
-
-            redis = await get_async_redis_client()
-            now_ts = time.time()
-            released: list[ReleasedCheckout] = []
-
-            for run in runs:
-                try:
-                    run_id = str(run.id)
-
-                    run.status = LLCRunStatus.INTERRUPTED.value
-                    run.finished_at = datetime.now(tz=timezone.utc)
-                    session.add(run)
-
-                    released.extend(await release_checkouts_for_run(session, run, _RECOVERY_RELEASE))
-
-                    await _requeue_agent(redis, run.agent_id, now_ts)
-
-                    logger.info(
-                        "SessionCheckpointer: recovered run %s for agent %s",
-                        run_id,
-                        run.agent_id,
-                    )
-                except Exception:
-                    logger.exception("Recovery failed for run %s (swallowed)", run.id)
-
-            try:
-                await session.commit()
-            except Exception:
-                logger.exception("SessionCheckpointer: commit failed during recovery (swallowed)")
-                await session.rollback()
-            else:
-                await drop_released_fences(released)  # only once the DB release is durable
+            await _recover_runs(session, runs)
     except Exception:
         logger.exception("SessionCheckpointer: recover_incomplete_runs failed (swallowed)")

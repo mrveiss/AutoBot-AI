@@ -14,9 +14,10 @@ import pytest
 from llc.scheduler.session_checkpointer import SessionCheckpointer, recover_incomplete_runs
 
 
-def _lease(held: bool = True) -> MagicMock:
-    """The startup-recovery lease: this worker holds it, or another one does."""
-    return MagicMock(update_leadership=AsyncMock(return_value=held))
+def _lease(*answers: bool | None) -> MagicMock:
+    """The startup-recovery lease, answering each ask in turn: True this worker holds it, False another one does,
+    None Redis did not answer. No answer given means held."""
+    return MagicMock(hold_or_refresh=AsyncMock(side_effect=list(answers)) if answers else AsyncMock(return_value=True))
 
 
 def _make_run(
@@ -39,18 +40,10 @@ def _make_run(
 
 
 def _make_factory(runs: list) -> MagicMock:
-    session = AsyncMock()
-    scalars_result = MagicMock()
-    scalars_result.all.return_value = runs
-    execute_result = MagicMock()
-    execute_result.scalars.return_value = scalars_result
-    session.execute.return_value = execute_result
-    session.add = MagicMock()
-    session.commit = AsyncMock()
-    session.rollback = AsyncMock()
+    from llc.tests._run_checkout_world import RoutedSession
 
     factory = MagicMock()
-    factory.return_value.__aenter__ = AsyncMock(return_value=session)
+    factory.return_value.__aenter__ = AsyncMock(return_value=RoutedSession(runs, []))
     factory.return_value.__aexit__ = AsyncMock(return_value=False)
     return factory
 
@@ -177,7 +170,7 @@ async def test_a_worker_that_does_not_hold_the_recovery_lease_recovers_nothing()
     run = _make_run(status="running")
     factory = _make_factory([run])
     with (
-        patch("llc.scheduler.session_checkpointer.recovery_lease", return_value=_lease(held=False)),
+        patch("llc.scheduler.session_checkpointer.recovery_lease", return_value=_lease(False)),
         patch("llc.scheduler.session_checkpointer.get_async_session_factory", return_value=factory),
     ):
         await recover_incomplete_runs()
@@ -276,3 +269,73 @@ def test_checkpointer_start_stop() -> None:
     # #13113: asyncio.run() — pytest-asyncio owns the loop lifecycle, so a sync test
     # running before any async test on its worker had no current loop for get_event_loop().
     asyncio.run(_run())
+
+
+@pytest.mark.asyncio
+async def test_recovery_asks_again_while_redis_does_not_answer_and_then_recovers() -> None:
+    """Redis down at boot is not "another worker holds the lease": the ask is repeated until it is answered."""
+    run = _make_run(status="running")
+    lease = _lease(None, None, True)
+    with (
+        patch("llc.scheduler.session_checkpointer.recovery_lease", return_value=lease),
+        patch("llc.scheduler.session_checkpointer.asyncio.sleep", AsyncMock()),
+        patch("llc.scheduler.session_checkpointer.get_async_session_factory", return_value=_make_factory([run])),
+        patch("llc.scheduler.session_checkpointer.get_async_redis_client", AsyncMock(return_value=AsyncMock())),
+    ):
+        await recover_incomplete_runs()
+
+    assert lease.hold_or_refresh.await_count == 3
+    assert run.status == "interrupted"
+
+
+@pytest.mark.asyncio
+async def test_another_holder_ends_the_wait_at_once_and_an_unanswering_redis_gives_up_after_the_bound() -> None:
+    from llc.scheduler import session_checkpointer as module
+
+    other, silent = _lease(False), _lease(*[None] * module.RECOVERY_LEASE_ATTEMPTS)
+    run = _make_run(status="running")
+    factory = _make_factory([run])
+    with (
+        patch("llc.scheduler.session_checkpointer.asyncio.sleep", AsyncMock()),
+        patch("llc.scheduler.session_checkpointer.get_async_session_factory", return_value=factory),
+    ):
+        for lease in (other, silent):
+            with patch("llc.scheduler.session_checkpointer.recovery_lease", return_value=lease):
+                await recover_incomplete_runs()
+
+    assert other.hold_or_refresh.await_count == 1
+    assert silent.hold_or_refresh.await_count == module.RECOVERY_LEASE_ATTEMPTS
+    factory.assert_not_called()
+    assert run.status == "running"
+
+
+@pytest.mark.asyncio
+async def test_a_run_whose_release_fails_is_rolled_back_and_not_requeued_or_unfenced() -> None:
+    """One run's failed release leaves that run for the next recovery; the other runs still recover."""
+    from llc.tests._run_checkout_world import RoutedSession
+
+    bad, good = _make_run(agent_id="agent-bad"), _make_run(agent_id="agent-good")
+    session = RoutedSession([bad, good], [])
+    factory = MagicMock()
+    factory.return_value.__aenter__ = AsyncMock(return_value=session)
+    factory.return_value.__aexit__ = AsyncMock(return_value=False)
+    queue, dropped = AsyncMock(), AsyncMock()
+
+    async def release(_session, run, _why):  # noqa: ANN001
+        if run is bad:
+            raise RuntimeError("audit write failed")
+        return []
+
+    with (
+        patch("llc.scheduler.session_checkpointer.recovery_lease", return_value=_lease()),
+        patch("llc.scheduler.session_checkpointer.get_async_session_factory", return_value=factory),
+        patch("llc.scheduler.session_checkpointer.get_async_redis_client", AsyncMock(return_value=queue)),
+        patch("llc.scheduler.session_checkpointer.release_checkouts_for_run", release),
+        patch("llc.scheduler.session_checkpointer.drop_released_fences", dropped),
+    ):
+        await recover_incomplete_runs()
+
+    assert session.rollbacks == 1, "the failed run's work is undone to its savepoint"
+    requeued = {agent for call in queue.zadd.call_args_list for agent in call.args[1]}
+    assert requeued == {"agent-good"}
+    assert good.status == "interrupted"
