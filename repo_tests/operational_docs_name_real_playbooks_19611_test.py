@@ -118,6 +118,7 @@ REACH = declare(
         "autobot-slm-backend",
         "docs",
         "install.sh",
+        "scripts/deployment",
     ),
 )
 
