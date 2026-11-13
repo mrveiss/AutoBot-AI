@@ -739,7 +739,6 @@
       vars:
         restart_unit_name: autobot-slm-backend
         restart_unit_daemon_reload: true
-      become: true
       tags: [slm, slm-backend, restart]
 
     # #15610: this play deploys the SLM backend by unarchive and never runs the
@@ -764,7 +763,6 @@
           tags: [slm, slm-frontend, restart]
       vars:
         restart_unit_name: nginx
-      become: true
       tags: [slm, slm-frontend, restart]
 
     - name: "[PLAY 1] SLM | Wait for API to be ready"
@@ -1432,7 +1430,6 @@
       vars:
         restart_unit_name: autobot-backend
         restart_unit_daemon_reload: true
-      become: true
       when: "'backend' in group_names"
       tags: [backend, restart]
 
@@ -1469,7 +1466,6 @@
       vars:
         restart_unit_name: "{{ item.item }}"
         restart_unit_daemon_reload: true
-      become: true
       loop: "{{ celery_unit_files.results | default([]) }}"
       loop_control:
         label: "{{ item.item }}"
@@ -1650,7 +1646,6 @@
           tags: [frontend, restart]
       vars:
         restart_unit_name: nginx
-      become: true
       when: "'frontend' in group_names"
       tags: [frontend, restart]
 
@@ -1731,7 +1726,6 @@
       vars:
         restart_unit_name: autobot-npu-worker
         restart_unit_tolerate_failure: true
-      become: true
       when: >-
         'npu' in group_names
       tags: [npu, npu-worker, restart]
@@ -1817,7 +1811,6 @@
           tags: [tts, tts-worker, restart]
       vars:
         restart_unit_name: autobot-tts-worker
-      become: true
       when: "'npu' in group_names"
       tags: [tts, tts-worker, restart]
 
@@ -1959,7 +1952,6 @@
       vars:
         restart_unit_name: autobot-playwright
         restart_unit_tolerate_failure: true
-      become: true
       when: >-
         'browser' in group_names
       tags: [browser, browser-worker, restart]
@@ -2025,7 +2017,6 @@
       vars:
         restart_unit_name: autobot-ai-stack
         restart_unit_tolerate_failure: true
-      become: true
       when: >-
         'aiml' in group_names
       tags: [ai-stack, aiml, restart]
@@ -2038,7 +2029,6 @@
       vars:
         restart_unit_name: autobot-chromadb
         restart_unit_tolerate_failure: true
-      become: true
       when: >-
         'aiml' in group_names
       tags: [ai-stack, aiml, chromadb, restart]

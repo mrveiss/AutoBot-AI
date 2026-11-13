@@ -8,7 +8,6 @@
   ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
   vars:
     restart_unit_name: "{{ redis_service_name | default('redis-stack-server') }}"
-  become: true
 
 - name: reload systemd
   systemd:
@@ -30,11 +29,9 @@
   ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
   vars:
     restart_unit_name: redis_exporter
-  become: true
 
 - name: restart chromadb
   when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
   vars:
     restart_unit_name: autobot-chromadb
-  become: true

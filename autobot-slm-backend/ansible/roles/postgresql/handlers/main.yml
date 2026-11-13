@@ -17,7 +17,6 @@
   ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
   vars:
     restart_unit_name: "{{ postgresql_service }}"
-  become: true
 
 - name: Reload systemd
   ansible.builtin.systemd:

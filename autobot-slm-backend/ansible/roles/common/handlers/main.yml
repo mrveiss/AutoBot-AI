@@ -24,4 +24,3 @@
     restart_unit_name: logrotate.timer
     restart_unit_daemon_reload: true
     restart_unit_tolerate_failure: true
-  become: true

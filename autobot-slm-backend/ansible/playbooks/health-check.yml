@@ -646,7 +646,7 @@
 
     - name: Test backend to database connectivity
       uri:
-        url: "https://{{ hostvars[_backend_host[0]]['ansible_host'] | default('127.0.0.1') }}:{{ backend_nginx_port | default(8443) }}/api/system/redis"  # Issue #956: HTTPS:8443
+        url: "https://{{ hostvars[_backend_host[0]]['ansible_host'] | default('127.0.0.1') }}:{{ hostvars[_backend_host[0]]['backend_nginx_port'] | default(8443) }}/api/system/redis"  # Issue #956: HTTPS:8443
         method: GET
         timeout: 15
         validate_certs: false
@@ -661,7 +661,7 @@
 
     - name: Test backend to AI/ML connectivity
       uri:
-        url: "https://{{ hostvars[_backend_host[0]]['ansible_host'] | default('127.0.0.1') }}:{{ backend_nginx_port | default(8443) }}/api/ai/status"  # Issue #956: HTTPS:8443
+        url: "https://{{ hostvars[_backend_host[0]]['ansible_host'] | default('127.0.0.1') }}:{{ hostvars[_backend_host[0]]['backend_nginx_port'] | default(8443) }}/api/ai/status"  # Issue #956: HTTPS:8443
         method: GET
         timeout: 30
         validate_certs: false
@@ -764,7 +764,7 @@
           - ""
           - "Service Endpoints:"
           - "  Frontend: http://{{ hostvars[_frontend_host[0]]['ansible_host'] | default('127.0.0.1') if _frontend_host | length > 0 else '(none)' }}"
-          - "  Backend: https://{{ hostvars[_backend_host[0]]['ansible_host'] | default('127.0.0.1') if _backend_host | length > 0 else '(none)' }}:{{ backend_nginx_port | default(8443) }}/api"
+          - "  Backend: https://{{ hostvars[_backend_host[0]]['ansible_host'] | default('127.0.0.1') if _backend_host | length > 0 else '(none)' }}:{{ (hostvars[_backend_host[0]]['backend_nginx_port'] | default(8443)) if _backend_host | length > 0 else 8443 }}/api"
           - "  Database: redis://{{ hostvars[_database_host[0]]['ansible_host'] | default('127.0.0.1') if _database_host | length > 0 else '(none)' }}:{{ redis_port | default(6379) }}"
           - "  AI Stack: http://{{ hostvars[_ai_host[0]]['ansible_host'] | default('127.0.0.1') if _ai_host | length > 0 else '(none)' }}:{{ ai_stack_port }}"
           - "  NPU Worker: http://{{ hostvars[_npu_host[0]]['ansible_host'] | default('127.0.0.1') if _npu_host | length > 0 else '(none)' }}:{{ npu_port | default(8081) }}"

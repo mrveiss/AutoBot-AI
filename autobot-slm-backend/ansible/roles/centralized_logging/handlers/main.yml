@@ -13,10 +13,8 @@
   ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
   vars:
     restart_unit_name: loki
-  become: true
 
 - name: restart promtail
   ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
   vars:
     restart_unit_name: promtail
-  become: true

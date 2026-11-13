@@ -9,7 +9,6 @@
   vars:
     restart_unit_name: autobot-vnc
     restart_unit_tolerate_failure: true
-  become: true
   # (#2872) Intentional: VNC service may not be deployed on all browser
   # nodes (install_vnc flag).  Handler is notified from tasks that are
   # conditionally included, so it must tolerate the unit being absent.
@@ -20,7 +19,6 @@
   vars:
     restart_unit_name: autobot-playwright
     restart_unit_tolerate_failure: true
-  become: true
   # (#2872) Intentional: Playwright service may not be deployed yet when
   # the handler fires during initial provisioning.
 

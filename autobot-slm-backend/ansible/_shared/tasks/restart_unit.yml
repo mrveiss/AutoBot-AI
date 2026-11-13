@@ -15,7 +15,9 @@
 #   restart_unit_name              the unit to restart (required)
 #   restart_unit_tolerate_failure  true when the unit may legitimately be absent (#2872); default false
 #   restart_unit_daemon_reload     true to reload unit files first; default false
-# The caller supplies `become`, `when` and tags (include_tasks `apply:`).
+# Privilege escalation is set on the two tasks below. The caller must NOT put `become` on its include_tasks:
+# ansible-core 2.17 rejects it (`TaskInclude.preprocess_data`: "'become' is not a valid attribute for a
+# TaskInclude"). The caller supplies `when` and tags (include_tasks `apply:`).
 
 - name: "Restart | Clear a start-limit park before restarting {{ restart_unit_name }} (#20772)"
   ansible.builtin.command:
