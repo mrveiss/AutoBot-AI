@@ -48,4 +48,19 @@ describe('useStaleResults (#17982)', () => {
     await nextTick()
     expect(stale.flags).toEqual({ duplicates: false, dependencies: false, importTree: false })
   })
+
+  it('a cached body for a source that is no longer selected neither sets nor clears the flag', async () => {
+    const source = ref('a')
+    const stale = useStaleResults(() => source.value)
+    source.value = 'b'
+    await nextTick()
+    stale.markFromCached('duplicates', { stale: true }, 'a') // a late answer for the previous source
+    expect(stale.flags.duplicates).toBe(false)
+    stale.markFromCached('duplicates', { stale: true }, 'b')
+    stale.markFromCached('duplicates', { stale: false }, 'a')
+    stale.clear('duplicates', 'a')
+    expect(stale.flags.duplicates).toBe(true)
+    stale.clear('duplicates', 'b')
+    expect(stale.flags.duplicates).toBe(false)
+  })
 })

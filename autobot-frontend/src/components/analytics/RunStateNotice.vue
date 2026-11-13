@@ -8,7 +8,8 @@
   so: how the newest run ended, that the findings are partial, and when the last run that did
   finish completed. A run still in progress is "updating", not a failure. Shown when the
   backend flags the run `partial`; nothing without a run record (data indexed before records
-  existed) and nothing for a completed run.
+  existed) and nothing for a completed run. A run state that could not be read is its own
+  notice with a retry: it is not "no run record", so the findings are not shown as complete.
 -->
 <template>
   <BaseAlert
@@ -20,18 +21,34 @@
   >
     <p v-for="line in lines" :key="line">{{ line }}</p>
   </BaseAlert>
+  <BaseAlert
+    v-else-if="readFailed"
+    variant="warning"
+    :title="t('analytics.codebase.runState.unreadTitle')"
+    :message="t('analytics.codebase.runState.unread')"
+    bordered
+    data-testid="run-state-unread-notice"
+  >
+    <template #actions>
+      <BaseButton variant="secondary" size="sm" data-testid="run-state-retry" @click="retry">
+        {{ t('analytics.codebase.runState.retry') }}
+      </BaseButton>
+    </template>
+  </BaseAlert>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, BaseButton } from '@autobot/ui'
 import { createDateFormatter } from '@/utils/formatHelpers'
 import { injectRunState } from '@/composables/analytics/useRunState'
 
 const { t, locale } = useI18n()
 const runState = injectRunState()
 const run = computed(() => runState?.run.value ?? null)
+const readFailed = computed(() => runState?.readFailed.value ?? false)
+const retry = () => { void runState?.loadRunState() }
 const formatWhen = createDateFormatter({ locale: () => locale.value })
 
 const isRunning = computed(() => run.value?.status === 'running')

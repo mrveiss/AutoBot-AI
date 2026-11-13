@@ -13,9 +13,12 @@ from fastapi.responses import JSONResponse
 
 from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-from ..run_status import run_response_fields
+from ..run_status import describe_run_state, run_fields
+from .store_state import store_unavailable
 
+logger = get_logger(__name__)
 router = APIRouter()
 
 
@@ -34,5 +37,12 @@ async def get_index_run_state(source_id: SourceIdQuery):
     storage may be from an interrupted run and must be shown labelled.
     A run left ``running`` past its hard timeout is reported ``abandoned``.
     """
-    fields = await run_response_fields(require_source_id(source_id, "run state"))
-    return JSONResponse({"status": "success", "source_id": source_id, **fields})
+    source = require_source_id(source_id, "run state")
+    # A record that cannot be read answers 503, never ``run: null``: this route serves nothing
+    # but the run state, and "no run" would clear a partial label the reader already shows.
+    try:
+        run = await describe_run_state(source, strict=True)
+    except Exception as read_error:
+        logger.error("run state: the run record could not be read: %s", read_error)
+        raise store_unavailable() from read_error
+    return JSONResponse({"status": "success", "source_id": source_id, **run_fields(run)})

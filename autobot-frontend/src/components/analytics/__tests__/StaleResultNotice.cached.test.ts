@@ -8,7 +8,7 @@
  * the real fetchers load the cached routes, the real notice reads what they flagged.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { computed, defineComponent, h, ref } from 'vue'
+import { computed, defineComponent, h, nextTick, ref } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
@@ -29,15 +29,15 @@ const NOTICE = '[data-testid="stale-result-notice"]'
 
 type Fetchers = ReturnType<typeof useAnalyticsDataFetchers>
 
-function host() {
+function host(source = ref('s1')) {
   const captured: { fetchers?: Fetchers } = {}
   const Host = defineComponent({
     setup() {
       captured.fetchers = useAnalyticsDataFetchers({
         rootPath: ref('/repo'),
-        sourceIdParam: computed(() => 'source_id=s1'),
-        sourceIdQuery: computed(() => ({ source_id: 's1' })),
-        withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=s1`,
+        sourceIdParam: computed(() => `source_id=${source.value}`),
+        sourceIdQuery: computed(() => ({ source_id: source.value })),
+        withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=${source.value}`,
         t: (key: string) => key,
         showToast: vi.fn(),
         notify: vi.fn(),
@@ -91,6 +91,26 @@ describe('stale cached results (#17982)', () => {
     fetchWithAuth.mockResolvedValue(respond({ status: 'success', from_cache: true, stale: false, duplicates: [ROW] }))
     const { wrapper, fetchers } = host()
     await fetchers.loadCachedDuplicates()
+    await flushPromises()
+    expect(wrapper.find(NOTICE).exists()).toBe(false)
+  })
+
+  it('a stale cached answer for the previous source that arrives after a switch does not flag the new source', async () => {
+    const source = ref('s1')
+    let release: (response: unknown) => void = () => {}
+    fetchWithAuth.mockImplementation((url: string) =>
+      url.includes('/duplicates/cached')
+        ? new Promise((resolve) => { release = resolve }) // s1's answer is held until after the switch
+        : Promise.resolve(respond({ status: 'success', partial: false, run: null })),
+    )
+    const { wrapper, fetchers } = host(source)
+    const late = fetchers.loadCachedDuplicates()
+    await flushPromises()
+    source.value = 's2'
+    await nextTick()
+    await flushPromises()
+    release(respond({ status: 'success', from_cache: true, stale: true, duplicates: [ROW] }))
+    await late // resolves once the held answer has been handled
     await flushPromises()
     expect(wrapper.find(NOTICE).exists()).toBe(false)
   })

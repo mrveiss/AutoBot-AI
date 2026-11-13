@@ -386,6 +386,37 @@ async def test_a_clean_exit_with_a_completed_task_backstops_the_record(collectio
 
 
 @pytest.mark.asyncio
+async def test_a_clean_exit_with_a_failed_task_backstops_the_record_with_a_reader_safe_reason(collection, monkeypatch):
+    """Pre-fix only ``completed`` was recovered: the record stayed ``running`` and later read ``abandoned``."""
+    await record_run_started("src", "run-2")  # the worker's own record write was lost
+    failed = {"status": "failed", "error": "/secret/path: boom"}
+    await _supervise(monkeypatch, {}, failed, proc=_ExitedProc(0))
+    state = await _state()
+    assert (state["status"], state["partial"], state["reason"]) == ("failed", True, "indexing failed")
+
+
+@pytest.mark.asyncio
+async def test_a_non_zero_exit_with_a_failed_task_backstops_the_record_and_keeps_a_reason_already_recorded(collection):
+    marked = []
+    failed = {"status": "failed", "error": "/secret/path: boom"}
+
+    async def crash(run_id):
+        with patch.object(subprocess_runner, "_load_task_from_redis", AsyncMock(return_value=failed)):
+            await subprocess_runner._handle_subprocess_crash(
+                run_id, 1, lambda t, e: marked.append(e), AsyncMock(), source_id="src"
+            )
+        return await _state()
+
+    await record_run_started("src", "run-2")  # the worker's own record write was lost
+    state = await crash("run-2")
+    assert (state["status"], state["reason"]) == ("failed", "indexing failed")
+    await record_run_started("src", "run-3")
+    await record_run_finished("src", "run-3", "failed", "indexing failed (ValueError)")  # the worker's write landed
+    assert (await crash("run-3"))["reason"] == "indexing failed (ValueError)"  # the first terminal status is final
+    assert marked == []  # a task already terminal is never re-marked
+
+
+@pytest.mark.asyncio
 async def test_a_late_completed_from_an_older_run_does_not_make_a_killed_newer_run_complete(collection):
     await record_run_started("src", "run-x")
     await record_run_started("src", "run-y")

@@ -293,19 +293,25 @@ def _present(meta: dict, hard_timeout: float, now: datetime) -> dict:
 
 
 async def describe_run_state(
-    source_id: str | None, hard_timeout: float = _SUBPROCESS_HARD_TIMEOUT, now: datetime | None = None
+    source_id: str | None,
+    hard_timeout: float = _SUBPROCESS_HARD_TIMEOUT,
+    now: datetime | None = None,
+    strict: bool = False,
 ) -> dict | None:
     """The newest run's state, or ``None`` when no run was ever recorded for the source.
 
     One read, no write.  ``partial`` is true when the newest run did not
     complete, i.e. the findings in storage may come from an interrupted run.
     ``last_completed_at`` is when the last complete run finished (empty if none
-    ever did).  A naive ``now`` is read as UTC.
+    ever did).  A naive ``now`` is read as UTC.  ``strict`` raises when the
+    collection cannot be opened, where the default reads that as "no run".
     """
     if not source_id:
         return None
     collection = await get_code_collection_async()
     if collection is None:
+        if strict:
+            raise RuntimeError("code collection unavailable")
         return None
     meta = await _read(collection, source_id)
     return _present(meta, hard_timeout, _as_utc(now) if now else _now()) if meta else None
@@ -318,12 +324,18 @@ async def run_response_fields(source_id: str | None) -> dict:
     indexed) is ``run: None, partial: False``: nothing says its results are
     incomplete, so none is claimed.  A record that cannot be read is reported
     the same way and logged; it must not fail the findings it only labels.
+    The run-state route, which serves nothing else, reads strictly instead.
     """
     try:
         run = await describe_run_state(source_id)
     except Exception as exc:
         logger.warning("Run state unreadable for %s (#21003): %s", source_id, exc)
         run = None
+    return run_fields(run)
+
+
+def run_fields(run: dict | None) -> dict:
+    """The ``partial``/``run`` pair for a run state already read (``None``: no run record)."""
     return {"partial": bool(run and run["partial"]), "run": run}
 
 
@@ -334,16 +346,22 @@ def with_run_state(handler):
     body is encoded once.  Anything else the handler returns (an error response, a
     redirect, a download) is passed through untouched, ``background`` included.
     The handler must receive ``source_id`` (by name or by position).
+
+    The run state is read BEFORE the handler reads the findings.  A run records
+    ``completed`` only after its last write, so a state read first can only err
+    towards ``partial``; read afterwards, a run that completed in between would
+    label findings from before its last writes as complete.
     """
     signature = inspect.signature(handler)
 
     @functools.wraps(handler)
     async def wrapper(*args, **kwargs):
+        source_id = signature.bind_partial(*args, **kwargs).arguments.get("source_id")
+        fields = await run_response_fields(source_id)
         result = await handler(*args, **kwargs)
         if not isinstance(result, dict):
             return result
-        source_id = signature.bind_partial(*args, **kwargs).arguments.get("source_id")
-        return JSONResponse({**result, **await run_response_fields(source_id)})
+        return JSONResponse({**result, **fields})
 
     wrapper.labels_run_state = True  # functools.wraps in the outer decorators carries it to the route
     return wrapper

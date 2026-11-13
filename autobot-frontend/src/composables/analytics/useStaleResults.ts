@@ -21,9 +21,13 @@ export type StaleResultKind = 'duplicates' | 'dependencies' | 'importTree'
 
 export interface StaleResultsHandle {
   flags: Record<StaleResultKind, boolean>
-  /** Set the flag from a cached-route body: stale only when the route said `stale: true`. */
-  markFromCached: (kind: StaleResultKind, body: unknown) => void
-  clear: (kind: StaleResultKind) => void
+  /**
+   * Set the flag from a cached-route body: stale only when the route said `stale: true`.
+   * `forSource` is the source key the request was made for (default: the current one): a body
+   * for a source that is no longer selected changes nothing, as in `useRunState`.
+   */
+  markFromCached: (kind: StaleResultKind, body: unknown, forSource?: string) => void
+  clear: (kind: StaleResultKind, forSource?: string) => void
 }
 
 export const STALE_RESULTS_KEY: InjectionKey<StaleResultsHandle> = Symbol('codebase-stale-results')
@@ -36,11 +40,12 @@ export function useStaleResults(currentSource: () => string): StaleResultsHandle
   const flags = reactive<Record<StaleResultKind, boolean>>({ duplicates: false, dependencies: false, importTree: false })
   const handle: StaleResultsHandle = {
     flags,
-    markFromCached: (kind, body) => {
+    markFromCached: (kind, body, forSource = currentSource()) => {
+      if (forSource !== currentSource()) return
       flags[kind] = !!body && typeof body === 'object' && (body as { stale?: unknown }).stale === true
     },
-    clear: (kind) => {
-      flags[kind] = false
+    clear: (kind, forSource = currentSource()) => {
+      if (forSource === currentSource()) flags[kind] = false
     },
   }
   watch(currentSource, () => {

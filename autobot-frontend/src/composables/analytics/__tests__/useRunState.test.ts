@@ -21,7 +21,7 @@ vi.mock('@/config/AppConfig.js', () => ({
 }))
 
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { useRunState, type CodebaseRunState } from '../useRunState'
+import { endedRunOutcome, useRunState, type CodebaseRunState } from '../useRunState'
 
 const mockedFetch = vi.mocked(fetchWithAuth)
 
@@ -89,6 +89,80 @@ describe('useRunState (#21003)', () => {
     expect(state.run.value).toBeNull()
   })
 
+  describe('a stale `running` snapshot (the requests are not ordered)', () => {
+    const RUNNING = { ...KILLED, status: 'running', reason: '', finished_at: '' }
+
+    it('does not replace the terminal state of the same run', () => {
+      const state = useRunState(withSource, () => 'autobot')
+      state.applyRunFields({ run: KILLED })
+      state.applyRunFields({ status: 'success', partial: true, run: RUNNING }) // read before the kill, arrived after
+      expect(state.run.value).toEqual(KILLED)
+    })
+
+    it('control: `running` of another run, and `running` first, are applied', () => {
+      const state = useRunState(withSource, () => 'autobot')
+      state.applyRunFields({ run: RUNNING })
+      expect(state.run.value?.status).toBe('running')
+      state.applyRunFields({ run: KILLED })
+      expect(state.run.value).toEqual(KILLED)
+      state.applyRunFields({ run: { ...RUNNING, run_id: 'r3' } }) // a new run started
+      expect(state.run.value?.run_id).toBe('r3')
+    })
+  })
+
+  describe('a failed read', () => {
+    const failing = () => new Response('{}', { status: 503 })
+
+    it('is exposed, keeps what was known, and is cleared by the next answer', async () => {
+      const state = useRunState(withSource, () => 'autobot')
+      state.applyRunFields({ run: KILLED })
+      mockedFetch.mockResolvedValueOnce(failing())
+      await state.loadRunState()
+      expect(state.readFailed.value).toBe(true)
+      expect(state.run.value).toEqual(KILLED) // a failure is not "no run record"
+      mockedFetch.mockResolvedValueOnce(jsonResponse({ status: 'success', partial: true, run: KILLED }))
+      await state.loadRunState() // the retry
+      expect(state.readFailed.value).toBe(false)
+    })
+
+    it('differs from a read that answered "no run record"', async () => {
+      const state = useRunState(withSource, () => 'autobot')
+      mockedFetch.mockResolvedValueOnce(jsonResponse({ status: 'success', partial: false, run: null }))
+      await state.loadRunState()
+      expect([state.run.value, state.readFailed.value]).toEqual([null, false])
+      mockedFetch.mockResolvedValueOnce(failing())
+      await state.loadRunState()
+      expect([state.run.value, state.readFailed.value]).toEqual([null, true])
+    })
+
+    it('a results body naming a run clears it; one with run: null (a label that may itself be unread) does not', async () => {
+      const state = useRunState(withSource, () => 'autobot')
+      mockedFetch.mockResolvedValueOnce(failing())
+      await state.loadRunState()
+      state.applyRunFields({ status: 'success', partial: false, run: null })
+      expect(state.readFailed.value).toBe(true)
+      state.applyRunFields({ status: 'success', partial: true, run: KILLED })
+      expect(state.readFailed.value).toBe(false)
+    })
+  })
+
+  describe('endedRunOutcome: how a job that left the task slot ended', () => {
+    const of = (over: Partial<CodebaseRunState>) => ({ ...KILLED, ...over })
+
+    it('reads completed, cancelled and the failures off the record of that job', () => {
+      expect(endedRunOutcome(of({ status: 'completed', reason: '' }), 'r2')).toEqual({ status: 'completed' })
+      expect(endedRunOutcome(of({ status: 'cancelled' }), 'r2')).toEqual({ status: 'cancelled' })
+      expect(endedRunOutcome(KILLED, 'r2')).toEqual({ status: 'failed', error: KILLED.reason })
+      expect(endedRunOutcome(of({ status: 'abandoned', reason: '' }), null)).toEqual({ status: 'failed', error: 'abandoned' })
+    })
+
+    it('says nothing for no record, a run still going, or another run than the job', () => {
+      expect(endedRunOutcome(null, 'r2')).toBeNull()
+      expect(endedRunOutcome(of({ status: 'running' }), 'r2')).toBeNull()
+      expect(endedRunOutcome(of({ status: 'completed' }), 'other')).toBeNull()
+    })
+  })
+
   describe('source switch', () => {
     const KILLED_B = { ...KILLED, run_id: 'rb' }
     const scopedBy = (source: { value: string }) => (url: string) => `${url}?source_id=${source.value}`
@@ -144,6 +218,7 @@ describe('useRunState (#21003)', () => {
       await nextTick()
       await flushPromises()
       expect(state.run.value).toBeNull()
+      expect(state.readFailed.value).toBe(true) // ... and the page can say the new source's state is unknown
     })
   })
 })
