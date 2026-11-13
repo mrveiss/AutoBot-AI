@@ -9,9 +9,12 @@ started_at is older than the per-agent timeout (default 30 minutes).
 For each stuck run:
   1. Marks the run status = timed_out
   2. Calls adapter.cancel() (best-effort)
-  3. Deletes the Redis checkout lock llc:checkout:{work_item_id} while it names the agent
-  4. Sets the work item status = blocked
-  5. Creates a recovery work item (type=bug) assigned to the agent's manager
+  3. Releases every checkout the run made (keyed on checkout_run_id; its Redis fence is dropped
+     once the transaction commits), one activity entry per item. An item still in progress is set to
+     blocked by that same release (its activity entry records the status change); an item in any
+     other status keeps its status
+  4. (done by step 3: there is one release rule, parameterised only by where an unfinished item goes)
+  5. Creates ONE recovery work item (type=bug) assigned to the agent's manager, naming every released item
   6. Writes an activity log entry (first of all, in fact: see ``_recover``)
 
 Each run recovers inside its own SAVEPOINT. A failure, the audit write included, undoes that
@@ -22,14 +25,13 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Sequence
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_holder
 from user_management.database import get_async_session_factory
 
 from ..models.activity import ActorType
@@ -40,6 +42,7 @@ from ..models.work_item import LLCWorkItem
 from ..services.accessors import get_work_item_service
 from ..services.activity_log import LLCActivityLogService
 from ..services.actor import audit
+from ..services.run_checkouts import ReleasedCheckout, ReleaseWhy, drop_released_fences, release_checkouts_for_run
 from ..services.work_item_hierarchy import HierarchyViolation, parent_if_allowed
 from .base import PollLoopScheduler
 from .dispatch_gate import agent_ref_block_reason
@@ -47,6 +50,20 @@ from .dispatch_gate import agent_ref_block_reason
 logger = get_logger(__name__)
 
 _DEFAULT_TIMEOUT_MINUTES = 30
+
+#: The ``reason`` on the run's activity entry and on each checkout released because the run timed out.
+LIVENESS_REASON = "liveness_timeout"
+
+#: Unlike a cancel or a stall, a run that timed out needs a person to look at what it was doing, so the monitor
+#: parks the unfinished items it releases as BLOCKED, visible and recoverable, instead of offering them again.
+_PARKED_AS = WorkItemStatus.BLOCKED
+
+
+def _liveness_release(log: LLCActivityLogService) -> ReleaseWhy:
+    """Why the monitor releases a stuck run's checkouts: the system, on a liveness timeout."""
+    return ReleaseWhy(reason=LIVENESS_REASON, source="liveness_monitor", log=log, then=_PARKED_AS)
+
+
 _POLL_INTERVAL_SECONDS = 60
 
 
@@ -80,11 +97,12 @@ class LivenessMonitor(PollLoopScheduler):
                 run_id = run.id  # read while loaded: the rollback below expires the run it undoes
                 try:
                     async with session.begin_nested():
-                        await self._recover(session, run)
+                        released = await self._recover(session, run)
                 except Exception:
                     logger.exception("Recovery failed for run %s — rolled back to its savepoint", run_id)
                     continue
                 await session.commit()  # a failed commit fails the scan; the loop logs it and retries
+                await drop_released_fences(released)  # only once the DB release is durable
 
     async def _find_stuck_runs(self, session: AsyncSession) -> list:
         """Return all runs where status=running and started_at is too old."""
@@ -104,8 +122,11 @@ class LivenessMonitor(PollLoopScheduler):
         )
         return list(result.scalars().all())
 
-    async def _recover(self, session: AsyncSession, run: LLCHeartbeatRun) -> None:
-        """Perform the six-step recovery protocol for a single stuck run."""
+    async def _recover(self, session: AsyncSession, run: LLCHeartbeatRun) -> list[ReleasedCheckout]:
+        """Perform the six-step recovery protocol for a single stuck run.
+
+        Returns the checkouts it released, whose Redis fences the caller drops once the transaction commits.
+        """
         run_id = str(run.id)
         agent_id = run.agent_id
         company_id = str(run.company_id)
@@ -117,7 +138,7 @@ class LivenessMonitor(PollLoopScheduler):
                 run_id,
                 agent_id,
             )
-            return
+            return []
 
         logger.warning(
             "LivenessMonitor: run %s for agent %s is stuck (started_at=%s) — recovering",
@@ -138,17 +159,15 @@ class LivenessMonitor(PollLoopScheduler):
         # Step 2: Call adapter.cancel() — best-effort, swallow all errors
         await self._cancel_adapter(agent_id, run_id)
 
-        # Step 3: Release Redis checkout lock
-        if run.work_item_id:
-            await self._release_checkout_lock(str(run.work_item_id), str(agent_id))
+        # Step 3: Release every checkout the run made (DB row; its Redis fence follows the commit)
+        released = await release_checkouts_for_run(session, run, _liveness_release(self._activity_log))
 
-        # Step 4: Set work item status = blocked
-        work_item = None
-        if run.work_item_id:
-            work_item = await self._block_work_item(session, str(run.work_item_id))
-
-        # Step 5: Create recovery work item
-        await self._create_recovery_item(session, run, work_item, company_id, agent_id)
+        # Step 5: one recovery item for the run, naming every item released (step 4 is part of the release)
+        work_items = [r.item for r in released]
+        await self._create_recovery_item(
+            session, run, work_items[0] if work_items else None, company_id, agent_id, released_items=work_items
+        )
+        return released
 
     async def _cancel_adapter(self, agent_id: str, run_id: str) -> None:
         try:
@@ -160,24 +179,6 @@ class LivenessMonitor(PollLoopScheduler):
         except Exception:
             logger.debug("adapter.cancel() swallowed for agent %s run %s", agent_id, run_id)
 
-    async def _release_checkout_lock(self, work_item_id: str, agent_id: str) -> None:
-        """Drop the fence only while it still names the stuck run's agent."""
-        redis = await get_async_redis_client()
-        if redis is None:
-            return
-        try:
-            await delete_if_holder(redis, f"llc:checkout:{work_item_id}", agent_id)
-        except Exception:
-            logger.debug("Redis DEL llc:checkout:%s failed (swallowed)", work_item_id)
-
-    async def _block_work_item(self, session: AsyncSession, work_item_id: str) -> Optional[LLCWorkItem]:
-        result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == work_item_id))
-        item = result.scalar_one_or_none()
-        if item is not None:
-            item.status = WorkItemStatus.BLOCKED
-            session.add(item)
-        return item
-
     async def _create_recovery_item(
         self,
         session: AsyncSession,
@@ -185,13 +186,14 @@ class LivenessMonitor(PollLoopScheduler):
         work_item: Optional[LLCWorkItem],
         company_id: str,
         agent_id: str,
+        released_items: Sequence[LLCWorkItem] = (),
     ) -> None:
         identifier = work_item.identifier if work_item else run_id_label(str(run.id))
         title = f"Recovery: agent {agent_id} timed out on {identifier}"
         description = (
             f"Automatic recovery item. Run {run.id} for agent {agent_id} "
             f"exceeded the liveness timeout and was marked timed_out. "
-            f"Work item {identifier} has been set to blocked. "
+            f"{_released_sentence(released_items or ([work_item] if work_item else []))}"
             f"Investigate and unblock manually."
         )
         svc = get_work_item_service()
@@ -257,8 +259,16 @@ class LivenessMonitor(PollLoopScheduler):
             entity_type="heartbeat_run",
             entity_id=str(run.id),
             after={"status": "timed_out"},
-            metadata={"agent_id": str(agent_id), "reason": "liveness_timeout"},
+            metadata={"agent_id": str(agent_id), "reason": LIVENESS_REASON},
         )
+
+
+def _released_sentence(items: Sequence[LLCWorkItem]) -> str:
+    """Every work item the run held, and the state each was left in: blocked, or unchanged if it had moved on."""
+    if not items:
+        return ""
+    named = ", ".join(f"{i.identifier} ({WorkItemStatus(i.status).value})" for i in items)
+    return f"Work items released from the run: {named}. "
 
 
 async def _recovery_project(session: AsyncSession, work_item: Optional[LLCWorkItem], company_id: str) -> Optional[str]:
