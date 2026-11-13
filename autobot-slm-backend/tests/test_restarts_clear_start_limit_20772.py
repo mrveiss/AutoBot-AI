@@ -16,11 +16,11 @@ from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._ansible_restart_unit import is_direct_restart, shared_include
 
 _ANSIBLE = Path(__file__).resolve().parents[1] / "ansible"
 _PLAYBOOK = _ANSIBLE / "playbooks" / "update-all-nodes.yml"
 _SHARED = _ANSIBLE / "_shared" / "tasks" / "restart_unit.yml"
-_SHARED_SUFFIX = "_shared/tasks/restart_unit.yml"
 _ROLE_KEYS = ("ansible.builtin.include_role", "include_role", "ansible.builtin.import_role", "import_role")
 
 
@@ -60,17 +60,6 @@ def _mappings(node):
             yield from _mappings(item)
 
 
-def _is_direct_restart(task: dict) -> bool:
-    spec = task.get("systemd") or task.get("ansible.builtin.systemd")
-    return isinstance(spec, dict) and spec.get("state") == "restarted"
-
-
-def _shared_include(task: dict):
-    inc = task.get("ansible.builtin.include_tasks") or task.get("include_tasks")
-    target = inc.get("file") if isinstance(inc, dict) else inc
-    return inc if isinstance(target, str) and target.endswith(_SHARED_SUFFIX) else None
-
-
 def _updater_roles() -> list:
     found = set()
     for node in _mappings(_load(_PLAYBOOK)):
@@ -98,8 +87,8 @@ def test_the_shared_task_clears_the_park_before_it_restarts() -> None:
 
 def test_the_updater_playbook_restarts_only_through_the_shared_task() -> None:
     mappings = list(_mappings(_load(_PLAYBOOK)))
-    shared = [t for t in mappings if _shared_include(t)]
-    direct = [t.get("name") for t in mappings if _is_direct_restart(t)]
+    shared = [t for t in mappings if shared_include(t)]
+    direct = [t.get("name") for t in mappings if is_direct_restart(t)]
     assert len(shared) >= 10, "control: the finder sees the playbook's restart tasks"
     assert not direct, f"these restarts do not clear a start-limit park: {direct}"
 
@@ -107,15 +96,15 @@ def test_the_updater_playbook_restarts_only_through_the_shared_task() -> None:
 def test_every_updater_role_handler_restarts_only_through_the_shared_task() -> None:
     files = _handler_files()
     handlers = [h for f in files for h in _load(f) if isinstance(h, dict)]
-    shared = [h for h in handlers if _shared_include(h)]
-    direct = [h.get("name") for h in handlers if _is_direct_restart(h)]
+    shared = [h for h in handlers if shared_include(h)]
+    direct = [h.get("name") for h in handlers if is_direct_restart(h)]
     assert len(shared) >= 25, "control: the finder sees the role handlers' restarts"
     assert not direct, f"these handlers do not clear a start-limit park: {direct}"
 
 
 def test_every_shared_include_names_its_unit() -> None:
     sources = _all_yaml()
-    includes = [t for src in sources for t in _mappings(_load(src)) if _shared_include(t)]
+    includes = [t for src in sources for t in _mappings(_load(src)) if shared_include(t)]
     assert includes
     nameless = [t.get("name") for t in includes if not (t.get("vars") or {}).get("restart_unit_name")]
     assert not nameless, f"restart includes without restart_unit_name: {nameless}"
@@ -151,7 +140,7 @@ def _tagged_includes_without_apply() -> list:
     for path in _all_yaml():
         rel = path.relative_to(_ANSIBLE).as_posix()
         for task, in_handler in _mappings_in_context(_load(path), "handlers" in path.relative_to(_ANSIBLE).parts):
-            inc = _shared_include(task)
+            inc = shared_include(task)
             if inc is None or in_handler or "tags" not in task:
                 continue
             if _lacks_apply(task, inc):
@@ -167,7 +156,7 @@ def test_the_tag_check_sees_a_missing_apply() -> None:
     """Control: the finder is not blind; it reports a fixture include whose tags are not applied."""
     fixture = "- ansible.builtin.include_tasks: _shared/tasks/restart_unit.yml\n  tags: [restart]\n"
     tasks = list(_mappings_in_context(yaml.load(fixture, Loader=_Loader)))  # noqa: S506
-    assert [_lacks_apply(t, _shared_include(t)) for t, _ in tasks if _shared_include(t)] == [True]
+    assert [_lacks_apply(t, shared_include(t)) for t, _ in tasks if shared_include(t)] == [True]
 
 
 def test_the_loader_reads_every_document_of_a_multi_document_file(tmp_path: Path) -> None:
@@ -186,8 +175,8 @@ def test_the_self_update_socket_restart_goes_through_the_shared_task() -> None:
     """#21426: the socket restart in the manager role is the same class of restart as the handlers."""
     path = _ANSIBLE / "roles" / "slm_manager" / "tasks" / "bind_self_update_socket.yml"
     mappings = list(_mappings(_load(path)))
-    assert [t.get("name") for t in mappings if _is_direct_restart(t)] == []
-    shared = [t for t in mappings if _shared_include(t)]
+    assert [t.get("name") for t in mappings if is_direct_restart(t)] == []
+    shared = [t for t in mappings if shared_include(t)]
     assert len(shared) == 1
     assert shared[0]["vars"]["restart_unit_name"] == "{{ slm_self_update_socket_service }}.socket"
     assert shared[0]["ansible.builtin.include_tasks"]["apply"]["tags"] == ["slm", "service", "systemd"]
@@ -321,7 +310,7 @@ def test_exactly_the_sites_that_tolerated_failure_still_tolerate_it() -> None:
     found = []
     for path in _all_yaml():
         for node in _mappings(_load(path)):
-            vars_ = node.get("vars") if _shared_include(node) else None
+            vars_ = node.get("vars") if shared_include(node) else None
             if isinstance(vars_, dict) and vars_.get("restart_unit_tolerate_failure") is True:
                 found.append((path.relative_to(_ANSIBLE).as_posix(), vars_["restart_unit_name"]))
     assert sorted(found) == sorted(_TOLERANT)

@@ -29,6 +29,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from repo_tests._ansible_restart_unit import restarts_unit
 
 yaml = pytest.importorskip("yaml")
 
@@ -91,12 +92,7 @@ def test_backend_unit_is_rendered_before_the_restart() -> None:
             if isinstance(inc, dict) and inc.get("name") == "backend":
                 if inc.get("tasks_from") == "unit_only":
                     render_idx = i
-            svc = task.get("systemd") or task.get("ansible.builtin.systemd") or {}
-            shared = (task.get("vars") or {}) if "restart_unit.yml" in str(task) else {}  # #20772
-            if restart_idx is None and (
-                (isinstance(svc, dict) and svc.get("name") == "autobot-backend" and svc.get("state") == "restarted")
-                or shared.get("restart_unit_name") == "autobot-backend"
-            ):
+            if restart_idx is None and restarts_unit(task, "autobot-backend"):  # #20772: either shape
                 restart_idx = i
         if render_idx is None and restart_idx is None:
             continue

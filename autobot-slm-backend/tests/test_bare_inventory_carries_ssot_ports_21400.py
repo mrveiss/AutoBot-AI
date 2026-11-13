@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 
 from autobot_shared.ssot_config import config
+from autobot_shared.testfile_names import is_test_filename
 from services import ansible_utils
 from services.ansible_utils import bare_inventory_args
 from services.deployment import DeploymentService
@@ -93,7 +94,7 @@ def test_no_command_builder_spells_a_bare_inventory_outside_the_shared_builder()
     offenders = []
     for path in sorted(_ROOT.rglob("*.py")):
         rel = path.relative_to(_ROOT).as_posix()
-        if rel.startswith(("tests/", "venv/")) or "/tests/" in rel or rel.endswith("_test.py"):
+        if rel.startswith(("tests/", "venv/")) or "/tests/" in rel or is_test_filename(rel):
             continue
         if rel == "services/ansible_utils.py":
             continue

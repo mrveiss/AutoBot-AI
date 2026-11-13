@@ -35,6 +35,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from repo_tests._ansible_restart_unit import restarted_unit
 
 yaml = pytest.importorskip("yaml")
 
@@ -83,14 +84,9 @@ def _systemd_restart_targets(tasks):
     registered = _registered_loops(tasks)
     targets = set()
     for task in tasks:
-        spec = task.get("systemd") or task.get("ansible.builtin.systemd")
-        if not isinstance(spec, dict) or spec.get("state") != "restarted":
-            # #20772: a restart is the shared task file, the unit named in its vars.
-            shared = _shared_restart_vars(task)
-            if shared is None:
-                continue
-            spec = {"name": shared.get("restart_unit_name", "")}
-        name = spec.get("name", "")
+        name = restarted_unit(task)  # #20772: either shape, the shared file names its unit in vars
+        if name is None:
+            continue
         if "{{" in str(name):
             loop = task.get("loop")
             if isinstance(loop, list):
@@ -100,15 +96,6 @@ def _systemd_restart_targets(tasks):
         else:
             targets.add(str(name))
     return targets
-
-
-def _shared_restart_vars(task):
-    """The vars of a task that includes the shared restart file (#20772), else None."""
-    inc = task.get("ansible.builtin.include_tasks") or task.get("include_tasks")
-    target = inc.get("file") if isinstance(inc, dict) else inc
-    if isinstance(target, str) and target.endswith("_shared/tasks/restart_unit.yml"):
-        return task.get("vars") or {}
-    return None
 
 
 def _registered_loops(tasks):

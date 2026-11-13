@@ -68,6 +68,16 @@ def _code(text: str) -> str:
     return "\n".join(strip_trailing_comment(line, ("#",)) for line in text.splitlines())
 
 
+def _reads_playbook_dir(text: str) -> bool:
+    """True if a task reads ``playbook_dir``; a task ``name:`` that says it does not is a mention."""
+    return any("playbook_dir" in line for line in _code(text).splitlines() if not re.match(r"\s*-?\s*name:", line))
+
+
+def test_contrast_a_task_name_mentioning_playbook_dir_is_not_a_read() -> None:
+    assert not _reads_playbook_dir('- name: "Resolve the repo root without playbook_dir (#20509)"\n  debug: {}')
+    assert _reads_playbook_dir('  root: "{{ playbook_dir | dirname }}"')
+
+
 def test_no_shared_task_hides_a_missing_role_path_behind_playbook_dir() -> None:
     bad = [
         p.name
@@ -90,7 +100,7 @@ def test_only_the_playbook_imported_task_reads_playbook_dir_and_it_proves_the_tr
     users = sorted(
         p.name
         for p in REACH.examined(root)
-        if str(p.relative_to(root)).startswith(_SHARED) and "playbook_dir" in _code(p.read_text(encoding="utf-8"))
+        if str(p.relative_to(root)).startswith(_SHARED) and _reads_playbook_dir(p.read_text(encoding="utf-8"))
     )
     assert users == [_PLAYBOOK_ANCHORED]
     text = (root / _SHARED / _PLAYBOOK_ANCHORED).read_text(encoding="utf-8")
