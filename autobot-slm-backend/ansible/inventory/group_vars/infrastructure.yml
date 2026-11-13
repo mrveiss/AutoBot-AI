@@ -48,15 +48,20 @@ dns_nameservers:
 # urls looked up `infrastructure` again -- a recursion that was only avoided while an
 # unguarded group lookup left `infrastructure` undefined. The urls below read these
 # two flat variables instead, so the dict never refers to itself.
+#
+# One rule for every entry: the first host of the group is THIS host -> loopback (a service on the
+# node you are configuring is reached locally, which is also the only address a loopback-only listener
+# has); another host -> that host's address; no such group -> loopback. Before #21399 the whole dict was
+# masked as undefined on registry nodes, so every `infrastructure is defined` consumer rendered loopback.
 infrastructure_hosts: &infrastructure_hosts
-  slm: "{{ (hostvars[groups['slm'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('slm') else '127.0.0.1' }}"
-  backend: "{{ (hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('backend') else '127.0.0.1' }}"
-  frontend: "{{ (hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('frontend') else '127.0.0.1' }}"
-  npu: "{{ (hostvars[groups['npu'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('npu') else '127.0.0.1' }}"
-  database: "{{ (hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('database') else '127.0.0.1' }}"
-  aiml: "{{ (hostvars[groups['aiml'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('aiml') else '127.0.0.1' }}"
-  browser: "{{ (hostvars[groups['browser'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('browser') else '127.0.0.1' }}"
-  reserved_1: "{{ (hostvars[groups['vnc_nodes'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('vnc_nodes') else '127.0.0.1' }}"
+  slm: "{{ ('127.0.0.1' if groups['slm'][0] == inventory_hostname else (hostvars[groups['slm'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('slm') else '127.0.0.1' }}"
+  backend: "{{ ('127.0.0.1' if groups['backend'][0] == inventory_hostname else (hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('backend') else '127.0.0.1' }}"
+  frontend: "{{ ('127.0.0.1' if groups['frontend'][0] == inventory_hostname else (hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('frontend') else '127.0.0.1' }}"
+  npu: "{{ ('127.0.0.1' if groups['npu'][0] == inventory_hostname else (hostvars[groups['npu'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('npu') else '127.0.0.1' }}"
+  database: "{{ ('127.0.0.1' if groups['database'][0] == inventory_hostname else (hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('database') else '127.0.0.1' }}"
+  aiml: "{{ ('127.0.0.1' if groups['aiml'][0] == inventory_hostname else (hostvars[groups['aiml'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('aiml') else '127.0.0.1' }}"
+  browser: "{{ ('127.0.0.1' if groups['browser'][0] == inventory_hostname else (hostvars[groups['browser'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('browser') else '127.0.0.1' }}"
+  reserved_1: "{{ ('127.0.0.1' if groups['vnc_nodes'][0] == inventory_hostname else (hostvars[groups['vnc_nodes'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('vnc_nodes') else '127.0.0.1' }}"
   reserved_2: "127.0.0.1"
 
 

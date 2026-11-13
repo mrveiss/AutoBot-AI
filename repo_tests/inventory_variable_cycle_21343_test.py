@@ -12,8 +12,9 @@ an unguarded `groups['vnc_nodes'][0]` left `infrastructure` undefined and the ro
 literal. The same loop is possible through `ansible_host` if an inventory ever defines it in terms
 of `infrastructure.*`, because `infrastructure.hosts.*` reads `hostvars[...]['ansible_host']`.
 
-CI does not execute Ansible; this builds the reference graph from the sources as text/YAML and
-fails on any cycle. Mutation check: make a url in `infrastructure` read `infrastructure.hosts`, or give
+CI does not execute Ansible; this builds the reference graph from group_vars, role defaults/vars and
+every inventory as YAML (names read as `x`, `vars['x']` and `lookup('vars','x')`) and fails on any cycle.
+A missing or non-mapping source fails, and floors bound how little it may examine. Mutation check: make a url in `infrastructure` read `infrastructure.hosts`, or give
 an inventory host `ansible_host: "{{ infrastructure.hosts.slm }}"`, and a test below goes red.
 """
 
@@ -21,22 +22,32 @@ from __future__ import annotations
 
 import re
 
-import pytest
+import yaml
 from repo_tests._paths import repo_root
-
-yaml = pytest.importorskip("yaml")
 
 _ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 _GROUP_VARS = sorted((_ANSIBLE / "inventory" / "group_vars").glob("*.yml"))
+_ROLE_VARS = sorted(_ANSIBLE.glob("roles/*/defaults/*.yml")) + sorted(_ANSIBLE.glob("roles/*/vars/*.yml"))
 _INVENTORIES = sorted((_ANSIBLE / "inventory").glob("*.yml")) + [_ANSIBLE / "inventory.yml"]
+
+#: Floors on the REACH of the sweep (measured on the tree this guard landed on, kept below it).
+_MIN_VAR_FILES = 40
+_MIN_INVENTORY_FILES = 5
+_MIN_VARIABLES = 600
+_MIN_EDGES = 150
 _JINJA = re.compile(r"\{\{(.*?)\}\}|\{%(.*?)%\}", re.S)
 _NAME = re.compile(r"(?<![\w.'\"])([A-Za-z_]\w*)")
+#: `vars['x']`, `vars["x"]` and `lookup('vars', 'x')` read a variable by NAME, which `_NAME` cannot see.
+_BY_NAME = re.compile(r"""(?:\bvars\[\s*|lookup\(\s*['"]vars['"]\s*,\s*)['"](\w+)['"]""")
 _ANSIBLE_HOST = "ansible_host"
 
 
 def _load(path) -> dict:
+    """A source that is missing or not a mapping FAILS the guard: a quiet `{}` would shrink the sweep."""
+    assert path.is_file(), f"{path}: expected source file is missing"
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return loaded if isinstance(loaded, dict) else {}
+    assert isinstance(loaded, dict), f"{path}: expected a YAML mapping, got {type(loaded).__name__}"
+    return loaded
 
 
 def _strings(node):
@@ -58,6 +69,7 @@ def _references(value, known: set[str]) -> set[str]:
         for match in _JINJA.finditer(text):
             expr = match.group(1) or match.group(2) or ""
             found |= set(_NAME.findall(expr)) & known
+            found |= set(_BY_NAME.findall(expr)) & known
             if f"['{_ANSIBLE_HOST}']" in expr or f'["{_ANSIBLE_HOST}"]' in expr:
                 found.add(_ANSIBLE_HOST)
     return found
@@ -114,7 +126,24 @@ def _cycles(graph: dict[str, set[str]]) -> list[list[str]]:
 
 
 def _repo_graph() -> dict[str, set[str]]:
-    return _graph([_load(p) for p in _GROUP_VARS], [_load(p) for p in _INVENTORIES if p.is_file()])
+    return _graph([_load(p) for p in [*_GROUP_VARS, *_ROLE_VARS]], [_load(p) for p in _INVENTORIES])
+
+
+def _edges(graph: dict[str, set[str]]) -> int:
+    return sum(len(targets) for targets in graph.values())
+
+
+def test_the_sweep_reaches_what_it_claims_to() -> None:
+    """Reach before findings: an empty or shrunken walk must fail, not pass."""
+    graph = _repo_graph()
+    assert len([*_GROUP_VARS, *_ROLE_VARS]) >= _MIN_VAR_FILES, "variable files examined fell below the floor"
+    assert len(_INVENTORIES) >= _MIN_INVENTORY_FILES, "inventory files examined fell below the floor"
+    assert len(graph) >= _MIN_VARIABLES, f"only {len(graph)} variables examined (floor {_MIN_VARIABLES})"
+    assert _edges(graph) >= _MIN_EDGES, f"only {_edges(graph)} references examined (floor {_MIN_EDGES})"
+    assert "infrastructure_hosts" in graph["infrastructure"], "known edge infrastructure -> infrastructure_hosts"
+    assert (
+        "model_storage_directories" in graph["model_storage"]
+    ), "known edge model_storage -> model_storage_directories"
 
 
 def test_no_variable_in_the_inventory_sources_can_reach_itself() -> None:
@@ -144,6 +173,19 @@ def test_the_host_expressions_still_fall_back_when_a_group_is_absent() -> None:
 def test_the_detector_flags_the_self_reference_that_broke_the_slm_play() -> None:
     broken = {"infrastructure": {"hosts": {"slm": "x"}, "urls": {"backend": "{{ infrastructure.hosts.backend }}"}}}
     assert _cycles(_graph([broken], []))
+
+
+def test_the_detector_flags_the_model_storage_shape_and_by_name_reads() -> None:
+    broken = {"model_storage": {"categories": {"a": {"path": "{{ model_storage.directories.base_dir }}/a"}}}}
+    assert _cycles(_graph([broken], []))
+    by_name = {"x": {"y": "{{ vars['x'] }}"}}
+    assert _cycles(_graph([by_name], []))
+    assert _cycles(_graph([{"x": "{{ lookup('vars', 'x') }}"}], []))
+    fixed = {
+        "model_storage_directories": {"base_dir": "/d"},
+        "model_storage": {"p": "{{ model_storage_directories.base_dir }}"},
+    }
+    assert not _cycles(_graph([fixed], []))
 
 
 def test_the_detector_flags_a_cycle_through_ansible_host() -> None:
