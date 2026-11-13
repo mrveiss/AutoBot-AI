@@ -5,8 +5,8 @@
 """Runs and work-item checkouts answering a session by the predicates the code asks with (#19601).
 
 A release the code does not ask for is a release that does not happen: the session returns an item
-only when its ``checkout_run_id`` is among the statement's bound values, and a run only for a
-statement on ``LLCHeartbeatRun``.
+only when its ``checkout_run_id`` AND its ``company_id`` are among the statement's bound values, and a run
+only for a statement on ``LLCHeartbeatRun``.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def bound_values(statement: Any) -> list:
 
 
 class RoutedSession(FakeAsyncSession):
-    """Answers ``LLCHeartbeatRun`` statements with *runs* and ``LLCWorkItem`` ones by ``checkout_run_id``."""
+    """Answers ``LLCHeartbeatRun`` statements with *runs* and ``LLCWorkItem`` ones by run id and company."""
 
     def __init__(self, runs: list, items: list) -> None:
         super().__init__(assign_ids=uuid.uuid4, default_result=FakeResult([]))
@@ -61,7 +61,7 @@ class RoutedSession(FakeAsyncSession):
             return FakeResult(self.runs)
         if entity == "LLCWorkItem":
             bound = bound_values(statement)
-            return FakeResult([i for i in self.items if i.checkout_run_id in bound])
+            return FakeResult([i for i in self.items if i.checkout_run_id in bound and i.company_id in bound])
         return FakeResult([])
 
 

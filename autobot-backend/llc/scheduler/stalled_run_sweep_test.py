@@ -166,9 +166,14 @@ class _Lease:
         self.release_reason = None
 
 
-def _item(checkout_run_id=None) -> Item:
-    """A work item of its own company; the fake itself is shared with the other checkout-release tests."""
-    return Item(uuid.uuid4(), checkout_run_id)
+def _item(run=None, company_id=None) -> Item:
+    """A work item held by *run*, in the run's own company unless *company_id* names another.
+
+    The fake itself is shared with the other checkout-release tests. With no run the item is unclaimed.
+    """
+    if run is None:
+        return Item(company_id or uuid.uuid4())
+    return Item(company_id or run.company_id, run.id)
 
 
 def entry_status(world) -> tuple:
@@ -206,7 +211,8 @@ class _World:
             return rows
         if entity == "LLCWorkspaceLease":
             return [x for x in self.leases if x.heartbeat_run_id in bound and x.released_at is None]
-        return [i for i in self.items if i.checkout_run_id is not None and i.checkout_run_id in bound]
+        # Both predicates the release asks with: the run's key AND the run's own company.
+        return [i for i in self.items if i.checkout_run_id in bound and i.company_id in bound]
 
 
 class _WorldSession(FakeAsyncSession):
@@ -349,7 +355,7 @@ async def test_a_stalled_run_releases_its_checkout_and_its_lease_and_is_marked_s
     the checkout release fails this while the lease assertions stay green.
     """
     run = _Run()
-    lease, item = _Lease(run.id), _item(run.id)
+    lease, item = _Lease(run.id), _item(run)
     world.runs.append(run)
     world.leases.append(lease)
     world.items.append(item)
@@ -376,8 +382,9 @@ async def test_a_stalled_run_releases_its_checkout_and_its_lease_and_is_marked_s
 @pytest.mark.parametrize("status", ["in_review", "blocked", "done", "cancelled"])
 async def test_an_item_in_another_status_keeps_it_when_its_run_stalls(sweep, world, status):
     """Only an item still in progress is parked; one that moved on after the checkout is not touched."""
-    run, item = _Run(), _item(None)
-    item.checkout_run_id, item.status = str(run.id), status
+    run = _Run()
+    item = _item(run)
+    item.status = status
     world.runs.append(run)
     world.items.append(item)
 
@@ -392,7 +399,7 @@ async def test_an_item_in_another_status_keeps_it_when_its_run_stalls(sweep, wor
 async def test_the_assignment_survives_the_checkout_release(sweep, world):
     """The assignment is not run-scoped -- it can predate the run -- so it stays."""
     run = _Run()
-    item = _item(run.id)
+    item = _item(run)
     assignee = item.assignee_agent_id
     world.runs.append(run)
     world.items.append(item)
@@ -409,7 +416,7 @@ async def test_two_concurrent_sweeps_release_each_holding_once(sweep, world):
     run = _Run()
     world.runs.append(run)
     world.leases.append(_Lease(run.id))
-    world.items.append(_item(run.id))
+    world.items.append(_item(run))
 
     first, second = await asyncio.gather(sweep._async_sweep(), sweep._async_sweep())
     third = await sweep._async_sweep()
@@ -425,7 +432,7 @@ async def test_two_concurrent_sweeps_release_each_holding_once(sweep, world):
 async def test_a_live_run_releases_nothing(sweep, world):
     """A run inside its deadline keeps its status, its checkout and its lease."""
     run = _Run(age_seconds=5)
-    lease, item = _Lease(run.id), _item(run.id)
+    lease, item = _Lease(run.id), _item(run)
     world.runs.append(run)
     world.leases.append(lease)
     world.items.append(item)
@@ -441,7 +448,7 @@ async def test_a_live_run_releases_nothing(sweep, world):
 async def test_a_checkout_the_stalled_run_did_not_make_is_untouched(sweep, world):
     """Release what the run acquired, not what happens to be near it."""
     run, other = _Run(), _Run(age_seconds=5)
-    mine, theirs, unclaimed = _item(run.id), _item(other.id), _item()
+    mine, theirs, unclaimed = _item(run), _item(other), _item()
     world.runs.extend([run, other])
     world.items.extend([mine, theirs, unclaimed])
     await world.fences.set(f"llc:checkout:{theirs.id}", _fence_value(theirs))
@@ -457,7 +464,7 @@ async def test_a_checkout_the_stalled_run_did_not_make_is_untouched(sweep, world
 async def test_a_fence_naming_a_newer_holder_is_left_alone(sweep, world):
     """The fence is dropped only while it still names the released checkout's holder."""
     run = _Run()
-    item = _item(run.id)
+    item = _item(run)
     world.runs.append(run)
     world.items.append(item)
     fence = f"llc:checkout:{item.id}"
@@ -466,6 +473,19 @@ async def test_a_fence_naming_a_newer_holder_is_left_alone(sweep, world):
     await sweep._async_sweep()
 
     assert await world.fences.get(fence) == "someone-newer"
+
+
+@pytest.mark.asyncio
+async def test_a_checkout_naming_the_run_id_in_another_organisational_unit_is_untouched(sweep, world):
+    """``checkout_run_id`` is free text a manual checkout can set: the run id alone must not reach another unit's item."""
+    run = _Run()
+    mine, foreign = _item(run), _item(run, company_id=uuid.uuid4())
+    world.runs.append(run)
+    world.items.extend([mine, foreign])
+
+    assert (await sweep._async_sweep())["checkouts"] == 1
+    assert mine.checkout_run_id is None
+    assert foreign.checkout_run_id == str(run.id) and foreign.version == 1 and foreign.status == "in_progress"
 
 
 def test_the_checkout_lookup_is_keyed_by_the_run_and_row_locked(sweep):
@@ -484,7 +504,7 @@ async def test_a_checkout_landing_mid_release_keeps_its_fence(sweep, world):
     checkout lands in the gap, and the DEL removes the newer holder's fence.
     """
     run = _Run()
-    item = _item(run.id)
+    item = _item(run)
     world.runs.append(run)
     world.items.append(item)
     fence = f"llc:checkout:{item.id}"
@@ -501,7 +521,7 @@ async def test_a_checkout_landing_mid_release_keeps_its_fence(sweep, world):
 async def test_a_redis_client_failure_after_commit_does_not_fail_the_sweep(sweep, world, monkeypatch, caplog):
     """The DB release has committed; a missing Redis client must not turn that into a task failure."""
     run = _Run()
-    item = _item(run.id)
+    item = _item(run)
     world.runs.append(run)
     world.items.append(item)
 
