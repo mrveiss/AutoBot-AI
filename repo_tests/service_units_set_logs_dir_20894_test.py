@@ -58,7 +58,9 @@ def _norm(value: str) -> str:
 def _tasks_files(root: Path, env: str) -> list[str]:
     """The role's task files, which say where an env template is deployed to (empty outside a role)."""
     tasks = (root / env).parent.parent / "tasks"
-    return sorted(str(p.relative_to(root)) for p in tasks.glob("*.yml")) if tasks.is_dir() else []
+    if not tasks.is_dir():
+        return []
+    return sorted(str(p.relative_to(root)) for p in tasks.iterdir() if p.suffix == ".yml" and p.is_file())
 
 
 def _env_dests(root: Path, env: str) -> set[str]:
