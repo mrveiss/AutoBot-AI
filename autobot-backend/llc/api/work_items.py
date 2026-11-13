@@ -568,6 +568,8 @@ async def release_work_item(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    """Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one. Not enforced: that
+    the caller IS that agent, nor that an item held by a person has no agent to match (open, #20521)."""
     # IDOR guard (M4/GH#9861).
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):

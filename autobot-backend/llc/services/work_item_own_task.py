@@ -144,6 +144,16 @@ def ensure_fence_safe_agent_id(agent_id: str) -> str:
     return agent_id
 
 
+def canonical_agent_id(agent_id: str) -> str:
+    """*agent_id* as the canonical UUID string (lower case, hyphenated); ``ValueError`` when it is not a UUID.
+
+    The checkout row stores the agent as a UUID and every release compares ``str(UUID)``, so a fence written from
+    an uppercase, unhyphenated or ``urn:`` spelling would name a holder no release could match (#19631). Applied
+    once, where a request names the agent (``FenceSafeAgentId``); every other caller passes ``str(UUID)`` already.
+    """
+    return str(uuid.UUID(agent_id))
+
+
 def checkout_fence_value(agent_id: str, run_id: Optional[str]) -> str:
     """The fence value of one agent checkout: the agent id tagged with the checkout generation (``checkout_run_id``).
 

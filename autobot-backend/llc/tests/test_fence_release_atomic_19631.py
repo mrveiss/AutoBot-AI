@@ -121,6 +121,29 @@ def test_a_release_request_refuses_an_agent_id_carrying_the_generation_separator
         work_items_api.ReleaseRequest(agent_id="agent#run")
 
 
+_SPELLINGS = (_AGENT.upper(), _AGENT.replace("-", ""), f"urn:uuid:{_AGENT}")
+
+
+@pytest.mark.parametrize("spelling", _SPELLINGS)
+async def test_a_non_canonical_agent_id_reaches_the_fence_canonical_and_the_release_matches(redis, spelling):
+    """Checkout and release both name the agent by request; each spelling must end as the stored assignee's form."""
+    checkout = work_items_api.CheckoutRequest(agent_id=spelling, run_id="run-1")
+    release = work_items_api.ReleaseRequest(agent_id=spelling)
+    assert checkout.agent_id == release.agent_id == _AGENT
+    item_id = str(uuid.uuid4())
+    await redis.set(_key(item_id), own_task.checkout_fence_value(checkout.agent_id, checkout.run_id))
+    with patch.object(own_task, "get_async_redis_client", new=AsyncMock(return_value=redis)):
+        await own_task.release_agent_fence(item_id, release.agent_id)
+    assert await redis.get(_key(item_id)) is None
+
+
+@pytest.mark.parametrize("value", ["", f"user:{_USER}", "agent-1", "not-a-uuid"])
+def test_a_request_refuses_an_agent_id_that_is_not_an_agent_uuid(value):
+    for model in (work_items_api.CheckoutRequest, work_items_api.ReleaseRequest):
+        with pytest.raises(ValidationError):
+            model(agent_id=value)
+
+
 async def _agent_to_human(redis, item_id: str) -> None:
     item = MagicMock(assignee_agent_id=uuid.UUID(_AGENT), project_id=None, title="t", description="d", version=1)
     session = AsyncMock()
