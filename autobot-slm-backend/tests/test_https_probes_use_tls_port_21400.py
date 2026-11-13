@@ -22,14 +22,59 @@ _PORT = re.compile(r"\bbackend_port\b")
 _ALLOWED: dict = {}
 
 
+_HTTPS_URL = re.compile(r"https://", re.IGNORECASE)
+
+
+def _url_span(text: str, start: int) -> str:
+    """The URL (or URL template) beginning at *start*: up to the first space or quote outside a ``{{ ... }}``.
+
+    A Jinja expression may hold spaces and newlines, so ``https://{{ host }}:{{\\n backend_port }}/x`` is one URL.
+    """
+    depth, i = 0, start
+    while i < len(text):
+        if text.startswith("{{", i):
+            depth, i = depth + 1, i + 2
+        elif text.startswith("}}", i):
+            depth, i = max(0, depth - 1), i + 2
+        elif depth == 0 and (text[i].isspace() or text[i] in "\"'"):
+            break
+        else:
+            i += 1
+    return text[start:i]
+
+
+def https_lines_using_backend_port(text: str) -> list[int]:
+    """Lines (1-based) that build an https URL from ``backend_port``: the line carries both, or a URL template
+    that spans several lines does. The reported line is where the URL starts."""
+    lines = text.splitlines()
+    hits = {
+        no
+        for no, line in enumerate(lines, 1)
+        if "https" in line.lower() and _PORT.search(line) and not line.lstrip().startswith("#")
+    }
+    for match in _HTTPS_URL.finditer(text):
+        no = text.count("\n", 0, match.start()) + 1
+        if not lines[no - 1].lstrip().startswith("#") and _PORT.search(_url_span(text, match.start())):
+            hits.add(no)
+    return sorted(hits)
+
+
 def _https_lines_using_backend_port():
     for path in sorted(_ANSIBLE.rglob("*")):
         if path.suffix not in {".yml", ".yaml", ".j2", ".sh"} or not path.is_file():
             continue
         rel = path.relative_to(_ANSIBLE).as_posix()
-        for no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if "https" in line.lower() and _PORT.search(line) and not line.lstrip().startswith("#"):
-                yield f"{rel}:{no}"
+        for no in https_lines_using_backend_port(path.read_text(encoding="utf-8")):
+            yield f"{rel}:{no}"
+
+
+def test_contrast_a_template_split_across_lines_is_read_whole() -> None:
+    split = 'url: "https://{{ host }}:{{\n  backend_port }}/api/health"\n'
+    assert https_lines_using_backend_port(split) == [1]
+    assert https_lines_using_backend_port(split.replace("backend_port", "backend_nginx_port")) == []
+    assert https_lines_using_backend_port('url: "https://{{ host }}:{{ backend_port | default(8443) }}/x"') == [1]
+    assert https_lines_using_backend_port('url: "http://{{ host }}:{{\n  backend_port }}/x"') == []
+    assert https_lines_using_backend_port("# https://{{ host }}:{{\n#  backend_port }}") == []
 
 
 def test_no_https_url_is_built_from_the_plain_backend_port() -> None:
