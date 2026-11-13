@@ -270,7 +270,20 @@ def _gated_groups() -> set[str]:
         # real case silently, whereas a scope rule states what the guard is about.
         if "roles/" in rel or rel.startswith("tests/"):
             continue
-        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        text = path.read_text(encoding="utf-8", errors="replace")
+        # Only a play file (a top-level YAML list) has plays; a `hosts:` key in group_vars, host_vars or any
+        # other mapping document is data, e.g. `hosts: *infrastructure_hosts` (#21343).
+        first = next(
+            (
+                ln
+                for ln in text.splitlines()
+                if ln.strip() and not ln.lstrip().startswith("#") and ln.strip() not in ("---", "...")
+            ),
+            "",
+        )
+        if not first.startswith("-"):
+            continue
+        for line in text.splitlines():
             match = re.match(r"\s*hosts:\s*([^#]+)", line)
             if not match:
                 continue
