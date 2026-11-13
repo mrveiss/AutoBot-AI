@@ -141,12 +141,25 @@ def test_the_health_probe_distinguishes_the_fallback(monkeypatch, source, expect
 
     catalog = ErrorCatalog()
     catalog.source = source
+    catalog._initialized = True  # already loaded: the probe must not reload over the injected source
     monkeypatch.setattr(api_module, "get_error_catalog_instance", lambda: catalog)
 
     deployed, data = api_module._error_catalog_state()
 
     assert deployed is expected_ok
     assert data["error_catalog_source"] == source
+
+
+def test_the_health_probe_loads_an_unloaded_catalog(monkeypatch):
+    """Import loads nothing (#20894), so the probe must load before reading ``source``."""
+    api_module = pytest.importorskip("api.error_resilience")
+    catalog = ErrorCatalog()
+    assert catalog.source == "unloaded"
+    monkeypatch.setattr(api_module, "get_error_catalog_instance", lambda: catalog)
+
+    _, data = api_module._error_catalog_state()
+
+    assert data["error_catalog_source"] in (SOURCE_YAML, SOURCE_BUILTIN_FALLBACK)
 
 
 def test_the_real_loader_path_finds_the_deployed_catalog():

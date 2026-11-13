@@ -611,8 +611,7 @@ class ErrorCatalog:
             ErrorDefinition if found, None otherwise
         """
         # Lazy load catalog on first access
-        if not self._initialized:
-            self.load_catalog()
+        self.ensure_loaded()
 
         return self._catalog.get(error_code)
 
@@ -640,8 +639,7 @@ class ErrorCatalog:
         Returns:
             True if code exists, False otherwise
         """
-        if not self._initialized:
-            self.load_catalog()
+        self.ensure_loaded()
 
         return error_code in self._catalog
 
@@ -655,8 +653,7 @@ class ErrorCatalog:
         Returns:
             List of error codes matching prefix
         """
-        if not self._initialized:
-            self.load_catalog()
+        self.ensure_loaded()
 
         return [code for code in self._catalog if code.startswith(component_prefix + "_")]
 
@@ -667,8 +664,7 @@ class ErrorCatalog:
         Returns:
             Dictionary with catalog statistics
         """
-        if not self._initialized:
-            self.load_catalog()
+        self.ensure_loaded()
 
         # Count errors by category
         category_counts: Dict[str, int] = {}
@@ -691,6 +687,11 @@ class ErrorCatalog:
             "by_category": category_counts,
             "by_component": component_counts,
         }
+
+    def ensure_loaded(self) -> None:
+        """Load the catalog once if nothing has loaded it yet; readers of ``source`` call this first (#20894)."""
+        if not self._initialized:
+            self.load_catalog()
 
     @property
     def catalog_path(self) -> Path | None:
@@ -770,5 +771,4 @@ def validate_error_code(error_code: str) -> bool:
     return catalog.validate_code(error_code)
 
 
-# Loaded at first use, never at import (#20894): every accessor above calls load_catalog() when the
-# catalog is not initialised yet, so importing this module reads no file and writes no log record.
+# Loaded at first use, never at import (#20894): every accessor calls ensure_loaded().
