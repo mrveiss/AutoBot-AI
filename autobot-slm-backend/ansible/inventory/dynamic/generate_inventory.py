@@ -60,21 +60,6 @@ def _backend_port() -> int:
 
 
 BACKEND_PORT = _backend_port()
-# The nginx TLS port is a different listener from BACKEND_PORT (the plain uvicorn port); a probe that
-# builds an https URL reads this one, under the name the static inventory already uses (#21400).
-_DEFAULT_BACKEND_NGINX_PORT = 8443
-
-
-def _backend_nginx_port() -> int:
-    """AUTOBOT_BACKEND_TLS_PORT when it is a valid port, else the default, with the refusal on stderr."""
-    raw = os.environ.get("AUTOBOT_BACKEND_TLS_PORT", str(_DEFAULT_BACKEND_NGINX_PORT)).strip()
-    if raw.isascii() and raw.isdigit() and 0 < int(raw) < 65536:
-        return int(raw)
-    print(f"AUTOBOT_BACKEND_TLS_PORT={raw!r} is not a port; using {_DEFAULT_BACKEND_NGINX_PORT}", file=sys.stderr)
-    return _DEFAULT_BACKEND_NGINX_PORT
-
-
-BACKEND_NGINX_PORT = _backend_nginx_port()
 _LEGACY_ENV_NAMES = {"AUTOBOT_REDIS_DB_TASKS": "workflows"}
 
 
@@ -247,7 +232,7 @@ class AutoBotInventory:
             "aiml": {"hosts": ["autobot-aiml"], "vars": {}},
             "browser": {"hosts": ["autobot-browser"], "vars": {}},
             "backend": {"hosts": ["autobot-host"], "vars": {}},
-            "all": {"vars": {"backend_port": BACKEND_PORT, "backend_nginx_port": BACKEND_NGINX_PORT}},
+            "all": {"vars": {"backend_port": BACKEND_PORT}},
         }
 
     def list_inventory(self) -> str:
@@ -261,7 +246,6 @@ class AutoBotInventory:
 
         # The GUI's backend port, as the static inventory states it (#19821).
         self.inventory.setdefault("all", {}).setdefault("vars", {})["backend_port"] = BACKEND_PORT
-        self.inventory["all"]["vars"]["backend_nginx_port"] = BACKEND_NGINX_PORT
         return json.dumps(self.inventory, indent=2)
 
     def host_vars(self, hostname: str) -> str:

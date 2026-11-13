@@ -10,13 +10,13 @@
     daemon_reload: true
 
 - name: restart autobot-coordinator
+  systemd:
+    name: autobot-coordinator
+    state: restarted
   when: create_systemd_services
-  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
-  vars:
-    restart_unit_name: autobot-coordinator
 
 - name: restart health-monitor
+  systemd:
+    name: autobot-health-monitor.timer
+    state: restarted
   when: create_systemd_services
-  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
-  vars:
-    restart_unit_name: autobot-health-monitor.timer

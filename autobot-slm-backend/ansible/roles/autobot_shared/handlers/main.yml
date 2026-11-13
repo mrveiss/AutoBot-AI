@@ -7,11 +7,11 @@
 # Mirror the notify targets of the extracted #3649 block: consumers of the
 # shared package must reload it after a sync. Handlers only fire on change.
 - name: restart backend
-  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
-  vars:
-    restart_unit_name: autobot-backend
+  ansible.builtin.systemd:
+    name: autobot-backend
+    state: restarted
 
 - name: restart celery
-  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
-  vars:
-    restart_unit_name: autobot-celery
+  ansible.builtin.systemd:
+    name: autobot-celery
+    state: restarted

@@ -12,8 +12,6 @@ import shutil
 from pathlib import Path
 
 from autobot_shared.env_utils import env_int
-from autobot_shared.ssot_config import config
-from services.ansible_extra_vars import port_vars
 from services.process_group import kill_process_group
 
 # Common install locations checked when ansible-playbook isn't on PATH
@@ -150,16 +148,6 @@ def ansible_run_failure(output: str, host: str | None, returncode: int | None) -
 _HOST_KEY_ARGS = "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'"
 
 
-def bare_inventory_args(host: str) -> list[str]:
-    """``-i "<host>,"`` plus the SSOT backend ports as extra vars (#21400).
-
-    A bare host-list inventory has no group_vars beside it, so a role that reads ``backend_port`` or
-    ``backend_nginx_port`` would see them undefined. Every command that targets one host this way builds
-    its inventory arguments here, so those plays get the same ports the generated inventory carries.
-    """
-    return ["-i", f"{host},", "-e", json.dumps(port_vars(config))]
-
-
 async def run_single_host_playbook(
     ansible_dir,
     playbook_path,
@@ -178,7 +166,7 @@ async def run_single_host_playbook(
     the whole process group before re-raising, so no ansible run outlives its caller. *env* reaches the playbook
     through the subprocess environment only, never argv or disk.
     """
-    cmd = ["ansible-playbook", str(playbook_path), *bare_inventory_args(host)]
+    cmd = ["ansible-playbook", str(playbook_path), "-i", f"{host},"]
     for var in (*extra_vars, f"ansible_user={ssh_user}", f"ansible_port={ssh_port}", _HOST_KEY_ARGS):
         cmd += ["-e", var]
     process = await asyncio.create_subprocess_exec(

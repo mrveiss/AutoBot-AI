@@ -184,9 +184,9 @@
 
   post_tasks:
     - name: Restart backend service
-      ansible.builtin.include_tasks: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
-      vars:
-        restart_unit_name: autobot-backend
+      systemd:
+        name: autobot-backend
+        state: restarted
 
     - name: Wait for service to start
       pause:

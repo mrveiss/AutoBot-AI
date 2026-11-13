@@ -30,19 +30,6 @@
 # Idempotent and guarded by a per-host fact, so including it from several roles
 # in one run stages once. Including it is always safe.
 
-# #20509: every caller is a role, so the repo root is `role_path`'s fixed-depth tree, or an
-# explicit `repo_source_root`. Never the playbook's folder; no anchor is a loud failure.
-- name: "Shared manifests | Resolve the repo root without playbook_dir (#20509)"
-  ansible.builtin.set_fact:
-    shared_manifests_repo_root: "{{ repo_source_root | default(role_path ~ '/../../../..' if role_path is defined else '', true) }}"
-
-- name: "Shared manifests | Fail when no repo root anchor exists (#20509)"
-  ansible.builtin.assert:
-    that: shared_manifests_repo_root | length > 0
-    fail_msg: >-
-      stage_shared_manifests.yml has no repo root: it was included outside a role without
-      repo_source_root. Pass repo_source_root (the checkout the manifests come from).
-
 - name: "Shared manifests | Ensure the constraints directory exists on the node (#17331)"
   ansible.builtin.file:
     path: "{{ autobot.base_dir }}/constraints"
@@ -53,7 +40,7 @@
 
 - name: "Shared manifests | Stage constraints/shared.txt onto the node (#17331)"
   ansible.builtin.copy:
-    src: "{{ shared_manifests_repo_root }}/constraints/shared.txt"
+    src: "{{ role_path | default(playbook_dir ~ '/x') }}/../../../../constraints/shared.txt"
     dest: "{{ autobot.base_dir }}/constraints/shared.txt"
     owner: "{{ autobot.user }}"
     mode: "0644"
@@ -66,7 +53,7 @@
 # It declares no includes of its own, so staging it needs nothing further.
 - name: "Shared manifests | Stage the root requirements.txt onto the node (#17331)"
   ansible.builtin.copy:
-    src: "{{ shared_manifests_repo_root }}/requirements.txt"
+    src: "{{ role_path | default(playbook_dir ~ '/x') }}/../../../../requirements.txt"
     dest: "{{ autobot.base_dir }}/requirements.txt"
     owner: "{{ autobot.user }}"
     mode: "0644"
@@ -84,9 +71,9 @@
     argv:
       - git
       - -c
-      - "safe.directory={{ code_source_dir | default(shared_manifests_repo_root) }}"
+      - "safe.directory={{ code_source_dir | default((role_path | default(playbook_dir ~ '/x')) ~ '/../../../..') }}"
       - -C
-      - "{{ code_source_dir | default(shared_manifests_repo_root) }}"
+      - "{{ code_source_dir | default((role_path | default(playbook_dir ~ '/x')) ~ '/../../../..') }}"
       - show
       - "{{ deploy_ref | default('HEAD') }}:.python-version"
   register: shared_manifests_python_version

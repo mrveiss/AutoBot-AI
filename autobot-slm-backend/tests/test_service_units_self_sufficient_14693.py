@@ -198,29 +198,6 @@ def test_the_playbook_still_supplies_no_play_level_become() -> None:
     )
 
 
-def _unescalated_handlers(handlers: list, base: Path) -> list:
-    """Names of handlers that perform privileged work without escalating, following an include.
-
-    A direct handler must carry `become: true`. An `include_tasks` handler cannot (Ansible rejects it at parse
-    time), so the file it includes is read: it escalates when every leaf task there does, or when the include
-    passes it through `apply: {become: true}`. An include of a file without `become` is still flagged.
-    """
-    missing = []
-    for handler in handlers:
-        name = handler.get("name", "<unnamed>")
-        target = _included_file(handler)
-        if target is None:
-            if handler.get("become") is not True:
-                missing.append(name)
-            continue
-        include = next(handler[k] for k in _INCLUDE_KEYS if handler.get(k))
-        applied = isinstance(include, dict) and (include.get("apply") or {}).get("become") is True
-        leaves = list(_leaf_tasks(_load(base / target)))
-        if not applied and not (leaves and all(escalated for _, escalated in leaves)):
-            missing.append(name)
-    return missing
-
-
 def test_every_handler_escalates() -> None:
     """The handlers these tasks notify need root too.
 
@@ -230,22 +207,8 @@ def test_every_handler_escalates() -> None:
     """
     handlers = _load(_HANDLERS)
     assert handlers, "no handlers defined"
-    missing = _unescalated_handlers(handlers, _HANDLERS.parent)
+    missing = [h.get("name", "<unnamed>") for h in handlers if h.get("become") is not True]
     assert not missing, f"these handlers perform privileged operations without escalating: {missing}"
-    assert any(_included_file(h) for h in handlers), "control: the handlers include the shared restart file"
-
-
-def test_the_handler_guard_follows_an_include_and_still_flags_the_unescalated(tmp_path: Path) -> None:
-    (tmp_path / "root.yml").write_text("- name: r\n  ansible.builtin.command: id\n  become: true\n", encoding="utf-8")
-    (tmp_path / "plain.yml").write_text("- name: p\n  ansible.builtin.command: id\n", encoding="utf-8")
-    handlers = yaml.safe_load(
-        "- name: via escalating file\n  ansible.builtin.include_tasks: root.yml\n"
-        "- name: via plain file\n  ansible.builtin.include_tasks: plain.yml\n"
-        "- name: via apply\n  ansible.builtin.include_tasks:\n    file: plain.yml\n    apply:\n      become: true\n"
-        "- name: direct with become\n  ansible.builtin.command: id\n  become: true\n"
-        "- name: direct without become\n  ansible.builtin.command: id\n"
-    )
-    assert _unescalated_handlers(handlers, tmp_path) == ["via plain file", "direct without become"]
 
 
 def test_play_one_still_includes_the_shared_task_file() -> None:

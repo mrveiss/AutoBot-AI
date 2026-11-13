@@ -13,17 +13,6 @@
 # <tree>). The SLM backend passes no code_source_dir (services/deployment.py
 # _enrollment_var_args) and runs from settings.ansible_dir, so the playbook's own tree is
 # the one that is certainly present; it need not be under autobot.base_dir/code_source.
-# Both callers are playbooks that import this file statically, so there is no role_path:
-# playbook_dir is the only handle. #20509: the derivation is therefore PROVEN, not trusted --
-# the first task below fails unless the derived tree is the one this playbook sits in, so a playbook
-# moved to another depth stops here instead of shipping some neighbouring tree's autobot_shared.
-# The proof is by content, not by the checkout's name: the derived tree (shared_parent, the tree
-# the archive is about to be built from) must hold this very file at its repository-relative path
-# (autobot-slm-backend/ansible/roles/_shared/tasks/), so shared_parent is the repository this
-# playbook sits in, whatever that checkout is called. It does not prove autobot_shared/ is there
-# (the next two tasks check that) nor that the file is byte-identical to the running one.
-# It runs only on the derived path: an explicit code_source_dir is the caller's choice and needs no
-# repository layout beyond autobot_shared/ itself, which the next two tasks check.
 #
 # The real agent imports autobot_shared (health_collector -> redis_client); the
 # unit's PYTHONPATH includes {{ slm_agent_dir | dirname }} (= autobot.base_dir).
@@ -45,26 +34,6 @@
       - ".env.*"
       - .envrc
   block:
-    - name: Find this task file under the derived source tree (#20509)
-      ansible.builtin.stat:
-        path: "{{ shared_parent }}/autobot-slm-backend/ansible/roles/_shared/tasks/install_agent_autobot_shared.yml"
-      register: shared_anchor
-      delegate_to: localhost
-      run_once: true
-      become: false
-      when: (code_source_dir | default('', true)) == ''
-
-    - name: Fail when the derived source tree is not the tree this playbook sits in (#20509)
-      ansible.builtin.assert:
-        that: shared_anchor.stat.exists
-        fail_msg: >-
-          Checked {{ shared_parent }} (derived from {{ playbook_dir }}) for
-          autobot-slm-backend/ansible/roles/_shared/tasks/install_agent_autobot_shared.yml and it is absent.
-          Either this playbook sits at a different depth than the derivation assumes, or the tree under the
-          derived path is not this repository's layout. Fix the derivation, or set code_source_dir.
-      when: (code_source_dir | default('', true)) == ''
-      run_once: true
-
     - name: Check autobot_shared exists in the source tree on the controller
       ansible.builtin.stat:
         path: "{{ shared_parent }}/autobot_shared/__init__.py"

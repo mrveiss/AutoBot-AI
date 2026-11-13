@@ -656,7 +656,6 @@
         apply:
           tags: [slm, slm-backend, deps]
       vars:
-        repo_source_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"  # #20509
         husk_venv_dir: "{{ autobot.base_dir }}/autobot-slm-backend/venv"
       when: hostvars['localhost']['python_deps_changed'] | bool
       tags: [slm, slm-backend, deps]
@@ -732,13 +731,11 @@
               Continuing to backend restart.
 
     - name: "[PLAY 1] SLM | Restart backend service"
-      ansible.builtin.include_tasks:
-        file: ../_shared/tasks/restart_unit.yml
-        apply:
-          tags: [slm, slm-backend, restart]
-      vars:
-        restart_unit_name: autobot-slm-backend
-        restart_unit_daemon_reload: true
+      systemd:
+        name: autobot-slm-backend
+        state: restarted
+        daemon_reload: true
+      become: true
       tags: [slm, slm-backend, restart]
 
     # #15610: this play deploys the SLM backend by unarchive and never runs the
@@ -757,12 +754,10 @@
       tags: [slm, slm-frontend, nginx]
 
     - name: "[PLAY 1] SLM | Restart nginx"
-      ansible.builtin.include_tasks:
-        file: ../_shared/tasks/restart_unit.yml
-        apply:
-          tags: [slm, slm-frontend, restart]
-      vars:
-        restart_unit_name: nginx
+      systemd:
+        name: nginx
+        state: restarted
+      become: true
       tags: [slm, slm-frontend, restart]
 
     - name: "[PLAY 1] SLM | Wait for API to be ready"
@@ -1087,7 +1082,6 @@
         apply:
           tags: [backend, deps]
       vars:
-        repo_source_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"  # #20509
         husk_venv_dir: "{{ autobot.base_dir }}/autobot-backend/venv"
       when:
         - "'backend' in group_names"
@@ -1423,13 +1417,11 @@
       tags: [backend, access-control, enforcement]
 
     - name: "[PLAY 2] Backend | Restart service"
-      ansible.builtin.include_tasks:
-        file: ../_shared/tasks/restart_unit.yml
-        apply:
-          tags: [backend, restart]
-      vars:
-        restart_unit_name: autobot-backend
-        restart_unit_daemon_reload: true
+      systemd:
+        name: autobot-backend
+        state: restarted
+        daemon_reload: true
+      become: true
       when: "'backend' in group_names"
       tags: [backend, restart]
 
@@ -1459,13 +1451,11 @@
       tags: [backend, restart, celery]
 
     - name: "[PLAY 2] Backend | Restart celery workers so they run the synced code (#13539)"
-      ansible.builtin.include_tasks:
-        file: ../_shared/tasks/restart_unit.yml
-        apply:
-          tags: [backend, restart, celery]
-      vars:
-        restart_unit_name: "{{ item.item }}"
-        restart_unit_daemon_reload: true
+      systemd:
+        name: "{{ item.item }}"
+        state: restarted
+        daemon_reload: true
+      become: true
       loop: "{{ celery_unit_files.results | default([]) }}"
       loop_control:
         label: "{{ item.item }}"
@@ -1640,12 +1630,10 @@
       tags: [frontend, restart]
 
     - name: "[PLAY 2] Frontend | Restart nginx"
-      ansible.builtin.include_tasks:
-        file: ../_shared/tasks/restart_unit.yml
-        apply:
-          tags: [frontend, restart]
-      vars:
-        restart_unit_name: nginx
+      systemd:
+        name: nginx
+        state: restarted
+      become: true
       when: "'frontend' in group_names"
       tags: [frontend, restart]
 
@@ -1719,15 +1707,13 @@
       tags: [npu, npu-worker, deps]
 
     - name: "[PLAY 2] NPU | Restart service"
-      ansible.builtin.include_tasks:
-        file: ../_shared/tasks/restart_unit.yml
-        apply:
-          tags: [npu, npu-worker, restart]
-      vars:
-        restart_unit_name: autobot-npu-worker
-        restart_unit_tolerate_failure: true
+      systemd:
+        name: autobot-npu-worker
+        state: restarted
+      become: true
       when: >-
         'npu' in group_names
+      failed_when: false
       tags: [npu, npu-worker, restart]
 
     - name: "[PLAY 2] NPU | Wait for service to stabilize (#1633)"
@@ -1805,12 +1791,10 @@
     # nothing says so. A restart that cannot complete is a real failure and
     # should be visible.
     - name: "[PLAY 2] TTS | Restart service"
-      ansible.builtin.include_tasks:
-        file: ../_shared/tasks/restart_unit.yml
-        apply:
-          tags: [tts, tts-worker, restart]
-      vars:
-        restart_unit_name: autobot-tts-worker
+      systemd:
+        name: autobot-tts-worker
+        state: restarted
+      become: true
       when: "'npu' in group_names"
       tags: [tts, tts-worker, restart]
 
@@ -1945,15 +1929,13 @@
       tags: [browser, browser-worker, deps]
 
     - name: "[PLAY 2] Browser | Restart service"
-      ansible.builtin.include_tasks:
-        file: ../_shared/tasks/restart_unit.yml
-        apply:
-          tags: [browser, browser-worker, restart]
-      vars:
-        restart_unit_name: autobot-playwright
-        restart_unit_tolerate_failure: true
+      systemd:
+        name: autobot-playwright
+        state: restarted
+      become: true
       when: >-
         'browser' in group_names
+      failed_when: false
       tags: [browser, browser-worker, restart]
 
     # #12912: waited on 3000, which nothing serves — autobot-playwright binds
@@ -2010,27 +1992,23 @@
       tags: [ai-stack, aiml]
 
     - name: "[PLAY 2] AI Stack | Restart autobot-ai-stack service"
-      ansible.builtin.include_tasks:
-        file: ../_shared/tasks/restart_unit.yml
-        apply:
-          tags: [ai-stack, aiml, restart]
-      vars:
-        restart_unit_name: autobot-ai-stack
-        restart_unit_tolerate_failure: true
+      systemd:
+        name: autobot-ai-stack
+        state: restarted
+      become: true
       when: >-
         'aiml' in group_names
+      failed_when: false
       tags: [ai-stack, aiml, restart]
 
     - name: "[PLAY 2] AI Stack | Restart autobot-chromadb service"
-      ansible.builtin.include_tasks:
-        file: ../_shared/tasks/restart_unit.yml
-        apply:
-          tags: [ai-stack, aiml, chromadb, restart]
-      vars:
-        restart_unit_name: autobot-chromadb
-        restart_unit_tolerate_failure: true
+      systemd:
+        name: autobot-chromadb
+        state: restarted
+      become: true
       when: >-
         'aiml' in group_names
+      failed_when: false
       tags: [ai-stack, aiml, chromadb, restart]
 
     # ----- Shared (non-backend nodes) -----

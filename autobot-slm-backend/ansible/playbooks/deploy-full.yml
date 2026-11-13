@@ -318,7 +318,7 @@
     _aiml_ip: "{{ ai_stack_host }}"
     _npu_ip: "{{ npu_worker_host }}"
     _browser_ip: "{{ browser_host }}"
-    _backend_port: "{{ backend_nginx_port | default(8443) }}"
+    _backend_port: "{{ backend_port }}"
     _redis_port: "{{ redis_port }}"
     _redis_insight_port: "{{ hostvars['autobot-database']['redis_insight_port'] }}"
     _ai_stack_port: "{{ ai_stack_port }}"

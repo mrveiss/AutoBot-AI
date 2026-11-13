@@ -436,12 +436,6 @@ _REAL_SERVICE_MODULES = (
     "rollback_commits",
     "rollback_migrations",
     "code_rollback",
-    # #21334: the one decision between an operational failure and a programming error, and the stage/job
-    # failure write. api/code_sync.py imports it, so the AST-derived stubs above would otherwise make it a
-    # MagicMock: the helper then re-raises nothing and the write is a no-op, and the unit tests of
-    # _collect_outdated_node_ids (tests/api/test_collect_outdated_node_ids.py, the Co-located Smoke job)
-    # would assert against a stub.
-    "collection_errors",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for

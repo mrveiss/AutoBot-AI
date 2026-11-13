@@ -37,14 +37,10 @@
         name: "{{ slm_backend_service }}"
         state: stopped
 
-    # #21426: through the shared restart task, so a socket parked by its start limit is cleared first.
     - name: "SLM | Start the self-update socket before the backend (#15823)"
-      ansible.builtin.include_tasks:
-        file: ../../../_shared/tasks/restart_unit.yml
-        apply:
-          tags: ['slm', 'service', 'systemd']
-      vars:
-        restart_unit_name: "{{ slm_self_update_socket_service }}.socket"
+      ansible.builtin.systemd:
+        name: "{{ slm_self_update_socket_service }}.socket"
+        state: restarted
 
     - name: "SLM | Start backend so it inherits the bound socket (#15823)"
       ansible.builtin.systemd:

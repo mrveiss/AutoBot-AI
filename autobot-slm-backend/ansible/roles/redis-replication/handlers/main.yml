@@ -4,8 +4,8 @@
 # Author: mrveiss
 ---
 - name: restart redis for replication
-  # #14516: a handler fires at play end, so a wrong unit name here fails
-  # late and obscures which change triggered it.
-  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
-  vars:
-    restart_unit_name: "{{ redis_service_name | default('redis-stack-server') }}"
+  ansible.builtin.systemd:
+    # #14516: a handler fires at play end, so a wrong unit name here fails
+    # late and obscures which change triggered it.
+    name: "{{ redis_service_name | default('redis-stack-server') }}"
+    state: restarted

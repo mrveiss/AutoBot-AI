@@ -35,7 +35,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from repo_tests._ansible_restart_unit import restarted_unit
 
 yaml = pytest.importorskip("yaml")
 
@@ -84,9 +83,10 @@ def _systemd_restart_targets(tasks):
     registered = _registered_loops(tasks)
     targets = set()
     for task in tasks:
-        name = restarted_unit(task)  # #20772: either shape, the shared file names its unit in vars
-        if name is None:
+        spec = task.get("systemd") or task.get("ansible.builtin.systemd")
+        if not isinstance(spec, dict) or spec.get("state") != "restarted":
             continue
+        name = spec.get("name", "")
         if "{{" in str(name):
             loop = task.get("loop")
             if isinstance(loop, list):

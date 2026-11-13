@@ -510,11 +510,11 @@
       changed_when: true
       when: _policy == 'security'
 
-    - name: System Update [frontend] | Restart nginx
-      ansible.builtin.include_tasks: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
-      vars:
-        restart_unit_name: nginx
-        restart_unit_daemon_reload: true
+    - name: "System Update [frontend] | Restart nginx"
+      ansible.builtin.systemd:
+        name: nginx
+        state: restarted
+        daemon_reload: true
 
     - name: "System Update [frontend] | Wait for HTTPS"
       ansible.builtin.wait_for:

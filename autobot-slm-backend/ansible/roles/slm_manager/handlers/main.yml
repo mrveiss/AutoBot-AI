@@ -22,19 +22,20 @@
 
 - name: restart slm backend
   when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
-  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
-  vars:
-    restart_unit_name: "{{ slm_backend_service }}"
-    restart_unit_tolerate_failure: true
+  ansible.builtin.systemd:
+    name: "{{ slm_backend_service }}"
+    state: restarted
   # (#2872) Intentional: during initial provisioning the service unit may
   # not be deployed yet when this handler fires from a config template
   # change.  The "Start backend service" task later ensures it runs.
+  failed_when: false
+  become: true
 
 - name: restart slm self-update socket
   when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
-  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
-  vars:
-    restart_unit_name: "{{ slm_self_update_socket_service }}.socket"
+  ansible.builtin.systemd:
+    name: "{{ slm_self_update_socket_service }}.socket"
+    state: restarted
   # #15728: a ListenStream=/SocketMode= change only takes effect on the next
   # bind, so this must run whenever either changes.
   #
@@ -45,6 +46,7 @@
   # host whose socket did not come back up looking like a clean deploy, and
   # the socket's permissions ARE the authentication for a credential-free
   # update trigger. A deploy that cannot bind it must fail loudly.
+  become: true
 
 - name: test nginx config
   ansible.builtin.command:
@@ -59,12 +61,14 @@
 
 - name: restart nginx
   when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
-  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
-  vars:
-    restart_unit_name: nginx
+  ansible.builtin.systemd:
+    name: nginx
+    state: restarted
+  become: true
 
 - name: restart grafana
   when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
-  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
-  vars:
-    restart_unit_name: grafana-server
+  ansible.builtin.systemd:
+    name: grafana-server
+    state: restarted
+  become: true

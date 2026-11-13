@@ -348,9 +348,9 @@
       shell: nginx -t
 
     - name: Restart nginx
-      ansible.builtin.include_tasks: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
-      vars:
-        restart_unit_name: nginx
+      systemd:
+        name: nginx
+        state: restarted
 
     - name: Configure firewall for frontend
       ufw:

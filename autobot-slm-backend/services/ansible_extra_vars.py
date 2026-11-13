@@ -48,12 +48,3 @@ def dump_extra_vars(extra_vars: Mapping[str, Any], fh: TextIO, unsafe_keys: Iter
     unsafe = frozenset(unsafe_keys)
     marked = {k: (mark_unsafe(v) if k in unsafe else v) for k, v in extra_vars.items()}
     yaml.dump(marked, fh, Dumper=_ExtraVarsDumper, default_flow_style=False)
-
-
-def port_vars(cfg: Any) -> dict[str, int]:
-    """The two backend ports every play may read, from the SSOT config (#21400).
-
-    ``backend_port`` is the plain uvicorn listener; ``backend_nginx_port`` is the TLS listener nginx
-    holds. They are different ports: a probe that builds an https URL reads ``backend_nginx_port``.
-    """
-    return {"backend_port": cfg.port.backend, "backend_nginx_port": cfg.tls.backend_tls_port}
