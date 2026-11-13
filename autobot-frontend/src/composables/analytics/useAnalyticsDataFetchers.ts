@@ -174,7 +174,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   >(
     {
       path: '/api/reporting/report',
-      scopeToSource: true, // #17758: per-project, superseding #5112's global contract
+      scopeToSource: true, requireSource: true, // #17758: per-project; #21463: the route answers 422 without a source
       label: 'Unified report endpoint',
       pickData: (raw) => (raw.status === 'success' ? raw : null),
       onSuccess: (d) =>

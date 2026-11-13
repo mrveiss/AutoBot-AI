@@ -35,7 +35,11 @@ from tools.lint._comment_syntax import code_lines
 FRONTEND_SRC = "autobot-frontend/src"
 MIN_SITES_EXAMINED = 30
 
-LITERAL = re.compile(r"(?:/api|\$\{getApiBase\(\)\})/analytics/codebase/([A-Za-z0-9_\-/{}$.]+)")
+#: ``/analytics/codebase/<path>`` (group 1 is ``<path>``), and the two ``/reporting`` routes that also require a source
+#: (group 1 is ``reporting/report`` / ``reporting/summary``; #21463).
+LITERAL = re.compile(
+    r"(?:/api|\$\{getApiBase\(\)\})/(?:analytics/codebase/|(?=reporting/(?:report|summary)\b))([A-Za-z0-9_\-/{}$.]+)"
+)
 EVIDENCE = re.compile(r"withSourceId\(|sourceIdQuery|source_id")
 SCOPE_FLAG = re.compile(r"scopeToSource:\s*true")
 REQUIRE_FLAG = re.compile(r"requireSource:\s*true")
@@ -317,3 +321,32 @@ def test_control_a_body_evidence_in_the_same_call_passes_and_one_outside_it_does
     assert scan_text(outside, "autobot-frontend/src/composables/analytics/useIndexingJob.ts")[
         1
     ], "the exemption covers only the anchored call"
+
+
+REPORTING_FILE = "autobot-frontend/src/composables/analytics/useAnalyticsDataFetchers.ts"
+
+
+def test_the_unified_report_caller_is_examined_and_skips_the_request_without_a_source():
+    """#21463: ``/api/reporting/report`` requires a source; the caller must be seen by the scan and be scoped."""
+    examined, violations = scan_text((repo_root() / REPORTING_FILE).read_text(encoding="utf-8"), REPORTING_FILE)
+    reporting = (repo_root() / REPORTING_FILE).read_text(encoding="utf-8").count("/api/reporting/report")
+    assert reporting >= 1, "the unified report caller moved; point this test at it"
+    assert examined >= 1 and not violations, violations
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        "useFetchEndpoint({ path: '/api/reporting/report', scopeToSource: true }, { withSourceId })",
+        "apiClient.get('/api/reporting/summary')",
+    ],
+)
+def test_control_a_reporting_call_without_a_skip_or_source_is_flagged(snippet):
+    examined, violations = scan_text(snippet)
+    assert examined == 1 and len(violations) == 1
+
+
+def test_control_a_scoped_reporting_call_passes_and_an_optional_one_is_not_examined():
+    scoped = "useFetchEndpoint({ path: '/api/reporting/report', scopeToSource: true, requireSource: true }, { withSourceId })"
+    assert scan_text(scoped) == (1, [])
+    assert scan_text("apiClient.get('/api/reporting/trends')") == (0, [])

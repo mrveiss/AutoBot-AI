@@ -213,7 +213,7 @@ describe('useFetchEndpoint (rehomed)', () => {
   })
 
   it('a scopeToSource caller whose backend source is optional still makes its request with no source selected (#20513)', async () => {
-    // /api/quality/*, /api/code-generation/stats, /api/reporting/report accept an absent source:
+    // /api/quality/* and /api/code-generation/stats accept an absent source:
     // the skip is opt-in (requireSource) and must not blank them.
     mockedFetch.mockResolvedValueOnce(jsonResponse({ ok: true, value: 7 }))
     const { data, load } = useFetchEndpoint<RawPayload, number>(
