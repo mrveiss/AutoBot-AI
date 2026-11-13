@@ -140,22 +140,20 @@ async def test_a_reassigned_item_still_gets_the_fence_its_first_holder_wrote_dro
 async def test_the_run_row_is_written_before_its_checkouts_are_selected() -> None:
     """Autoflush is off: the terminal status must reach the database (taking the run's row lock) first."""
     events: list[str] = []
-
-    class Ordered(RoutedSession):
-        async def flush(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
-            events.append("flush")
-            await super().flush(*args, **kwargs)
-
-        async def execute(self, statement, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
-            events.append("select")
-            return await super().execute(statement, *args, **kwargs)
-
     run = _run()
-    await release_checkouts_for_run(
-        Ordered([run], [Item(_COMPANY, run.id)]), run, ReleaseWhy("cancelled", "run_cancel", log=Recorder())
-    )
+    session = RoutedSession([run], [Item(_COMPANY, run.id)])
+    for name in ("flush", "execute"):
+        original = getattr(session, name)
 
-    assert events[:2] == ["flush", "select"]
+        async def traced(*args, _name=name, _original=original, **kwargs):  # noqa: ANN002, ANN003, ANN202
+            events.append(_name)
+            return await _original(*args, **kwargs)
+
+        setattr(session, name, traced)
+
+    await release_checkouts_for_run(session, run, ReleaseWhy("cancelled", "run_cancel", log=Recorder()))
+
+    assert events[:2] == ["flush", "execute"]
 
 
 def _user_ctx(run: LLCHeartbeatRun) -> MagicMock:
