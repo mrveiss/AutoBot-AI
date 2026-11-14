@@ -147,8 +147,10 @@ def test_the_head_is_judged_against_the_merge_base_not_the_base_tip(lane, repo) 
     head = repo.commit("add")
     repo.run("switch", "-q", "main")
     repo.write("elsewhere.py", _HEADLESS)  # main moves on with its own header-less file after the branch point
+    repo.write("new/a.py", _HEADLESS)  # and adds the same path: only the merge base shows the head adding it
     tip = repo.commit("main moves")
-    assert tip != repo.base and _flagged(lane, repo, head) == ["new/a.py"]
+    assert tip != repo.base
+    assert lane.headerless_additions(tip, head) == ["new/a.py"], "against the base tip the file reads as unchanged"
 
 
 def _main(lane, repo: Repo, head: str, monkeypatch, fetched: list[str]) -> int:
@@ -193,12 +195,13 @@ def test_a_non_utf8_added_file_is_judged_by_its_header_not_crashed_on(lane, repo
     assert _flagged(lane, repo, repo.commit("add")) == ["new/bad.py"]
 
 
-@pytest.mark.parametrize("sha", ["main", "abc123", "", "g" * 40])
-def test_a_commit_that_is_not_a_full_id_is_refused(lane, sha) -> None:
-    with pytest.raises(SystemExit):
-        lane.headerless_additions(sha, "a" * 40)
-    with pytest.raises(SystemExit):
-        lane.headerless_additions("a" * 40, sha)
+def test_a_commit_that_is_not_a_full_id_is_refused_though_git_would_resolve_it(lane, repo) -> None:
+    head = repo.run("rev-parse", "HEAD")
+    for short in ("main", head[:12], "HEAD"):  # each is a revision git resolves: only the id check refuses it
+        with pytest.raises(SystemExit, match="not a full commit id"):
+            lane.headerless_additions(short, head)
+        with pytest.raises(SystemExit, match="not a full commit id"):
+            lane.headerless_additions(head, short)
 
 
 @pytest.mark.parametrize(
