@@ -84,7 +84,8 @@ jobs:
       # ready: the run is not a draft pull request. Work behind a required gate is held back
       # until then; the gate itself fails with the reason (D4, #18208).
       ready: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && steps.hold.outputs.held != 'true') }}
-      # held (#21490): a dependabot pull request that is neither a `train-*` head nor labelled `ci:full`.
+      # held (#21490, #21519): a dependabot pull request that is neither a `train-*` head nor labelled `ci:full`,
+      # or the release promotion pull request without `ci:full`.
       # It starts no expensive work; every gate reports it as held (fails, never passes) in its summary.
       held: ${{ steps.hold.outputs.held }}
       # D8: python-suite on merge_group is parity -- it runs only when Python changed.
@@ -125,15 +126,21 @@ jobs:
       npm_structured_thinking: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.npm_structured_thinking == 'true' }}
       run_slm_frontend: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.slm_frontend == 'true' }}
     steps:
-      # #21490: decide first, from the PULL REQUEST AUTHOR -- `github.actor` becomes the human who
-      # re-runs it. Labels are read from the event payload, so `ci:full` takes effect on the next run
-      # the event starts (push, reopen, ready for review), not when the label is applied.
-      - name: Hold dependabot pull requests
+      # #21490 / #21519: decide first, from facts of the PULL REQUEST (its author, its head and base)
+      # -- `github.actor` becomes the human who re-runs it. Labels are read from the event payload, so
+      # `ci:full` takes effect on the next run the event starts (push, reopen, ready for review), not
+      # when the label is applied. Two kinds are held: a dependabot pull request, and the release
+      # promotion pull request (head = the default branch of THIS repository, base = release).
+      - name: Hold dependabot and release promotion pull requests
         id: hold
         env:
           EVENT: ${{ github.event_name }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REPO: ${{ github.repository }}
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         # FAILS OPEN. A broken hold step must degrade to "run everything", never "block everything":
         # a failure here fails `changes` and with it every gate of every pull request. So no `set -e`,
@@ -142,21 +149,30 @@ jobs:
         run: |
           set -uo pipefail
           held=false
-          if [ "${EVENT}" = "pull_request" ] && [ "${AUTHOR}" = "dependabot[bot]" ] \
-             && [[ "${HEAD_REF}" != train-* ]]; then
+          kind=""
+          if [ "${EVENT}" = "pull_request" ]; then
+            if [ "${AUTHOR}" = "dependabot[bot]" ] && [[ "${HEAD_REF}" != train-* ]]; then
+              kind="dependabot pull request"
+            # Same-repository head only: a fork branch that happens to be called main is not a promotion.
+            elif [ -n "${DEFAULT_BRANCH}" ] && [ "${HEAD_REF}" = "${DEFAULT_BRANCH}" ] \
+                 && [ "${HEAD_REPO}" = "${REPO}" ] && [ "${BASE_REF}" = "release" ]; then
+              kind="release promotion pull request"
+            fi
+          fi
+          if [ -n "${kind}" ]; then
             if full=$(jq -r 'if index("ci:full") then "yes" else "no" end' <<<"${LABELS}" 2>/dev/null) \
                && [ -n "${full}" ]; then
               [ "${full}" = "no" ] && held=true
             else
-              echo "::warning title=hold::cannot read the pull request labels; not holding this dependabot run (#21490)"
+              echo "::warning title=hold::cannot read the pull request labels; not holding this ${kind} (#21490)"
             fi
           fi
           echo "held=${held}" >> "$GITHUB_OUTPUT"
           if [ "${held}" = "true" ]; then
             {
-              echo "### Held: dependabot pull request (#21490)"
+              echo "### Held: ${kind} (#21490, #21519)"
               echo "The expensive work was NOT run and every required gate reports it as held, not passed."
-              echo "It runs on a \`train-*\` branch, or here once the \`ci:full\` label is on the PR and a new run starts."
+              echo "It runs once the \`ci:full\` label is on the PR and a new run starts (a dependabot PR also on a \`train-*\` branch)."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
