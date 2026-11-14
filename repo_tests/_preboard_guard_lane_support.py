@@ -39,9 +39,13 @@ def load_lane() -> Iterator[Any]:
         sys.modules.pop(spec.name, None)
 
 
+def env_needs() -> dict[str, dict[str, str]]:
+    """The ``needs`` of the result job when every job it waits for succeeded."""
+    return {name: {"result": "success"} for name in ("guards", "own-tests", "added-headers", "types")}
+
+
 def env(**over: str) -> dict[str, str]:
-    needs = {"guards": {"result": "success"}, "own-tests": {"result": "success"}, "types": {"result": "success"}}
-    base = {"NEEDS_JSON": json.dumps(needs), "RUN_ID": "1", "REF": "b", "SHA": "s", "BASE_REF": "main"}
+    base = {"NEEDS_JSON": json.dumps(env_needs()), "RUN_ID": "1", "REF": "b", "SHA": "s", "BASE_REF": "main"}
     base["PINNED_BASE_SHA"] = BASE_SHA
     return {**base, **over}
 

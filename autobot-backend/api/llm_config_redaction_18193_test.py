@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from api import llm as llm_api
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.ssot_config import config as ssot_config
-from config import unified_config_manager
+from config import config_manager
 from constants.model_constants import ModelConstants
 
 _PW = "SENTINEL-PW"  # f-string below: no literal user:pass@ in the source
@@ -60,7 +60,7 @@ def _client(monkeypatch, tree, role: str = "admin") -> TestClient:
             node = node[key]
         return node
 
-    monkeypatch.setattr(unified_config_manager, "get_nested", fake_get_nested)
+    monkeypatch.setattr(config_manager, "get_nested", fake_get_nested)
     app = FastAPI()
     app.include_router(llm_api.router, prefix="/api/llm")
     app.dependency_overrides[get_current_user] = lambda: {"username": f"{role}-user", "role": role}

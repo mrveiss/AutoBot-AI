@@ -33,7 +33,7 @@ def overridden(monkeypatch):
 
 
 def test_the_canonical_redis_config_follows_main(overridden):
-    assert config_pkg.unified_config_manager.get_redis_config()["db"] == 12
+    assert config_pkg.config_manager.get_redis_config()["db"] == 12
 
 
 def test_the_reentry_stub_follows_main(overridden):

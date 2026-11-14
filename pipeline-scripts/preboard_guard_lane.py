@@ -25,6 +25,10 @@ verdict logic: it asks this module (and ``preboard_guard_lane_report`` for the v
 * ``changed-tests`` -- the test files the head adds or changes (#21509), split by who runs them: the
   guard shards already run the guard roots in full; the ``own-tests`` job runs the rest, so a member's
   own new tests execute before the train instead of first inside it.
+* ``added-headers`` -- the files the head ADDS (or renames or copies into place) in the license-header check's
+  scope, judged on the committed text at the dispatched head: one without the header fails the lane (#21535).
+  The check is the shared ``lacks_header`` of ``tools/lint/check_spdx_header.py``, which the train content gate
+  also calls, so what a train rejects after boarding the lane rejects before it.
 * ``summarize`` -- the machine-readable result and its job summary.
 """
 
@@ -49,8 +53,10 @@ for _entry in (str(Path(__file__).resolve().parent.parent), str(Path(__file__).r
 
 import preboard_guard_lane_report as report  # noqa: E402
 
+from autobot_shared.git_probe import committed_text  # noqa: E402
 from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 from tools.lint._comment_syntax import code_lines  # noqa: E402
+from tools.lint.check_spdx_header import in_scope, lacks_header  # noqa: E402
 
 #: The guard and tooling trees, as named in pytest.ini's ``testpaths``. The only copy of this list.
 GUARD_ROOTS = (
@@ -84,6 +90,10 @@ IGNORED_PREFIXES = ("autobot-slm-backend/ansible/", "autobot-npu-worker/resource
 
 #: Where a changed test file runs. ``guarded`` files belong to the guard shards, which run their roots in full.
 OWN_GROUPS = ("main", "slm", "guarded", "uncollected")
+
+#: ``--diff-filter`` letters: every file a head changes (test selection), and the files it brings in under a path.
+CHANGED_FILTER = "ACMR"
+ARRIVED_FILTER = "ACR"
 
 #: The suite's own record of the tests it runs, one node id per entry.
 DURATIONS_FILE = ".test_durations"
@@ -233,12 +243,12 @@ def select_own_tests(paths: list[str], patterns: list[str], exists: Callable[[st
     return groups
 
 
-def changed_paths(base_sha: str, head_sha: str) -> list[str]:
-    """Files the head adds, copies, modifies or renames relative to the merge base (three-dot diff)."""
+def changed_paths(base_sha: str, head_sha: str, kinds: str = CHANGED_FILTER) -> list[str]:
+    """Files of the *kinds* (``--diff-filter`` letters) the head has relative to the merge base (three-dot diff)."""
     for sha in (base_sha, head_sha):
         if not BASE_SHA_PATTERN.fullmatch(sha):
             raise SystemExit(f"{sha!r} is not a full commit id")
-    out = _git("diff", "--name-only", "-z", "--diff-filter=ACMR", f"{base_sha}...{head_sha}")
+    out = _git("diff", "--name-only", "-z", f"--diff-filter={kinds}", f"{base_sha}...{head_sha}")
     return [p for p in out.split("\0") if p]
 
 
@@ -261,6 +271,40 @@ def _changed_tests(root: Path, args: argparse.Namespace) -> None:
         sys.stderr.write(f"{counts['guarded']} changed test file(s) in the guard roots run in the guard shards\n")
     if counts["uncollected"]:
         sys.stderr.write(f"::notice::{counts['uncollected']} changed test file(s) the suite does not collect\n")
+
+
+def examine_additions(base_sha: str, head_sha: str) -> tuple[int, int, list[str]]:
+    """``(added, in scope, header-less)``: the files the head brings in, those in the header check's scope, and
+    those whose COMMITTED text at the head has no header.
+
+    Read with ``committed_text`` (``git show``), never the working tree, which the lane has changed by merging the
+    base. A file the head only modifies is not judged: a header it already lacked is not this head's addition.
+    """
+    added = changed_paths(base_sha, head_sha, ARRIVED_FILTER)
+    scoped = [path for path in added if in_scope(Path(path))]
+    missing = [p for p in scoped if lacks_header(Path(p), lambda p=p: committed_text(head_sha, p))]
+    return len(added), len(scoped), missing
+
+
+def headerless_additions(base_sha: str, head_sha: str) -> list[str]:
+    """The files of :func:`examine_additions` that lack the header."""
+    return examine_additions(base_sha, head_sha)[2]
+
+
+def _added_headers(args: argparse.Namespace) -> int:
+    pinned_base_commit(args.base_sha)  # the base may not be in the branch's history: fetch it by id first
+    added, scoped, missing = examine_additions(args.base_sha, args.head_sha)
+    for path in missing:
+        sys.stderr.write(f"{path}: added without the SPDX/Apache-2.0 license header\n")
+    if missing:
+        sys.stderr.write(f"::error::{len(missing)} added file(s) lack the license header; add it and commit\n")
+        return 1
+    sys.stdout.write(
+        "no added files: nothing to examine\n"
+        if not added
+        else f"added files: {added}, in the header check's scope: {scoped}, with the header: {scoped - len(missing)}\n"
+    )
+    return 0
 
 
 def build_meta(root: Path, shard: int, splits: int, rc: int | None, env: dict[str, str]) -> dict[str, Any]:
@@ -320,6 +364,9 @@ def _parser() -> argparse.ArgumentParser:
     own = sub.add_parser("changed-tests")
     for flag in ("--base-sha", "--head-sha", "--out-dir"):
         own.add_argument(flag, required=True)
+    added = sub.add_parser("added-headers")
+    for flag in ("--base-sha", "--head-sha"):
+        added.add_argument(flag, required=True)
     summarize = sub.add_parser("summarize")
     for flag in ("--shards", "--types", "--out", "--markdown"):
         summarize.add_argument(flag, required=True)
@@ -343,6 +390,8 @@ def main(argv: list[str] | None = None) -> int:
         _write_meta(args)
     elif args.command == "changed-tests":
         _changed_tests(root, args)
+    elif args.command == "added-headers":
+        return _added_headers(args)
     else:
         return _summarize(args)
     return 0
