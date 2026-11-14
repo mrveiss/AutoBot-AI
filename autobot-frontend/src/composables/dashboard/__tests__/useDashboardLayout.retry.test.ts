@@ -15,6 +15,7 @@ vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api' }))
 vi.mock('@/utils/debugUtils', () => ({ createLogger: () => ({ error: vi.fn(), warn: vi.fn() }) }))
 
 const { useDashboardLayout } = await import('../useDashboardLayout')
+const { CircuitBreakerError } = await import('@/utils/apiCircuitBreaker')
 
 const DEFAULTS = (): DashboardLayout => ({
   dashboards: [{ id: 'default', name: 'n', widgets: [], createdAt: 0, updatedAt: 0 }],
@@ -177,6 +178,48 @@ describe('useDashboardLayout load retry', () => {
     api.get.mockRejectedValue(new AbsoluteEndpointError('https://evil.example/x'))
     const d = useDashboardLayout('home', DEFAULTS, OPTS)
     await d.load()
+    expect(api.get).toHaveBeenCalledTimes(1)
+    expect(d.loadError.value).not.toBeNull()
+    expect(d.retrying.value).toBe(false)
+  })
+
+  it.each([
+    ['a fetch network failure', () => new TypeError('Failed to fetch')],
+    ['the client timeout, built as the client builds it', () => new Error('Request timeout after 30000ms')],
+    ['a 5xx', () => new HttpError(504, 'Gateway Timeout')],
+    ['an open circuit', () => new CircuitBreakerError('dashboard', 'OPEN')],
+  ])('retries %s', async (_kind, makeError) => {
+    api.get.mockRejectedValueOnce(makeError()).mockResolvedValueOnce(STORED_BODY)
+    const d = useDashboardLayout('home', DEFAULTS, OPTS)
+    const done = d.load()
+    await vi.advanceTimersByTimeAsync(1000)
+    await done
+    expect(api.get).toHaveBeenCalledTimes(2)
+    expect(d.loaded.value).toBe(true)
+  })
+
+  it.each([
+    ['a body that is not JSON (SyntaxError)', () => new SyntaxError('Unexpected token < in JSON')],
+    ['an unknown error', () => new Error('boom')],
+  ])('does not retry %s', async (_kind, makeError) => {
+    api.get.mockRejectedValue(makeError())
+    const d = useDashboardLayout('home', DEFAULTS, OPTS)
+    await d.load()
+    expect(api.get).toHaveBeenCalledTimes(1)
+    expect(d.loadError.value).not.toBeNull()
+    expect(d.retrying.value).toBe(false)
+    expect(d.loaded.value).toBe(false)
+  })
+
+  it('a wait that ends after the deadline starts no new attempt', async () => {
+    api.get.mockRejectedValue(new HttpError(503, 'x'))
+    const d = useDashboardLayout('home', DEFAULTS, { ...OPTS, retries: 10, budgetMs: 2500 })
+    const done = d.load()
+    await vi.advanceTimersByTimeAsync(0) // first failure: the 1000 ms wait fits the budget, so it is scheduled
+    expect(d.retrying.value).toBe(true)
+    vi.setSystemTime(Date.now() + 10000) // the tab was throttled: the clock jumps past the deadline mid-wait
+    await vi.advanceTimersByTimeAsync(1000)
+    await done
     expect(api.get).toHaveBeenCalledTimes(1)
     expect(d.loadError.value).not.toBeNull()
     expect(d.retrying.value).toBe(false)
