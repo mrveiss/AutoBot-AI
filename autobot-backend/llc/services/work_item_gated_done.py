@@ -94,16 +94,17 @@ async def review_outcome(
     item: LLCWorkItem,
     company_id: str,
     gate: DoneGate,
-    *,
-    is_human: bool,
-    is_board_override: bool,
+    who: tuple,
+    acting_user: Optional[uuid.UUID],
 ) -> Optional[LLCWorkItem]:
     """The item in review when the gate takes this finish, ``None`` when the finish may go ahead.
 
     A person, or a board override, is never gated. Anyone else finishing a gated type is refused unless
     it is the agent holding the item, whose finish becomes a handoff. A caller with no gate is refused.
+    *who* is (agent id, user id, board override); a user id or *acting_user* makes the caller a person.
     """
-    if is_human or is_board_override:
+    _agent, user_id, is_board_override = who
+    if user_id is not None or acting_user is not None or is_board_override:
         return None
     if gate.review_gate_svc is None:
         raise InvalidTransition(f"Work item {item.id} cannot be marked done: no review gate was supplied.")

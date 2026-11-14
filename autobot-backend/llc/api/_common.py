@@ -83,6 +83,15 @@ def _is_auth_disabled_user(current_user: dict) -> bool:
     return current_user.get("auth_disabled") is True and not current_user.get("service")
 
 
+def event_actor(current_user: dict) -> Optional[str]:
+    """The verified caller's id for an event: the auth-disabled stand-in has none, any other caller needs a UUID.
+
+    A credential without a usable id is refused with 401 (``actor_id``), as before; only the stand-in the
+    auth middleware yields when authentication is off may act without one (#21503).
+    """
+    return None if _is_auth_disabled_user(current_user) else str(actor_id(current_user))
+
+
 def acting_user_id(current_user: dict) -> Optional[str]:
     """The acting user's id for the activity log, or None for a principal that is not a user.
 

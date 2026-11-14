@@ -837,15 +837,11 @@ class WorkItemService(LLCServiceBase):
         company_id = company_id or str(item.company_id)
         current, own = self._check_move(item, acting_user, WorkItemStatus.DONE)
         gate = DoneGate(review_gate_svc, handoff_svc, actor_agent_id, is_agent)
-        person = actor_user_id is not None or acting_user is not None
-        held = await review_outcome(
-            session, item, company_id, gate, is_human=person, is_board_override=is_board_override
-        )
+        who = (actor_agent_id, actor_user_id, is_board_override)
+        held = await review_outcome(session, item, company_id, gate, who, acting_user)
         if held is not None:
             return held
-        await self._complete(
-            session, item, current, own, company_id, (actor_agent_id, actor_user_id, is_board_override)
-        )
+        await self._complete(session, item, current, own, company_id, who)
         return item
 
     async def _complete(

@@ -9,6 +9,9 @@ brings no review gate gets the real one, so a new caller of ``transition_status`
 What can still bypass it is code that skips ``transition_status``:
 
 * a call to ``transition_to_done`` from outside the service module (it takes the gate as optional arguments); and
+* a ``DoneGate(...)`` built outside the two homes that build one (the accessors, which fill it with the real
+  services, and the service, which rebuilds it from ``transition_to_done``'s arguments), since a caller's own
+  permissive gate is a way round the real one; and
 * a write of ``WorkItemStatus.DONE`` to a work item outside the two homes that may stamp it: the service
   (``transition_to_done``'s stamp) and ``HandoffService.approve`` (a reviewer's decision, the review flow itself).
 
@@ -35,6 +38,8 @@ _HANDOFF = "autobot-backend/llc/services/handoff.py"
 _CALL_HOMES = frozenset({_SERVICE})
 #: Where ``WorkItemStatus.DONE`` may be written to a work item.
 _WRITE_HOMES = frozenset({_SERVICE, _HANDOFF})
+#: Where a ``DoneGate`` may be constructed.
+_GATE_HOMES = frozenset({_SERVICE, "autobot-backend/llc/services/accessors.py"})
 _STAMPS = frozenset({"stamp_status", "stamp_and_release"})
 
 
@@ -58,7 +63,7 @@ REACH = declare(
     "one-done-path",
     discover=_backend_python,
     reference=_reference,
-    min_fraction=0.95,
+    min_fraction=1.0,  # discover and reference are the same population by construction: any gap is a real gap
     what="tracked backend python files",
     roots=("autobot-backend",),
 )
@@ -76,6 +81,17 @@ def done_calls(source: str) -> list[int]:
             func = node.func
             name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
             if name == "transition_to_done":
+                found.append(node.lineno)
+    return sorted(found)
+
+
+def gate_constructions(source: str) -> list[int]:
+    """Lines constructing a ``DoneGate``."""
+    found = []
+    for node in ast.walk(parse_cache.parse(source)):
+        if isinstance(node, ast.Call):
+            func = node.func
+            if (func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")) == "DoneGate":
                 found.append(node.lineno)
     return sorted(found)
 
@@ -139,6 +155,20 @@ def test_control_a_write_of_done_is_seen(source: str, expected: list[int]) -> No
     assert done_writes(source) == expected
 
 
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("gate = DoneGate(permissive_svc)", [1]),
+        ("x = 1\ng = gated_done.DoneGate(review_gate_svc=None)", [2]),
+        ("class DoneGate:\n    pass", []),
+        ("g = done_gate_for()", []),
+    ],
+    ids=["bare", "qualified", "a-definition-is-not-a-construction", "the-accessor"],
+)
+def test_control_a_built_gate_is_seen(source: str, expected: list[int]) -> None:
+    assert gate_constructions(source) == expected
+
+
 def _production() -> list[tuple[str, str]]:
     sources = []
     for rel in REACH.examined(_ROOT):
@@ -146,7 +176,7 @@ def _production() -> list[tuple[str, str]]:
         if is_test_filename(base, include_js=False) or "/tests/" in f"/{rel}" or "test_support" in base:
             continue
         text = (_ROOT / rel).read_text(encoding="utf-8")
-        if "DONE" in text or "transition_to_done" in text:
+        if "DONE" in text or "transition_to_done" in text or "DoneGate" in text:
             sources.append((rel, text))
     return sources
 
@@ -161,7 +191,15 @@ def test_nothing_outside_the_homes_writes_done_to_a_work_item() -> None:
     assert not offenders, "a work item is finished by WorkItemService.transition_status: " + ", ".join(offenders)
 
 
+def test_nothing_outside_the_homes_builds_a_done_gate() -> None:
+    offenders = [
+        f"{rel}:{n}" for rel, text in _production() if rel not in _GATE_HOMES for n in gate_constructions(text)
+    ]
+    assert not offenders, "get the gate from llc.services.accessors.done_gate_for: " + ", ".join(offenders)
+
+
 def test_the_homes_are_real() -> None:
     """Control: each home is examined and does what it is excused for, so an excuse cannot outlive its code."""
     seen = {rel: text for rel, text in _production()}
     assert done_writes(seen[_SERVICE]) and done_writes(seen[_HANDOFF])
+    assert all(gate_constructions(seen[home]) for home in _GATE_HOMES)

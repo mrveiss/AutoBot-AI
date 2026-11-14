@@ -29,7 +29,7 @@ from user_management.services import TenantContext
 from ..exceptions import WipLimitExceeded
 from ..services.board import BoardService
 from ..services.work_item_service import InvalidTransition
-from ._common import acting_user_id, moving_as, refused_transition
+from ._common import event_actor, moving_as, refused_transition
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/boards", tags=["llc-boards"])
@@ -334,7 +334,7 @@ async def move_item(
             board_id=board_id,
             work_item_id=body.work_item_id,
             column_id=body.column_id,
-            actor_id=acting_user_id(_current_user),
+            actor_id=event_actor(_current_user),
             **moving_as(_current_user),
         )
         await session.commit()

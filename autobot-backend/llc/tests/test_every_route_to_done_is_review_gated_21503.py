@@ -405,3 +405,13 @@ async def test_a_cancel_still_releases_the_task_workspace(factory, effects) -> N
         await session.commit()
     assert (await _row(factory)).status == WorkItemStatus.CANCELLED
     assert effects.release.await_args.args[0] == str(_ITEM)
+
+
+async def test_a_board_move_by_a_credential_with_no_user_id_is_still_a_401(factory) -> None:  # noqa: ANN001
+    """Only the auth-disabled stand-in may move a card without a user id; any other such credential is refused."""
+    await _seed(factory, type_=WorkItemType.TASK, agent=None)
+
+    response = await _board_done(factory, {"id": "not-a-uuid", "auth_method": "jwt"})
+
+    assert response.status_code == 401, response.text
+    assert (await _row(factory)).status == WorkItemStatus.IN_PROGRESS

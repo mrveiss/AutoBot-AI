@@ -36,6 +36,8 @@ get_review_gate_service = service_singleton(ReviewGatePolicyService)
 def get_handoff_service() -> "HandoffService":
     """The shared handoff service. Imported on first use: its module pulls in ``llc.kb`` (#13057)."""
 
+    from .handoff import HandoffService
+
     return service_singleton(HandoffService)()
 
 

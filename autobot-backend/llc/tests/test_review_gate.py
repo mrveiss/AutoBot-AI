@@ -338,21 +338,21 @@ class TestTransitionToDone:
         company_id, agent_id, reviewer = (str(uuid.uuid4()) for _ in range(3))
         wi.company_id = uuid.UUID(company_id)
         wi.reviewer_user_id = uuid.UUID(reviewer)
-
         gate_svc = AsyncMock(spec=ReviewGatePolicyService, requires_review=AsyncMock(return_value=(True, "admin")))
-
         in_review_wi = _make_work_item(status=WorkItemStatus.IN_REVIEW)
         handoff_svc = AsyncMock(spec=HandoffService, agent_to_human=AsyncMock(return_value=in_review_wi))
-
         svc = WorkItemService()
-        result = await svc.transition_to_done(
-            session,
-            str(wi.id),
-            company_id,
-            actor_agent_id=agent_id,
-            review_gate_svc=gate_svc,
-            handoff_svc=handoff_svc,
-        )
+        with patch(
+            "llc.services.authz.membership_role", new=AsyncMock(return_value="member")
+        ):  # the reviewer is a member
+            result = await svc.transition_to_done(
+                session,
+                str(wi.id),
+                company_id,
+                actor_agent_id=agent_id,
+                review_gate_svc=gate_svc,
+                handoff_svc=handoff_svc,
+            )
 
         handoff_svc.agent_to_human.assert_awaited_once_with(
             session, str(wi.id), agent_id=agent_id, reviewer_user_id=reviewer, company_id=company_id

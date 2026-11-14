@@ -260,7 +260,7 @@ async def test_relations_add_and_remove_record_the_actor_and_keep_their_metadata
 
 @pytest.mark.asyncio
 async def test_transition_to_done_records_the_actor_and_survives_a_service_principal():
-    from llc.models.enums import WorkItemStatus
+    from llc.models.enums import WorkItemStatus, WorkItemType
     from llc.services import work_item_service as wis
 
     can_finish = next(st for st, to in wis._ALLOWED_TRANSITIONS.items() if WorkItemStatus.DONE in to)
@@ -277,7 +277,7 @@ async def test_transition_to_done_records_the_actor_and_survives_a_service_princ
         svc = wis.WorkItemService(activity_log=log)
         svc._trigger_artifact_ingest = AsyncMock()
         company = uuid.uuid4()
-        item = MagicMock(status=can_finish.value, version=1, company_id=company)
+        item = MagicMock(status=can_finish.value, version=1, company_id=company, type=WorkItemType.TASK.value)
         await svc.transition_to_done(_session_with(item), str(uuid.uuid4()), str(company), **kwargs)
         sent = log.record.await_args.kwargs
         assert (sent["actor_type"], sent["actor_id"]) == (expected_type, expected_id)
