@@ -66,6 +66,11 @@ declare module 'vue-router' {
      */
     minRole?: Role
 
+    /**
+     * Company-scoped route whose view handles a company switch itself, so the company layout must
+     * not remount it when the route's company changes (#21502). Everything else remounts.
+     */
+    keepOnCompanySwitch?: boolean
   }
 }
 

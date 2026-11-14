@@ -85,7 +85,7 @@ export const llcCompanyChildren: RouteRecordRaw[] = [
   // #13714: Company OS > Mailbox -- no mailbox backend yet, so the view states that plainly.
   { path: 'mailbox', name: 'llc-mailbox', component: () => import('@/views/llc/MailboxView.vue'), meta: { title: 'Mailbox', requiresAuth: true } },
   { path: 'routines', name: 'llc-routines', component: () => import('@/views/llc/RoutinesView.vue'), props: true, meta: { title: 'Routines', requiresAuth: true } },
-  { path: 'ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
+  { path: 'ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true, keepOnCompanySwitch: true } },
   { path: 'activity', name: 'llc-activity', component: () => import('@/views/llc/ActivityFeedView.vue'), props: true, meta: { title: 'Activity', requiresAuth: true } },
   { path: 'roles', name: 'llc-roles', component: () => import('@/views/llc/RolesView.vue'), props: true, meta: { title: 'Roles', requiresAuth: true } },
   // #18431: Organization > Handbook -- generated role/workflow/process pages from the company model.

@@ -119,6 +119,9 @@ async function mountChart() {
 async function mountOnCanvas() {
   const wrapper = await mountChart()
   await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+  // Canvas entry starts loaders (people sources, process and tool nodes); let them settle so a case
+  // that clears or snapshots a request counter afterwards is not racing them (#21501).
+  await flushPromises()
   return wrapper
 }
 
@@ -244,6 +247,9 @@ describe('OrgChart "View As: role" lens (#13943)', () => {
 
   it('never fetches or posts as a result of a lens selection — presentation only', async () => {
     const wrapper = await mountOnCanvas()
+    // Canvas entry did issue requests; without this the assertions below could pass on a counter
+    // that was never fed.
+    expect(get.mock.calls.map(([url]) => String(url)).some((url) => url.endsWith('/involved'))).toBe(true)
     get.mockClear()
     post.mockClear()
 
@@ -252,7 +258,8 @@ describe('OrgChart "View As: role" lens (#13943)', () => {
     await wrapper.get('[data-testid="role-lens-clear"]').trigger('click')
     await flushPromises()
 
-    expect(get).not.toHaveBeenCalled()
-    expect(post).not.toHaveBeenCalled()
+    // By URL, so a failure names the request a lens selection must not make.
+    expect(get.mock.calls.map(([url]) => String(url))).toEqual([])
+    expect(post.mock.calls.map(([url]) => String(url))).toEqual([])
   })
 })
