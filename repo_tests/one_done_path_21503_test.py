@@ -164,8 +164,17 @@ def done_writes(source: str) -> list[int]:
         ("await svc.transition_status(session, item_id, WorkItemStatus.DONE)", []),
         ("def transition_to_done(self):\n    return 1", []),
         ("from m import transition_to_done as finish\nawait finish(session, item_id)", [2]),
+        ("Alias = transition_to_done\nawait Alias(session, item_id)", [2]),
     ],
-    ids=["method", "bare-name", "second-line", "transition-status-is-gated", "a-definition-is-not-a-call", "aliased"],
+    ids=[
+        "method",
+        "bare-name",
+        "second-line",
+        "transition-status-is-gated",
+        "a-definition-is-not-a-call",
+        "aliased",
+        "assigned-alias",
+    ],
 )
 def test_control_a_call_to_the_done_transition_is_seen(source: str, expected: list[int]) -> None:
     assert done_calls(source) == expected
@@ -185,6 +194,8 @@ def test_control_a_call_to_the_done_transition_is_seen(source: str, expected: li
         ("item.status: WorkItemStatus = WorkItemStatus.DONE", [1]),
         ("from m import WorkItemStatus as S\nitem.status = S.DONE", [2]),
         ("from m import stamp_status as ss\nss(item, WorkItemStatus.DONE, now)", [2]),
+        ("Alias = WorkItemStatus\nitem.status = Alias.DONE", [2]),
+        ("Alias = LLCWorkItem\nrow = Alias(status=WorkItemStatus.DONE)", [2]),
         ("row = LLCWorkItem(title=t, status=WorkItemStatus.DONE)", [1]),
         ("q = select(LLCWorkItem).filter_by(status=WorkItemStatus.DONE)", []),
         ("q = select(LLCWorkItem).where(LLCWorkItem.status == WorkItemStatus.DONE)", []),
@@ -202,6 +213,8 @@ def test_control_a_call_to_the_done_transition_is_seen(source: str, expected: li
         "annotated-assign",
         "aliased-enum",
         "aliased-stamp",
+        "assigned-enum-alias",
+        "assigned-model-alias",
         "new-row",
         "filter-by-is-a-read",
         "where-is-a-read",

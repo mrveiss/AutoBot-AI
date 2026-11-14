@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from llc.models.enums import WorkItemStatus, WorkItemType
 from llc.services import after_commit
+from llc.services.handoff import HandoffService
 from llc.services.work_item_gated_done import DoneGate
 from llc.services.work_item_service import WorkItemService
 from testkit.fake_async_session import FakeAsyncSession
@@ -81,3 +82,18 @@ async def test_the_worktree_goes_when_the_transition_commits(status) -> None:
 async def test_the_worktree_stays_when_the_transition_does_not_commit(status) -> None:
     _item_, _workspace, removed, _before = await _finish(status, commit=False)
     removed.assert_not_called()
+
+
+@pytest.mark.parametrize(("commit", "removals"), [(True, 1), (False, 0)], ids=["commit", "rollback"])
+async def test_the_approve_path_removes_the_worktree_only_after_commit(commit: bool, removals: int) -> None:
+    reviewer, item, workspace = uuid.uuid4(), _item(), SimpleNamespace(workspace_dir="/workspaces/task")
+    item.reviewer_user_id = reviewer
+    session = _TxSession(results=[FakeResult([item]), FakeResult([workspace])])
+    removed = MagicMock()
+    with patch("services.task_workspace.release_workspace", removed):
+        service = HandoffService(activity_log=MagicMock(record=AsyncMock()))
+        await service.approve(session, str(item.id), str(reviewer), str(item.company_id))
+        assert removed.call_count == 0, "the worktree was removed before the approval committed"
+        await (session.commit() if commit else session.rollback())
+        await asyncio.gather(*after_commit.after_commit_tasks)
+    assert removed.call_count == removals

@@ -341,9 +341,9 @@ async def release_for_task(
         state.workspace_dir = None
         await session.flush()
 
-        defer_until_commit(
-            session, lambda: _remove_worktree(task_id, repo_root), f"remove the worktree of task {task_id}"
-        )
+        task = defer_until_commit(session, lambda: _remove_worktree(task_id, repo_root), f"remove worktree {task_id}")
+        if task is not None:  # a session-less caller has no commit to wait for: the removal started at once
+            await task
     except Exception:
         logger.warning("release_for_task failed for task=%s", task_id, exc_info=True)
 
