@@ -47,15 +47,16 @@ REMOVED_NAME = re.compile(r"\b(?:UnifiedConfigManager|get_unified_config_manager
 
 def _population(root: Path) -> list[str]:
     try:
-        found = tracked_paths(root, "*.py", "*.md", exclude=_EXCLUDE)
+        found = tracked_paths(root, ".", exclude=_EXCLUDE)
     except EmptyEnumeration:
         return []
-    return [p for p in found if p != _THIS_FILE]
+    return [p for p in found if p.endswith((".py", ".md")) and p != _THIS_FILE]
 
 
 REACH = declare(
     "unified-config-aliases-gone",
     discover=_population,
+    floor=9483,  # measured on this tree (9683, growth 400, mid-window); a new guard pins until it lands on the base (#19676)
     what="tracked python and markdown files outside changelogs and archives",
     growth=400,
 )
