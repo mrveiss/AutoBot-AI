@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { MockWebSocket } from '../../../test/mocks/websocket-mock'
 import SSHTerminal from '../SSHTerminal.vue'
+import { URL_RESTART_DELAY_MS } from '@/composables/useWebSocket'
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: vi.fn(function (this: Record<string, unknown>) {
@@ -100,6 +101,8 @@ describe('SSHTerminal when a detached socket closes (#21548)', () => {
     const view = mountTerminal()
     expect(MockWebSocket.getAllInstances()).toHaveLength(1)
     await settleConnection(view)
+    // Past the window in which the URL watcher used to close this socket and open a second one.
+    await vi.advanceTimersByTimeAsync(URL_RESTART_DELAY_MS)
 
     expect(MockWebSocket.getAllInstances()).toHaveLength(1)
     expect(barClasses()).toContain('connected')

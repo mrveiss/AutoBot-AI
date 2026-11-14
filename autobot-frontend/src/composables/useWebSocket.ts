@@ -116,11 +116,11 @@ export interface UseWebSocketOptions {
   onClose?: (event: CloseEvent, info: WebSocketCloseInfo) => void
 }
 
-// `protocols` stays optional: Required<> would strip the `undefined` its type
-// deliberately allows (#17009), and an absent value means "offer none".
 /** Delay before reconnect() and the URL watcher reopen a socket they just closed. */
 export const URL_RESTART_DELAY_MS = 100
 
+// `protocols` stays optional: Required<> would strip the `undefined` its type
+// deliberately allows (#17009), and an absent value means "offer none".
 const DEFAULT_OPTIONS: Required<Omit<UseWebSocketOptions, 'protocols'>> = {
   autoConnect: true,
   autoReconnect: true,
