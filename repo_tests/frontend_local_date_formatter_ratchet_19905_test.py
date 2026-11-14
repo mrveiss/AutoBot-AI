@@ -43,7 +43,7 @@ from pathlib import Path
 
 from repo_tests._local_date_formatter_detect import date_formatter_names
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table
+from repo_tests._ratchet_base import base_file_present, base_table, raised_known_entries
 from repo_tests._reach import declare
 
 _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src")
@@ -441,16 +441,12 @@ def test_the_apps_do_not_hand_roll_more_date_formatters_than_pinned() -> None:
 
 
 def test_the_pin_was_not_raised_against_the_base() -> None:
-    base = base_table(
-        repo_root(),
-        ("repo_tests/frontend_local_date_formatter_ratchet_19905_test.py",),
-        "PINS",
-    )
-    if not base:
+    this = ("repo_tests/frontend_local_date_formatter_ratchet_19905_test.py",)
+    if not base_file_present(repo_root(), this):
         return  # the guard is new at this base; nothing to compare against yet
-    for key, pinned in PINS.items():
-        if key in base:  # a measure the base did not have starts at its first measurement (#20004)
-            assert pinned <= base[key], f"PINS[{key!r}] rose from {base[key]} to {pinned}; the pin only goes down."
+    base = base_table(repo_root(), this, "PINS")
+    raised = raised_known_entries(PINS, base)  # a measure the base did not have starts at its first measurement
+    assert not raised, f"PINS rose against the base (base, now): {raised}; the pin only goes down."
 
 
 # The kit itself: ``format.ts`` is the one home of the date formatters, and ``schedule/zone.ts`` is

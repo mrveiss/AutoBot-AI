@@ -1,7 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
-import { AbsoluteEndpointError, ApiClientBase, fillPathParams, parseRetryAfterMs, withQuery, type TransportRequestOptions } from '../ApiClientBase'
+import { AbsoluteEndpointError, ApiClientBase, RequestTimeoutError, fillPathParams, parseRetryAfterMs, withQuery, type TransportRequestOptions } from '../ApiClientBase'
 import { HttpError } from '../httpError'
 
 const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }
@@ -108,6 +108,16 @@ describe('ApiClientBase', () => {
       init.signal!.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
     }))
     await expect(new TestClient().rawRequest('/x', { timeout: 5 })).rejects.toThrow('Request timeout after 5ms')
+  })
+
+  it('rejects a timed-out request with a RequestTimeoutError carrying the budget', async () => {
+    fetchMock.mockImplementation((_u: string, init: RequestInit) => new Promise((_r, reject) => {
+      init.signal!.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+    }))
+    const error = await new TestClient().rawRequest('/x', { timeout: 5 }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(RequestTimeoutError)
+    expect((error as RequestTimeoutError).message).toBe('Request timeout after 5ms')
+    expect((error as RequestTimeoutError).timeoutMs).toBe(5)
   })
 
   it('passes a caller abort through as the AbortError', async () => {
