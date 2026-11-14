@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import os
 import socket
+import uuid
 from typing import Any, Awaitable, Callable, Optional
 
 from autobot_shared.logging_manager import get_logger
@@ -44,6 +45,16 @@ DEFAULT_REFRESH_S = 10
 DEFAULT_POLL_S = 15
 
 Hook = Callable[[], Awaitable[None] | None]
+
+
+def worker_identity(*, unique: bool = False) -> str:
+    """The name one worker takes a lock under: ``host-pid``; with *unique*, a random suffix names one INSTANCE.
+
+    The one construction every lock holder shares. Two routers in one process (tests) need *unique*, so a lock
+    one took is not the other's.
+    """
+    identity = "%s-%d" % (socket.gethostname(), os.getpid())
+    return "%s:%s" % (identity, uuid.uuid4().hex[:8]) if unique else identity
 
 
 class LeaderLease:
@@ -71,7 +82,7 @@ class LeaderLease:
         self.ttl_ms = ttl_ms
         self.refresh_s = refresh_s
         self.poll_s = poll_s
-        self.worker_id = worker_id or "%s-%d" % (socket.gethostname(), os.getpid())
+        self.worker_id = worker_id or worker_identity()
         self.label = label or key
         self._is_leader = False
         self._client_factory = client_factory
@@ -196,4 +207,4 @@ async def _call(hook: Hook | None) -> None:
         await result
 
 
-__all__ = ["LeaderLease", "DEFAULT_TTL_MS", "DEFAULT_REFRESH_S", "DEFAULT_POLL_S"]
+__all__ = ["LeaderLease", "worker_identity", "DEFAULT_TTL_MS", "DEFAULT_REFRESH_S", "DEFAULT_POLL_S"]
