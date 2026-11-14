@@ -544,7 +544,8 @@ def main() -> int:
     if args.file_issues:
         _file_new_issues(findings, args.max_issues)
 
-    # print() appended one newline; render_human() already ends in one, so it keeps its second.
+    # The report was previously emitted with the builtin that appends one newline; render_human() already
+    # ends in one, so its output keeps a second. Writing "+ \n" keeps stdout byte-identical.
     sys.stdout.write((render_json(findings) if args.json else render_human(findings)) + "\n")
 
     return 1 if findings else 0
