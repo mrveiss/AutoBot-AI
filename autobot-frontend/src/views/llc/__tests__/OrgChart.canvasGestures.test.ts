@@ -196,8 +196,8 @@ describe('the card\'s own detach button is the one route to a detach (#14749)', 
   it('shows a viewer who may not manage no detach button, and the menu still offers none', async () => {
     const w = await canvasChart(false)
     // The nodes are drawn, so the absence below is not an unrendered canvas.
-    expect(node(w, PROCESS_NODE).exists()).toBe(true)
-    expect(node(w, TOOL_NODE).exists()).toBe(true)
+    expect(w.find(`[data-node-id="${PROCESS_NODE}"]`).exists()).toBe(true)
+    expect(w.find(`[data-node-id="${TOOL_NODE}"]`).exists()).toBe(true)
 
     expect(w.find('[data-testid="process-detach-btn"]').exists()).toBe(false)
     expect(w.find('[data-testid="tool-detach-btn"]').exists()).toBe(false)
