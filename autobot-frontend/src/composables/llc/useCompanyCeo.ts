@@ -11,8 +11,9 @@
  * no longer exists, and a live holder. A refusal carries its reason in the response `detail`
  * (holder does not exist / has no company recorded / belongs elsewhere); it is shown as sent.
  *
- * The view is not remounted when the route moves to another company, so a response is applied
- * only while it is still for the company shown.
+ * The layout remounts the view on a company switch (#21502) except on a route with
+ * `meta.keepOnCompanySwitch` (the CEO chat), so a response is applied only while it is still for
+ * the company shown.
  */
 import { computed, ref, watch } from 'vue'
 import { isHttpError } from '@autobot/ui'

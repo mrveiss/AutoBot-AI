@@ -18,7 +18,12 @@ const route = reactive<{ params: Record<string, string>; query: Record<string, s
   params: { companyId: 'c1' },
   query: {},
 })
-const store = reactive({ selectedCompanyId: null as string | null, hasCompanies: true, isLoading: false })
+const store = reactive({
+  selectedCompanyId: null as string | null,
+  hasCompanies: true,
+  isLoading: false,
+  selectCompany: vi.fn(),
+})
 
 vi.mock('@/composables/useEventBus', () => ({ useEventBus: () => ({ subscribe }) }))
 vi.mock('@/composables/useNotificationBus', () => ({
