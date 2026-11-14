@@ -48,8 +48,10 @@ def _entry_paths() -> set[str]:
 
 def test_the_enumeration_reaches_the_tree_it_compares_against() -> None:
     tracked = _tracked()
-    absent = [anchor for anchor in _REACH_ANCHORS if anchor not in tracked]
-    assert not absent, f"git ls-files no longer lists {absent}; a missing-path result would be vacuous"
+    reached = [anchor for anchor in _REACH_ANCHORS if anchor in tracked]
+    assert len(reached) == len(
+        _REACH_ANCHORS
+    ), f"git ls-files lists {len(reached)} of {len(_REACH_ANCHORS)} anchors; a missing-path result would be vacuous"
     assert _entry_paths(), "the legacy-keys file names no paths; there is nothing to check"
 
 
