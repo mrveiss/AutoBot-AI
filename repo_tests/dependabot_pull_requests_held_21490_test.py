@@ -286,9 +286,9 @@ def _needs(spec: dict) -> list:
     return [needs] if isinstance(needs, str) else list(needs)
 
 
-def _in_scope(name: str, job_id: str, spec: dict) -> bool:
-    """ci.yml: the expensive-looking jobs; every other workflow: every job."""
-    if name != "ci.yml":
+def _in_scope(name: str, job_id: str, spec: dict, cheap=CHEAP) -> bool:
+    """A non-cheap workflow outside ci.yml: every job; ci.yml and the cheap record: the expensive-looking ones."""
+    if name != "ci.yml" and name not in cheap:
         return True
     return _is_expensive(job_id, spec) and job_id not in REPORTING_GATES
 
@@ -297,7 +297,7 @@ def violations(workflows: dict[str, dict], cheap=CHEAP, exempt=EXEMPT_JOBS) -> l
     problems = []
     for name, doc in workflows.items():
         jobs = doc.get("jobs") or {}
-        expensive = [j for j, spec in jobs.items() if _in_scope(name, j, spec) and (name, j) not in exempt]
+        expensive = [j for j, spec in jobs.items() if _in_scope(name, j, spec, cheap) and (name, j) not in exempt]
         if name in cheap:
             if len(jobs) != cheap[name]:
                 problems.append(
@@ -398,6 +398,14 @@ def test_control_one_held_job_does_not_excuse_an_unheld_sibling_in_a_workflow():
     assert (
         violations({"x.yml": {"jobs": {"big": held, "audit": plain}}}, cheap={}, exempt={("x.yml", "audit"): "r"}) == []
     )
+
+
+def test_control_a_cheap_listed_workflow_keeps_the_heuristic_and_the_job_count_pin():
+    plain = {"c.yml": {"jobs": {"a": {"runs-on": "x"}, "b": {"if": "${{ true }}"}}}}
+    assert violations(plain, cheap={"c.yml": 2}) == []
+    assert len(violations(plain, cheap={"c.yml": 1})) == 1
+    heavy = {"c.yml": {"jobs": {"a": {}, "b": {"timeout-minutes": 45}}}}
+    assert violations(heavy, cheap={"c.yml": 2})
 
 
 def test_control_a_cheap_workflow_that_grew_a_job_is_flagged():
