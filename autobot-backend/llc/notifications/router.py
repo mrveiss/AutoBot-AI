@@ -230,15 +230,13 @@ class LLCNotificationRouter:
                     continue
                 await self._dispatch(message)
         finally:
-            try:  # bounded: a hung socket must not hold up the hold loop, which awaits this when it stops routing
-                await asyncio.wait_for(self._close_pubsub(pubsub), timeout=_HOLD_INTERVAL)
-            except Exception:
-                logger.warning("LLC router: pubsub cleanup failed or timed out", exc_info=True)
-
-    @staticmethod
-    async def _close_pubsub(pubsub: Any) -> None:
-        await pubsub.punsubscribe()
-        await pubsub.aclose()
+            # Each step bounded and in its own try: a hung socket must not hold up the hold loop (it awaits this
+            # when it stops routing), and a failed unsubscribe must not skip closing the connection.
+            for close in (pubsub.punsubscribe, pubsub.aclose):
+                try:
+                    await asyncio.wait_for(close(), timeout=_HOLD_INTERVAL)
+                except Exception:
+                    logger.warning("LLC router: pubsub cleanup failed or timed out", exc_info=True)
 
     async def _dispatch(self, message: dict) -> None:
         raw = message.get("data")

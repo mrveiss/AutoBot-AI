@@ -13,6 +13,7 @@ directly (the loop's body) against a real Lua engine (fakeredis[lua]); only two 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock
@@ -102,22 +103,28 @@ async def test_two_workers_never_both_hold_the_lock(redis) -> None:  # noqa: ANN
 
 
 async def _eventually(condition) -> None:  # noqa: ANN001
-    """Poll *condition* for up to five seconds; a regression fails here instead of passing on a lucky sleep."""
+    """Poll *condition* (a plain or an async predicate) for up to five seconds. Poll for an END state only: a
+    transient one lasts a hold interval and a late poll would miss it."""
     for _ in range(100):
-        if condition():
+        result = condition()
+        if inspect.isawaitable(result):
+            result = await result
+        if result:
             return
         await asyncio.sleep(0.05)
     raise AssertionError("the hold loop did not reach the expected state")
+
+
+async def _holds_the_lock(redis, router: LLCNotificationRouter) -> bool:  # noqa: ANN001
+    return _routing(router) and await redis.get(_ROUTER_LOCK_KEY) == _token(router)
 
 
 async def test_the_hold_loop_itself_renews_and_takes_over(redis, monkeypatch) -> None:  # noqa: ANN001
     monkeypatch.setattr(router_module, "_HOLD_INTERVAL", 0.2)
     async with _worker() as router:
         await router.start()
-        await redis.delete(_ROUTER_LOCK_KEY)
-        await _eventually(lambda: not _routing(router))  # the loop saw the key gone ...
-        await _eventually(lambda: _routing(router))  # ... and took the lock again
-        assert await redis.get(_ROUTER_LOCK_KEY) == _token(router)
+        await redis.delete(_ROUTER_LOCK_KEY)  # the loop sees the key gone, then takes the lock again
+        await _eventually(lambda: _holds_the_lock(redis, router))
 
 
 async def test_stop_during_the_wait_for_a_slow_routing_task_returns_and_ends_both_tasks(  # noqa: ANN001
