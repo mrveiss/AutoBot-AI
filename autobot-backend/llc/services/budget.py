@@ -121,7 +121,10 @@ def _cost_of(model: str, agent_id: str, tokens_in: int, tokens_out: int) -> Deci
         return Decimal("0")
     # Deferred (#21596): llm_shared's package init probes PyTorch/CUDA, and this
     # module is reached at llc.scheduler package import (Celery registration).
-    from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_price
+    from llm_shared.pricing.sync_cache import (  # noqa: PLC0415 -- keeps llm_shared out of scheduler import
+        PricingCacheCold,
+        get_cached_price,
+    )
 
     try:
         pricing = get_cached_price(model)

@@ -27,36 +27,15 @@ So this module asserts both halves against each other:
 Making either half pass by weakening the other fails this module.
 """
 
-import os
-import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
-_BACKEND_DIR = Path(__file__).parents[2]
-_WORKTREE_ROOT = _BACKEND_DIR.parent
+from tests.helpers._fresh_interpreter import assert_import_leaks_nothing
 
 # Names a package import of llc.scheduler must never load (#13332).
-_BLOCKED_PREFIXES = ("llm_shared", "llc.kb")
-
-
-def _run_fresh(script: str) -> subprocess.CompletedProcess:
-    """Run ``script`` in a fresh interpreter with the backend import roots set."""
-    env = dict(os.environ)
-    env["PYTHONPATH"] = f"{_WORKTREE_ROOT}{os.pathsep}{_BACKEND_DIR}"
-    return subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=str(_BACKEND_DIR),
-        capture_output=True,
-        text=True,
-        env=env,
-        timeout=120,
-        check=False,
-    )
-
-
 _SCHEDULER_PREFIX = "llc.scheduler"
+_BLOCKED_PREFIXES = ("llm_shared", "llc.kb")
 
 # The modules whose eager import Celery task registration depends on, and the
 # beat task name each one registers (celery_app.py beat_schedule). A new task
@@ -173,19 +152,7 @@ def test_package_import_does_not_import_llm_shared_or_llc_kb() -> None:
     A fresh process has nothing cached, so sys.modules after the import is the
     complete set of modules the package import reaches.
     """
-    script = (
-        "import sys; "
-        "import llc.scheduler; "
-        f"blocked = {_BLOCKED_PREFIXES!r}; "
-        "leaked = sorted(m for m in sys.modules "
-        "if any(m == b or m.startswith(b + '.') for b in blocked)); "
-        "sys.stdout.write('LEAKED:' + ','.join(leaked) if leaked else 'CLEAN')"
-    )
-    result = _run_fresh(script)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert (
-        result.stdout.strip() == "CLEAN"
-    ), f"importing llc.scheduler reached a blocked stack (#13332): {result.stdout}\n{result.stderr}"
+    assert_import_leaks_nothing("import llc.scheduler", _BLOCKED_PREFIXES)
 
 
 def test_package_import_does_not_import_the_scheduler_classes(isolated_llc_scheduler) -> None:

@@ -17,6 +17,8 @@ import sys
 
 import pytest
 
+from tests.helpers._fresh_interpreter import assert_import_leaks_nothing
+
 _LAZY_MODULE_PREFIXES = ("llc.services",)
 
 
@@ -53,47 +55,14 @@ def isolated_llc_services():
         sys.modules.update(saved)
 
 
-class _RejectImport:
-    """Meta-path finder that fails any import of a name under ``blocked``.
-
-    Presence-in-sys.modules alone cannot prove causation in a full pytest
-    session — llm_shared may already be cached from an earlier, unrelated
-    test. This intercepts the *attempt* to import it during the call under
-    test, which is unaffected by what any other test already did.
-
-    Implements ``find_spec``, not the legacy ``find_module`` — the latter was
-    removed from ``importlib._bootstrap``'s finder protocol in Python 3.12,
-    so on this repo's CI-pinned 3.14 a ``find_module``-only finder is
-    silently skipped (``_find_spec`` catches ``AttributeError`` and moves to
-    the next finder) and this guard would pass vacuously without ever
-    blocking anything.
-    """
-
-    def __init__(self, blocked: tuple[str, ...]) -> None:
-        self._blocked = blocked
-
-    def find_spec(self, name, path=None, target=None):  # noqa: ANN001, ANN201 — importlib protocol
-        if any(name == b or name.startswith(b + ".") for b in self._blocked):
-            raise ImportError(f"BLOCKED: {name} must not be imported here (#13057)")
-        return None
-
-
-def test_importing_secret_alone_does_not_import_llm_shared(isolated_llc_services) -> None:
+def test_importing_secret_alone_does_not_import_llm_shared() -> None:
     """Acceptance criterion (#13057): importing llc.services.secret alone
     must trigger no llm_shared import (PyTorch/CUDA probing).
 
-    Only guards against a *fresh* import attempt: if llm_shared is already
-    cached in sys.modules from an unrelated, earlier test in the same
-    session, Python's import system never re-executes it, so the guard below
-    correctly does not fire — that is not a false negative, it means this
-    particular call genuinely triggered no new llm_shared load.
+    Checked in a fresh interpreter (#21596): the earlier in-process meta-path
+    finder never fired for a module an earlier test had already cached.
     """
-    guard = _RejectImport(("llm_shared",))
-    sys.meta_path.insert(0, guard)
-    try:
-        from llc.services.secret import SecretService  # noqa: F401
-    finally:
-        sys.meta_path.remove(guard)
+    assert_import_leaks_nothing("from llc.services.secret import SecretService", ("llm_shared",))
 
 
 def test_importing_secret_alone_does_not_import_the_other_twelve_services(isolated_llc_services) -> None:

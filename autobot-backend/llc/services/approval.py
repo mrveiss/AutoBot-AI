@@ -241,7 +241,9 @@ class ApprovalService(LLCServiceBase):
         try:
             # Deferred (#21596): llc.kb pulls the vector stack, and this module is
             # imported at llc.scheduler package import (Celery registration).
-            from ..kb.decision_log import DecisionLogWriter
+            from ..kb.decision_log import (  # noqa: PLC0415 -- keeps llc.kb out of scheduler import
+                DecisionLogWriter,
+            )
 
             writer = DecisionLogWriter()
             await writer.write(approval)
