@@ -205,7 +205,7 @@ def test_an_unresolvable_base_is_not_the_no_table_signal_even_when_empty_is_requ
 
 
 def test_a_base_without_the_file_still_reads_empty_and_a_present_table_is_unchanged(tmp_path, monkeypatch) -> None:
-    repo, _ = _history(tmp_path, "T = {'x.py': 700}\n", "T = {'x.py': 700}\n")
+    repo, _ = _history(tmp_path, "T = {'x.py': 700}\n", "T = {'x.py': 700}\n# head\n")
     _ci(monkeypatch)
     assert base_table(repo, ("absent.py",), "T") == {}
     assert base_table(repo, ("absent.py",), "T", absent_as_empty=True) == {}
@@ -213,7 +213,7 @@ def test_a_base_without_the_file_still_reads_empty_and_a_present_table_is_unchan
 
 
 def test_a_base_file_that_does_not_parse_still_raises_with_empty_requested(tmp_path, monkeypatch) -> None:
-    repo, _ = _history(tmp_path, "T = {\n", "T = {\n")
+    repo, _ = _history(tmp_path, "T = {\n", "T = {\n# head\n")
     _ci(monkeypatch)
     with pytest.raises(SyntaxError):
         base_table(repo, ("table.py",), "T", absent_as_empty=True)
@@ -221,7 +221,7 @@ def test_a_base_file_that_does_not_parse_still_raises_with_empty_requested(tmp_p
 
 def test_the_base_file_being_absent_is_told_from_its_table_being_empty(tmp_path, monkeypatch) -> None:
     """#21573: only an absent file means the ratchet is new; an empty table is still compared."""
-    repo, _ = _history(tmp_path, "E = {}\nT = {'x.py': 1}\n", "E = {}\nT = {'x.py': 1}\n")
+    repo, _ = _history(tmp_path, "E = {}\nT = {'x.py': 1}\n", "E = {}\nT = {'x.py': 1}\n# head\n")
     _ci(monkeypatch)
     assert not base_file_present(repo, ("absent.py",))
     assert base_file_present(repo, ("absent.py", "table.py")), "any of the paths counts"
