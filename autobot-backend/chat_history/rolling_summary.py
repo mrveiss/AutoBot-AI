@@ -79,6 +79,7 @@ from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import MS_PER_SECOND, delete_if_value, expire_if_value
 from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_constants import CategoryDefaults
@@ -123,10 +124,6 @@ _SUMMARY_KEY_PREFIX = "chat:rolling_summary:"
 _LOCK_KEY_PREFIX = "chat:rolling_summary_lock:"
 
 
-_RELEASE_LOCK = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
-_EXTEND_LOCK = (
-    "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end"
-)
 _STORE_IF_LOCKED = (
     "if redis.call('get', KEYS[1]) == ARGV[1] then "
     "redis.call('set', KEYS[2], ARGV[2], 'EX', ARGV[3]); return 1 else return 0 end"
@@ -298,7 +295,9 @@ class _RefreshLock:
 
     async def extend(self) -> bool:
         """Renew the lock; False when it was already lost."""
-        return bool(await _redis_op(self.redis.eval(_EXTEND_LOCK, 1, self.key, self.token, _LOCK_TTL_SECONDS)))
+        return bool(
+            await _redis_op(expire_if_value(self.redis, self.key, self.token, _LOCK_TTL_SECONDS * MS_PER_SECOND))
+        )
 
     async def renew(self) -> None:
         """Renew before a gateway call; raises ``_LockLost`` when the lock is already gone."""
@@ -324,7 +323,7 @@ class _RefreshLock:
 
     async def release(self) -> None:
         try:
-            await _redis_op(self.redis.eval(_RELEASE_LOCK, 1, self.key, self.token))
+            await _redis_op(delete_if_value(self.redis, self.key, self.token))
         except Exception as exc:  # noqa: BLE001 -- an unreleased lock expires on its own TTL
             logger.warning("Rolling summary lock release failed (expires on TTL): %s", exc)
 

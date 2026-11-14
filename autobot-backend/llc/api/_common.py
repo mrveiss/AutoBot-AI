@@ -26,7 +26,7 @@ from autobot_shared.auth.interactive_principal import is_interactive_human
 from autobot_shared.logging_manager import get_logger
 
 from ..services.work_item_hierarchy import HierarchyViolation
-from ..services.work_item_own_task import ensure_fence_safe_agent_id
+from ..services.work_item_own_task import canonical_agent_id, ensure_fence_safe_agent_id
 
 logger = get_logger(__name__)
 
@@ -48,8 +48,11 @@ def actor_id(current_user: dict) -> uuid.UUID:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated") from exc
 
 
-#: An agent id a checkout can fence: a request carrying one that cannot is refused with 422 (#21083).
-FenceSafeAgentId = Annotated[str, AfterValidator(ensure_fence_safe_agent_id)]
+#: An agent id a checkout can fence: a request carrying one that cannot is refused with 422 (#21083). It must be an
+#: agent UUID (a ``user:<id>`` or empty value is not one) and is canonicalised, so the fence and every release name
+#: the same spelling as the stored assignee (#19631). Input validation only: WHO may check out or release as a named
+#: agent is the open decision on #20521.
+FenceSafeAgentId = Annotated[str, AfterValidator(ensure_fence_safe_agent_id), AfterValidator(canonical_agent_id)]
 
 
 def own_task_actor(current_user: dict) -> Optional[uuid.UUID]:

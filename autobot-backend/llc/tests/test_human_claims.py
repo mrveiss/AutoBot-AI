@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.redis_utils import COMPARE_AND_DELETE_LUA
 from llc.models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem
 from llc.services.work_item_service import CheckoutConflict, WorkItemService
@@ -184,7 +185,10 @@ class TestHumanUnclaim:
         assert result.assignee_type is None
         assert result.status == WorkItemStatus.READY
         assert result.version == 2
-        mock_redis.delete.assert_called_once_with(f"llc:checkout:{item.id}")
+        mock_redis.eval.assert_awaited_once_with(
+            COMPARE_AND_DELETE_LUA, 1, f"llc:checkout:{item.id}", f"user:{user_id}"
+        )  # the claim's own fence, owner-checked in one step
+        mock_redis.delete.assert_not_called()
 
     async def test_unclaim_wrong_user_raises(self, service, mock_session):
         real_user = uuid.uuid4()

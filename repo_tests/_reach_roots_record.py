@@ -271,6 +271,11 @@ REACH_ROOTS = {
         "pipeline-scripts",
         "scripts",
     ),
+    "repo_tests/one_compare_and_delete_script_19631_test.py": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+    ),
     "repo_tests/one_content_digest_15722_test.py": ("autobot-backend", "autobot_shared"),
     "repo_tests/one_deployment_mode_detector_12771_test.py": ("autobot-backend/", "autobot-infrastructure/"),
     "repo_tests/one_doc_indexer_18129_test.py": (

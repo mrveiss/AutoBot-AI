@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_holder, delete_if_value
 from autobot_shared.time_utils import utc_timestamp
 
 from ..kb.handoff_brief import HandoffBriefGenerator
@@ -173,8 +174,8 @@ class HandoffService(LLCServiceBase):
         # and neither of those can be taken back.
         await self._record_a2h_activity(session, company_id, agent_id, reviewer_user_id, work_item_id, brief)
         redis = await get_async_redis_client()
-        if redis is not None:
-            await redis.delete(f"{_CHECKOUT_REDIS_PREFIX}{work_item_id}")
+        if redis is not None:  # the agent's fence only, whatever checkout generation it carries
+            await delete_if_holder(redis, f"{_CHECKOUT_REDIS_PREFIX}{work_item_id}", agent_id)
         await self._publish_a2h_notification(session, company_id, work_item_id, reviewer_user_id, brief)
 
         task = asyncio.create_task(
@@ -333,9 +334,10 @@ class HandoffService(LLCServiceBase):
         if redis is None:
             return
         key = f"{_CHECKOUT_REDIS_PREFIX}{work_item_id}"
-        existing = await redis.get(key)
-        if existing in (f"user:{user_id}", user_id):
-            await redis.delete(key)
+        # Two atomic compare-and-deletes, never a client-side GET then DEL: a fence re-taken in that gap would
+        # be deleted. ``user:<id>`` is what claim_human writes, so it goes first; the bare ``<id>`` is the legacy form.
+        if not await delete_if_value(redis, key, f"user:{user_id}"):
+            await delete_if_value(redis, key, user_id)
 
     async def _publish_h2a_notification(
         self, session: AsyncSession, company_id: str, target_agent_id: str, work_item_id: str
