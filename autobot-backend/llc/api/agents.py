@@ -29,6 +29,7 @@ from ..org_role_authority import describe_role_bound
 from ..scheduler.dispatch_gate import AgentNotDispatchable, run_block_reason
 from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
 from ..services.agent_presence_queries import agent_org_nodes_with_latest_heartbeat
+from ._common import http_refusal
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/agents", tags=["llc-agents"])
@@ -127,7 +128,7 @@ async def trigger_heartbeat(
                 status_code=404,
                 detail=f"Agent {agent_id!r} not found or not configured",
             )
-        raise HTTPException(status_code=409, detail=f"Cannot run: {exc.reason}")
+        raise http_refusal(409, exc, scope="agents.trigger_heartbeat") from None
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")

@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.user_management.base_service import TenantContext
+from llc.api._common import http_refusal
 from llc.deps import assert_company_access, get_session
 from llc.models.enums import RoleHolderType
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
@@ -175,7 +176,9 @@ async def set_company_ceo(
         row = await svc.set_ceo(session, company_id, body.holder_type, body.holder_id)
     except ValueError as exc:
         await session.rollback()
-        detail = await _explain_refusal(session, body, str(exc))
+        detail = await _explain_refusal(
+            session, body, http_refusal(422, exc, scope="company_ceo.set_company_ceo").detail
+        )
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail) from exc
 
     holder_type, holder_id = row.holder_type, row.holder_id

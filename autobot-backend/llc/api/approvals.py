@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.human_decider import require_interactive_human
 from autobot_shared.logging_manager import get_logger
+from llc.api._common import http_refusal
 from llc.deps import assert_company_access, get_session, load_authorized, service_dep
 from models.approval import Approval
 from services.ai_line_change_action import ACTION as LINE_CHANGE_ACTION
@@ -114,7 +115,7 @@ async def request_approval(
                 actor_user_id=ctx.user_id,
             )
     except ApprovalHookError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise http_refusal(422, exc, scope="approvals.request_approval") from None
     await svc.publish_requested(approval)
     return _to_response(approval)
 

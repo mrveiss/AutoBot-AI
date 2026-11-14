@@ -62,6 +62,7 @@ from ..services.attachment_service import (
     AttachmentService,
     AttachmentTooLarge,
 )
+from ..services.company_os.errors import CompanyOsNotFound
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import (
     CheckoutConflict,
@@ -72,7 +73,7 @@ from ..services.work_item_service import (
 )
 from ._common import FenceSafeAgentId
 from ._common import actor_id as verified_user_id
-from ._common import moving_as, refused_transition, write_refusal
+from ._common import http_refusal, moving_as, refused_transition, write_refusal
 from ._handoff_identity import handing_off_agent, member_reviewer
 from ._release_request import ReleaseRequest
 from .activity import ActivityLogEntry, ActivityLogResponse
@@ -550,7 +551,7 @@ async def checkout_work_item(
         # could not tell WHO holds the checkout. Domain-level message, safe to
         # surface.
         logger.info("Rejected work-item checkout conflict: %s", exc)
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise http_refusal(409, exc, scope="work_items.checkout_work_item") from None
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
@@ -575,7 +576,7 @@ async def release_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise http_refusal(409, exc, scope="work_items.release_work_item") from None
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=400, detail="Internal server error")
@@ -667,7 +668,7 @@ async def claim_work_item(
     except CheckoutConflict as exc:
         # #12740 (same defect class): surface WHO holds the checkout.
         logger.info("Rejected work-item checkout conflict: %s", exc)
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise http_refusal(409, exc, scope="work_items.claim_work_item") from None
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
@@ -760,13 +761,11 @@ async def set_coworker(
         return await _item_to_dict(item, session)
     except CoWorkingPermissionError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=403, detail="Internal server error")
-    except ValueError as exc:
-        msg = str(exc)
-        # "not found" errors → 404; identity/type validation errors → 422
-        if "not found" in msg.lower():
-            raise HTTPException(status_code=404, detail=msg)
-        raise HTTPException(status_code=422, detail=msg)
+        raise http_refusal(403, exc, scope="work_items.set_coworker") from None
+    except CompanyOsNotFound as exc:
+        raise http_refusal(404, exc, scope="work_items.set_coworker") from None
+    except ValueError as exc:  # CompanyOsError (identity missing) or a plain ValueError: both 422
+        raise http_refusal(422, exc, scope="work_items.set_coworker") from None
 
 
 @router.post("/{work_item_id}/comments", status_code=201)
