@@ -6,9 +6,9 @@
 
 ``secrets_delete_outcome.error_for`` reads the same classification as ``outcome_for``: not found is 404 and
 permission denied is 403. The table drives each failure kind of the #21506 test through the main route and both
-envelope routes and asserts the HTTP status AND the audit record. Bodies built from the exception text by the
-envelope routes' ``_mapped`` (a ``SecretAccessError`` / ``SecretNotFoundError``) and the detail of an
-``HTTPException`` are the routes' existing behaviour and are not asserted leak-free here.
+envelope routes and asserts the HTTP status, the fixed body text and the audit record. Every non-HTTP failure
+kind is asserted leak-free on every route (#21559); only the detail of an ``HTTPException`` the route itself
+raised is passed through, as it always was.
 """
 
 # flake8: noqa: F811 -- pytest fixtures imported by name are re-requested as parameters
@@ -32,9 +32,14 @@ _STATUS = {
     "not-found-error": 404,
     "runtime-error": 500,
 }
-#: Keys whose response body is built from the exception text by the route today (not part of this fix).
-_ECHOED_MAIN = {"http-404", "http-409", "http-503"}
-_ECHOED_ENVELOPE = _ECHOED_MAIN | {"access-error", "not-found-error"}
+#: Keys that are an ``HTTPException`` the route raised itself: its detail is its own, passed through unchanged.
+_PASSTHROUGH = {"http-404", "http-409", "http-503"}
+#: The fixed body of the failure kinds ``error_for`` maps (one table: ``secrets_delete_outcome``).
+_BODY = {
+    "permission-error": "Not permitted to access this secret",
+    "access-error": "Not permitted to access this secret",
+    "not-found-error": "Secret not found",
+}
 
 
 def test_the_status_table_covers_every_failure_kind() -> None:
@@ -49,6 +54,7 @@ def test_error_for_gives_the_status_the_record_implies(key) -> None:
         assert error is None
         return
     assert error.status_code == _STATUS[key]
+    assert error.detail == _BODY[key]
     assert _LEAK not in str(error.detail)
 
 
@@ -66,8 +72,10 @@ def test_the_main_route_answers_the_status_and_records_the_outcome(
     result, details = _outcome(ops)
     assert (result, details["reason"]) == _EXPECTED[key]
     assert _LEAK not in repr(ops.await_args_list)
-    if key not in _ECHOED_MAIN:
+    if key not in _PASSTHROUGH:
         assert _LEAK not in response.text
+    if key in _BODY:
+        assert response.json()["detail"] == _BODY[key]
 
 
 @pytest.mark.parametrize("kind", ["user", "service"], ids=["user", "service"])
@@ -80,5 +88,7 @@ def test_the_envelope_routes_answer_the_status_and_record_the_outcome(key, kind,
     assert response.status_code == _STATUS[key]
     assert _trail(store) == [("attempted", "before_write"), (_EXPECTED[key][0], _EXPECTED[key][1])]
     assert _LEAK not in repr([e.metadata for e in store.events])
-    if key not in _ECHOED_ENVELOPE:
+    if key not in _PASSTHROUGH:
         assert _LEAK not in response.text
+    if key in _BODY:
+        assert response.json()["detail"] == _BODY[key]

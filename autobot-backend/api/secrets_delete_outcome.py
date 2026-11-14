@@ -55,17 +55,19 @@ def outcome_for(exc: BaseException) -> tuple[AuditResult, str]:
     return "failed", type(exc).__name__
 
 
-#: The HTTP error each recorded reason implies: (status, fixed body). The texts are the main route's own and carry
-#: no exception message, secret name or value. Keyed by the reason ``outcome_for`` returns, so the record and the
-#: response are read from one classification and cannot drift (#21539).
+#: The HTTP error each recorded reason implies: (status, fixed body). The texts carry no exception message, secret
+#: id, owner reference, name or value, and the 403 text says "refused" without revealing whether the secret exists
+#: or who owns it. Keyed by the reason ``outcome_for`` returns, so the record and the response are read from one
+#: classification and cannot drift (#21539). The one table for every secret delete route AND the envelope
+#: routes' ``_mapped`` (#21559); its 403 text follows the wording of ``api/secrets.py``'s create refusal.
 _ERROR_FOR_REASON: dict[str, tuple[int, str]] = {
     "not_found": (status.HTTP_404_NOT_FOUND, "Secret not found"),
-    "permission_denied": (status.HTTP_403_FORBIDDEN, "Internal server error"),
+    "permission_denied": (status.HTTP_403_FORBIDDEN, "Not permitted to access this secret"),
 }
 
 
 def error_for(exc: BaseException) -> HTTPException | None:
-    """The HTTP error a non-HTTP delete failure is answered with, or None to keep the caller's behaviour.
+    """The HTTP error a non-HTTP secret failure is answered with, or None to keep the caller's behaviour.
 
     Not found is 404 and permission denied is 403, the status the audit record of the same failure implies.
     An ``HTTPException`` already carries its status, so it is never rewritten here.
@@ -76,6 +78,18 @@ def error_for(exc: BaseException) -> HTTPException | None:
     if mapped is None:
         return None
     return HTTPException(status_code=mapped[0], detail=mapped[1])
+
+
+def fixed_secret_error_for(exc: BaseException) -> HTTPException | None:
+    """The fixed-text 403 / 404 for a refused or missing secret on an envelope route, or None (#21559).
+
+    The answer is :func:`error_for`'s, never ``str(exc)``: the message carries the caller-supplied secret id or
+    the owner reference. The detail stays in the server log (the audit record is written by the route, unchanged).
+    """
+    known = error_for(exc)
+    if known is not None:
+        logger.warning("envelope secret request refused: %s: %s", type(exc).__name__, exc)
+    return known
 
 
 async def record_delete_failure(
