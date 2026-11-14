@@ -12,11 +12,11 @@ import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
 /**
  * The company a route's params name: the first element of a repeated param, and '' when it is
  * missing, empty or the 'undefined'/'null' text a link built from an unset id produces. The one
- * definition shared by the guard (entering the company routes) and the company layout (a
- * param-only change, which the guard does not see).
+ * definition shared by the guard (entering the company routes), the company layout (a
+ * param-only change, which the guard does not see), the sidebar and the company context.
  */
-export function companyIdFromParams(params: RouteParams): string {
-  const raw = params.companyId
+export function companyIdFromParams(params?: RouteParams): string {
+  const raw = params?.companyId
   const id = Array.isArray(raw) ? raw[0] : raw
   return !id || id === 'undefined' || id === 'null' ? '' : id
 }

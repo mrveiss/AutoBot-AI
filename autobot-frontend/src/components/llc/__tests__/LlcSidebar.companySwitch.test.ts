@@ -98,4 +98,14 @@ describe('the sidebar company switch (#21512)', () => {
     expect(current()).toEqual({ name: 'llc-ledger', params: { companyId: 'c2' } })
     wrapper.unmount()
   })
+
+  it.each(['undefined', 'null'])('reads a %s company param as no company: the store\'s company, no placeholder link', async (placeholder) => {
+    const wrapper = await mountOn('llc-ledger', { companyId: placeholder })
+
+    expect((wrapper.get('#llc-company-select').element as HTMLSelectElement).value).toBe('c1')
+    const hrefs = wrapper.findAll('a').map((a) => a.attributes('href') ?? '')
+    expect(hrefs.length).toBeGreaterThan(0)
+    expect(hrefs.filter((href) => href.includes(`/${placeholder}`))).toEqual([])
+    wrapper.unmount()
+  })
 })

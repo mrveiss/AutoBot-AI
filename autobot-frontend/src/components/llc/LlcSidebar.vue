@@ -17,6 +17,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { companySwitchTarget } from '@/router/llcCompanySwitch'
+import { companyIdFromParams } from '@/router/llcGuards'
 import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
 import { useApiClient } from '@/plugins/api'
 import { useLiveEvents } from '@/composables/useLiveEvents'
@@ -30,10 +31,7 @@ const api = useApiClient()
 const live = useLiveEvents()
 const logger = createLogger('LlcSidebar')
 
-const companyId = computed(() => {
-  const raw = route.params.companyId
-  return (Array.isArray(raw) ? raw[0] : raw) ?? companyStore.selectedCompanyId
-})
+const companyId = computed(() => companyIdFromParams(route.params) || companyStore.selectedCompanyId)
 
 // FR-GOV-03: pending board-approval count badge on the Approvals link.
 const pendingApprovals = ref(0)
