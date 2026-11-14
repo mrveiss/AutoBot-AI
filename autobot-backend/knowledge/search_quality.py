@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Set, Tuple
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.text_tokens import word_token_list
 from autobot_shared.time_utils import parse_utc_iso
+from knowledge.query_term_replace import replace_whole_word
 
 logger = get_logger(__name__)
 
@@ -151,11 +152,10 @@ class QueryExpander:
         for word in words:
             if expansions_added >= self.max_expansions:
                 break
-
             # Check direct synonyms
             if word in self.SYNONYMS:
                 for syn in self.SYNONYMS[word][:2]:  # Limit synonyms per word
-                    expanded = query.replace(word, syn)
+                    expanded = replace_whole_word(query, word, syn)
                     if expanded not in queries:
                         queries.append(expanded)
                         expansions_added += 1
@@ -165,7 +165,7 @@ class QueryExpander:
             # Check reverse synonyms (synonym -> canonical)
             elif word in self._reverse_synonyms:
                 canonical = self._reverse_synonyms[word]
-                expanded = query.replace(word, canonical)
+                expanded = replace_whole_word(query, word, canonical)
                 if expanded not in queries:
                     queries.append(expanded)
                     expansions_added += 1

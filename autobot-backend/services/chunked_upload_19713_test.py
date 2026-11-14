@@ -26,6 +26,12 @@ def _staging(tmp_path, monkeypatch):
     monkeypatch.setattr(uploads, "CHUNK_BYTES", 40_000)
 
 
+def _expire_sessions(monkeypatch) -> None:
+    """Zero the TTL and read the module's clock one second ahead, so every session is past it without a wait."""
+    monkeypatch.setattr(uploads, "SESSION_TTL_S", 0)
+    monkeypatch.setattr(uploads, "time", SimpleNamespace(time=lambda: time.time() + 1))
+
+
 def _staged_bytes(session: uploads.UploadSession) -> bytes:
     return uploads.staged_path(session).read_bytes()
 
@@ -157,8 +163,7 @@ async def test_the_file_goes_only_after_the_handoff_is_recorded_and_stays_after_
 async def test_a_handoff_whose_worker_went_away_can_be_tried_again_later(monkeypatch) -> None:
     session = await uploads.begin_handoff(await _send_all(_session()))
     assert uploads.expired_sessions() == []
-    monkeypatch.setattr(uploads, "SESSION_TTL_S", 0)
-    time.sleep(0.01)
+    _expire_sessions(monkeypatch)
     assert [s.id for s in uploads.expired_sessions()] == [session.id]
     assert (await uploads.begin_handoff(session)).state == "handing_off"
 
@@ -166,8 +171,7 @@ async def test_a_handoff_whose_worker_went_away_can_be_tried_again_later(monkeyp
 @pytest.mark.asyncio
 async def test_an_abandoned_session_stops_taking_chunks_and_is_listed_not_deleted(monkeypatch) -> None:
     session = _session()
-    monkeypatch.setattr(uploads, "SESSION_TTL_S", 0)
-    time.sleep(0.01)
+    _expire_sessions(monkeypatch)
     with pytest.raises(uploads.UploadRejected, match="expired"):
         await uploads.write_chunk(session, 0, _body(b"x"))
     assert [s.id for s in uploads.expired_sessions()] == [session.id]
@@ -236,8 +240,7 @@ async def test_a_failed_session_expires_and_a_listed_one_can_be_removed_by_an_ad
     with pytest.raises(uploads.UploadRejected, match="review list"):
         await uploads.remove_listed_session(session.id, record)
     record.assert_not_awaited()
-    monkeypatch.setattr(uploads, "SESSION_TTL_S", 0)
-    time.sleep(0.01)
+    _expire_sessions(monkeypatch)
     assert [s.id for s in uploads.expired_sessions()] == [session.id]
     await uploads.remove_listed_session(session.id, record)
     record.assert_awaited_once()
@@ -258,8 +261,7 @@ async def test_a_session_being_handed_over_cant_be_removed_as_abandoned() -> Non
 @pytest.mark.asyncio
 async def test_a_removal_that_cant_be_recorded_removes_nothing(monkeypatch) -> None:
     session = _session()
-    monkeypatch.setattr(uploads, "SESSION_TTL_S", 0)
-    time.sleep(0.01)
+    _expire_sessions(monkeypatch)
     with pytest.raises(uploads.UploadAuditFailed):
         await uploads.remove_listed_session(session.id, AsyncMock(return_value=False))
     assert uploads.staged_path(session).exists()
@@ -268,8 +270,7 @@ async def test_a_removal_that_cant_be_recorded_removes_nothing(monkeypatch) -> N
 @pytest.mark.asyncio
 async def test_the_record_is_written_before_the_bytes_go(monkeypatch) -> None:
     session = _session()
-    monkeypatch.setattr(uploads, "SESSION_TTL_S", 0)
-    time.sleep(0.01)
+    _expire_sessions(monkeypatch)
     seen = []
 
     async def record(_session) -> bool:
