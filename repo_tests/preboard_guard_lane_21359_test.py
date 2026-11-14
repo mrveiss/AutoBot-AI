@@ -181,7 +181,8 @@ def test_the_types_check_is_the_one_composite_action(workflow) -> None:
 
 def test_the_result_is_uploaded_whatever_the_outcome(workflow) -> None:
     result = workflow["jobs"]["result"]
-    assert result["needs"] == ["pin", "guards", "own-tests", "types"] and "always()" in result["if"]
+    assert result["needs"] == ["pin", "guards", "own-tests", "added-headers", "types"]
+    assert "always()" in result["if"]
     upload = next(s for s in result["steps"] if s.get("with", {}).get("name") == "preboard-guards-result")
     assert upload["uses"].startswith("actions/upload-artifact@") and upload["if"] == "always()"
     assert upload["with"]["if-no-files-found"] == "error"
