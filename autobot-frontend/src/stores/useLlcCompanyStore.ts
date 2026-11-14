@@ -47,6 +47,8 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
 
   // Newest fetchCompanies run; a probe from an older run may change nothing.
   let fetchRun = 0
+  // Arguments of the newest fetchCompanies run while it is in flight, else null.
+  let inFlightLoad: { includeArchived: boolean } | null = null
 
   const selectedCompany = computed(
     () => companies.value.find((c) => c.id === selectedCompanyId.value) ?? null,
@@ -106,6 +108,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
   async function fetchCompanies(includeArchived = false): Promise<void> {
     const api = useApiClient()
     const run = ++fetchRun
+    inFlightLoad = { includeArchived }
     isLoading.value = true
     error.value = null
     unavailable.value = false
@@ -123,8 +126,21 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
       logger.error('fetchCompanies failed:', err)
       if (run === fetchRun) recordLoadFailure(err)
     } finally {
-      if (run === fetchRun) isLoading.value = false
+      if (run === fetchRun) {
+        isLoading.value = false
+        inFlightLoad = null
+      }
     }
+  }
+
+  /**
+   * A local change to ``companies`` invalidates a load already in flight: its server snapshot
+   * predates the change and would overwrite it. Supersede that load with a fresh one using the
+   * same arguments; the new run publishes the post-change snapshot and resets ``isLoading``.
+   * Does nothing when no load is in flight. fetchCompanies handles its own errors.
+   */
+  function reloadIfLoading(): void {
+    if (inFlightLoad) void fetchCompanies(inFlightLoad.includeArchived)
   }
 
   /** Set the active company id (route guards keep this in sync on URL nav). */
@@ -145,6 +161,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
   function applyStatus(id: string, status: string): void {
     const company = companies.value.find((c) => c.id === id)
     if (company) company.llc_status = status
+    reloadIfLoading()
   }
 
   /**
@@ -163,6 +180,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
       selectedCompanyId.value = ''
       selectionUnverified.value = false
     }
+    reloadIfLoading()
   }
 
   return {

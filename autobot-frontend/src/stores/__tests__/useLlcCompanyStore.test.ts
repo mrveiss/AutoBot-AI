@@ -406,6 +406,88 @@ describe('useLlcCompanyStore (GH#9627)', () => {
     })
   })
 
+  describe('a mutation racing a list load (#21553)', () => {
+    const other = () => mockCompany({ id: 'company-2', name: 'Beta LLC' })
+    const holdListUrls = () => {
+      const lists: Array<{ url: string; resolve: (v: LlcCompany[]) => void }> = []
+      getMock.mockImplementation((url: string) =>
+        new Promise((resolve) => { lists.push({ url, resolve }) }),
+      )
+      return lists
+    }
+    /** Load once so the store holds both companies, then start a held load A. */
+    const loadedWithHeldLoad = async (includeArchived = false) => {
+      const lists = holdListUrls()
+      const store = useLlcCompanyStore()
+      const initial = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(1))
+      lists[0].resolve([mockCompany(), other()])
+      await initial
+      const held = store.fetchCompanies(includeArchived)
+      await vi.waitFor(() => expect(lists).toHaveLength(2))
+      return { lists, store, held }
+    }
+
+    it('a delete completed while a load is in flight is not undone by that load', async () => {
+      const { lists, store, held } = await loadedWithHeldLoad()
+      await store.deleteCompany('company-1')
+      await vi.waitFor(() => expect(lists).toHaveLength(3))
+      expect(lists[2].url).toBe(lists[1].url)
+      lists[1].resolve([mockCompany(), other()])
+      await held
+      expect(store.companies.map((c) => c.id)).toEqual(['company-2'])
+      expect(store.isLoading).toBe(true)
+      lists[2].resolve([other()])
+      await vi.waitFor(() => expect(store.isLoading).toBe(false))
+      expect(store.companies.map((c) => c.id)).toEqual(['company-2'])
+    })
+
+    it('a status patch applied while a load is in flight yields to the fresh server list', async () => {
+      const { lists, store, held } = await loadedWithHeldLoad()
+      store.applyStatus('company-1', 'archived')
+      await vi.waitFor(() => expect(lists).toHaveLength(3))
+      lists[1].resolve([mockCompany(), other()])
+      await held
+      expect(store.companies[0].llc_status).toBe('archived')
+      lists[2].resolve([mockCompany({ llc_status: 'archived' }), other()])
+      await vi.waitFor(() => expect(store.isLoading).toBe(false))
+      expect(store.companies[0].llc_status).toBe('archived')
+    })
+
+    it('a delete with no load in flight issues no extra list request', async () => {
+      const lists = holdListUrls()
+      const store = useLlcCompanyStore()
+      const initial = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(1))
+      lists[0].resolve([mockCompany()])
+      await initial
+      await store.deleteCompany('company-1')
+      expect(lists).toHaveLength(1)
+      expect(store.isLoading).toBe(false)
+    })
+
+    it('re-issues the load with include_archived when the superseded load carried it', async () => {
+      const { lists, store, held } = await loadedWithHeldLoad(true)
+      await store.deleteCompany('company-1')
+      await vi.waitFor(() => expect(lists).toHaveLength(3))
+      expect(lists[2].url).toBe('/api/llc/companies/?include_archived=true')
+      lists[1].resolve([mockCompany()])
+      await held
+      lists[2].resolve([other()])
+      await vi.waitFor(() => expect(store.isLoading).toBe(false))
+    })
+
+    it('a failed delete does not supersede the load in flight', async () => {
+      const { lists, store, held } = await loadedWithHeldLoad()
+      deleteMock.mockRejectedValue(new HttpError(409, 'has children'))
+      await expect(store.deleteCompany('company-1')).rejects.toThrow('409')
+      expect(lists).toHaveLength(2)
+      lists[1].resolve([mockCompany(), other()])
+      await held
+      expect(store.isLoading).toBe(false)
+    })
+  })
+
   it('fetchCompanies keeps a selection that still exists', async () => {
     const store = useLlcCompanyStore()
     store.selectCompany('company-1')
