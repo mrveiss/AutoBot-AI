@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import traceback
 import uuid
 from typing import Any, AsyncGenerator, Callable, Set, Type, TypeVar
 
@@ -43,7 +44,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.redaction import safe_log_text
+from autobot_shared.security.redaction import safe_log_text, sanitize_log_value
 from autobot_shared.singleton_factory import lazy_singleton
 from llc.models.sprint import LLCProject
 from user_management.database import get_async_session_factory
@@ -129,13 +130,31 @@ def _build_dep(service_cls: Type[_T]) -> Callable[[], _T]:
     return _dep
 
 
+_LOGGED_FRAMES = 3
+
+
+def _frames_label(exc: BaseException) -> str:
+    """Innermost stack frames of *exc* as ``file:line in function``, no source lines, no message."""
+    frames = traceback.extract_tb(exc.__traceback__)[-_LOGGED_FRAMES:]
+    return " <- ".join(sanitize_log_value(f"{f.filename}:{f.lineno} in {f.name}") for f in reversed(frames))
+
+
 def logged_server_error(log: logging.Logger, detail: str, scope: str, exc: Exception) -> HTTPException:
-    """500 carrying only the fixed *detail*; the cause goes to *log* through ``safe_log_text`` (#21396).
+    """500 carrying only the fixed *detail*; the cause goes to *log*, redacted (#21396).
 
     Exception text can hold driver messages and connection targets, so it never
-    reaches the response body.
+    reaches the response body. The log line carries the exception class, its
+    text through ``safe_log_text``, and the innermost frames (location only),
+    all on one line; *scope* is neutralised like any other untrusted log value.
     """
-    log.error("%s for %s: %s: %s", detail, scope, type(exc).__name__, safe_log_text(exc))
+    log.error(
+        "%s for %s: %s: %s [at %s]",
+        detail,
+        sanitize_log_value(scope),
+        type(exc).__name__,
+        safe_log_text(exc),
+        _frames_label(exc),
+    )
     return HTTPException(status_code=500, detail=detail)
 
 

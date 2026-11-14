@@ -18,7 +18,7 @@ from fastapi import HTTPException
 from llc.api import agent_api, companies
 
 _COMPANY_ID = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-_LEAK_MARKER = "LEAK-MARKER-chroma-host-10.0.0.9"
+_LEAK_MARKER = "LEAK-MARKER-chroma-host-9c1d"
 
 
 def _request() -> MagicMock:
