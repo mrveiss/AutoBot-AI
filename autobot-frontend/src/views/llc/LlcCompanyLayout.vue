@@ -28,8 +28,8 @@ useLlcCompanyNotices(routeCompanyId)
 // The sidebar's company switch re-targets the same route, so Vue reuses the routed view and its
 // load-on-mount data would stay the previous company's. The key sits on the <RouterView> vnode itself:
 // a changed key remounts that RouterView subtree (the routed child and any nested view) once, while the
-// layout, sidebar and plan card stay mounted (#21502). A route that handles the switch itself (CEO
-// chat) opts out via meta.
+// layout, sidebar and plan card stay mounted (#21502). A route that must keep its instance opts out via
+// meta.keepOnCompanySwitch: CEO chat (handles the switch itself) and the workflow builder (unsaved draft).
 const viewKey = computed(() => (route.meta?.keepOnCompanySwitch ? undefined : routeCompanyId.value))
 // The creation wizard lands here with ?welcome=plan (#19938 E2).
 const showPlanCard = computed(() => route.query.welcome === 'plan')
