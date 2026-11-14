@@ -104,6 +104,12 @@ MID: dict[str, tuple[str, str, str]] = {
         "floor BELOW the constant it would replace, which #17914 AC2 refuses, and 1.00 fires on "
         "a single index-versus-filesystem skew.",
     ),
+    "unified-config-aliases-gone": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every tracked .py and .md file minus changelogs, archives and the guard itself (#21526); files are "
+        "added in every PR, so an exact floor would fail any new file.",
+    ),
     "autobot-has-no-pro-name": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
