@@ -45,10 +45,6 @@ import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUr
 import { usePollingJob } from '@/composables/usePollingJob'
 
 const OPEN_DELAY_MS = 10
-// useWebSocket restarts a socket that is opened in the same tick as its URL changes: connect()
-// sets wsUrl ('' -> url) and calls wsConnect(), the URL watcher then disconnects that first socket
-// and reconnects after this delay (useWebSocket.ts scheduleRestart). The live socket is the second one.
-const URL_RESTART_MS = 100
 
 let wrapper: VueWrapper | null
 
@@ -60,9 +56,9 @@ function mountTerminal() {
   return wrapper
 }
 
-/** Let the mount-time connect settle: the watcher restart, then the live socket's open. */
+/** Let the mount-time connect settle: the one socket opens (the URL watcher does not restart it). */
 async function settleConnection(view: VueWrapper) {
-  await vi.advanceTimersByTimeAsync(URL_RESTART_MS + OPEN_DELAY_MS)
+  await vi.advanceTimersByTimeAsync(OPEN_DELAY_MS)
   await view.vm.$nextTick()
 }
 
@@ -98,6 +94,15 @@ describe('SSHTerminal when a detached socket closes (#21548)', () => {
     MockWebSocket.restoreImplementation()
     MockWebSocket.clearInstances()
     vi.useRealTimers()
+  })
+
+  it('opens exactly one socket on mount and keeps it through the URL watcher', async () => {
+    const view = mountTerminal()
+    expect(MockWebSocket.getAllInstances()).toHaveLength(1)
+    await settleConnection(view)
+
+    expect(MockWebSocket.getAllInstances()).toHaveLength(1)
+    expect(barClasses()).toContain('connected')
   })
 
   it('ignores the stale close while a new connection is being made', async () => {
