@@ -27,9 +27,34 @@ So this module asserts both halves against each other:
 Making either half pass by weakening the other fails this module.
 """
 
+import os
+import subprocess
 import sys
+from pathlib import Path
 
 import pytest
+
+_BACKEND_DIR = Path(__file__).parents[2]
+_WORKTREE_ROOT = _BACKEND_DIR.parent
+
+# Names a package import of llc.scheduler must never load (#13332).
+_BLOCKED_PREFIXES = ("llm_shared", "llc.kb")
+
+
+def _run_fresh(script: str) -> subprocess.CompletedProcess:
+    """Run ``script`` in a fresh interpreter with the backend import roots set."""
+    env = dict(os.environ)
+    env["PYTHONPATH"] = f"{_WORKTREE_ROOT}{os.pathsep}{_BACKEND_DIR}"
+    return subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=str(_BACKEND_DIR),
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=120,
+        check=False,
+    )
+
 
 _SCHEDULER_PREFIX = "llc.scheduler"
 
@@ -81,30 +106,6 @@ def isolated_llc_scheduler():
         sys.modules.update(saved)
 
 
-class _RejectImport:
-    """Meta-path finder that fails any import of a name under ``blocked``.
-
-    Presence-in-sys.modules cannot prove causation in a full pytest session —
-    ``llm_shared`` may already be cached by an earlier, unrelated test, in which
-    case Python never re-executes it and a presence assertion would be
-    order-dependent. This intercepts the *attempt* instead, so the result does
-    not depend on what any other test already imported.
-
-    Implements ``find_spec``, not the legacy ``find_module``: the latter was
-    removed from the finder protocol in Python 3.12, so on this repo's 3.14 a
-    ``find_module``-only finder is silently skipped and the guard would pass
-    vacuously without ever blocking anything.
-    """
-
-    def __init__(self, blocked: tuple[str, ...]) -> None:
-        self._blocked = blocked
-
-    def find_spec(self, name, path=None, target=None):  # noqa: ANN001, ANN201 — importlib protocol
-        if any(name == b or name.startswith(b + ".") for b in self._blocked):
-            raise ImportError(f"BLOCKED: {name} must not be imported by llc.scheduler (#13332)")
-        return None
-
-
 # ---------------------------------------------------------------------------
 # The eager half — Celery registration must survive the laziness (GH#12318)
 # ---------------------------------------------------------------------------
@@ -153,26 +154,38 @@ def test_beat_task_names_resolve_to_real_callables(isolated_llc_scheduler) -> No
 # ---------------------------------------------------------------------------
 
 
-def test_package_import_does_not_import_llm_shared_or_llc_kb(isolated_llc_scheduler) -> None:
-    """Acceptance criterion (#13332): importing llc.scheduler must not reach the
-    LLM/vector stack.
+def test_package_import_does_not_import_llm_shared_or_llc_kb() -> None:
+    """Acceptance criterion (#13332, #21596): importing llc.scheduler must not
+    reach the LLM/vector stack.
 
-    Before the fix the package eagerly imported ``sprint_autoclose``, which
-    imported ``SprintAutoCloseService`` at module level:
+    Run in a FRESH interpreter. The earlier in-process version removed only the
+    ``llc.scheduler.*`` modules from ``sys.modules`` and refused new imports of
+    the blocked names through a meta-path finder -- but a module already loaded
+    by an earlier test is never re-imported, so the finder never saw it and the
+    test passed while the package reached both stacks:
 
-        llc.services.sprint_autoclose -> llc.kb.sprint_summarizer
-            -> llm_shared.types   (probes PyTorch/CUDA at import)
-            -> llc.kb.collections (ChromaDB / knowledge stack)
+        llc.scheduler -> workspace_lease_sweep -> llc.services.approval
+            -> llc.kb.decision_log (and the llc.kb package __init__)
+        llc.services.approval -> approval_hooks -> agent_hire_service
+            -> accessors -> budget -> llm_shared.pricing.sync_cache
+            (llm_shared/__init__ probes PyTorch/CUDA)
 
-    so importing even ``llc.scheduler.base`` — three stdlib imports — booted all
-    of it, because Python initialises a parent package before its submodule.
+    A fresh process has nothing cached, so sys.modules after the import is the
+    complete set of modules the package import reaches.
     """
-    guard = _RejectImport(("llm_shared", "llc.kb"))
-    sys.meta_path.insert(0, guard)
-    try:
-        import llc.scheduler  # noqa: F401
-    finally:
-        sys.meta_path.remove(guard)
+    script = (
+        "import sys; "
+        "import llc.scheduler; "
+        f"blocked = {_BLOCKED_PREFIXES!r}; "
+        "leaked = sorted(m for m in sys.modules "
+        "if any(m == b or m.startswith(b + '.') for b in blocked)); "
+        "sys.stdout.write('LEAKED:' + ','.join(leaked) if leaked else 'CLEAN')"
+    )
+    result = _run_fresh(script)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (
+        result.stdout.strip() == "CLEAN"
+    ), f"importing llc.scheduler reached a blocked stack (#13332): {result.stdout}\n{result.stderr}"
 
 
 def test_package_import_does_not_import_the_scheduler_classes(isolated_llc_scheduler) -> None:
