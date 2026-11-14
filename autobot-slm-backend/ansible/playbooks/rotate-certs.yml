@@ -116,11 +116,11 @@
         name: nginx
         state: reloaded
 
-    - name: "Certs [slm] | Restart backend service"
-      ansible.builtin.systemd:
-        name: "{{ _service }}"
-        state: restarted
-      failed_when: false
+    - name: Certs [slm] | Restart backend service
+      ansible.builtin.include_tasks: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+      vars:
+        restart_unit_name: "{{ _service }}"
+        restart_unit_tolerate_failure: true
 
     - name: "Certs [slm] | Wait for backend port"
       ansible.builtin.wait_for:
@@ -183,11 +183,11 @@
       vars:
         cert_label: backend
 
-    - name: "Certs [backend] | Restart backend service"
-      ansible.builtin.systemd:
-        name: "{{ _service }}"
-        state: restarted
-      failed_when: false
+    - name: Certs [backend] | Restart backend service
+      ansible.builtin.include_tasks: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+      vars:
+        restart_unit_name: "{{ _service }}"
+        restart_unit_tolerate_failure: true
 
     - name: "Certs [backend] | Wait for HTTPS port"
       ansible.builtin.wait_for:

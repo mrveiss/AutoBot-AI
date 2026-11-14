@@ -11,6 +11,6 @@
 
 - name: restart access-monitor
   when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
-  systemd:
-    name: autobot-access-monitor.timer
-    state: restarted
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: autobot-access-monitor.timer

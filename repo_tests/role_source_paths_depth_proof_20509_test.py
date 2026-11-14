@@ -7,6 +7,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
@@ -55,3 +56,123 @@ def test_contrast_the_old_form_is_caught() -> None:
 def test_the_ai_stack_copies_from_its_own_tree() -> None:
     text = (repo_root() / _ROLES / "ai-stack/tasks/main.yml").read_text(encoding="utf-8")
     assert "{{ role_path }}/../../../../autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py" in text
+
+
+_SHARED = f"{_ROLES}/_shared/tasks"
+#: A `role_path` that quietly falls back to playbook_dir hides the missing anchor it should report.
+_FALLBACK = re.compile(r"role_path\s*\|\s*default\(")
+#: The one shared task with no role_path (statically imported by playbooks); it proves its tree instead.
+_PLAYBOOK_ANCHORED = "install_agent_autobot_shared.yml"
+
+
+def _code(text: str) -> str:
+    return "\n".join(strip_trailing_comment(line, ("#",)) for line in text.splitlines())
+
+
+def _reads_playbook_dir(text: str) -> bool:
+    """True if a task reads ``playbook_dir``; a task ``name:`` that says it does not is a mention."""
+    return any("playbook_dir" in line for line in _code(text).splitlines() if not re.match(r"\s*-?\s*name:", line))
+
+
+def test_contrast_a_task_name_mentioning_playbook_dir_is_not_a_read() -> None:
+    assert not _reads_playbook_dir('- name: "Resolve the repo root without playbook_dir (#20509)"\n  debug: {}')
+    assert _reads_playbook_dir('  root: "{{ playbook_dir | dirname }}"')
+
+
+def test_no_shared_task_hides_a_missing_role_path_behind_playbook_dir() -> None:
+    bad = [
+        p.name
+        for p in REACH.examined(repo_root())
+        if str(p.relative_to(repo_root())).startswith(_SHARED)
+        and _FALLBACK.search(_code(p.read_text(encoding="utf-8")))
+    ]
+    assert not bad, f"fail loudly on a missing role_path instead of defaulting it: {bad}"
+
+
+def test_contrast_the_silent_fallback_is_caught() -> None:
+    assert _FALLBACK.search("src: \"{{ role_path | default(playbook_dir ~ '/x') }}/../x\"")
+    assert not _FALLBACK.search(
+        "repo_source_root | default(role_path ~ '/../../../..' if role_path is defined else '', true)"
+    )
+
+
+def test_only_the_playbook_imported_task_reads_playbook_dir_and_it_proves_the_tree() -> None:
+    root = repo_root()
+    users = sorted(
+        p.name
+        for p in REACH.examined(root)
+        if str(p.relative_to(root)).startswith(_SHARED) and _reads_playbook_dir(p.read_text(encoding="utf-8"))
+    )
+    assert users == [_PLAYBOOK_ANCHORED]
+    text = (root / _SHARED / _PLAYBOOK_ANCHORED).read_text(encoding="utf-8")
+    assert "autobot-slm-backend/ansible/roles/_shared/tasks/install_agent_autobot_shared.yml" in text
+    assert text.index("shared_anchor.stat.exists") < text.index("shared_src.stat.exists")
+
+
+def test_the_role_less_callers_name_their_anchor_and_the_tasks_assert_it() -> None:
+    root = repo_root()
+    for name, var in (
+        ("clear_venv_husks.yml", "husk_repo_root"),
+        ("stage_shared_manifests.yml", "shared_manifests_repo_root"),
+    ):
+        text = (root / _SHARED / name).read_text(encoding="utf-8")
+        assert f"{var} | length > 0" in text, name
+    play = yaml.load_all(
+        (root / "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml").read_text(encoding="utf-8"),
+        Loader=_PlaybookLoader,
+    )
+    tasks = [task for doc in play for task in _walk_tasks(doc)]
+    includes = [t for t in tasks if _includes(t, "clear_venv_husks.yml")]
+    assert len(includes) >= 2, "control: the walk sees the husk-clearing includes"
+    assert _includes_without_anchor(tasks, "clear_venv_husks.yml") == []
+
+
+class _PlaybookLoader(yaml.SafeLoader):
+    """SafeLoader that reads Ansible's custom tags (``!unsafe``, ``!vault``) as plain data."""
+
+
+_PlaybookLoader.add_multi_constructor("!", lambda loader, suffix, node: None)
+_INCLUDE_KEYS = ("ansible.builtin.include_tasks", "include_tasks", "ansible.builtin.import_tasks", "import_tasks")
+
+
+def _walk_tasks(node):
+    """Every mapping in a playbook document, depth first (plays, blocks and tasks alike)."""
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _walk_tasks(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _walk_tasks(item)
+
+
+def _includes(task: dict, target: str) -> bool:
+    for key in _INCLUDE_KEYS:
+        spec = task.get(key)
+        file = spec.get("file") if isinstance(spec, dict) else spec
+        if isinstance(file, str) and file.endswith("/" + target):
+            return True
+    return False
+
+
+def _includes_without_anchor(tasks, target: str) -> list:
+    """Names of the includes of *target* whose OWN ``vars`` lack ``repo_source_root`` (another task's does not count)."""
+    return [
+        t.get("name", "<unnamed>")
+        for t in tasks
+        if _includes(t, target) and "repo_source_root" not in (t.get("vars") or {})
+    ]
+
+
+def test_contrast_each_include_must_carry_its_own_anchor() -> None:
+    both = yaml.safe_load(
+        "- name: a\n  ansible.builtin.include_tasks: ../x/_shared/tasks/clear_venv_husks.yml\n  vars: {repo_source_root: /r}\n"
+        "- name: b\n  ansible.builtin.include_tasks: ../x/_shared/tasks/clear_venv_husks.yml\n  vars: {repo_source_root: /r}\n"
+    )
+    assert _includes_without_anchor(both, "clear_venv_husks.yml") == []
+    one_missing = yaml.safe_load(
+        "- name: a\n  ansible.builtin.include_tasks: ../x/_shared/tasks/clear_venv_husks.yml\n  vars: {repo_source_root: /r}\n"
+        "- name: b\n  ansible.builtin.include_tasks: ../x/_shared/tasks/clear_venv_husks.yml\n"
+        "- name: unrelated\n  ansible.builtin.set_fact: {repo_source_root: /r}\n  vars: {repo_source_root: /r}\n"
+    )
+    assert _includes_without_anchor(one_missing, "clear_venv_husks.yml") == ["b"]

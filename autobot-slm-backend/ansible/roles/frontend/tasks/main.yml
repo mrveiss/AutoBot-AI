@@ -4,6 +4,11 @@
 # Frontend role - User frontend (autobot-frontend) deployment
 # Serves production build via nginx + SSL on Frontend VM (.21)
 
+# #21400: the backend port that matches the proxy scheme, defined once for every consumer.
+- name: "Frontend | Load the scheme-matched backend port"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/load_backend_scheme_port.yml
+  tags: ['always']
+
 # ============================================================
 # Phase 1 CLEAN - remove legacy/wrong-node dirs  (#926 Phase 4)
 # ============================================================
@@ -372,6 +377,6 @@
       - "Node.js: {{ node_version.stdout | default('not probed under --check') }}"
       - "Frontend URL: https://{{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
       - "TLS: Enabled ({{ frontend_tls_cert }})"
-      - "API Proxy: {{ backend_host | default(ansible_host) }}:{{ backend_port | default(8443) }}"
+      - "API Proxy: {{ backend_host | default(ansible_host) }}:{{ frontend_upstream_backend_port }}"
       - "Nginx: Enabled (production build)"
   tags: ['frontend', 'report']

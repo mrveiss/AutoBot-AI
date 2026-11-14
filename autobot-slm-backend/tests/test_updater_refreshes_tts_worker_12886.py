@@ -29,6 +29,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from repo_tests._ansible_restart_unit import restarts_unit, shared_restart_vars
 
 yaml = pytest.importorskip("yaml")
 
@@ -199,14 +200,7 @@ def test_tts_service_is_restarted_explicitly() -> None:
             inc = task.get("ansible.builtin.include_role") or task.get("include_role")
             if isinstance(inc, dict) and inc.get("name") == "tts-worker":
                 tts_idx = i
-            svc = task.get("systemd") or task.get("ansible.builtin.systemd") or {}
-            if (
-                isinstance(svc, dict)
-                and svc.get("name") == "autobot-tts-worker"
-                and svc.get("state") == "restarted"
-                and tts_idx is not None
-                and restart_idx is None
-            ):
+            if tts_idx is not None and restart_idx is None and restarts_unit(task, "autobot-tts-worker"):  # #20772
                 restart_idx = i
         if tts_idx is None:
             continue
@@ -234,9 +228,9 @@ def test_tts_restart_does_not_fail_open() -> None:
     playbook = yaml.safe_load(_PLAYBOOK.read_text(encoding="utf-8"))
 
     for task in _iter_mappings(playbook):
-        svc = task.get("systemd") or task.get("ansible.builtin.systemd") or {}
-        if isinstance(svc, dict) and svc.get("name") == "autobot-tts-worker":
-            assert task.get("failed_when") is not False, (
+        if restarts_unit(task, "autobot-tts-worker"):
+            shared = shared_restart_vars(task) or {}
+            assert task.get("failed_when") is not False and not shared.get("restart_unit_tolerate_failure"), (
                 "the TTS restart must not fail open — a swallowed restart failure "
                 "leaves the worker serving stale code with the update green"
             )

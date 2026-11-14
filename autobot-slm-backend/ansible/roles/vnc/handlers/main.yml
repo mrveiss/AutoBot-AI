@@ -11,14 +11,12 @@
   become: true
 
 - name: restart vnc-server
-  ansible.builtin.systemd:
-    name: "{{ vnc_service_name }}"
-    state: restarted
-  become: true
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: "{{ vnc_service_name }}"
 
 - name: restart websockify
-  ansible.builtin.systemd:
-    name: "{{ websockify_service_name }}"
-    state: restarted
-  become: true
   when: websockify_enabled | bool
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: "{{ websockify_service_name }}"

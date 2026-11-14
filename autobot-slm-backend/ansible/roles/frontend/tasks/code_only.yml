@@ -24,6 +24,11 @@
 # on every update and never touched sites-enabled. Same shape as the SLM
 # nginx_site.yml bug (#16979): render and enable now live in the same file.
 
+# #21400: this file is entered on its own (`tasks_from: code_only`), where main.yml's load never ran.
+- name: "Frontend | Load the scheme-matched backend port"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/load_backend_scheme_port.yml
+  tags: ['always']
+
 - name: "Frontend | Configure nginx"
   ansible.builtin.template:
     src: nginx-frontend.conf.j2
