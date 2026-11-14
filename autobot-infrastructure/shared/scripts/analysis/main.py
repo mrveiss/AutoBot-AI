@@ -30,7 +30,7 @@ for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
 # Import the application factory
 from app_factory import create_app  # noqa: E402
 
-from config import config as config_instance  # noqa: E402
+from config import config_manager as config_instance  # noqa: E402
 
 # Configure logging using centralized logging manager
 # #14518: ``utils.logging_manager`` does not exist under autobot-backend either;

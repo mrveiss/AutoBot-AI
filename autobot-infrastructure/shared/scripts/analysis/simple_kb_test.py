@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 async def test_autobot_kb():
     """Test the actual AutoBot knowledge base"""
     try:
-        from config import config as global_config
+        from config import config_manager as global_config
         from knowledge_base import KnowledgeBase
 
         # Initialize KB

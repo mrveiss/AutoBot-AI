@@ -147,7 +147,7 @@ class LLMConfigurationSynchronizer:
         """
         try:
             from api.agent_config import DEFAULT_AGENT_CONFIGS
-            from config import config as config_instance
+            from config import config_manager as config_instance
 
             logger.info("Starting LLM configuration synchronization...")
 
@@ -199,7 +199,7 @@ class LLMConfigurationSynchronizer:
             Dict containing the population result
         """
         try:
-            from config import config as config_instance
+            from config import config_manager as config_instance
             from utils.connection_utils import ModelManager
 
             logger.info("Ensuring models list is populated...")

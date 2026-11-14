@@ -2,13 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The three `Unified*` config aliases and the two instance aliases are gone and stay gone (#21526, #21533).
+"""The three `Unified*` config aliases and the four instance aliases are gone and stay gone (#21526, #21533).
 
 #959 renamed `UnifiedConfigManager` / `get_unified_config_manager` / `UnifiedConfigSettings`
 to `ConfigManager` / `get_config_manager` / `ConfigSettings` but left the old names behind as
 `# Deprecated` aliases with live users. #21526 migrated the users and removed the aliases; the
 repo rule is ONE canonical name, so a variant of it must not return. #21533 did the same for the module-level
 INSTANCE aliases `unified_config_manager` and `global_config_manager`: both resolved to the one `config_manager` object.
+The last two, `config` and `cfg`, resolved to that same object through the config package's `__getattr__`; importers now
+use `config_manager` and the package no longer answers to them.
 
 Scope, stated so an empty result is read correctly: every git-tracked `.py` file (comment lines
 excluded, via the shared comment helper) and every tracked `.md` file, minus this file, changelogs
@@ -25,6 +27,11 @@ package's attribute or bind the old spelling as a name:
 * `config.<name>` / `config_pkg.<name>` attribute access (this covers a `"config.<name>"` patch target) and the exact
   quoted string `"<name>"` (a `setattr`/`getattr`/`patch` target) are matched per line, in Python and Markdown.
 * Markdown keeps the per-line `from config import <name>` match (including `import a, <name>`).
+
+`config` and `cfg` are common names, so they are hits only where they name the config PACKAGE's attribute: a
+`from config import config|cfg` (parsed, any depth, with or without `as`), a `config_pkg.config|cfg` access, and a quoted
+`"config.config"` / `"config.cfg"` patch target. A bare `config.config` is NOT a hit: it is an ordinary attribute of
+unrelated config objects (connectors, domain security). `from autobot_shared.ssot_config import config` is another module.
 
 A local variable, a parameter, a `<name>.py` module path, `_fake_<name>` helpers and `TestUnifiedConfigTimeouts` are
 not hits. NOT seen: a bare relative `from . import <name>` inside the config package (no module name to resolve),
@@ -68,6 +75,10 @@ REMOVED_NAME = re.compile(r"\b(?:UnifiedConfigManager|get_unified_config_manager
 
 _INSTANCE_NAMES = ("unified_config_manager", "global_config_manager")
 _INSTANCE_ALT = "|".join(_INSTANCE_NAMES)
+_PKG_ATTRS = ("config", "cfg")  # removed #21533: the package attribute, never a bare local of that name
+_FROM_NAMES = _INSTANCE_NAMES + _PKG_ATTRS
+_PKG_ATTR_USE = re.compile(r"(?<![\w.])config_pkg\.(config|cfg)\b")
+_PKG_PATCH_TARGET = re.compile(r"[\"']config\.(config|cfg)(?:\.\w+)*[\"']")
 _FROM_IMPORT = re.compile(r"\bfrom config import\s+([^#]*)")
 _ATTR_USE = re.compile(rf"(?<![\w.])(?:config|config_pkg)\.({_INSTANCE_ALT})\b")
 _QUOTED = re.compile(rf"[\"']({_INSTANCE_ALT})[\"']")
@@ -85,7 +96,7 @@ def import_hits(text: str, filename: str) -> list[tuple[int, str]] | None:
             continue
         from_config = isinstance(node, ast.ImportFrom) and node.module == "config"
         for alias in node.names:
-            if from_config and alias.name in _INSTANCE_NAMES:
+            if from_config and alias.name in _FROM_NAMES:
                 found.append((alias.lineno, alias.name))
             if alias.asname in _INSTANCE_NAMES:
                 found.append((alias.lineno, alias.asname))
@@ -95,10 +106,11 @@ def import_hits(text: str, filename: str) -> list[tuple[int, str]] | None:
 def _instance_hits(line: str, imports: bool = True) -> list[str]:
     """Removed instance-alias names *line* reads off, quotes as a target of, or (if *imports*) imports from `config`."""
     found = [m.group(1) for m in _ATTR_USE.finditer(line)] + [m.group(1) for m in _QUOTED.finditer(line)]
+    found += [m.group(1) for rx in (_PKG_ATTR_USE, _PKG_PATCH_TARGET) for m in rx.finditer(line)]
     imp = _FROM_IMPORT.search(line) if imports else None
     if imp:
         firsts = (re.match(r"\W*(\w+)", part) for part in imp.group(1).split(","))
-        found += [m.group(1) for m in firsts if m and m.group(1) in _INSTANCE_ALT.split("|")]
+        found += [m.group(1) for m in firsts if m and m.group(1) in _FROM_NAMES]
     return found
 
 
@@ -241,9 +253,9 @@ def test_binding_an_old_spelling_by_import_as_is_refused() -> None:
     """Control: the local re-binding class (`import ... as <old name>`), at module level and inside a function."""
     for name in _INSTANCE_NAMES:
         assert hits_in(f"from config import config_manager as {name}\n", "x.py") == [(1, name)]
-        assert hits_in(f"from config import config as {name}  # noqa\n", "x.py") == [(1, name)]
+        assert hits_in(f"from config import config as {name}  # noqa\n", "x.py") == [(1, "config"), (1, name)]
         assert hits_in(f"import config as {name}\n", "x.py") == [(1, name)]
-        assert hits_in(f"def f():\n    from config import config as {name}\n", "x.py") == [(2, name)]
+        assert hits_in(f"def f():\n    from config import config as {name}\n", "x.py") == [(2, "config"), (2, name)]
     assert not hits_in("from config import config_manager as config_instance\n", "x.py")
     assert not hits_in('"""from config import config as global_config_manager"""\n', "x.py")
 
@@ -275,3 +287,33 @@ def test_the_sweep_reaches_python_and_markdown_and_skips_history() -> None:
     assert any(p.endswith(".py") for p in read) and any(p.endswith(".md") for p in read)
     assert _THIS_FILE not in read and "CHANGELOG.md" not in read
     assert not any(p.startswith("docs/archives/") for p in read)
+
+
+def test_the_config_and_cfg_package_aliases_are_caught_in_every_form_and_not_look_alikes() -> None:
+    """Control (#21533): each way to reach `config.config` / `config.cfg` is caught; same-spelled locals are not."""
+    for name in _PKG_ATTRS:
+        for hit in (
+            f"from config import {name}",
+            f"from config import {name} as local_name",
+            f"from config import config_manager, {name}",
+            f"def f():\n    from config import {name}",
+            f"from config import (\n    config_manager,\n    {name},\n)",
+            f"config_pkg.{name}.get('x')",
+            f"patch('config.{name}', fake)",
+            f'patch("config.{name}.get")',
+        ):
+            assert hits_in(hit + "\n", "x.py"), hit
+        assert hits_in(f"run `from config import {name}`\n", "x.md"), name
+        assert hits_in(f"from config import {name}\nbroken(:\n", "x.py") == [(1, name)], name
+    for fine in (
+        "from config import config_manager",
+        "from config import config_manager as config",
+        "from config import config_manager as cfg",
+        "from autobot_shared.ssot_config import config",
+        "from other_pkg import config",
+        "import config as config_pkg",
+        "cfg = config.config",
+        "self.config.config.get('x')",
+        "config = Config()",
+    ):
+        assert not hits_in(fine + "\n", "x.py"), fine

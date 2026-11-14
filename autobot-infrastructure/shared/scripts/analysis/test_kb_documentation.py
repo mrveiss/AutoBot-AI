@@ -82,7 +82,7 @@ async def _log_kb_stats(kb):
 async def test_documentation_search():
     """Test searching for documentation in knowledge base"""
     try:
-        from config import config as global_config
+        from config import config_manager as global_config
         from knowledge_base import KnowledgeBase
 
         # Initialize knowledge base
@@ -133,7 +133,7 @@ async def test_documentation_search():
 async def test_specific_autobot_docs():
     """Test searching for specific AutoBot documentation"""
     try:
-        from config import config as global_config
+        from config import config_manager as global_config
         from knowledge_base import KnowledgeBase
 
         kb = KnowledgeBase(config_manager=global_config)
