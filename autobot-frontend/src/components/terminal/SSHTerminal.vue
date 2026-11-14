@@ -97,8 +97,9 @@ const { send: wsSend, connect: wsConnect, disconnect: wsDisconnect, isConnected:
     errorMessage.value = 'Connection error'
     emit('error', 'Connection error')
   },
-  onClose: (event) => {
+  onClose: (event, info) => {
     logger.info('SSH WebSocket closed:', { code: event.code, reason: event.reason })
+    if (!info.current) return
     connectionState.value = 'disconnected'
     emit('disconnected')
   },
@@ -261,6 +262,10 @@ const handleMessage = (message: SSHTerminalMessage) => {
 // Disconnect
 const disconnect = () => {
   wsDisconnect()
+  // The detached socket's close is stale and ignored by onClose, so report the disconnect here.
+  if (connectionState.value === 'disconnected') return
+  connectionState.value = 'disconnected'
+  emit('disconnected')
 }
 
 // Resize handler
