@@ -6,7 +6,8 @@
 // Tests for useAuditApi — GH#7538
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { useAuditApi } from '../useAuditApi'
+import { useAuditApi, useAuditState } from '../useAuditApi'
+import { calculateSuccessRate } from '@/types/audit'
 
 const mockGet = vi.fn()
 
@@ -132,7 +133,7 @@ describe('useAuditApi figures over unfinished records (#20665)', () => {
         query: {},
       })
     })
-    const api = useAuditApi()
+    const api = useAuditState()
     await api.loadLogs()
     if (statistics) await api.loadStatistics()
     return api
@@ -174,5 +175,26 @@ describe('useAuditApi figures over unfinished records (#20665)', () => {
     const api = await loaded(['success', 'denied'], { success_rate: 87 })
 
     expect(api.successRate.value).toBe(87)
+  })
+
+  it('a non-finite success_rate from the server falls back to the computed rate', async () => {
+    const api = await loaded(['success', 'failed'], { success_rate: NaN })
+
+    expect(api.successRate.value).toBe(50)
+  })
+})
+
+describe('calculateSuccessRate (#20665)', () => {
+  it('is 0 when no row is terminal', () => {
+    expect(calculateSuccessRate(0, 0)).toBe(0)
+  })
+
+  it('is 33 for 1 of 3', () => {
+    expect(calculateSuccessRate(1, 3)).toBe(33)
+  })
+
+  it('rounds half up and reaches 100', () => {
+    expect(calculateSuccessRate(2, 3)).toBe(67)
+    expect(calculateSuccessRate(4, 4)).toBe(100)
   })
 })

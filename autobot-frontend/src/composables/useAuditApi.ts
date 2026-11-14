@@ -30,6 +30,7 @@ import type {
 import {
   DEFAULT_AUDIT_FILTER,
   auditTimestampToDate,
+  calculateSuccessRate,
   getDateRangeForFilter,
   isTerminalAuditResult,
 } from '@/types/audit'
@@ -162,9 +163,8 @@ export function useAuditState() {
   const successRate = computed(() => {
     // The server does not send a rate today, so the object being present says nothing about it.
     const served: unknown = statistics.value?.success_rate
-    if (typeof served === 'number') return served
-    if (terminalEntries.value.length === 0) return 0
-    return Math.round((successEntries.value.length / terminalEntries.value.length) * 100)
+    if (typeof served === 'number' && Number.isFinite(served)) return served
+    return calculateSuccessRate(successEntries.value.length, terminalEntries.value.length)
   })
 
   const uniqueOperations = computed(() => {

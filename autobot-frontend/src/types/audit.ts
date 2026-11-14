@@ -212,11 +212,12 @@ export const DEFAULT_AUDIT_FILTER: AuditFilter = {
 }
 
 /**
- * Helper to calculate success rate percentage
+ * The one definition of the success rate: successes as a whole percentage of the rows whose outcome is
+ * final (see {@link isTerminalAuditResult}). With no final row there is no rate to speak of, so it is 0.
  */
-export function calculateSuccessRate(stats: AuditStatistics): number {
-  if (stats.total_entries === 0) return 0
-  return Math.round((stats.success_count / stats.total_entries) * 100)
+export function calculateSuccessRate(successCount: number, terminalCount: number): number {
+  if (terminalCount === 0) return 0
+  return Math.round((successCount / terminalCount) * 100)
 }
 
 /**
