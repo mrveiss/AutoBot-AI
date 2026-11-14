@@ -72,7 +72,7 @@ def _raises_http(handler) -> tuple[int | None, str]:
     return None, ""
 
 
-@pytest.mark.parametrize("module", ["work_items.py", "boards.py"])
+@pytest.mark.parametrize("module", ["work_items.py", "boards.py", "agent_api.py"])
 def test_invalid_transition_returns_409_with_the_real_reason(module):
     handlers = list(_handlers_for(module, "InvalidTransition"))
     assert handlers, f"no InvalidTransition handler in {module}"
@@ -95,7 +95,7 @@ def test_checkout_conflict_also_surfaces_who_holds_it():
 
 def test_no_domain_handler_still_returns_a_generic_message():
     """Guard against regression across BOTH modules at once."""
-    for module in ("work_items.py", "boards.py"):
+    for module in ("work_items.py", "boards.py", "agent_api.py"):
         for exc_name in ("InvalidTransition", "CheckoutConflict"):
             for h in _handlers_for(module, exc_name):
                 _, detail = _raises_http(h)
