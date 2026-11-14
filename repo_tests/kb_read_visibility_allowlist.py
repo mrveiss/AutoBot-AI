@@ -172,7 +172,7 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "autobot-backend/api/knowledge_search_aggregator.py",
         "_get_fact_relations_for_graph",
     ): (
-        "SCOPED: fact_ids come from _get_facts_for_graph's already-filtered output "
+        "SCOPED: fact_ids come from visible_facts_page's already-filtered output "
         "(#16665), and both ends of every returned edge are re-checked against that "
         "same fact_ids set -- include_fact_details=False means no fact content is "
         "ever fetched here"

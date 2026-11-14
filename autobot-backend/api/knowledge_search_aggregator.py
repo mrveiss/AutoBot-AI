@@ -19,11 +19,14 @@ Endpoints:
 """
 
 import asyncio
-import json
 from typing import Any, Dict, List, Set
 
 from fastapi import APIRouter, Depends, Query, Request
 
+from api.knowledge_graph_facts import FactsPage
+from api.knowledge_graph_facts import decode_fact_metadata as _decode_fact_metadata
+from api.knowledge_graph_facts import visible_facts_page
+from api.knowledge_graph_sections import graph_sections
 from api.schemas_knowledge import (
     ContextRequest,
     GraphRequest,
@@ -33,13 +36,15 @@ from api.schemas_knowledge import (
     KnowledgeMultiSourceStatsResponse,
     SearchRequest,
 )
+from api.schemas_knowledge_graph import CURSOR_PATTERN
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
+from knowledge.graph_limits import GRAPH_MAX_OFFSET
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.relations import relations_by_direction
-from knowledge.root_read import admin_read_audit
+from knowledge.root_read import admin_read_audit, is_superadmin_user
 from knowledge.search_filters import (
     extract_user_context_from_request,
     filter_search_results_by_permission,
@@ -105,20 +110,6 @@ async def _expand_fact_relations(
             rel.get("source_fact"), ownership_manager, user_id, user_org_id, user_group_ids, is_admin
         ):
             _process_incoming_relation(rel, fact_id, related_ids, results)
-
-
-def _decode_fact_metadata(raw_fact: Dict[str, Any]) -> Dict[str, Any]:
-    """knowledge/facts.py hset()s "metadata" as a JSON *string* (#16665 review:
-    wrapping it un-decoded read every fact as owner_id=None, denying everyone
-    including the owner)."""
-    raw = raw_fact.get("metadata")
-    if not isinstance(raw, str):
-        return raw if isinstance(raw, dict) else {}
-    try:
-        decoded = json.loads(raw)
-    except (TypeError, ValueError):
-        return {}
-    return decoded if isinstance(decoded, dict) else {}
 
 
 async def _related_fact_is_accessible(
@@ -631,46 +622,6 @@ def _process_category_tree(
             _process_category_tree(children, nodes, edges, node["id"])
 
 
-async def _get_facts_for_graph(
-    kb: Any,
-    category_filter: str | None,
-    max_facts: int,
-    user_id: str,
-    user_org_id: str | None,
-    user_group_ids: List[str],
-    is_admin: bool,
-) -> List[Dict[str, Any]]:
-    """Get facts for the graph with optional category filtering.
-
-    Issue #707: Extracted helper for multi-source graph building.
-
-    #16665: the returned facts (and, transitively, every fact_id the graph's
-    relation edges reach -- _get_fact_relations_for_graph only ever sees IDs
-    this function already returned) are filtered to what *user_id* may see.
-    """
-    if category_filter:
-        # get_facts_in_category's facts carry metadata JSON-encoded, unlike
-        # kb.search()'s already-decoded results -- _decode_fact_metadata fixes
-        # the shape before filtering (#16665 review).
-        result = await kb.get_facts_in_category(category_id=category_filter, include_descendants=True, limit=max_facts)
-        raw_facts = result.get("facts", []) if result.get("success") else []
-        facts = [{**fact, "metadata": _decode_fact_metadata(fact)} for fact in raw_facts]
-    else:
-        # #19727: listed, not a search for "*", which the keyword fallback matches nothing for; quarantine stays out
-        listed = await kb.get_all_facts(limit=max_facts)
-        get_category = lambda fact: (fact.get("metadata") or {}).get("category", CategoryDefaults.GENERAL)  # noqa: E731
-        facts = [{**fact, "id": fact.get("fact_id"), "category": get_category(fact)} for fact in listed]
-
-    return await filter_search_results_by_permission(
-        facts,
-        user_id=user_id,
-        user_org_id=user_org_id,
-        user_group_ids=user_group_ids,
-        ownership_manager=getattr(kb, "ownership_manager", None),
-        is_admin=is_admin,
-    )
-
-
 async def _get_fact_relations_for_graph(kb: Any, fact_ids: List[str], max_relations: int = 100) -> List[Dict[str, Any]]:
     """Get relations between facts for the graph.
 
@@ -875,7 +826,6 @@ async def get_multi_source_graph(req: Request, body: GraphRequest, current_user:
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
     async with admin_read_audit(current_user, user_id, "kb.multi_source_graph") as is_admin:  # #19860
-
         nodes: List[Dict[str, Any]] = []
         edges: List[Dict[str, Any]] = []
 
@@ -883,14 +833,14 @@ async def get_multi_source_graph(req: Request, body: GraphRequest, current_user:
         category_map = await _process_category_tree_for_graph(kb, body, nodes, edges)
 
         # Get facts for the graph
-        facts: List[Dict[str, Any]] = []
+        page = FactsPage(cursor=body.cursor, failed=True)  # no KB / unreadable listing: failed, not empty or success
         if kb is not None:
             try:
-                facts = await _get_facts_for_graph(
-                    kb, body.category_filter, body.max_facts, user_id, user_org_id, user_group_ids, is_admin
-                )
+                scope = (kb, body.category_filter, body.max_facts, body.offset, user_id, user_org_id, user_group_ids)
+                page = await visible_facts_page(*scope, is_admin, is_superadmin_user(current_user), body.cursor)
             except Exception as e:
                 logger.warning("Failed to get facts: %s", e)
+        facts = page.facts
 
         # If no category nodes from tree, create them dynamically from facts
         if body.include_categories and not category_map and facts:
@@ -912,11 +862,9 @@ async def get_multi_source_graph(req: Request, body: GraphRequest, current_user:
 
         return {
             "success": True,
-            "data": {
-                "entities": nodes,
-                "relations": edges,
-            },
+            "data": {"entities": nodes, "relations": edges},
             "stats": {
+                "sections": await graph_sections(kb, body, nodes, edges, is_admin, page, current_user),
                 "total_entities": len(nodes),
                 "total_relations": len(edges),
                 "categories": len([n for n in nodes if n["type"] == "category"]),
@@ -935,6 +883,9 @@ async def get_multi_source_graph_simple(
     req: Request,
     max_facts: int = Query(50, ge=1, le=200, description="Maximum facts to include"),
     include_categories: bool = Query(True, description="Include category nodes"),
+    offset: int = Query(0, ge=0, le=GRAPH_MAX_OFFSET, description="Facts and bucket records to skip"),
+    cursor: str | None = Query(None, pattern=CURSOR_PATTERN, description="Resume the facts scan (see GraphRequest)"),
+    include_buckets: bool = Query(True),
     current_user: Dict = Depends(get_current_user),
 ):
     """
@@ -943,8 +894,6 @@ async def get_multi_source_graph_simple(
     Returns a multi-source knowledge graph with default settings.
     For more control, use POST /multi-source/graph with GraphRequest body.
     """
-    body = GraphRequest(
-        max_facts=max_facts,
-        include_categories=include_categories,
-    )
+    body = GraphRequest(max_facts=max_facts, include_categories=include_categories, offset=offset, cursor=cursor)
+    body.include_buckets = include_buckets
     return await get_multi_source_graph(req, body, current_user)
