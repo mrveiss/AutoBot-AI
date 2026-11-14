@@ -11,9 +11,9 @@ calls stay in the sweep's client.
 Three kinds of open issue are told apart, all from ONE listing of the open issues, all by hidden markers
 and never by what the text says:
 
-* the **umbrella**: its first body line is ``<!-- scheduled-failure-report:umbrella -->``;
-* the sweep's **own** issue for a workflow: ``<!-- scheduled-failure-report:<file> -->``; it may be closed
-  on recovery;
+* the **umbrella**: its FIRST body line is ``<!-- scheduled-failure-report:umbrella -->``;
+* the sweep's **own** issue for a workflow: its FIRST body line is ``<!-- scheduled-failure-report:<file> -->``;
+  it may be closed on recovery;
 * a **person's** issue, opted in by a line ``<!-- scheduled-failure-tracks:<file> -->`` anywhere in its
   body: the sweep comments there instead of opening its own, and never closes it. Merely naming the file
   does not opt in. With several issues tracking one file, the lowest number wins and the rest are logged.
@@ -25,43 +25,28 @@ issue was a failure.
 
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+from autobot_shared.env_utils import env_int_clamped, env_str
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
 Json = Dict[str, Any]
 
-
-def env_text(name: str, default: str) -> str:
-    return os.environ.get(name, "").strip() or default
-
-
-def env_days(name: str, default: int) -> int:
-    """A positive whole number of days from the environment; anything else is logged and ignored."""
-    raw = os.environ.get(name, "").strip()
-    if not raw:
-        return default
-    if raw.isdigit() and int(raw) > 0:
-        return int(raw)
-    logger.warning("%s=%r is not a positive whole number; using %d", name, raw, default)
-    return default
-
-
 ISSUE_LABELS = ("bug", "ci")
 #: The structure the 2-hourly issue-structure sweep requires (#19522): a goal milestone ``M<n> - ...``, a
 #: ``phase:M<n>.<k>`` label with the same ``n``, and a native parent. Env-backed so a re-planned milestone is
 #: a configuration change.
-PHASE_LABEL = env_text("SCHEDULED_FAILURE_PHASE_LABEL", "phase:M5.3")
-MILESTONE_TITLE = env_text(
+PHASE_LABEL = env_str("SCHEDULED_FAILURE_PHASE_LABEL", "phase:M5.3")
+MILESTONE_TITLE = env_str(
     "SCHEDULED_FAILURE_MILESTONE", "M5 - Engineering platform: CI/CD security, debugging and dependency tooling"
 )
-#: A scheduled workflow whose file is older than this and that has no completed scheduled run is treated as failing.
-NEVER_RUN_DAYS = env_days("SCHEDULED_FAILURE_NEVER_RUN_DAYS", 7)
+#: A scheduled workflow that GitHub has known for more than this many days and that has no completed scheduled
+#: run is treated as failing.
+NEVER_RUN_DAYS = env_int_clamped("SCHEDULED_FAILURE_NEVER_RUN_DAYS", 7, min_v=1)
 
 UMBRELLA_KEY = "umbrella"
 NEVER_KEY = "never"
@@ -104,7 +89,7 @@ def _facts(wf: ScheduledWorkflow, run: Optional[Json], failure: Failure, age_day
     rows = [f"| Workflow | {wf.name} (`.github/workflows/{wf.file}`) |"]
     if run is None:
         age = "unknown" if age_days is None else f"{age_days} days ago"
-        rows += ["| Scheduled runs | none has completed |", f"| Workflow file added | {age} |"]
+        rows += ["| Scheduled runs | none has completed |", f"| Workflow registered | {age} |"]
     else:
         rows += [
             f"| Run | {run.get('html_url')} |",
@@ -157,13 +142,20 @@ def passing_comment(wf: ScheduledWorkflow, run: Json, human: bool = False) -> st
 
 
 def marker_file(body: Optional[str]) -> Optional[str]:
-    match = _REPORT_MARKER_RE.search(body or "")
+    """The workflow file (or ``umbrella``) named by the FIRST body line's report marker, else None."""
+    first = (body or "").lstrip("﻿").split("\n", 1)[0].strip()
+    match = _REPORT_MARKER_RE.fullmatch(first)
     return match.group(1) if match else None
 
 
 def tracked_files(body: Optional[str]) -> set:
     """The workflow files a person's issue opted in to, by ``scheduled-failure-tracks`` lines anywhere in its body."""
     return set(_TRACKS_MARKER_RE.findall(body or ""))
+
+
+def has_parent(issue: Json) -> bool:
+    """True when the listing item already has a native parent (any parent: one is never replaced)."""
+    return bool(issue.get("parent_issue_url"))
 
 
 def marker_events(issue: Json, comments: Iterable[Json]) -> List[Tuple[str, str]]:

@@ -22,35 +22,81 @@ from scheduled_failure_report_test import (
     REPO,
     WEEKLY,
     FakeApi,
+    ago,
     do_sweep,
     own_issue,
     person_issue,
 )
 
-# ---- a workflow that never ran ---------------------------------------------------------
+# ---- a workflow that never ran: dated by when GitHub registered it ---------------------
 
 
-def test_a_young_or_undated_never_run_workflow_is_a_warning_line_and_nothing_else() -> None:
-    for runs, age in (({"nightly.yml": []}, 2), ({}, 2), ({"nightly.yml": []}, None)):
-        api = FakeApi(runs)
-        outcomes, errors = do_sweep(api, age_of=lambda file, age=age: age)
+def test_a_workflow_registered_a_day_ago_or_not_yet_on_the_default_branch_is_a_warning_and_nothing_else() -> None:
+    for created in ({"nightly.yml": ago(1)}, {}):  # {} -> GET /actions/workflows/{file} answers 404
+        api = FakeApi({"nightly.yml": []}, created=created)
+        outcomes, errors = do_sweep(api)
         assert [(o.state, o.action, o.issue) for o in outcomes] == [("never-run", "none", None)]
         assert outcomes[0].note.startswith("WARNING") and errors == [] and api.writes() == []
         assert "\tWARNING" in outcomes[0].line()
 
 
-def test_an_old_never_run_workflow_opens_an_issue_saying_it_never_fired() -> None:
-    api = FakeApi({"nightly.yml": []})
-    outcomes, errors = do_sweep(api, age_of=lambda file: 30)
+def test_a_workflow_with_no_runs_endpoint_either_is_a_warning_too() -> None:
+    api = FakeApi({}, created={"nightly.yml": ago(1)})
+    outcomes, errors = do_sweep(api)
+    assert [(o.state, o.action) for o in outcomes] == [("never-run", "none")] and errors == []
+
+
+def test_a_workflow_registered_thirty_days_ago_that_never_ran_opens_an_issue_saying_it_never_fired() -> None:
+    api = FakeApi({"nightly.yml": []}, created={"nightly.yml": ago(30)})
+    outcomes, errors = do_sweep(api)
     assert errors == [] and [(o.state, o.action) for o in outcomes] == [("never-fired", "open")]
     body = api.writes()[0][2]["body"]
     assert "<!-- scheduled-failure-run:never -->" in body and "30 days ago" in body
 
 
+def test_the_age_is_the_registration_date_not_a_commit_date() -> None:
+    api = FakeApi({}, created={"nightly.yml": "2026-11-13T01:19:15.000+02:00"})
+    now = mod.datetime.fromisoformat("2026-11-14T08:00:00+00:00")
+    assert mod.SweepClient(api).workflow_age_days("nightly.yml", now) == 1
+    assert mod.SweepClient(api).workflow_age_days("missing.yml", now) == 0
+    assert api.calls[0][1].endswith("/actions/workflows/nightly.yml")
+
+
+def test_a_failed_workflow_lookup_is_that_workflows_error() -> None:
+    api = FakeApi({"nightly.yml": []}, created={"nightly.yml": ago(30)}, fail=lambda m, p: p.endswith("nightly.yml"))
+    outcomes, errors = do_sweep(api)
+    assert outcomes == [] and len(errors) == 1 and "cannot read the workflow nightly.yml" in errors[0]
+
+
 def test_a_never_fired_report_is_made_once_and_then_left_alone() -> None:
-    api = FakeApi({"nightly.yml": []}, [own_issue(key="never")])
-    outcomes, _ = do_sweep(api, age_of=lambda file: 30)
+    api = FakeApi({"nightly.yml": []}, [own_issue(key="never")], created={"nightly.yml": ago(30)})
+    outcomes, _ = do_sweep(api)
     assert outcomes[0].action == "already-reported" and api.writes() == []
+
+
+# ---- an own issue that lost its attach -------------------------------------------------
+
+
+def test_an_attach_that_failed_on_open_is_retried_on_the_next_sweep() -> None:
+    def refuse_attach(method: str, path: str) -> bool:
+        return method == "POST" and path.endswith("/sub_issues")
+
+    first = FakeApi({"nightly.yml": FAILING}, fail=refuse_attach)
+    outcomes, errors = do_sweep(first)
+    assert outcomes[0].action == "open" and any("not attached to the umbrella" in e for e in errors)
+    orphan = own_issue(900, key=5, parent=False)  # what the next listing shows
+    second = FakeApi({"nightly.yml": FAILING}, [orphan])
+    outcomes, errors = do_sweep(second)
+    assert errors == [] and outcomes[0].action == "already-reported"
+    ((method, path, payload),) = second.writes()
+    assert path.endswith("/issues/30/sub_issues") and payload == {"sub_issue_id": 9900}
+
+
+def test_an_own_issue_that_has_a_parent_is_not_attached_again_and_a_persons_issue_never_is() -> None:
+    for issue in (own_issue(key=5), person_issue()):
+        api = FakeApi({"nightly.yml": FAILING}, [issue, own_issue(41, key=1, file="other.yml")])
+        do_sweep(api)
+        assert not any(w[1].endswith("/sub_issues") for w in api.writes())
 
 
 # ---- a person's issue ------------------------------------------------------------------
@@ -108,15 +154,34 @@ def test_two_persons_issues_tracking_one_file_comment_on_the_lowest_number_only(
 
 
 def test_a_listing_failure_is_reported_and_the_other_workflows_still_run() -> None:
-    class Flaky(FakeApi):
-        def request(self, method: str, path: str, payload: Any = None) -> Tuple[int, Any]:
-            if "/actions/workflows/nightly.yml/" in path:
-                return 500, {"message": "boom"}
-            return super().request(method, path, payload)
-
-    outcomes, errors = do_sweep(Flaky({"weekly.yml": PASSING}), workflows=[NIGHTLY, WEEKLY])
+    api = FakeApi({"weekly.yml": PASSING}, fail=lambda m, p: "/actions/workflows/nightly.yml/" in p)
+    outcomes, errors = do_sweep(api, workflows=[NIGHTLY, WEEKLY])
     assert [o.file for o in outcomes] == ["weekly.yml"]
     assert len(errors) == 1 and errors[0].startswith("nightly.yml:")
+
+
+def test_a_milestone_list_failure_is_one_problem_and_every_issue_is_still_opened() -> None:
+    runs = {"nightly.yml": FAILING, "weekly.yml": FAILING}
+    api = FakeApi(runs, fail=lambda m, p: "/milestones?" in p)
+    outcomes, errors = do_sweep(api, workflows=[NIGHTLY, WEEKLY])
+    assert [o.action for o in outcomes] == ["open", "open"]
+    assert sum("cannot list milestones" in e for e in errors) == 1 and api.count("/milestones?") == 1
+    created = [w[2] for w in api.writes() if w[1].endswith("/issues")]
+    assert len(created) == 2 and all("milestone" not in payload for payload in created)
+
+
+def test_a_failed_close_posts_no_comment_is_one_error_and_the_sweep_continues() -> None:
+    runs = {"nightly.yml": PASSING, "weekly.yml": PASSING}
+    issues = [own_issue(40, 1, "nightly.yml"), own_issue(41, 1, "weekly.yml")]
+    api = FakeApi(runs, issues, fail=lambda m, p: m == "PATCH" and p.endswith("/issues/40"))
+    outcomes, errors = do_sweep(api, workflows=[NIGHTLY, WEEKLY])
+    assert [(o.file, o.action) for o in outcomes] == [("weekly.yml", "close")]
+    assert len(errors) == 1 and errors[0].startswith("nightly.yml:")
+    assert [(w[0], w[1].rsplit("/", 2)[-2:]) for w in api.writes()] == [
+        ("PATCH", ["issues", "40"]),
+        ("PATCH", ["issues", "41"]),
+        ("POST", ["41", "comments"]),
+    ]
 
 
 def _boom(number: int) -> List[Dict[str, Any]]:
@@ -170,7 +235,6 @@ def test_list_issues_drops_pull_requests_keeps_the_filters_and_reports_a_page_ca
 def _patch_main(monkeypatch: pytest.MonkeyPatch, workflows: List[mod.ScheduledWorkflow], problems: List[str], api: Any):
     monkeypatch.setattr(mod, "scan_workflows", lambda: (workflows, problems))
     monkeypatch.setattr(mod, "build_api", lambda: api)
-    monkeypatch.setattr(mod, "git_age_days", lambda file: None)
 
 
 def test_main_exits_1_when_no_scheduled_workflow_is_found(monkeypatch: pytest.MonkeyPatch) -> None:

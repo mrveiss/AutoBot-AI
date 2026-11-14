@@ -16,15 +16,18 @@ Run by `.github/workflows/scheduled-failure-report.yml`. Nothing is listed by ha
    ``skipped``, ``neutral``, ``stale`` and ``action_required`` say nothing about the workflow
    (a person or a concurrency group stopped it), so they are skipped and the next older run
    decides. Runs exist but none decides: ``inconclusive``, no action. No completed scheduled run
-   at all: ``never-run`` -- reported as a WARNING in the output, and when the workflow file was
-   added more than ``NEVER_RUN_DAYS`` ago (env ``SCHEDULED_FAILURE_NEVER_RUN_DAYS``, default 7) it is
-   ``never-fired`` and handled like a failing workflow. The sweep's own file is therefore only a
+   at all: ``never-run`` -- reported as a WARNING in the output. It becomes ``never-fired`` (handled
+   like a failing workflow) once GitHub has known the workflow for more than ``NEVER_RUN_DAYS`` (env
+   ``SCHEDULED_FAILURE_NEVER_RUN_DAYS``, default 7). The age is the ``created_at`` of
+   ``GET /actions/workflows/{file}``, i.e. when the file reached the default branch, not when its commits
+   were written; a 404 (not on the default branch yet) is too new. The sweep's own file is therefore only a
    warning for its first week.
 3. **The issue.** (Markers, matching and text: ``scheduled_failure_issues.py``.) Found by a hidden marker
-   line in the body among the open issues; the title is never matched. Failing and no issue: open one with
-   the milestone and labels the issue-structure sweep requires, then attach it to the umbrella issue as a
-   native sub-issue. Failing with an issue: a NEW comment per failing run, never twice for the same run.
-   Passing with the sweep's own issue: a closing comment, then close.
+   on the first body line among the open issues; the title is never matched. Failing and no issue: open one
+   with the milestone and labels the issue-structure sweep requires, then attach it to the umbrella issue as
+   a native sub-issue (an own issue found without a parent is attached on a later sweep). Failing with an
+   issue: a NEW comment per failing run, never twice for the same run. Passing with the sweep's own issue:
+   close it, then a closing comment.
 4. **A person's issue.** An open issue whose body carries the line
    ``<!-- scheduled-failure-tracks:<workflow file name> -->`` is opted in: the sweep comments THERE instead
    of opening its own (idempotent per run) and never closes it. On recovery it adds one "passes again"
@@ -38,13 +41,12 @@ reader is the shared helper (#12984). The report goes to STDOUT, diagnostics at 
 from __future__ import annotations
 
 import argparse
-import subprocess  # nosec B404  # one fixed `git log` to date a workflow file
 import sys
 import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, FrozenSet, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, FrozenSet, Iterable, List, Optional, Sequence, Tuple
 
 import yaml
 
@@ -68,6 +70,7 @@ from scheduled_failure_issues import (  # noqa: E402
     Targets,
     build_targets,
     failure_comment,
+    has_parent,
     issue_body,
     issue_title,
     last_word_is_failure,
@@ -85,7 +88,6 @@ WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 RUNS_PER_WORKFLOW = 10
 MAX_ISSUE_PAGES = 50
 MILESTONE_PAGE_SIZE = 100
-GIT_TIMEOUT_SECONDS = 60
 
 FAILING_CONCLUSIONS: FrozenSet[str] = frozenset({"failure", "timed_out", "startup_failure"})
 PASSING_CONCLUSIONS: FrozenSet[str] = frozenset({"success"})
@@ -107,8 +109,6 @@ WRITING_ACTIONS = frozenset({ACTION_OPEN, ACTION_UPDATE, ACTION_CLOSE, ACTION_RE
 
 NO_JOB_STARTED = "none: the run ended before any job started"
 NEVER_RUN_NOTE = "WARNING: scheduled, but no scheduled run has completed"
-
-AgeOf = Optional[Callable[[str], Optional[int]]]
 
 
 class SweepError(IssueApiError):
@@ -185,7 +185,7 @@ def verdict_of(runs: Iterable[Json]) -> Verdict:
 
 
 def settle(verdict: Verdict, age_days: Optional[int], threshold: int = NEVER_RUN_DAYS) -> Verdict:
-    """A workflow that never ran and whose file is older than ``threshold`` days has never FIRED."""
+    """A workflow that never ran and that GitHub has known for more than ``threshold`` days has never FIRED."""
     if verdict.state == STATE_NEVER_RUN and age_days is not None and age_days > threshold:
         return Verdict(STATE_NEVER_FIRED)
     return verdict
@@ -212,24 +212,11 @@ def first_failure(jobs: Iterable[Json]) -> Failure:
     return Failure()
 
 
-def git_age_days(file: str, now: Optional[datetime] = None) -> Optional[int]:
-    """Whole days since the workflow file was first added to the history; None when git cannot say."""
-    cmd = ["git", "log", "--diff-filter=A", "--format=%aI", "--", f".github/workflows/{file}"]
-    try:
-        done = subprocess.run(  # nosec B603  # fixed argv, no shell
-            cmd, cwd=REPO_ROOT, capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS
-        )
-        added = datetime.fromisoformat(done.stdout.split()[-1])
-    except (OSError, subprocess.SubprocessError, IndexError, ValueError):
-        return None
-    return ((now or datetime.now(timezone.utc)) - added).days
-
-
 def never_run_note(state: str, age: Optional[int]) -> str:
     """The WARNING column for a workflow with no completed scheduled run; empty for every other state."""
     if state not in (STATE_NEVER_RUN, STATE_NEVER_FIRED):
         return ""
-    return NEVER_RUN_NOTE if age is None else f"{NEVER_RUN_NOTE} (file added {age} days ago)"
+    return NEVER_RUN_NOTE if age is None else f"{NEVER_RUN_NOTE} (registered {age} days ago)"
 
 
 # ---- IO ---------------------------------------------------------------------------------
@@ -264,6 +251,17 @@ class SweepClient(IssueClient):
             raise self.error(f"cannot list the scheduled runs of {file}: HTTP {status}: {body}")
         return list(body.get("workflow_runs") or [])
 
+    def workflow_age_days(self, file: str, now: Optional[datetime] = None) -> int:
+        """Whole days since GitHub registered the workflow (``created_at``); 0 when not on the default branch."""
+        path = f"/repos/{self.repo}/actions/workflows/{urllib.parse.quote(file)}"
+        status, body = self.api.request("GET", path, None)
+        if status == 404:
+            return 0
+        if status != 200 or not isinstance(body, dict) or not body.get("created_at"):
+            raise self.error(f"cannot read the workflow {file}: HTTP {status}: {body}")
+        created = datetime.fromisoformat(str(body["created_at"]).replace("Z", "+00:00"))
+        return ((now or datetime.now(timezone.utc)) - created).days
+
     def failure_of(self, run_id: int) -> Failure:
         try:
             return first_failure(self.api.run_jobs(run_id))
@@ -296,15 +294,15 @@ class SweepClient(IssueClient):
             self.problems.append(f"cannot list milestones: {exc}")
         return None
 
-    def attach_to_umbrella(self, umbrella: Optional[Json], created: Json) -> None:
-        """Make ``created`` a native sub-issue of the umbrella (by the issue's numeric id, not its number)."""
+    def attach_to_umbrella(self, umbrella: Optional[Json], issue: Json) -> None:
+        """Make ``issue`` a native sub-issue of the umbrella (by the issue's numeric id, not its number)."""
         if umbrella is None:
             return
         path = f"/repos/{self.repo}/issues/{umbrella['number']}/sub_issues"
         try:
-            self.call("POST", path, {"sub_issue_id": created["id"]}, ok=(201,))
+            self.call("POST", path, {"sub_issue_id": issue["id"]}, ok=(201,))
         except SweepError as exc:
-            self.problems.append(f"#{created['number']} was opened but not attached to the umbrella: {exc}")
+            self.problems.append(f"#{issue['number']} is not attached to the umbrella: {exc}")
 
     def comment(self, number: int, body: str) -> None:
         self.call("POST", f"/repos/{self.repo}/issues/{number}/comments", {"body": body}, ok=(201,))
@@ -364,10 +362,11 @@ def _update(
 
 
 def _close(client: SweepClient, wf: ScheduledWorkflow, run: Json, issue: Json, dry_run: bool) -> Done:
+    """Close first, comment second: a failed close leaves nothing posted, so the next sweep cannot double the note."""
     number = issue["number"]
     if not dry_run:
-        client.comment(number, passing_comment(wf, run))
         client.call("PATCH", f"/repos/{client.repo}/issues/{number}", {"state": "closed", "state_reason": "completed"})
+        client.comment(number, passing_comment(wf, run))
     return ACTION_CLOSE, number
 
 
@@ -396,6 +395,8 @@ def _apply(
         return _open(client, wf, verdict, targets, age, dry_run)
     if issue is None:
         return ACTION_NONE, None
+    if not human and not dry_run and action != ACTION_CLOSE and not has_parent(issue):
+        client.attach_to_umbrella(targets.umbrella, issue)  # an earlier attach failed: retry it
     if action == ACTION_UPDATE:
         return _update(client, wf, verdict, issue, human, age, dry_run)
     if run is not None and action == ACTION_CLOSE:
@@ -405,11 +406,9 @@ def _apply(
     return ACTION_NONE, issue["number"]
 
 
-def handle_workflow(
-    client: SweepClient, wf: ScheduledWorkflow, targets: Targets, dry_run: bool, age_of: AgeOf = None
-) -> Outcome:
+def handle_workflow(client: SweepClient, wf: ScheduledWorkflow, targets: Targets, dry_run: bool) -> Outcome:
     verdict = verdict_of(client.scheduled_runs(wf.file))
-    age = age_of(wf.file) if age_of is not None and verdict.state == STATE_NEVER_RUN else None
+    age = client.workflow_age_days(wf.file) if verdict.state == STATE_NEVER_RUN else None
     verdict = settle(verdict, age)
     own = targets.own.get(wf.file)
     human = None if own else targets.human.get(wf.file)
@@ -422,7 +421,7 @@ def handle_workflow(
 
 
 def sweep(
-    client: SweepClient, workflows: Sequence[ScheduledWorkflow], dry_run: bool, age_of: AgeOf = None
+    client: SweepClient, workflows: Sequence[ScheduledWorkflow], dry_run: bool
 ) -> Tuple[List[Outcome], List[str]]:
     """Every workflow handled on its own: one API failure is reported and the rest still run."""
     files = [wf.file for wf in workflows]
@@ -435,7 +434,7 @@ def sweep(
     errors: List[str] = []
     for wf in workflows:
         try:
-            outcomes.append(handle_workflow(client, wf, targets, dry_run, age_of))
+            outcomes.append(handle_workflow(client, wf, targets, dry_run))
         except SweepError as exc:
             errors.append(f"{wf.file}: {exc}")
     return outcomes, [*client.problems, *errors]
@@ -450,7 +449,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         logger.error("no scheduled workflow found under %s; refusing to report a clean sweep", WORKFLOW_DIR)
         return 1
     try:
-        outcomes, errors = sweep(SweepClient(build_api()), workflows, args.dry_run, git_age_days)
+        outcomes, errors = sweep(SweepClient(build_api()), workflows, args.dry_run)
     except (IssueApiError, WatchdogError) as exc:
         logger.error("%s", exc)
         return 1

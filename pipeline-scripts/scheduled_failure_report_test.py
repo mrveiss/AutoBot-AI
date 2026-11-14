@@ -11,6 +11,7 @@ file's fakes. No network: a fake API answers from literal fixtures and records e
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -34,6 +35,11 @@ def run(run_id: int, conclusion: Optional[str], created: str, status: str = "com
         "run_started_at": created,
         "html_url": RUN_URL.format(run_id),
     }
+
+
+def ago(days: int) -> str:
+    """An ISO timestamp ``days`` days before now, for a workflow's ``created_at``."""
+    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
 
 FAILED_JOBS = [
@@ -181,7 +187,7 @@ def test_the_plan_follows_state_and_issue(state: str, has_issue: bool, human: bo
     [
         pytest.param("never-run", 8, "never-fired", id="older-than-the-threshold"),
         pytest.param("never-run", 7, "never-run", id="exactly-the-threshold-is-still-young"),
-        pytest.param("never-run", 0, "never-run", id="added-today"),
+        pytest.param("never-run", 0, "never-run", id="registered-today"),
         pytest.param("never-run", None, "never-run", id="age-unknown-never-escalates"),
         pytest.param("failing", 400, "failing", id="only-a-never-run-workflow-is-settled"),
     ],
@@ -237,6 +243,13 @@ def test_the_title_is_not_the_identity() -> None:
     assert iss.build_targets([renamed], ["nightly.yml"]).own == {"nightly.yml": renamed}
     titled_only = {"number": 4, "title": mod.issue_title(NIGHTLY), "body": "no marker here"}
     assert iss.build_targets([titled_only], ["nightly.yml"]).own == {}
+
+
+def test_a_report_marker_below_the_first_line_is_not_an_identity() -> None:
+    umbrella_low = {"number": 31, "title": "u", "body": "intro\n" + iss.REPORT_MARKER.format(file="umbrella")}
+    own_low = {"number": 32, "title": "o", "body": "intro\n" + iss.REPORT_MARKER.format(file="nightly.yml")}
+    targets = iss.build_targets([umbrella_low, own_low], ["nightly.yml"])
+    assert targets.umbrella is None and targets.own == {}
 
 
 def test_two_own_issues_for_one_workflow_keep_the_lowest_number() -> None:
@@ -324,17 +337,27 @@ class FakeApi:
         issues: Optional[List[Dict[str, Any]]] = None,
         umbrella: bool = True,
         milestones: Optional[List[Dict[str, Any]]] = None,
+        created: Optional[Dict[str, str]] = None,
+        fail: Optional[Callable[[str, str], bool]] = None,
     ) -> None:
         self.runs = runs
         self.issues = ([UMBRELLA] if umbrella else []) + (issues or [])
         self.milestones = [{"number": 7, "title": iss.MILESTONE_TITLE}] if milestones is None else milestones
+        self.created = created or {}
+        self.fail = fail
         self.calls: List[Tuple[str, str, Any]] = []
 
     def request(self, method: str, path: str, payload: Any = None) -> Tuple[int, Any]:
         self.calls.append((method, path, payload))
+        if self.fail is not None and self.fail(method, path):
+            return 500, {"message": "boom"}
         if method == "GET" and "/actions/workflows/" in path:
-            file = path.split("/actions/workflows/")[1].split("/runs")[0]
-            return (200, {"workflow_runs": self.runs[file]}) if file in self.runs else (404, {"message": "Not Found"})
+            file = path.split("/actions/workflows/")[1].split("/runs")[0].split("?")[0]
+            if "/runs" in path:
+                known = file in self.runs
+                return (200, {"workflow_runs": self.runs[file]}) if known else (404, {"message": "Not Found"})
+            created = self.created.get(file)
+            return (200, {"created_at": created}) if created else (404, {"message": "Not Found"})
         if method == "GET" and "/milestones?" in path:
             return 200, self.milestones
         if method == "GET" and "/issues?" in path:
@@ -367,14 +390,14 @@ def do_sweep(
     comments: Comments = None,
     dry_run: bool = False,
     workflows: Optional[List[mod.ScheduledWorkflow]] = None,
-    age_of: Optional[Callable[[str], Optional[int]]] = None,
 ):
-    return mod.sweep(make_client(api, comments), workflows or [NIGHTLY], dry_run, age_of)
+    return mod.sweep(make_client(api, comments), workflows or [NIGHTLY], dry_run)
 
 
-def own_issue(number: int = 40, key: Any = 1, file: str = "nightly.yml") -> Dict[str, Any]:
+def own_issue(number: int = 40, key: Any = 1, file: str = "nightly.yml", parent: bool = True) -> Dict[str, Any]:
     body = iss.REPORT_MARKER.format(file=file) + "\n" + iss.RUN_MARKER.format(key=key)
-    return {"number": number, "title": "own", "body": body}
+    issue = {"number": number, "id": 9000 + number, "title": "own", "body": body}
+    return {**issue, "parent_issue_url": "https://api.example.invalid/repos/x/y/issues/30"} if parent else issue
 
 
 def person_issue(number: int = 50, file: str = "nightly.yml") -> Dict[str, Any]:
@@ -440,14 +463,14 @@ def test_a_run_reported_in_a_comment_is_not_reported_again() -> None:
     assert api.writes() == []
 
 
-def test_a_passing_latest_run_comments_and_closes_the_own_issue() -> None:
+def test_a_passing_latest_run_closes_the_own_issue_first_and_then_comments() -> None:
     api = FakeApi({"nightly.yml": PASSING}, [own_issue()])
     outcomes, _ = do_sweep(api)
     assert outcomes == [mod.Outcome("nightly.yml", "passing", "close", 40)]
-    comment, patch = api.writes()
-    assert comment[1].endswith("/issues/40/comments") and RUN_URL.format(7) in comment[2]["body"]
+    patch, comment = api.writes()
     assert patch[0] == "PATCH" and patch[1].endswith("/issues/40")
     assert patch[2] == {"state": "closed", "state_reason": "completed"}
+    assert comment[1].endswith("/issues/40/comments") and RUN_URL.format(7) in comment[2]["body"]
 
 
 def test_a_cancelled_newest_run_leaves_a_failing_issue_open_and_quiet() -> None:
@@ -464,6 +487,7 @@ def test_dry_run_reads_everything_and_writes_nothing() -> None:
         ([run(6, "failure", "2026-11-04T04:00:00Z")], [own_issue(key=5)], "would-update"),
         (PASSING, [own_issue()], "would-close"),
         (PASSING, [person_issue()], "none"),
+        (FAILING, [own_issue(key=5, parent=False)], "already-reported"),
     ):
         api = FakeApi({"nightly.yml": runs}, issues)
         outcomes, _ = do_sweep(api, dry_run=True)
@@ -474,6 +498,6 @@ def test_dry_run_reads_everything_and_writes_nothing() -> None:
 def test_the_run_listing_asks_only_for_completed_scheduled_runs() -> None:
     api = FakeApi({"nightly.yml": []})
     do_sweep(api)
-    listing = [path for method, path, _ in api.calls if "/actions/workflows/" in path]
+    listing = [path for method, path, _ in api.calls if "/runs?" in path]
     assert len(listing) == 1
     assert "event=schedule" in listing[0] and "status=completed" in listing[0]

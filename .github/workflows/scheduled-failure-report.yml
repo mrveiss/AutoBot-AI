@@ -9,14 +9,15 @@
 # passes. A person's open issue that carries the line
 # `<!-- scheduled-failure-tracks:<workflow file name> -->` in its body gets the comments instead
 # and is never closed by the sweep. Cancelled and skipped runs are not evidence either way; a
-# workflow that never ran is a WARNING line, and a failure once its file is a week old. Logic,
+# workflow that never ran is a WARNING line, and a failure once GitHub has known it for a week
+# (the `created_at` of the workflow, i.e. when its file reached the default branch). Logic,
 # markers and the fixture tests: pipeline-scripts/scheduled_failure_report.py and
 # scheduled_failure_issues.py.
 #
 # Daily 07:23 UTC (09:23 Riga in winter, 10:23 in summer), after the night-time schedules.
 # `workflow_dispatch` takes `dry_run` to print what would be done without writing any issue.
 # Permissions: issues write covers issues, comments, milestones reads and sub-issues; actions
-# read lists the runs and jobs. The full history is fetched to date each workflow file.
+# read lists the runs, jobs and the workflow's creation date.
 
 name: Scheduled Failure Report
 
@@ -48,7 +49,6 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
-          fetch-depth: 0
 
       # The repo scripts import autobot_shared, which refuses an interpreter below the
       # .python-version floor; the runner default python3 is not guaranteed to meet it.
