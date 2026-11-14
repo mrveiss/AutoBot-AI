@@ -303,6 +303,10 @@
         </div>
       </div>
     </Teleport>
+    <!-- Preview Pane: the server-built preview of a listed text attachment (#20906) -->
+    <Teleport to="body">
+      <FilePreviewPane v-if="preview || previewLoading" :preview="preview" @close="closePreview" />
+    </Teleport>
   </div>
 </template>
 
@@ -313,6 +317,8 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useConversationFiles, type SortField } from '@/composables/useConversationFiles'
+import { useLatestRequest } from '@/composables/useLatestRequest'
+import FilePreviewPane from '@/components/chat/FilePreviewPane.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 
@@ -333,6 +339,10 @@ const {
   stats,
   loading,
   error,
+  preview,
+  previewLoading,
+  closePreview,
+  resetForSession,
   uploadProgress,
   hasFiles,
   totalSizeFormatted,
@@ -362,7 +372,7 @@ const {
   isPreviewable,
   isEditable,
   clearError
-} = useConversationFiles(props.sessionId)
+} = useConversationFiles(() => props.sessionId)
 
 // Local state
 const fileInput = ref<HTMLInputElement>()
@@ -436,10 +446,14 @@ const handleRename = async () => {
   renameValue.value = ''
 }
 
+/** Only the latest edit-open may fill the editor; a session switch or a newer open revokes the one in flight (#21337). */
+const editOpen = useLatestRequest()
+
 const startEdit = async (fileId: string, filename: string) => {
   contextMenu.value = null
+  const token = editOpen.begin()
   const content = await getFileContent(fileId)
-  if (content !== null) {
+  if (content !== null && editOpen.isCurrent(token)) {
     editingFileId.value = fileId
     editingContent.value = content
     editingFileName.value = filename
@@ -507,6 +521,12 @@ onUnmounted(() => {
 })
 
 watch(() => props.sessionId, (newSessionId) => {
+  resetForSession()
+  // A draft belongs to the file of the previous conversation; saving it here would write into the new one (#21337).
+  editOpen.invalidate()
+  editingFileId.value = null
+  editingContent.value = ''
+  editingFileName.value = ''
   if (newSessionId) loadFiles()
 })
 </script>

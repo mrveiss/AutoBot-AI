@@ -1,0 +1,117 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# GitHub Actions workflow — backend startup-import smoke test (#6789 / #6540)
+#
+# Catches the recurring #6042 migration-regression family at PR time:
+#   #6536 BaseModel orphan imports, #6569 Metadata orphan, #6604 duplicate-class
+#   collisions, #6609 required-field-no-default, #6613 stale singleton attr.
+#
+# Fails the PR if any new backend module loses the ability to fresh-import.
+# Known-broken modules tracked in KNOWN_BROKEN_AT_TEST_INTRODUCTION inside
+# tests/test_startup_imports.py with issue refs.
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
+
+name: Backend Startup Import Smoke (reusable body)
+
+on:
+  workflow_call:
+    outputs:
+      ok:
+        description: "'true' only when every step of the smoke test passed"
+        value: ${{ jobs.import-smoke.outputs.ok }}
+
+permissions:
+  contents: read
+
+jobs:
+  import-smoke:
+    name: Backend Startup Import Smoke
+    outputs:
+      ok: ${{ steps.done.outputs.ok }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: ./.github/actions/setup-python-ci
+        with:
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+
+      - name: Install CI requirements
+        uses: ./.github/actions/install-ci-requirements
+
+      - name: Install backend dependencies
+        # #6947: pipefail required so pip install failures surface (was masked by `| tail -5`).
+        # #7018: switched from `autobot-backend/requirements.txt` to `requirements-ci.txt`
+        # because the former pulls torch>=2.11.0 + transitive vllm 0.19.x (requires torch==2.10.0),
+        # an unsatisfiable resolver state. `requirements-ci.txt` is purpose-built to exclude
+        # vllm and other GPU-dependent packages — see `security.yml` which has used it for years.
+        # autobot_shared is installed separately (editable, from repo root, no CWD trickery).
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install pytest >/dev/null
+          python -m pip install -e autobot_shared
+
+      - name: Run startup-import smoke test
+        run: |
+          python -m pytest autobot-backend/tests/test_startup_imports.py -q --tb=line || {
+            echo ""
+            echo "Backend startup-import smoke test FAILED."
+            echo ""
+            echo "If known-broken, add to KNOWN_BROKEN_AT_TEST_INTRODUCTION in"
+            echo "autobot-backend/tests/test_startup_imports.py with issue ref."
+            exit 1
+          }
+
+      # #14035: this is the only CI job that runs `pip install -e autobot_shared`
+      # (the sharded python-suite job relies on pytest.ini's `pythonpath =`
+      # instead), so it is the only place a broken editable-install mapping can
+      # actually be caught. The guard skips itself everywhere else.
+      - name: Run editable-install packaging guard
+        run: |
+          python -m pytest autobot_shared/editable_install_layout_test.py -v --tb=short || {
+            echo ""
+            echo "autobot_shared editable-install packaging guard FAILED (#14035)."
+            echo ""
+            echo "The editable finder is registering autobot_shared's submodules"
+            echo "as top-level names instead of (or in addition to) autobot_shared"
+            echo "itself. Check autobot_shared/pyproject.toml's"
+            echo "[tool.setuptools]/[tool.setuptools.packages.find] config."
+            exit 1
+          }
+
+      # #13041: this guard has stdlib-only deps (ast/pathlib — no imports of
+      # backend modules) and was never collected by any CI workflow, letting
+      # the raw-ClientSession ceiling silently regress 12->13 unnoticed. This
+      # job already runs pytest against autobot-backend/tests/ with the full
+      # backend dependency set and is a required check, so it is the natural
+      # (smallest-blast-radius) place to add it rather than expanding #10691's
+      # broader "enable all backend tests in CI" scope.
+      - name: Run raw ClientSession ceiling guard
+        run: |
+          python -m pytest autobot-backend/tests/test_raw_client_session_ceiling_12992.py -v --tb=short || {
+            echo ""
+            echo "Raw aiohttp.ClientSession(...) ceiling guard FAILED (#12992/#13041)."
+            echo ""
+            echo "A new raw ClientSession site was added without routing it through"
+            echo "autobot_shared.http_client.get_http_client(), or without documenting"
+            echo "it as an intentional carve-out in the test's module docstring."
+            exit 1
+          }
+
+      # Positive evidence for the `startup-import-smoke` gate in ci.yml (#18208): this step is
+      # reached only when every step above it succeeded, so the output below is
+      # 'true' on a full pass and empty on a failure, a cancel or a timeout.
+      - name: Record that every step passed
+        id: done
+        shell: bash
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"

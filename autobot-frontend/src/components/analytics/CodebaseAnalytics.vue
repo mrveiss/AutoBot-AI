@@ -6,6 +6,7 @@
       :root-path="rootPath"
       :selected-source="selectedSource"
       :scan-runner-running="scanRunner.running.value"
+      :stop-disabled="analyzing && !currentJobId && !scanRunner.running.value"
       :loading-api-endpoints="loadingApiEndpoints"
       :analyzing-code-smells="analyzingCodeSmells"
       :exporting-report="exportingReport"
@@ -224,6 +225,7 @@
         ref="patternAnalysisRef"
         :root-path="rootPath"
         :auto-load="true"
+        :with-source-id="withSourceId"
         @analysis-complete="onPatternAnalysisComplete"
         @error="onPatternAnalysisError"
       />
@@ -308,27 +310,14 @@
       />
     </div>
 
-    <!-- Issue #1133: Knowledge Base Opt-in Banner -->
-    <div v-if="showKnowledgeBaseOptIn" class="kb-optin-banner">
-      <div class="kb-optin-content">
-        <Icon name="book" />
-        <div class="kb-optin-text">
-          <strong>{{ $t('analytics.codebase.knowledgeBase.indexingComplete') }}</strong>
-          {{ $t('analytics.codebase.knowledgeBase.addDescription') }}
-        </div>
-        <button
-          class="kb-optin-btn"
-          @click="addToKnowledgeBase"
-          :disabled="knowledgeBaseAdding"
-        >
-          <i :class="knowledgeBaseAdding ? 'fas fa-spinner fa-spin' : 'plus'"></i>
-          {{ knowledgeBaseAdding ? $t('analytics.codebase.knowledgeBase.adding') : $t('analytics.codebase.knowledgeBase.addToKnowledgeBase') }}
-        </button>
-        <button class="kb-optin-dismiss" @click="showKnowledgeBaseOptIn = false" :aria-label="$t('analytics.codebase.actions.dismiss')">
-          <Icon name="times" />
-        </button>
-      </div>
-    </div>
+    <!-- Issue #1133: Knowledge Base Opt-in Banner (#20513: needs a selected source) -->
+    <KnowledgeBaseOptIn
+      v-if="showKnowledgeBaseOptIn"
+      :adding="knowledgeBaseAdding"
+      :has-source="!!selectedSource"
+      @add="addToKnowledgeBase"
+      @dismiss="showKnowledgeBaseOptIn = false"
+    />
 
     <!-- Issue #1133: Source Manager Panel -->
     <SourceManager
@@ -452,6 +441,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
+import KnowledgeBaseOptIn from '@/components/analytics/KnowledgeBaseOptIn.vue'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useCodebaseExport, type SectionType } from '@/composables/analytics/useCodebaseExport'
 import type { ScanDefinition } from '@/composables/useAnalyticsScanRunner'
@@ -462,6 +452,7 @@ import { useSourceRegistry } from '@/composables/analytics/useSourceRegistry'
 import { useAnalyticsDataFetchers } from '@/composables/analytics/useAnalyticsDataFetchers'
 import { useCodeIntelAnalysis } from '@/composables/analytics/useCodeIntelAnalysis'
 import { useAnalyticsDebug } from '@/composables/analytics/useAnalyticsDebug'
+import { useProjectSubTabs } from '@/composables/analytics/useProjectSubTabs'
 import { createLogger } from '@/utils/debugUtils'
 import { useApiClient } from '@/plugins/api'
 // Issue #1133: Code Source Registry Components
@@ -520,15 +511,7 @@ const route = useRoute()
 const analyticsRouter = useRouter()
 
 // Issue #3436: Sub-tab active-state computed properties
-const isOverviewTabActive = computed(() => {
-  const path = route.path
-  // Active when on the exact project path (no child segment)
-  return /^\/analytics\/codebase\/[^/]+\/?$/.test(path)
-})
-const isCodeQualityTabActive = computed(() => route.path.includes('/code-quality'))
-const isCodeReviewTabActive = computed(() => route.path.includes('/code-review'))
-const isEvolutionTabActive = computed(() => route.path.endsWith('/evolution'))
-const isCodeGenerationTabActive = computed(() => route.path.includes('/code-generation'))
+const { isOverviewTabActive, isCodeQualityTabActive, isCodeReviewTabActive, isEvolutionTabActive, isCodeGenerationTabActive } = useProjectSubTabs(route)
 
 // Toast notifications
 const { showToast } = useNotificationBus()
@@ -578,6 +561,7 @@ const {
   duplicateScanState,
   declarationAnalysis,
   hardcodeAnalysis,
+  runState,
   problemsError, declarationsError, hardcodesError,
   loadingProgress,
   chartData,
@@ -767,6 +751,7 @@ const {
   progressStatus,
   selectedSource,
   withSourceId,
+  sourceKey: () => sourceIdParam.value,
   notify,
   t,
   problemsReport,
@@ -775,6 +760,7 @@ const {
   duplicateAnalysis,
   hardcodeAnalysis,
   chartData,
+  runState,
   showKnowledgeBaseOptIn,
   onIndexComplete: () => runAllAnalysisScans(codeIntelFullScans()),
   storageKeyPath: STORAGE_KEY_PATH,
@@ -801,6 +787,7 @@ const {
   declarationAnalysis,
   duplicateAnalysis,
   stopJobPolling,
+  withSourceId,
   t,
   notify,
 })
@@ -1114,90 +1101,6 @@ onUnmounted(() => {
 
 .refresh-all-btn:hover {
   background: var(--chart-indigo-dark);
-}
-
-/* Knowledge Base Opt-in Banner */
-.kb-optin-banner {
-  position: fixed;
-  bottom: var(--spacing-6);
-  right: var(--spacing-6);
-  z-index: var(--z-modal-backdrop);
-  max-width: 480px;
-  width: 100%;
-}
-
-.kb-optin-content {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
-  background: var(--bg-card);
-  border: 1px solid var(--color-success);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-4) var(--spacing-5);
-  box-shadow: var(--shadow-lg);
-}
-
-.kb-optin-content > i {
-  font-size: var(--text-xl);
-  color: var(--color-success);
-  flex-shrink: 0;
-}
-
-.kb-optin-text {
-  flex: 1;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  min-width: 0;
-}
-
-.kb-optin-text strong {
-  display: block;
-  color: var(--text-primary);
-  margin-bottom: var(--spacing-0-5);
-}
-
-.kb-optin-btn {
-  padding: var(--spacing-2) var(--spacing-3-5);
-  background: var(--color-success);
-  border: none;
-  border-radius: var(--radius-lg);
-  color: white;
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: opacity var(--duration-200);
-}
-
-.kb-optin-btn:hover:not(:disabled) {
-  opacity: 0.85;
-}
-
-.kb-optin-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.kb-optin-dismiss {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: var(--spacing-1);
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  font-size: var(--text-xs);
-  flex-shrink: 0;
-  transition: color var(--duration-200);
-}
-
-.kb-optin-dismiss:hover {
-  color: var(--text-primary);
 }
 
 /* Issue #3436: Per-project sub-tab bar */

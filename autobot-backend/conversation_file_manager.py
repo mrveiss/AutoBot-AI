@@ -39,7 +39,7 @@ from constants.ttl_constants import TTL_1_HOUR
 from conversation_file_cleanup import deleted_file_stats, pending_cleanup_stats
 from conversation_file_quota import UploadRefused, abandon, file_too_large, insert_within_quota, resize_within_quota
 from conversation_file_quota_owner_schema import ensure_quota_owner_schema
-from conversation_file_route_api import FILE_INFO_COLUMNS, ConversationFileRouteApi
+from conversation_file_route_api import FILE_INFO_COLUMNS, ConversationFileRouteApi, with_extension
 from conversation_file_schema_version import query_schema_version
 from conversation_file_upload_info import UploadInfo
 from utils.chat_utils import validate_chat_session_id
@@ -546,15 +546,7 @@ class ConversationFileManager(ConversationFileRouteApi):
         return connection
 
     def _compute_file_hash(self, file_content: bytes) -> str:
-        """
-        Compute SHA-256 hash of file content for deduplication.
-
-        Args:
-            file_content: File content bytes
-
-        Returns:
-            str: Hex-encoded SHA-256 hash
-        """
+        """Hex SHA-256 of *file_content*, the deduplication key."""
         return hashlib.sha256(file_content).hexdigest()
 
     def _generate_stored_filename(self, original_filename: str, file_hash: str) -> str:
@@ -774,7 +766,7 @@ class ConversationFileManager(ConversationFileRouteApi):
         Helper for add_file (Issue #70, #375).
         """
         file_size = self._validate_file_size(file_content)
-        file_hash = self._compute_file_hash(file_content)
+        file_hash = kwargs.get("file_hash") or self._compute_file_hash(file_content)
         file_id = str(uuid.uuid4())
         stored_filename = self._generate_stored_filename(original_filename, file_hash)
         return UploadInfo(
@@ -803,8 +795,9 @@ class ConversationFileManager(ConversationFileRouteApi):
         message_id: str | None = None,
         metadata: Dict[str, Any] | None = None,
         quota_owner: str | None = None,
+        file_hash: str | None = None,
     ) -> Dict[str, Any]:
-        """Add a file to the conversation file system."""
+        """Add a file to the conversation file system; *file_hash* is its SHA-256 if the caller already computed it."""
         async with self._lock:
             file_info = self._prepare_file_info(
                 session_id,
@@ -815,6 +808,7 @@ class ConversationFileManager(ConversationFileRouteApi):
                 quota_owner=quota_owner,
                 message_id=message_id,
                 metadata=metadata,
+                file_hash=file_hash,
             )
 
             connection = await self._get_async_db_connection()
@@ -862,7 +856,7 @@ class ConversationFileManager(ConversationFileRouteApi):
             (session_id, page_size, offset),
         ) as cursor:
             rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
+        return [with_extension(dict(row)) for row in rows]
 
     async def list_files(self, session_id: str, page: int = 1, page_size: int = 50) -> Dict[str, Any]:
         """

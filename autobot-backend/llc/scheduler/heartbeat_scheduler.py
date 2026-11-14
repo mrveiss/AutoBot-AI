@@ -65,7 +65,7 @@ from .auth_failure import adapter_run_failure, pause_after_auth_failure
 # Aliased to the name `_run_adapter` already calls (#17726). Renaming the call
 # site would put that unrelated 82-line function in scope for the function-length
 # guard, and refactoring it is not this change.
-from .dispatch_gate import adapter_block_reason, dispatch_block_reason, require_dispatchable
+from .dispatch_gate import adapter_block_reason, dispatch_block_reason, note_refused_wake, require_dispatchable
 from .replay_recording import record_run_for_replay as _record_run_for_replay
 from .run_context import enrich_run_context
 from .run_key import ADAPTER_MAX_WAIT_SECONDS
@@ -73,8 +73,8 @@ from .run_key import issue_run_key as _issue_run_key
 from .run_key import revoke_run_key as _revoke_run_key
 from .run_status import RunSuperseded, latest_run_in, mark_running
 from .run_workspace import acquire_run_workspace, release_run_workspace, release_workspace_best_effort
-from .schedule_members import agent_due_members, drop_unschedulable_member
-from .usage_billing import ingest_run_cost
+from .schedule_members import agent_due_members, drop_unschedulable_member, reschedule_after_start
+from .usage_billing import agent_company_and_model, budget_session_scope, ingest_run_cost
 
 logger = get_logger(__name__)
 
@@ -308,7 +308,7 @@ class LLCHeartbeatScheduler:
 
             reason = await dispatch_block_reason(session, agent_id, agent.get("company_id"), agent.get("status"))
             if reason is not None:
-                logger.info("Heartbeat skipped for agent %s: %s", agent_id, reason)
+                await note_refused_wake(session, agent.get("company_id"), agent_id, reason)
                 await self._reschedule(agent_id, cron_expr, redis)
                 return
 
@@ -370,7 +370,8 @@ class LLCHeartbeatScheduler:
         self._tasks.add(t)
         t.add_done_callback(self._tasks.discard)
 
-        await self._reschedule(agent_id, cron_expr, redis, run_id=run.id)
+        # The adapter task is running: a failed reschedule must not requeue and run the agent again (#20117).
+        await reschedule_after_start("Heartbeat agent", self._reschedule, agent_id, cron_expr, redis, run_id=run.id)
 
     async def _reschedule(self, agent_id: str, cron_expr: str, redis: Any, *, run_id: Any = None) -> None:
         """Advance this agent's sorted-set score to its next fire time.
@@ -839,7 +840,7 @@ async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]
     # GH#8502: use run_blocking() so ProviderRateLimited propagates to _run_adapter
     # and triggers exponential-backoff recovery.  _run_adapter is already a
     # background task, so blocking here does not stall the poll loop.
-    adapter = AutoBotAgentAdapter(agent_config=adapter_config)
+    adapter = AutoBotAgentAdapter(agent_config=adapter_config, budget_session_factory=budget_session_scope)
     scoped = dict(context, agent_id=agent["agent_id"], company_id=str(agent.get("company_id") or ""))
     await adapter.run_blocking(scoped)
 
@@ -933,18 +934,17 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
     if result.tokens_in is None and result.tokens_out is None:
         return  # adapter did not report usage (e.g. CLI without stream-json result)
     agent_id: str = agent["agent_id"]
-    model = (agent.get("adapter_config") or {}).get("model") or agent.get("model") or ""
+    company, model = agent_company_and_model(agent)
     try:
         factory = get_async_session_factory()
         async with factory() as session:
-            company = str(agent.get("company_id") or "")
             usage = (int(result.tokens_in or 0), int(result.tokens_out or 0))
             await ingest_run_cost(get_budget_service(), session, result, agent_id, company, usage, model)
             await session.commit()
     except BudgetExhausted:
         raise  # GH#8215 hard-stop — propagate so the run is recorded FAILED
     except Exception:
-        logger.warning("Budget ingest failed for agent %s (best-effort)", agent_id)
+        logger.exception("Budget ingest failed for agent %s: this run's charge is lost (#20883)", agent_id)
 
 
 async def _safe_cancel(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> None:

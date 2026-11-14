@@ -66,6 +66,7 @@
     mode: "0640"
     owner: root
     group: "{{ npu_group }}"
+  diff: false  # the file carries secrets (#20941)
   notify: restart npu-worker
   tags: ['npu', 'config']
 
@@ -104,9 +105,20 @@
     - "{{ npu_install_dir }}"
     - "{{ npu_models_dir }}"
 
+- name: "Ensure the application log directory exists (#20894)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/ensure_app_log_dir.yml
+    apply:
+      tags: ['npu', 'config']
+  vars:
+    app_log_dir: "{{ npu_app_log_dir }}"
+    app_log_dir_owner: "{{ npu_user }}"
+    app_log_dir_group: "{{ npu_group }}"
+  tags: ['npu', 'config']
+
 # #12425: npu_log_dir defaults to the SHARED /var/log/autobot (common role),
 # not an NPU-exclusive path — re-chowning it to npu_user/npu_group above (as
-# the other two, genuinely NPU-exclusive dirs correctly are) clobbered
+# the genuinely NPU-exclusive dirs created above and by the shared log-dir task correctly are) clobbered
 # common's autobot:autobot ownership on every run of this role. Converge to
 # the SAME canonical ownership the common role applies, regardless of which
 # role runs last; the group-write bit + this role's own membership in the

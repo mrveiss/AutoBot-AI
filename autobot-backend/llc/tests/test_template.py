@@ -14,6 +14,7 @@ Covers:
 - Entity count extraction from template_json
 """
 
+import json
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -24,7 +25,9 @@ from llc.models.template import (
     TemplateImportRequest,
     TemplatePublishRequest,
 )
+from llc.services import template as template_module
 from llc.services.template import (
+    BuiltInTemplateNotFoundError,
     TemplateAccessError,
     TemplateNotFoundError,
     TemplateSecretPlaceholderError,
@@ -33,6 +36,7 @@ from llc.services.template import (
     _build_embed_text,
     _check_access,
     _find_placeholders,
+    _load_built_in_template,
     _replace_in_structure,
     _resolve_placeholders,
     _validate_no_secrets,
@@ -314,3 +318,46 @@ async def test_publish_calls_kb_indexing():
         svc = TemplateService(session=session)
         await svc.publish(req, company_id=None)
         mock_index.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Built-in template loader: key never reaches a path, realpath containment holds (#20884)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def templates_dir(tmp_path, monkeypatch):
+    base = tmp_path / "built_in_templates"
+    base.mkdir()
+    monkeypatch.setattr(template_module, "_BUILT_IN_TEMPLATES_DIR", base)
+    return base
+
+
+def test_built_in_loader_loads_a_normal_template(templates_dir):
+    (templates_dir / "plain-team.json").write_text(json.dumps({"name": "plain"}), encoding="utf-8")
+    assert _load_built_in_template("plain-team")["name"] == "plain"
+
+
+def test_built_in_loader_refuses_a_symlink_escaping_the_directory(templates_dir, tmp_path):
+    outside = tmp_path / "secret.json"
+    outside.write_text(json.dumps({"secret": True}), encoding="utf-8")
+    (templates_dir / "leak.json").symlink_to(outside)
+    with pytest.raises(BuiltInTemplateNotFoundError, match="outside allowed directory"):
+        _load_built_in_template("leak")
+
+
+def test_built_in_loader_follows_a_symlink_that_stays_inside_the_directory(templates_dir):
+    (templates_dir / "real.json").write_text(json.dumps({"name": "real"}), encoding="utf-8")
+    (templates_dir / "alias.json").symlink_to(templates_dir / "real.json")
+    assert _load_built_in_template("alias")["name"] == "real"
+
+
+def test_built_in_loader_rejects_a_bad_key_before_touching_the_filesystem(templates_dir):
+    with patch.object(type(templates_dir), "glob", side_effect=AssertionError("filesystem touched")):
+        with pytest.raises(BuiltInTemplateNotFoundError, match="Invalid template key"):
+            _load_built_in_template("../etc/passwd")
+
+
+def test_built_in_loader_reports_an_unknown_key_as_not_found(templates_dir):
+    with pytest.raises(BuiltInTemplateNotFoundError, match="not found"):
+        _load_built_in_template("missing")

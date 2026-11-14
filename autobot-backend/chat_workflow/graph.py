@@ -32,7 +32,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_workflow import limits
 from chat_workflow.approval_binding import ai_line_calls_shown, bind_decision
-from chat_workflow.attachment_context import attachment_prompt, stream_notices, without_block
+from chat_workflow.attachment_context import attachment_prompt, deliver_notices, without_block
 from chat_workflow.checkpointer_connection import describe_connection, describe_error, get_checkpointer_connection
 from chat_workflow.graph_hooks import (
     _emit_agent_execute_hook,
@@ -40,12 +40,14 @@ from chat_workflow.graph_hooks import (
     _emit_planned_agent_error_hooks,
 )
 from chat_workflow.graph_planner import NO_PLAN, advance_after_tools, create_plan, with_plan_step
+from chat_workflow.graph_routes import route_after_judge  # noqa: F401  (re-exported: graph.route_after_judge)
 from chat_workflow.graph_tool_dispatch import (
     dispatch_approved_calls,
     emit_tool_call_hook,
     emit_tool_complete_hook,
     send_denied_message,
 )
+from chat_workflow.stall_escalation import add_stall_nodes, stall_mode
 from chat_workflow.tool_call_loop import (
     _LOOP_ABORT_THRESHOLD,
     FINAL_ANSWER_INSTRUCTION,
@@ -142,6 +144,8 @@ class ChatState(TypedDict, total=False):
     tool_call_fingerprints: List[str]
     tool_loop_count: int
     tool_loop_warning: str
+
+    stall_question: Dict[str, Any] | None  # #21022: the pending human question; None when nothing is asked
 
     # Error tracking
     error: str | None
@@ -257,7 +261,7 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     session = await manager.get_or_create_session(state["session_id"])
     updated_context = dict(state.get("context", {}) or {})  # #20195: the seam stamps INTO this; the node returns it
     llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], updated_context)
-    stream_notices(llm_params, config["configurable"].get("stream_callback"))  # #20195: streamed, not persisted
+    await deliver_notices(state["session_id"], llm_params, config["configurable"].get("stream_callback"))  # #21006
     ctx = manager._create_llm_iteration_context(
         llm_params,
         state["session_id"],
@@ -789,21 +793,6 @@ async def inline_judge_response(state: ChatState, config: RunnableConfig) -> dic
         return {}
 
 
-def route_after_judge(state: ChatState) -> str:
-    """Route after inline judge (#10599).
-
-    If the judge set a refinement hint and hasn't exhausted its one-shot
-    budget, loop back to generate_response.  Otherwise proceed to persist.
-    """
-    hint = state.get("rlm_refinement_hint", "")
-    judge_count = state.get("judge_count", 0)
-    if hint and judge_count == 1:
-        # judge_count==1 means the hint was just set on this pass; route back
-        # to generate_response for exactly one regeneration.
-        return "generate_response"
-    return "persist_conversation"
-
-
 async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
     """Interrupt execution to request command approval from the user.
 
@@ -923,7 +912,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
     )
 
     # Issue #3254: tell the user why the assistant stopped.
-    if tool_loop_count >= _LOOP_ABORT_THRESHOLD:
+    if tool_loop_count >= _LOOP_ABORT_THRESHOLD and stall_mode(state) == "stop":  # "ask" says it at ask_human (#21022)
         _append_loop_abort_message(messages, stream_cb, iteration)
 
     await emit_tool_complete_hook(session_id, exec_history)
@@ -1289,7 +1278,7 @@ def route_after_execution(state: ChatState) -> str:
             state.get("tool_loop_count", 0),
             state.get("session_id", "unknown"),
         )
-        return "persist_conversation"
+        return "announce_stall" if stall_mode(state) == "ask" else "persist_conversation"  # #21022
 
     if state.get("should_continue"):
         if state.get("iteration_count", 0) < limits.MAX_CONTINUATION_ITERATIONS:
@@ -1338,6 +1327,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_node("inline_judge_response", inline_judge_response)  # Issue #10599
     builder.add_node("request_approval", request_approval)
     builder.add_node("execute_tools", execute_tools)
+    add_stall_nodes(builder)  # Issue #21022
     builder.add_node("force_final_answer", force_final_answer)
     builder.add_node("persist_conversation", persist_conversation)
 

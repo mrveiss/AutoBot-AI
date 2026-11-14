@@ -26,6 +26,7 @@ import {
   orgLayoutKey,
   orgUnitRoots,
   teamMemberOrgNodeId,
+  isProcessNodeSource,
   workflowIdFromProcessNode,
   ORG_GROUP_PREFIX,
 } from '@/composables/llc/orgCanvasGraph'
@@ -34,6 +35,7 @@ import { WORKFLOW_QUERY_KEY } from '@/composables/workflow/workflowDeepLink'
 import { canvasNodeIdFromQuery } from '@/composables/workflow/canvasNodeDeepLink'
 import OrgPeopleList from '@/components/llc/OrgPeopleList.vue'
 import OrgProcessAttachForm from '@/components/llc/OrgProcessAttachForm.vue'
+import OrgProcessBanners from '@/components/llc/OrgProcessBanners.vue'
 import OrgToolAttachForm from '@/components/llc/OrgToolAttachForm.vue'
 import WorkflowPlannerPanel from '@/components/llc/workflowPlanner/WorkflowPlannerPanel.vue'
 import CanvasNodeSidebar from '@/components/llc/CanvasNodeSidebar.vue'
@@ -43,7 +45,7 @@ import {
   groupPeopleByTeam,
   UNGROUPED_TEAM_ID,
 } from '@/composables/llc/orgPeople'
-import type { CompanyTeam, ContactEditPatch, ContactSource } from '@/composables/llc/orgPeople'
+import type { ContactEditPatch } from '@/composables/llc/orgPeople'
 import ExecutorRollupPanel from '@/components/llc/ExecutorRollupPanel.vue'
 import { buildExecutorRollupMatrix } from '@/composables/llc/executorRollup'
 import type { ExecutorRollupCell, ExecutorRollupMatrix } from '@/composables/llc/executorRollup'
@@ -60,6 +62,9 @@ import {
   toolFilterCounts,
 } from '@/composables/llc/orgCanvasFilters'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
+import { useCompanyWorkflows } from '@/composables/llc/useCompanyWorkflows'
+import { useOrgPeopleSources } from '@/composables/llc/useOrgPeopleSources'
+import { useOrgProcessAttachment } from '@/composables/llc/useOrgProcessAttachment'
 import { BaseDrawer } from '@autobot/ui'
 
 const logger = createLogger('OrgChart')
@@ -101,26 +106,19 @@ const VIEW_MODE_LABEL_KEY: Record<OrgViewMode, string> = { tree: 'llc.orgChart.v
 const viewMode = ref<OrgViewMode>(route?.query?.view === 'planner' ? 'planner' : 'tree')
 const activeTabId = ref<string>(ALL_UNITS_TAB)
 
-// GH#13938: contacts and teams are fetched only when the People list is first
-// opened. The org chart's own mount stays a single request, and a terminate
-// reload keeps reloading exactly the hierarchy it changed.
-const contacts = ref<ContactSource[]>([])
-// #13998: ids of contacts this department carries with no role to explain them.
-// Kept separate from `contacts` so the list the org chart builds stays one
-// list, while the People view can still label the difference honestly.
-const unassignedContactIds = ref<Set<string>>(new Set())
-const teams = ref<CompanyTeam[]>([])
-const peopleLoaded = ref(false)
-// A source that did not answer — kept apart from a source that answered
-// "nothing", so the list never states a fact it does not know (#14064).
-const contactsFailed = ref(false)
-const teamsFailed = ref(false)
-// #14596: distinguishes "the teams request has not answered yet" from "it
-// answered with zero teams" — `teams.value` is `[]` in both cases, and the
-// canvas must never say "this company has no teams" before the request that
-// would prove it has actually completed (#14064's failure shape).
-const teamsAttempted = ref(false)
-const peopleLoading = ref(false)
+// GH#13938/#21469: contacts and teams are fetched only when the People list is first opened; the
+// sources, their failed-vs-empty flags and the retry live in `useOrgPeopleSources`.
+const {
+  contacts,
+  unassignedContactIds,
+  teams,
+  contactsFailed,
+  teamsFailed,
+  teamsAttempted,
+  loading: peopleLoading,
+  load: loadPeopleSources,
+  reload: reloadPeopleSources,
+} = useOrgPeopleSources({ api, resolveCompanyId: () => resolveCompanyIdOnce(), companyId: () => companyId.value ?? '' })
 // #14603: contact editing, from the People list. `savingContactId` is the
 // contact id a PATCH is in flight for — never a plain boolean, so the row
 // the People list is not saving stays interactive. Single-flight per the
@@ -170,6 +168,9 @@ const canvasNodes = ref<CanvasNode[]>([])
 // render as "this company has no org chart".
 const processNodes = ref<ProcessNodeSource[]>([])
 const processNodesLoaded = ref(false)
+/** The process-nodes request did not answer, and whether it was tried (#21242): "failed" is not "none attached". */
+const processNodesFailed = ref(false)
+const processNodesAttempted = ref(false)
 
 // #14597: the tools this company's roles carry — the sibling of
 // `processNodes` above, same reasoning: its own ref so a failed fetch cannot
@@ -197,12 +198,27 @@ const attachableRoles = ref<AttachableRole[]>([])
 /** The roles request did not answer — distinct from answering "none" (#14064). */
 const attachRolesFailed = ref(false)
 const rolesLoaded = ref(false)
-const attachRoleId = ref('')
-const attachWorkflowId = ref('')
+// #21242: the company's workflows (attach select, create modal, attach/detach), loaded with the canvas.
+const workflowsSvc = useCompanyWorkflows(() => companyId.value ?? '', {
+  autoLoad: () => viewMode.value === 'canvas',
+})
 // One flag for both mutations, mirroring RolesView.vue's `isMutating`: a
 // second attach/detach cannot fire while the first is still in flight.
-const processMutationInFlight = ref(false)
-const processMutationError = ref<string | null>(null)
+const {
+  roleId: attachRoleId,
+  workflowId: attachWorkflowId,
+  inFlight: processMutationInFlight,
+  error: processMutationError,
+  attachedIds: attachedToRole,
+  attach: onProcessAttach,
+  detach: onProcessDetached,
+} = useOrgProcessAttachment({
+  companyId: () => companyId.value ?? '',
+  workflows: workflowsSvc,
+  processNodes,
+  reload: reloadProcessNodes,
+  describe: describeError,
+})
 
 // #14597: the tool attach form's own state, mirroring the process attach
 // form above exactly (same `attachableRoles` picker, a name field instead of
@@ -370,73 +386,6 @@ const teamFilterName = computed(
 )
 
 /**
- * Load the two sources the People list needs beyond the org chart.
- *
- * Each is independent: a company with no contacts must still get its teams,
- * and a teams endpoint failure must not blank the people. `Promise.allSettled`
- * keeps a partial answer partial instead of turning it into an empty list.
- */
-async function loadPeopleSources(): Promise<void> {
-  if (peopleLoaded.value || peopleLoading.value) return
-  // Claim the guard BEFORE the first await: two clicks in one tick would both
-  // pass the check above and double-fire every request.
-  peopleLoading.value = true
-  const cid = await resolveCompanyIdOnce()
-  if (!cid) {
-    peopleLoading.value = false
-    return
-  }
-  const [contactsResult, teamsResult] = await Promise.allSettled([
-    api.get<{ with_role: ContactSource[]; unassigned: ContactSource[] }>(
-      `/api/llc/contacts/${cid}/involved`,
-    ),
-    api.get<{ teams: CompanyTeam[] }>(`/api/llc/companies/${cid}/teams`),
-  ])
-  if (contactsResult.status === 'fulfilled') {
-    // Two groups, one list to draw: people whose presence a role explains, and
-    // people the department carries from before the directory was shared.
-    // Merging them here would assert an involvement nobody recorded, so the
-    // second group is tracked by id and labelled rather than blended in.
-    const withRole = Array.isArray(contactsResult.value?.with_role)
-      ? contactsResult.value.with_role
-      : []
-    const unassigned = Array.isArray(contactsResult.value?.unassigned)
-      ? contactsResult.value.unassigned
-      : []
-    contacts.value = [...withRole, ...unassigned]
-    unassignedContactIds.value = new Set(unassigned.map((c) => c.id))
-    contactsFailed.value = false
-  } else {
-    // A failed fetch must never be reported as "this company has no people".
-    // Absence of data and absence of an answer are different claims (#14064).
-    contactsFailed.value = true
-    logger.error('Failed to fetch contacts:', contactsResult.reason)
-  }
-  if (teamsResult.status === 'fulfilled') {
-    teams.value = Array.isArray(teamsResult.value?.teams) ? teamsResult.value.teams : []
-    teamsFailed.value = false
-  } else {
-    teamsFailed.value = true
-    logger.error('Failed to fetch company teams:', teamsResult.reason)
-  }
-  teamsAttempted.value = true
-  // Only a complete answer is cached; a partial one retries on re-entry.
-  peopleLoaded.value = !contactsFailed.value && !teamsFailed.value
-  peopleLoading.value = false
-}
-
-/**
- * Force the People sources to actually re-fetch (#14603) — mirrors
- * `reloadProcessNodes`/`reloadToolNodes`. `peopleLoaded` guards the lazy
- * fetch above, so a contact save has to clear it first or the "refetch"
- * would hit the guard and silently keep showing the pre-edit row.
- */
-async function reloadPeopleSources(): Promise<void> {
-  peopleLoaded.value = false
-  await loadPeopleSources()
-}
-
-/**
  * Save an edited contact from the People list (#14603).
  *
  * Only a contact ever reaches this handler — `OrgPeopleList` renders the
@@ -528,6 +477,7 @@ function setViewMode(mode: OrgViewMode) {
   // reader who stays in tree mode should not pay for a request they never see.
   if (mode === 'canvas') {
     void fetchProcessNodes()
+    void workflowsSvc.load()
     // #14549: the attach picker needs the role list, same lazy trigger.
     void fetchRolesForAttach()
     // #14596: teams render on the canvas too, sharing the same lazy fetch
@@ -574,15 +524,18 @@ const resolveCompanyIdOnce = shareInFlight(() => resolveCompanyId())
 /**
  * Load the workflows this company's roles run (#13963).
  *
- * Failures are logged and left as an empty list rather than surfaced as a page
- * error: the org chart is still correct without the process nodes, and blocking
- * the whole view on a secondary panel is the #14104 `peopleUnavailable`
- * precedent in reverse.
+ * A failure is not a page error (the org chart is still correct without the
+ * process nodes, the #14104 `peopleUnavailable` precedent in reverse), but it is
+ * recorded in `processNodesFailed`: "failed to load" must not read as "none
+ * attached" (#21242), as `fetchToolNodes` already keeps apart.
  */
 async function fetchProcessNodes() {
   if (processNodesLoaded.value) return
+  let cid = ''
+  // A switched company owns the flags now; an unresolved one (cid '') never does (#21242).
+  const stale = () => cid !== '' && !!companyId.value && cid !== companyId.value
   try {
-    const cid = await resolveCompanyIdOnce()
+    cid = await resolveCompanyIdOnce()
     if (!cid) {
       processNodes.value = []
       return
@@ -590,22 +543,23 @@ async function fetchProcessNodes() {
     const resp = await api.get<{ nodes: ProcessNodeSource[] }>(
       `/api/llc/companies/${cid}/process-nodes`,
     )
-    // Accept only rows that actually carry the three strings a process node is
-    // made of. A response of another shape — a misrouted mock, a changed
-    // contract — would otherwise be rendered as nonsense nodes on the canvas
-    // rather than as nothing.
+    if (stale()) return
     const rows = Array.isArray(resp?.nodes) ? resp.nodes : []
-    processNodes.value = rows.filter(
-      (row): row is ProcessNodeSource =>
-        typeof row?.role_id === 'string' &&
-        typeof row?.role_name === 'string' &&
-        typeof row?.workflow_id === 'string',
-    )
-    processNodesLoaded.value = true
+    processNodes.value = rows.filter(isProcessNodeSource)
+    settleProcessNodes(true)
   } catch (err: unknown) {
     logger.error('Failed to fetch process nodes:', err instanceof Error ? err.message : String(err))
+    if (stale()) return
     processNodes.value = []
+    settleProcessNodes(false)
   }
+}
+
+/** Record how the process-nodes request ended; only an answer is cached as loaded. */
+function settleProcessNodes(answered: boolean) {
+  processNodesFailed.value = !answered
+  processNodesLoaded.value = answered
+  processNodesAttempted.value = true
 }
 
 /**
@@ -658,51 +612,6 @@ async function reloadProcessNodes(): Promise<void> {
 
 function describeError(error: unknown, fallbackKey: string): string {
   return describeApiError(error, t(fallbackKey))
-}
-
-/** Attach a workflow to a role from the canvas (#14549). */
-async function onProcessAttach(): Promise<void> {
-  const roleId = attachRoleId.value
-  const workflowId = attachWorkflowId.value.trim()
-  if (!companyId.value || !roleId || !workflowId || processMutationInFlight.value) return
-  processMutationInFlight.value = true
-  processMutationError.value = null
-  try {
-    await api.post(`/api/llc/roles/${companyId.value}/${roleId}/workflows`, {
-      workflow_id: workflowId,
-    })
-    attachWorkflowId.value = ''
-    // The canvas is the confirmation (#14549 issue body): a successful attach
-    // must be visible on it, not just accepted by the server.
-    await reloadProcessNodes()
-  } catch (err: unknown) {
-    logger.error('Failed to attach workflow:', err)
-    processMutationError.value = describeError(err, 'llc.orgChart.attachError')
-  } finally {
-    processMutationInFlight.value = false
-  }
-}
-
-/**
- * Detach a workflow from a role, reached from the process node's own control
- * on the canvas (#14549). No optimistic update: a failed call leaves
- * `processNodes` — and so the graph — exactly as it was.
- */
-async function onProcessDetached(roleId: string, workflowId: string): Promise<void> {
-  if (!companyId.value || processMutationInFlight.value) return
-  processMutationInFlight.value = true
-  processMutationError.value = null
-  try {
-    await api.delete(
-      `/api/llc/roles/${companyId.value}/${roleId}/workflows/${encodeURIComponent(workflowId)}`,
-    )
-    await reloadProcessNodes()
-  } catch (err: unknown) {
-    logger.error('Failed to detach workflow:', err)
-    processMutationError.value = describeError(err, 'llc.orgChart.detachError')
-  } finally {
-    processMutationInFlight.value = false
-  }
 }
 
 /**
@@ -1214,6 +1123,9 @@ onMounted(() => {
         :roles="attachableRoles"
         :roles-failed="attachRolesFailed"
         :busy="processMutationInFlight"
+        :company-id="companyId ?? ''"
+        :service="workflowsSvc"
+        :attached-ids="attachedToRole"
         @attach="onProcessAttach"
       />
       <div
@@ -1224,6 +1136,14 @@ onMounted(() => {
       >
         {{ processMutationError }}
       </div>
+      <!-- #21242: failed / company has no workflows / none attached — three different empty canvases. -->
+      <OrgProcessBanners
+        :failed="processNodesFailed"
+        :attempted="processNodesAttempted"
+        :node-count="processNodes.length"
+        :workflows-state="workflowsSvc.state.value"
+        :workflow-count="workflowsSvc.workflows.value.length"
+      />
 
       <!-- #14597: the tool sibling of the process-attach form above — a role
            picker (reusing `attachableRoles`) plus a tool-name field. Attach

@@ -17,6 +17,13 @@
     backend_secret_key: "{{ _existing_secret.stdout | default(lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true), true) }}"
 
   pre_tasks:
+    # #20894: this play loads no role, so the role default is restated here -- but only when the inventory (or
+    # an extra var) has not set it: a vars file or play var would outrank an operator's override.
+    - name: Derive the application log directory unless the inventory sets it (#20894)
+      ansible.builtin.set_fact:
+        backend_app_log_dir: "{{ autobot.base_dir }}/logs"
+      when: backend_app_log_dir is not defined
+
     - name: Read existing secret key from .env if present (#2726)
       ansible.builtin.shell:
         cmd: grep '^SECRET_KEY=' {{ backend_code_dir }}/.env | cut -d= -f2-
@@ -27,6 +34,11 @@
 
     - name: Read the encryption key (#19864)
       ansible.builtin.include_tasks: ../roles/backend/tasks/read_encryption_key.yml
+
+    # #20941: backend.env.j2 renders AUTOBOT_SECRETS_ROOT_KEY unconditionally; without this read it
+    # is written empty. Same read (and fail-on-empty) as the backend role.
+    - name: Read the secrets root key (#14758, #20941)
+      ansible.builtin.include_tasks: ../roles/backend/tasks/read_secrets_root_key.yml
 
   tasks:
     - name: Create backend directories if they don't exist
@@ -59,6 +71,14 @@
           - "{{ backend_code_dir ~ '/.env' }}"
           - "{{ autobot_backend_env_file }}"
 
+    - name: "Ensure the application log directory exists (#20894)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/ensure_app_log_dir.yml
+      vars:
+        app_log_dir: "{{ backend_app_log_dir }}"
+        app_log_dir_owner: "{{ backend_user }}"
+        app_log_dir_group: "{{ backend_group }}"
+
     - name: Deploy backend environment file
       ansible.builtin.template:
         src: ../roles/backend/templates/backend.env.j2
@@ -66,6 +86,7 @@
         mode: "0600"
         owner: "{{ backend_user }}"
         group: "{{ backend_group }}"
+      diff: false  # the file carries secrets (#20941)
       become_user: "{{ backend_user }}"
       notify: restart backend
       vars:

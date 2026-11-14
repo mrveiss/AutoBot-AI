@@ -65,8 +65,9 @@ GRAPH_SHAPE_FINGERPRINT_VERSION = 1
 #: every added blank line a full re-embed, i.e. the bug this fixes.
 _NODE_IDENTITY_FIELDS = ("id", "name", "kind", "source_path", "parent")
 
-#: Same for edges. ``line`` becomes ``call_line`` on the persisted record and is
-#: likewise refreshed rather than re-embedded.
+#: Same for edges. ``lines`` (every call site, #21317) and ``dropped_call_sites`` become
+#: ``call_lines``/``dropped_call_sites`` on the persisted record and are likewise refreshed
+#: rather than re-embedded.
 _EDGE_IDENTITY_FIELDS = ("source", "target_name", "module_path", "current_class", "kind", "source_path")
 
 

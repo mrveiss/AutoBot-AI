@@ -17,6 +17,8 @@ import importlib
 
 import pytest
 
+from autobot_shared.logging_once import reset_log_once
+
 
 @pytest.fixture(autouse=True)
 def empty_reachable_provider_key_vault(monkeypatch):
@@ -28,6 +30,6 @@ def empty_reachable_provider_key_vault(monkeypatch):
         return
     monkeypatch.setattr(vault, "_hydrated_keys", {})
     monkeypatch.setattr(vault, "_unreadable_keys", set())
-    monkeypatch.setattr(vault, "_env_fallback_logged", set())
+    reset_log_once()
     monkeypatch.setattr(vault, "_vault_state", vault.VAULT_REACHABLE)
     yield

@@ -62,6 +62,23 @@ async def test_recording_is_always_on() -> None:
     assert (s.flushes, s.rollbacks, s.commits, s.committed) == (2, 1, 1, True)
 
 
+def test_info_is_a_per_instance_dict_like_the_real_sessions() -> None:
+    a, b = FakeAsyncSession(), FakeAsyncSession()
+    a.info["k"] = 1
+    assert a.info == {"k": 1} and b.info == {}
+
+
+@pytest.mark.asyncio
+async def test_the_shared_async_session_scope_runs_on_the_fake() -> None:
+    """`async_session_scope` seeds ``session.info`` first; the fake must carry it (#20883)."""
+    from autobot_shared.db_session import async_session_scope
+
+    s = FakeAsyncSession()
+    async with async_session_scope(lambda: s) as session:
+        assert session is s
+    assert (s.commits, s.rollbacks, s.closed) == (1, 0, True)
+
+
 @pytest.mark.asyncio
 async def test_assign_ids_numbers_new_objects_on_flush_and_commit() -> None:
     class M:

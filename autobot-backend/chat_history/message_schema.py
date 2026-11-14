@@ -71,6 +71,10 @@ _CALLER_ROLE = "user"
 _RESPONDER_ROLE = "assistant"
 _CONVERSATION_ROLES = frozenset({_CALLER_ROLE, _RESPONDER_ROLE})
 
+#: A stored notice shown to the user about an attached file (#21006). It is a record OF the turn, never a turn: a
+#: model asked to continue or distil the conversation must not read it as something said in it.
+ATTACHMENT_NOTICE_TYPE = "attachment_notice"
+
 
 def message_role(message: Dict[str, Any], default: str = _UNKNOWN_ROLE) -> str:
     """The speaker, from either schema.
@@ -203,11 +207,13 @@ def as_llm_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:
 
     The single call for "give me this conversation as the model would see it",
     whichever schema it was stored in. Non-dict entries are skipped rather than
-    raising: malformed history is data, not a programming error.
+    raising: malformed history is data, not a programming error. A stored attachment notice (#21006) is not
+    conversation and is skipped, so skill distillation and every other reader of this function never see it.
+    (``terminal_output`` system entries take the same path and are left as they are: #21228.)
     """
     normalised: List[Dict[str, str]] = []
     for message in messages:
-        if not isinstance(message, dict):
+        if not isinstance(message, dict) or message_type(message) == ATTACHMENT_NOTICE_TYPE:
             continue
         text = message_text(message)
         if not text:

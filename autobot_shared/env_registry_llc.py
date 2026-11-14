@@ -108,6 +108,20 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_BUDGET_REFUSAL_DEDUP_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "How long the de-duplication mark of a budget-refused dispatch is kept in Redis (#21212). "
+            "One budget.dispatch_refused activity row is written per exhaustion episode; a long episode "
+            "is restated after this many seconds. Minimum 1."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_LLC_SCHEDULE_RECONCILE_INTERVAL_SECONDS",
         type=float,
         default=60.0,
@@ -120,6 +134,38 @@ env_registry.register_env_var(
             "agent and routine tables."
         ),
         component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_RECOVERY_LEASE_ATTEMPTS",
+        type=int,
+        default=6,
+        description=(
+            "How many times startup recovery of interrupted agent runs asks for its leader lease while "
+            "Redis gives no answer (#19601). A definite answer, including another worker holding the "
+            "lease, ends the wait at once; only silence is retried. The default spans the lease TTL, so a"
+            " worker that finds Redis down at boot still recovers once it is back. After the last attempt"
+            " recovery is skipped and the liveness monitor is the backstop."
+        ),
+        component="orchestrator",
+        range=(1, 60),
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_RECOVERY_LEASE_RETRY_SECONDS",
+        type=int,
+        default=5,
+        description=(
+            "Seconds between two asks for the startup-recovery leader lease while Redis gives no answer "
+            "(#19601). Recovery runs in the background-services phase, so waiting never delays the app "
+            "becoming ready."
+        ),
+        component="orchestrator",
+        range=(1, 60),
     )
 )
 
@@ -289,6 +335,22 @@ env_registry.register_env_var(
             "database query; the response sets truncated when more rows break the rules than are returned."
         ),
         range=(1, 5000),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_NOTIFICATION_ROUTER_LOCK_TTL_SECONDS",
+        type=int,
+        default=30,
+        description=(
+            "Seconds the notification router's single-instance lock lives without a renewal (#21456). The "
+            "worker holding it renews it every third of this period; every other started worker tries to take "
+            "it at the same interval, so once the lock has lapsed (holder gone, Redis flushed or failed over) "
+            "another worker takes over routing within one interval."
+        ),
+        range=(3, 3600),
         component="orchestrator",
     )
 )

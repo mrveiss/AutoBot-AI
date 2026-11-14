@@ -38,7 +38,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.human_decider import require_interactive_human
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.user_management.models.user import resolve_display_name
 from llc.deps import assert_company_access, get_session, service_dep
@@ -63,12 +62,7 @@ from ..services.attachment_service import (
     AttachmentService,
     AttachmentTooLarge,
 )
-from ..services.handoff import (
-    HandoffAttachment,
-    HandoffNotAllowed,
-    HandoffNotAuthorized,
-    HandoffService,
-)
+from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import (
     CheckoutConflict,
     CoWorkingPermissionError,
@@ -76,17 +70,18 @@ from ..services.work_item_service import (
     WorkItemService,
     resolve_actor_role,
 )
+from ._common import FenceSafeAgentId
 from ._common import actor_id as verified_user_id
 from ._common import own_task_actor, refused_transition, write_refusal
 from ._handoff_identity import handing_off_agent, member_reviewer
+from ._release_request import ReleaseRequest
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
 from .work_item_comments import require_work_item_id, serialize_comment
 
 
 class HumanClaimRequest(BaseModel):
-    user_id: Optional[str] = None  # accepted, ignored: claimant and tenant are the session's (#13999)
-    company_id: Optional[str] = None
+    company_id: Optional[str] = None  # accepted, ignored: claimant and tenant are the session's (#13999)
 
 
 class HumanUnclaimRequest(HumanClaimRequest):
@@ -150,7 +145,6 @@ class WorkItemCreate(BaseModel):
     goal_id: Optional[str] = None
     assignee_agent_id: Optional[str] = None
     assignee_user_id: Optional[str] = None
-    created_by_agent_id: Optional[str] = None
     labels: Optional[List[str]] = None
     # GH#11140: declarative approval-gated action categories (plan-time visibility).
     requires_approval_before: Optional[List[str]] = None
@@ -179,14 +173,10 @@ class WorkItemUpdate(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
-    agent_id: str
+    agent_id: FenceSafeAgentId
     run_id: Optional[str] = None
     # GH#9532: optional free-text intent for the audit trail + similarity check
     work_intent: Optional[str] = None
-
-
-class ReleaseRequest(BaseModel):
-    agent_id: str
 
 
 class TransitionRequest(BaseModel):
@@ -196,8 +186,6 @@ class TransitionRequest(BaseModel):
 class CommentCreate(BaseModel):
     company_id: str
     body: str
-    author_agent_id: Optional[str] = None
-    author_user_id: Optional[str] = None
 
 
 class LinkPrRequest(BaseModel):
@@ -405,7 +393,6 @@ async def create_work_item(
             goal_id=body.goal_id,
             assignee_agent_id=body.assignee_agent_id,
             assignee_user_id=body.assignee_user_id,
-            created_by_agent_id=body.created_by_agent_id,
             created_by_user_id=str(verified_user_id(_current_user)),  # never the body: it decides who owns the task
             labels=body.labels,
             requires_approval_before=body.requires_approval_before,
@@ -577,17 +564,18 @@ async def release_work_item(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    """Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one; an item held by a
+    person is refused (409). Not enforced: that the caller IS that agent (open, #20521)."""
     # IDOR guard (M4/GH#9861).
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     try:
-        item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id)
+        item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id, run_id=body.run_id)
         await session.commit()
-        redis = await get_async_redis_client()
-        if redis is not None:
-            await redis.delete(f"llc:checkout:{work_item_id}")
         return await _item_to_dict(item, session)
+    except CheckoutConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=400, detail="Internal server error")
@@ -800,8 +788,8 @@ async def add_comment(
         work_item_id=work_item_id,
         company_id=str(ctx.org_id),
         body=body.body,
-        author_agent_id=body.author_agent_id,
-        author_user_id=body.author_user_id,
+        author_agent_id=None,
+        author_user_id=str(verified_user_id(_current_user)),  # the session's, never the body (#20521)
     )
     # GH#9624/#19582: add_comment queued the comment and @mention wakes; they dispatch on this commit.
     await session.commit()
@@ -1162,8 +1150,6 @@ async def upload_attachment(
     work_item_id: str,
     company_id: str = Query(...),
     file: UploadFile = File(...),
-    uploaded_by_agent_id: Optional[str] = Query(None),
-    uploaded_by_user_id: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -1172,6 +1158,7 @@ async def upload_attachment(
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    uploader = str(verified_user_id(_current_user))  # the session's, never the query (#20521); before the body is read
     try:
         row = await _attachment_service().upload(
             session,
@@ -1180,8 +1167,7 @@ async def upload_attachment(
             filename=require_safe_upload(file.filename),  # #19088: gate before the body is read
             content_type=file.content_type or "application/octet-stream",
             content=await file.read(),
-            uploaded_by_agent_id=uploaded_by_agent_id,
-            uploaded_by_user_id=uploaded_by_user_id,
+            uploaded_by_user_id=uploader,
         )
     except (AttachmentTooLarge, ValueError) as exc:  # #17302: ValueError was an uncaught 500
         logger.warning("Attachment upload refused for %s: %s", work_item_id, exc)

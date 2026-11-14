@@ -261,8 +261,15 @@ STORE_AUTHORITY: dict[str, Concept] = {
         name="codebase_analytics",
         system_of_record=Store.CHROMADB,
         projections=(),
-        write_sites=("autobot-backend/api/codebase_analytics/chromadb_storage.py",),
-        rebuilt_by="Every row is derived from the repository by re-running the analysis.",
+        write_sites=(
+            "autobot-backend/api/codebase_analytics/chromadb_storage.py",
+            # #21003: the per-source run record (type run_status), under `owner_source`
+            # so the per-source delete in chromadb_storage leaves it alone.
+            "autobot-backend/api/codebase_analytics/run_status.py",
+        ),
+        rebuilt_by="Every findings row is derived from the repository by re-running the analysis. "
+        "The run record is not: it is the only account of how a run ended and when the last "
+        "complete one finished, and a re-run writes a new account rather than rebuilding the old.",
     ),
     "multimodal_vectors": Concept(
         name="multimodal_vectors",
@@ -356,6 +363,16 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "one crashed agent into a permanently blocked project, which is worse than the collision "
         "claims exist to prevent. Every claim carries a TTL and is renewed by its holder, so the "
         "durable record of the work is the a2a Task, never the claim.",
+    ),
+    "workflow_inapp_notifications": Concept(
+        name="workflow_inapp_notifications",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot-backend/services/notification_service.py",),
+        rebuilt_by="Nothing to rebuild: a missed in-app notice is re-raised by the next workflow lifecycle event.",
+        note="Deliberate exception (#21045). The in-app store holds only workflow-lifecycle notices, in a "
+        "Redis list with a 7-day TTL and no durable copy, so it is not a projection of anything. It never "
+        "receives router notices; those are durably recorded in the company activity log.",
     ),
     "terminal_session_state": Concept(
         name="terminal_session_state",

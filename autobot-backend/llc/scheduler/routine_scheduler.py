@@ -29,8 +29,8 @@ from typing import Any, Optional
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
-from .dispatch_gate import agent_ref_block_reason
-from .schedule_members import routine_due_members
+from .dispatch_gate import agent_ref_block_reason, record_budget_refusal
+from .schedule_members import reschedule_after_start, routine_due_members
 
 logger = get_logger(__name__)
 
@@ -181,8 +181,10 @@ class RoutineScheduler:
                 reason = await agent_ref_block_reason(session, agent_id, company_id)
                 if reason is not None:
                     logger.info("RoutineScheduler: skipping %s — %s (FR-GOV-05)", routine_id_str, reason)
+                    skip_cron = routine.cron_schedule  # read before the refusal record may roll the session back
+                    await record_budget_refusal(session, company_id, agent_id, reason)
                     # Re-queue at next fire time so the routine resumes automatically when unpaused
-                    next_ts_skip: float = croniter(routine.cron_schedule, datetime.now(tz=timezone.utc)).get_next(float)
+                    next_ts_skip: float = croniter(skip_cron, datetime.now(tz=timezone.utc)).get_next(float)
                     redis = await get_async_redis_client()
                     if redis is None:
                         raise RuntimeError(f"Redis unavailable — cannot re-queue paused routine {routine_id_str}")
@@ -204,19 +206,17 @@ class RoutineScheduler:
     async def _schedule_next_fire(self, routine_id: Any, cron_schedule: Optional[str], croniter: Any) -> None:
         """Re-insert the routine at its next fire time, after the run is committed.
 
-        Logs and returns on failure rather than raising: the caller's retry path would fire the
-        routine a second time for a run that already exists. The schedule reconciler restores the
-        missing member within one interval (#20117).
+        A failure is logged, not raised: the retry path would fire the routine a second time
+        for a run that already exists (#20117, shared with the agent path).
         """
-        try:
-            redis = await get_async_redis_client()
-            if redis is None or cron_schedule is None:
-                logger.error("Routine %s ran but was not rescheduled; the reconciler will restore it", routine_id)
-                return
-            next_ts: float = croniter(cron_schedule, datetime.now(tz=timezone.utc)).get_next(float)
-            await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": next_ts})
-        except Exception as exc:
-            logger.error("Routine %s ran but rescheduling failed (%s); the reconciler will restore it", routine_id, exc)
+        await reschedule_after_start("Routine", self._zadd_next_fire, routine_id, cron_schedule, croniter)
+
+    async def _zadd_next_fire(self, routine_id: Any, cron_schedule: Optional[str], croniter: Any) -> None:
+        redis = await get_async_redis_client()
+        if redis is None or cron_schedule is None:
+            raise RuntimeError("Redis unavailable or the routine has no cron schedule")
+        next_ts: float = croniter(cron_schedule, datetime.now(tz=timezone.utc)).get_next(float)
+        await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": next_ts})
 
     async def _readd_for_retry(self, routine_id_str: str) -> None:
         """Put a claimed routine back a short delay from now so it is not lost (nx: never move a fire time)."""

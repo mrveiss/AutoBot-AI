@@ -29,24 +29,14 @@ from __future__ import annotations
 import asyncio
 import os
 import socket
+import uuid
 from typing import Any, Awaitable, Callable, Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.redis_utils import delete_if_value, expire_if_value
 
 logger = get_logger(__name__)
-
-# Compare-and-extend in a single round-trip. A plain GET->PEXPIRE pair can be
-# split by a pause between the two calls, letting an expired leader extend a key
-# another worker has already taken.
-_REFRESH_LUA = """
-if redis.call('GET', KEYS[1]) == ARGV[1] then
-    return redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[2]))
-else
-    return 0
-end
-"""
 
 # Lease lifetime, and how often the holder renews it. Refresh must stay well
 # under the TTL so a slow cycle does not drop a lease that is still held.
@@ -55,6 +45,16 @@ DEFAULT_REFRESH_S = 10
 DEFAULT_POLL_S = 15
 
 Hook = Callable[[], Awaitable[None] | None]
+
+
+def worker_identity(*, unique: bool = False) -> str:
+    """The name one worker takes a lock under: ``host-pid``; with *unique*, a random suffix names one INSTANCE.
+
+    Used by :class:`LeaderLease` and the LLC outbound sync. Two routers in one process (tests) need *unique*, so a
+    lock one took is not the other's.
+    """
+    identity = "%s-%d" % (socket.gethostname(), os.getpid())
+    return "%s:%s" % (identity, uuid.uuid4().hex[:8]) if unique else identity
 
 
 class LeaderLease:
@@ -82,7 +82,7 @@ class LeaderLease:
         self.ttl_ms = ttl_ms
         self.refresh_s = refresh_s
         self.poll_s = poll_s
-        self.worker_id = worker_id or "%s-%d" % (socket.gethostname(), os.getpid())
+        self.worker_id = worker_id or worker_identity()
         self.label = label or key
         self._is_leader = False
         self._client_factory = client_factory
@@ -110,8 +110,7 @@ class LeaderLease:
             return None
         try:
             if self._is_leader:
-                held = await redis.eval(_REFRESH_LUA, 1, self.key, self.worker_id, str(self.ttl_ms))
-                return bool(held)
+                return await expire_if_value(redis, self.key, self.worker_id, self.ttl_ms)
             acquired = await redis.set(self.key, self.worker_id, nx=True, px=self.ttl_ms)
             return acquired is not None
         except Exception as exc:
@@ -208,4 +207,4 @@ async def _call(hook: Hook | None) -> None:
         await result
 
 
-__all__ = ["LeaderLease", "DEFAULT_TTL_MS", "DEFAULT_REFRESH_S", "DEFAULT_POLL_S"]
+__all__ = ["LeaderLease", "worker_identity", "DEFAULT_TTL_MS", "DEFAULT_REFRESH_S", "DEFAULT_POLL_S"]

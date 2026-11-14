@@ -70,6 +70,7 @@ on:
       - "autobot_shared/stream_logging.py"
       - "autobot_shared/token_count.py"
       - "autobot_shared/url_safety.py"
+      - "requirements-ci/monitoring.txt"
       - ".github/workflows/llm-optimization-real-torch.yml"
   pull_request:
     # ready_for_review is REQUIRED: the job is gated on draft == false, and
@@ -134,6 +135,7 @@ on:
       - "autobot_shared/stream_logging.py"
       - "autobot_shared/token_count.py"
       - "autobot_shared/url_safety.py"
+      - "requirements-ci/monitoring.txt"
       - ".github/workflows/llm-optimization-real-torch.yml"
 
 # Least privilege (#15331). Runs tests only; no token writes.
@@ -146,7 +148,18 @@ concurrency:
 
 jobs:
   real-torch:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # #21490, #21519: a dependabot pull request, or the release promotion pull request, does not start this
+    # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
+    if: >-
+      ${{ github.event_name != 'pull_request'
+          || (github.event.pull_request.draft == false
+              && (github.event.pull_request.user.login != 'dependabot[bot]'
+                  || startsWith(github.event.pull_request.head.ref, 'train-')
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))
+              && (github.event.pull_request.head.ref != github.event.repository.default_branch
+                  || github.event.pull_request.head.repo.full_name != github.repository
+                  || github.event.pull_request.base.ref != 'release'
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:

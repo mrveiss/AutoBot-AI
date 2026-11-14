@@ -32,6 +32,19 @@ const reject = (status: number) => ({
   text: async () => '{"detail":"source does not resolve"}',
 })
 
+// ONE place for the deps `useAnalyticsDataFetchers` reads (a new required dep is added here once).
+// The cast hides a missing field from vue-tsc, so every construction goes through this.
+const fetcherDeps = (notify: ReturnType<typeof vi.fn>) =>
+  ({
+    rootPath: ref('/repo'),
+    sourceIdParam: computed(() => 'source_id=s1'),
+    sourceIdQuery: computed(() => ''),
+    withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=s1`,
+    t: (key: string) => key,
+    showToast: vi.fn(),
+    notify,
+  }) as unknown as Parameters<typeof useAnalyticsDataFetchers>[0]
+
 describe('readDuplicatePayload (#17983)', () => {
   it.each([
     [{ status: 'success', duplicates: [] }, 'done', 0],
@@ -55,15 +68,7 @@ describe('readDuplicatePayload (#17983)', () => {
 
 describe('duplicates fetchers given a 200 {"status":"error"} (#17983)', () => {
   const notify = vi.fn()
-  const fetchers = () =>
-    useAnalyticsDataFetchers({
-      rootPath: ref('/repo'),
-      sourceIdQuery: computed(() => ''),
-      withSourceId: (url: string) => url,
-      t: (key: string) => key,
-      showToast: vi.fn(),
-      notify,
-    } as unknown as Parameters<typeof useAnalyticsDataFetchers>[0])
+  const fetchers = () => useAnalyticsDataFetchers(fetcherDeps(notify))
 
   beforeEach(() => {
     fetchWithAuth.mockReset()
@@ -102,15 +107,7 @@ describe('duplicates fetchers given an HTTP error (#17983)', () => {
   // rather than returning a body -- so `onSuccess` never runs and, before
   // `onError` was wired, the state simply kept whatever it already held.
   const notify = vi.fn()
-  const fetchers = () =>
-    useAnalyticsDataFetchers({
-      rootPath: ref('/repo'),
-      sourceIdQuery: computed(() => ''),
-      withSourceId: (url: string) => url,
-      t: (key: string) => key,
-      showToast: vi.fn(),
-      notify,
-    } as unknown as Parameters<typeof useAnalyticsDataFetchers>[0])
+  const fetchers = () => useAnalyticsDataFetchers(fetcherDeps(notify))
 
   beforeEach(() => {
     fetchWithAuth.mockReset()
@@ -163,15 +160,7 @@ describe('the dupTask path clears stale rows too (#17983)', () => {
   // populated list from an earlier scan shows those rows and hides the failure —
   // the same defect, surviving in the one path that was missed.
   const notify = vi.fn()
-  const fetchers = () =>
-    useAnalyticsDataFetchers({
-      rootPath: ref('/repo'),
-      sourceIdQuery: computed(() => ''),
-      withSourceId: (url: string) => url,
-      t: (key: string) => key,
-      showToast: vi.fn(),
-      notify,
-    } as unknown as Parameters<typeof useAnalyticsDataFetchers>[0])
+  const fetchers = () => useAnalyticsDataFetchers(fetcherDeps(notify))
 
   beforeEach(() => {
     fetchWithAuth.mockReset()
@@ -195,5 +184,69 @@ describe('the dupTask path clears stale rows too (#17983)', () => {
     await f.loadDuplicates()
     expect(f.duplicateScanState.value).toBe('failed')
     expect(f.duplicateAnalysis.value).toEqual([])
+  })
+})
+
+describe('a stats or problems answer for a previous source (#20513)', () => {
+  const notify = vi.fn()
+  const STATS_A = { status: 'success', stats: { from: 'a' } }
+  const PROBLEMS_A = { problems: [{ from: 'a' }] }
+  // The page's current source key, which a switch changes while a request is still in flight.
+  const sourceKey = ref('a')
+  const fetchers = () =>
+    useAnalyticsDataFetchers({ ...fetcherDeps(notify), sourceIdParam: computed(() => sourceKey.value) } as Parameters<typeof useAnalyticsDataFetchers>[0])
+  /** Holds every response until the returned function is called (a response already being processed). */
+  const hold = (body: unknown) => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    fetchWithAuth.mockImplementation(async () => {
+      await gate
+      return respond(body)
+    })
+    return release
+  }
+  const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+  beforeEach(() => {
+    fetchWithAuth.mockReset()
+    sourceKey.value = 'a'
+  })
+
+  it('stats: an answer for source A released after the switch to B does not overwrite B\'s', async () => {
+    const f = fetchers()
+    const release = hold(STATS_A)
+    const pending = f.getCodebaseStats()
+    sourceKey.value = 'b'
+    f.codebaseStats.value = { from: 'b' }
+    release()
+    await pending
+    await settle()
+    expect(f.codebaseStats.value).toEqual({ from: 'b' }) // unguarded: { from: 'a' }
+  })
+
+  it('problems: an answer for source A released after the switch to B does not overwrite B\'s', async () => {
+    const f = fetchers()
+    const release = hold(PROBLEMS_A)
+    const pending = f.getProblemsReport()
+    sourceKey.value = 'b'
+    f.problemsReport.value = [{ from: 'b' }] as never
+    release()
+    await pending
+    await settle()
+    expect(f.problemsReport.value).toEqual([{ from: 'b' }]) // unguarded: [{ from: 'a' }]
+  })
+
+  it('control: an answer for the current source still lands', async () => {
+    const f = fetchers()
+    const releaseStats = hold(STATS_A)
+    const stats = f.getCodebaseStats()
+    releaseStats()
+    await stats
+    expect(f.codebaseStats.value).toEqual({ from: 'a' })
+    const releaseProblems = hold(PROBLEMS_A)
+    const problems = f.getProblemsReport()
+    releaseProblems()
+    await problems
+    expect(f.problemsReport.value).toEqual([{ from: 'a' }])
   })
 })

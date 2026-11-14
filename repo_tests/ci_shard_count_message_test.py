@@ -29,12 +29,16 @@ _DURATIONS_WORKFLOW = repo_root() / ".github" / "workflows" / "test-durations.ym
 
 
 def _reported_count() -> int:
-    """The number the aggregate job's success message claims."""
+    """The number the `python-suite` gate's success detail claims (#18208: the gate, not an echo step)."""
     steps = _document()["jobs"]["python-suite"]["steps"]
-    bodies = [s["run"] for s in steps if "run" in s and "shards passed" in s["run"]]
-    assert len(bodies) == 1, f"expected exactly one success message, found {len(bodies)}"
-    found = re.search(r"All (\d+) python-suite shards passed", bodies[0])
-    assert found, f"success message does not name a count: {bodies[0]!r}"
+    details = [
+        s["with"]["work-detail"]
+        for s in steps
+        if "work-detail" in (s.get("with") or {}) and "shards passed" in s["with"]["work-detail"]
+    ]
+    assert len(details) == 1, f"expected exactly one success message, found {len(details)}"
+    found = re.search(r"All (\d+) python-suite shards passed", details[0])
+    assert found, f"success message does not name a count: {details[0]!r}"
     return int(found.group(1))
 
 
@@ -42,7 +46,7 @@ def test_the_success_message_names_the_real_shard_count():
     """#14353: the message said 6 while the matrix ran 12."""
     assert _reported_count() == _shard_count(), (
         f"python-suite reports {_reported_count()} shards but the matrix runs "
-        f"{_shard_count()}. Update the echo in ci.yml's python-suite job."
+        f"{_shard_count()}. Update the `work-detail` of ci.yml's python-suite gate."
     )
 
 

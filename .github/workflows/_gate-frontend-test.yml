@@ -1,0 +1,393 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Frontend Testing Suite workflow
+# Runs on ubuntu-latest (#15395). It used self-hosted runners until that issue
+# found nothing in CI needed the hardware -- and that three required contexts
+# were hostage to a two-machine pool.
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
+
+name: Frontend Testing Suite (reusable body)
+
+on:
+  workflow_call:
+    outputs:
+      ok:
+        description: "'true' only when every step of the unit suite passed"
+        value: ${{ jobs.unit-tests.outputs.ok }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Job 1: Unit and Integration Tests
+  unit-tests:
+    name: Frontend Unit and Integration Suite
+    outputs:
+      ok: ${{ steps.done.outputs.ok }}
+    # ubuntu-latest (#15395). This job publishes a REQUIRED context, and a
+    # required context pinned to a two-machine pool cannot report when that
+    # pool is down -- the #13401 deadlock, recurring as #15185 and #14444.
+    # Nothing here needs self-hosted hardware: the pins carried only the
+    # generic [self-hosted, Linux, X64] labels, never an npu/gpu/cuda one.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # #11077: fail fast; not GitHub's 24h default
+    # vue-tsc (the `type-check` and `check-ts-delta` steps) is near the default
+    # V8 old-space ceiling on this project and intermittently OOMs
+    # ("Reached heap limit … JavaScript heap out of memory"), flaking this
+    # required check (#10298). Give Node enough heap.
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: autobot-frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: autobot-frontend
+        # #13410: no CI job runs Cypress (only `test:e2e` needs the binary), so
+        # skip the ~100MB CDN download — a Cypress CDN 504 must never red out a
+        # required check. Local dev `npm ci` is unaffected and still gets it.
+        env:
+          CYPRESS_INSTALL_BINARY: '0'
+        run: npm ci
+
+      - name: Verify generated API types exist (#5209)
+        working-directory: autobot-frontend
+        run: |
+          # Fails if someone edits src/types/generated/api.ts by hand.
+          # Full drift detection (regenerate against live backend, diff)
+          # runs separately where a backend is available — see
+          # docs/developer/frontend-type-generation.md.
+          test -f src/types/generated/api.ts || (
+            echo "Missing src/types/generated/api.ts — run 'npm run gen:types' against a running backend and commit the result."
+            exit 1
+          )
+          npm run verify:types
+
+      - name: Run type checking
+        working-directory: autobot-frontend
+        # #14481: this step used to be followed by `check-ts-delta`, which ran
+        # this exact vue-tsc project a SECOND time in the same job — the first
+        # compile took 215s, the second exceeded its 600s budget and was killed
+        # under runner load, reddening the required "Unit & Integration Tests"
+        # context with no failing test and no error output. `set -eo pipefail`
+        # keeps this step's pass/fail identical to a bare `npm run type-check`:
+        # any nonzero exit from vue-tsc still fails this step immediately, teeing
+        # its output to a file does not change that. `check-ts-delta` below
+        # reads that file instead of recompiling.
+        run: |
+          set -eo pipefail
+          npm run type-check 2>&1 | tee vue-tsc-output.log
+          echo 0 > vue-tsc-status.txt
+
+      - name: Check TypeScript error delta
+        working-directory: autobot-frontend
+        # #14481: reuse the compile `type-check` just captured (vue-tsc-output.log
+        # / vue-tsc-status.txt) instead of running the same vue-tsc project a
+        # second time — see scripts/check-ts-delta.sh for the reuse contract.
+        # If either file were unexpectedly missing the script falls back to
+        # compiling itself, so this step still gates even then.
+        #
+        # #13341: bound the STEP, not just the job. GitHub enforces
+        # `timeout-minutes` from the RUNNER side, so when the runner process
+        # stops making progress the job-level cancellation may never be issued
+        # — observed here as a run of over three hours against the declared
+        # 30-minute limit above, on the singleton self-hosted runner, holding
+        # a REQUIRED context and starving every other job needing that machine.
+        # `timeout` runs inside this step's own process tree, so it fires at a
+        # known point whether or not GitHub's cancellation ever arrives, and the
+        # step fails with a diagnosable "timed out" instead of hanging silently.
+        # `--verbose` matters: without it `timeout` prints NOTHING, so the log
+        # ends at "Process completed with exit code 124" and the operator is
+        # left to know that 124 means a timeout. With it the step says
+        # "timeout: sending signal TERM to command 'npm'", which is the
+        # diagnosable failure this bound exists to produce.
+        # 60s (was 600s) because this step no longer compiles anything (#14481)
+        # — it only reads the two files above and does a `grep`/arithmetic
+        # comparison, sub-second work on any runner. 60s keeps the same
+        # defense-in-depth this bound has always provided against an unknown
+        # future hang, rightsized to the much smaller job that remains; it is
+        # not a budget for a compile, because there is no longer a compile here
+        # to budget for.
+        run: timeout --verbose --kill-after=15s 60 npm run check-ts-delta
+        env:
+          TSC_OUTPUT_FILE: vue-tsc-output.log
+          TSC_STATUS_FILE: vue-tsc-status.txt
+
+      - name: Run linting
+        working-directory: autobot-frontend
+        run: npm run lint
+
+      - name: Check i18n keys
+        working-directory: autobot-frontend
+        run: npm run check:i18n
+
+
+      - name: Check locale completeness
+        working-directory: autobot-frontend
+        run: npm run check:locales
+      # #10365: the unit suite runs once, with coverage — `test:coverage` is
+      # `vitest run --coverage` over the same default config as `test:unit`, so a
+      # separate `test:unit` step just ran every unit test twice on the self-hosted runner.
+      - name: Run integration tests
+        working-directory: autobot-frontend
+        run: npm run test:integration
+
+      - name: Run unit tests with coverage
+        working-directory: autobot-frontend
+        run: npm run test:coverage
+
+      # #14786: the shared kit (libs/autobot-ui) has its own package.json, own
+      # devDependencies and own vitest.config.ts, separate from autobot-frontend's
+      # -- `npm ci` above never installs or runs them. No package-lock.json is
+      # committed for this package (it is consumed by both apps via a `file:`
+      # dependency, never installed as its own top-level project until now), so
+      # `npm install` here, not `npm ci`. No coverage step yet -- that is a later
+      # AC on #14786, not this batch.
+      - name: Install shared UI kit dependencies
+        working-directory: libs/autobot-ui
+        run: npm install
+
+      - name: Run shared UI kit tests
+        working-directory: libs/autobot-ui
+        run: npm test
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5  # v7.1.1
+        with:
+          files: ./autobot-frontend/coverage/lcov.info
+          directory: ./autobot-frontend/coverage
+          flags: frontend
+          name: autobot-frontend-coverage
+          fail_ci_if_error: false
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: test-results-unit
+          path: |
+            autobot-frontend/test-results/
+            autobot-frontend/coverage/
+          retention-days: 30
+
+      - name: Cleanup node_modules
+        if: always()
+        run: |
+          rm -rf autobot-frontend/node_modules || true
+          rm -rf libs/autobot-ui/node_modules || true
+
+      # Positive evidence for the `Unit & Integration Tests` gate in ci.yml (#18208): this step is
+      # reached only when every step above it succeeded, so the output below is
+      # 'true' on a full pass and empty on a failure, a cancel or a timeout.
+      - name: Record that every step passed
+        id: done
+        shell: bash
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"
+
+  # (The skip-success shim for the required "Unit & Integration Tests" context was relocated in
+  # #13405 and is gone since #18208: the `Unit & Integration Tests` gate in ci.yml is the one
+  # publisher, `if: always()`, so there is no second job with that name to keep exclusive.)
+
+  # Job 2: Security Scanning
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20  # #11077: fail fast; not GitHub's 24h default
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: autobot-frontend/package-lock.json
+
+      # #20903: the npm audit gate is a repo script; run it on the .python-version
+      # interpreter like every other repo script, not the runner default python3.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install dependencies
+        working-directory: autobot-frontend
+        # #13410: no CI job runs Cypress (only `test:e2e` needs the binary), so
+        # skip the ~100MB CDN download — a Cypress CDN 504 must never red out a
+        # required check. Local dev `npm ci` is unaffected and still gets it.
+        env:
+          CYPRESS_INSTALL_BINARY: '0'
+        run: npm ci
+
+      # #13400: this step GATES. A high or critical advisory in the frontend
+      # lockfile fails the job on purpose — that is the whole point of the
+      # check's name.
+      #
+      # The backlog was measured at 0 advisories (every severity) across 1191
+      # dependencies immediately before the gate was armed, so arming it broke
+      # no open PR and required no triage campaign.
+      #
+      # Do NOT make this step non-blocking to clear a red build. A red
+      # "advisories found" means a real advisory reached package-lock.json; the
+      # fix is to bump the dependency (dependabot raises those PRs). If an
+      # advisory ever has no published fix and the gate has to yield, change it
+      # deliberately and record why on #13400 — do not silence it as a flake.
+      #
+      # #16337: ONE call to npm's audit service, not two. The gate used to be a
+      # second `npm audit --audit-level=high` that re-fetched what the `--json`
+      # call already had, so an endpoint failure on that second call read as an
+      # advisory. pipeline-scripts/npm_audit_gate.py makes the single call,
+      # retries it while the service is unavailable, writes audit-results.json
+      # for the artifact below, and ends in one of three results, each named in
+      # the job summary and as an annotation:
+      #   passed (exit 0) · advisories found (exit 1) · could not check (exit 2)
+      # "Could not check" still fails the job — a gate that did not look must
+      # not pass — but it is labelled as an outage, not as an advisory.
+      #
+      # npm is pinned to 11 for this call. npm 7-10 (Node 22 bundles 10.9) fall
+      # back to the retiring `audits/quick` endpoint when the bulk advisory call
+      # fails; npm 11 has no such fallback. `--loglevel=http` puts the endpoint
+      # npm called in the log, and the script echoes those lines.
+      - name: Run npm audit
+        working-directory: autobot-frontend
+        env:
+          NPM_AUDIT_NPM_VERSION: '11.19.1'
+          NPM_AUDIT_MAX_ATTEMPTS: '3'
+          NPM_AUDIT_RETRY_DELAY_SECONDS: '15'
+        run: |
+          python3 ../pipeline-scripts/npm_audit_gate.py \
+            --npm "npx --yes npm@${NPM_AUDIT_NPM_VERSION}" \
+            --report audit-results.json
+
+      # Stays non-blocking by design (#13400): auditjs queries a third-party
+      # network service (OSS Index) whose availability is outside this repo's
+      # control, and its data duplicates the npm advisory feed the gate above
+      # already enforces. It is kept for the extra signal in the log, not as a
+      # second gate — an outage here must never red out the check.
+      - name: Run dependency vulnerability scan
+        working-directory: autobot-frontend
+        run: |
+          npx auditjs ossi || true
+
+      - name: Upload security scan results
+        uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: security-scan-results
+          path: autobot-frontend/audit-results.json
+          retention-days: 30
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf autobot-frontend/node_modules || true
+
+  # Job 3: Build Test
+  build-test:
+    name: Build Test
+    needs: [unit-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # #11077: fail fast; not GitHub's 24h default
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: autobot-frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: autobot-frontend
+        # #13410: no CI job runs Cypress (only `test:e2e` needs the binary), so
+        # skip the ~100MB CDN download — a Cypress CDN 504 must never red out a
+        # required check. Local dev `npm ci` is unaffected and still gets it.
+        env:
+          CYPRESS_INSTALL_BINARY: '0'
+        run: npm ci
+
+      - name: Build application
+        working-directory: autobot-frontend
+        run: npm run build
+
+      - name: Analyze bundle size
+        working-directory: autobot-frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          du -sh dist/
+          find dist/ -name "*.js" -exec du -h {} \; | sort -hr
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf autobot-frontend/node_modules autobot-frontend/dist || true
+
+  # Job 4: Test Summary and Reporting
+  test-summary:
+    name: Test Summary
+    needs: [unit-tests, security-scan, build-test]
+    # `always()` so the summary still reports when a test job FAILED.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15  # #11077: fail fast; not GitHub's 24h default
+    # ci.yml calls this body only when the frontend filter hit (#18208), so the summary
+    # no longer needs its own `changes` gate to stay off a path-untouched PR (#13405).
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: test-artifacts
+
+      - name: Generate test summary
+        run: |
+          {
+            echo "# 🧪 Frontend Test Results"
+            echo ""
+            echo "## Test Jobs Status:"
+            echo "- Unit Tests: ${{ needs.unit-tests.result }}"
+            echo "- Security Scan: ${{ needs.security-scan.result }}"
+            echo "- Build Test: ${{ needs.build-test.result }}"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -d "test-artifacts/test-results-unit/coverage" ]; then
+            {
+              echo "## Coverage Report Available"
+              echo "Coverage reports have been uploaded to Codecov."
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [ -d "test-artifacts" ]; then
+            {
+              echo "## Available Artifacts:"
+              find test-artifacts -type d -name "*results*" | while read -r dir; do
+                echo "- $(basename "$dir")"
+              done
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          {
+            echo "## Quick Links:"
+            echo "- [View Coverage Report](https://app.codecov.io/gh/${{ github.repository }})"
+            echo "- [Download Test Artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          } >> "$GITHUB_STEP_SUMMARY"

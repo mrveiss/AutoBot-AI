@@ -69,6 +69,7 @@ from typing import TYPE_CHECKING, Callable, Iterator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_once import log_once
 from autobot_shared.plugin_sdk.credential_binding import CredentialUnavailableError
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
@@ -199,10 +200,6 @@ _SYSTEM_VAULT = VaultRef(VaultKind.SYSTEM)
 #: separate, pre-existing concern -- see services/execution/env_sanitizer.py).
 _hydrated_keys: dict[str, str] = {}
 
-#: Names already reported as resolving from the env fallback, so the warning is
-#: emitted once per name per process rather than on every resolution.
-_env_fallback_logged: set[str] = set()
-
 #: Names the System vault holds but whose last read failed. Distinct from "not in
 #: the vault": these are refused, never resolved from the environment (#18094).
 _unreadable_keys: set[str] = set()
@@ -271,10 +268,10 @@ def resolve_provider_key(env_var: str, config_value: str) -> str:
 
 def _log_env_fallback(name: str) -> None:
     """Warn once that *name* resolved from the environment, not the secrets manager."""
-    if name in _env_fallback_logged:
-        return
-    _env_fallback_logged.add(name)
-    logger.warning(
+    log_once(
+        logger,
+        logging.WARNING,
+        name,
         "provider-key-vault: %s vault has no key: using the environment (migration fallback); store it in the vault",
         _label(name),
     )
@@ -499,6 +496,26 @@ async def hydrate_provider_keys_from_vault(session: AsyncSession, *, root_key: b
     return hydrated
 
 
+_STAGE_ATTR = "vault_hydration_stage"
+_STAGE_OPEN_SESSION = "open session"
+_STAGE_LIST = "list"
+_STAGE_REGISTER = "register dependency"
+_STAGE_READ = "read"
+
+
+async def _staged(stage: str, awaitable):
+    """Await one hydration step; an exception leaves it carrying the stage that raised it (#21089)."""
+    try:
+        return await awaitable
+    except Exception as exc:
+        if not hasattr(exc, _STAGE_ATTR):
+            try:
+                setattr(exc, _STAGE_ATTR, stage)
+            except AttributeError:  # a slotted exception cannot carry it: the log names the default stage
+                pass
+        raise
+
+
 async def _hydrate_all(session: AsyncSession, root_key: bytes | None) -> list[str]:
     """List and read every held name into a new cache, then swap it in; any exception = held-state unknown."""
     global _hydrated_keys, _unreadable_keys
@@ -507,12 +524,12 @@ async def _hydrate_all(session: AsyncSession, root_key: bytes | None) -> list[st
     unreadable: set[str] = set()
     any_dependency_registered = False
     for name in VAULT_RESOLVED_CREDENTIAL_NAMES:
-        secret_id = await _find_system_secret_id(session, name)
+        secret_id = await _staged(_STAGE_LIST, _find_system_secret_id(session, name))
         if secret_id is None:
             continue  # nothing vaulted: resolution falls back to the env var
-        await _register_credential_dependency(session, name=name, secret_id=secret_id)
+        await _staged(_STAGE_REGISTER, _register_credential_dependency(session, name=name, secret_id=secret_id))
         any_dependency_registered = True
-        value = await _read_one_key(session, service, name=name, secret_id=secret_id)
+        value = await _staged(_STAGE_READ, _read_one_key(session, service, name=name, secret_id=secret_id))
         if value is None:
             unreadable.add(name)
         else:
@@ -539,8 +556,9 @@ async def hydrate_at_startup(get_session_factory: Callable[[], Callable]) -> lis
     except Exception as exc:  # noqa: BLE001 - classified and reported; startup continues with keys refused
         _vault_state = VAULT_UNREACHABLE
         logger.error(
-            "provider-key-vault: vault unreachable (%s): every vault-resolved provider key is refused, "
-            "never taken from env, until a hydration succeeds",
+            "provider-key-vault: vault unreachable (stage: %s, %s): every vault-resolved provider key is "
+            "refused, never taken from env, until a hydration succeeds",
+            getattr(exc, _STAGE_ATTR, _STAGE_OPEN_SESSION),
             type(exc).__name__,
         )
         return []

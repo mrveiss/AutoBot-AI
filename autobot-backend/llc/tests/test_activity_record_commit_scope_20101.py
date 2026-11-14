@@ -35,6 +35,7 @@ from llc.models.enums import ActivityEventType, AssigneeType, WorkItemStatus
 from llc.services import activity_log as activity_log_module
 from llc.services.activity_log import LLCActivityLogService
 from llc.services.actor import ActivityRecordError, audit
+from llc.services.after_commit import after_commit_tasks
 from llc.services.handoff import HandoffService
 from llc.tests import _e2e_harness as harness
 from testkit.fake_async_session import FakeAsyncSession
@@ -79,8 +80,8 @@ def _bulk_entry() -> dict:
 
 async def _drain_publishes() -> None:
     await asyncio.sleep(0)
-    if activity_log_module._publish_tasks:
-        await asyncio.gather(*activity_log_module._publish_tasks)
+    if after_commit_tasks:
+        await asyncio.gather(*after_commit_tasks)
 
 
 # --- the failure of the write ---------------------------------------------------------------
@@ -308,7 +309,7 @@ async def test_a_failed_audit_leaves_the_key_and_sends_nothing_on_agent_to_human
     with patch("llc.services.handoff.get_async_redis_client", AsyncMock(return_value=redis)):
         with pytest.raises(ActivityRecordError):
             await service.agent_to_human(_a2h_session(agent), str(uuid.uuid4()), agent, USER, COMPANY)
-    redis.delete.assert_not_called()
+    redis.eval.assert_not_called()  # the owner-checked release (delete_if_holder / delete_if_value)
     redis.publish.assert_not_called()
     assert not service._background_tasks
 
@@ -333,6 +334,6 @@ async def test_a_failed_audit_leaves_the_key_and_sends_nothing_on_human_to_agent
                 company_id=COMPANY,
                 human_notes="n",
             )
-    redis.delete.assert_not_called()
+    redis.eval.assert_not_called()  # the owner-checked release (delete_if_holder / delete_if_value)
     redis.publish.assert_not_called()
     assert item.status != WorkItemStatus.IN_REVIEW

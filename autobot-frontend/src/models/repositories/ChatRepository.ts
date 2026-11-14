@@ -6,6 +6,7 @@ import { toSessionDate, type ChatListEntry } from './sessionDates'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { clearStoredAuth } from '@/utils/authToken'
+import { storedMessageText } from '@/utils/attachmentNotice'
 import type { ApiResponse } from '@/types/models'
 import type { ChatMessage } from '@/types/api'
 
@@ -384,11 +385,10 @@ export class ChatRepository {
         // Backend may save raw types like 'llm_response_chunk' which need mapping
         const rawType = msg.messageType || msg.type || 'message'
         const normalizedType = this.normalizeMessageType(rawType)
-
         const transformed = {
           id: msg.id || msg.metadata?.message_id || msg.rawData?.message_id || `${msg.sender}-${msg.timestamp}-${index}`,
           sender: this.normalizeSender(msg.sender),
-          content: msg.text || msg.content || '',
+          content: storedMessageText(msg),
           timestamp: new Date(msg.timestamp || new Date().toISOString()),
           type: normalizedType,
           // CRITICAL FIX: Backend saves approval metadata in rawData, not metadata
@@ -439,7 +439,7 @@ export class ChatRepository {
     if (type.includes('utility')) return 'utility'
     if (type.includes('source')) return 'sources'
     if (type.includes('json')) return 'json'
-    if (type === 'command_approval_request') return 'command_approval_request'
+    if (type === 'command_approval_request' || type === 'human_question') return type // #21022: keep the stall card
     if (type === 'terminal_output' || type === 'terminal_command') return type
 
     // Default to 'message' for unrecognized types

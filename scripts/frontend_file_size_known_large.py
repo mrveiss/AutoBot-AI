@@ -29,12 +29,12 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
     "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1780,
     "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1216,
-    "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1259,
+    "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1166,
     "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 756,
     "autobot-frontend/src/components/analytics/ConversationFlowDashboard.vue": 909,
     "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": 1078,
     "autobot-frontend/src/components/analytics/LogPatternDashboard.vue": 941,
-    "autobot-frontend/src/components/analytics/PatternAnalysis.vue": 944,
+    "autobot-frontend/src/components/analytics/PatternAnalysis.vue": 941,
     "autobot-frontend/src/components/analytics/PerformanceAnalysisDashboard.vue": 1075,
     "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": 1094,
     "autobot-frontend/src/components/analytics/SourceManager.vue": 830,
@@ -101,7 +101,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/visualizations/WorkflowVisualization.vue": 1017,  # #16744: 1020 -> 1019
     "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 618,
     "autobot-frontend/src/components/workflow/WorkflowCanvas.vue": 2849,  # #20682: -38 (CanvasDetachButton)
-    "autobot-frontend/src/components/workflow/WorkflowLiveDashboard.vue": 782,
+    "autobot-frontend/src/components/workflow/WorkflowLiveDashboard.vue": 777,
     "autobot-frontend/src/composables/__tests__/useClipboard.test.ts": 696,
     "autobot-frontend/src/composables/__tests__/useConnectionTester.test.ts": 944,
     "autobot-frontend/src/composables/__tests__/useErrorHandler.test.ts": 1901,
@@ -115,11 +115,11 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/composables/analytics/useAnalyticsDataFetchers.ts": 685,
     "autobot-frontend/src/composables/useKeyboard.ts": 650,
     "autobot-frontend/src/composables/useKnowledgeVectorization.ts": 679,
-    "autobot-frontend/src/composables/usePatternAnalysis.ts": 865,
+    "autobot-frontend/src/composables/usePatternAnalysis.ts": 829,
     "autobot-frontend/src/composables/useTimeout.ts": 749,
     "autobot-frontend/src/composables/useVoiceConversation.ts": 986,
     "autobot-frontend/src/composables/useVoiceOutput.ts": 1089,
-    "autobot-frontend/src/composables/useWorkflowBuilder.ts": 1282,  # #17677: 1293 -> 1292 -> 1284
+    "autobot-frontend/src/composables/useWorkflowBuilder.ts": 1278,  # #17677: 1293 -> 1292 -> 1284; #21033: -> 1278
     "autobot-frontend/src/config/__tests__/ssot-config.spec.ts": 626,
     "autobot-frontend/src/config/ssot-config.ts": 804,  # #19821 -15
     "autobot-frontend/src/models/controllers/ChatController.ts": 1156,
@@ -152,9 +152,10 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1012,  # #20123: 1015 -> 1012 (mixed bucket lists each currency)
     "autobot-frontend/src/views/llc/GanttTimelineView.vue": 815,
     "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 800,
-    "autobot-frontend/src/views/llc/OrgChart.vue": 1442,  # #14780: 1527 -> 1522 (kit BaseDrawer); #20682: -75
+    # #21469: 1435 -> 1362 (the People sources moved to a composable)
+    "autobot-frontend/src/views/llc/OrgChart.vue": 1362,  # #14780: 1527 -> 1522 (kit BaseDrawer); #20682: -75
     "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1370,  # #18819 1379->1374; #18849 -1; #14778 BaseInput -1
-    "autobot-frontend/src/views/llc/RolesView.vue": 1026,  # #18819 1029->1027; #18849 one kit import on the merge (-1)
+    "autobot-frontend/src/views/llc/RolesView.vue": 1015,  # #18819 1029->1027; #18849 one kit import on the merge (-1)
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
     "autobot-frontend/src/views/llc/SprintBoardView.vue": 664,
     # #14780: 1046 -> 1013 (kit BaseDrawer); #18750: 994 (comments tab returns)

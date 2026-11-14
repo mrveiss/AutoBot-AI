@@ -26,7 +26,10 @@
 # the role default "" and silently drop the backend's Redis password. Same adopt
 # rule as tasks/main.yml: only when none is set, username together with password.
 - name: "Backend | Read the SLM-generated Redis credential (#16627)"
-  ansible.builtin.include_tasks: ../../../_shared/tasks/read_redis_password.yml
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/read_redis_password.yml
+    apply:
+      tags: ['backend', 'env']
   tags: ['backend', 'env']
 
 - name: "Backend | Adopt the SLM-generated Redis credential when none is set (#16627)"
@@ -40,29 +43,55 @@
   tags: ['backend', 'env']
 
 - name: "Backend | Keep the deployed embedding model (#15502)"
-  ansible.builtin.include_tasks: ../../../_shared/tasks/read_deployed_embedding_model.yml
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/read_deployed_embedding_model.yml
+    apply:
+      tags: ['backend', 'env']
   vars:
     deployed_embedding_env_files: ["{{ backend_env_dest }}"]
   tags: ['backend', 'env']
 
 - name: "Backend | Keep the deployed Prometheus scrape token (#16375)"
-  ansible.builtin.include_tasks: ../../../_shared/tasks/keep_prometheus_scrape_token.yml
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/keep_prometheus_scrape_token.yml
+    apply:
+      tags: ['backend', 'env']
   vars:
     scrape_token_env_files: ["{{ backend_env_dest }}", "{{ autobot_backend_env_file }}"]
   tags: ['backend', 'env']
 
 # #19051: without this the updater rendered the role default "" for the root key.
 - name: "Backend | Read the secrets root key from slm-secrets.env (#14758, #19051)"
-  ansible.builtin.include_tasks: read_secrets_root_key.yml
+  ansible.builtin.include_tasks:
+    file: read_secrets_root_key.yml
+    apply:
+      tags: ['backend', 'env']
   tags: ['backend', 'env']
 
 - name: "Backend | Read the encryption key (#19864)"
-  ansible.builtin.include_tasks: read_encryption_key.yml
+  ansible.builtin.include_tasks:
+    file: read_encryption_key.yml
+    apply:
+      tags: ['backend', 'config', 'env']
   tags: ['backend', 'config', 'env']
 
 - name: "Backend | Resolve the models for this model server (#19731)"
-  ansible.builtin.include_tasks: resolve_models.yml
+  ansible.builtin.include_tasks:
+    file: resolve_models.yml
+    apply:
+      tags: ['backend', 'config', 'env']
   tags: ['backend', 'config', 'env']
+
+- name: "Ensure the application log directory exists (#20894)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/ensure_app_log_dir.yml
+    apply:
+      tags: ['backend', 'env']
+  vars:
+    app_log_dir: "{{ backend_app_log_dir }}"
+    app_log_dir_owner: "{{ backend_user }}"
+    app_log_dir_group: "{{ backend_group }}"
+  tags: ['backend', 'env']
 
 - name: "Backend | Render .env from template (#12871)"
   ansible.builtin.template:
@@ -71,6 +100,7 @@
     mode: "0600"
     owner: "{{ backend_env_owner }}"
     group: "{{ backend_env_group }}"
+  diff: false  # the env carries secrets (#20941)
   become: true
   tags: ['backend', 'env']
   vars:

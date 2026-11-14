@@ -3,8 +3,8 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 
-// #19960: the members view is not remounted when the route moves to another company, so what it
-// shows and what it sends are scoped to the company a request was made for.
+// #19960: the layout remounts the view on a company switch (#21502), but a late answer can still
+// arrive for another company, so what it shows and sends is scoped to the company a request was for.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -39,10 +39,15 @@ const ALL = ['owner', 'admin', 'member', 'guest', 'lead']
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
 function rowsOf(prefix: string) {
-  return [
-    { user_id: `${prefix}-u1`, display_name: `${prefix} Alice`, role: 'owner' },
-    { user_id: `${prefix}-u2`, display_name: `${prefix} Bob`, role: 'member' },
-  ].map((m) => ({ ...m, viewer_role: 'owner', viewer_grantable_roles: ALL }))
+  return {
+    members: [
+      { user_id: `${prefix}-u1`, display_name: `${prefix} Alice`, role: 'owner' },
+      { user_id: `${prefix}-u2`, display_name: `${prefix} Bob`, role: 'member' },
+    ],
+    viewer_role: 'owner',
+    viewer_can_manage: true,
+    viewer_grantable_roles: ALL,
+  }
 }
 
 function deferred<T>() {

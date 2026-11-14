@@ -70,6 +70,8 @@ class AuditAction(str, Enum):
     KNOWLEDGE_UPLOAD_SESSION_REMOVE = "knowledge.upload_session.remove"  # #19713: an admin frees an abandoned upload
     KNOWLEDGE_QUARANTINE_READ = "knowledge.quarantine.read"  # #19163: an opt-out read of the research quarantine
     KNOWLEDGE_ADMIN_READ = "kb.admin_read"  # #16665: an admin's read of any fact through an explicit read API
+    KNOWLEDGE_WIPE = "knowledge.wipe"  # #21048: the knowledge-base wipe, run after an approval
+    KNOWLEDGE_WIPE_REFRESH = "knowledge.wipe.refresh"  # #21048: a pending wipe plan re-proposed; nothing deleted
     API_KEY_CREATE = "api_key.create"  # pragma: allowlist secret -- an action name, not a key
     API_KEY_REVOKE = "api_key.revoke"  # pragma: allowlist secret -- an action name, not a key
     USER_CREATE = "user.create"
@@ -149,6 +151,10 @@ class AuditAction(str, Enum):
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
     BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
     LLC_PROJECT_BACKFILL = "llc.project_backfill"  # #18978: an approved project backfill assigned projects
+    # #21136: heartbeat control routes record the verified principal who paused, resumed or terminated an agent.
+    AGENT_PAUSE = "agent.pause"
+    AGENT_RESUME = "agent.resume"
+    AGENT_TERMINATE = "agent.terminate"
     # #16333: the internal service key was admitted on a route that names its caller (service_opt_in).
     SERVICE_KEY_ADMITTED = "auth.service_key_admitted"  # pragma: allowlist secret -- an action name, not a key
     # #20750: re-aligning the backend's AUTOBOT_INTERNAL_API_KEY to the SLM's, one record per step.

@@ -8,6 +8,7 @@
 # file with the base commit). #10603 is the umbrella for built-but-disconnected machinery.
 # One ruled exception (#20910): the detector fixes newly flagged routes that were always unconnected;
 # they were added once, each linked to a grouped wiring issue under #20512 (frozen in the gate test).
+# A second, #21428: following a router included through a package router unmasked twelve routes, added once and frozen.
 #
 # What it cannot see: a function nobody calls inside a module somebody imports; a module imported
 # only by another unused module; callers that build a path or key at runtime; plugins and
@@ -148,7 +149,6 @@ table:ssh_keys	#10603
 table:system_events	#10603
 table:validation_results	#10603
 route:autobot-backend/api/admin_ownerless_chat_sessions.py:POST /ownerless-chat-sessions/requests	#20904
-route:autobot-backend/api/conversation_files.py:GET /conversation/{session_id}/preview/{file_id}	#20906
 route:autobot-backend/api/knowledge_chunked_upload.py:DELETE /expired/{upload_id}	#20905
 route:autobot-backend/api/monitoring.py:GET /alerts/check	#19484
 route:autobot-backend/api/monitoring.py:GET /hardware/gpu	#19484
@@ -332,60 +332,21 @@ route:autobot-backend/api/code_search.py:GET /analytics/stats	#10603
 route:autobot-backend/api/code_search.py:POST /analytics/declarations	#10603
 route:autobot-backend/api/code_search.py:POST /analytics/duplicates	#10603
 route:autobot-backend/api/code_search.py:POST /analytics/refactor-suggestions	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/call_graph.py:GET /analytics/call-graph	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/charts.py:GET /analytics/charts	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:GET /cross-language/api-mismatches	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:GET /cross-language/dto-mismatches	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:GET /cross-language/patterns	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:GET /cross-language/semantic-matches	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:GET /cross-language/summary	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:GET /cross-language/validation-duplications	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:POST /cross-language/analyze	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:POST /cross-language/clear-cache	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/dependencies.py:GET /analytics/dependencies	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/dependencies.py:GET /analytics/dependencies/cached	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/dependencies.py:GET /analytics/dependencies/status/{task_id}	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/dependencies.py:POST /analytics/dependencies/analyze	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/duplicates.py:GET /duplicates/cached	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/duplicates.py:GET /duplicates/status/{task_id}	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/duplicates.py:POST /duplicates/analyze	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/environment.py:GET /env-analysis/export	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/environment_default_model.py:GET /env-analysis/default-model	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/import_tree.py:GET /analytics/import-tree	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/import_tree.py:GET /analytics/import-tree/cached	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/import_tree.py:GET /analytics/import-tree/status/{task_id}	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/import_tree.py:POST /analytics/import-tree/analyze	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/indexing.py:GET /index/current	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/indexing.py:GET /index/status/{task_id}	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/indexing.py:POST /index/cancel	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:DELETE /patterns/task/{task_id}	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/cached-patterns	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/cached-summary	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/complexity-hotspots	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/duplicates	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/refactoring-suggestions	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/regex-opportunities	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/report	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/result/{task_id}	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/similar	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/status/{task_id}	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/storage/stats	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/summary	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/summary/status/{task_id}	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:GET /patterns/tasks	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:POST /patterns/analyze	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:POST /patterns/storage/clear	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:POST /patterns/summary/analyze	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:POST /patterns/tasks/clear-all	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/queue.py:DELETE /index/queue/{source_id}	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/queue.py:GET /index/queue	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/sources.py:DELETE /sources/{source_id}	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/sources.py:GET /sources/summary	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/sources.py:GET /sources/{source_id}	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/sources.py:GET /sources/{source_id}/summary	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/sources.py:POST /sources/{source_id}/share	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/sources.py:POST /sources/{source_id}/sync	#10603
-route:autobot-backend/api/codebase_analytics/endpoints/sources.py:PUT /sources/{source_id}	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/stats.py:POST /embedding-stats/reset	#10603
 route:autobot-backend/api/conversation_export.py:GET /conversations/export-all	#10603
 route:autobot-backend/api/conversation_export.py:GET /conversations/{session_id}/export	#10603
@@ -846,11 +807,9 @@ route:autobot-backend/llc/api/ai_lines.py:POST /me/changes	#10603
 route:autobot-backend/llc/api/approvals.py:GET /companies/{company_id}/approvals/pending-count	#10603
 route:autobot-backend/llc/api/company_os.py:DELETE /workflows/{workflow_id}	#10603
 route:autobot-backend/llc/api/company_os.py:GET /workflows/{workflow_id}	#10603
-route:autobot-backend/llc/api/company_os.py:GET /workflows/{workflow_id}/graph	#10603
 route:autobot-backend/llc/api/company_os.py:GET /workflows/{workflow_id}/validation	#10603
 route:autobot-backend/llc/api/company_os.py:PATCH /workflows/{workflow_id}	#10603
 route:autobot-backend/llc/api/company_os.py:POST /workflows/{workflow_id}/graph/validate	#10603
-route:autobot-backend/llc/api/company_os.py:PUT /workflows/{workflow_id}/graph	#10603
 route:autobot-backend/llc/api/context.py:GET /context/{item_id}	#10603
 route:autobot-backend/llc/api/controls.py:POST /companies/{company_id}/controls/pause-all	#10603
 route:autobot-backend/llc/api/controls.py:POST /companies/{company_id}/controls/resume-all	#10603
@@ -1456,18 +1415,12 @@ route:autobot-backend/llc/api/companies.py:POST /{company_id}/pm-config/test	#20
 route:autobot-backend/llc/api/company_members.py:DELETE /{company_id}/members/{user_id}	#20977
 route:autobot-backend/llc/api/company_members.py:PATCH /{company_id}/members/{user_id}	#20977
 route:autobot-backend/llc/api/company_os.py:DELETE /processes/{process_key}	#20977
-route:autobot-backend/llc/api/company_os.py:GET /processes	#20977
 route:autobot-backend/llc/api/company_os.py:GET /processes/{process_key}	#20977
-route:autobot-backend/llc/api/company_os.py:GET /workflows	#20977
 route:autobot-backend/llc/api/company_os.py:PATCH /processes/{process_key}	#20977
-route:autobot-backend/llc/api/company_os.py:POST /processes	#20977
-route:autobot-backend/llc/api/company_os.py:POST /workflows	#20977
 route:autobot-backend/llc/api/company_os_plans.py:GET /{plan_key}/revisions/{revision}	#20977
 route:autobot-backend/llc/api/company_os_plans.py:POST /{plan_key}/map/validate	#20977
 route:autobot-backend/llc/api/company_os_plans.py:PUT /{plan_key}/approval-policies	#20977
 route:autobot-backend/llc/api/company_os_skills.py:DELETE /{role_id}/skills/{grant_id}	#20977
-route:autobot-backend/llc/api/company_os_skills.py:GET /{role_id}/skills	#20977
-route:autobot-backend/llc/api/company_os_skills.py:POST /{role_id}/skills	#20977
 route:autobot-backend/llc/api/company_teams.py:DELETE /{company_id}/teams/{team_id}	#20977
 route:autobot-backend/llc/api/company_teams.py:DELETE /{company_id}/teams/{team_id}/members/{user_id}	#20977
 route:autobot-backend/llc/api/company_teams.py:POST /{company_id}/teams/{team_id}/members/{user_id}	#20977
@@ -1513,10 +1466,8 @@ route:autobot-backend/llc/api/work_items.py:POST /{work_item_id}/review/approve	
 route:autobot-backend/llc/api/work_items.py:POST /{work_item_id}/review/request-changes	#20977
 route:autobot-backend/llc/api/work_items.py:POST /{work_item_id}/unclaim	#20977
 route:autobot-backend/llc/api/workflows.py:DELETE /{company_id}/{workflow_id}	#20977
-route:autobot-backend/llc/api/workflows.py:GET /{company_id}	#20977
 route:autobot-backend/llc/api/workflows.py:GET /{company_id}/{workflow_id}	#20977
 route:autobot-backend/llc/api/workflows.py:PATCH /{company_id}/{workflow_id}	#20977
-route:autobot-backend/llc/api/workflows.py:POST /{company_id}	#20977
 route:autobot-backend/routers/code_completion.py:GET /patterns	#20973
 route:autobot-backend/routers/code_completion.py:GET /statistics	#20973
 route:autobot-backend/routers/code_completion.py:POST /extract	#20973
@@ -1539,3 +1490,17 @@ route:autobot-backend/services/knowledge_sync_service.py:GET /history	#20975
 route:autobot-backend/services/knowledge_sync_service.py:GET /metrics	#20975
 route:autobot-backend/services/knowledge_sync_service.py:GET /status	#20975
 route:autobot-backend/services/knowledge_sync_service.py:POST /manual	#20975
+# The one-time re-measure of #21428 (frozen in unconnected_code_remeasure_21428.txt): twelve routes the corrected mount
+# resolution newly shows as unconnected. #21459: codebase analytics; #21460: the Company OS API package.
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:GET /api-calls	#21459
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:GET /api-endpoints	#21459
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:GET /endpoint-coverage	#21459
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:GET /missing-endpoints	#21459
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:GET /orphaned-endpoints	#21459
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:GET /used-endpoints	#21459
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:POST /refresh-endpoint-cache	#21459
+route:autobot-backend/api/codebase_analytics/endpoints/environment.py:GET /env-recommendations	#21459
+route:autobot-backend/api/codebase_analytics/endpoints/ownership.py:GET /expertise	#21459
+route:autobot-backend/api/codebase_analytics/endpoints/ownership.py:GET /knowledge-gaps	#21459
+route:autobot-backend/api/codebase_analytics/endpoints/stats.py:GET /embedding-stats	#21459
+route:autobot-backend/llc/api/__init__.py:GET /health	#21460

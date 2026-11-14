@@ -173,13 +173,15 @@ single deterministic command, run it inline. Delegate mechanical work only when 
 fan out in parallel), or **high-discard** (most of what is read is thrown away).
 
 **Tiers — pick by output type, not task difficulty.** This is the in-repo copy; the extended
-routing table and the never-hand-to-Haiku list live in the global model-tiers doc.
+routing table and the never-hand-to-Haiku list live in the global model-tiers doc. The tiers are
+named by alias; the pinned ID for each alias is written only in
+[`autobot_shared/ssot_claude_models.py`](../../autobot_shared/ssot_claude_models.py) (`CLAUDE_TIER_MODELS`).
 
 | Tier | Model | Use for |
 |---|---|---|
-| Haiku | `claude-haiku-4-5-20251001` | mechanical work — sweeps, status checks, inventories, capture |
-| Fable | `claude-fable-5` | plans and design documents — PRDs, architecture proposals |
-| Sonnet | `claude-sonnet-5` | deliverables — code, reviews, acceptance criteria, approvals |
+| Haiku | `haiku` | mechanical work — sweeps, status checks, inventories, capture |
+| Fable | `fable` | plans and design documents — PRDs, architecture proposals |
+| Sonnet | `sonnet` | deliverables — code, reviews, acceptance criteria, approvals |
 
 Never hand Haiku a deliverable or a judgement that ships. Each agent declares its own tier in
 its `.claude/agents/` definition; an agent with no `model:` inherits the caller's model, which
@@ -347,7 +349,7 @@ is clear to merge. Run before a push, its verdict would be correct, complete, an
 commit the push is replacing — and `never-reported`, which it blocks on deliberately, is the
 normal state seconds after a push.
 
-It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs.
+It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `_gate-code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs.
 
 It also runs (or explains why it did not) each of the required status checks branch protection gates `main` on (11 contexts, read with `gh api repos/{owner}/{repo}/branches/main/protection --jq '.required_status_checks.contexts'`; the `Main` ruleset itself holds only deletion and non-fast-forward rules). Every check is path-filtered by default, using the same `.github/filters/*.yml` set its own workflow uses, so a diff outside those paths gets the identical "nothing to check" verdict locally that it would in CI. `--full` bypasses that filter and forces every check to actually run, and is also what turns on `api-wiring` (it builds the whole backend app to dump its OpenAPI schema, so it stays behind `--full` even on a relevant diff). Two checks are out of reach either way: `migration-matrix` needs a live PostgreSQL (set `AUTOBOT_MIGRATION_TEST_ADMIN_URL` to enable it), and `smoke-test` needs a Docker daemon plus three image builds and a running compose stack — reported SKIPPED with that reason rather than approximated (#15933). The gates below remain the reference; this runs the mechanical ones early.
 

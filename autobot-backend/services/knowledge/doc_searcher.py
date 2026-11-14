@@ -11,10 +11,12 @@ Contains DocumentationSearcher for AutoBot documentation search integration.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.paths import chromadb_data_dir
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import get_ollama_url
@@ -30,21 +32,19 @@ logger = get_llm_logger("doc_searcher")
 PROJECT_ROOT = PATH.PROJECT_ROOT
 
 
-_WARNED: set[str] = set()
-
-
 def _warn_unrecorded_once(collection: str, model: str, dim: int) -> None:
     """Warn once per process that ``collection`` is searched on a dimension match, and propose a stamp."""
-    if collection in _WARNED:
-        return
-    _WARNED.add(collection)
-    logger.warning(
+    if not log_once(
+        logger,
+        logging.WARNING,
+        collection,
         "Collection '%s': unrecorded space, dimension-matched: dimension match only, model unverified "
         "(assumed %s, %d-d) (#18143)",
         collection,
         model,
         dim,
-    )
+    ):
+        return
     from services.knowledge.collection_space_proposal import schedule_stamp_proposal
 
     schedule_stamp_proposal(collection, model, dim)

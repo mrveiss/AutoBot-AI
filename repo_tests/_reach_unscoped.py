@@ -28,6 +28,12 @@ UNSCOPED = frozenset(
         # #19982: every tracked non-changelog file, since the product name can be misspelled into an
         # edition in any component; the population is the whole tree, so no prefix describes it.
         "autobot-has-no-pro-name",
+        # #21526: every tracked .py and .md file outside changelogs and archives, since a removed alias name
+        # can be written in any component; the population is the whole tree by suffix, not a set of prefixes.
+        "unified-config-aliases-gone",
+        # #21048: every tracked file, since an automatic caller of the KB setup script could live in any
+        # component; the population is the whole tree, so no prefix describes it.
+        "kb-wipe-never-invoked",
         # Whole tree (#18940): every tracked test file, wherever a test lives; the population is
         # the test suite itself, so a roots= list would only go stale as tests move.
         "isolated-git-env",
@@ -39,8 +45,18 @@ UNSCOPED = frozenset(
         "user-mode-values-sweep-19437",
         # #19076: items are (role, unit) pairs from one registry file, not paths -- no roots= to check.
         "role-registry-installed-units",
+        # #21183: items are glob keys of one record file, not paths -- no roots= to check.
+        "glob-declared-uncovered-entries",
         # #19413: every tracked file, so a ChromaDB heartbeat path written anywhere is seen.
         "chromadb-heartbeat-one-home-sweep",
+        # #20894: every tracked non-test python file, since an in-repo log path can be written in any
+        # component; the population is the whole tree by suffix, not a set of prefixes.
+        "no-in-repo-log-path-20894",
+        # #20892/#20894: every tracked path, since a cache or log file can be committed anywhere.
+        "no-tracked-cache-or-log-files-20892",
+        # #20894: (task file, template) pairs, not paths: the same template appears once per renderer, so no
+        # path prefix describes the population.
+        "ansible-log-dir-templates-complete-20894",
         # #19318: every tracked code/config file by suffix (.py, .sh, .yml, .j2, .env*, Dockerfile*),
         # wherever a copy of the SLM admin password default could be written -- no prefix describes it.
         "slm-admin-password-one-home-sweep",
@@ -54,6 +70,9 @@ UNSCOPED = frozenset(
         # depth -- a new package root can appear anywhere, so no roots= list could name it.
         "dependabot-package-roots",
         "ansible-inventory-shell-sweep",
+        # #21343: items are variable names and (variable, variable) pairs parsed from YAML, not paths.
+        "inventory-variable-cycle-variables-21343",
+        "inventory-variable-cycle-references-21343",
         "audio-extension-allowlist",
         "blanket-skip-test-module-sweep",
         # #19324: an extension filter (*.py, *.sh, *.yml, .env*, ...) over the whole tree, not a set of prefixes.
@@ -62,6 +81,9 @@ UNSCOPED = frozenset(
         "ceiling-table-sweep-19544",
         # #19279: requirements files live in every package directory; a glob, not a set of prefixes.
         "landing-page-declared-dependencies",
+        # #21071: every tracked non-test .py, wherever a hand-rolled log-once flag could be written; no prefix
+        # describes it.
+        "log-once-hand-rolled-sweep-21071",
         "chromadb-bind-host-override-candidates",
         "chromadb-bind-launch-sites",
         "chromadb-compose-port-sites",

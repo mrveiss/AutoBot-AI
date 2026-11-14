@@ -161,6 +161,7 @@ async def test_the_next_route_actually_checks_the_item_out(session):  # noqa: AN
     item = await _seed_item(session, company, title="claim me")
 
     await _seed_agent_node(session, company, "agent-next")
+    run_id = await _seed_run(session, company, "agent-next")
 
     with patch("user_management.database.get_async_session_factory", new=_factory_yielding(session)):
         result = await agent_api.get_next_work_item(_request("agent-next", company))
@@ -169,7 +170,8 @@ async def test_the_next_route_actually_checks_the_item_out(session):  # noqa: AN
     assert result["work_item"]["id"] == str(item.id)
 
     await session.refresh(item)
-    assert item.checkout_run_id is not None, "the route reported a checkout and the item was not claimed"
+    assert item.checkout_run_id == str(run_id), "the checkout must name the agent's own run, so the run can release it"
+    assert result["run_id"] == str(run_id)
     assert item.status == WorkItemStatus.IN_PROGRESS.value
 
 
@@ -187,6 +189,7 @@ async def test_the_next_route_reports_no_work_without_claiming_anything(session)
     backlog = await _seed_item(session, company, status=WorkItemStatus.BACKLOG.value)
 
     await _seed_agent_node(session, company, "agent-none")
+    await _seed_run(session, company, "agent-none")
 
     with patch("user_management.database.get_async_session_factory", new=_factory_yielding(session)):
         result = await agent_api.get_next_work_item(_request("agent-none", company))
@@ -208,6 +211,7 @@ async def test_the_next_route_will_not_reach_into_another_company(session):  # n
     other = await _seed_item(session, theirs, title="not yours")
 
     await _seed_agent_node(session, mine, "agent-x")
+    await _seed_run(session, mine, "agent-x")
 
     with patch("user_management.database.get_async_session_factory", new=_factory_yielding(session)):
         result = await agent_api.get_next_work_item(_request("agent-x", mine))
@@ -233,6 +237,7 @@ async def test_the_next_route_honours_the_backlog_ordering(session):  # noqa: AN
     first = await _seed_item(session, company, title="first", position=1)
 
     await _seed_agent_node(session, company, "agent-order")
+    await _seed_run(session, company, "agent-order")
 
     with patch("user_management.database.get_async_session_factory", new=_factory_yielding(session)):
         result = await agent_api.get_next_work_item(_request("agent-order", company))
@@ -542,6 +547,7 @@ async def test_the_next_route_looks_past_items_assigned_to_other_agents(session)
 
     company = str(uuid.uuid4())
     await _seed_agent_node(session, company, "agent-patient")
+    await _seed_run(session, company, "agent-patient")
     other = await _seed_agent_node(session, company, "agent-other")
 
     # Fill every candidate slot with items assigned elsewhere, then one for us
@@ -567,6 +573,7 @@ async def test_the_next_route_still_takes_an_item_assigned_to_this_agent(session
 
     company = str(uuid.uuid4())
     node_id = await _seed_agent_node(session, company, "agent-owner")
+    await _seed_run(session, company, "agent-owner")
     item = await _seed_item(session, company, title="already mine")
     item.assignee_agent_id = node_id
     await session.commit()
