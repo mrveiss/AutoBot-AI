@@ -87,6 +87,15 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
     }
   }
 
+  /** Publish a failed list load as ``unavailable`` (HTTP 503: LLC disabled) or ``error``. */
+  function recordLoadFailure(err: unknown): void {
+    if (isHttpError(err) && err.status === 503) {
+      unavailable.value = true
+      return
+    }
+    error.value = (err instanceof Error ? err.message : '') || 'Failed to load companies'
+  }
+
   /**
    * Load the company list from the backend (parsed JSON, no envelope).
    *
@@ -106,20 +115,15 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
         ? `${COMPANIES_ENDPOINT}?include_archived=true`
         : COMPANIES_ENDPOINT
       const resp = await api.get<LlcCompany[]>(endpoint)
+      // Only the newest run may publish: a superseded list must not overwrite a newer one.
+      if (run !== fetchRun) return
       companies.value = Array.isArray(resp) ? resp : []
       await dropSelectionIfGone(run)
     } catch (err) {
-      const message = err instanceof Error ? err.message : ''
-      // HTTP 503 = LLC data layer disabled in this deployment (no company mode).
-      // Treat as "unavailable", not a user-facing error.
-      if (isHttpError(err) && err.status === 503) {
-        unavailable.value = true
-      } else {
-        error.value = message || 'Failed to load companies'
-      }
       logger.error('fetchCompanies failed:', err)
+      if (run === fetchRun) recordLoadFailure(err)
     } finally {
-      isLoading.value = false
+      if (run === fetchRun) isLoading.value = false
     }
   }
 
