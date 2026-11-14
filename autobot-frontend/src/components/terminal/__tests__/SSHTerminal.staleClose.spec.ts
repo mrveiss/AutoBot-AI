@@ -45,6 +45,10 @@ import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUr
 import { usePollingJob } from '@/composables/usePollingJob'
 
 const OPEN_DELAY_MS = 10
+// useWebSocket restarts a socket that is opened in the same tick as its URL changes: connect()
+// sets wsUrl ('' -> url) and calls wsConnect(), the URL watcher then disconnects that first socket
+// and reconnects after this delay (useWebSocket.ts scheduleRestart). The live socket is the second one.
+const URL_RESTART_MS = 100
 
 let wrapper: VueWrapper | null
 
@@ -54,6 +58,12 @@ function mountTerminal() {
     global: { stubs: { Icon: true } },
   })
   return wrapper
+}
+
+/** Let the mount-time connect settle: the watcher restart, then the live socket's open. */
+async function settleConnection(view: VueWrapper) {
+  await vi.advanceTimersByTimeAsync(URL_RESTART_MS + OPEN_DELAY_MS)
+  await view.vm.$nextTick()
 }
 
 const barClasses = () => wrapper!.find('.connection-bar').classes()
@@ -92,7 +102,7 @@ describe('SSHTerminal when a detached socket closes (#21548)', () => {
 
   it('ignores the stale close while a new connection is being made', async () => {
     const view = mountTerminal()
-    await vi.advanceTimersByTimeAsync(OPEN_DELAY_MS)
+    await settleConnection(view)
     expect(barClasses()).toContain('connected')
     const first = MockWebSocket.getLatestInstance()!
 
@@ -115,7 +125,7 @@ describe('SSHTerminal when a detached socket closes (#21548)', () => {
 
   it('emits disconnected exactly once for a deliberate disconnect, close event included', async () => {
     const view = mountTerminal()
-    await vi.advanceTimersByTimeAsync(OPEN_DELAY_MS)
+    await settleConnection(view)
     const first = MockWebSocket.getLatestInstance()!
 
     ;(view.vm as unknown as { disconnect: () => void }).disconnect()
@@ -131,7 +141,7 @@ describe('SSHTerminal when a detached socket closes (#21548)', () => {
 
   it('still reports the live socket\'s own close', async () => {
     const view = mountTerminal()
-    await vi.advanceTimersByTimeAsync(OPEN_DELAY_MS)
+    await settleConnection(view)
     const live = MockWebSocket.getLatestInstance()!
     expect(disconnectedEmits()).toHaveLength(0)
 
