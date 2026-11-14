@@ -67,8 +67,10 @@ declare module 'vue-router' {
     minRole?: Role
 
     /**
-     * Company-scoped route whose view handles a company switch itself, so the company layout must
-     * not remount it when the route's company changes (#21502). Everything else remounts.
+     * Company-scoped route the company layout must not remount when the route's company changes
+     * (#21502). Everything else remounts. Two users: CEO chat handles the switch itself and keeps its
+     * session state; the workflow builder keeps an unsaved draft until its switch behaviour is decided
+     * (#21520). A flag on a parent record applies to its children (route.meta merges matched records).
      */
     keepOnCompanySwitch?: boolean
   }
