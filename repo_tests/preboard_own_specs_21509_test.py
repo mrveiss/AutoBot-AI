@@ -102,9 +102,10 @@ def repo(tmp_path, monkeypatch) -> Repo:
     return made
 
 
-def _select(lane, repo: Repo, head: str, capsys) -> dict[str, Any]:
+def _select(lane, repo: Repo, head: str, capsys, rc: int = 0) -> dict[str, Any]:
     out = repo.path.parent / "out"
-    assert lane.main(["changed-specs", "--base-sha", repo.base, "--head-sha", head, "--out-dir", str(out)]) == 0
+    argv = ["changed-specs", "--base-sha", repo.base, "--head-sha", head, "--out-dir", str(out)]
+    assert lane.main(argv) == rc
     captured = capsys.readouterr()
     packages = (out / "packages.txt").read_text(encoding="utf-8").split()
     lists = {p: (out / f"{p.replace('/', '__')}.txt").read_text(encoding="utf-8").split() for p in packages}
@@ -144,7 +145,7 @@ def test_a_spec_outside_every_package_is_a_notice_and_not_a_failure(lane, repo, 
     repo.write("elsewhere/x.test.ts")
     got = _select(lane, repo, repo.commit("add"), capsys)
     assert got["packages"] == []
-    assert "::notice::elsewhere/x.test.ts looks like a spec but no frontend package collects it" in got["err"]
+    assert "::notice::elsewhere/x.test.ts looks like a spec" in got["err"] and "::error::" not in got["err"]
 
 
 def test_specs_are_grouped_by_package_and_the_nearest_config_owns_a_file(lane, repo, capsys) -> None:
@@ -165,15 +166,40 @@ def test_specs_are_grouped_by_package_and_the_nearest_config_owns_a_file(lane, r
     assert got["out"] == "total=4\npackages=3\n"
 
 
-def test_the_configs_own_include_and_exclude_decide_what_is_collected(lane, repo, capsys) -> None:
-    for rel in ("web/e2e/a.spec.ts", "web/src/b.playwright.spec.ts", "web/src/c.spec.tsx", "web/never/d.spec.ts"):
+def test_a_spec_an_explicit_exclude_skips_is_a_notice_and_the_job_stays_green(lane, repo, capsys) -> None:
+    for rel in ("web/e2e/a.spec.ts", "web/src/b.playwright.spec.ts", "web/src/node_modules/e.spec.ts"):
         repo.write(rel)
-    repo.write("web/src/node_modules/e.spec.ts")
     repo.write("web/src/ok.spec.ts")
     got = _select(lane, repo, repo.commit("add"), capsys)
     assert got["lists"] == {"web": ["src/ok.spec.ts"]}
-    for path in ("web/e2e/a.spec.ts", "web/src/b.playwright.spec.ts", "web/src/c.spec.tsx", "web/never/d.spec.ts"):
+    for path in ("web/e2e/a.spec.ts", "web/src/b.playwright.spec.ts", "web/src/node_modules/e.spec.ts"):
         assert f"::notice::{path} looks like a spec" in got["err"], path
+    assert "::error::" not in got["err"]
+
+
+def test_a_spec_in_a_package_that_its_include_does_not_match_is_an_error_and_red(lane, repo, capsys) -> None:
+    repo.write("web/src/c.spec.tsx")
+    repo.write("web/never/d.spec.ts")
+    got = _select(lane, repo, repo.commit("add"), capsys, rc=1)
+    assert "::error::web/src/c.spec.tsx looks like a spec but package web does not collect it" in got["err"]
+    assert "::error::web/never/d.spec.ts looks like a spec but package web does not collect it" in got["err"]
+    assert "::notice::web/never" not in got["err"]
+
+
+def test_an_unrun_spec_is_red_even_beside_a_collected_one_which_is_still_selected(lane, repo, capsys) -> None:
+    repo.write("web/src/ok.spec.ts")
+    repo.write("web/never/d.spec.ts")
+    got = _select(lane, repo, repo.commit("add"), capsys, rc=1)
+    assert got["lists"] == {"web": ["src/ok.spec.ts"]} and got["out"] == "total=1\npackages=1\n"
+
+
+def test_a_deleted_unrun_spec_is_not_an_error(lane, repo, capsys) -> None:
+    repo.write("web/never/d.spec.ts")
+    repo.commit("add the odd one")
+    repo.base = repo.run("rev-parse", "HEAD")
+    (repo.path / "web" / "never" / "d.spec.ts").unlink()
+    got = _select(lane, repo, repo.commit("remove"), capsys)
+    assert got["packages"] == [] and "::error::" not in got["err"]
 
 
 def test_the_rules_are_read_from_the_test_object_without_comments_or_nested_objects(lane, tmp_path) -> None:
@@ -266,7 +292,7 @@ def test_only_the_changed_specs_that_still_exist_in_the_tested_tree_are_selected
     (tmp_path / "web" / "src").mkdir()
     (tmp_path / "web" / "src" / "here.spec.ts").write_text("", encoding="utf-8")
     paths = ["web/src/here.spec.ts", "web/src/here.spec.ts", "web/src/absent.spec.ts"]
-    assert lane.specs.select_specs(tmp_path, paths) == ({"web": ["src/here.spec.ts"]}, [])
+    assert lane.specs.select_specs(tmp_path, paths) == ({"web": ["src/here.spec.ts"]}, [], [])
 
 
 def _green_shards() -> list[dict[str, Any]]:

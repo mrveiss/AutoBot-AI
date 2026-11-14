@@ -277,15 +277,22 @@ def _changed_tests(root: Path, args: argparse.Namespace) -> None:
         sys.stderr.write(f"::notice::{counts['uncollected']} changed test file(s) the suite does not collect\n")
 
 
-def _changed_specs(root: Path, args: argparse.Namespace) -> None:
-    selected, uncollected = specs.select_specs(root, changed_paths(args.base_sha, args.head_sha))
+def _changed_specs(root: Path, args: argparse.Namespace) -> int:
+    selected, notices, unrun = specs.select_specs(root, changed_paths(args.base_sha, args.head_sha))
     specs.write_selection(selected, Path(args.out_dir))
     total = sum(len(files) for files in selected.values())
     sys.stdout.write(f"total={total}\npackages={len(selected)}\n")
     if not total:
         sys.stderr.write("no changed frontend specs\n")
-    for path in uncollected:
-        sys.stderr.write(f"::notice::{path} looks like a spec but no frontend package collects it\n")
+    for path in notices:
+        sys.stderr.write(
+            f"::notice::{path} looks like a spec but no frontend package runs it (outside all, or excluded)\n"
+        )
+    for path, package in unrun:
+        sys.stderr.write(
+            f"::error::{path} looks like a spec but package {package} does not collect it: no include rule matches\n"
+        )
+    return 1 if unrun else 0
 
 
 def examine_additions(base_sha: str, head_sha: str) -> tuple[int, int, list[str]]:
@@ -409,7 +416,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "changed-tests":
         _changed_tests(root, args)
     elif args.command == "changed-specs":
-        _changed_specs(root, args)
+        return _changed_specs(root, args)
     elif args.command == "added-headers":
         return _added_headers(args)
     else:

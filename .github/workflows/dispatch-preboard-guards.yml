@@ -44,8 +44,9 @@
 #           collects them (#21509): so a member's new specs, and a spec that calls a function its subject does not export,
 #           fail here and not first inside the train. The selection is `changed-specs` in pipeline-scripts/preboard_guard_lane.py
 #           (rules in preboard_guard_lane_specs.py): the `include` and `exclude` of each package's own vitest.config.*, the
-#           package being the directory that holds the config. A spec-looking file no package collects is a notice, not a
-#           failure. An empty selection is green and installs nothing ("no changed frontend specs"). Otherwise Node is set up and
+#           package being the directory that holds the config. A spec-looking file inside a package that the package's
+#           own `exclude` skips, or outside every package, is a notice; one inside a package that its `include` does not
+#           match (nothing runs it) is an `::error::` and red. An empty selection is green and installs nothing ("no changed frontend specs"). Otherwise Node is set up and
 #           each package installed as the frontend test job does (setup-node on .nvmrc, `npm ci`, or `npm install` where no lock is
 #           committed), and `vitest run` is given just the selected files, with no coverage gate. A failing spec, or a selected
 #           file Vitest collects nothing from, is red. Not covered: the rest of the frontend suite, lint, type-check, build.

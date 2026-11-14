@@ -146,24 +146,35 @@ def collected(rules: tuple[list[str], list[str]], relative: str) -> bool:
     return glob_matches(relative, include) and not glob_matches(relative, exclude)
 
 
-def select_specs(root: Path, paths: list[str]) -> tuple[dict[str, list[str]], list[str]]:
-    """``(by package, uncollected)``: the changed spec files that still exist, per package and relative to it,
-    and those spec-looking files that no package collects (full paths)."""
+def select_specs(root: Path, paths: list[str]) -> tuple[dict[str, list[str]], list[str], list[tuple[str, str]]]:
+    """``(by package, notices, unrun)`` for the changed spec files that still exist.
+
+    *by package* are the specs a package collects, relative to it. *notices* are full paths nobody is expected to
+    run: a spec outside every package (no config to judge it by), or one a package's own ``exclude`` rule skips on
+    purpose. *unrun* are ``(path, package)`` pairs inside a package that neither include nor exclude rules name:
+    a spec that looks like coverage and that no job runs.
+    """
     selected: dict[str, list[str]] = {}
-    uncollected: list[str] = []
+    notices: list[str] = []
+    unrun: list[tuple[str, str]] = []
     rules: dict[str, tuple[list[str], list[str]]] = {}
     for path in sorted(set(paths)):
         if not SPEC_NAME.search(path) or not (root / path).is_file():
             continue
         package = package_of(root, path)
-        if package is not None and package not in rules:
+        if package is None:
+            notices.append(path)
+            continue
+        if package not in rules:
             rules[package] = package_rules(_config_file(root, package))
-        relative = path[len(package) + 1 :] if package is not None else path
-        if package is not None and collected(rules[package], relative):
+        relative = path[len(package) + 1 :]
+        if collected(rules[package], relative):
             selected.setdefault(package, []).append(relative)
+        elif glob_matches(relative, rules[package][1]):
+            notices.append(path)
         else:
-            uncollected.append(path)
-    return selected, uncollected
+            unrun.append((path, package))
+    return selected, notices, unrun
 
 
 def slug_of(package: str) -> str:
