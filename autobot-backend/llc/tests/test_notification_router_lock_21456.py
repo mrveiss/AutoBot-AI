@@ -101,14 +101,49 @@ async def test_two_workers_never_both_hold_the_lock(redis) -> None:  # noqa: ANN
         assert _routing(second) and not _routing(first)
 
 
+async def _eventually(condition) -> None:  # noqa: ANN001
+    """Poll *condition* for up to five seconds; a regression fails here instead of passing on a lucky sleep."""
+    for _ in range(100):
+        if condition():
+            return
+        await asyncio.sleep(0.05)
+    raise AssertionError("the hold loop did not reach the expected state")
+
+
 async def test_the_hold_loop_itself_renews_and_takes_over(redis, monkeypatch) -> None:  # noqa: ANN001
-    monkeypatch.setattr(router_module, "_HOLD_INTERVAL", 0.05)
+    monkeypatch.setattr(router_module, "_HOLD_INTERVAL", 0.2)
     async with _worker() as router:
         await router.start()
         await redis.delete(_ROUTER_LOCK_KEY)
-        await asyncio.sleep(0.5)
-        assert _routing(router)
+        await _eventually(lambda: not _routing(router))  # the loop saw the key gone ...
+        await _eventually(lambda: _routing(router))  # ... and took the lock again
         assert await redis.get(_ROUTER_LOCK_KEY) == _token(router)
+
+
+async def test_stop_during_the_wait_for_a_slow_routing_task_returns_and_ends_both_tasks(  # noqa: ANN001
+    redis, monkeypatch
+) -> None:
+    """Before: ``_cancel_task`` swallowed the hold task's own cancellation, so ``stop()`` waited forever."""
+    cancelling = asyncio.Event()
+
+    async def slow_to_finish() -> None:
+        try:
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            cancelling.set()
+            await asyncio.sleep(0.5)
+            raise
+
+    monkeypatch.setattr(router_module, "_HOLD_INTERVAL", 0.2)
+    async with _worker() as router:
+        router._run = slow_to_finish  # type: ignore[method-assign]
+        await router.start()
+        routing, hold = router._task, router._hold_task
+        await redis.set(_ROUTER_LOCK_KEY, _FOREIGN)  # the next hold step finds the lock lost and stops routing
+        await asyncio.wait_for(cancelling.wait(), timeout=5)  # the hold task is now awaiting the routing task
+        await asyncio.wait_for(router.stop(), timeout=5)
+        assert routing.done() and hold.done()
+        assert await redis.get(_ROUTER_LOCK_KEY) == _FOREIGN
 
 
 async def test_the_lock_is_held_with_the_configured_lifetime_and_renewed_by_its_owner(redis) -> None:  # noqa: ANN001

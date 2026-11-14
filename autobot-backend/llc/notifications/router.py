@@ -156,10 +156,11 @@ class LLCNotificationRouter:
         if task is None:
             return
         task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        # ``asyncio.wait`` never raises the task's own cancellation into the caller, so a cancellation aimed at
+        # the caller (``stop()`` ending the hold task while it stops routing) is not swallowed here.
+        await asyncio.wait([task])
+        if not task.cancelled():
+            task.exception()  # mark it retrieved
 
     async def _hold_loop(self) -> None:
         while True:
@@ -229,11 +230,15 @@ class LLCNotificationRouter:
                     continue
                 await self._dispatch(message)
         finally:
-            try:
-                await pubsub.punsubscribe()
-                await pubsub.aclose()
+            try:  # bounded: a hung socket must not hold up the hold loop, which awaits this when it stops routing
+                await asyncio.wait_for(self._close_pubsub(pubsub), timeout=_HOLD_INTERVAL)
             except Exception:
-                pass
+                logger.warning("LLC router: pubsub cleanup failed or timed out", exc_info=True)
+
+    @staticmethod
+    async def _close_pubsub(pubsub: Any) -> None:
+        await pubsub.punsubscribe()
+        await pubsub.aclose()
 
     async def _dispatch(self, message: dict) -> None:
         raw = message.get("data")

@@ -50,8 +50,8 @@ Hook = Callable[[], Awaitable[None] | None]
 def worker_identity(*, unique: bool = False) -> str:
     """The name one worker takes a lock under: ``host-pid``; with *unique*, a random suffix names one INSTANCE.
 
-    The one construction every lock holder shares. Two routers in one process (tests) need *unique*, so a lock
-    one took is not the other's.
+    Used by :class:`LeaderLease` and the LLC outbound sync. Two routers in one process (tests) need *unique*, so a
+    lock one took is not the other's.
     """
     identity = "%s-%d" % (socket.gethostname(), os.getpid())
     return "%s:%s" % (identity, uuid.uuid4().hex[:8]) if unique else identity
