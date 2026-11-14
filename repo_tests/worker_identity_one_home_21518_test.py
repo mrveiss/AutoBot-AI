@@ -35,15 +35,6 @@ from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 _ROOT = repo_root()
 HOME = "autobot_shared/leader_lease.py"
 
-#: Sites still building their own identity, each with the reason it is not converted yet. SHRINK ONLY:
-#: ``test_every_pending_site_still_builds_its_own`` fails when an entry stops matching.
-PENDING: dict[str, str] = {
-    "autobot-backend/knowledge/embedding_switch.py": (
-        "#21518 -- its owner is 'host:pid:suffix' (colons), the helper's is 'host-pid'; converting changes the "
-        "stored value, which is an owner decision recorded on the issue"
-    ),
-}
-
 _TEST_PARTS = ("/tests/", "repo_tests/")
 _FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
@@ -149,8 +140,12 @@ def _files(sites: list[str]) -> Counter[str]:
     return Counter(site.rsplit(":", 1)[0] for site in sites)
 
 
+def _outside_the_home(sites: list[str]) -> list[str]:
+    return [s for s in sites if s.rsplit(":", 1)[0] != HOME]
+
+
 def test_no_identity_is_built_outside_the_helper() -> None:
-    outside = sorted(s for s in _tree_sites() if s.rsplit(":", 1)[0] not in {HOME, *PENDING})
+    outside = sorted(_outside_the_home(_tree_sites()))
     assert (
         outside == []
     ), f"#21518: build the host-and-process identity with worker_identity() in {HOME}:\n  " + "\n  ".join(outside)
@@ -161,12 +156,6 @@ def test_the_helper_is_found_by_the_sweep() -> None:
     assert _files(_tree_sites())[HOME] == 1
 
 
-def test_every_pending_site_still_builds_its_own() -> None:
-    seen = _files(_tree_sites())
-    stale = sorted(path for path in PENDING if seen[path] == 0)
-    assert stale == [], f"these PENDING entries no longer build an identity; delete them: {stale}"
-
-
 def test_a_planted_identity_fails_the_sweep(tmp_path: Path) -> None:
     (tmp_path / "bad.py").write_text(
         "import os\nimport socket\n\n\ndef holder():\n    return '%s-%d' % (socket.gethostname(), os.getpid())\n",
@@ -175,7 +164,7 @@ def test_a_planted_identity_fails_the_sweep(tmp_path: Path) -> None:
     sites = sweep(tmp_path, ["bad.py"])
     assert sites == ["bad.py:6"]
     with pytest.raises(AssertionError):
-        assert [s for s in sites if s.rsplit(":", 1)[0] not in {HOME, *PENDING}] == []
+        assert list(_outside_the_home(sites)) == []
 
 
 @pytest.mark.parametrize(
