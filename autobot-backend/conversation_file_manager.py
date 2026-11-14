@@ -39,7 +39,7 @@ from constants.ttl_constants import TTL_1_HOUR
 from conversation_file_cleanup import deleted_file_stats, pending_cleanup_stats
 from conversation_file_quota import UploadRefused, abandon, file_too_large, insert_within_quota, resize_within_quota
 from conversation_file_quota_owner_schema import ensure_quota_owner_schema
-from conversation_file_route_api import FILE_INFO_COLUMNS, ConversationFileRouteApi
+from conversation_file_route_api import FILE_INFO_COLUMNS, ConversationFileRouteApi, with_extension
 from conversation_file_schema_version import query_schema_version
 from conversation_file_upload_info import UploadInfo
 from utils.chat_utils import validate_chat_session_id
@@ -856,7 +856,7 @@ class ConversationFileManager(ConversationFileRouteApi):
             (session_id, page_size, offset),
         ) as cursor:
             rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
+        return [with_extension(dict(row)) for row in rows]
 
     async def list_files(self, session_id: str, page: int = 1, page_size: int = 50) -> Dict[str, Any]:
         """

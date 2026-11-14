@@ -35,6 +35,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_value
 from autobot_shared.ssot_constants import QueryDefaults
 
 from ..models.activity import ActorType
@@ -68,6 +69,7 @@ from .work_item_own_task import (
     is_own_task,
     other_checkout_holder,
     refuse_past_reviewer,
+    release_checkout,
     stamp_agent_checkout,
     stamp_and_release,
 )
@@ -491,9 +493,7 @@ class WorkItemService(LLCServiceBase):
             raise ValueError(f"Work item {work_item_id} not found")
         if item.assignee_agent_id and str(item.assignee_agent_id) != agent_id:
             raise ValueError(f"Agent {agent_id} does not hold checkout for work item {work_item_id}")
-        item.checkout_run_id = None
-        item.checkout_locked_at = None
-        item.version += 1
+        release_checkout(session, item, agent_id)
         await session.flush()
         return item
 
@@ -612,9 +612,8 @@ class WorkItemService(LLCServiceBase):
         )
 
         # Only once the release is audited: a failed audit rolls the DB back and the lock must survive it.
-        redis = await get_async_redis_client()
-        if redis is not None:
-            await redis.delete(f"llc:checkout:{work_item_id}")
+        if (redis := await get_async_redis_client()) is not None:
+            await delete_if_value(redis, f"llc:checkout:{work_item_id}", f"user:{user_id}")  # the claim's own
 
         return item
 

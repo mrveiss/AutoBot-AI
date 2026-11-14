@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.redis_utils import decode_redis_value, delete_if_value
 
 from ..models.enums import AssigneeType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
@@ -144,6 +144,16 @@ def ensure_fence_safe_agent_id(agent_id: str) -> str:
     return agent_id
 
 
+def canonical_agent_id(agent_id: str) -> str:
+    """*agent_id* as the canonical UUID string (lower case, hyphenated); ``ValueError`` when it is not a UUID.
+
+    The checkout row stores the agent as a UUID and every release compares ``str(UUID)``, so a fence written from
+    an uppercase, unhyphenated or ``urn:`` spelling would name a holder no release could match (#19631). Applied
+    once, where a request names the agent (``FenceSafeAgentId``); every other caller passes ``str(UUID)`` already.
+    """
+    return str(uuid.UUID(agent_id))
+
+
 def checkout_fence_value(agent_id: str, run_id: Optional[str]) -> str:
     """The fence value of one agent checkout: the agent id tagged with the checkout generation (``checkout_run_id``).
 
@@ -160,9 +170,51 @@ async def drop_fence(redis: Any, key: str, value: str, acquired: bool) -> None:
         await delete_if_value(redis, key, value)
 
 
+async def release_agent_fence(item_id: Any, agent_id: str, generation: Optional[str]) -> None:
+    """Delete the item's fence only while it names *agent_id* in checkout generation *generation* (#19631).
+
+    The release of a checkout that is already committed, so the fence read here is compared with the generation the
+    locked row held (``None``: an untagged fence) and removed by its exact value: the same agent's NEXT checkout
+    carries another generation and is kept, and so is another holder's. The agent is compared canonically, so a
+    fence written before requests were canonicalised under a raw spelling still matches its own agent. A Redis
+    failure is logged and never raised: the fence expires on its TTL.
+    """
+    try:
+        redis = await get_async_redis_client()
+        if redis is None:
+            return
+        key = checkout_fence_key(item_id)
+        value = decode_redis_value(await redis.get(key))
+        if value is not None and fence_agent(value) == agent_id and fence_generation(value) == generation:
+            await delete_if_value(redis, key, value)
+    except Exception:
+        logger.warning("Checkout fence of work item %s was not released; it expires on its TTL", item_id, exc_info=True)
+
+
+def release_checkout(session: AsyncSession, item: LLCWorkItem, agent_id: str) -> None:
+    """Clear the checkout on the locked row and drop its fence once the caller's commit lands.
+
+    The generation is read while the row lock is held, so the drop names the checkout released, never a later one.
+    """
+    item_id, generation = item.id, item.checkout_run_id
+    item.checkout_run_id = None
+    item.checkout_locked_at = None
+    item.version += 1
+    defer_until_commit(
+        session, lambda: release_agent_fence(item_id, agent_id, generation), f"release checkout fence of {item_id}"
+    )
+
+
 def fence_agent(value: str) -> str:
-    """The agent id a fence value names, whatever generation it carries."""
-    return value.split(_FENCE_GENERATION_SEP, 1)[0]
+    """The agent id a fence value names, whatever generation it carries, as a canonical UUID when it is one.
+
+    A fence written before requests were canonicalised (#19631) can carry a raw spelling of the same agent.
+    """
+    agent = value.split(_FENCE_GENERATION_SEP, 1)[0]
+    try:
+        return canonical_agent_id(agent)
+    except ValueError:
+        return agent
 
 
 def fence_generation(value: str) -> Optional[str]:

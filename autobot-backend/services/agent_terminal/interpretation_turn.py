@@ -23,6 +23,7 @@ import asyncio
 
 from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_utils import delete_if_value
 
 from .redis_usability import usable_redis
 from .session_state import DECISION_TTL_SECONDS, ApprovalStateUnavailableError
@@ -64,14 +65,6 @@ redis.call('SET', KEYS[1], ARGV[1], 'EX', tonumber(ARGV[2]))
 return 1
 """
 
-#: Drop the turn's token while it still owns the key. ``done`` and a newer turn's token are left alone.
-RELEASE_TURN_LUA = """
-if redis.call('GET', KEYS[1]) == ARGV[1] then
-  return redis.call('DEL', KEYS[1])
-end
-return 0
-"""
-
 
 def interpretation_key(session_id: str, command_id: str | None) -> str:
     """One key per approval, so a ``done`` of one command never decides another's interpretation."""
@@ -105,9 +98,12 @@ async def take_for_turn(redis, session_id: str, command_id: str | None, token: s
 
 
 async def release_turn(redis, session_id: str, command_id: str | None, token: str) -> None:
-    """The turn is leaving: drop its token, so the command's worker no longer waits for it."""
+    """The turn is leaving: drop its token while it still owns the key, so the command's worker no longer waits for it.
+
+    ``done`` and a newer turn's token are left alone (``delete_if_value`` compares the exact value).
+    """
     _require(redis)
-    await redis.eval(RELEASE_TURN_LUA, 1, interpretation_key(session_id, command_id), TURN_PREFIX + token)
+    await delete_if_value(redis, interpretation_key(session_id, command_id), TURN_PREFIX + token)
 
 
 async def take_for_command(redis, session_id: str, command_id: str | None) -> bool:
