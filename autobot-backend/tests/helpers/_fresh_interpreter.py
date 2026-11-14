@@ -31,9 +31,12 @@ _LEAK_SNIPPET = (
 )
 
 
-def run_fresh(script: str, timeout: int = 120) -> subprocess.CompletedProcess:
-    """Run ``script`` via ``python -c`` in a new interpreter (no network, bounded)."""
-    env = dict(os.environ)
+def run_fresh(script: str, *, timeout: int = 120, inherit_env: bool = True) -> subprocess.CompletedProcess:
+    """Run ``script`` via ``python -c`` in a new interpreter (no network, bounded).
+
+    ``inherit_env=False`` runs with ``PYTHONPATH`` as the only variable.
+    """
+    env = dict(os.environ) if inherit_env else {}
     env["PYTHONPATH"] = f"{_REPO_ROOT}{os.pathsep}{_BACKEND_DIR}"
     return subprocess.run(
         [sys.executable, "-c", script],
