@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 from repo_tests._company_os_exception_text_baseline import COMPANY_OS_EXCEPTION_TEXT_SITES
-from repo_tests._company_os_exception_text_scan import scan_source, scan_tree
+from repo_tests._company_os_exception_text_scan import exc_text_scan_source, exc_text_scan_tree
 from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_file_present, base_table, raised_known_entries
 
@@ -79,22 +79,22 @@ _QUIET = [
 
 @pytest.mark.parametrize(("source"), [s for _, s in _FIRES], ids=[i for i, _ in _FIRES])
 def test_the_scanner_fires_on_exception_text(source: str) -> None:
-    assert scan_source(source, "x.py")
+    assert exc_text_scan_source(source, "x.py")
 
 
 @pytest.mark.parametrize(("source"), [s for _, s in _QUIET], ids=[i for i, _ in _QUIET])
 def test_the_scanner_is_quiet_on_a_public_answer(source: str) -> None:
-    assert scan_source(source, "x.py") == []
+    assert exc_text_scan_source(source, "x.py") == []
 
 
 def test_a_site_is_named_by_path_function_and_occurrence() -> None:
     source = "class C:\n    def m(self):\n        try:\n            f()\n        except E as e:\n            raise HTTPException(400, str(e))\n            raise HTTPException(400, str(e))\n"
-    assert scan_source(source, "a/b.py") == ["a/b.py::C.m#1", "a/b.py::C.m#2"]
+    assert exc_text_scan_source(source, "a/b.py") == ["a/b.py::C.m#1", "a/b.py::C.m#2"]
 
 
 @pytest.fixture(scope="module")
 def measured() -> dict[str, int]:
-    return scan_tree(repo_root())
+    return exc_text_scan_tree(repo_root())
 
 
 def test_the_scan_reads_the_llc_tree(measured: dict[str, int]) -> None:

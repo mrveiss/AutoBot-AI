@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session
 from user_management.services import TenantContext
@@ -130,7 +131,7 @@ async def trigger_heartbeat(
             )
         raise http_refusal(409, exc, scope="agents.trigger_heartbeat") from None
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
 
     agent_company = agent_cfg.get("company_id")

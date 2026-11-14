@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, get_tenant_context, require_org_context
 from autobot_shared.db_session import commit_and_run_post_commit
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from llc.api._common import http_refusal
 from llc.config import DEFAULT_BUDGET_LIMIT
 from llc.deps import assert_company_access, load_authorized
@@ -301,14 +302,14 @@ async def ingest_cost(
         # 402 is right; the detail was not. It said "Internal server error" for a
         # budget the caller had exhausted, which is a client-actionable condition
         # reported as a server fault.
-        logger.warning("Budget exhausted for agent %s: %s", agent_id, exc)
+        logger.warning("Budget exhausted for agent %s: %s", agent_id, safe_log_text(repr(exc)))
         raise http_refusal(402, exc, scope="budget.ingest_cost") from None
     except UnpricedModel as exc:
         # #15860 gave `ingest_cost_event` a second failure mode, and this route
         # is its other caller. Without this the same condition that returns 422
         # from POST /agent/cost-events returns 500 here -- two routes disagreeing
         # about one service call from the day the condition was introduced.
-        logger.warning("Unpriced model in cost ingest for agent %s: %s", agent_id, exc)
+        logger.warning("Unpriced model in cost ingest for agent %s: %s", agent_id, safe_log_text(repr(exc)))
         raise http_refusal(422, exc, scope="budget.ingest_cost") from None
     # `get_async_session` commits in its teardown, which FastAPI (>=0.118) runs AFTER the response has been
     # sent: the caller can read a 200 before the charge is visible to another session, read the old
@@ -324,7 +325,7 @@ async def _require_budget_admin(session: AsyncSession, company_id: str, agent_id
             session, uuid.UUID(str(company_id)), ctx.user_id, platform_admin=ctx.is_platform_admin
         )
     except NotAuthorisedError as exc:
-        logger.warning("Refused budget limit change for %s: %s", agent_id, exc)
+        logger.warning("Refused budget limit change for %s: %s", agent_id, safe_log_text(repr(exc)))
         raise HTTPException(status_code=403, detail="Only a company owner or admin may change a budget limit") from exc
 
 

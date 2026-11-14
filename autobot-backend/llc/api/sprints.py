@@ -44,6 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from llc.deps import get_session
 from llc.deps import load_owned_project as _load_owned_project
 from user_management.services import TenantContext
@@ -307,10 +308,7 @@ async def _enrich_projects(session: AsyncSession, projects: List[LLCProject]) ->
     enriched: List[ProjectResponse] = []
     for p in projects:
         resp = _enrich(
-            ProjectResponse,
-            p,
-            open_work_item_count=open_counts.get(p.id, 0),
-            active_sprint_name=active.get(p.id),
+            ProjectResponse, p, open_work_item_count=open_counts.get(p.id, 0), active_sprint_name=active.get(p.id)
         )
         resp.code_source = await _project_source_summary(p.code_source_id)
         enriched.append(resp)
@@ -940,7 +938,7 @@ async def close_sprint(
     except (ApprovalNotFoundError, ApprovalStateError) as exc:
         raise HTTPException(status_code=422, detail="Internal server error") from exc
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=400, detail="Internal server error") from exc
 
 
@@ -964,7 +962,7 @@ async def get_sprint_capacity(
     try:
         return await _planning_svc.get_capacity(session, sprint_id)
     except SprintNotFound as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error") from exc
 
 
@@ -1085,7 +1083,7 @@ async def get_sprint_burndown(
     try:
         return await _planning_svc.get_burndown(session, sprint_id)
     except SprintNotFound as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error") from exc
 
 
@@ -1207,6 +1205,6 @@ async def get_sprint_agent_scorecard(
     try:
         scorecard = await _scorecard_svc.build(session, sprint_id)
     except SprintNotFound as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error") from exc
     return SprintScorecardResponse(**scorecard.to_dict())

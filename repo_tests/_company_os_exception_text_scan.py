@@ -46,32 +46,32 @@ EXCEPTION_PARAM_NAMES = frozenset({"exc", "e", "ex", "err", "error", "exception"
 _FORMAT_PARENTS = (ast.JoinedStr, ast.FormattedValue, ast.BinOp)
 
 
-def _call_name(call: ast.Call) -> str:
+def _exc_text_call_name(call: ast.Call) -> str:
     func = call.func
     return func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else ""
 
 
-def _is_exception_param(arg: ast.arg) -> bool:
+def _exc_text_is_exception_param(arg: ast.arg) -> bool:
     """A parameter that holds an exception: annotated as one, or named like one."""
     note = ast.unparse(arg.annotation) if arg.annotation else ""
     return arg.arg in EXCEPTION_PARAM_NAMES or note.endswith(("Exception", "Error", "Violation"))
 
 
-def _parent_map(root: ast.AST) -> dict[ast.AST, ast.AST]:
+def _exc_text_parent_map(root: ast.AST) -> dict[ast.AST, ast.AST]:
     return {child: parent for parent in ast.walk(root) for child in ast.iter_child_nodes(parent)}
 
 
-def _names_outside_sanctioned(node: ast.AST):
+def _exc_text_names_outside_sanctioned(node: ast.AST):
     """Every `ast.Name` under *node*, not descending into a `http_refusal(...)` call."""
-    if isinstance(node, ast.Call) and _call_name(node) == SANCTIONED_CALL:
+    if isinstance(node, ast.Call) and _exc_text_call_name(node) == SANCTIONED_CALL:
         return
     if isinstance(node, ast.Name):
         yield node
     for child in ast.iter_child_nodes(node):
-        yield from _names_outside_sanctioned(child)
+        yield from _exc_text_names_outside_sanctioned(child)
 
 
-def _in_format(name: ast.Name, parents: dict[ast.AST, ast.AST]) -> bool:
+def _exc_text_in_format(name: ast.Name, parents: dict[ast.AST, ast.AST]) -> bool:
     """Whether *name* is rendered to text: str()/repr(), .format(), an f-string, `%` or `+`."""
     node: ast.AST = name
     while node in parents and not isinstance(node, ast.Call):
@@ -79,22 +79,22 @@ def _in_format(name: ast.Name, parents: dict[ast.AST, ast.AST]) -> bool:
         if isinstance(node, _FORMAT_PARENTS):
             return True
     if isinstance(node, ast.Call):
-        return _call_name(node) in {"str", "repr", "format"}
+        return _exc_text_call_name(node) in {"str", "repr", "format"}
     return False
 
 
-def _leaks(name: ast.Name, parents: dict[ast.AST, ast.AST], rel: str, from_except: bool) -> bool:
+def _exc_text_leaks(name: ast.Name, parents: dict[ast.AST, ast.AST], rel: str, from_except: bool) -> bool:
     parent = parents.get(name)
     if isinstance(parent, ast.Attribute) and parent.value is name:
         if parent.attr in PUBLIC_ATTRS or (rel, parent.attr) in ATTRIBUTE_ALLOW:
             return False
         return from_except or parent.attr in PARAM_LEAK_ATTRS
-    if isinstance(parent, ast.Call) and _call_name(parent) in {"isinstance", "type"}:
+    if isinstance(parent, ast.Call) and _exc_text_call_name(parent) in {"isinstance", "type"}:
         return False
-    return from_except or _in_format(name, parents)
+    return from_except or _exc_text_in_format(name, parents)
 
 
-class _Scan(ast.NodeVisitor):
+class _ExcTextScan(ast.NodeVisitor):
     def __init__(self, rel: str) -> None:
         self.rel = rel
         self.qual: list[str] = []
@@ -104,18 +104,18 @@ class _Scan(ast.NodeVisitor):
         self.counts: dict[str, int] = {}
         self.sites: list[str] = []
 
-    def _function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+    def _exc_text_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         args = node.args
         every = [*args.posonlyargs, *args.args, *args.kwonlyargs, *([args.vararg] if args.vararg else [])]
         self.qual.append(node.name)
-        self.params.append({a.arg for a in every if _is_exception_param(a)})
+        self.params.append({a.arg for a in every if _exc_text_is_exception_param(a)})
         self.tainted.append(set())
         self.generic_visit(node)
         self.tainted.pop()
         self.params.pop()
         self.qual.pop()
 
-    visit_FunctionDef = visit_AsyncFunctionDef = _function
+    visit_FunctionDef = visit_AsyncFunctionDef = _exc_text_function
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self.qual.append(node.name)
@@ -127,70 +127,73 @@ class _Scan(ast.NodeVisitor):
         self.generic_visit(node)
         self.excepts.pop()
 
-    def _carries_text(self, value: ast.AST | None) -> bool:
+    def _exc_text_carries_text(self, value: ast.AST | None) -> bool:
         """Whether *value* renders an except-bound or tainted name to text (not via `public_detail`)."""
         if value is None:
             return False
         live = {n for n in self.excepts if n}.union(*self.tainted)
-        parents = _parent_map(value)
-        return any(n.id in live and _leaks(n, parents, self.rel, True) for n in _names_outside_sanctioned(value))
+        parents = _exc_text_parent_map(value)
+        return any(
+            n.id in live and _exc_text_leaks(n, parents, self.rel, True)
+            for n in _exc_text_names_outside_sanctioned(value)
+        )
 
-    def _taint(self, targets: list[ast.expr], value: ast.AST | None) -> None:
-        if self._carries_text(value):
+    def _exc_text_taint(self, targets: list[ast.expr], value: ast.AST | None) -> None:
+        if self._exc_text_carries_text(value):
             self.tainted[-1].update(n.id for t in targets for n in ast.walk(t) if isinstance(n, ast.Name))
 
     def visit_Assign(self, node: ast.Assign) -> None:
-        self._taint(node.targets, node.value)
+        self._exc_text_taint(node.targets, node.value)
         self.generic_visit(node)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
-        self._taint([node.target], node.value)
+        self._exc_text_taint([node.target], node.value)
         self.generic_visit(node)
 
     def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
-        self._taint([node.target], node.value)
+        self._exc_text_taint([node.target], node.value)
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
-        if _call_name(node) in RESPONSE_CALLS and self._leaking(node):
+        if _exc_text_call_name(node) in RESPONSE_CALLS and self._exc_text_leaking(node):
             where = ".".join(self.qual) or "<module>"
             self.counts[where] = self.counts.get(where, 0) + 1
             self.sites.append(f"{self.rel}::{where}#{self.counts[where]}")
         self.generic_visit(node)
 
-    def _leaking(self, call: ast.Call) -> bool:
+    def _exc_text_leaking(self, call: ast.Call) -> bool:
         if SANCTIONED_CALL in self.qual:
             return False
-        parents = _parent_map(call)
+        parents = _exc_text_parent_map(call)
         bound = {n for n in self.excepts if n}.union(*self.tainted)
         params = set().union(*self.params) if self.params else set()
         values = [*call.args, *(k.value for k in call.keywords)]
-        for name in (n for v in values for n in _names_outside_sanctioned(v)):
-            if name.id in bound and _leaks(name, parents, self.rel, True):
+        for name in (n for v in values for n in _exc_text_names_outside_sanctioned(v)):
+            if name.id in bound and _exc_text_leaks(name, parents, self.rel, True):
                 return True
-            if name.id in params and name.id not in bound and _leaks(name, parents, self.rel, False):
+            if name.id in params and name.id not in bound and _exc_text_leaks(name, parents, self.rel, False):
                 return True
         return False
 
 
-def scan_source(source: str, rel: str) -> list[str]:
+def exc_text_scan_source(source: str, rel: str) -> list[str]:
     """The site identities in one source text, in source order."""
-    scan = _Scan(rel)
+    scan = _ExcTextScan(rel)
     scan.visit(ast.parse(source))
     return scan.sites
 
 
-def _is_test_file(path: Path) -> bool:
+def _exc_text_is_test_file(path: Path) -> bool:
     return "tests" in path.parts or path.name.startswith("test_") or path.name.endswith("_test.py")
 
 
-def scan_tree(root: Path) -> dict[str, int]:
+def exc_text_scan_tree(root: Path) -> dict[str, int]:
     """`{identity: 1}` for every non-test module under `autobot-backend/llc`."""
     found: dict[str, int] = {}
     for path in sorted((root / LLC_ROOT).rglob("*.py")):
-        if _is_test_file(path):
+        if _exc_text_is_test_file(path):
             continue
         rel = path.relative_to(root).as_posix()
-        for site in scan_source(path.read_text(encoding="utf-8"), rel):
+        for site in exc_text_scan_source(path.read_text(encoding="utf-8"), rel):
             found[site] = 1
     return found

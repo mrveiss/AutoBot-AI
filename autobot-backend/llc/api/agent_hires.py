@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.env_utils import env_str
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET, current_claude_model
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.deps import assert_company_access, service_dep
@@ -213,7 +214,7 @@ def _validated_default_cron() -> str:
             "AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON=%r is not a valid cron (%s); "
             "falling back to %r so hired agents are schedulable",
             raw,
-            exc,
+            safe_log_text(repr(exc)),
             _FALLBACK_HEARTBEAT_CRON,
         )
         return _FALLBACK_HEARTBEAT_CRON
@@ -286,7 +287,7 @@ async def _fetch_agent_config(
         if row and row[0]:
             return dict(row[0]) if isinstance(row[0], dict) else {}
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not fetch adapter_config for agent %r: %s", agent_id, exc)
+        logger.warning("Could not fetch adapter_config for agent %r: %s", agent_id, safe_log_text(repr(exc)))
     return None
 
 
@@ -377,7 +378,7 @@ async def create_agent_hire(
         )
         await session.commit()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not persist hire record (table may not exist): %s", exc)
+        logger.warning("Could not persist hire record (table may not exist): %s", safe_log_text(repr(exc)))
         await session.rollback()
 
     return AgentHireRead(
@@ -412,7 +413,7 @@ async def list_agent_hires(
         )
         rows = result.fetchall()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("llc_agent_hires table not available: %s", exc)
+        logger.warning("llc_agent_hires table not available: %s", safe_log_text(repr(exc)))
         return []
 
     return [
@@ -543,7 +544,7 @@ async def _require_manager_here(session: AsyncSession, company_id: uuid.UUID, re
     try:
         await AgentOrgService(session).assert_manager_in_company(reports_to, company_id)
     except ValueError as exc:
-        logger.warning("Refused hire in company %s: %s", company_id, exc)
+        logger.warning("Refused hire in company %s: %s", company_id, safe_log_text(repr(exc)))
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="reports_to is not an agent of this company"
         ) from exc

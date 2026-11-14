@@ -26,6 +26,7 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from security.upload_filename_policy import require_safe_upload
 
 from ..deps import logged_server_error
@@ -454,7 +455,7 @@ async def agent_upload_attachment(
             "text_extracted": row.text_extracted,
         }
     except AttachmentTooLarge as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=413, detail="Internal server error")
 
 

@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.user_management.base_service import TenantContext
 from llc.api._common import http_refusal
 from llc.deps import assert_company_access, get_session
@@ -118,7 +119,7 @@ async def _require_owner_or_admin(session: AsyncSession, ctx: TenantContext, com
             session, company_id, ctx.user_id, platform_admin=ctx.is_platform_admin
         )
     except NotAuthorisedError as exc:
-        logger.warning("Refused CEO change in company %s: %s", company_id, exc)
+        logger.warning("Refused CEO change in company %s: %s", company_id, safe_log_text(repr(exc)))
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Only a company owner or admin may change the CEO"
         ) from exc
