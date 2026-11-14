@@ -43,10 +43,9 @@ _WHITE = re.compile(
     re.I,
 )
 
-# Rules in files still held by an open PR (#20478: BacklogView.vue). Delete an entry when its file is converted.
-PINS = {
-    "views/llc/BacklogView.vue :: .btn-primary": 1,
-}
+# Rules not yet converted, shrink-only. Every label now reads the token, so the table is empty and any
+# literal white label on a primary fill fails as new.
+PINS: dict[str, int] = {}
 
 
 def frontend_files(root: Path) -> list[Path]:
