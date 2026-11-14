@@ -436,20 +436,21 @@ def test_control_the_positive_dependabot_test_is_not_a_hold():
     assert violations(wf, cheap={})
 
 
+# These two exercise the ci.yml heuristic path (a `changes` job, always-running dependants), so they use that name.
 def test_control_changes_outputs_count_only_where_changes_defines_them():
     big = {"timeout-minutes": 45, "if": "${{ needs.changes.outputs.ready == 'true' }}", "needs": ["changes"]}
-    assert violations({"x.yml": {"jobs": {"changes": {"outputs": {}}, "big": big}}}, cheap={})
-    assert violations({"x.yml": {"jobs": {"changes": {"outputs": {"ready": "x"}}, "big": big}}}, cheap={}) == []
+    assert violations({"ci.yml": {"jobs": {"changes": {"outputs": {}}, "big": big}}}, cheap={})
+    assert violations({"ci.yml": {"jobs": {"changes": {"outputs": {"ready": "x"}}, "big": big}}}, cheap={}) == []
 
 
 @pytest.mark.parametrize("condition", ["always()", "${{ !cancelled() }}", "${{ failure() }}"])
 def test_control_an_always_running_dependent_does_not_inherit_the_hold(condition):
     jobs = {"held": {"if": "${{ " + _BOTH + " }}"}}
     jobs["after"] = {"uses": "./a.yml", "needs": ["held"], "if": condition}
-    assert violations({"x.yml": {"jobs": jobs}}, cheap={}) == [
-        "x.yml: expensive job 'after' is not held for dependabot or promotion pull requests (#21490, #21519)"
+    assert violations({"ci.yml": {"jobs": jobs}}, cheap={}) == [
+        "ci.yml: job 'after' is not held for dependabot or promotion pull requests (#21490, #21519)"
     ]
-    exempted = violations({"x.yml": {"jobs": jobs}}, cheap={}, exempt={("x.yml", "after"): "reports"})
+    exempted = violations({"ci.yml": {"jobs": jobs}}, cheap={}, exempt={("ci.yml", "after"): "reports"})
     assert not any("not held" in problem for problem in exempted)
 
 
