@@ -145,6 +145,7 @@ REACH_ROOTS = {
     ),
     "repo_tests/generated_type_names_not_redeclared_19334_test.py": ("autobot-frontend/src",),
     "repo_tests/github_api_single_module_15411_test.py": ("pipeline-scripts", "scripts"),
+    "repo_tests/hardcoded_colour_ratchet_17560_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/hardcoded_ui_literal_ratchet_12732_test.py": ("autobot-frontend/src/", "autobot-slm-frontend/src/"),
     "repo_tests/hosted_model_literal_guard_15501_test.py": (
         "autobot-backend",
@@ -351,6 +352,10 @@ REACH_ROOTS = {
         "pipeline-scripts",
         "scripts",
         "tools",
+    ),
+    "repo_tests/primary_fill_class_label_reads_text_on_primary_21543_test.py": (
+        "autobot-frontend/src",
+        "autobot-slm-frontend/src",
     ),
     "repo_tests/primary_fill_label_reads_text_on_primary_20425_test.py": ("autobot-frontend/src",),
     "repo_tests/provenance_accessor_17527_test.py": ("autobot-backend",),
