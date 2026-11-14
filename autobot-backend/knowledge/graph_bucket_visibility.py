@@ -46,7 +46,8 @@ class Viewer:
     ledger: Any = False
 
     @property
-    def is_admin(self) -> bool:
+    def admin_read(self) -> bool:
+        """The route passed an ``AdminReadLedger``: an admin read decided upstream, not a second admin check."""
         return bool(self.ledger)
 
 
@@ -133,7 +134,7 @@ async def visible_records(
         viewer.company_id,
         list(viewer.group_ids),
         ownership_manager=ownership_manager,
-        is_admin=viewer.is_admin,  # the ledger records only the page the route returns
+        is_admin=viewer.admin_read,  # the ledger records only the page the route returns
     )
     allowed = {f["id"] for f in kept}
     return [r for r in rows if f"bucket:{collection}:{r['id']}" in allowed]
@@ -141,5 +142,5 @@ async def visible_records(
 
 def record_page(viewer: Viewer, section_access: str, page: List[tuple]) -> None:
     """Record the admin-gated records of a returned page (``(collection, id, metadata)``) in the ledger (#19860)."""
-    if viewer.is_admin and section_access != PUBLIC:
+    if viewer.admin_read and section_access != PUBLIC:
         viewer.ledger.record([{"id": f"bucket:{name}:{rid}"} for name, rid, _ in page])

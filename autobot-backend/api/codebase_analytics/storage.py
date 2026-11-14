@@ -164,6 +164,11 @@ CODE_GRAPH_COLLECTION = "autobot_code_graph"
 _CODE_GRAPH_DESCRIPTION = "Code graph: resolved call nodes and edges (record_type=node|edge)"
 
 
+def code_graph_collection_name() -> str:
+    """The code-graph collection's name, for a module that must recognise it but never open it (#17254)."""
+    return CODE_GRAPH_COLLECTION
+
+
 def get_code_graph_collection():
     """The code-graph collection (sync). Mirrors get_code_collection."""
     try:

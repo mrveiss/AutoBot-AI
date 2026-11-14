@@ -56,18 +56,29 @@ class BucketSection:
     names: Tuple[str, ...] = ()
     prefixes: Tuple[str, ...] = ()
     access: str = OWNER  # who reads a record: PUBLIC (product docs/code), OWNER (per-user), TENANT_ADMIN
+    late_names: Tuple[Callable[[], str], ...] = ()  # names owned by another module, resolved on first use
 
     def matches(self, collection: str) -> bool:
         """True for the logical name or the ChromaDB-stored one (``:`` is stored as ``_``, #10743)."""
         stored = _chroma_safe_name(collection)
+        names = self.names + tuple(resolve() for resolve in self.late_names)
         return (
-            collection in self.names
-            or stored in {_chroma_safe_name(n) for n in self.names}
+            collection in names
+            or stored in {_chroma_safe_name(n) for n in names}
             or any(collection.startswith(p + ":") or stored.startswith(p + "_") for p in self.prefixes)
         )
 
 
 _P = KbCollectionManager
+
+
+def _code_graph_name() -> str:
+    """The code-graph collection's name from its one home (#17254); the router stack imports on first match."""
+    from api.codebase_analytics.storage import code_graph_collection_name  # noqa: PLC0415 -- heavy package init
+
+    return code_graph_collection_name()
+
+
 _MEMORY = (
     "autobot_memory",
     "autobot_lessons",
@@ -83,7 +94,8 @@ BUCKET_SECTIONS: Tuple[BucketSection, ...] = (
     BucketSection(
         "code",
         "Code analysis",
-        names=("autobot_code", "autobot_code_graph", CODE_INDEX, *PATTERN_INDEXES, "code_kb"),
+        names=("autobot_code", CODE_INDEX, *PATTERN_INDEXES, "code_kb"),
+        late_names=(_code_graph_name,),
         access=PUBLIC,
     ),
     BucketSection(
@@ -294,7 +306,7 @@ async def build_bucket_sections(
             if not is_accounted_for(name):
                 unmapped.append(name)
             continue
-        if section.access != TENANT_ADMIN or viewer.is_admin:
+        if section.access != TENANT_ADMIN or viewer.admin_read:
             by_section.setdefault(section.key, []).append(name)
     for section in (s for s in BUCKET_SECTIONS if s.key in by_section):
         scan = await _section_rows(client, section, by_section[section.key], viewer, ownership_manager, kb)

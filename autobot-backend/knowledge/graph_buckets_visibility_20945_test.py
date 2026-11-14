@@ -115,7 +115,9 @@ async def test_an_admin_reads_other_units_and_unit_less_records_in_every_bucket_
     )
     assert _ids(built, "research") == ["ta", "tb", "tn"]
     assert len(who.ledger.fact_ids) == 10, "every record of the returned page is in the admin-read ledger"
-    assert "bucket:company:tenant-b:b2" in who.ledger.fact_ids and "bucket:trajectories:tn" in who.ledger.fact_ids
+    assert (
+        "bucket:company:tenant-b:agents:b2" in who.ledger.fact_ids and "bucket:trajectories:tn" in who.ledger.fact_ids
+    )
 
 
 @pytest.mark.asyncio
