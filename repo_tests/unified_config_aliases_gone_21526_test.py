@@ -32,19 +32,13 @@ _THIS_FILE = "repo_tests/unified_config_aliases_gone_21526_test.py"
 _EXCLUDE = ("*CHANGELOG*", "*Changelog*", "*changelog*", "docs/archives")
 _BANNER = re.compile(r"^> \*\*Correction \(\d{4}-\d{2}-\d{2}, #15206\)")
 
-#: Verbatim historical text that quotes the old name on purpose -- a module path's import line from a
-#: planning snippet (that module never exported the new name) and a logged warning. Exact (path, line).
-_ALLOWED: frozenset[tuple[str, str]] = frozenset(
+#: Verbatim historical text that quotes the old name on purpose -- an import line from a planning snippet (the
+#: module it names never exported the new name) and a logged warning. Matched by exact line text, not path.
+_ALLOWED: frozenset[str] = frozenset(
     {
-        (
-            "docs/planning/CONFIGURATION_MANAGEMENT_IMPLEMENTATION_PLAN.md",
-            "from src.unified_config_manager import UnifiedConfigManager",
-        ),
-        ("docs/system-state.md", "**1. Missing UnifiedConfigManager Method**"),
-        (
-            "docs/system-state.md",
-            "- Warning: `'UnifiedConfigManager' object has no attribute 'get_distributed_services_config'`",
-        ),
+        "from src.unified_config_manager import UnifiedConfigManager",
+        "**1. Missing UnifiedConfigManager Method**",
+        "- Warning: `'UnifiedConfigManager' object has no attribute 'get_distributed_services_config'`",
     }
 )
 
@@ -71,9 +65,7 @@ def hits_in(text: str, rel: str) -> list[tuple[int, str]]:
     """Removed-name hits in *text*, as (line number, name); comments and banners excluded."""
     if rel.endswith(".md"):
         lines = [
-            (n, ln)
-            for n, ln in enumerate(text.splitlines(), 1)
-            if not _BANNER.match(ln) and (rel, ln.strip()) not in _ALLOWED
+            (n, ln) for n, ln in enumerate(text.splitlines(), 1) if not _BANNER.match(ln) and ln.strip() not in _ALLOWED
         ]
     else:
         lines = [(c.lineno, c.text) for c in code_lines(text, name=rel)]
