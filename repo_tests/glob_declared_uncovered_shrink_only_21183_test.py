@@ -70,16 +70,25 @@ def _complaint(grown: dict[str, list[str]]) -> str:
     return f"{_NAME} grew against the base (glob: added guards): {grown}. It only shrinks. {_ROUTES}"
 
 
+def _base_record(root: Path) -> dict[str, Any]:
+    """The record at the base commit of *root*: a dict, EMPTY when the debt is paid or the base has no record.
+
+    Only the type is asserted, never the truthiness (#21347). An empty base is the legitimate end
+    state of a record that only shrinks, and an absent one already reads as ``{}`` from ``base_table``,
+    so every current key is an addition and the guard still fails instead of passing vacuously.
+    """
+    base = base_table(root, (_RECORD,), _NAME)
+    assert isinstance(base, dict), f"the base read returned {type(base).__name__}, not the record's dict"
+    return base
+
+
 def grown_against_base(root: Path, now: dict[str, Any]) -> dict[str, list[str]]:
     """What *now* added to the record relative to the base commit of *root* (BaseUnavailable if unreadable)."""
-    base = base_table(root, (_RECORD,), _NAME)
-    return grown_entries(now, base)
+    return grown_entries(now, _base_record(root))
 
 
 def test_the_record_did_not_grow_against_the_base() -> None:
-    base = base_table(repo_root(), (_RECORD,), _NAME)
-    assert isinstance(base, dict) and base, "the base read returned no record; the guard would pass vacuously"
-    grown = grown_entries(GLOB_DECLARED_UNCOVERED, base)
+    grown = grown_against_base(repo_root(), GLOB_DECLARED_UNCOVERED)
     assert not grown, _complaint(grown)
     REACH.completed(REACH.examined(repo_root()))
 
@@ -127,14 +136,50 @@ def test_a_missing_base_record_reads_every_entry_as_added() -> None:
     assert set(grown_entries(GLOB_DECLARED_UNCOVERED, {})) == set(GLOB_DECLARED_UNCOVERED)
 
 
+def _pin_base(repo: Path, monkeypatch: pytest.MonkeyPatch, body: str | None) -> None:
+    """Make *repo*'s base commit hold the record *body*, or no record at all when None."""
+    make_repo(repo)
+    if body is None:
+        (repo / "other.txt").write_text("x\n", encoding="utf-8")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "base without the record")
+        base = git(repo, "rev-parse", "HEAD").stdout.strip()
+    else:
+        base = _commit_record(repo, body)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("AUTOBOT_RATCHET_BASE_SHA", base)
+
+
 def test_a_record_absent_from_the_base_commit_fails_the_guard(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The guard's own read, not just ``grown_entries({})``: no record at the base means every key is added."""
-    make_repo(tmp_path)
-    (tmp_path / "other.txt").write_text("x\n", encoding="utf-8")
-    git(tmp_path, "add", "-A")
-    git(tmp_path, "commit", "-q", "-m", "base without the record")
-    first = git(tmp_path, "rev-parse", "HEAD").stdout.strip()
-    monkeypatch.setenv("GITHUB_ACTIONS", "true")
-    monkeypatch.setenv("AUTOBOT_RATCHET_BASE_SHA", first)
+    _pin_base(tmp_path, monkeypatch, None)
     grown = grown_against_base(tmp_path, GLOB_DECLARED_UNCOVERED)
     assert set(grown) == set(GLOB_DECLARED_UNCOVERED), "a missing base record must read every key as added"
+
+
+def test_an_empty_base_and_an_empty_record_pass() -> None:
+    """The paid-off end state: nothing in the base, nothing now, nothing grew."""
+    assert grown_entries({}, {}) == {}
+
+
+def test_an_empty_base_record_in_a_real_git_history_passes_when_nothing_is_added(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _pin_base(tmp_path, monkeypatch, f"{_NAME} = {{}}\n")
+    assert _base_record(tmp_path) == {}
+    assert grown_against_base(tmp_path, {}) == {}
+
+
+def test_an_empty_base_record_still_flags_every_key_added_after_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Not vacuous: dropping the truthiness check must not let additions to an empty record through."""
+    _pin_base(tmp_path, monkeypatch, f"{_NAME} = {{}}\n")
+    now = {"alpha": ({"a_test.py"}, "why")}
+    assert grown_against_base(tmp_path, now) == {"alpha": ["a_test.py"]}
+
+
+def test_an_absent_base_record_passes_an_empty_current_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _pin_base(tmp_path, monkeypatch, None)
+    assert _base_record(tmp_path) == {}
+    assert grown_against_base(tmp_path, {}) == {}
