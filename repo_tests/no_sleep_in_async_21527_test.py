@@ -40,11 +40,11 @@ def _discover(root: Path) -> list[str]:
         return []
 
 
-#: Measured on this tree: 8580 tracked .py files, so mid-window is 8580 - 400 / 2 = 8380 (skips=0).
+#: Measured on this tree (guard's own file included): 8584 tracked .py files, so mid-window is 8584 - 400 / 2 = 8384 (skips=0).
 REACH = declare(
     "no-sleep-in-async-21527",
     discover=_discover,
-    floor=8380,  # measured on this tree; a new guard pins until it lands on the base (#19676)
+    floor=8384,  # measured on this tree; a new guard pins until it lands on the base (#19676)
     growth=400,
     what="tracked Python files swept for time.sleep inside async def",
 )
