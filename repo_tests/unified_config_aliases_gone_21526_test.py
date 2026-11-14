@@ -32,11 +32,11 @@ _THIS_FILE = "repo_tests/unified_config_aliases_gone_21526_test.py"
 _EXCLUDE = ("*CHANGELOG*", "*Changelog*", "*changelog*", "docs/archives")
 _BANNER = re.compile(r"^> \*\*Correction \(\d{4}-\d{2}-\d{2}, #15206\)")
 
-#: Verbatim historical text that quotes the old name on purpose -- an import line from a planning snippet (the
-#: module it names never exported the new name) and a logged warning. Matched by exact line text, not path.
+#: Verbatim historical text that quotes the old name on purpose -- a section heading and a logged warning
+#: from a status report. Matched by exact line text, not path.
+#: An entry no sweep line matched is STALE and fails (``test_no_allowed_line_is_stale``).
 _ALLOWED: frozenset[str] = frozenset(
     {
-        "from src.unified_config_manager import UnifiedConfigManager",
         "**1. Missing UnifiedConfigManager Method**",
         "- Warning: `'UnifiedConfigManager' object has no attribute 'get_distributed_services_config'`",
     }
@@ -62,24 +62,57 @@ REACH = declare(
 )
 
 
-def hits_in(text: str, rel: str) -> list[tuple[int, str]]:
-    """Removed-name hits in *text*, as (line number, name); comments and banners excluded."""
+def hits_in(
+    text: str, rel: str, allowed: frozenset[str] = _ALLOWED, used: set[str] | None = None
+) -> list[tuple[int, str]]:
+    """Removed-name hits in *text*, as (line number, name); comments and banners excluded.
+
+    Each allowed line met is added to *used*, so a caller can tell an entry that matched from one that went stale.
+    """
     if rel.endswith(".md"):
-        lines = [
-            (n, ln) for n, ln in enumerate(text.splitlines(), 1) if not _BANNER.match(ln) and ln.strip() not in _ALLOWED
-        ]
+        lines = [(n, ln) for n, ln in enumerate(text.splitlines(), 1) if not _BANNER.match(ln)]
+        if used is not None:
+            used.update(ln.strip() for _, ln in lines if ln.strip() in allowed)
+        lines = [(n, ln) for n, ln in lines if ln.strip() not in allowed]
     else:
         lines = [(c.lineno, c.text) for c in code_lines(text, name=rel)]
     return [(n, m.group(0)) for n, ln in lines for m in REMOVED_NAME.finditer(ln)]
 
 
-def test_no_removed_unified_config_name_is_back() -> None:
-    root = repo_root()
-    offenders = []
+def _sweep(root: Path) -> tuple[list[str], set[str]]:
+    """(offenders, allowed lines actually met) over the whole population."""
+    offenders: list[str] = []
+    used: set[str] = set()
     for rel in REACH.examined(root):
         text = (root / rel).read_text(encoding="utf-8", errors="replace")
-        offenders.extend(f"{rel}:{n}: {name}" for n, name in hits_in(text, rel))
+        offenders.extend(f"{rel}:{n}: {name}" for n, name in hits_in(text, rel, used=used))
+    return offenders, used
+
+
+def stale_allowances(allowed: frozenset[str], used: set[str]) -> list[str]:
+    """Allowed texts no swept line matched -- exemptions for lines that no longer exist."""
+    return sorted(allowed - used)
+
+
+def test_no_removed_unified_config_name_is_back() -> None:
+    offenders, _ = _sweep(repo_root())
     assert not offenders, "Use ConfigManager / get_config_manager / ConfigSettings (#21526):\n" + "\n".join(offenders)
+
+
+def test_no_allowed_line_is_stale() -> None:
+    """A stale exemption fails as loudly as a stale baseline entry: delete it, do not leave it accepted."""
+    _, used = _sweep(repo_root())
+    assert not stale_allowances(
+        _ALLOWED, used
+    ), f"_ALLOWED lines found nowhere in the tree: {stale_allowances(_ALLOWED, used)}"
+
+
+def test_an_unused_allowance_is_reported() -> None:
+    """Control: a synthetic allowlist with an unmatched text is flagged, a matched one is not."""
+    allowed = frozenset({"- keep me UnifiedConfigManager", "- gone UnifiedConfigManager"})
+    used: set[str] = set()
+    assert not hits_in("  - keep me UnifiedConfigManager\n", "x.md", allowed, used)
+    assert stale_allowances(allowed, used) == ["- gone UnifiedConfigManager"]
 
 
 def test_the_detector_fires_on_each_name_and_not_on_look_alikes() -> None:
