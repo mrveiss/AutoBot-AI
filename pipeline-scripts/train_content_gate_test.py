@@ -277,3 +277,36 @@ def test_a_path_git_would_quote_is_read_exactly(train):
 def test_an_unreadable_history_is_unmeasured_not_a_pass(train, capsys):
     assert gate.main(["--landed", "not-a-commit"]) == 2
     assert "UNMEASURED" in capsys.readouterr().out
+
+
+HEADER = "# Copyright 2025-2026 mrveiss\n# SPDX-License-Identifier: Apache-2.0\n"
+
+
+def test_an_added_source_file_without_the_license_header_fails(train):
+    """#21535: the CI fixer hook inserts the header in its own checkout, so only the committed text tells."""
+    board(1, member("one", {"pkg/new_test.py": LONG.format(1)}))
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "#1 pkg/new_test.py: added without the SPDX/Apache-2.0 license header" in findings[0]
+
+
+def test_an_added_source_file_with_the_header_passes(train):
+    board(1, member("one", {"pkg/new_test.py": HEADER + LONG.format(1)}))
+    assert gate.check_range("main..train").findings == []
+
+
+def test_a_path_outside_the_header_scope_needs_no_header(train):
+    """Not a header-bearing extension, a generated directory, a workflow: the check's own scope decides."""
+    files = {"notes.txt": LONG.format(1), "pkg/fixtures/x.py": LONG.format(2), ".github/workflows/w.sh": LONG.format(3)}
+    board(1, member("one", files))
+    assert gate.check_range("main..train").findings == []
+
+
+def test_a_modified_file_without_the_header_is_not_this_gates_finding(train):
+    """Only an ADDED file is judged: a pre-existing header-less file is the header step's, not the member's."""
+    run("switch", "-q", "main")
+    write("old.py", LONG.format("old"))
+    commit("old file without a header")
+    run("switch", "-q", "train")
+    run("merge", "-q", "--no-ff", "main", "-m", "Merge main into train")
+    board(1, member("one", {"old.py": LONG.format("old") + LONG.format(1)}))
+    assert gate.check_range("main..train").findings == []

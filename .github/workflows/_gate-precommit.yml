@@ -195,6 +195,21 @@ jobs:
           }
           cat precommit-output.txt
 
+      - name: Restore the checkout to the committed content (#21535)
+        if: inputs.sweep == 'true'
+        run: |
+          # #21535: pre-commit runs FIXER hooks (insert-license, black, isort, autoflake,
+          # trailing-whitespace, end-of-file-fixer, mixed-line-ending) that rewrite files in this
+          # checkout. The run above only warns, so the rewritten tree stayed in place and every
+          # enforcing step below judged THAT, not the commit: insert-license added the header to three
+          # header-less files, the header step then passed, and the files reached main without it.
+          # Name what was rewritten, then put the tree back, so each later step reads committed content.
+          # `--staged --worktree` also drops anything a hook staged. Untracked files are not touched;
+          # no fixer creates one, and precommit-*.txt must survive for the steps that read them.
+          git status --porcelain --untracked-files=no | sed 's/^/::warning::a pre-commit hook rewrote: /'
+          git restore --source=HEAD --staged --worktree -- .
+          test -z "$(git status --porcelain --untracked-files=no)"
+
       - name: Fail when a hook could not run at all (#14181)
         if: inputs.sweep == 'true'
         run: |
@@ -235,6 +250,14 @@ jobs:
             pre-commit run --all-files "${id}" >> precommit-gating.txt 2>&1 || true
           done <<< "${ids}"
           cat precommit-gating.txt
+
+      - name: Restore the checkout to the committed content (#21535) after the gating run
+        if: inputs.sweep == 'true'
+        run: |
+          # #21535: same restore as above, for the pre-commit invocation in the step before this one.
+          git status --porcelain --untracked-files=no | sed 's/^/::warning::a pre-commit hook rewrote: /'
+          git restore --source=HEAD --staged --worktree -- .
+          test -z "$(git status --porcelain --untracked-files=no)"
 
       - name: Fail when a behavioural hook reported a finding (#14878)
         if: inputs.sweep == 'true'

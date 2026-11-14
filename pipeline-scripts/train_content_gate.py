@@ -14,7 +14,10 @@ commit, because at the tip a deliberate in-train fix reads as a loss, and a memb
 judged at its last merge against the base of its first, so a drop in the first still counts. A member
 fails when a file it added or deleted did not take effect there, or when under half of a file's added
 lines are present. ``--title`` names the members the train declares, so one with no merge at all
-fails too, as does a merge the gate cannot account for. A head already on the train's base has landed
+fails too, as does a merge the gate cannot account for. A file a member ADDS in the
+license-header check's scope must carry the header in the committed content at its merge (#21535): the CI
+pre-commit fixer inserts a missing header in its own checkout, so the header step there never sees it.
+A head already on the train's base has landed
 and passes with a note; a head reachable only through the train leaves nothing to compare and fails.
 ``--body`` may name a deliberate drop: ``train-content-drop: #N path reason``.
 
@@ -39,6 +42,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from autobot_shared.git_probe import run_git  # noqa: E402
+from tools.lint.check_spdx_header import has_header, in_scope  # noqa: E402
 
 MEMBER_MERGE = re.compile(r"^Merge #(\d+) @ [0-9a-f]{7,40}\b")
 #: Bringing main into the train adds no member: "Merge main into ...", "Merge branch 'main' into ...".
@@ -107,12 +111,19 @@ def _added_lines(base: str, head: str, path: str) -> list[str]:
     return [line for line in added if len(line) >= MIN_LINE and FLOOR_LINE not in line]
 
 
+def _lacks_header(commit: str, path: str) -> bool:
+    """True when *path* is in the header check's scope and its committed text at *commit* has no header."""
+    return in_scope(Path(path)) and not has_header(_git("show", f"{commit}:{path}"))
+
+
 def _judge_file(status: str, path: str, base: str, head: str, merge: str, report: ContentReport) -> str | None:
     """Why *path* did not take effect at *merge*, or None."""
     if status == "D":
         return "deleted by the member, still present" if _exists_at(merge, path) else None
     if not _exists_at(merge, path):
         return "missing"
+    if status == "A" and _lacks_header(merge, path):
+        return "added without the SPDX/Apache-2.0 license header"
     added = _added_lines(base, head, path)
     if not added:
         return None
