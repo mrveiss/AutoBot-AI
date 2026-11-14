@@ -55,7 +55,7 @@ from ..models.enums import (
     WorkItemType,
 )
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
-from ..services.accessors import get_attachment_service, get_work_product_service
+from ..services.accessors import done_gate_for, get_attachment_service, get_handoff_service, get_work_product_service
 from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.attachment_service import (
     AttachmentNotFound,
@@ -110,7 +110,7 @@ class CoworkerRequest(BaseModel):
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"], dependencies=[Depends(require_work_item_id)])
-_get_handoff_service = lazy_singleton(HandoffService)
+_get_handoff_service = get_handoff_service  # the instance the gated done path hands off through
 _kb_manager = KbCollectionManager()
 _get_activity_service = lazy_singleton(LLCActivityLogService)
 _get_ac_suggester = lazy_singleton(AcSuggester)
@@ -595,7 +595,7 @@ async def transition_work_item(
         raise HTTPException(status_code=404, detail="Work item not found")
     try:
         item = await _service().transition_status(
-            session, work_item_id, body.status, acting_user=own_task_actor(_current_user)
+            session, work_item_id, body.status, acting_user=own_task_actor(_current_user), done_gate=done_gate_for()
         )
         await session.commit()
         if item.status == WorkItemStatus.DONE:

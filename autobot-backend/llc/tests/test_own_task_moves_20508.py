@@ -41,7 +41,7 @@ async def _settle() -> None:
 
 async def _move(item: MagicMock, new_status: WorkItemStatus, acting_user) -> MagicMock:
     session = FakeAsyncSession(results=[[item]])
-    moved = await WorkItemService(activity_log=MagicMock()).transition_status(
+    moved = await WorkItemService(activity_log=MagicMock(record=AsyncMock())).transition_status(
         session, str(item.id), new_status, acting_user=acting_user
     )
     await _settle()

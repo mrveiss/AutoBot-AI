@@ -29,9 +29,11 @@ _COMPANY = "0f1d7a52-3c88-4b6e-9a0d-61c2b7e4f905"
 def _item() -> MagicMock:
     item = MagicMock(spec=LLCWorkItem)
     item.id = uuid.UUID("9c2e4b1a-7d35-4f08-8e6a-3b1d5c7a9e02")
+    item.company_id = uuid.UUID(_COMPANY)
     item.type = WorkItemType.BUG.value
     item.status = WorkItemStatus.IN_PROGRESS.value
     item.assignee_agent_id = uuid.UUID(_AGENT)
+    item.reviewer_user_id, item.created_by_user_id = None, None
     item.project_id = None
     item.title, item.description = "A bug", ""
     item.version = 1

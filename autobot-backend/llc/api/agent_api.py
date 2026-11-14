@@ -29,7 +29,7 @@ from autobot_shared.logging_manager import get_logger
 from security.upload_filename_policy import require_safe_upload
 
 from ..deps import logged_server_error
-from ._common import agent_context, agent_node_uuid, assert_item_in_company, parse_work_item_id
+from ._common import agent_context, agent_node_uuid, assert_item_in_company, parse_work_item_id, refused_transition
 from ._peer_search import fetch_peer_rows
 
 logger = get_logger(__name__)
@@ -118,7 +118,8 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
     from user_management.database import get_async_session_factory
 
     from ..models.enums import WorkItemStatus
-    from ..services.accessors import get_work_item_service
+    from ..services.accessors import done_gate_for, get_work_item_service
+    from ..services.work_item_own_task import InvalidTransition
 
     agent_id, company_id = agent_context(request)
     try:
@@ -126,6 +127,9 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=f"Unknown work item status {body.status!r}") from exc
 
+    # The node UUID is the key the handoff names the agent by, and the comment's author.
+    author_uuid = await agent_node_uuid(agent_id, company_id)
+    gate = done_gate_for(str(author_uuid) if author_uuid else None)
     factory = get_async_session_factory()
     async with factory() as session:
         try:
@@ -134,7 +138,10 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
                 work_item_id=str(item_id),
                 new_status=new_status,
                 company_id=str(company_id),
+                done_gate=gate,
             )
+        except InvalidTransition as exc:  # a refused move, or a done the review gate cannot send to review
+            raise refused_transition(exc) from exc
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -145,7 +152,6 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
         # failed to commit is a reason for something that did not happen.
         comment_id = None
         if body.comment and body.comment.strip():
-            author_uuid = await agent_node_uuid(agent_id, company_id)
             comment = await get_work_item_service().add_comment(
                 session,
                 work_item_id=str(item_id),
@@ -156,7 +162,7 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
             comment_id = str(comment.id)
 
         await session.commit()
-        resulting = str(item.status)
+        resulting = WorkItemStatus(item.status).value
 
     # `comment_id` separates a 200 that stored the comment from one with none
     # to store; the caller could not tell those apart (#16017).

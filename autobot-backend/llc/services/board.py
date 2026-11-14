@@ -29,6 +29,7 @@ from ..exceptions import WipLimitExceeded
 from ..models.board import LLCBoard, LLCBoardColumn
 from ..models.enums import BoardType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
+from .accessors import done_gate_for
 from .base import LLCServiceBase
 from .work_item_service import WorkItemService
 
@@ -328,7 +329,12 @@ class BoardService(LLCServiceBase):
         new_status = WorkItemStatus(column.status_filter[0])
         work_item_svc = WorkItemService(activity_log=self.activity_log)
         updated_item = await work_item_svc.transition_status(
-            session, work_item_id, new_status, company_id=str(board.company_id), acting_user=acting_user
+            session,
+            work_item_id,
+            new_status,
+            company_id=str(board.company_id),
+            acting_user=acting_user,
+            done_gate=done_gate_for(),
         )
 
         await self._publish_board_event(

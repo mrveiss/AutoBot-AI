@@ -272,8 +272,9 @@ async def test_transition_to_done_records_the_actor_and_survives_a_service_princ
         log = MagicMock(record=AsyncMock())
         svc = wis.WorkItemService(activity_log=log)
         svc._trigger_artifact_ingest = AsyncMock()
-        item = MagicMock(status=can_finish.value, version=1)
-        await svc.transition_to_done(_session_with(item), str(uuid.uuid4()), str(uuid.uuid4()), **kwargs)
+        company = uuid.uuid4()
+        item = MagicMock(status=can_finish.value, version=1, company_id=company)
+        await svc.transition_to_done(_session_with(item), str(uuid.uuid4()), str(company), **kwargs)
         sent = log.record.await_args.kwargs
         assert (sent["actor_type"], sent["actor_id"]) == (expected_type, expected_id)
 
