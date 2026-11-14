@@ -16,6 +16,8 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { companySwitchTarget } from '@/router/llcCompanySwitch'
+import { companyIdFromParams } from '@/router/llcGuards'
 import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
 import { useApiClient } from '@/plugins/api'
 import { useLiveEvents } from '@/composables/useLiveEvents'
@@ -29,10 +31,7 @@ const api = useApiClient()
 const live = useLiveEvents()
 const logger = createLogger('LlcSidebar')
 
-const companyId = computed(() => {
-  const raw = route.params.companyId
-  return (Array.isArray(raw) ? raw[0] : raw) ?? companyStore.selectedCompanyId
-})
+const companyId = computed(() => companyIdFromParams(route.params) || companyStore.selectedCompanyId)
 
 // FR-GOV-03: pending board-approval count badge on the Approvals link.
 const pendingApprovals = ref(0)
@@ -78,6 +77,8 @@ const links = computed<SidebarLink[]>(() => {
     // All views are company-scoped (/llc/companies/:companyId/…) so the
     // LlcCompanyLayout — and therefore this sidebar — stays mounted (#10750 B3).
     { labelKey: 'nav.llcDashboard', to: { path: `/llc/companies/${id}/dashboard` } },
+    { labelKey: 'nav.llcLedger', to: { path: `/llc/companies/${id}/ledger` } },
+    { labelKey: 'nav.llcMailbox', to: { path: `/llc/companies/${id}/mailbox` } },
     { labelKey: 'nav.llcBacklog', to: { path: `/llc/companies/${id}/backlog` } },
     { labelKey: 'nav.llcBoards', to: { path: `/llc/companies/${id}/boards` } },
     { labelKey: 'nav.llcReviewInbox', to: { path: `/llc/companies/${id}/reviews` } },
@@ -86,7 +87,9 @@ const links = computed<SidebarLink[]>(() => {
     { labelKey: 'nav.llcGoals', to: { path: `/llc/companies/${id}/goals` } },
     { labelKey: 'nav.llcOrgChart', to: { path: `/llc/companies/${id}/org-chart` } },
     { labelKey: 'nav.llcMembers', to: { path: `/llc/companies/${id}/members` } },
+    { labelKey: 'nav.llcTeams', to: { path: `/llc/companies/${id}/teams` } },
     { labelKey: 'nav.llcRoles', to: { path: `/llc/companies/${id}/roles` } },
+    { labelKey: 'nav.llcHandbook', to: { path: `/llc/companies/${id}/handbook` } },
     { labelKey: 'nav.llcApprovals', to: { path: `/llc/companies/${id}/approvals` } },
     { labelKey: 'nav.llcCosts', to: { path: `/llc/companies/${id}/costs` } },
     { labelKey: 'nav.llcHeartbeat', to: { path: `/llc/companies/${id}/heartbeat` } },
@@ -102,6 +105,7 @@ const links = computed<SidebarLink[]>(() => {
     { labelKey: 'nav.llcActivity', to: { path: `/llc/companies/${id}/activity` } },
     { labelKey: 'nav.llcPortability', to: { path: `/llc/companies/${id}/portability` } },
     { labelKey: 'nav.llcSecrets', to: { path: `/llc/companies/${id}/secrets` } },
+    { labelKey: 'nav.llcSettings', to: { path: `/llc/companies/${id}/settings` } },
   ]
 })
 
@@ -112,21 +116,15 @@ function isActive(link: SidebarLink): boolean {
 }
 
 /**
- * Switch the active company while staying on the equivalent view.
- * Board-scoped routes (:boardId) belong to the old company, so fall back
- * to the new company's backlog for those.
+ * Switch the active company while staying on the equivalent view; ids of records the old company
+ * owns (a board, a portfolio, a program) cannot follow, see companySwitchTarget (#21512).
  */
 async function onCompanyChange(event: Event): Promise<void> {
   const id = (event.target as HTMLSelectElement).value
   if (!id || id === companyId.value) return
   companyStore.selectCompany(id)
-  if (route.params.boardId) {
-    await router.push({ name: 'llc-backlog', params: { companyId: id } })
-  } else if (route.params.companyId) {
-    await router.push({
-      name: route.name as string,
-      params: { ...route.params, companyId: id },
-    })
+  if (route.params.companyId) {
+    await router.push(companySwitchTarget(route, id))
   }
 }
 </script>
@@ -210,7 +208,7 @@ async function onCompanyChange(event: Event): Promise<void> {
 .llc-sidebar-select {
   width: 100%;
   padding: 0.375rem 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   border-radius: var(--radius-md, 8px);
   border: 1px solid var(--border-default);
   background: var(--bg-input);
@@ -218,7 +216,7 @@ async function onCompanyChange(event: Event): Promise<void> {
 }
 
 .llc-sidebar-switch {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-accent-text, var(--color-accent));
   text-decoration: none;
 }
@@ -239,7 +237,7 @@ async function onCompanyChange(event: Event): Promise<void> {
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.4375rem 0.625rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   border-radius: var(--radius-md, 8px);
   border-left: 2px solid transparent;
   color: var(--text-secondary);

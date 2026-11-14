@@ -20,13 +20,14 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 # Add autobot modules to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-backend"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
-from autobot_shared.redis_client import get_async_redis_client
+from _session_redis import SessionListMixin
+
 from autobot_shared.time_utils import utc_timestamp
 
 # Configure logging
@@ -34,7 +35,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
-class ActivityBackfiller:
+class ActivityBackfiller(SessionListMixin):
     """Backfills user_id for messages and activities"""
 
     def __init__(self, dry_run: bool = False):
@@ -54,31 +55,6 @@ class ActivityBackfiller:
             "activities_updated": 0,
             "activities_failed": 0,
         }
-
-    async def connect_redis(self) -> None:
-        """Connect to Redis database"""
-        try:
-            self.redis_client = await get_async_redis_client(database="main")
-            await self.redis_client.ping()
-            logger.info("Connected to Redis successfully")
-        except Exception as e:
-            logger.error(f"Failed to connect to Redis: {e}")
-            raise
-
-    async def get_all_sessions(self) -> List[str]:
-        """Get all session IDs from Redis.
-
-        Returns:
-            List of session IDs
-        """
-        try:
-            keys = await self.redis_client.keys("chat:session:*")
-            session_ids = [key.decode("utf-8").split(":", 2)[2] for key in keys]
-            logger.info(f"Found {len(session_ids)} sessions")
-            return session_ids
-        except Exception as e:
-            logger.error(f"Failed to get sessions: {e}")
-            return []
 
     async def get_session_owner(self, session_id: str) -> Optional[str]:
         """Get the owner of a session.

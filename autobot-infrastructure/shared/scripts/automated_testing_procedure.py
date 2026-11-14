@@ -24,15 +24,21 @@ import aiohttp
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# `autobot_shared` lives at the repository root, which is not on the path when this
+# script is run standalone (#18094; same bootstrap as deployment_rollback.py).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 # #14518: the first-party imports below carried a stale ``backend.`` package
 # prefix -- no ``backend`` package exists -- and autobot-backend was never on
 # sys.path, so this script raised ModuleNotFoundError on its own import block
 # before doing any work. Add the directory the way the other operator entry
 # points in this tree do (#14129).
-_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
-if str(_BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(_BACKEND_DIR))
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):  # the backend, and `autobot_shared` (#18289)
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -66,9 +72,9 @@ class AutomatedTestingSuite:
             "api_tests": [],
         }
         # Import configuration from centralized source
-        from config import API_BASE_URL
+        from autobot_shared.ssot_config import config as ssot_config
 
-        self.backend_url = API_BASE_URL
+        self.backend_url = ssot_config.backend_url
 
     def run_unit_tests(self) -> List[TestResult]:
         """Run Python unit tests"""
@@ -285,11 +291,11 @@ class AutomatedTestingSuite:
         start_time = time.time()
 
         try:
-            from config import global_config_manager
+            from config import config_manager
 
             # Test basic config access
-            global_config_manager.get("backend", {})
-            global_config_manager.get("memory", {})
+            config_manager.get("backend", {})
+            config_manager.get("memory", {})
 
             duration = time.time() - start_time
             return TestResult(
@@ -429,13 +435,13 @@ class AutomatedTestingSuite:
         start_time = time.time()
 
         try:
-            from config import global_config_manager
+            from config import config_manager
 
             # Measure config access time
             for _ in range(100):
-                global_config_manager.get("backend", {})
-                global_config_manager.get("memory", {})
-                global_config_manager.get("llm_config", {})
+                config_manager.get("backend", {})
+                config_manager.get("memory", {})
+                config_manager.get("llm_config", {})
 
             duration = time.time() - start_time
             avg_time = duration / 100

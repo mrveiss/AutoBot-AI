@@ -1,0 +1,94 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""GET /code-sync/update-all/report: read-only report of the last update, admin-only (#19962)."""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime
+from typing import Annotated, Any, Literal
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from autobot_shared.auth.permissions import Permission
+from autobot_shared.env_utils import env_int_clamped
+from models.database import Deployment, Node, NodeStatus
+from services.auth import require_permission
+from services.database import get_db
+from services.deploy_activity import read_deploy_activity
+from services.playbook_executor import SELF_UPDATE_LOG_PATH
+from services.self_update_log_reader import read_self_update_verdict
+from services.update_progress import build_update_progress
+from services.update_report import build_update_report
+
+router = APIRouter()
+
+#: Role deploys listed in the report; the newest are kept.
+DEPLOY_RUNS_LIMIT = env_int_clamped("AUTOBOT_SLM_UPDATE_REPORT_DEPLOY_RUNS", 50, 1, 500)
+
+
+async def _deploy_runs_since(db: AsyncSession, started_at: str | None) -> list[Deployment]:
+    """Role deploys since the update started; none when the log gives no start to measure from."""
+    if not started_at:
+        return []
+    since = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+    query = select(Deployment).where(Deployment.created_at >= since)
+    result = await db.execute(query.order_by(Deployment.created_at.desc()).limit(DEPLOY_RUNS_LIMIT))
+    return list(result.scalars().all())
+
+
+@router.get("/update-all/nodes-offline")
+async def get_nodes_offline_after_update(
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, int | str]:
+    """Nodes the last self-update left offline and still are (#20250), with when that update ran."""
+    verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
+    online = (await db.execute(select(func.count(Node.id)).where(Node.status == NodeStatus.ONLINE.value))).scalar() or 0
+    still_offline = min(verdict.nodes_offline, max(0, verdict.nodes_total - online))
+    if not verdict.run_started_at:  # an undated report can't be told from an old one, so it isn't shown
+        still_offline = 0
+    return {
+        "nodes_offline": still_offline,
+        "nodes_total": verdict.nodes_total,
+        "run_started_at": verdict.run_started_at or "",
+    }
+
+
+@router.get("/update-all/report")
+async def get_update_report(
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """The last update's target, stage, result, failed task, error and role deploys."""
+    from api.code_sync import _get_slm_deployed_commit  # code_sync mounts this router
+
+    alive = (await read_deploy_activity()).in_progress  # #19770: running vs ended without a recap
+    started_at = read_self_update_verdict(SELF_UPDATE_LOG_PATH, run_alive=alive).run_started_at
+    target = await _get_slm_deployed_commit()  # the marker moves before pip runs, so it is the target, not a success
+    return build_update_report(SELF_UPDATE_LOG_PATH, target, await _deploy_runs_since(db, started_at), alive)
+
+
+class UpdateProgress(BaseModel):
+    """A running self-update's position in its own log (#20254)."""
+
+    state: Literal["waiting", "running", "quiet", "exited_without_recap", "finished", "unknown"]
+    play: str | None = None
+    task: str | None = None
+    last_line_at: str | None = None
+    elapsed_seconds: float | None = None
+
+
+@router.get("/update-all/progress", response_model=UpdateProgress)
+async def get_update_progress(
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
+    since: str | None = None,
+) -> dict[str, Any]:  # validated by response_model
+    """What the running self-update is doing, from its own log, across the SLM's restart (#20254)."""
+    activity = await read_deploy_activity()
+    return await asyncio.to_thread(build_update_progress, SELF_UPDATE_LOG_PATH, activity.in_progress, since)

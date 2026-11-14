@@ -7,15 +7,22 @@
  * Handles connection lifecycle, reconnection, and cleanup.
  *
  * NOTE: This is for individual WebSocket connections (e.g., /api/logs/stream, /api/terminal).
- * For the global singleton WebSocket, use useGlobalWebSocket instead.
+ * For channel-based real-time events, use useEventBus instead.
  */
 
-import { ref, computed, onScopeDispose, getCurrentScope, watch, unref, toValue, type Ref, type MaybeRefOrGetter } from 'vue'
+import { backoffDelay } from '@autobot/ui'
+import { ref, computed, onScopeDispose, getCurrentScope, watch, unref, toValue, toRaw, type Ref, type MaybeRefOrGetter } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
 
 // Create scoped logger for useWebSocket
 const logger = createLogger('useWebSocket')
+
+/** Tells a close of the live socket from a close of a replaced one. */
+export interface WebSocketCloseInfo {
+  /** True when the closed socket is the one the composable currently holds. */
+  current: boolean
+}
 
 export interface UseWebSocketOptions {
   /**
@@ -102,9 +109,11 @@ export interface UseWebSocketOptions {
   onError?: (event: Event) => void
 
   /**
-   * Callback when connection closes
+   * Callback when connection closes. Also called for a socket that disconnect() or a newer
+   * connect() already replaced; `info.current` is false for that stale close, so a caller that
+   * keeps its own connection state must ignore it (#21548).
    */
-  onClose?: (event: CloseEvent) => void
+  onClose?: (event: CloseEvent, info: WebSocketCloseInfo) => void
 }
 
 // `protocols` stays optional: Required<> would strip the `undefined` its type
@@ -165,6 +174,29 @@ export function useWebSocket(
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
   let connectionTimeoutTimer: ReturnType<typeof setTimeout> | null = null
+  // The 100 ms restart of reconnect() and of the URL watcher. Kept apart from clearTimers():
+  // disconnect() detaches the old socket from `ws` but its onclose handler stays attached and
+  // calls clearTimers() when the close event arrives, which would cancel a pending restart.
+  let restartTimer: ReturnType<typeof setTimeout> | null = null
+  // Set once the owning scope is disposed. Not set by disconnect(): a manual
+  // disconnect() followed by connect() must keep working.
+  let disposed = false
+
+  const clearRestartTimer = () => {
+    if (restartTimer) {
+      clearTimeout(restartTimer)
+      restartTimer = null
+    }
+  }
+
+  /** Reconnect shortly after the current socket was closed (reconnect() and the URL watcher). */
+  const scheduleRestart = () => {
+    clearRestartTimer()
+    restartTimer = setTimeout(() => {
+      restartTimer = null
+      connect()
+    }, 100)
+  }
 
   /**
    * Clear all timers
@@ -197,10 +229,42 @@ export function useWebSocket(
     }
   }
 
+  /** True while `socket` is the one `ws` holds; `ws` is a deep ref, so compare the raw object. */
+  const isCurrentSocket = (socket: WebSocket) => toRaw(ws.value) === socket
+
+  /** Back off and reconnect after the current socket closed, or report that the attempts ran out. */
+  const reconnectAfterClose = (event: CloseEvent) => {
+    if (
+      opts.autoReconnect &&
+      !disposed &&
+      event.code !== 1000 && // Normal closure
+      (opts.maxReconnectAttempts === 0 || reconnectAttempts.value < opts.maxReconnectAttempts)
+    ) {
+      // Exponential backoff: delay * 2^attempts
+      const delay = backoffDelay(reconnectAttempts.value, {
+        base: opts.reconnectDelay,
+        max: opts.maxReconnectDelay,
+      })
+
+      logger.info(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts.value + 1})`)
+
+      reconnectTimer = setTimeout(() => {
+        reconnectAttempts.value++
+        connect()
+      }, delay)
+    } else if (opts.maxReconnectAttempts > 0 && reconnectAttempts.value >= opts.maxReconnectAttempts) {
+      logger.warn('Max reconnection attempts reached')
+      errors.value = [...errors.value, new Error('Max reconnection attempts reached')]
+    }
+  }
+
   /**
    * Connect to WebSocket
    */
   const connect = () => {
+    if (disposed) {
+      return // The owner is gone: nothing may open a socket nobody will close
+    }
     if (isConnecting.value || (ws.value && ws.value.readyState === WebSocket.OPEN)) {
       return // Already connecting or connected
     }
@@ -217,7 +281,8 @@ export function useWebSocket(
     try {
       // #16457: an auth token travels as a subprotocol, never in the URL.
       const subprotocols = toValue(opts.protocols)
-      ws.value = subprotocols ? new WebSocket(wsUrl, subprotocols) : new WebSocket(wsUrl)
+      const socket = subprotocols ? new WebSocket(wsUrl, subprotocols) : new WebSocket(wsUrl)
+      ws.value = socket
 
       // Connection timeout
       if (opts.connectionTimeout > 0) {
@@ -232,7 +297,7 @@ export function useWebSocket(
         }, opts.connectionTimeout)
       }
 
-      ws.value.onopen = (event) => {
+      socket.onopen = (event) => {
         isConnected.value = true
         isConnecting.value = false
         reconnectAttempts.value = 0
@@ -248,7 +313,7 @@ export function useWebSocket(
         opts.onOpen(event)
       }
 
-      ws.value.onmessage = (event) => {
+      socket.onmessage = (event) => {
         try {
           const data = opts.parseJSON ? JSON.parse(event.data) : event.data
           lastMessage.value = data
@@ -260,7 +325,8 @@ export function useWebSocket(
         }
       }
 
-      ws.value.onerror = (event) => {
+      socket.onerror = (event) => {
+        if (!isCurrentSocket(socket)) return // Detached by disconnect(): its error is nobody's (#21530)
         // BUG3: a raw WebSocket `Event` has no message — don't log it as an
         // Error object. The reconnect/close handler drives user-facing state.
         logger.debug('WebSocket error:', event instanceof Event ? event.type : String(event))
@@ -274,36 +340,22 @@ export function useWebSocket(
         opts.onError(event)
       }
 
-      ws.value.onclose = (event) => {
-        isConnected.value = false
-        isConnecting.value = false
-        clearTimers()
+      socket.onclose = (event) => {
+        // disconnect() detaches a socket from `ws` but leaves its handlers attached, so this can be a
+        // close that arrives after the socket was replaced. The flags and timers below belong to the
+        // CURRENT socket; a stale close must not touch them (#21530).
+        const current = isCurrentSocket(socket)
+        if (current) {
+          isConnected.value = false
+          isConnecting.value = false
+          clearTimers()
+        }
 
         logger.info('Closed:', { code: event.code, reason: event.reason })
-        opts.onClose(event)
+        // Still delivered for a detached socket: callers use it to learn that their own disconnect() took effect.
+        opts.onClose(event, { current })
 
-        // Auto-reconnect logic
-        if (
-          opts.autoReconnect &&
-          event.code !== 1000 && // Normal closure
-          (opts.maxReconnectAttempts === 0 || reconnectAttempts.value < opts.maxReconnectAttempts)
-        ) {
-          // Exponential backoff: delay * 2^attempts
-          const delay = Math.min(
-            opts.reconnectDelay * Math.pow(2, reconnectAttempts.value),
-            opts.maxReconnectDelay
-          )
-
-          logger.info(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts.value + 1})`)
-
-          reconnectTimer = setTimeout(() => {
-            reconnectAttempts.value++
-            connect()
-          }, delay)
-        } else if (opts.maxReconnectAttempts > 0 && reconnectAttempts.value >= opts.maxReconnectAttempts) {
-          logger.warn('Max reconnection attempts reached')
-          errors.value = [...errors.value, new Error('Max reconnection attempts reached')]
-        }
+        if (current) reconnectAfterClose(event)
       }
     } catch (err) {
       // #14989: no upstream scheme validation here (unlike TerminalService),
@@ -321,6 +373,7 @@ export function useWebSocket(
    */
   const disconnect = (code: number = 1000, reason: string = 'Client disconnect') => {
     clearTimers()
+    clearRestartTimer()
 
     if (ws.value) {
       // Disable auto-reconnect for manual disconnect
@@ -364,7 +417,7 @@ export function useWebSocket(
   const reconnect = () => {
     disconnect()
     reconnectAttempts.value = 0
-    setTimeout(connect, 100)
+    scheduleRestart()
   }
 
   // Watch URL changes and reconnect
@@ -375,7 +428,7 @@ export function useWebSocket(
         // Disconnect old connection first to prevent accumulating connections (#820)
         disconnect()
         reconnectAttempts.value = 0
-        setTimeout(connect, 100)
+        scheduleRestart()
       }
     })
   }
@@ -388,6 +441,7 @@ export function useWebSocket(
   // Cleanup when effect scope disposes (component unmount or scope.stop())
   if (getCurrentScope()) {
     onScopeDispose(() => {
+      disposed = true
       disconnect()
     })
   }

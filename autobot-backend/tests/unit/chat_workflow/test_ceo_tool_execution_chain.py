@@ -74,7 +74,14 @@ async def test_handle_llc_tool_dispatches_company_scoped():
     TestLLCToolDenial.
     """
     m = _mixin_instance()
-    ctx = SimpleNamespace(context={"company_id": "co-1", "user_id": "u-1"}, consecutive_invalid_tool_calls=0)
+    ctx = SimpleNamespace(
+        context={
+            "company_id": "client-claim",
+            "verified_company_id": "00000000-0000-0000-0000-0000000000c1",
+            "verified_user_id": "u-1",
+        },
+        consecutive_invalid_tool_calls=0,
+    )
     tool_call = {"name": "create_task", "params": {"title": "X", "priority": "high"}}
     exec_results: list = []
     with patch(
@@ -86,6 +93,8 @@ async def test_handle_llc_tool_dispatches_company_scoped():
     args = disp.await_args.args
     # dispatch_llc_tool(tool_name, params, company_id, user_id)
     assert args[0] == "create_task"
-    assert args[2] == "co-1"  # company_id from ctx.context, not params
+    assert (
+        args[2] == "00000000-0000-0000-0000-0000000000c1"
+    )  # the VERIFIED company, not params and not the request's own claim
     assert any(getattr(x, "type", "") == "command_output" for x in msgs)
     assert exec_results and exec_results[-1]["status"] == "success"

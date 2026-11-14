@@ -275,6 +275,7 @@ describe('ToolsView remote-exec transport', () => {
     await flushPromises()
 
     expect(sessionStorage.getItem(TOKEN_KEY)).toBeNull()
-    expect(window.location.href).toBe('/login')
+    // #18892: the base-aware login URL carries the current route back as ?redirect=
+    expect(window.location.href).toBe('/login?redirect=%2Ftools')
   })
 })

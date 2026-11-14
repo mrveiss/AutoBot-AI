@@ -62,6 +62,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _SLM_ROOT = Path(__file__).resolve().parent.parent
 if str(_SLM_ROOT) not in sys.path:
     sys.path.insert(0, str(_SLM_ROOT))
@@ -84,16 +86,19 @@ _CPU, _MEM, _DISK = 0.0, 23.4, 18.1
 
 
 def _status(extra_data=None, restart_churn_active=False) -> str:
-    """Call the real `_calculate_node_status` -- it does not touch `self`."""
-    return reconciler.ReconcilerService._calculate_node_status(
-        SimpleNamespace(), _CPU, _MEM, _DISK, extra_data, restart_churn_active
-    )
+    """One sample through the real status path (#19292): classify, then `_node_status_and_reason`."""
+    return _status_for(_CPU, extra_data, restart_churn_active)
+
+
+def _status_for(cpu: float, extra_data=None, restart_churn_active=False) -> str:
+    level = reconciler.classify_resource_sample(cpu, _MEM, _DISK)
+    return reconciler._node_status_and_reason(level, extra_data, restart_churn_active)[0]
 
 
 def test_the_real_module_was_loaded_not_a_stub():
     """`hasattr`/`callable` are true of any MagicMock and cannot tell the two apart."""
     assert not isinstance(reconciler.ReconcilerService, MagicMock)
-    assert inspect.isfunction(reconciler.ReconcilerService._calculate_node_status)
+    assert inspect.isfunction(reconciler._node_status_and_reason)
     assert inspect.isfunction(reconciler.ReconcilerService._update_existing_service)
 
 
@@ -230,14 +235,8 @@ def test_a_non_autobot_service_never_mattered_regardless_of_state():
 def test_high_metrics_still_win_over_a_clean_service_list():
     """The metric thresholds this fix must not touch."""
     assert _status(None) == reconciler.NodeStatus.ONLINE.value
-    assert (
-        reconciler.ReconcilerService._calculate_node_status(SimpleNamespace(), 96.0, 0.0, 0.0, None, False)
-        == reconciler.NodeStatus.ERROR.value
-    )
-    assert (
-        reconciler.ReconcilerService._calculate_node_status(SimpleNamespace(), 85.0, 0.0, 0.0, None, False)
-        == reconciler.NodeStatus.DEGRADED.value
-    )
+    assert _status_for(96.0) == reconciler.NodeStatus.ERROR.value
+    assert _status_for(85.0) == reconciler.NodeStatus.DEGRADED.value
 
 
 def test_the_churn_window_floor_is_derived_from_the_shared_discovery_ttl_not_a_bare_literal():
@@ -263,7 +262,7 @@ def test_the_churn_window_floor_is_derived_from_the_shared_discovery_ttl_not_a_b
 #
 # Review: the churn signal being TRUE or FALSE is not itself interesting to
 # assert on in isolation -- passing `restart_churn_active=True` straight into
-# `_calculate_node_status` only exercises `_service_health_degraded`'s first
+# `_node_status_and_reason` only exercises `_service_health_degraded`'s first
 # `if`, which is true by construction. What must be tested is whether the
 # REAL computation (against a real, persisted previous row) produces that
 # value in the first place. These tests call the real, module-level
@@ -364,54 +363,20 @@ class _ServiceRow:
         self.extra_data = extra_data or {}
 
 
-class _NoOpNestedTransaction:
-    """Stand-in for `session.begin_nested()` (#17070): never suppresses an exception."""
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-
-class _SeededServiceHeartbeatSession:
+def _seeded_service_heartbeat_session(node, seeded_service: _ServiceRow) -> FakeAsyncSession:
     """Drives `update_node_heartbeat` with ONE pre-seeded existing `Service` row.
 
     The FIRST `execute()` is `_find_node_by_id_or_hostname`'s node lookup.
-    The SECOND is `_upsert_service`'s existing-row lookup -- returns the
+    The SECOND is the batch's lookup of the node's rows -- returns the
     seeded `_ServiceRow`, taking the update path where the churn signal lives.
     Every later call (`_remove_stale_services`'s stale-service scan) resolves
     to "nothing found".
     """
-
-    def __init__(self, node, seeded_service: _ServiceRow):
-        self._node = node
-        self._seeded_service = seeded_service
-        self._reads = 0
-
-    def begin_nested(self):
-        return _NoOpNestedTransaction()
-
-    async def execute(self, _query):
-        self._reads += 1
-        if self._reads == 1:
-            return SimpleNamespace(scalar_one_or_none=lambda: self._node)
-        if self._reads == 2:
-            return SimpleNamespace(scalar_one_or_none=lambda: self._seeded_service)
-        return SimpleNamespace(scalar_one_or_none=lambda: None, scalars=lambda: SimpleNamespace(all=lambda: []))
-
-    def add(self, _obj):
-        pass
-
-    async def commit(self):
-        pass
-
-    async def refresh(self, _obj):
-        pass
+    return FakeAsyncSession(results=[[node], [seeded_service]])
 
 
 def test_a_churning_service_degrades_across_a_real_heartbeat_against_its_prior_row():
-    """The full path, not `_calculate_node_status` or `_restart_churn_active`
+    """The full path, not `_node_status_and_reason` or `_restart_churn_active`
     in isolation.
 
     A `Service` row already on record from a PRIOR heartbeat shows
@@ -420,8 +385,8 @@ def test_a_churning_service_degrades_across_a_real_heartbeat_against_its_prior_r
     transition the node to DEGRADED because `_update_existing_service`
     detects the rise against that prior row, through the real
     `update_node_heartbeat` -> `_update_node_metrics` ->
-    `_sync_discovered_services` -> `_upsert_service` ->
-    `_calculate_node_status` chain, and persists the churn timestamp for the
+    `_sync_discovered_services` -> `_upsert_services` ->
+    `_node_status_and_reason` chain, and persists the churn timestamp for the
     NEXT heartbeat to read.
     """
     node = SimpleNamespace(
@@ -437,7 +402,8 @@ def test_a_churning_service_degrades_across_a_real_heartbeat_against_its_prior_r
         os_info=None,
     )
     seeded_service = _ServiceRow(extra_data={"n_restarts": 44})
-    session = _SeededServiceHeartbeatSession(node, seeded_service)
+    seeded_service.service_name = "autobot-vnc"  # the batch lookup keys rows by name (#20250)
+    session = _seeded_service_heartbeat_session(node, seeded_service)
     service = reconciler.ReconcilerService()
 
     this_beat = {

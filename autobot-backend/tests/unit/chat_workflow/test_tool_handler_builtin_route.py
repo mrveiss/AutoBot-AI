@@ -12,6 +12,7 @@ the four hand-written branches the table replaced (browser #1368, web_search
 """
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -39,7 +40,7 @@ def _mixin() -> ToolHandlerMixin:
     mixin._enforce_forbidden_work = lambda *a, **k: None
     mixin._enforce_config_protection = lambda *a, **k: None
     mixin._enforce_fact_forcing = lambda *a, **k: None
-    mixin._enforce_work_item_approval = lambda *a, **k: None
+    mixin._enforce_ai_line = AsyncMock(return_value=None)
     return mixin
 
 

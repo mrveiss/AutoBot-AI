@@ -205,10 +205,12 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
 import type { ViolationStatistics } from '@/utils/FeatureFlagsApiClient';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const props = defineProps<{
   metrics: ViolationStatistics | null;
@@ -298,21 +300,9 @@ const handleDaysChange = () => {
 const getPercentage = (value: number, max: number) => {
   return Math.min((value / max) * 100, 100);
 };
-
-const formatDayLabel = (dateString: string) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', { weekday: 'short' });
-};
-
-const formatTime = (timestamp: number) => {
-  const date = new Date(timestamp * 1000);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
+const { locale } = useI18n()
+const formatDayLabel = createDateFormatter({ kind: 'date', intl: { weekday: 'short' } });
+const formatTime = createDateFormatter({ locale: () => locale.value, unit: 'seconds', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } });
 </script>
 
 <style scoped>
@@ -344,7 +334,7 @@ const formatTime = (timestamp: number) => {
   gap: var(--spacing-2-5);
 }
 
-.header-info h3 i {
+.header-info h3 .icon {
   color: var(--color-primary);
 }
 

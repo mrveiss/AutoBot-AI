@@ -36,6 +36,10 @@ from repo_tests._hardcoded_colour_baseline import (
 from repo_tests._reach import declare
 
 _FRONTEND = Path("autobot-frontend/src")
+#: #17567: the `!important` sweep covers the control plane too. Its keys carry this
+#: prefix so a path in one app cannot collide with the same path in the other.
+_SLM_FRONTEND = Path("autobot-slm-frontend/src")
+SLM_KEY_PREFIX = "slm:"
 _SUFFIXES = {".ts", ".vue", ".js"}
 _SKIP_FRAGMENTS = (
     "assets/css/",
@@ -81,12 +85,11 @@ def _is_colour(token: str, line: str = "", start: int = -1) -> bool:
     return bool(_VALUE_POSITION.search(before))
 
 
-def _colour_scanned_files(root: Path) -> list[str]:
-    """Every file the colour scanner opens. Its reach population."""
-    frontend = root / _FRONTEND
+def _colour_candidates(frontend: Path) -> list[Path]:
+    """Every file under *frontend* the colour scanner opens. One filter for both apps."""
     if not frontend.is_dir():
         return []
-    out: list[str] = []
+    out: list[Path] = []
     for path in sorted(frontend.rglob("*")):
         if path.suffix not in _SUFFIXES or "node_modules" in path.parts:
             continue
@@ -97,35 +100,48 @@ def _colour_scanned_files(root: Path) -> list[str]:
             continue
         if "__tests__" in path.parts or path.name.endswith((".spec.ts", ".test.ts", ".stories.ts")):
             continue
-        out.append(rel)
+        out.append(path)
+    return out
+
+
+def _colour_scanned_files(root: Path) -> list[str]:
+    """Every file the colour scanner opens, in both apps. Its reach population.
+
+    The control plane's keys carry ``SLM_KEY_PREFIX`` (#17567), as the `!important` sweep's do.
+    """
+    out: list[str] = []
+    for tree, prefix in ((_FRONTEND, ""), (_SLM_FRONTEND, SLM_KEY_PREFIX)):
+        out += [prefix + p.relative_to(root / tree).as_posix() for p in _colour_candidates(root / tree)]
     return out
 
 
 def _important_scanned_files(root: Path) -> list[str]:
-    """Every .vue the !important sweep opens. Its reach population."""
-    frontend = root / _FRONTEND
-    if not frontend.is_dir():
-        return []
-    return [
-        p.relative_to(frontend).as_posix() for p in sorted(frontend.rglob("*.vue")) if "node_modules" not in p.parts
-    ]
+    """Every .vue the !important sweep opens, in both apps. Its reach population."""
+    out: list[str] = []
+    for tree, prefix in ((_FRONTEND, ""), (_SLM_FRONTEND, SLM_KEY_PREFIX)):
+        frontend = root / tree
+        if frontend.is_dir():
+            out += [
+                prefix + p.relative_to(frontend).as_posix()
+                for p in sorted(frontend.rglob("*.vue"))
+                if "node_modules" not in p.parts
+            ]
+    return out
 
 
 REACH_COLOUR_FILES = declare(
     "hardcoded-colour-scan",
     discover=_colour_scanned_files,
-    floor=820,
     growth=60,
     skips=0,
-    what="frontend source files scanned for colour literals",
+    what="frontend source files scanned for colour literals, in both frontends (the SLM joined in #17567)",
 )
 REACH_IMPORTANT_FILES = declare(
     "important-declaration-sweep",
     discover=_important_scanned_files,
-    floor=430,
     growth=40,
     skips=0,
-    what="component files scanned for !important",
+    what="component files scanned for !important, in both frontends (570 read; the SLM joined in #17567)",
 )
 
 
@@ -137,16 +153,7 @@ def _scan(root: Path) -> dict[str, int]:
     changes what CI runs on a frontend edit. See the baseline's docstring.
     """
     counts: dict[str, int] = {}
-    for path in sorted(root.rglob("*")):
-        if path.suffix not in _SUFFIXES or "node_modules" in path.parts:
-            continue
-        relative = path.relative_to(root).as_posix()
-        if any(fragment in relative for fragment in _SKIP_FRAGMENTS):
-            continue
-        if path.name in EXEMPT_BASENAMES:
-            continue
-        if "__tests__" in path.parts or path.name.endswith((".spec.ts", ".test.ts", ".stories.ts")):
-            continue
+    for path in _colour_candidates(root):
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -178,13 +185,56 @@ def _scan(root: Path) -> dict[str, int]:
     return counts
 
 
+def _scan_slm(repo: Path) -> dict[str, int]:
+    """The same colour scan over the control plane (#17567): own tree, own baseline, same detector."""
+    return _scan(repo / _SLM_FRONTEND)
+
+
 _STYLE_CONTENT = re.compile(r"<style\b[^>]*>(.*?)</style>", re.DOTALL | re.IGNORECASE)
 _IMPORTANT = re.compile(r"!\s*important", re.IGNORECASE)
+#: Selectors that style markup a third-party library injects at runtime. There
+#: `!important` is the only way to beat the library's own inline styles, so it is
+#: not a design-system override and is not counted (#17567). Each entry carries
+#: its reason; a selector with no stated reason is indistinguishable from an
+#: oversight. A lookalike (`.apexcharts` without the dash, `.my-xtermish`) is NOT
+#: exempt: the patterns need the vendor's own class prefix.
+VENDOR_SELECTORS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\.apexcharts-"), "ApexCharts injects its canvas/tooltip/legend DOM with inline styles"),
+    (re.compile(r"\.xterm(?:-[\w-]+)?(?![\w-])"), "xterm.js sets inline styles on its viewport and rows"),
+)
+_RULE_BLOCK = re.compile(r"([^{}]*)\{([^{}]*)\}")
 _THEME_SOURCES = (
     "assets/css/design-tokens.css",
     "assets/css/themes/light.css",
     "assets/css/themes/dark.css",
 )
+
+
+def _selector_list(selector: str) -> list[str]:
+    """The comma-separated selectors of a rule; a comma inside ``:is(...)`` does not split."""
+    parts, depth, current = [], 0, ""
+    for ch in selector:
+        depth += (ch == "(") - (ch == ")")
+        if ch == "," and depth == 0:
+            parts.append(current)
+            current = ""
+        else:
+            current += ch
+    return [*parts, current]
+
+
+def _is_vendor_rule(selector: str) -> bool:
+    """Every selector in the list targets a vendor class: ``.apexcharts-tooltip, .card`` styles app CSS too."""
+    return all(any(p.search(part) for p, _reason in VENDOR_SELECTORS) for part in _selector_list(selector))
+
+
+def _without_vendor_rules(css: str) -> str:
+    """``css`` with the rule blocks that target only vendor-injected classes removed."""
+
+    def keep(m: re.Match[str]) -> str:
+        return "" if _is_vendor_rule(m.group(1)) else m.group(0)
+
+    return _RULE_BLOCK.sub(keep, css)
 
 
 def _scan_important(root: Path) -> dict[str, int]:
@@ -203,9 +253,19 @@ def _scan_important(root: Path) -> dict[str, int]:
         except (OSError, UnicodeDecodeError):
             continue
         css = "\n".join(m.group(1) for m in _STYLE_CONTENT.finditer(text))
-        found = len(_IMPORTANT.findall(css))
+        found = len(_IMPORTANT.findall(_without_vendor_rules(css)))
         if found:
             counts[path.relative_to(root).as_posix()] = found
+    return counts
+
+
+def _scan_important_all(repo: Path) -> dict[str, int]:
+    """The sweep over both apps: the user frontend's keys as they always were,
+    the control plane's behind ``SLM_KEY_PREFIX`` (#17567)."""
+    counts = _scan_important(repo / _FRONTEND)
+    slm = repo / _SLM_FRONTEND
+    if slm.is_dir():
+        counts.update({SLM_KEY_PREFIX + k: v for k, v in _scan_important(slm).items()})
     return counts
 
 
@@ -240,7 +300,6 @@ def _component_style_blocks(root: Path) -> list[tuple[str, int]]:
 REACH_STYLE_BLOCKS = declare(
     "component-style-block-sweep",
     discover=_component_style_blocks,
-    floor=380,
     growth=40,
     skips=0,
     what="component <style> blocks searched for design-token redefinitions",
@@ -279,3 +338,61 @@ def _token_redefinitions(root: Path, owned: set[str]) -> tuple[dict[str, list[st
         if clashes:
             offenders[path.relative_to(root).as_posix()] = clashes
     return offenders, blocks
+
+
+# --- #20425: a label on a primary fill reads --text-on-primary -------------------------------
+#: --color-primary is white in High Contrast Dark and pale in Dark, so a literal white label on
+#: it vanishes there. --text-on-primary is the token that follows the fill.
+_PRIMARY_FILL = re.compile(
+    r"background(?:-color)?\s*:[^;{}]*var\(\s*--(?:color-)?primary\s*[,)]",
+    re.IGNORECASE,
+)
+_WHITE_LABEL = re.compile(
+    r"(?<![\w-])color\s*:\s*(?:white|#fff(?:fff)?|rgb\(\s*255\s*,\s*255\s*,\s*255\s*\)|var\(\s*--color-white\s*\))"
+    r"\s*(?:!\s*important\s*)?(?=[;}])",
+    re.IGNORECASE,
+)
+_WHITE_ON_PRIMARY_TREES = ((_FRONTEND, ""), (_SLM_FRONTEND, SLM_KEY_PREFIX))
+
+
+def white_on_primary_in(css: str) -> int:
+    """Rules in *css* that fill with the primary token and write a literal white label."""
+    css = _CSS_COMMENT.sub("", css)
+    return sum(
+        1 for m in _RULE_BLOCK.finditer(css) if _PRIMARY_FILL.search(m.group(2)) and _WHITE_LABEL.search(m.group(2))
+    )
+
+
+def _white_on_primary_files(repo: Path) -> list[Path]:
+    out: list[Path] = []
+    for tree, _prefix in _WHITE_ON_PRIMARY_TREES:
+        base = repo / tree
+        if base.is_dir():
+            out += [
+                p for p in sorted(base.rglob("*")) if p.suffix in {".vue", ".css"} and "node_modules" not in p.parts
+            ]
+    return out
+
+
+def _scan_white_on_primary(repo: Path) -> dict[str, int]:
+    """``path -> rules painting a primary fill with a literal white label`` in both apps.
+
+    .vue files contribute their <style> blocks only; .css files are read whole. Keys carry
+    SLM_KEY_PREFIX for the control plane, as the !important sweep does.
+    """
+    counts: dict[str, int] = {}
+    for tree, prefix in _WHITE_ON_PRIMARY_TREES:
+        base = repo / tree
+        for path in _white_on_primary_files(repo):
+            if base not in path.parents:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if path.suffix == ".vue":
+                text = "\n".join(m.group(1) for m in _STYLE_CONTENT.finditer(text))
+            found = white_on_primary_in(text)
+            if found:
+                counts[prefix + path.relative_to(base).as_posix()] = found
+    return counts

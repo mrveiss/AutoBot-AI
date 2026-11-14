@@ -19,11 +19,11 @@ from typing_extensions import Annotated
 
 from api.websocket import ws_manager
 from config import settings
-from models.database import Agent
+from models.database import SlmAgent
 from models.schemas import (
     AgentCreateRequest,
     AgentListResponse,
-    AgentLLMConfigWithKey,
+    AgentLLMConfig,
     AgentResponse,
     AgentUpdateRequest,
 )
@@ -53,7 +53,14 @@ def _encrypt_api_key(api_key: str) -> str:
 
 
 def _decrypt_api_key(encrypted_key: str) -> str | None:
-    """Decrypt API key from storage."""
+    """Decrypt a stored provider key for SERVER-SIDE use only.
+
+    The return value must never reach a response model, a log line or an error
+    body. It was previously returned straight out of `GET /{agent_id}/llm`,
+    which is the disclosure this module was fixed for.
+
+    Decrypts a key from storage.
+    """
     if not encrypted_key:
         return None
     try:
@@ -74,30 +81,30 @@ async def list_agents(
     is_active: bool | None = Query(None),
 ) -> AgentListResponse:
     """List all agents with pagination and filtering."""
-    query = select(Agent)
+    query = select(SlmAgent)
 
     if search:
         query = query.where(
-            (Agent.name.ilike(f"%{search}%"))
-            | (Agent.agent_id.ilike(f"%{search}%"))
-            | (Agent.description.ilike(f"%{search}%"))
+            (SlmAgent.name.ilike(f"%{search}%"))
+            | (SlmAgent.agent_id.ilike(f"%{search}%"))
+            | (SlmAgent.description.ilike(f"%{search}%"))
         )
 
     if is_active is not None:
-        query = query.where(Agent.is_active == is_active)
+        query = query.where(SlmAgent.is_active == is_active)
 
-    query = query.order_by(Agent.is_default.desc(), Agent.name)
+    query = query.order_by(SlmAgent.is_default.desc(), SlmAgent.name)
 
     # Count total
-    count_query = select(func.count(Agent.id))
+    count_query = select(func.count(SlmAgent.id))
     if search:
         count_query = count_query.where(
-            (Agent.name.ilike(f"%{search}%"))
-            | (Agent.agent_id.ilike(f"%{search}%"))
-            | (Agent.description.ilike(f"%{search}%"))
+            (SlmAgent.name.ilike(f"%{search}%"))
+            | (SlmAgent.agent_id.ilike(f"%{search}%"))
+            | (SlmAgent.description.ilike(f"%{search}%"))
         )
     if is_active is not None:
-        count_query = count_query.where(Agent.is_active == is_active)
+        count_query = count_query.where(SlmAgent.is_active == is_active)
 
     count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
@@ -119,7 +126,7 @@ async def get_default_agent(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> AgentResponse:
     """Get the default agent."""
-    result = await db.execute(select(Agent).where(Agent.is_default.is_(True), Agent.is_active.is_(True)))
+    result = await db.execute(select(SlmAgent).where(SlmAgent.is_default.is_(True), SlmAgent.is_active.is_(True)))
     agent = result.scalar_one_or_none()
 
     if not agent:
@@ -138,7 +145,7 @@ async def get_agent(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> AgentResponse:
     """Get a specific agent by ID."""
-    result = await db.execute(select(Agent).where(Agent.agent_id == agent_id))
+    result = await db.execute(select(SlmAgent).where(SlmAgent.agent_id == agent_id))
     agent = result.scalar_one_or_none()
 
     if not agent:
@@ -150,14 +157,29 @@ async def get_agent(
     return AgentResponse.model_validate(agent)
 
 
-@router.get("/{agent_id}/llm", response_model=AgentLLMConfigWithKey)
+@router.get("/{agent_id}/llm", response_model=AgentLLMConfig)
 async def get_agent_llm_config(
     agent_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> AgentLLMConfigWithKey:
-    """Get LLM configuration for an agent with decrypted API key."""
-    result = await db.execute(select(Agent).where(Agent.agent_id == agent_id))
+) -> AgentLLMConfig:
+    """Get an agent's LLM configuration. The API key is NEVER included.
+
+    This previously returned the decrypted provider key as a response-model
+    field, to any authenticated caller. The key is omitted rather than masked:
+    a value the client never receives cannot be written back, so a
+    GET-then-PUT round-trip is a no-op for the stored key -- the same reasoning
+    `public_provider_view` records on the settings path.
+
+    **This endpoint is still not ownership-scoped, and cannot be here.** The
+    `agents` table has no company, tenant or owner column -- only a nullable
+    `created_by` -- so there is no predicate to scope by. Adding one against
+    `created_by` would be an authorization check that passes for every row
+    where it is NULL, which is worse than none because it reads as enforcement.
+    The missing tenancy boundary is tracked separately; removing the secret is
+    what closes the disclosure, and it does not depend on that work.
+    """
+    result = await db.execute(select(SlmAgent).where(SlmAgent.agent_id == agent_id))
     agent = result.scalar_one_or_none()
 
     if not agent:
@@ -166,30 +188,24 @@ async def get_agent_llm_config(
             detail="Agent not found",
         )
 
-    # Decrypt API key
-    api_key = None
-    if agent.llm_api_key_encrypted:
-        api_key = _decrypt_api_key(agent.llm_api_key_encrypted)
-
-    return AgentLLMConfigWithKey(
+    return AgentLLMConfig(
         llm_provider=agent.llm_provider,
         llm_endpoint=agent.llm_endpoint,
         llm_model=agent.llm_model,
         llm_timeout=agent.llm_timeout,
         llm_temperature=agent.llm_temperature,
         llm_max_tokens=agent.llm_max_tokens,
-        llm_api_key=api_key,
     )
 
 
 async def _clear_default_agents(db: AsyncSession) -> None:
     """Helper for create_agent and update_agent. Ref: #1088."""
-    current_default_result = await db.execute(select(Agent).where(Agent.is_default.is_(True)))
+    current_default_result = await db.execute(select(SlmAgent).where(SlmAgent.is_default.is_(True)))
     for default_agent in current_default_result.scalars():
         default_agent.is_default = False
 
 
-async def _broadcast_agent_event(event_type: str, agent: Agent) -> None:
+async def _broadcast_agent_event(event_type: str, agent: SlmAgent) -> None:
     """Helper for create_agent and update_agent. Ref: #1088."""
     await ws_manager.broadcast(
         "events:global",
@@ -212,7 +228,7 @@ async def create_agent(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> AgentResponse:
     """Create a new agent."""
-    result = await db.execute(select(Agent).where(Agent.agent_id == request.agent_id))
+    result = await db.execute(select(SlmAgent).where(SlmAgent.agent_id == request.agent_id))
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -224,7 +240,7 @@ async def create_agent(
 
     encrypted_key = _encrypt_api_key(request.llm_api_key) if request.llm_api_key else None
 
-    agent = Agent(
+    agent = SlmAgent(
         agent_id=request.agent_id,
         name=request.name,
         description=request.description,
@@ -253,7 +269,7 @@ async def create_agent(
     return AgentResponse.model_validate(agent)
 
 
-def _apply_agent_update_fields(agent: Agent, request: AgentUpdateRequest) -> None:
+def _apply_agent_update_fields(agent: SlmAgent, request: AgentUpdateRequest) -> None:
     """Helper for update_agent. Ref: #1088."""
     if request.name is not None:
         agent.name = request.name
@@ -287,7 +303,7 @@ async def update_agent(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> AgentResponse:
     """Update an existing agent."""
-    result = await db.execute(select(Agent).where(Agent.agent_id == agent_id))
+    result = await db.execute(select(SlmAgent).where(SlmAgent.agent_id == agent_id))
     agent = result.scalar_one_or_none()
 
     if not agent:
@@ -317,7 +333,7 @@ async def delete_agent(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> None:
     """Delete an agent. Cannot delete the default agent."""
-    result = await db.execute(select(Agent).where(Agent.agent_id == agent_id))
+    result = await db.execute(select(SlmAgent).where(SlmAgent.agent_id == agent_id))
     agent = result.scalar_one_or_none()
 
     if not agent:

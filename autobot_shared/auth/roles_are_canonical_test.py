@@ -117,16 +117,19 @@ def test_admin_roles_cannot_name_a_non_role():
 # ------------------------------ AC: ADMIN_ROLES is not a permission source
 
 
-def test_being_administrative_grants_nothing_by_itself():
-    """The core #13854 AC, asserted through the role that separates the two.
+def test_being_administrative_grants_nothing_by_itself(monkeypatch):
+    """The core #13854 AC, kept by #19125, asserted through the superadmin role.
 
-    ``superadmin`` is in ``ADMIN_ROLES`` and holds an empty grant list. If any
-    resolver ever again short-circuits on the administrative predicate, this
-    fails. Asserted over the WHOLE Permission enum, not a sample, so a partial
+    ``superadmin`` is in ``ADMIN_ROLES`` and (since #19125) holds admin's set
+    through its ROLE_PERMISSIONS entry. If any resolver short-circuits on the
+    administrative predicate instead of that entry, emptying the resolved table
+    would no longer deny. Asserted over the WHOLE Permission enum, so a partial
     reintroduction cannot slip through.
     """
+    from autobot_shared.auth import permissions as mod
+
+    monkeypatch.setitem(mod._ROLE_PERMISSION_VALUES, Role.SUPERADMIN, frozenset())
     assert is_admin_role("superadmin") is True
-    assert ROLE_PERMISSIONS[Role.SUPERADMIN] == []
 
     granted = [p.value for p in Permission if role_has_permission("superadmin", p.value)]
     assert granted == [], f"ADMIN_ROLES membership leaked {len(granted)} permissions: {granted}"

@@ -117,7 +117,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
 
 from api.schemas_terminal import (
     AdminExecuteRequest,
@@ -157,6 +157,7 @@ from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import LOG_MASK
 from autobot_shared.status_enums import CommandRisk
 from autobot_shared.websocket_subprotocol import accept_websocket
 from constants.error_constants import ERR_SESSION_NOT_FOUND
@@ -169,6 +170,7 @@ from services.simple_pty import simple_pty_manager
 from services.terminal_secrets_service import get_terminal_secrets_service
 
 logger = get_logger(__name__)
+_ADMIN_COMMAND_TIMEOUT_S = 30.0  # one value for the wait and its timeout message (#18056)
 
 # Issue #14998: a router-level admin `Depends` 500s every `@router.websocket`
 # handshake below (Request-typed, unresolvable in a WS scope). HTTP routes keep
@@ -195,6 +197,7 @@ from api.terminal_ssh import (  # noqa: E402
 
 # Tool management router, extracted from this file (#185).
 from api.terminal_tools import router as tools_router
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 
 # On `admin_router` (#15084): they run system commands and carry no gate of their own.
 admin_router.include_router(tools_router, prefix="/terminal")
@@ -585,14 +588,13 @@ async def send_terminal_input(
         raise HTTPException(status_code=404, detail="Session not active")
 
     # Send input to the WebSocket connection
-    # This would be implemented through the session manager
     success = await session_manager.send_input(session_id, request.text)
 
     if success:
         return {
             "session_id": session_id,
             "status": "sent",
-            "input": request.text if not request.is_password else "***",
+            "input": request.text if not request.is_password else LOG_MASK,
         }
     else:
         raise HTTPException(status_code=500, detail="Failed to send input")
@@ -761,7 +763,7 @@ async def _init_terminal_handler(
     # Issue #666: Use async Redis client since TerminalLogger uses await with Redis ops
     redis_client = None
     try:
-        from dependencies import get_async_redis_client
+        from autobot_shared.redis_client import get_async_redis_client
 
         redis_client = await get_async_redis_client(database="main")
     except Exception as e:
@@ -792,15 +794,10 @@ async def _run_terminal_message_loop(
         while True:
             data = await websocket.receive_text()
             message = json.loads(data)
-            logger.info(
-                "[WS RECV] Session %s, Type: %s, Data: %s",
-                session_id,
-                message.get("type"),
-                str(message)[:100],
-            )
+            logger.info("[WS RECV] Session %s, Type: %s, Data: %s", session_id, message.get("type"), str(message)[:100])
             await terminal.handle_message(message)
-    except WebSocketDisconnect:
-        logger.info("WebSocket disconnected for session %s", session_id)
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "_run_terminal_message_loop")
     except Exception as e:
         logger.error("Error in WebSocket handling: %s", e)
         await websocket.send_text(
@@ -1242,52 +1239,39 @@ async def get_terminal_statistics(
 async def admin_execute_command(body: AdminExecuteRequest) -> AdminExecuteResponse:
     """Execute a single shell command and return stdout/stderr/exit_code.
 
-    Runs on the local backend machine. No auth required — accessible via
-    the /autobot-api/ nginx proxy (Issue #983).
-
-    Blocks commands matching RISKY_COMMAND_PATTERNS.
+    Runs on the local backend machine. Admin-only: ``admin_router`` requires
+    ``check_admin_permission`` (Issue #983). Blocks commands matching RISKY_COMMAND_PATTERNS.
     """
     command_lower = body.command.lower().strip()
     for pattern in RISKY_COMMAND_PATTERNS:
         if pattern in command_lower:
-            return {
-                "stdout": "",
-                "stderr": f"Command blocked: contains restricted pattern '{pattern}'",
-                "exit_code": 1,
-            }
+            return _admin_failure(f"Command blocked: contains restricted pattern '{pattern}'")
     try:
         cmd_parts = shlex.split(body.command)
     except ValueError as exc:
-        return {
-            "stdout": "",
-            "stderr": safe_http_detail(exc, "Invalid command syntax"),
-            "exit_code": 1,
-        }
+        return _admin_failure(safe_http_detail(exc, "Invalid command syntax"))
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd_parts,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+        stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=_ADMIN_COMMAND_TIMEOUT_S)
         return {
             "stdout": stdout_b.decode("utf-8", errors="replace"),
             "stderr": stderr_b.decode("utf-8", errors="replace"),
             "exit_code": proc.returncode or 0,
         }
     except asyncio.TimeoutError:
-        return {
-            "stdout": "",
-            "stderr": "Command timed out after 30 seconds",
-            "exit_code": 124,
-        }
+        return _admin_failure(f"Command timed out after {_ADMIN_COMMAND_TIMEOUT_S:.0f} seconds", exit_code=124)
     except Exception:
         logger.exception("Admin terminal execute failed: %s", body.command)
-        return {
-            "stdout": "",
-            "stderr": "Internal error executing command",
-            "exit_code": 1,
-        }
+        return _admin_failure("Internal error executing command")
+
+
+def _admin_failure(stderr: str, exit_code: int = 1) -> dict:
+    """The one shape of a command that produced no output (#18056)."""
+    return {"stdout": "", "stderr": stderr, "exit_code": exit_code}
 
 
 # Issue #14998: merge admin_router's HTTP routes into router now that all exist.

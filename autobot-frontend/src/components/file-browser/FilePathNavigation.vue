@@ -1,17 +1,17 @@
 <template>
   <div class="path-navigation">
-    <!-- Breadcrumb Navigation -->
-    <div class="breadcrumb">
-      <button @click="$emit('navigate-to-path', '/')" class="breadcrumb-item" type="button">
-        <Icon name="home" /> {{ $t('fileBrowser.pathNavigation.home') }}
-      </button>
-      <span v-for="(part, index) in pathParts" :key="index" class="breadcrumb-item">
-        <Icon name="chevron-right" class="breadcrumb-separator" />
-        <button @click="$emit('navigate-to-path', getPathUpTo(index))" class="clickable" type="button">
-          {{ part }}
-        </button>
-      </span>
-    </div>
+    <!-- Breadcrumb Navigation: the kit trail (#17563); the last part is the current folder -->
+    <Breadcrumb
+      class="breadcrumb"
+      :items="crumbs"
+      :label="$t('common.breadcrumb')"
+      @select="$emit('navigate-to-path', pathForCrumb($event))"
+    >
+      <template #item="{ item, index }">
+        <Icon v-if="index === 0" name="home" /> {{ item.label }}
+      </template>
+      <template #separator><Icon name="chevron-right" /></template>
+    </Breadcrumb>
 
     <!-- Path Input -->
     <div class="path-input">
@@ -31,6 +31,8 @@
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { Breadcrumb, type BreadcrumbItem } from '@autobot/ui'
 
 interface Props {
   currentPath: string
@@ -42,6 +44,7 @@ interface Emits {
 
 const props = defineProps<Props>()
 defineEmits<Emits>()
+const { t } = useI18n()
 
 // Local state for path input
 const pathInput = ref(props.currentPath)
@@ -56,11 +59,14 @@ const pathParts = computed(() => {
   return props.currentPath.split('/').filter(part => part)
 })
 
-// Methods
-const getPathUpTo = (index: number): string => {
-  const parts = pathParts.value.slice(0, index + 1)
-  return '/' + parts.join('/')
-}
+// Home, then one crumb per path part; every crumb but the current folder navigates
+const crumbs = computed<BreadcrumbItem[]>(() => [
+  { label: t('fileBrowser.pathNavigation.home'), selectable: true },
+  ...pathParts.value.map((part) => ({ label: part, selectable: true })),
+])
+
+// Crumb 0 is home; crumb n is the path through part n
+const pathForCrumb = (index: number): string => '/' + pathParts.value.slice(0, index).join('/')
 </script>
 
 <style scoped>
@@ -70,31 +76,7 @@ const getPathUpTo = (index: number): string => {
 }
 
 .breadcrumb {
-  @apply flex items-center flex-wrap gap-1 flex-1 min-w-0;
-}
-
-.breadcrumb-item {
-  @apply flex items-center text-sm bg-none border-none cursor-pointer hover:underline p-0;
-  color: var(--text-link);
-  font: inherit;
-}
-
-.breadcrumb-item:hover {
-  color: var(--text-link-hover);
-}
-
-.breadcrumb-item .clickable {
-  @apply cursor-pointer hover:underline bg-none border-none p-0;
-  color: var(--text-link);
-  font: inherit;
-}
-
-.breadcrumb-item .clickable:hover {
-  color: var(--text-link-hover);
-}
-
-.breadcrumb-separator {
-  @apply text-autobot-text-muted mx-1;
+  @apply flex-1 min-w-0;
 }
 
 .path-input {

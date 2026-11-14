@@ -116,7 +116,7 @@ AutoBot supports comprehensive configuration through environment variables with 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTOBOT_USE_LANGCHAIN` | `false` | Use LangChain orchestrator |
-| `AUTOBOT_USE_PHI2` | `false` | Use Phi-2 model (deprecated) |
+| `AUTOBOT_USE_PHI2` | `false` | Use Phi-2 model (deprecated; not provisioned) |
 
 ## Frontend Configuration
 

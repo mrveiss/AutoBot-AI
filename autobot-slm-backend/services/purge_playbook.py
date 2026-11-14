@@ -11,10 +11,18 @@ it had been missing -- and no comment length would have fitted. New material
 moves to a new module; the same answer `service_status.py` got for the same
 reason.
 
+The node's install root is filled in from ``fleet_constants`` when the module loads (#18094), so
+the playbook names the same directory as every other deploy path; the YAML keeps a placeholder
+because its Jinja braces rule out an f-string.
+
 The template is data, not logic: `blue_green.py` writes it verbatim
 (`path.write_text`), substituting nothing. Keeping it beside the code that
 writes it bought nothing that an import does not.
 """
+
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
+
+_INSTALL_ROOT_PLACEHOLDER = "__FLEET_INSTALL_ROOT__"
 
 PURGE_PLAYBOOK_TEMPLATE = """# AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
@@ -67,10 +75,10 @@ PURGE_PLAYBOOK_TEMPLATE = """# AutoBot - AI-Powered Automation Platform
         - /var/lib/redis
         - /etc/redis
       backend:
-        - /opt/autobot/backend
+        - __FLEET_INSTALL_ROOT__/backend
         - /var/log/autobot
       frontend:
-        - /opt/autobot/frontend
+        - __FLEET_INSTALL_ROOT__/frontend
       monitoring:
         - /var/lib/prometheus
         - /var/lib/grafana
@@ -120,4 +128,4 @@ PURGE_PLAYBOOK_TEMPLATE = """# AutoBot - AI-Powered Automation Platform
     - name: Display purge summary
       ansible.builtin.debug:
         msg: "Purged roles: {{ role_list | join(', ') }}"
-"""
+""".replace(_INSTALL_ROOT_PLACEHOLDER, FLEET_INSTALL_ROOT)

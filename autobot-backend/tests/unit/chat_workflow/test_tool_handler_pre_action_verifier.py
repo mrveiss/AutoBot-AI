@@ -71,9 +71,11 @@ def test_the_call_site_still_names_the_enforcer() -> None:
     """
     import inspect
 
-    source = inspect.getsource(ToolHandlerMixin._dispatch_tool_call)
+    # #18430: the guards run from `_seam_guard_message`, which `_dispatch_tool_call` awaits first.
+    source = inspect.getsource(ToolHandlerMixin._seam_guard_message)
 
-    assert "_enforce_pre_action_verifier(" in source
+    assert "_enforce_pre_action_verifier" in source
+    assert "_seam_guard_message(" in inspect.getsource(ToolHandlerMixin._dispatch_tool_call)
 
 
 @pytest.mark.asyncio

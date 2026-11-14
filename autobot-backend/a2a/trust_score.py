@@ -35,12 +35,12 @@ Persistence
 
 Usage
 -----
-    from a2a.trust_score import get_trust_manager, Capability, TrustAccessDenied
+    from a2a.trust_score import get_trust_manager, TrustCapability, TrustAccessDenied
 
     mgr = get_trust_manager()
     mgr.record_success("partner-agent-1")
     level = mgr.get_trust_level("partner-agent-1")
-    mgr.require_capability("partner-agent-1", Capability.SUBMIT_TASKS)  # raises on deny
+    mgr.require_capability("partner-agent-1", TrustCapability.SUBMIT_TASKS)  # raises on deny
 """
 
 import json
@@ -86,11 +86,11 @@ def _level_from_score(score: float) -> TrustLevel:
 
 
 # ---------------------------------------------------------------------------
-# Capability matrix
+# TrustCapability matrix
 # ---------------------------------------------------------------------------
 
 
-class Capability(str, Enum):
+class TrustCapability(str, Enum):
     """What a peer's trust level lets it do. Every member must have an enforcement site (#16957)."""
 
     SUBMIT_TASKS = "submit_tasks"  # submit new A2A tasks -- enforced at api/a2a.py submit_task
@@ -103,32 +103,32 @@ class Capability(str, Enum):
     #   the admin copy at /api/a2a/agent-card would refuse a document anyone can fetch.
 
 
-_CAPABILITY_MATRIX: Dict[TrustLevel, Set[Capability]] = {
+_CAPABILITY_MATRIX: Dict[TrustLevel, Set[TrustCapability]] = {
     TrustLevel.UNTRUSTED: set(),
-    TrustLevel.LIMITED: {Capability.SUBMIT_TASKS},
-    TrustLevel.STANDARD: {Capability.SUBMIT_TASKS, Capability.QUERY_MEMORY},
+    TrustLevel.LIMITED: {TrustCapability.SUBMIT_TASKS},
+    TrustLevel.STANDARD: {TrustCapability.SUBMIT_TASKS, TrustCapability.QUERY_MEMORY},
     # Since #16957, TRUSTED grants nothing beyond STANDARD: the one capability it added
     # had no operation behind it. The level still matters for promotion and demotion;
     # the levels as a whole are to be revisited once the peer-identity re-key is decided.
-    TrustLevel.TRUSTED: {Capability.SUBMIT_TASKS, Capability.QUERY_MEMORY},
+    TrustLevel.TRUSTED: {TrustCapability.SUBMIT_TASKS, TrustCapability.QUERY_MEMORY},
 }
 
 
 class TrustAccessDenied(Exception):
     """Raised when a peer lacks the capability needed for the requested operation."""
 
-    def __init__(self, peer_id: str, capability: Capability, level: TrustLevel) -> None:
+    def __init__(self, peer_id: str, capability: TrustCapability, level: TrustLevel) -> None:
         self.peer_id = peer_id
         self.capability = capability
         self.level = level
         super().__init__(f"Peer {peer_id!r} at trust level {level.value} " f"is not permitted to {capability.value}")
 
 
-def get_capabilities(level: TrustLevel) -> Set[Capability]:
+def get_capabilities(level: TrustLevel) -> Set[TrustCapability]:
     return frozenset(_CAPABILITY_MATRIX[level])
 
 
-def has_capability(level: TrustLevel, capability: Capability) -> bool:
+def has_capability(level: TrustLevel, capability: TrustCapability) -> bool:
     return capability in _CAPABILITY_MATRIX[level]
 
 
@@ -322,7 +322,7 @@ class TrustScoreManager:
         return record.current_level
 
     # ------------------------------------------------------------------
-    # Capability gate
+    # TrustCapability gate
     # ------------------------------------------------------------------
 
     def get_trust_level(self, peer_id: str) -> TrustLevel:
@@ -411,7 +411,7 @@ class TrustScoreManager:
     def get_record(self, peer_id: str) -> TrustRecord:
         return self._load(peer_id)
 
-    def require_capability(self, peer_id: str, capability: Capability) -> None:
+    def require_capability(self, peer_id: str, capability: TrustCapability) -> None:
         """Raise TrustAccessDenied if the peer lacks the required capability."""
         level = self.get_trust_level(peer_id)
         if not has_capability(level, capability):

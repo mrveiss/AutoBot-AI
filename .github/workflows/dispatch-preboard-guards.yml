@@ -1,0 +1,471 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-board fast lane (#21359, AC4 of #18499). Dispatch it on a member PR's head to learn, in
+# minutes and with EVERY failure listed, whether the head would fail a mechanical guard -- instead
+# of finding one guard per merge-train cycle inside the full suite.
+#
+#   gh workflow run dispatch-preboard-guards.yml --ref <member branch> [-f base=main]
+#   gh run download <run id> -n preboard-guards-result
+#
+# A member boards a train only with a completed (not cancelled) result at its approved head whose
+# `overall` is "green" or "green_with_skips" and whose `base_sha` still equals the tip of the base
+# branch at boarding time (every landing moves it; an older result is stale, dispatch again). The lane runs outside
+# the train CI slots: it is dispatch-only, so it never starts on its own, and its concurrency
+# group is its own (one run per dispatched ref; a newer dispatch on the same ref supersedes the
+# older one and nothing else).
+#
+# What it runs
+#   pin     The tip of `base`, resolved ONCE (the only place the branch is read). Its output `base_sha`
+#           is the commit every other job merges, fetched by id: the base advancing during the run
+#           cannot give two jobs two trees. The result job still checks that every shard and the
+#           types job recorded that same commit.
+#   merge   The head MERGED with the pinned base commit, as a local commit that is never pushed:
+#           the state a pull request's merge ref gives the suite. A head that conflicts with the
+#           base tests nothing and the lane is red.
+#   guards  Every test the python suite collects from the guard roots (all of pytest.ini's
+#           testpaths except the product trees), with the suite's own interpreter setup, env,
+#           marker selection and shard plugin, and AUTOBOT_REACH_AUDIT=1 (the reach-floor
+#           staleness band, which the suite enables on train heads). The roots, the floor and the
+#           verdict come from pipeline-scripts/preboard_guard_lane.py; this file names none.
+#           Split in the matrix below by the suite's stable module sharding, balanced over the
+#           lane's own recorded durations. Not fail-fast, no stop-on-first-failure option: one
+#           complete list per run.
+#   own-tests  The test files the head adds or changes (three-dot diff from the pinned base) in the product trees,
+#           run with the suite's own pytest options (-n auto --dist loadscope, its marker selection), so a
+#           member's new tests, and a collection error that only xdist shows (different ids per worker), fail
+#           here and not first inside the train (#21509). The selection is `changed-tests` in
+#           pipeline-scripts/preboard_guard_lane.py: backend, tts-worker, libs and plugins run in the backend
+#           interpreter, SLM backend files in the SLM interpreter, in separate sessions as the suite does. Files
+#           under the guard roots (repo_tests included) are left to the guard shards. An empty selection is
+#           green ("no changed test files"). Not covered: frontend specs (#21509).
+#   added-headers  Every file the head ADDS (or renames or copies into place) in the license-header check's scope must carry the
+#           header in its COMMITTED text at the dispatched head (#21535). The train content gate fails the same file, but
+#           only after the member has boarded; this fails it before. A small job of its own, with no suite environment and
+#           no merge: it reads `git show <head>:<path>`, never a working tree the merge would have changed. The selection
+#           is `added-headers` in pipeline-scripts/preboard_guard_lane.py, over the same three-dot diff as `changed-tests`.
+#           A file the head only modifies is not judged. A failed or missing job is red.
+#   types   The generated-types check on the merged tree, through the composite action the types
+#           dispatch uses.
+#   result  The summary and the artifact below. Fails only when the lane is red or cancelled.
+#
+# Not covered (each is an inline step of a larger job; copying it would give it a second
+# definition). Follow-up #21360: move each into a composite action that its workflow and this one call.
+#   - the product test trees, except the test files the head changes (own-tests runs those) (autobot-backend, autobot-slm-backend, autobot-tts-worker, libs,
+#     plugins/core-plugins), the frontend tests, and the interaction of two members
+#   - the dependency-floor check, the hardcoded-value baseline audit (ssot-coverage.yml), Semgrep
+#     at ERROR severity (security.yml)
+#   - promtool (AUTOBOT_REQUIRE_PROMTOOL, ci.yml): its tests skip here and are accepted only through
+#     the skip allowlist in preboard_guard_lane_skips.py. The two real-ChromaDB modules RUN here against
+#     the real library (no backend conftest stubs it); a skip of either is off-list, so red
+#   - source-reading guard tests that live inside the product trees (for example under
+#     autobot-backend/): they are not run here
+# The skip rule: a skipped test is accepted only when it is on the allowlist in
+# preboard_guard_lane_skips.py (24 entries), by file AND reason prefix, in one of two classes, so that a skip the
+# train's suite shares never turns the lane red but is always listed. covered-by-suite-only: the lane
+# skips it and the suite RUNS it (the suite provides the tool or session). equivalent-to-suite: the
+# suite skips it the same way on the same runner image, so the train is no stricter than the lane; of
+# these, the guards that never run on a CI runner at all are tracked by #21371, the rest skip by design.
+# Any other skip is red. An entry joins with the reason read from the suite's `-rs` summary (ci.yml
+# python-shard step), never from a guess. A skipped test never counts toward the executed floor.
+#
+# Result artifact `preboard-guards-result` holds `result.json` (and `summary.md`), schema 2:
+#   schema        2; bumped when a field below is renamed or removed
+#   run_id        the workflow run
+#   ref, sha      the dispatched branch and its head commit
+#   base_ref      the `base` input; base_sha the base commit the pin job resolved and every job merged;
+#                 behind_base the commits the head lacked from it; merged true when the merge succeeded (false: conflict)
+#   overall       "green" | "green_with_skips" | "red" | "cancelled". green: every check succeeded
+#                 and nothing was skipped. green_with_skips: the same, and every skip is on the
+#                 reviewed allowlist (see the skip rule above). A skip off the allowlist, a failure, a missing shard or
+#                 recorded test file, a conflict or a run under the floor is red.
+#   roots         the guard roots that ran
+#   checks.guards status, executed, floor, failed, skipped, unreviewed_skips, skip_classes, shards, problems
+#                 (the reasons the run was not a complete one: a shard missing or unreadable, an
+#                 unexpected exit code, a recorded test file that produced no test, a conflict, a shard
+#                 or the types job that merged a base other than `base_sha`, a missing types record)
+#   checks.own_tests  status (the own-tests job result; anything but "success", or a missing job, is red)
+#   checks.added_headers  status (the added-headers job result; anything but "success", or a missing job, is red)
+#   checks.types  status (the types job result); the base it merged is recorded in types-meta.json
+#                 (artifact preboard-types-record) and compared with base_sha in checks.guards.problems
+#   failed_tests  [{nodeid, kind: "failure" | "error", message: first line}]
+#   skip_classes  {covered-by-suite-only, equivalent-to-suite, unreviewed}: how many skips are in each
+#                 class, so an operator sees which skips the train will still exercise
+#   skipped_tests [{nodeid, reason, allowed, skip_class}]; every skipped test, reviewed or not
+# The run's page carries the same verdict: a `notice` (green), a `warning` (green_with_skips) or `error`
+# lines (red, cancelled) naming overall, behind_base and the skip counts by class; the summary heading
+# names overall.
+# `executed` (passed, failed, errored; a skipped test is not one) below `floor` makes the guards
+# check a failure. The floor is a share of the node ids .test_durations records under the roots.
+
+name: Dispatch Preboard Guards
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Branch the head is compared with by guards that read the merge base
+        required: false
+        default: main
+        type: string
+
+# One run per dispatched ref. Its own group: it never joins, queues behind, or cancels a pull
+# request or train run, and a run of this lane on one ref never cancels another ref's.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
+
+jobs:
+  # The base is resolved HERE and nowhere else. Every other job merges this exact commit, so the base
+  # advancing while the lane runs cannot give two jobs two different merged trees.
+  pin:
+    name: pin base
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BASE_REF: ${{ inputs.base }}
+    outputs:
+      base_sha: ${{ steps.pin.outputs.base_sha }}
+    steps:
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Resolve the tip of the base branch once
+        id: pin
+        run: python3 pipeline-scripts/preboard_guard_lane.py resolve --base-ref "$BASE_REF" >> "$GITHUB_OUTPUT"
+
+  guards:
+    name: guards shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    needs: [pin]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTEST_FAULTHANDLER_TIMEOUT_S: 600
+      PINNED_BASE_SHA: ${{ needs.pin.outputs.base_sha }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Six shards keep each under the cost target (about twelve minutes of tests): the lane's
+        # roots hold most of the recorded suite time, balanced here over their own durations.
+        # THIS LIST IS THE SHARD COUNT: the plugin and the job name read it through
+        # `strategy.job-total`.
+        shard: [1, 2, 3, 4, 5, 6]
+    services:
+      redis:
+        image: ghcr.io/mrveiss/ci-redis:7-alpine
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      # The dispatched branch itself, with the history the merge reads.
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      # Before the environment is built, so the install sees the merged requirements.
+      - name: Merge the pinned base into the head (local commit, never pushed)
+        id: base
+        run: python3 pipeline-scripts/preboard_guard_lane.py merge --base-sha "$PINNED_BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/setup-python-suite
+
+      - name: Run the guard tests of this shard
+        if: steps.base.outputs.merged == 'true'
+        env:
+          # A pull request's merge ref has the base tip as its first parent; this commit does not.
+          AUTOBOT_RATCHET_BASE_SHA: ${{ steps.base.outputs.base_sha }}
+          # The suite sets it for train heads: the reach-floor staleness band.
+          AUTOBOT_REACH_AUDIT: "1"
+          MERGED: ${{ steps.base.outputs.merged }}
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+          BEHIND_BASE: ${{ steps.base.outputs.behind_base }}
+          SHARD: ${{ matrix.shard }}
+          SPLITS: ${{ strategy.job-total }}
+        run: |
+          roots=$(python3 pipeline-scripts/preboard_guard_lane.py roots)
+          mapfile -t ROOTS <<< "$roots"
+          out="$RUNNER_TEMP/preboard/shard-$SHARD"
+          mkdir -p "$out"
+          python3 pipeline-scripts/preboard_guard_lane.py durations --out "$out/durations.json"
+          rc=0
+          python -m pytest "${ROOTS[@]}" \
+            -n auto --dist loadscope \
+            -p repo_tests.stable_shard \
+            --shard-splits "$SPLITS" --shard-group "$SHARD" \
+            --shard-durations "$out/durations.json" \
+            -m "not integration and not slow and not distributed and not performance" \
+            --tb=short \
+            -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
+            -o junit_family=xunit1 --junitxml="$out/junit.xml" \
+            -q || rc=$?
+          python3 pipeline-scripts/preboard_guard_lane.py meta \
+            --shard "$SHARD" --splits "$SPLITS" --rc "$rc" --out "$out/shard-meta.json"
+          exit "$rc"
+
+      - name: Report a head that conflicts with the base
+        if: steps.base.outputs.merged != 'true'
+        env:
+          MERGED: ${{ steps.base.outputs.merged }}
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+          BEHIND_BASE: ${{ steps.base.outputs.behind_base }}
+          SHARD: ${{ matrix.shard }}
+          SPLITS: ${{ strategy.job-total }}
+        run: |
+          out="$RUNNER_TEMP/preboard/shard-$SHARD"
+          mkdir -p "$out"
+          python3 pipeline-scripts/preboard_guard_lane.py meta \
+            --shard "$SHARD" --splits "$SPLITS" --out "$out/shard-meta.json"
+          echo "::error::the head conflicts with the base; nothing was tested"
+          exit 1
+
+      - name: Upload this shard's report
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: preboard-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/preboard/shard-${{ matrix.shard }}
+          if-no-files-found: warn
+          retention-days: 7
+
+  own-tests:
+    name: own tests
+    needs: [pin]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTEST_FAULTHANDLER_TIMEOUT_S: 600
+      PINNED_BASE_SHA: ${{ needs.pin.outputs.base_sha }}
+    services:
+      redis:
+        image: ghcr.io/mrveiss/ci-redis:7-alpine
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Merge the pinned base into the head (local commit, never pushed)
+        id: base
+        run: python3 pipeline-scripts/preboard_guard_lane.py merge --base-sha "$PINNED_BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Stop on a head that conflicts with the base
+        if: steps.base.outputs.merged != 'true'
+        run: |
+          echo "::error::the head conflicts with the base; nothing was tested"
+          exit 1
+
+      # The dispatched ref's own head (not the merge commit) against the pinned base: three dots, from the merge base.
+      - name: Select the test files this head adds or changes
+        id: select
+        env:
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          python3 pipeline-scripts/preboard_guard_lane.py changed-tests \
+            --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" --out-dir "$RUNNER_TEMP/own-tests" >> "$GITHUB_OUTPUT"
+
+      - name: Set up the suite environment
+        id: suite
+        if: steps.select.outputs.main != '0' || steps.select.outputs.slm != '0'
+        uses: ./.github/actions/setup-python-suite
+
+      # The suite's own options (ci.yml, backend step) without the shard plugin: everything selected runs. Exit 5
+      # is every selected test deselected by the marker selection, not a failure.
+      - name: Run the changed tests - backend, tts-worker, libs, plugins
+        if: steps.select.outputs.main != '0'
+        run: |
+          mapfile -t FILES < "$RUNNER_TEMP/own-tests/main.txt"
+          rc=0
+          python -m pytest "${FILES[@]}" \
+            -n auto --dist loadscope \
+            -m "not integration and not slow and not distributed and not performance" \
+            --tb=short \
+            -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
+            -q -rs || rc=$?
+          if [ "$rc" -eq 5 ]; then
+            echo "::notice::pytest exit 5, no test ran from: ${FILES[*]} (every test deselected by the marker selection, or none collected)"
+            exit 0
+          fi
+          exit "$rc"
+
+      - name: Run the changed tests - slm-backend
+        if: ${{ !cancelled() && steps.suite.outcome == 'success' && steps.select.outputs.slm != '0' }}
+        env:
+          SLM_PYTHON: ${{ steps.suite.outputs.slm-venv }}/bin/python
+        run: |
+          mapfile -t FILES < "$RUNNER_TEMP/own-tests/slm.txt"
+          rc=0
+          "$SLM_PYTHON" -m pytest "${FILES[@]}" \
+            -n auto --dist loadscope \
+            -m "not integration and not slow and not distributed and not performance" \
+            --tb=short \
+            -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
+            -q -rs || rc=$?
+          if [ "$rc" -eq 5 ]; then
+            echo "::notice::pytest exit 5, no test ran from: ${FILES[*]} (every test deselected by the marker selection, or none collected)"
+            exit 0
+          fi
+          exit "$rc"
+
+  # The committed text of the head's added files, not the merged tree: no merge step, no suite environment.
+  added-headers:
+    name: added files carry the license header
+    needs: [pin]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      # The dispatched ref's own head against the pinned base: three dots, from the merge base.
+      - name: Fail on a file this head adds without the license header
+        env:
+          BASE_SHA: ${{ needs.pin.outputs.base_sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python3 pipeline-scripts/preboard_guard_lane.py added-headers --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA"
+
+  types:
+    name: types
+    needs: [pin]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PINNED_BASE_SHA: ${{ needs.pin.outputs.base_sha }}
+    steps:
+      # The dispatched branch itself: the default ref, no PR- or input-derived value.
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Merge the pinned base into the head (local commit, never pushed)
+        id: base
+        run: python3 pipeline-scripts/preboard_guard_lane.py merge --base-sha "$PINNED_BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      # Written before the stop below, so a conflicting head still leaves its record.
+      - name: Record the base this job tested
+        env:
+          MERGED: ${{ steps.base.outputs.merged }}
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/preboard-types"
+          python3 pipeline-scripts/preboard_guard_lane.py types-meta --out "$RUNNER_TEMP/preboard-types/types-meta.json"
+
+      - name: Upload the types job's base record
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: preboard-types-record
+          path: ${{ runner.temp }}/preboard-types
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Stop on a head that conflicts with the base
+        if: steps.base.outputs.merged != 'true'
+        run: |
+          echo "::error::the head conflicts with the base; nothing was tested"
+          exit 1
+
+      - name: Regenerate the generated types and report drift
+        uses: ./.github/actions/generated-types-autofix
+
+  result:
+    name: result
+    needs: [pin, guards, own-tests, added-headers, types]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Download the shard reports
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: preboard-shard-*
+          path: ${{ runner.temp }}/shards
+
+      - name: Download the types job's base record
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: preboard-types-record
+          path: ${{ runner.temp }}/types
+
+      # Exits non-zero only for a red or cancelled lane; green and green_with_skips are boardable.
+      - name: Summarize
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          RUN_ID: ${{ github.run_id }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          BASE_REF: ${{ inputs.base }}
+          PINNED_BASE_SHA: ${{ needs.pin.outputs.base_sha }}
+          OUT_DIR: ${{ runner.temp }}/result
+        run: |
+          mkdir -p "$OUT_DIR" "$RUNNER_TEMP/shards" "$RUNNER_TEMP/types"
+          rc=0
+          python3 pipeline-scripts/preboard_guard_lane.py summarize \
+            --shards "$RUNNER_TEMP/shards" --types "$RUNNER_TEMP/types" \
+            --out "$OUT_DIR/result.json" --markdown "$OUT_DIR/summary.md" || rc=$?
+          cat "$OUT_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+      - name: Upload the result
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: preboard-guards-result
+          path: ${{ runner.temp }}/result
+          if-no-files-found: error
+          retention-days: 14

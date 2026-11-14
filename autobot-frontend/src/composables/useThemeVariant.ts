@@ -43,17 +43,18 @@ const VALID_VARIANTS: readonly BuiltinThemeVariant[] = ['default', 'ember']
 /**
  * Default variant when the user has no saved preference.
  *
- * The user GUI ships the warm "ember" palette by default (Issue #10461 / #9274).
- * Build-time overridable via `VITE_DEFAULT_THEME_VARIANT` so a deployment that
- * shares this build with the /slm control plane can pin `default` and keep the
- * current look. An unset or unrecognised value falls back to `ember`.
+ * The user GUI ships the Refined palette (`default`) by default (#18161). Ember was
+ * the default from #10461 / #9274 until the Refined redesign (#18223); it stays a
+ * selectable variant. Build-time overridable via `VITE_DEFAULT_THEME_VARIANT=ember`
+ * for a deployment that wants the warm palette. An unset or unrecognised value
+ * falls back to `default`.
  */
 function resolveDefaultVariant(): BuiltinThemeVariant {
   const fromEnv = import.meta.env?.VITE_DEFAULT_THEME_VARIANT as string | undefined
   if (fromEnv && (VALID_VARIANTS as readonly string[]).includes(fromEnv)) {
     return fromEnv as BuiltinThemeVariant
   }
-  return 'ember'
+  return 'default'
 }
 
 /** Default variant when no preference is set */
@@ -152,6 +153,19 @@ function loadThemeVariant(): ThemeVariant {
     // localStorage may be unavailable
   }
   return DEFAULT_VARIANT
+}
+
+/**
+ * True when this device holds an explicit variant choice. Account sync uses it
+ * to tell "the user picked Default" from "the user never picked" (#18240): the
+ * account's `default` only overrides a device that has chosen something.
+ */
+export function hasStoredThemeVariant(): boolean {
+  try {
+    return localStorage.getItem(THEME_VARIANT_STORAGE_KEY) !== null
+  } catch {
+    return false
+  }
 }
 
 /**

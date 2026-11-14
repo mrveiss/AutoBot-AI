@@ -31,6 +31,7 @@ import type {
   WorkflowStepStatus,
   RiskLevel,
 } from './_generated/workflow'
+import type { RiskTier } from './riskTier'
 export type { PromptSpec, WorkflowTask, WorkflowPlan, WorkflowStepStatus, RiskLevel }
 
 /**
@@ -90,6 +91,8 @@ export interface AutomationWorkflowStep {
   status: WorkflowStepStatus
   requires_confirmation: boolean
   risk_level: RiskLevel
+  /** Sent by the backend (#13422); absent on steps the client builds before saving. */
+  risk_tier?: RiskTier | null
   estimated_duration: number
   dependencies?: string[]
   execution_result?: Record<string, unknown>

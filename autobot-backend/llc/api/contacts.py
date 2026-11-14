@@ -49,6 +49,7 @@ from user_management.services import TenantContext
 from ..services.authz import NotAuthorisedError
 from ..services.contact import ContactService
 from ..services.contact_directory import ContactDirectoryService, ContactInUseError
+from ._common import actor_id, bad_request, forbidden
 
 router = APIRouter(prefix="/contacts", tags=["llc-contacts"])
 
@@ -64,16 +65,6 @@ _NOTES_MAX_LENGTH = 2000
 
 def _svc() -> ContactService:
     return _get_svc()
-
-
-def _actor_id(current_user: dict) -> uuid.UUID:
-    """Derive the acting user's id from the authenticated session, never the
-    client-supplied body/query (#13969 review M1 — a client-supplied ``actor``
-    let the audit trail's actor identity and USER/SYSTEM discriminator be
-    whatever the caller typed, and an unparseable value was an unhandled 500
-    in ``ActivityLogService.record``)."""
-    raw = current_user.get("id") or current_user.get("user_id")
-    return uuid.UUID(str(raw))
 
 
 def _strip_full_name(value: str) -> str:
@@ -187,12 +178,12 @@ async def merge_contacts(
             company_id=company_id,
             keep_id=body.keep_id,
             merge_id=body.merge_id,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise forbidden(exc) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise bad_request(exc) from exc
     await session.commit()
     return ContactResponse.model_validate(survivor)
 
@@ -216,7 +207,7 @@ async def _delete_via_directory(
             session,
             company_id=company_id,
             contact_id=contact_id,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except ContactInUseError as exc:
         raise HTTPException(
@@ -224,7 +215,7 @@ async def _delete_via_directory(
             detail={"message": str(exc), "company_ids": [str(c) for c in exc.company_ids]},
         ) from exc
     except NotAuthorisedError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise forbidden(exc) from exc
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
     await session.commit()
@@ -311,7 +302,7 @@ async def create_contact(
         phone=body.phone,
         role_title=body.role_title,
         notes=body.notes,
-        actor=_actor_id(_current_user),
+        actor=actor_id(_current_user),
     )
     await session.commit()
     return ContactResponse.model_validate(contact)
@@ -343,7 +334,7 @@ async def update_contact(
 ) -> ContactResponse:
     assert_company_access(ctx, company_id)
     updates = body.model_dump(exclude_unset=True)
-    contact = await _svc().update(session, company_id, contact_id, actor=_actor_id(_current_user), **updates)
+    contact = await _svc().update(session, company_id, contact_id, actor=actor_id(_current_user), **updates)
     if contact is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
     await session.commit()

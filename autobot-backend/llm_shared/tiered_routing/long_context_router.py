@@ -25,7 +25,7 @@ from autobot_shared.logging_manager import get_logger
 
 from ..model_param_registry import list_long_context_candidates
 from .complexity_scorer import TaskComplexityScorer
-from .tier_config import ComplexityResult, TierConfig, TierMetrics
+from .tier_config import ComplexityResult, TierConfig, TierMetrics, disabled_route
 
 logger = get_logger(__name__)
 
@@ -75,12 +75,7 @@ class LongContextRouter:
             (selected_model, result) tuple.
         """
         if not self.config.enabled:
-            return self.config.models.complex, ComplexityResult(
-                score=0.0,
-                factors={},
-                tier="complex",
-                reasoning="Tiered routing disabled",
-            )
+            return disabled_route(self.config)
 
         result = self.scorer.score(messages)
 
@@ -119,6 +114,9 @@ class LongContextRouter:
     def get_metrics(self) -> Dict:
         """Return routing metrics dict."""
         return self._metrics.to_dict()
+
+    def reset_metrics(self) -> None:
+        self._metrics = TierMetrics()
 
     # ------------------------------------------------------------------
     # Internal helpers

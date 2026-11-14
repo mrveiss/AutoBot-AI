@@ -19,7 +19,7 @@ import type {
   FleetSummary,
   FleetUpdateSummary,
   NodeUpdateSummary,
-  HealthStatus,
+  NodeHealthStatus,
   NodeRole,
   NodeCreate,
   NodeUpdate,
@@ -116,7 +116,7 @@ export const useFleetStore = defineStore('fleet', () => {
     }
   })
 
-  const overallHealth = computed<HealthStatus>(() => {
+  const overallHealth = computed<NodeHealthStatus>(() => {
     const summary = fleetSummary.value
     if (summary.total_nodes === 0) return 'unknown'
     if (summary.unhealthy_nodes > 0 || summary.offline_nodes > 0) return 'unhealthy'

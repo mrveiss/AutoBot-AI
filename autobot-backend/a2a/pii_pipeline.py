@@ -28,9 +28,9 @@ Usage
         ...
 
 
-Boundary: this module is one of seven that own a secret detector — see
+Boundary: this module is one of three that own a secret detector — see
 ``docs/developer/REDACTION_BOUNDARY.md`` for which redactor owns which shape of
-the problem, and add a new detector there rather than starting an eighth (#16688).
+the problem, and add a new detector there rather than starting another (#16688).
 """
 
 import hashlib

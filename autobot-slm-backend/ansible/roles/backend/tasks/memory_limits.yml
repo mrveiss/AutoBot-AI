@@ -1,6 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-# #13765: guarantee `ansible_memtotal_mb` before the backend unit is rendered.
+# #13765: guarantee `ansible_facts['memtotal_mb']` before the backend unit is rendered.
 #
 # autobot-backend.service.j2 derives MemoryHigh/MemoryMax from that fact. Every
 # play in playbooks/update-all-nodes.yml — the playbook behind code-sync and
@@ -19,7 +19,7 @@
       - "!all"
       - "!min"
       - hardware
-  when: ansible_memtotal_mb is not defined
+  when: ansible_facts['memtotal_mb'] is not defined
   tags: [backend, systemd, unit, config]
 
 # Assert PRESENCE, not the absence of an error. `setup` above can succeed while
@@ -28,13 +28,13 @@
 - name: "Backend | Fail loudly when host memory cannot be detected (#13765)"
   ansible.builtin.assert:
     that:
-      - ansible_memtotal_mb is defined
-      - (ansible_memtotal_mb | int) > 0
+      - ansible_facts['memtotal_mb'] is defined
+      - (ansible_facts['memtotal_mb'] | int) > 0
     fail_msg: >-
       Cannot detect host memory, so autobot-backend's MemoryHigh/MemoryMax
       cannot be derived (#13765). Rendering the unit now would emit no limits
       and look indistinguishable from a host deliberately left unlimited.
-    success_msg: "Detected {{ ansible_memtotal_mb | default(0) }}M host memory"
+    success_msg: "Detected {{ ansible_facts.memtotal_mb | default(0) }}M host memory"
   tags: [backend, systemd, unit, config]
 
 # MemoryHigh throttles, MemoryMax kills. Inverting them gives a unit that is

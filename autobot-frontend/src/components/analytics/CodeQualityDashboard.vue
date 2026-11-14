@@ -12,15 +12,15 @@
         </div>
       </div>
       <div class="header-actions">
-        <button class="btn-refresh" @click="refreshData" :disabled="loading">
+        <BaseButton variant="secondary" size="sm" @click="refreshData" :disabled="loading">
           <span class="icon">↻</span>
           {{ loading ? $t('analytics.codeQuality.loading') : $t('analytics.codeQuality.refresh') }}
-        </button>
+        </BaseButton>
         <div class="export-dropdown" v-click-outside="closeExportMenu">
-          <button class="btn-export" @click="exportMenuOpen = !exportMenuOpen">
+          <BaseButton variant="info" size="sm" @click="exportMenuOpen = !exportMenuOpen">
             <span class="icon">↓</span>
             {{ $t('analytics.codeQuality.export') }}
-          </button>
+          </BaseButton>
           <div v-if="exportMenuOpen" class="dropdown-menu">
             <button @click="exportReport('json')">{{ $t('analytics.codeQuality.exportJson') }}</button>
             <button @click="exportReport('csv')">{{ $t('analytics.codeQuality.exportCsv') }}</button>
@@ -72,7 +72,7 @@
       <div class="health-details">
         <h3>{{ $t('analytics.codeQuality.overallHealthScore') }}</h3>
         <p class="health-description">
-          Your codebase is rated <strong :class="'grade-' + healthScore.grade">{{ getGradeDescription(healthScore.grade) }}</strong>
+          {{ $t('analytics.codeQuality.codebaseRatedPrefix') }} <strong :class="'grade-' + healthScore.grade">{{ getGradeDescription(healthScore.grade) }}</strong>
         </p>
         <div class="trend-indicator" :class="getTrendClass(healthScore.trend)">
           <span class="trend-arrow">{{ healthScore.trend >= 0 ? '↑' : '↓' }}</span>
@@ -81,14 +81,11 @@
         <div class="recommendations" v-if="healthScore.recommendations.length > 0">
           <h4>{{ $t('analytics.codeQuality.topRecommendations') }}</h4>
           <ul>
-            <li v-for="(rec, i) in healthScore.recommendations.slice(0, 3)" :key="i">
+            <li v-for="(rec, i) in visible('recommendations', healthScore.recommendations)" :key="i">
               {{ rec }}
             </li>
           </ul>
-          <TruncationNotice
-            :shown="Math.min(3, healthScore.recommendations.length)"
-            :total="healthScore.recommendations.length"
-          />
+          <TruncationNotice :shown="shown('recommendations', healthScore.recommendations.length)" :total="healthScore.recommendations.length" :step="RECOMMENDATIONS_PAGE" @show-more="showMore('recommendations')" />
         </div>
       </div>
     </div>
@@ -420,32 +417,15 @@
             </div>
           </div>
           <div class="drill-down-files">
-            <table class="files-table">
-              <thead>
-                <tr>
-                  <th>{{ $t('analytics.codeQuality.file') }}</th>
-                  <th>{{ $t('analytics.codeQuality.issues') }}</th>
-                  <th>{{ $t('analytics.codeQuality.score') }}</th>
-                  <th>{{ $t('analytics.codeQuality.topIssue') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="file in drillDownData.files" :key="file.path">
-                  <td class="file-path">{{ truncatePath(file.path) }}</td>
-                  <td class="issues-count">{{ file.issues }}</td>
-                  <td>
-                    <span class="score-badge" :class="getScoreClass(file.score)">
-                      {{ file.score }}
-                    </span>
-                  </td>
-                  <td class="top-issue">{{ file.top_issue }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <BaseTable :columns="drillDownColumns" :rows="drillDownRows" size="compact" :aria-label="$t('analytics.codeQuality.file')">
+              <template #cell-score="{ row }">
+                <BaseBadge size="sm" :variant="SCORE_VARIANT[getScoreClass(Number(row.score))]">{{ row.score }}</BaseBadge>
+              </template>
+            </BaseTable>
           </div>
       </template>
       <template #actions>
-        <button class="btn-secondary" @click="drillDownCategory = null">{{ $t('analytics.codeQuality.close') }}</button>
+        <BaseButton variant="secondary" size="sm" @click="drillDownCategory = null">{{ $t('analytics.codeQuality.close') }}</BaseButton>
       </template>
     </BaseModal>
   </div>
@@ -453,9 +433,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
+import { createDateFormatter, formatLocalTime } from '@/utils/formatHelpers'
 import TruncationNotice from './TruncationNotice.vue';
+import { useShowMore, BaseButton, saveTextFile } from '@autobot/ui'
 import type { DirectiveBinding } from 'vue';
-import { BaseModal } from '@autobot/ui'
+import { BaseBadge, BaseModal, BaseTable, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
@@ -588,6 +570,8 @@ const healthScore = ref<HealthScore>({
   components: {},
   recommendations: [],
 });
+const RECOMMENDATIONS_PAGE = 3;
+const { visible, shown, showMore } = useShowMore(RECOMMENDATIONS_PAGE, () => healthScore.value.recommendations);
 
 const metrics = ref<Metric[]>([]);
 const patterns = ref<Pattern[]>([]);
@@ -619,8 +603,8 @@ const {
     wsConnected.value = true;
     logger.debug('WebSocket connected');
   },
-  onClose: () => {
-    wsConnected.value = false;
+  onClose: (_event, info) => {
+    if (info.current) wsConnected.value = false;
     logger.debug('WebSocket disconnected');
   },
   onError: (error) => {
@@ -775,7 +759,7 @@ const trendStats = computed(() => {
 
 // Removed lastUpdated computed - always recalculating is inefficient
 // Use reactive lastUpdated ref instead, updated only on data refresh
-const lastUpdated = ref(new Date().toLocaleTimeString());
+const lastUpdated = ref(formatLocalTime(new Date()));
 
 // Methods
 async function refreshData(): Promise<void> {
@@ -791,7 +775,7 @@ async function refreshData(): Promise<void> {
       fetchUnwiredTrackers(),  // Issue #6871: load unwired-tracker count
     ]);
     // Update timestamp only on successful data refresh
-    lastUpdated.value = new Date().toLocaleTimeString();
+    lastUpdated.value = formatLocalTime(new Date());
   } catch (error) {
     logger.error('Failed to refresh data:', error);
   } finally {
@@ -851,13 +835,7 @@ async function exportReport(format: string): Promise<void> {
 }
 
 function downloadFile(content: string, filename: string, type: string): void {
-  const blob = new Blob([content], { type });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  window.URL.revokeObjectURL(url);
+  saveTextFile(content, filename, type);
 }
 
 function closeExportMenu(): void {
@@ -938,6 +916,18 @@ function getScoreClass(score: number): string {
   return 'critical';
 }
 
+// #17562: the drill-down file list is the kit table; the score cell is a kit badge.
+const SCORE_VARIANT: Record<string, BadgeVariant> = { excellent: 'success', good: 'info', warning: 'warning', critical: 'error' };
+const drillDownColumns = computed<BaseTableColumn[]>(() => [
+  { key: 'path', label: t('analytics.codeQuality.file'), monospace: true },
+  { key: 'issues', label: t('analytics.codeQuality.issues'), numeric: true },
+  { key: 'score', label: t('analytics.codeQuality.score') },
+  { key: 'top_issue', label: t('analytics.codeQuality.topIssue') },
+]);
+const drillDownRows = computed(() =>
+  drillDownData.value.files.map((file) => ({ ...file, id: file.path, path: truncatePath(file.path) })),
+);
+
 function getTrendClass(trend: number): string {
   if (trend > 0) return 'positive';
   if (trend < 0) return 'negative';
@@ -986,15 +976,9 @@ function truncatePath(path: string): string {
   return `.../${parts.slice(-2).join('/')}`;
 }
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
+const formatDate = createDateFormatter({ kind: 'date', intl: { month: 'short', day: 'numeric' } });
 
-function formatShortDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
+const formatShortDate = createDateFormatter({ kind: 'date', intl: { month: 'numeric', day: 'numeric' } });
 
 // Directive for click outside
 const vClickOutside = {
@@ -1104,39 +1088,6 @@ watch(selectedPeriod, () => {
 .header-actions {
   display: flex;
   gap: var(--spacing-3);
-}
-
-.btn-refresh,
-.btn-export {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: var(--transition-all);
-}
-
-.btn-refresh {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  color: var(--text-primary);
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: var(--bg-tertiary);
-  border-color: var(--border-strong);
-}
-
-.btn-export {
-  background: var(--color-info);
-  border: none;
-  color: var(--text-on-primary);
-}
-
-.btn-export:hover {
-  background: var(--color-info-hover);
 }
 
 .export-dropdown {
@@ -1452,7 +1403,7 @@ watch(selectedPeriod, () => {
 }
 
 .severity-filter button.active {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border-color: var(--color-info);
   color: var(--text-on-primary);
 }
@@ -1689,7 +1640,7 @@ watch(selectedPeriod, () => {
 }
 
 .period-selector button.active {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border-color: var(--color-info);
   color: var(--text-on-primary);
 }
@@ -1826,78 +1777,4 @@ watch(selectedPeriod, () => {
   color: var(--text-muted);
 }
 
-.files-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-}
-
-.files-table th {
-  text-align: left;
-  padding: var(--spacing-3);
-  background: var(--bg-surface);
-  color: var(--text-muted);
-  font-weight: var(--font-semibold);
-}
-
-.files-table td {
-  padding: var(--spacing-3);
-  border-bottom: 1px solid var(--bg-surface);
-  color: var(--text-secondary);
-}
-
-.file-path {
-  font-family: var(--font-mono);
-  color: var(--color-info);
-}
-
-.issues-count {
-  font-weight: var(--font-semibold);
-}
-
-.score-badge {
-  display: inline-block;
-  padding: var(--spacing-1) var(--spacing-2);
-  border-radius: var(--radius-default);
-  font-weight: var(--font-semibold);
-}
-
-.score-badge.excellent {
-  background: var(--color-success-bg);
-  color: var(--color-success);
-}
-
-.score-badge.good {
-  background: var(--color-info-bg);
-  color: var(--color-info);
-}
-
-.score-badge.warning {
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-}
-
-.score-badge.critical {
-  background: var(--color-error-bg);
-  color: var(--color-error);
-}
-
-.top-issue {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-.btn-secondary {
-  padding: var(--spacing-2) var(--spacing-4);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.btn-secondary:hover {
-  background: var(--bg-tertiary);
-}
 </style>

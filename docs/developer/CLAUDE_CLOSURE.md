@@ -2,6 +2,8 @@
 
 **NEVER close an issue without 100% verification. Issues remain OPEN until ALL acceptance criteria are proven met.**
 
+`Closes #N` auto-closes the issue at merge, before any closure comment exists: write `Closes` only when every AC is delivered, otherwise `Refs`; the merger still posts AC evidence and reopens on failure ([OWNER_RULES.md](OWNER_RULES.md)).
+
 ## The Three Mechanical Gates (#11599 — post-mortem of #6828/#8082)
 
 These compare the delivery against the ORIGINAL ISSUE BODY — implementation health (tests pass, modules have callers) is necessary but not sufficient.
@@ -34,7 +36,7 @@ These compare the delivery against the ORIGINAL ISSUE BODY — implementation he
    - Is the feature/fix actually implemented? (check diff)
    - Does it work correctly? (test output, curl, UI verification)
    - All edge cases handled? (review code, error handling)
-   - Tests passing? (run test suite for changed modules)
+   - Tests passing? (targeted local tests for changed modules; CI is the full gate, see [OWNER_RULES.md](OWNER_RULES.md))
    - Documentation updated if needed?
    - **Integration check (#6836 gate):** for every NEW module added, at least one production caller must import it:
      ```bash

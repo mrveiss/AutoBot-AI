@@ -62,7 +62,7 @@ register_adapter("codex_subscription", CodexSubscriptionAdapter())
 async def get_adapter_for_agent(agent_id: str) -> Optional[LLCAdapter]:
     """Return the registered adapter for *agent_id*, or None if unregistered.
 
-    Concrete registry is built in GH#8225 (HeartbeatScheduler). Until then,
+    Concrete registry is built in GH#8225 (LLCHeartbeatScheduler). Until then,
     always returns None so LivenessMonitor and the runs API degrade gracefully
     to no-ops on cancel().
     """

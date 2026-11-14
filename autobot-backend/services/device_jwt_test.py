@@ -84,6 +84,13 @@ def mock_db_session():
         yield result
 
 
+@pytest.fixture(autouse=True)
+def owner_marker_clear():
+    """These tests are about the credential; the owner-marker gate (#20446) has its own file."""
+    with patch("services.device_owner_revocation.reject_if_revoked_by_password_change", new=AsyncMock()):
+        yield
+
+
 @pytest.fixture
 def test_device():
     """Test device data."""

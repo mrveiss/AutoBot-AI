@@ -1,0 +1,272 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""
+WebSocket Channel Adapter
+
+Issue #732: Unified Gateway for multi-channel communication.
+Adapts WebSocket connections to the unified Gateway message format.
+"""
+
+import json
+from typing import Any, Dict
+
+from fastapi import WebSocket
+from starlette.websockets import WebSocketState
+
+from autobot_shared.logging_manager import get_logger
+
+from ..types import ChannelMessage, ChannelType, GatewayMessageType, GatewaySession
+from .transport_base import BaseChannelAdapter
+
+logger = get_logger(__name__)
+
+
+class WebSocketAdapter(BaseChannelAdapter):
+    """
+    WebSocket channel adapter.
+
+    Translates between WebSocket messages and unified Gateway messages.
+    """
+
+    def __init__(self) -> None:
+        """Initialize WebSocket adapter."""
+        super().__init__(ChannelType.WEBSOCKET)
+
+    async def send_message(
+        self,
+        message: ChannelMessage,
+        session: GatewaySession,
+        connection_context: Any | None = None,
+    ) -> bool:
+        """
+        Send message through WebSocket.
+
+        Args:
+            message: Unified message to send
+            session: Session associated with message
+            connection_context: WebSocket connection
+
+        Returns:
+            True if sent successfully
+        """
+        if not isinstance(connection_context, WebSocket):
+            logger.error("Invalid connection context for WebSocket")
+            return False
+
+        websocket: WebSocket = connection_context
+
+        # Check connection state
+        if websocket.client_state != WebSocketState.CONNECTED:
+            logger.warning("WebSocket not connected")
+            return False
+
+        try:
+            # Convert to WebSocket format
+            ws_message = self._to_websocket_format(message)
+
+            # Send as JSON
+            await websocket.send_json(ws_message)
+            return True
+
+        except Exception as e:
+            logger.error("Error sending WebSocket message: %s", e, exc_info=True)
+            return False
+
+    async def receive_message(
+        self,
+        raw_data: Any,
+        session: GatewaySession,
+    ) -> ChannelMessage | None:
+        """
+        Receive and parse WebSocket message.
+
+        Args:
+            raw_data: Raw WebSocket data (dict or str)
+            session: Session receiving the message
+
+        Returns:
+            Parsed ChannelMessage or None
+        """
+        try:
+            # Parse JSON if string
+            if isinstance(raw_data, str):
+                data = json.loads(raw_data)
+            elif isinstance(raw_data, dict):
+                data = raw_data
+            else:
+                logger.warning("Invalid WebSocket message format: %s", type(raw_data))
+                return None
+
+            # Convert from WebSocket format
+            return self._from_websocket_format(data, session)
+
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse WebSocket JSON: %s", e)
+            return None
+        except Exception as e:
+            logger.error("Error receiving WebSocket message: %s", e, exc_info=True)
+            return None
+
+    async def connect(
+        self,
+        session: GatewaySession,
+        connection_params: Dict[str, Any],
+    ) -> Any:
+        """
+        Accept WebSocket connection.
+
+        Args:
+            session: Session to connect
+            connection_params: Must contain 'websocket' key with WebSocket instance
+
+        Returns:
+            WebSocket connection object
+        """
+        websocket = connection_params.get("websocket")
+        if not isinstance(websocket, WebSocket):
+            raise ValueError("connection_params must contain 'websocket' key")
+
+        # Accept connection
+        await websocket.accept()
+
+        logger.info("WebSocket connected for session %s", session.session_id)
+
+        return websocket
+
+    async def disconnect(
+        self,
+        session: GatewaySession,
+        connection_context: Any | None = None,
+    ) -> None:
+        """
+        Close WebSocket connection.
+
+        Args:
+            session: Session to disconnect
+            connection_context: WebSocket connection
+        """
+        if not isinstance(connection_context, WebSocket):
+            return
+
+        websocket: WebSocket = connection_context
+
+        try:
+            if websocket.client_state == WebSocketState.CONNECTED:
+                await websocket.close()
+                logger.info("WebSocket disconnected for session %s", session.session_id)
+        except Exception as e:
+            logger.error("Error closing WebSocket: %s", e, exc_info=True)
+
+    async def handle_heartbeat(
+        self,
+        session: GatewaySession,
+        connection_context: Any | None = None,
+    ) -> bool:
+        """
+        Send WebSocket heartbeat/ping.
+
+        Args:
+            session: Session to send heartbeat for
+            connection_context: WebSocket connection
+
+        Returns:
+            True if connection alive
+        """
+        if not isinstance(connection_context, WebSocket):
+            return False
+
+        websocket: WebSocket = connection_context
+
+        try:
+            if websocket.client_state == WebSocketState.CONNECTED:
+                # Send ping (WebSocket protocol handles this automatically)
+                heartbeat_msg = ChannelMessage(
+                    session_id=session.session_id,
+                    channel=ChannelType.WEBSOCKET,
+                    message_type=GatewayMessageType.SESSION_HEARTBEAT,
+                    content={"status": "alive"},
+                )
+                return await self.send_message(heartbeat_msg, session, websocket)
+            return False
+
+        except Exception as e:
+            logger.error("Heartbeat failed: %s", e)
+            return False
+
+    def _to_websocket_format(self, message: ChannelMessage) -> Dict[str, Any]:
+        """
+        Convert ChannelMessage to WebSocket format.
+
+        Args:
+            message: Unified message
+
+        Returns:
+            WebSocket-compatible dictionary
+        """
+        # Map GatewayMessageType to legacy WebSocket event types
+        event_type_map = {
+            GatewayMessageType.USER_TEXT: "user_message",
+            GatewayMessageType.AGENT_TEXT: "llm_response",
+            GatewayMessageType.AGENT_THOUGHT: "thought",
+            GatewayMessageType.AGENT_TOOL_CODE: "tool_code",
+            GatewayMessageType.AGENT_TOOL_OUTPUT: "tool_output",
+            GatewayMessageType.SYSTEM_STATUS: "progress",
+            GatewayMessageType.SYSTEM_ERROR: "error",
+            GatewayMessageType.SYSTEM_PROGRESS: "progress",
+            GatewayMessageType.SESSION_START: "session_start",
+            GatewayMessageType.SESSION_END: "session_end",
+            GatewayMessageType.SESSION_HEARTBEAT: "heartbeat",
+        }
+
+        event_type = event_type_map.get(message.message_type, "message")
+
+        # Format content based on type
+        data = message.content if isinstance(message.content, dict) else {"content": message.content}
+
+        return {
+            "type": event_type,
+            "data": data,
+            "message_id": message.message_id,
+            "timestamp": message.created_at.isoformat(),
+            "metadata": message.metadata,
+        }
+
+    def _from_websocket_format(
+        self,
+        data: Dict[str, Any],
+        session: GatewaySession,
+    ) -> ChannelMessage:
+        """
+        Convert WebSocket message to ChannelMessage.
+
+        Args:
+            data: WebSocket message data
+            session: Associated session
+
+        Returns:
+            ChannelMessage
+        """
+        # Map legacy WebSocket event types to GatewayMessageType
+        type_map = {
+            "user_message": GatewayMessageType.USER_TEXT,
+            "message": GatewayMessageType.USER_TEXT,
+            "voice": GatewayMessageType.USER_VOICE,
+            "image": GatewayMessageType.USER_IMAGE,
+            "file": GatewayMessageType.USER_FILE,
+        }
+
+        ws_type = data.get("type", "message")
+        message_type = type_map.get(ws_type, GatewayMessageType.USER_TEXT)
+
+        # Extract content
+        content = data.get("data") or data.get("content") or data.get("message", "")
+
+        return ChannelMessage(
+            session_id=session.session_id,
+            channel=ChannelType.WEBSOCKET,
+            message_type=message_type,
+            content=content,
+            metadata=data.get("metadata", {}),
+        )

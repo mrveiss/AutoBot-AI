@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import argparse
 import re
-import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
 
@@ -42,8 +41,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from autobot_shared.paths import (  # noqa: E402
     GitRepoRootUnavailable,
     git_repo_root,
-    scrubbed_git_env,
 )
+
+# tools/lint/ is not a package; make the shared enumeration helpers importable
+# rather than growing another copy of `git ls-files` (#14896).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "lint"))
+
+from _scan_helpers import EmptyEnumeration, GitEnumerationFailed, tracked_paths  # noqa: E402
 
 _REQ = re.compile(r"([A-Za-z0-9_.\-]+)(\[[^\]]*\])?\s*([<>=!~].*)?$")
 # pip accepts both spellings, and a guard that silently skips one reports clean
@@ -113,21 +117,12 @@ def _closure(path: Path) -> list[Path]:
 
 def conflicts(root: Path) -> list[str]:
     """Every package pinned differently anywhere in one install's requirement set."""
-    listing = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "*requirements*.txt"],
-        cwd=str(root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        # Same scrub as the root: an inherited GIT_DIR would enumerate one
-        # checkout's index while *root* names another (#15176).
-        env=scrubbed_git_env(),
-    )
-    if listing.returncode != 0:
-        sys.exit(f"FATAL: git ls-files failed: {listing.stderr.strip()}")
-    files = listing.stdout.split()
-    if not files:
+    try:
+        files = tracked_paths(root, "*requirements*.txt")
+    except EmptyEnumeration:
         sys.exit("FATAL: git ls-files listed no requirements files — refusing to report clean on an empty scope")
+    except GitEnumerationFailed as exc:
+        sys.exit(f"FATAL: git ls-files failed: {exc}")
 
     def _label(path: Path) -> str:
         try:

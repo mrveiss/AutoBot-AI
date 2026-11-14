@@ -8,15 +8,19 @@ Provides real-time metrics for AutoBot system components.
 """
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import aiohttp
 import psutil
 
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
+from autobot_shared.redis_scan import cached_count, count_age_seconds
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
@@ -37,6 +41,12 @@ class SystemMetric:
     metadata: Dict[str, Any] = None
 
 
+# #18999: doc:* / kb_cache:* counts are keyspace walks; refresh at most this often.
+KB_COUNT_REFRESH_SECONDS = env_float_clamped(
+    "AUTOBOT_KB_METRICS_COUNT_REFRESH_SECONDS", 300.0, 1.0, 86400.0, positive_finite=True
+)
+
+
 class SystemMetricsCollector:
     """
     Collects and aggregates system metrics in real-time.
@@ -51,7 +61,7 @@ class SystemMetricsCollector:
         self.logger = get_logger(__name__)
         self._collection_interval = config.get("monitoring.metrics.collection_interval", 5)
         self._is_collecting = False
-        self._auth_error_logged = False  # Track if auth error was already logged
+        self._kb_counts: Dict[str, tuple] = {}  # pattern -> (last attempt ts, count|None, ts count taken)
 
         # Phase 5 (Issue #348): Prometheus is now the primary metrics store
         try:
@@ -360,6 +370,14 @@ class SystemMetricsCollector:
         kb_redis_client = await get_async_redis_client(database="knowledge")
         return kb_redis_client
 
+    async def _cached_key_count(self, redis_client, pattern: str) -> Optional[int]:
+        """Keys matching ``pattern``, walked at most once per refresh window (#18999)."""
+        return await cached_count(self._kb_counts, redis_client, pattern, KB_COUNT_REFRESH_SECONDS)
+
+    def _kb_count_metadata(self, pattern: str) -> Dict[str, Any]:
+        """``count_age_seconds``: how old the cached keyspace count is (up to a refresh window)."""
+        return {"count_age_seconds": count_age_seconds(self._kb_counts, pattern)}
+
     async def _collect_kb_vector_metrics(
         self, redis_client, timestamp: float, metrics: Dict[str, "SystemMetric"]
     ) -> None:
@@ -373,16 +391,17 @@ class SystemMetricsCollector:
             timestamp: Metric timestamp
             metrics: Dictionary to add metrics to
         """
-        vector_count = 0
-        async for key in redis_client.scan_iter(match="doc:*"):
-            vector_count += 1
+        vector_count = await self._cached_key_count(redis_client, "doc:*")
 
+        if vector_count is None:
+            return
         metrics["kb_vector_count"] = SystemMetric(
             timestamp=timestamp,
             name="kb_vector_count",
             value=vector_count,
             unit="count",
             category="knowledge_base",
+            metadata=self._kb_count_metadata("doc:*"),
         )
 
     async def _collect_kb_cache_metrics(
@@ -399,17 +418,17 @@ class SystemMetricsCollector:
             metrics: Dictionary to add metrics to
         """
         # Count cache entries
-        cache_count = 0
-        async for key in redis_client.scan_iter(match="kb_cache:*"):
-            cache_count += 1
+        cache_count = await self._cached_key_count(redis_client, "kb_cache:*")
 
-        metrics["kb_cache_entries"] = SystemMetric(
-            timestamp=timestamp,
-            name="kb_cache_entries",
-            value=cache_count,
-            unit="count",
-            category="knowledge_base",
-        )
+        if cache_count is not None:
+            metrics["kb_cache_entries"] = SystemMetric(
+                timestamp=timestamp,
+                name="kb_cache_entries",
+                value=cache_count,
+                unit="count",
+                category="knowledge_base",
+                metadata=self._kb_count_metadata("kb_cache:*"),
+            )
 
         # Calculate cache hit rate if stats available
         cache_stats = await redis_client.hgetall("kb_cache_stats")
@@ -439,12 +458,13 @@ class SystemMetricsCollector:
         """
         error_msg = str(error)
         if "Authentication required" in error_msg or "NOAUTH" in error_msg:
-            if not self._auth_error_logged:
-                self.logger.warning(
-                    "Knowledge base metrics collection skipped: Redis authentication required. "
-                    "Configure Redis credentials in get_redis_client() to enable KB metrics."
-                )
-                self._auth_error_logged = True
+            log_once(
+                self.logger,
+                logging.WARNING,
+                "kb_metrics_redis_auth",
+                "Knowledge base metrics collection skipped: Redis authentication required. "
+                "Configure Redis credentials in get_redis_client() to enable KB metrics.",
+            )
         else:
             self.logger.error("Error collecting knowledge base metrics: %s", error)
 

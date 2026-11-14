@@ -144,6 +144,10 @@ class BaseCollection(ABC):
     def peek(self, limit: int = 10) -> Dict[str, Any]:
         """Return up to ``limit`` items (any order). Flat-list dict."""
 
+    def modify_metadata(self, metadata: Metadata) -> None:
+        """Merge ``metadata`` into the collection's metadata, keeping every existing key (#18143)."""
+        raise NotImplementedError(f"{type(self).__name__} cannot modify collection metadata")
+
 
 class BaseClient(ABC):
     """Backend-agnostic client / factory for collections.

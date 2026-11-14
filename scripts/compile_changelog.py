@@ -46,18 +46,27 @@ TYPE_LABELS = {
 
 GITHUB_REPO = "mrveiss/AutoBot-AI"
 
+# scripts/ is not a package; put the repo root on the path so the canonical
+# front-matter parser is importable when this runs as a bare CI script (#18093).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from autobot_shared.frontmatter import split_frontmatter  # noqa: E402
+
 
 def parse_fragment(path: Path) -> dict | None:
+    """#18093: a NINTH front-matter variant, and `find("---", 3)` was not line-anchored.
+
+    A `---` inside a value truncated the block: for `title: a --- b` it captured
+    `'title: a'` and dropped every key after it. `split_frontmatter` requires the fence
+    to be a line of its own.
+    """
     text = path.read_text(encoding="utf-8").strip()
-    if not text.startswith("---"):
+    raw, remainder = split_frontmatter(text)
+    if raw is None:
         return None
 
-    end = text.find("---", 3)
-    if end == -1:
-        return None
-
-    frontmatter = text[3:end].strip()
-    body = text[end + 3 :].strip()
+    frontmatter = raw.strip()
+    body = remainder.strip()
 
     meta: dict = {}
     for line in frontmatter.splitlines():

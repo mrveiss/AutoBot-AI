@@ -47,5 +47,9 @@ class RoutingStrategy(Protocol):
         """Return a dict of strategy-specific metrics for monitoring."""
         ...
 
+    def reset_metrics(self) -> None:
+        """Zero the strategy's metrics (admin reset, #696)."""
+        ...
+
 
 __all__ = ["RoutingStrategy"]

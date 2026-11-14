@@ -24,7 +24,8 @@ from prompt_manager import get_language_instruction, resolve_language
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
-from .payloads import AgentStatus, ChatPayload
+from .llm_response_content import try_extract_choices_content, try_extract_message_content
+from .payloads import AgentOutcome, ChatPayload
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -102,7 +103,7 @@ class ChatAgent(StandardizedAgent):
         else:
             token_usage = getattr(response, "usage", {})
         return ChatPayload(
-            status=AgentStatus.SUCCESS,
+            status=AgentOutcome.SUCCESS,
             agent_type="chat",
             model_used=self.model_name,
             response=response_text,
@@ -219,28 +220,6 @@ For complex technical tasks, analysis, or system commands, you should "
 
         return messages
 
-    def _try_extract_message_content(self, response: Dict) -> str | None:
-        """Try to extract content from message dict (Issue #334 - extracted helper)."""
-        if "message" not in response:
-            return None
-        message = response["message"]
-        if not isinstance(message, dict):
-            return None
-        content = message.get("content")
-        return content.strip() if content else None
-
-    def _try_extract_choices_content(self, response: Dict) -> str | None:
-        """Try to extract content from choices list (Issue #334 - extracted helper)."""
-        if "choices" not in response:
-            return None
-        choices = response["choices"]
-        if not isinstance(choices, list) or not choices:
-            return None
-        choice = choices[0]
-        if "message" not in choice or "content" not in choice["message"]:
-            return None
-        return choice["message"]["content"].strip()
-
     def _extract_response_content(self, response: Any) -> str:
         """Extract the actual text content from LLM response.
 
@@ -255,12 +234,12 @@ For complex technical tasks, analysis, or system commands, you should "
 
             if isinstance(response, dict):
                 # Try message content first
-                content = self._try_extract_message_content(response)
+                content = try_extract_message_content(response)
                 if content:
                     return content
 
                 # Try choices format
-                content = self._try_extract_choices_content(response)
+                content = try_extract_choices_content(response)
                 if content:
                     return content
 

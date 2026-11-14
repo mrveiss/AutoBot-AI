@@ -16,23 +16,19 @@ from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
 from fastapi import APIRouter
-from fastapi.responses import PlainTextResponse
 
+from api.codebase_analytics.problem_severity import PROBLEM_SEVERITY_ORDER
+from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
 # Issue #244: Cross-Language Pattern Detection
-from code_intelligence.cross_language_patterns import (
-    CrossLanguageAnalysis,
-    CrossLanguagePatternDetector,
-)
+from code_intelligence.cross_language_patterns import CrossLanguageAnalysis, CrossLanguagePatternDetector
 
 # Issue #208: Code Pattern Detection & Optimization
-from code_intelligence.pattern_analysis import (
-    CodePatternAnalyzer,
-    PatternAnalysisReport,
-)
+from code_intelligence.pattern_analysis import CodePatternAnalyzer, PatternAnalysisReport
 from constants.path_constants import PATH
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
 from utils.cancel_tokens import new_cancel_token, run_cancellable
@@ -52,25 +48,27 @@ from utils.io_executor import get_analytics_executor
 
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..duplicate_detector import (  # noqa: F401
+    HIGH_SIMILARITY_THRESHOLD,
     LOW_SIMILARITY_THRESHOLD,
+    MEDIUM_SIMILARITY_THRESHOLD,
     DuplicateAnalysis,
     DuplicateCodeDetector,
 )
 from ..models import APIEndpointAnalysis
+from ..problem_dedup import dedupe_same_location_problems
+from ..run_status import report_response, run_response_fields
 from ..storage import get_code_collection
 from .duplicates import _run_standard_analysis
+from .scan_responses import ScanUnavailable
 from .shared import (
     filter_problems_by_file_existence,
-    resolve_project_root,
-    resolve_source_root,
+    resolve_git_repo_root,
+    resolve_scan_root,
 )
 
 logger = get_logger(__name__)
 
 router = APIRouter()
-
-# Severity order for sorting (most critical first)
-SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3, "hint": 4}
 
 # All file categories for tracking
 ALL_CATEGORIES = [
@@ -226,7 +224,7 @@ def _generate_category_section(
 
     grouped = _group_problems(problems)
 
-    for severity in ["high", "medium", "low", "info", "hint"]:
+    for severity in PROBLEM_SEVERITY_ORDER:
         if severity in grouped:
             lines.extend(_format_severity_subsection(severity, grouped[severity]))
 
@@ -299,7 +297,7 @@ def _build_summary_section(severity_counts: Dict[str, int], type_counts: Dict[st
         "|----------|-------|",
     ]
 
-    for sev in ["high", "medium", "low", "info", "hint"]:
+    for sev in PROBLEM_SEVERITY_ORDER:
         count = severity_counts.get(sev, 0)
         if count > 0:
             emoji = _get_severity_emoji(sev)
@@ -359,7 +357,7 @@ def _generate_risk_distribution(prediction: PredictionResult) -> List[str]:
         "| Risk Level | Files |",
         "|------------|-------|",
     ]
-    for level in ["critical", "high", "medium", "low", "minimal"]:
+    for level in (s.value for s in Severity.risk_ladder()):
         count = prediction.risk_distribution.get(level, 0)
         emoji = _get_risk_emoji(level)
         lines.append(f"| {emoji} {level.capitalize()} | {count} |")
@@ -670,7 +668,7 @@ def _generate_duplicate_overview(analysis: DuplicateAnalysis) -> List[str]:
 
 def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
     """Generate high similarity duplicates section."""
-    high_similarity_dups = [d for d in analysis.duplicates if d.similarity >= 0.90]
+    high_similarity_dups = [d for d in analysis.duplicates if d.similarity >= HIGH_SIMILARITY_THRESHOLD]
     if not high_similarity_dups:
         return []
 
@@ -701,7 +699,9 @@ def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[st
 
 def _generate_medium_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
     """Generate medium similarity duplicates section."""
-    medium_similarity_dups = [d for d in analysis.duplicates if 0.70 <= d.similarity < 0.90]
+    medium_similarity_dups = [
+        d for d in analysis.duplicates if MEDIUM_SIMILARITY_THRESHOLD <= d.similarity < HIGH_SIMILARITY_THRESHOLD
+    ]
     if not medium_similarity_dups:
         return []
 
@@ -1011,11 +1011,10 @@ def _generate_severity_distribution(report: PatternAnalysisReport) -> List[str]:
         "low": "🟢",
         "info": "🔵",
     }
-    for severity in ["critical", "high", "medium", "low", "info"]:
+    for severity in (s.value for s in reversed(Severity.finding_ladder())):
         count = report.severity_distribution.get(severity, 0)
         if count > 0:
-            emoji = severity_emojis.get(severity, "⚪")
-            lines.append(f"| {emoji} {severity.capitalize()} | {count} |")
+            lines.append(f"| {severity_emojis.get(severity, '⚪')} {severity.capitalize()} | {count} |")
     lines.append("")
     return lines
 
@@ -1228,8 +1227,8 @@ def _generate_cross_language_section(
 
 
 def _fetch_problems_from_chromadb(
-    source_id: str | None = None,
-    source_root: Path | None = None,
+    source_id: str,
+    source_root: Path,
 ) -> List[Dict]:
     """
     Fetch code problems from ChromaDB collection.
@@ -1240,7 +1239,7 @@ def _fetch_problems_from_chromadb(
     prevent hallucinated results from reaching the issue tracker.
 
     Args:
-        source_id: Optional source registry ID to scope results.
+        source_id: Source registry ID the results are scoped to (#20513: required).
         source_root: Filesystem root to resolve relative file paths against.
                      Defaults to the project root when None.
 
@@ -1249,6 +1248,8 @@ def _fetch_problems_from_chromadb(
         Each entry includes ``file_verified: True`` when the path was confirmed
         on disk, or ``file_verified: False`` when the path field was absent.
     """
+    # Before the `try` below, which logs and swallows: a missing source is a caller bug.
+    where_filter = {"$and": [{"type": "problem"}, {"source_id": require_source_id(source_id, "report problems query")}]}
     code_collection = get_code_collection()
     problems = []
 
@@ -1256,15 +1257,6 @@ def _fetch_problems_from_chromadb(
         return problems
 
     try:
-        if source_id:
-            where_filter = {
-                "$and": [
-                    {"type": "problem"},
-                    {"source_id": source_id},
-                ]
-            }
-        else:
-            where_filter = {"type": "problem"}
         results = get_all_paginated(
             code_collection,
             where=where_filter,
@@ -1289,13 +1281,8 @@ def _fetch_problems_from_chromadb(
 
         # Issue #2724: Validate file paths — drop findings that reference
         # files not present in the indexed repository.
-        # Issue #12399: Fall back to resolve_project_root() (deployed-layout-aware,
-        # #10730) rather than get_project_root() (hardcoded parents[4], which
-        # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
-        # standalone rsync layout).
-        root = source_root or Path(resolve_project_root())
-        problems = filter_problems_by_file_existence(problems, root)
-
+        # #20513: the source's own root, never AutoBot's tree as a stand-in.
+        problems = dedupe_same_location_problems(filter_problems_by_file_existence(problems, source_root))  # #20493
         logger.info("Returning %s validated problems for report", len(problems))
     except Exception as e:
         logger.error("Failed to fetch problems from ChromaDB: %s", e)
@@ -1602,18 +1589,18 @@ async def _get_pattern_analysis(
     Args:
         project_root: Resolved filesystem root for the requested source.
             Falls back to AutoBot's own backend dir when None or when it
-            resolves to AutoBot's own project root (default source).
+            resolves to AutoBot's own project root (a self-scan; no source is implied).
 
     Returns:
         PatternAnalysisReport or None if analysis fails
     """
     try:
-        # #12399: compare against resolve_project_root() (deployed-layout-aware),
+        # #12399: compare against resolve_git_repo_root() (deployed-layout-aware),
         # matching the scan_root fallback — otherwise in the deployed layout an
         # AutoBot self-report (project_root == code_source) fails this identity
         # check and scans the full repo instead of PATH.BACKEND_DIR, dropping the
         # #2655 timeout optimization.
-        if project_root and Path(project_root).resolve() != Path(resolve_project_root()).resolve():
+        if project_root and Path(project_root).resolve() != Path(resolve_git_repo_root()).resolve():
             scan_target = str(project_root)
         else:
             scan_target = str(PATH.BACKEND_DIR)
@@ -1682,15 +1669,6 @@ async def _get_duplicate_analysis(
         # LOW_SIMILARITY_THRESHOLD is the detector's own default, which is what
         # this call site relied on implicitly — behaviour unchanged.
         analysis = await _run_standard_analysis(scan_target, LOW_SIMILARITY_THRESHOLD)
-        if analysis is None:
-            # #13602: say so. The GUI polls /duplicates while loading /report and
-            # they now share one lock, so this is the common case — and a report
-            # that omits the section without comment reads as "no duplicates".
-            logger.warning(
-                "Duplicate section omitted from the report: the scan was "
-                "unavailable (already in flight, or it exceeded its deadline)"
-            )
-            return None
 
         logger.info(
             "Duplicate analysis: %d duplicates (%d high, %d medium, %d low)",
@@ -1700,6 +1678,13 @@ async def _get_duplicate_analysis(
             analysis.low_similarity_count,
         )
         return analysis
+    except ScanUnavailable as exc:
+        # #13602/#18013: say so, and say which. The GUI polls /duplicates while
+        # loading /report and they share one lock, so busy is the common case --
+        # and a report that omits the section without comment reads as "no
+        # duplicates".
+        logger.warning("Duplicate section omitted from the report: %s", exc)
+        return None
     except asyncio.TimeoutError:
         logger.warning("Duplicate analysis timed out")
         return None
@@ -2196,6 +2181,7 @@ def _render_report(problems: list, analyses: dict) -> str:
     error_code_prefix="CODEBASE",
 )
 async def generate_analysis_report(
+    source_id: SourceIdQuery,
     format: str = "markdown",
     include_api_analysis: bool = True,
     include_duplicate_analysis: bool = True,
@@ -2204,7 +2190,6 @@ async def generate_analysis_report(
     include_pattern_analysis: bool = True,
     quick: bool = False,
     use_semantic: bool = False,
-    source_id: str | None = None,
 ):
     """
     Generate a code analysis report from the indexed data.
@@ -2221,29 +2206,15 @@ async def generate_analysis_report(
         quick: If True, skip expensive analyses for faster export
         use_semantic: Enable LLM-based semantic analysis for bug prediction (Issue #554)
         source_id: Scope the report and every sub-analysis to this code source
-            (Issue #12372). Falls back to the most recently indexed source, or
-            AutoBot's own root only when no source is resolvable.
+            (Issue #12372). Required (#20513): there is no default source.
 
     Returns:
         Markdown formatted report as plain text
     """
-    # Default to most recent source to prevent cross-project data mixing (#2653)
-    if not source_id:
-        from api.codebase_analytics.source_storage import get_default_source_id
-
-        source_id = await get_default_source_id()
-
     # Issue #2724 / #2760: Resolve source root via shared helper so _fetch_problems_from_chromadb
     # (which runs in a thread) can validate file paths without blocking the event loop.
-    source_root = await resolve_source_root(source_id)
-    # Issue #12372: Sub-analysis scanners need a concrete root even when the
-    # source is unresolvable -- fall back to AutoBot's own project root
-    # (matches resolve_scan_root's fallback behavior) rather than letting each
-    # sub-analysis silently default to its own hard-coded AutoBot path.
-    # Issue #12399: Use resolve_project_root() (deployed-layout-aware, #10730)
-    # to match resolve_scan_root's fallback -- get_project_root() (parents[4])
-    # resolves to /opt/autobot, not the analyzable repo, in the deployed layout.
-    scan_root = source_root or Path(resolve_project_root())
+    # #20513: a source with no checkout is a 404, never AutoBot's own tree.
+    source_root = await resolve_scan_root(source_id)
 
     problems = await asyncio.to_thread(_fetch_problems_from_chromadb, source_id, source_root)
     analyses = await _resolve_analyses(
@@ -2255,13 +2226,7 @@ async def generate_analysis_report(
         include_pattern_analysis=include_pattern_analysis,
         use_semantic=use_semantic,
         source_id=source_id,
-        scan_root=scan_root,
+        scan_root=source_root,
     )
-    report = _render_report(problems, analyses)
-    return PlainTextResponse(
-        content=report,
-        media_type="text/markdown; charset=utf-8",
-        headers={
-            "Content-Disposition": 'attachment; filename="code-analysis-report.md"',
-        },
-    )
+    # #21003: a report built from an interrupted run says so, in its body and its headers.
+    return report_response(_render_report(problems, analyses), await run_response_fields(source_id), source_id)

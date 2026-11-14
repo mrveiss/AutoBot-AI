@@ -8,10 +8,11 @@
  * Preserves identical public API: class TerminalService, useTerminalService, singleton
  */
 
+import { backoffDelay } from '@autobot/ui'
 import { reactive, ref, type Ref } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import apiClient from '@/utils/ApiClient'
-import { NetworkConstants } from '@/constants/network'
+import { getBackendWsUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
@@ -227,9 +228,9 @@ class TerminalService {
     return url
   }
 
-  /** Build a deterministic fallback WebSocket URL from NetworkConstants. */
+  /** The fallback terminal socket: same origin as every other backend socket (#19821). */
   private _buildFallbackWsUrl(): string {
-    return `ws://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}/api/terminal/ws`
+    return `${getBackendWsUrl()}/api/terminal/ws`
   }
 
   // -----------------------------------------------------------------------
@@ -522,7 +523,6 @@ class TerminalService {
     const attempts = this.reconnectAttempts.get(sessionId) || 0
     this.reconnectAttempts.set(sessionId, attempts + 1)
 
-    const delay = this.reconnectDelay * Math.pow(2, attempts)
     this.setConnectionState(sessionId, CONNECTION_STATES.RECONNECTING)
 
     setTimeout(async () => {
@@ -534,7 +534,7 @@ class TerminalService {
           this.setConnectionState(sessionId, CONNECTION_STATES.ERROR)
         }
       }
-    }, delay)
+    }, backoffDelay(attempts, { base: this.reconnectDelay }))
   }
 
   /** Remove the WebSocket reference and stop its health-check. */
@@ -950,9 +950,9 @@ class TerminalService {
   async executeCommand(command: string, options: ExecuteOptions = {}): Promise<any> {
     try {
       return await apiClient.executeTerminalCommand(command, {
-        timeout: options.timeout || 30_000,
+        timeout: options.timeout,
         cwd: options.cwd,
-        env: options.env || {},
+        env: options.env,
       })
     } catch (error) {
       logger.error('Error executing command:', error)

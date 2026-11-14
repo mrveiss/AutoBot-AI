@@ -54,6 +54,7 @@ from autobot_shared.paths import (
     git_repo_root,
     scrubbed_git_env,
 )
+from tools.lint import _parse_cache as parse_cache
 
 
 def project_root() -> Path:
@@ -108,6 +109,12 @@ SLM_RUN = {"autobot-slm-backend"}
 #: ``INTENTIONALLY_UNCOLLECTED``: ``autobot-infrastructure`` legitimately
 #: appears in both, the hooks subtree collected and the rest not.
 NARROWLY_COLLECTED = {
+    "plugins/core-plugins": (
+        "backend-run: named explicitly in ci.yml and pytest.ini's testpaths "
+        "(#12979); the generation-plugin suites load their hyphenated plugin "
+        "modules by file path, so no sys.path entry is needed. Resolves the "
+        "#15178 decision (c) that had parked these"
+    ),
     ".claude/skills/claims-audit": (
         "backend-run: named explicitly in ci.yml and pytest.ini's testpaths "
         "(#14986); `.claude/` as a whole is harness territory and does not collect"
@@ -120,7 +127,7 @@ NARROWLY_COLLECTED = {
         "backend-run: named by pytest.ini's testpaths (line 147) and by "
         "marker-tests.yml's 'marked tests -- infrastructure, libs and frontend' "
         "step (line 341). #15161 repointed this tree's conftest shim, so its "
-        "`from config import unified_config_manager` resolves through "
+        "`from config import config_manager` resolves through "
         "autobot-backend/config/__init__.py's lazy `__getattr__` (line 242) and "
         "the tree collects on its own terms"
     ),
@@ -178,15 +185,6 @@ INTENTIONALLY_UNCOLLECTED = {
         "which no longer resolves', described shared/tests/conftest.py -- a tree "
         "this entry no longer covers, and a breakage #15161 had already repaired"
     ),
-    "plugins": (
-        "#15178 -- DECISION (c) PARKED. 2 modules under "
-        "core-plugins/video-generation-plugin/tools/. `plugins/` is named by no "
-        "ci.yml invocation and no pytest.ini testpath, and the plugin directory is "
-        "hyphenated, so it is not an importable package -- both modules reach their "
-        "subject through importlib.util.spec_from_file_location rather than an "
-        "import. Whether dynamically-loaded plugin trees are gated at all is the "
-        "outstanding decision, not a wiring fix; parked until it is taken"
-    ),
 }
 
 #: Per-prefix ceilings on how many tracked test files each exclusion excuses.
@@ -201,7 +199,6 @@ INTENTIONALLY_UNCOLLECTED = {
 _UNCOLLECTED_CEILINGS = {
     "autobot-infrastructure": 51,
     "autobot-npu-worker": 14,
-    "plugins": 2,
 }
 
 #: Floor under the SUBJECT, not the finding. Every count above is derived from
@@ -293,7 +290,7 @@ def _declared_markers(path: Path) -> set[str]:
     per-test decorator -- and, being an AST walk, cannot be satisfied by the
     string appearing in a comment or a docstring.
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     return {
         node.attr
         for node in ast.walk(tree)

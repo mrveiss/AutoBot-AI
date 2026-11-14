@@ -23,15 +23,39 @@ Architecture:
     - RLM reflection evaluates response quality before persisting
 """
 
-import hashlib
-import json
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
+import aiohttp
 from langchain_core.runnables import RunnableConfig
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_workflow import limits
+from chat_workflow.approval_binding import ai_line_calls_shown, bind_decision
+from chat_workflow.attachment_context import attachment_prompt, deliver_notices, without_block
+from chat_workflow.checkpointer_connection import describe_connection, describe_error, get_checkpointer_connection
+from chat_workflow.graph_hooks import (
+    _emit_agent_execute_hook,
+    _emit_planned_agent_complete_hook,
+    _emit_planned_agent_error_hooks,
+)
+from chat_workflow.graph_planner import NO_PLAN, advance_after_tools, create_plan, with_plan_step
+from chat_workflow.graph_routes import route_after_judge  # noqa: F401  (re-exported: graph.route_after_judge)
+from chat_workflow.graph_tool_dispatch import (
+    dispatch_approved_calls,
+    emit_tool_call_hook,
+    emit_tool_complete_hook,
+    send_denied_message,
+)
+from chat_workflow.stall_escalation import add_stall_nodes, stall_mode
+from chat_workflow.tool_call_loop import (
+    _LOOP_ABORT_THRESHOLD,
+    FINAL_ANSWER_INSTRUCTION,
+    _append_loop_abort_message,
+    _inline_loop_update,
+    are_already_executed,
+    planned_loop_update,
+)
 
 try:
     from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -50,22 +74,8 @@ logger = get_logger(__name__)
 # Tool-call loop detection constants (#3254)
 # ---------------------------------------------------------------------------
 
-# Number of identical-fingerprint iterations required to declare a loop.
-_LOOP_DETECTION_WINDOW: int = 3
-
-# Maximum consecutive loop events before the graph halts tool execution.
-_LOOP_ABORT_THRESHOLD: int = 2
-
-# Warning injected into the prompt on first loop detection.
-_LOOP_WARNING_MSG: str = (
-    "You appear to be calling the same tool with identical or near-identical "
-    "arguments repeatedly without making progress. Break the loop: either use "
-    "the 'respond' tool to explain what you have found so far, or try a "
-    "meaningfully different approach."
-)
 
 # Redis connection for checkpointer
-_REDIS_URI = None  # Set lazily from SSOT config
 _checkpointer = None
 _compiled_graph = None
 
@@ -124,86 +134,21 @@ class ChatState(TypedDict, total=False):
     # has already triggered a regeneration for this turn (capped at 1).
     judge_count: int
 
+    # Planner (#21023): ids only; the plan body lives in Redis. plan_progress = done/total/complete + step block.
+    plan_id: str | None
+    current_step_id: str | None
+    plan_progress: Dict[str, Any]
+
     # Tool-call loop detection (#3254)
     # Each entry is a frozenset fingerprint of (tool_name, args_hash) for one iteration.
     tool_call_fingerprints: List[str]
     tool_loop_count: int
     tool_loop_warning: str
 
+    stall_question: Dict[str, Any] | None  # #21022: the pending human question; None when nothing is asked
+
     # Error tracking
     error: str | None
-
-
-# ---------------------------------------------------------------------------
-# Tool-call loop detection helpers (#3254)
-# ---------------------------------------------------------------------------
-
-
-def _fingerprint_tool_call(tool_call: Dict[str, Any]) -> str:
-    """Return a stable string fingerprint for one tool call.
-
-    The fingerprint is built from the tool name plus a SHA-1 digest of the
-    canonically sorted JSON-serialised params dict.  Using a digest (rather
-    than the raw params string) keeps fingerprints constant-length and avoids
-    false negatives caused by key-ordering differences.
-
-    Issue #3254: content-aware detection — two calls are considered identical
-    when *both* the tool name and the arguments are the same.
-
-    Args:
-        tool_call: A parsed tool-call dict with at least a "name" key and an
-                   optional "params" key (dict or scalar).
-
-    Returns:
-        A short string of the form ``"<name>:<hex_digest>"``.
-    """
-    name = tool_call.get("name", "")
-    params = tool_call.get("params", {})
-    try:
-        canonical = json.dumps(params, sort_keys=True, ensure_ascii=False)
-    except (TypeError, ValueError):
-        canonical = str(params)
-    digest = hashlib.sha1(canonical.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
-    return f"{name}:{digest}"
-
-
-def _detect_tool_call_loop(
-    new_fingerprints: List[str],
-    history: List[str],
-    window: int = _LOOP_DETECTION_WINDOW,
-) -> Tuple[bool, List[str]]:
-    """Detect whether the current iteration is a repetition of recent ones.
-
-    A loop is declared when the last ``window - 1`` entries in ``history``
-    are all identical to the current set of fingerprints.  This requires at
-    least ``window`` consecutive identical iterations before triggering.
-
-    Issue #3254: content-aware (not just count-based) — two iterations are
-    considered identical only when they produce *the same tool calls in the
-    same order*.
-
-    Args:
-        new_fingerprints: Fingerprint strings for the current iteration's
-                          tool calls (one entry per tool call).
-        history:          Accumulated per-iteration fingerprint strings from
-                          previous iterations (each entry is one iteration's
-                          comma-joined fingerprints).
-        window:           How many identical consecutive iterations trigger
-                          the loop alarm (default: ``_LOOP_DETECTION_WINDOW``).
-
-    Returns:
-        ``(is_loop, updated_history)`` where ``updated_history`` has the new
-        iteration's fingerprint appended.
-    """
-    current_key = ",".join(new_fingerprints)
-    updated = (list(history) + [current_key])[-window:]
-
-    if len(updated) < window:
-        return False, updated
-
-    recent = updated[-(window):]
-    is_loop = len(set(recent)) == 1 and recent[0] != ""
-    return is_loop, updated
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +200,10 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
             "tool_call_fingerprints": [],
             "tool_loop_count": 0,
             "tool_loop_warning": "",
+            # #18430: a yes never outlives its turn (the checkpointer would otherwise carry it forward).
+            "approval_decision": None,
+            "pending_approval": None,
+            **NO_PLAN,  # #21023: a plan never outlives its turn
         }
     except Exception as exc:
         logger.error("initialize_session failed: %s", exc, exc_info=True)
@@ -310,7 +259,9 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     manager = config["configurable"]["manager"]
 
     session = await manager.get_or_create_session(state["session_id"])
-    llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], state.get("context", {}))
+    updated_context = dict(state.get("context", {}) or {})  # #20195: the seam stamps INTO this; the node returns it
+    llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], updated_context)
+    await deliver_notices(state["session_id"], llm_params, config["configurable"].get("stream_callback"))  # #21006
     ctx = manager._create_llm_iteration_context(
         llm_params,
         state["session_id"],
@@ -324,7 +275,6 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     # into ctx.context. Without this, the ctx built above — which DOES carry
     # the flag via _create_llm_iteration_context — is discarded, and the
     # response-metadata cost badge sees it only on the non-graph path.
-    updated_context = dict(state.get("context", {}) or {})
     updated_context["lightweight_mode_used"] = llm_params.get("lightweight_mode_used", False)
 
     return {
@@ -332,7 +282,7 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
             "ollama_endpoint": ctx.ollama_endpoint,
             "selected_model": ctx.selected_model,
             "system_prompt": ctx.system_prompt,
-            "initial_prompt": ctx.initial_prompt,
+            "initial_prompt": without_block(llm_params),  # #20195: file text never rides the Redis checkpoint
         },
         "used_knowledge": ctx.used_knowledge,
         "rag_citations": [c for c in (ctx.rag_citations or [])],
@@ -412,6 +362,8 @@ def _build_llm_iteration_context(state: ChatState):
     if loop_warning:
         initial_prompt = _inject_mid_conversation_warning(loop_warning, initial_prompt)
 
+    initial_prompt = with_plan_step(initial_prompt, state)  # #21023: the current plan step, if the turn has a plan
+
     # GH#11159/#11160: carry governed identity from the request context bag.
     agent_context, work_item_id, approval_cats = build_governed_identity(
         state.get("context", {}) or {}, state["session_id"]
@@ -421,7 +373,7 @@ def _build_llm_iteration_context(state: ChatState):
     # call evaluated as the default role — which is the bug being fixed.
     auth_role = resolve_auth_role(state.get("context", {}) or {})
 
-    return LLMIterationContext(
+    ctx = LLMIterationContext(
         ollama_endpoint=state["llm_params"]["ollama_endpoint"],
         selected_model=state["llm_params"]["selected_model"],
         session_id=state["session_id"],
@@ -444,6 +396,10 @@ def _build_llm_iteration_context(state: ChatState):
         work_item_id=work_item_id,
         requires_approval_before=approval_cats,
     )
+    # #18430: a person's yes covers exactly the calls request_approval bound it to; line 3 never is.
+    decision = state.get("approval_decision") or {}
+    ctx.approved_fingerprints = frozenset(decision.get("bound") or ()) if decision.get("approved") else frozenset()
+    return ctx
 
 
 async def _run_llm_iteration(manager, ctx, iteration, messages, stream_cb):
@@ -463,7 +419,7 @@ async def _run_llm_iteration(manager, ctx, iteration, messages, stream_cb):
 
     async for item in manager._run_continuation_loop_iteration(
         http_client,
-        ctx.initial_prompt,
+        await attachment_prompt(manager, ctx),  # #20195: file text re-resolved per call, never checkpointed
         iteration,
         ctx,
     ):
@@ -492,21 +448,15 @@ async def _run_llm_iteration(manager, ctx, iteration, messages, stream_cb):
 # ---------------------------------------------------------------------------
 
 
-def _tool_call_needs_approval(tool_call: Dict[str, Any], ctx) -> bool:
-    """Combined work-item + category approval gate for one planned tool call.
+async def _tool_call_needs_approval(tool_call: Dict[str, Any], ctx) -> bool:
+    """Whether a planned tool call must wait for a person (GH#11202, #18430).
 
-    GH#11202: a tool call requires approval when the run carries declared
-    ``requires_approval_before`` categories (from the work item and/or the
-    session, already resolved onto ``ctx``) AND this tool's action category
-    matches one of them, per the existing ``_approval_category_for`` matcher
-    (GH#11160/#11206) — reused verbatim, never reinvented.
+    Not a policy of its own: it asks the AI-line point's resolver (stored line, approval baseline and
+    the work item's declared categories), so the plan-time interrupt and the dispatch seam agree.
     """
-    from chat_workflow.tool_handler import _approval_category_for
+    from services.ai_line_enforcement import call_needs_approval
 
-    declared = getattr(ctx, "requires_approval_before", None) or []
-    if not declared:
-        return False
-    return _approval_category_for(tool_call.get("name", ""), declared) is not None
+    return await call_needs_approval(tool_call, ctx)
 
 
 async def _run_llm_iteration_plan(manager, ctx, iteration, messages, stream_cb):
@@ -526,7 +476,7 @@ async def _run_llm_iteration_plan(manager, ctx, iteration, messages, stream_cb):
 
     async for item in manager._run_llm_iteration_plan_only(
         http_client,
-        ctx.initial_prompt,
+        await attachment_prompt(manager, ctx),  # #20195: file text re-resolved per call, never checkpointed
         iteration,
         ctx,
     ):
@@ -541,36 +491,6 @@ async def _run_llm_iteration_plan(manager, ctx, iteration, messages, stream_cb):
                 messages.append(msg_dict)
 
     return messages, llm_response, tool_calls, should_stop
-
-
-async def _emit_planned_agent_error_hooks(session_id, iteration, exc: Exception) -> None:
-    """Fire ON_AGENT_ERROR for the plan-only path (mirrors generate_response). GH#11202."""
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_ERROR.value,
-            session_id=session_id,
-            iteration=iteration,
-            error=str(exc),
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_ERROR failed (non-fatal): %s", _hook_exc)
-
-
-async def _emit_planned_agent_complete_hook(session_id, iteration, llm_response: str) -> None:
-    """Fire ON_AGENT_COMPLETE for the plan-only path (mirrors generate_response). GH#11202."""
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_COMPLETE.value,
-            session_id=session_id,
-            iteration=iteration,
-            response=llm_response or "",
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_COMPLETE failed (non-fatal): %s", _hook_exc)
 
 
 async def _generate_response_planned(
@@ -622,7 +542,7 @@ async def _generate_response_planned(
 
     tool_calls = tool_calls or []
     for tc in tool_calls:
-        tc["needs_approval"] = _tool_call_needs_approval(tc, ctx)
+        tc["needs_approval"] = await _tool_call_needs_approval(tc, ctx)
 
     if tool_calls:
         emit_plan(tool_calls, session_id=session_id)
@@ -642,7 +562,21 @@ async def _generate_response_planned(
         "tool_calls": tool_calls,
         "workflow_messages": messages,
         "tool_loop_warning": "",
+        # #18430: a yes belongs to the batch it was given for; a new plan starts with none.
+        "approval_decision": None,
+        "pending_approval": None,
     }
+
+
+def _carry_tool_results_into_prompt(manager, ctx, state: ChatState) -> None:
+    """After a tool has run, the model must see its result, or it asks for the same call again (#19715)."""
+    if not ctx.execution_history:
+        return
+    prompt = manager._build_and_log_continuation_prompt(ctx, ctx.execution_history)
+    for warning in (state.get("rlm_refinement_hint", ""), state.get("tool_loop_warning", "")):
+        if warning:
+            prompt = _inject_mid_conversation_warning(warning, prompt)
+    ctx.initial_prompt = with_plan_step(prompt, state)  # #21023
 
 
 async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
@@ -656,8 +590,6 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
     if state.get("error"):
         return {}
 
-    import aiohttp
-
     from chat_workflow.cot_events import emit_step_complete, emit_step_start
 
     manager = config["configurable"]["manager"]
@@ -665,6 +597,8 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
     messages = list(state.get("workflow_messages", []))
     iteration = state.get("iteration_count", 0) + 1
     ctx = _build_llm_iteration_context(state)
+    _carry_tool_results_into_prompt(manager, ctx, state)
+    results_before = len(ctx.execution_history)
     session_id = state.get("session_id")
 
     # Issue #3232: emit step-level CoT event so frontend can track LLM reasoning.
@@ -676,24 +610,13 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         step_id=step_name,
     )
 
-    # Issue #3278: notify plugins before LLM execution.
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
+    await _emit_agent_execute_hook(session_id, iteration)  # Issue #3278
 
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_EXECUTE.value,
-            session_id=session_id,
-            iteration=iteration,
-            agent_type="chat_workflow",
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_EXECUTE failed (non-fatal): %s", _hook_exc)
-
-    # GH#11202: flag-gated plan-only path. OFF (default) falls through to the
-    # unchanged inline-dispatch path below — zero behavior change when off.
+    # GH#11202 flag-gated plan-only path; #20195: attachment turns (and that chat's later turns) take it whatever
+    # the flag, so a person can answer each call. Otherwise OFF falls through to the unchanged inline path.
     from chat_workflow.session_role import CHAT_APPROVAL_GATE_ENABLED
 
-    if CHAT_APPROVAL_GATE_ENABLED:
+    if CHAT_APPROVAL_GATE_ENABLED or ctx.approve_every_call:
         return await _generate_response_planned(
             state, manager, ctx, iteration, messages, stream_cb, step_name, _cot_start
         )
@@ -712,39 +635,18 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
             output_summary="LLM error: Request failed",
             session_id=session_id,
         )
-        # Issue #3278: notify plugins on agent error.
-        try:
-            from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-            await HookRegistry().call_hook(
-                Hook.ON_AGENT_ERROR.value,
-                session_id=session_id,
-                iteration=iteration,
-                error=str(exc),
-            )
-        except Exception as _hook_exc:  # noqa: BLE001
-            logger.debug("Plugin hook ON_AGENT_ERROR failed (non-fatal): %s", _hook_exc)
+        await _emit_planned_agent_error_hooks(session_id, iteration, exc)  # Issue #3278
         return {"error": str(exc), "workflow_messages": messages}
 
-    # Issue #3278: notify plugins after successful LLM execution.
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_COMPLETE.value,
-            session_id=session_id,
-            iteration=iteration,
-            response=llm_response or "",
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_COMPLETE failed (non-fatal): %s", _hook_exc)
+    await _emit_planned_agent_complete_hook(session_id, iteration, llm_response or "")  # Issue #3278
 
     # Issue #13295 (review B3): append unconditionally — see the matching
     # comment in _generate_response_planned for why a skipped append here
     # would desync all_responses[idx] from iteration=idx+1.
     all_responses = list(state.get("all_llm_responses", []))
     all_responses.append(llm_response or "")
-    parsed_tool_calls = list(ctx.execution_history) if ctx.execution_history else []
+    # #19715: only this pass's results are this pass's calls; the whole list stays in execution_history.
+    parsed_tool_calls = list(ctx.execution_history[results_before:])
 
     # Issue #3232: emit plan event when the response contains a planning block.
     if parsed_tool_calls:
@@ -767,6 +669,7 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         "iteration_count": iteration,
         "all_llm_responses": all_responses,
         "tool_calls": parsed_tool_calls,
+        "execution_history": list(ctx.execution_history),  # #19715: the next prompt is built from this
         "workflow_messages": messages,
         # Reset loop warning so it is only active for one cycle (#3254).
         "tool_loop_warning": "",
@@ -890,21 +793,6 @@ async def inline_judge_response(state: ChatState, config: RunnableConfig) -> dic
         return {}
 
 
-def route_after_judge(state: ChatState) -> str:
-    """Route after inline judge (#10599).
-
-    If the judge set a refinement hint and hasn't exhausted its one-shot
-    budget, loop back to generate_response.  Otherwise proceed to persist.
-    """
-    hint = state.get("rlm_refinement_hint", "")
-    judge_count = state.get("judge_count", 0)
-    if hint and judge_count == 1:
-        # judge_count==1 means the hint was just set on this pass; route back
-        # to generate_response for exactly one regeneration.
-        return "generate_response"
-    return "persist_conversation"
-
-
 async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
     """Interrupt execution to request command approval from the user.
 
@@ -913,18 +801,10 @@ async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
     and resumes the graph with Command(resume=decision).
     """
     tool_calls = state.get("tool_calls", [])
-    if not tool_calls:
-        return {"pending_approval": None}
-
-    # Find the first tool call needing approval
-    pending = None
-    for tc in tool_calls:
-        if tc.get("needs_approval"):
-            pending = tc
-            break
-
-    if not pending:
-        return {"pending_approval": None}
+    shown = [tc for tc in tool_calls if tc.get("needs_approval")]  # #18430: ALL of them, not the first
+    if not shown:
+        return {"pending_approval": None, "approval_decision": None}
+    pending = shown[0]
 
     stream_cb = config["configurable"].get("stream_callback")
 
@@ -938,6 +818,7 @@ async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
             "risk_level": pending.get("risk_level", "medium"),
             "session_id": state["session_id"],
             "terminal_session_id": state["terminal_session_id"],
+            "calls": ai_line_calls_shown(shown),
         },
     }
     if stream_cb:
@@ -948,7 +829,29 @@ async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
 
     return {
         "pending_approval": pending,
-        "approval_decision": decision,
+        "approval_decision": bind_decision(decision, shown),
+    }
+
+
+async def _inline_dispatched_update(manager, state: ChatState, turn: tuple) -> dict:
+    """execute_tools for calls already run inline (GH#11958): no re-dispatch; loop check and plan step only."""
+    from chat_workflow.cot_events import emit_step_complete
+
+    messages, stream_cb, cot_start = turn
+    tool_calls, session_id = state.get("tool_calls", []), state.get("session_id")
+    logger.debug("execute_tools: %d call(s) already dispatched inline (session=%s)", len(tool_calls), session_id)
+    emit_step_complete(
+        "execute_tools",
+        cot_start,
+        output_summary="tools already dispatched inline — skipped re-dispatch",
+        session_id=session_id,
+    )
+    return {
+        "should_continue": state.get("should_continue", False),
+        "workflow_messages": messages,
+        "tool_calls": [],
+        **_inline_loop_update(state, tool_calls, messages, stream_cb, state.get("iteration_count", 0)),
+        **await advance_after_tools(manager, state, tool_calls),  # #21023: these are this pass's results
     }
 
 
@@ -967,11 +870,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
     stream_cb = config["configurable"].get("stream_callback")
     messages = list(state.get("workflow_messages", []))
     session_id = state.get("session_id")
-    # Issue #13295 (review B1): the GH#11202 interrupt-resume dispatch below
-    # calls manager._process_tool_calls directly, bypassing
-    # _process_tool_results/_handle_tool_message_types entirely — so nothing
-    # tags these messages unless this node does it. generate_response already
-    # set iteration_count to the LLM pass that produced these tool_calls.
+    # #13295 B1: nothing else tags this dispatch's messages; this is the pass that produced the calls.
     iteration = state.get("iteration_count", 0)
 
     decision = state.get("approval_decision")
@@ -986,49 +885,12 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         agent_type="chat_workflow",
     )
 
-    # GH#11958: on the default (flag-OFF) path, generate_response already
-    # dispatched these tool calls inline via _run_continuation_loop_iteration
-    # -> _process_tool_calls -> _dispatch_tool_call (results already streamed
-    # to the user via stream_cb), so `tool_calls` here holds POST-EXECUTION
-    # summary dicts (`{"tool": ..., "status": ...}` shape — see
-    # tool_handler.py's execution_results) rather than the pre-execution
-    # `{"name": ..., "params": ...}` shape `_process_tool_calls` expects.
-    # Re-dispatching would duplicate side effects and crash on
-    # `tool_call["name"]` (KeyError — #11958). Detected by SHAPE, not by
-    # re-reading the approval-gate flag: execute_tools is also exercised
-    # directly (e.g. on interrupt-resume) with a legitimate pre-execution
-    # list regardless of the flag's current value, so the flag alone can't
-    # tell already-executed summaries apart from planned calls.
-    already_executed = bool(tool_calls) and all("name" not in tc for tc in tool_calls)
-    if already_executed:
-        logger.debug(
-            "execute_tools: skipping re-dispatch of %d already-executed tool "
-            "summary/summaries (session=%s) — dispatched inline by generate_response",
-            len(tool_calls),
-            session_id,
-        )
-        emit_step_complete(
-            "execute_tools",
-            _cot_exec_start,
-            output_summary="tools already dispatched inline — skipped re-dispatch",
-            session_id=session_id,
-        )
-        return {
-            "should_continue": state.get("should_continue", False),
-            "workflow_messages": messages,
-            "tool_calls": [],
-        }
+    if are_already_executed(tool_calls):
+        return await _inline_dispatched_update(manager, state, (messages, stream_cb, _cot_exec_start))
 
     # If approval was needed and denied, skip execution
     if decision and not decision.get("approved", False):
-        deny_msg = {
-            "type": "response",
-            "content": f"Command denied: {decision.get('reason', 'User denied')}",
-            "metadata": {"iteration": iteration},
-        }
-        messages.append(deny_msg)
-        if stream_cb:
-            stream_cb(deny_msg)
+        send_denied_message(decision, iteration, messages, stream_cb)
         emit_step_complete(
             "execute_tools",
             _cot_exec_start,
@@ -1040,134 +902,22 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
             "workflow_messages": messages,
         }
 
-    # Issue #3254: Fingerprint the tool calls about to run and detect loops
-    # *before* execution.  This is the correct place because execute_tools
-    # receives the parsed tool call list from generate_response via state.
-    fingerprint_history = list(state.get("tool_call_fingerprints", []))
-    tool_loop_count = state.get("tool_loop_count", 0)
-    tool_loop_warning = ""
+    loop_state = planned_loop_update(state, tool_calls)  # #3254: before execution
+    tool_loop_count = loop_state["tool_loop_count"]
 
-    new_fps = [_fingerprint_tool_call(tc) for tc in tool_calls]
-    is_loop, fingerprint_history = _detect_tool_call_loop(new_fps, fingerprint_history)
-    if is_loop:
-        tool_loop_count += 1
-        tool_loop_warning = _LOOP_WARNING_MSG
-        logger.warning(
-            "Tool-call loop detected (loop_count=%d, session=%s): %s",
-            tool_loop_count,
-            state.get("session_id", "unknown"),
-            new_fps,
-        )
+    await emit_tool_call_hook(state.get("session_id"), tool_calls)
 
-    # Issue #3278: notify plugins before tool execution.
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
+    exec_history, break_loop = await dispatch_approved_calls(
+        manager, _build_llm_iteration_context(state), state, tool_calls, iteration, messages, stream_cb
+    )
 
-        await HookRegistry().call_hook(
-            Hook.ON_TOOL_CALL.value,
-            session_id=state.get("session_id"),
-            tool_calls=tool_calls,
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_TOOL_CALL failed (non-fatal): %s", _hook_exc)
+    # Issue #3254: tell the user why the assistant stopped.
+    if tool_loop_count >= _LOOP_ABORT_THRESHOLD and stall_mode(state) == "stop":  # "ask" says it at ask_human (#21022)
+        _append_loop_abort_message(messages, stream_cb, iteration)
 
-    # Execute via existing manager method
-    exec_history = list(state.get("execution_history", []))
-    break_loop = False
-
-    # #14242: bind the spill run on THIS path too. `_run_continuation_loop_
-    # iteration` binds it for the non-gated path (#13997), but that method is
-    # never called here — GH#11202's whole point is that this node dispatches
-    # instead of it — so a run reaching this seam was never bound and the
-    # offload below would decline to write (no run to re-read it under).
-    manager._bind_spill_run(session_id)
-
-    # GH#11202: thread the governed-identity context so the same production
-    # seam gates (forbidden_work #11145, config-protection #11177,
-    # fact-forcing #11178) apply here exactly as they do on the inline
-    # continuation-loop path. Without ``ctx=``, every ``_enforce_*`` check in
-    # ``_dispatch_tool_call`` no-ops on ``ctx is None``.
-    exec_ctx = _build_llm_iteration_context(state)
-
-    # GH#11202: the work-item approval seam gate (_enforce_work_item_approval)
-    # must NOT re-fire here. On this (graph) path, route_after_generation /
-    # request_approval already decided approval-required tool calls BEFORE
-    # reaching this node (needs_approval on each tc, set by
-    # _tool_call_needs_approval) — a denial already returned above, so
-    # anything reaching this dispatch loop was either never gated or was just
-    # approved. Re-checking requires_approval_before here would re-block an
-    # approved action (double-block); clearing it supersedes the seam gate on
-    # the graph path while leaving it fully active for legacy/MCP callers
-    # that never pass through the interrupt.
-    exec_ctx.requires_approval_before = []
-
-    async for item in manager._process_tool_calls(
-        tool_calls,
-        state["session_id"],
-        state["terminal_session_id"],
-        state["llm_params"]["ollama_endpoint"],
-        state["llm_params"]["selected_model"],
-        ctx=exec_ctx,
-    ):
-        if isinstance(item, tuple) and len(item) == 2:
-            break_loop, _ = item
-        else:
-            msg_dict = item.to_dict() if hasattr(item, "to_dict") else item
-            # Issue #13295 (review B1): _process_tool_calls is the same
-            # producer _process_tool_results drives, but this interrupt-resume
-            # dispatch never routes through it — tag here so these messages
-            # interleave correctly instead of falling into the untagged
-            # leftover fallback.
-            msg_dict.setdefault("metadata", {})["iteration"] = iteration
-            # Stream ALL messages for real-time display
-            if stream_cb:
-                stream_cb(msg_dict)
-            # Only persist non-streaming chunks (#1064)
-            is_streaming = msg_dict.get("metadata", {}).get("streaming", False)
-            if not is_streaming:
-                messages.append(msg_dict)
-            # Track execution results (#14242). `item` is the yielded
-            # WorkflowMessage — never a dict — so `isinstance(item, dict)` here
-            # never matched and `exec_history` silently stayed whatever
-            # `state["execution_history"]` already held: new tool results never
-            # reached it, and neither did the offload this seam now applies.
-            # `msg_dict["metadata"]["execution_results"]` is the flat per-tool
-            # list `_build_execution_summary` produces — the same shape
-            # `_handle_execution_summary` extends `execution_history` with on
-            # the non-gated path — offloaded through the same #13997 seam so
-            # oversized output does not reach the model on a resume either.
-            if msg_dict.get("type") == "execution_summary":
-                new_results = msg_dict.get("metadata", {}).get("execution_results", [])
-                new_results = await manager._offload_oversized_output(new_results)
-                exec_history.extend(new_results)
-
-    # Issue #3254: Emit a user-visible message when the loop abort threshold is
-    # reached so the user understands why the assistant stopped making progress.
-    if tool_loop_count >= _LOOP_ABORT_THRESHOLD:
-        abort_msg = {
-            "type": "response",
-            "content": (
-                "I noticed I was repeating the same action without making progress "
-                "and stopped the loop. Please let me know if you would like me to "
-                "try a different approach."
-            ),
-            "metadata": {"iteration": iteration},
-        }
-        messages.append(abort_msg)
-        if stream_cb:
-            stream_cb(abort_msg)
-
-    # Issue #3278: notify plugins after tool execution.
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-        await HookRegistry().call_hook(
-            Hook.ON_TOOL_COMPLETE.value,
-            session_id=session_id,
-            execution_history=exec_history,
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_TOOL_COMPLETE failed (non-fatal): %s", _hook_exc)
+    await emit_tool_complete_hook(session_id, exec_history)
+    this_pass = exec_history[len(state.get("execution_history", [])) :]
+    plan_update = await advance_after_tools(manager, state, this_pass)  # #21023: one plan step per tool pass
 
     # Issue #3232: emit step complete for the execute_tools block.
     emit_step_complete(
@@ -1182,10 +932,8 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         "execution_history": exec_history,
         "workflow_messages": messages,
         "tool_calls": [],  # Clear after execution
-        # Tool-call loop state (#3254)
-        "tool_call_fingerprints": fingerprint_history,
-        "tool_loop_count": tool_loop_count,
-        "tool_loop_warning": tool_loop_warning,
+        **loop_state,
+        **plan_update,
     }
 
 
@@ -1217,6 +965,7 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
 
     # Respect the agentic search feature flag from RAGConfig
     try:
+        from chat_workflow.agentic_rag_hooks import emit_after_rag_results, notify_kb_search
         from knowledge.search_components.agentic_search import (
             AgenticSearchConfig,
             knowledge_search_tool,
@@ -1257,46 +1006,17 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
             rag_service=rag_service,
             context=None,
             config=agentic_cfg,
+            principal=(await manager.get_or_create_session(state["session_id"])).kb_principal(),  # #16664
         )
 
-        # Issue #4263: Emit AFTER_RAG_RESULTS hook after RAG returns results
-        from chat_workflow.session_handler import _emit_after_rag_results
-
-        try:
-            # Convert context_str back to results format for extensions
-            # Results format: list of dicts with content/metadata
-            results = [{"content": context_str}] if context_str else []
-            results = await _emit_after_rag_results(
-                results,
-                user_query,
-                state.get("session_id"),
-                {},
-            )
-            # Reconstruct context_str from filtered results
-            context_str = "\n\n".join([r.get("content", "") for r in results if r.get("content")])
-        except Exception as hook_exc:  # noqa: BLE001
-            logger.debug("AFTER_RAG_RESULTS hook failed (non-fatal): %s", hook_exc)
+        context_str = await emit_after_rag_results(context_str, user_query, state.get("session_id"))
 
         # Track the original query; refined queries are recorded inside the tool
         queries_used: List[str] = [state["user_message"]]
 
-        logger.info(
-            "Agentic search complete: context_len=%d",
-            len(context_str),
-        )
+        logger.info("Agentic search complete: context_len=%d", len(context_str))
 
-        # Issue #3278: notify plugins after knowledge base search.
-        try:
-            from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-            await HookRegistry().call_hook(
-                Hook.ON_KB_SEARCH.value,
-                session_id=state.get("session_id"),
-                query=state["user_message"],
-                context_length=len(context_str),
-            )
-        except Exception as _hook_exc:  # noqa: BLE001
-            logger.debug("Plugin hook ON_KB_SEARCH failed (non-fatal): %s", _hook_exc)
+        await notify_kb_search(state.get("session_id"), state["user_message"], len(context_str))
 
         return {
             "agentic_context": context_str,
@@ -1421,15 +1141,15 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
         # into the per-iteration entries _persist_workflow_messages now needs
         # to interleave with tool output.
         combined_response = await _emit_before_response_send_safe(combined_response, session_id)
-
-        await manager._persist_conversation(session_id, session, state["user_message"], combined_response)
+        model = (state.get("llm_params") or {}).get("selected_model")  # the rolling-summary refresh folds with it
+        await manager._persist_conversation(session_id, session, state["user_message"], combined_response, model)
 
         wf_messages = _build_workflow_messages_from_state(state)
         await manager._persist_workflow_messages(
             session_id,
             wf_messages,
             all_llm_responses,
-            selected_model=state.get("llm_params", {}).get("selected_model", ""),
+            selected_model=(state.get("llm_params") or {}).get("selected_model", ""),
             rag_citations=state.get("rag_citations", []),
             used_knowledge=state.get("used_knowledge", False),
         )
@@ -1509,6 +1229,39 @@ def route_after_reflection(state: ChatState) -> str:
     return "inline_judge_response"
 
 
+async def force_final_answer(state: ChatState, config: RunnableConfig) -> dict:
+    """At the iteration cap: one last LLM pass that dispatches nothing, to answer from the results (#19715)."""
+    manager = config["configurable"]["manager"]
+    stream_cb = config["configurable"].get("stream_callback")
+    messages = list(state.get("workflow_messages", []))
+    iteration = state.get("iteration_count", 0) + 1
+    ctx = _build_llm_iteration_context(state)
+    _carry_tool_results_into_prompt(manager, ctx, state)
+    ctx.initial_prompt = _inject_mid_conversation_warning(FINAL_ANSWER_INSTRUCTION, ctx.initial_prompt)
+    try:
+        messages, llm_response, _unused_calls, _stop = await _run_llm_iteration_plan(
+            manager, ctx, iteration, messages, stream_cb
+        )
+    except aiohttp.ClientError as exc:
+        logger.error("Final answer call failed: %s", exc)
+        llm_response = None
+    if not llm_response:
+        fallback = {
+            "type": "response",
+            "content": "I ran out of steps before finishing and could not write a final answer. Please try again.",
+            "metadata": {"iteration": iteration},
+        }
+        messages.append(fallback)
+        if stream_cb:
+            stream_cb(fallback)
+    return {
+        "workflow_messages": messages,
+        "all_llm_responses": [*state.get("all_llm_responses", []), llm_response or ""],
+        "iteration_count": iteration,
+        "should_continue": False,
+    }
+
+
 def route_after_execution(state: ChatState) -> str:
     """Route after tool execution — may loop back for continuation.
 
@@ -1525,10 +1278,12 @@ def route_after_execution(state: ChatState) -> str:
             state.get("tool_loop_count", 0),
             state.get("session_id", "unknown"),
         )
-        return "persist_conversation"
+        return "announce_stall" if stall_mode(state) == "ask" else "persist_conversation"  # #21022
 
-    if state.get("should_continue") and state.get("iteration_count", 0) < limits.MAX_CONTINUATION_ITERATIONS:
-        return "generate_response"
+    if state.get("should_continue"):
+        if state.get("iteration_count", 0) < limits.MAX_CONTINUATION_ITERATIONS:
+            return "generate_response"
+        return "force_final_answer"  # #19715: the transcript must not end on a tool's output
     return "persist_conversation"
 
 
@@ -1566,11 +1321,14 @@ def build_chat_graph() -> StateGraph:
     builder.add_node("detect_intent", detect_intent)
     builder.add_node("prepare_llm", prepare_llm)
     builder.add_node("perform_knowledge_search", perform_knowledge_search)  # Issue #1718
+    builder.add_node("create_plan", create_plan)  # Issue #21023
     builder.add_node("generate_response", generate_response)
     builder.add_node("reflect_on_response", reflect_on_response)
     builder.add_node("inline_judge_response", inline_judge_response)  # Issue #10599
     builder.add_node("request_approval", request_approval)
     builder.add_node("execute_tools", execute_tools)
+    add_stall_nodes(builder)  # Issue #21022
+    builder.add_node("force_final_answer", force_final_answer)
     builder.add_node("persist_conversation", persist_conversation)
 
     # Wire edges
@@ -1578,12 +1336,14 @@ def build_chat_graph() -> StateGraph:
     builder.add_edge("initialize_session", "detect_intent")
     builder.add_conditional_edges("detect_intent", route_after_intent)
     builder.add_edge("prepare_llm", "perform_knowledge_search")  # Issue #1718
-    builder.add_edge("perform_knowledge_search", "generate_response")  # Issue #1718
+    builder.add_edge("perform_knowledge_search", "create_plan")  # Issue #1718, #21023
+    builder.add_edge("create_plan", "generate_response")
     builder.add_conditional_edges("generate_response", route_after_generation)
     builder.add_conditional_edges("reflect_on_response", route_after_reflection)
     builder.add_conditional_edges("inline_judge_response", route_after_judge)  # Issue #10599
     builder.add_edge("request_approval", "execute_tools")
     builder.add_conditional_edges("execute_tools", route_after_execution)
+    builder.add_edge("force_final_answer", "persist_conversation")
     builder.add_edge("persist_conversation", END)
 
     return builder
@@ -1591,7 +1351,7 @@ def build_chat_graph() -> StateGraph:
 
 async def get_redis_checkpointer() -> "AsyncRedisSaver":  # type: ignore[return]
     """Get or create the Redis checkpointer for graph persistence."""
-    global _checkpointer, _REDIS_URI
+    global _checkpointer
 
     if not _REDIS_CHECKPOINTER_AVAILABLE:
         raise RuntimeError(
@@ -1602,25 +1362,15 @@ async def get_redis_checkpointer() -> "AsyncRedisSaver":  # type: ignore[return]
     if _checkpointer is not None:
         return _checkpointer
 
-    # Get Redis URI and checkpoint TTL from SSOT config.
     # Issue #3231: default raised to 30 days (43200 min) to prevent silent
     # checkpoint expiry during human-in-the-loop pauses.
     ttl_minutes = 43200  # Default: 30 days
     try:
-        from autobot_shared.ssot_config import config as ssot
-
-        redis_host = ssot.vm.redis
-        redis_port = ssot.port.redis
-        _REDIS_URI = f"redis://{redis_host}:{redis_port}"
-        ttl_minutes = ssot.redis.checkpoint_ttl_minutes
+        ttl_minutes = _ssot_config.redis.checkpoint_ttl_minutes
     except Exception:
-        redis_host = _ssot_config.redis_host
-        redis_port = _ssot_config.port.redis
-        _REDIS_URI = f"redis://{redis_host}:{redis_port}"
-        logger.warning(
-            "SSOT config unavailable, using fallback Redis URI: %s",
-            _REDIS_URI,
-        )
+        logger.warning("SSOT checkpoint TTL unavailable, using default %s min", ttl_minutes)
+    # #18953: URL (ACL creds, rediss://, db) and TLS kwargs come from the SSOT builder.
+    redis_uri, connection_args = get_checkpointer_connection()
 
     # Issue #1481: TTL config for checkpoint auto-expiration
     ttl_config = None
@@ -1631,14 +1381,15 @@ async def get_redis_checkpointer() -> "AsyncRedisSaver":  # type: ignore[return]
         }
 
     # Issue #1433: from_conn_string() is an async generator, use direct init
-    _checkpointer = AsyncRedisSaver(redis_url=_REDIS_URI, ttl=ttl_config)
-    await _checkpointer.asetup()
+    saver = AsyncRedisSaver(redis_url=redis_uri, ttl=ttl_config, connection_args=connection_args or None)
+    await saver.asetup()
+    _checkpointer = saver  # publish only once setup succeeded
     logger.info(
         "LangGraph Redis checkpointer initialized: %s (TTL: %s min)",
-        _REDIS_URI,
+        describe_connection(redis_uri),
         ttl_minutes if ttl_minutes > 0 else "disabled",
     )
-    return _checkpointer
+    return saver
 
 
 async def delete_thread_checkpoints(thread_id: str) -> None:
@@ -1655,7 +1406,7 @@ async def delete_thread_checkpoints(thread_id: str) -> None:
         await checkpointer.adelete_thread(thread_id)
         logger.info("Cleared LangGraph checkpoints for thread: %s", thread_id)
     except Exception as exc:
-        logger.warning("Failed to clear checkpoints for thread %s: %s", thread_id, exc)
+        logger.warning("Failed to clear checkpoints for thread %s: %s", thread_id, describe_error(exc))
 
 
 async def get_compiled_graph(manager):

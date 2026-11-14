@@ -28,7 +28,7 @@ Legend: ✅ implemented (file cited) · ⚠️ partial (gap noted) · ❌ none.
 
 ## Verified gaps → remaining #10016 work
 
-1. **Backup schedule + retention** (member 2) — `backup-node-data.yml` + API exist but no cron/timer schedule or retention/prune policy.
+1. **Backup schedule** (member 2) — retention exists: the API prunes by count and age after each successful Redis/PostgreSQL backup (#13307, `services/backup.py apply_retention`). PostgreSQL also has a nightly local `autobot-pg-backup.timer` with its own 14-day pruning (#11383, `roles/postgresql/tasks/backup.yml`); its dumps aren't tracked by the API or GUI. **Still missing:** a schedule for API backups (Redis, secrets and PostgreSQL rows only happen on demand), and restore of anything but Redis from the SLM (#19455, #10016).
 2. ~~ChromaDB + secrets in unified backup~~ — **RESOLVED**: ChromaDB block existed but stat'd a stale path (fixed #11097); secrets are captured via the `/etc/autobot` config archive. Both verified in-commit.
 3. ~~Restore-verification play~~ — **RESOLVED**: `ansible/verify-backup-restore.yml` restores every artifact into a scratch dir + health-checks (checksums, gunzip pg dump + DDL, `redis-check-rdb`, tar extract non-empty); non-destructive. Follow-up: full isolated-postgres-cluster load drill (pg_dumpall is cluster-wide → needs a temp cluster).
 4. **Backend dep-install on update** (member 4) — code-sync doesn't `pip install` on a requirements change → **#11069** (must replicate the backend role's filtered-requirements + `-c ../constraints/shared.txt` install; delicate).

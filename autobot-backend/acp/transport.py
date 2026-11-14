@@ -25,7 +25,7 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 
-class StdioTransport:
+class AcpStdioTransport:
     """Line-delimited JSON-RPC over stdin/stdout."""
 
     def __init__(self) -> None:

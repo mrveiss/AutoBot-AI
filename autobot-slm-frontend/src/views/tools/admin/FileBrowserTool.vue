@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert, formatFileSize } from '@autobot/ui'
 /**
  * FileBrowserTool - File Browser Interface
  *
@@ -12,9 +13,12 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
+import { useI18n } from 'vue-i18n'
+import { downloadAdminFile, downloadErrorKey } from '@/composables/adminFileDownload'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
+const { t } = useI18n()
 
 // State
 const loading = ref(false)
@@ -48,17 +52,7 @@ const breadcrumbs = computed(() => {
 })
 
 // Format file size
-function formatSize(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
-
-function formatDate(dateStr: string): string {
-  return formatDateTime(dateStr)
-}
+const SIZE_OPTIONS = { decimals: 2, units: ['B', 'KB', 'MB', 'GB', 'TB'] } as const
 
 // Get file icon
 function getFileIcon(entry: FileEntry): string {
@@ -148,18 +142,10 @@ async function downloadFile(entry: FileEntry): Promise<void> {
     const filePath = currentPath.value === '/'
       ? `/${entry.name}`
       : `${currentPath.value}/${entry.name}`
-    const content = await api.readFile(filePath)
-
-    // Create download link
-    const blob = new Blob([content], { type: 'application/octet-stream' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = entry.name
-    a.click()
-    URL.revokeObjectURL(url)
+    await downloadAdminFile(filePath, entry.name)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to download file'
+    const key = downloadErrorKey(e)
+    error.value = key ? t(key) : e instanceof Error ? e.message : t('tools.admin.fileBrowserTool.downloadFailed')
   }
 }
 
@@ -239,9 +225,7 @@ onMounted(() => {
         </div>
 
         <!-- Error Message -->
-        <div v-if="error" class="m-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {{ error }}
-        </div>
+        <BaseAlert v-if="error" variant="error" class="m-4" :message="error" />
 
         <!-- Loading -->
         <div v-if="loading && !files.length" class="flex-1 flex items-center justify-center">
@@ -282,10 +266,10 @@ onMounted(() => {
                   </div>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {{ entry.type === 'directory' ? '-' : formatSize(entry.size) }}
+                  {{ entry.type === 'directory' ? '-' : formatFileSize(entry.size, SIZE_OPTIONS) }}
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDate(entry.modified) }}
+                  {{ formatFleetDateTime(entry.modified) }}
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono">
                   {{ entry.permissions }}

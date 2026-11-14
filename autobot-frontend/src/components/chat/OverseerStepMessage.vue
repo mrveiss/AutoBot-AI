@@ -154,6 +154,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useClipboard } from '@/composables/useClipboard'
 import type { OverseerStep } from '@/composables/useOverseerAgent'
+import type { OverseerStepStatus } from '@/types/_generated/workflow'
 
 const props = defineProps<{
   step: OverseerStep
@@ -163,10 +164,12 @@ const { t } = useI18n()
 const { copy } = useClipboard()
 
 // Computed
-const stepStatusClass = computed(() => ({
+// Record<OverseerStepStatus, boolean>: the compiler flags a status the backend adds next (#19623)
+const stepStatusClass = computed<Record<OverseerStepStatus, boolean>>(() => ({
   pending: props.step.status === 'pending',
   running: props.step.status === 'running',
   streaming: props.step.status === 'streaming',
+  waiting_explanation: props.step.status === 'waiting_explanation',
   explaining: props.step.status === 'explaining',
   completed: props.step.status === 'completed',
   failed: props.step.status === 'failed'
@@ -178,6 +181,7 @@ const statusIcon = computed(() => {
     // #9724: was an FA class string, which <Icon> rendered as an empty SVG
     running: 'spinner',
     streaming: 'stream',
+    waiting_explanation: 'clock',
     explaining: 'brain',
     completed: 'check-circle',
     failed: 'times-circle'
@@ -242,6 +246,7 @@ const copyCommand = () => {
 .step-status.pending { @apply text-autobot-text-muted; }
 .step-status.running { color: var(--color-info); }
 .step-status.streaming { color: var(--color-info); }
+.step-status.waiting_explanation { color: var(--color-info); }
 .step-status.explaining { color: var(--color-info); }
 .step-status.completed { color: var(--color-success); }
 .step-status.failed { color: var(--color-error); }
@@ -255,7 +260,7 @@ const copyCommand = () => {
   @apply flex items-center gap-2 text-autobot-text-secondary mb-4;
 }
 
-.step-description i {
+.step-description .icon {
   @apply text-indigo-400;
 }
 
@@ -342,7 +347,7 @@ const copyCommand = () => {
   @apply flex items-center gap-2 px-3 py-2 bg-autobot-bg-secondary border-b border-autobot-border;
 }
 
-.output-header i {
+.output-header .icon {
   @apply text-green-400;
 }
 
@@ -382,7 +387,7 @@ const copyCommand = () => {
   @apply flex items-start gap-2 text-sm text-autobot-text-secondary;
 }
 
-.key-findings li i {
+.key-findings li .icon {
   @apply text-teal-400 mt-0.5;
 }
 

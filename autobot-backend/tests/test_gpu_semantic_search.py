@@ -61,7 +61,7 @@ async def test_gpu_semantic_search_returns_results_on_kb_hit():
     kb_mock = _make_kb_mock([_RAW_KB_ROW])
 
     with patch(
-        "knowledge_base_factory.get_knowledge_base",
+        "knowledge_base_factory.get_knowledge_base_or_none",
         AsyncMock(return_value=kb_mock),
     ):
         result = await obj._gpu_semantic_search({"query": "what is AutoBot", "top_k": 3})
@@ -85,11 +85,11 @@ async def test_gpu_semantic_search_returns_results_on_kb_hit():
 async def test_gpu_semantic_search_empty_query_returns_empty():
     obj = _make_accelerator()
 
-    with patch("knowledge_base_factory.get_knowledge_base", AsyncMock()) as mock_get_kb:
+    with patch("knowledge_base_factory.get_knowledge_base_or_none", AsyncMock()) as mock_get_kb:
         result_missing = await obj._gpu_semantic_search({})
         result_empty = await obj._gpu_semantic_search({"query": ""})
 
-    # get_knowledge_base should never be called when query is absent/empty
+    # get_knowledge_base_or_none should never be called when query is absent/empty
     mock_get_kb.assert_not_awaited()
 
     for result in (result_missing, result_empty):
@@ -107,7 +107,7 @@ async def test_gpu_semantic_search_empty_query_returns_empty():
 async def test_gpu_semantic_search_kb_none_returns_empty():
     obj = _make_accelerator()
 
-    with patch("knowledge_base_factory.get_knowledge_base", AsyncMock(return_value=None)):
+    with patch("knowledge_base_factory.get_knowledge_base_or_none", AsyncMock(return_value=None)):
         result = await obj._gpu_semantic_search({"query": "some query"})
 
     assert result["search_results"] == []
@@ -126,7 +126,7 @@ async def test_gpu_semantic_search_kb_raises_returns_empty():
     kb_mock = AsyncMock()
     kb_mock.search = AsyncMock(side_effect=RuntimeError("vector store offline"))
 
-    with patch("knowledge_base_factory.get_knowledge_base", AsyncMock(return_value=kb_mock)):
+    with patch("knowledge_base_factory.get_knowledge_base_or_none", AsyncMock(return_value=kb_mock)):
         result = await obj._gpu_semantic_search({"query": "failing query"})
 
     assert result["search_results"] == []
@@ -146,7 +146,7 @@ async def test_gpu_semantic_search_uses_default_top_k():
     obj = _make_accelerator()
     kb_mock = _make_kb_mock([])
 
-    with patch("knowledge_base_factory.get_knowledge_base", AsyncMock(return_value=kb_mock)):
+    with patch("knowledge_base_factory.get_knowledge_base_or_none", AsyncMock(return_value=kb_mock)):
         await obj._gpu_semantic_search({"query": "top-k default test"})
 
     kb_mock.search.assert_awaited_once_with(query="top-k default test", top_k=_DEFAULT_SEMANTIC_SEARCH_TOP_K)

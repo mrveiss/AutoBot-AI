@@ -9,6 +9,7 @@
  */
 
 import { ref, computed } from 'vue'
+import { getEnvPositiveInt } from '@autobot/ui'
 import { useKnowledgeJobs } from './knowledge/useKnowledgeJobs'
 import { usePollingJob } from './usePollingJob'
 import { useBatchSelection } from './useBatchSelection'
@@ -381,8 +382,7 @@ export function useKnowledgeVectorization() {
       // Poll for completion
       let completed = false
       let attempts = 0
-      // Configurable timeout via environment variable (default: 60 seconds)
-      const maxAttempts = Number(import.meta.env.VITE_VECTORIZATION_TIMEOUT) || 60
+      const maxAttempts = getEnvPositiveInt(import.meta.env, 'VITE_VECTORIZATION_TIMEOUT', 60) // env-tunable, default 60 s
 
       while (!completed && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second

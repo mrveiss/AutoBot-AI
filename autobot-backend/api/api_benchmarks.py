@@ -17,13 +17,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from constants.api_constants import PATH_API_HEALTH
-from constants.network_constants import NetworkConstants
 
 try:
     # benchmark_base lives in tests/benchmarks/ — only present when the test
@@ -39,7 +40,7 @@ except ImportError as _benchmark_import_error:
 logger = get_logger(__name__)
 
 # Build URLs from centralized configuration
-BASE_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+BASE_URL = config.backend_url
 
 
 class TestAPIEndpointBenchmarks:
@@ -73,8 +74,10 @@ class TestAPIEndpointBenchmarks:
         import httpx
 
         async def health_check():
+            url = f"{BASE_URL}{PATH_API_HEALTH}"
+            await assert_egress_policy(url)
             async with httpx.AsyncClient() as client:
-                response = await client.get(f"{BASE_URL}{PATH_API_HEALTH}")
+                response = await client.get(url)
                 return response.json()
 
         result = await runner.run_async_benchmark(
@@ -99,9 +102,11 @@ class TestAPIEndpointBenchmarks:
         import httpx
 
         async def send_chat():
+            url = f"{BASE_URL}/api/chat/message"
+            await assert_egress_policy(url)
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{BASE_URL}/api/chat/message",
+                    url,
                     json={"message": "Test message", "session_id": "bench_001"},
                 )
                 return response.json()
@@ -126,8 +131,10 @@ class TestAPIEndpointBenchmarks:
         import httpx
 
         async def list_tools():
+            url = f"{BASE_URL}/api/mcp/tools"
+            await assert_egress_policy(url)
             async with httpx.AsyncClient() as client:
-                response = await client.get(f"{BASE_URL}/api/mcp/tools")
+                response = await client.get(url)
                 return response.json()
 
         result = await runner.run_async_benchmark(
@@ -149,9 +156,11 @@ class TestAPIEndpointBenchmarks:
         import httpx
 
         async def search_knowledge():
+            url = f"{BASE_URL}/api/knowledge/query"
+            await assert_egress_policy(url)
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{BASE_URL}/api/knowledge/query",
+                    url,
                     json={"query": "test query", "top_k": 5},
                 )
                 return response.json()
@@ -175,8 +184,10 @@ class TestAPIEndpointBenchmarks:
         import httpx
 
         async def concurrent_health_checks():
+            url = f"{BASE_URL}{PATH_API_HEALTH}"
+            await assert_egress_policy(url)
             async with httpx.AsyncClient() as client:
-                tasks = [client.get(f"{BASE_URL}{PATH_API_HEALTH}") for _ in range(5)]
+                tasks = [client.get(url) for _ in range(5)]
                 responses = await asyncio.gather(*tasks)
                 return [r.json() for r in responses]
 

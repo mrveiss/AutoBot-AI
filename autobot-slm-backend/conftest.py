@@ -25,10 +25,19 @@ Issue: #3499
 
 import ast
 import importlib
+
+# #19878: the class every module stub is built from; loaded by path (`tests/` is not a package root).
+import importlib.util as _ilu  # noqa: E402
 import sys
 import types
 from pathlib import Path
 from unittest.mock import MagicMock
+
+_ms_spec = _ilu.spec_from_file_location("_slm_module_stub", Path(__file__).parent / "tests" / "_module_stub.py")
+_ms_mod = _ilu.module_from_spec(_ms_spec)
+_ms_spec.loader.exec_module(_ms_mod)
+sys.modules["_slm_module_stub"] = _ms_mod
+ModuleStub = _ms_mod.ModuleStub
 
 # ---------------------------------------------------------------------------
 # Hollow api package — prevents api/__init__.py from executing
@@ -139,7 +148,7 @@ def _stub(name: str) -> MagicMock:
         # ones starting with `assert` (e.g. services.fleet_sync_guard.
         # assert_no_running_sync) which safe mocks block as typo-protection
         # and turn into collection-time ImportError (#10023).
-        mod = MagicMock(unsafe=True)
+        mod = ModuleStub(unsafe=True)
         mod.__name__ = name
         mod.__package__ = name.split(".")[0]
         mod.__spec__ = None
@@ -215,46 +224,13 @@ _role_columns_mod.COLUMNS = frozenset(
 sys.modules["_role_cols"] = _role_columns_mod
 sys.modules["models.database"].Role.__table__ = types.SimpleNamespace(columns=_role_columns_mod.COLUMNS)
 
-# #13139: models/schemas_secrets.py must be REAL, not stubbed. It carries
-# response_model classes, and FastAPI rejects a MagicMock as a response field
-# ("Invalid args for response field!") the moment a test builds the app. It
-# imports only pydantic, so loading it by path is safe -- this deliberately
-# bypasses models/__init__.py, which is what the stubs above exist to avoid.
-_schemas_secrets_path = Path(__file__).parent / "models" / "schemas_secrets.py"
-if not _schemas_secrets_path.is_file():
-    raise RuntimeError("conftest: models/schemas_secrets.py is named here but does not exist")
-import importlib.util as _ss_importlib_util  # noqa: E402  -- the shared alias is bound later
-
-_ss_spec = _ss_importlib_util.spec_from_file_location("models.schemas_secrets", _schemas_secrets_path)
-_ss_mod = _ss_importlib_util.module_from_spec(_ss_spec)
-_ss_spec.loader.exec_module(_ss_mod)
-sys.modules["models.schemas_secrets"] = _ss_mod
-setattr(sys.modules["models"], "schemas_secrets", _ss_mod)
-
-# #16281: models/npu_schemas.py and models/gpu_schemas.py are REAL for the same
-# reason -- services/node_gpu.py builds pydantic responses from them, and a
-# MagicMock model validates nothing. Both import only pydantic; gpu_schemas also
-# imports npu_schemas, hence the order and the sys.modules entry before exec.
-for _schema in ("npu_schemas", "gpu_schemas"):
-    _schema_path = Path(__file__).parent / "models" / f"{_schema}.py"
-    _schema_spec = _ss_importlib_util.spec_from_file_location(f"models.{_schema}", _schema_path)
-    _schema_mod = _ss_importlib_util.module_from_spec(_schema_spec)
-    sys.modules[f"models.{_schema}"] = _schema_mod
-    _schema_spec.loader.exec_module(_schema_mod)
-    setattr(sys.modules["models"], _schema, _schema_mod)
-
-# #15495: models/node_capability.py is REAL for a different reason than the
-# pair above -- it declares a SQLAlchemy Core Table, not a Pydantic model, and
-# services/node_capability.py needs its real columns (``.c.node_id`` etc.) to
-# build meaningful insert/update/select statements. It imports only
-# sqlalchemy, which is already stubbed harmlessly above (attribute access on
-# the stub auto-vivifies rather than raising).
-_ncap_path = Path(__file__).parent / "models" / "node_capability.py"
-_ncap_spec = _ss_importlib_util.spec_from_file_location("models.node_capability", _ncap_path)
-_ncap_mod = _ss_importlib_util.module_from_spec(_ncap_spec)
-sys.modules["models.node_capability"] = _ncap_mod
-_ncap_spec.loader.exec_module(_ncap_mod)
-setattr(sys.modules["models"], "node_capability", _ncap_mod)
+# Real-loaded model schemas (#13139, #16281, #15495) live in `testkit/slm_real_models.py`
+# (#21026: split out for the 600-line cap); loaded by path, this dir is not on sys.path.
+_rm_spec = _ilu.spec_from_file_location("_slm_real_models", _SLM_ROOT / "testkit" / "slm_real_models.py")
+_rm_mod = _ilu.module_from_spec(_rm_spec)
+_rm_spec.loader.exec_module(_rm_mod)
+_rm_mod.load_real_model_schemas()
+del _rm_spec, _rm_mod
 
 
 # ── services ──────────────────────────────────────────────────────────────────
@@ -399,14 +375,16 @@ import importlib.util as _importlib_util  # noqa: E402
 # pytest.ini's pythonpath `autobot_shared/` itself is a root, so a bare
 # `import status_enums` finds autobot_shared/status_enums.py -- a different
 # module with no NodeStatus. Production resolves the SLM's own; so does the suite.
-_se_spec = _importlib_util.spec_from_file_location("status_enums", Path(__file__).parent / "status_enums.py")
-_se_mod = _importlib_util.module_from_spec(_se_spec)
-_se_spec.loader.exec_module(_se_mod)
-sys.modules["status_enums"] = _se_mod
+# service_status (#16019) is not on the suite's path at all (#20796).
+for _top in ("status_enums", "service_status"):
+    _top_spec = _importlib_util.spec_from_file_location(_top, Path(__file__).parent / f"{_top}.py")
+    sys.modules[_top] = _importlib_util.module_from_spec(_top_spec)
+    _top_spec.loader.exec_module(sys.modules[_top])
 
 _REAL_SERVICE_MODULES = (
     "ssh_utils",
     "deploy_artifacts",
+    "ansible_extra_vars",  # #19005: inventory_builder imports it, so it loads first
     "inventory_builder",
     "a2a_card_fetcher",
     "hf_token_validator",
@@ -414,6 +392,7 @@ _REAL_SERVICE_MODULES = (
     "ansible_utils",
     "provision_progress",
     "process_divergence",
+    "unit_names",  # #18359: stdlib-only validators; journal_fetch imports it
     "journal_fetch",
     # #15462: has a co-located test that imports it, so it must be real-loaded
     # here or it resolves to a MagicMock depending on shard order
@@ -445,6 +424,18 @@ _REAL_SERVICE_MODULES = (
     # than an error (the #14307 reasoning this list exists for).
     "capability_tiers",
     "node_capability",
+    # #19125: the SLM's JWKS token verifier; its co-located admin-family test
+    # imports it directly and must exercise the real claim normalisation.
+    "jwks_verifier",
+    # #19318: its co-located test imports it, so it must be real-loaded, not a MagicMock.
+    "admin_seed_password",
+    # #20214: the code rollback services; each has a co-located test that imports
+    # it. Order is dependency order: rollback_target first (commits and
+    # migrations import is_full_sha from it), code_rollback last.
+    "rollback_target",
+    "rollback_commits",
+    "rollback_migrations",
+    "code_rollback",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for
@@ -577,4 +568,4 @@ def pytest_configure(config) -> None:
     module = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("_slm_stub_lifetime", module)
     spec.loader.exec_module(module)
-    module.register(config, _SLM_ROOT, _INSTALLED_STUBS)
+    module.register_stub_lifetime(config, _SLM_ROOT, _INSTALLED_STUBS)

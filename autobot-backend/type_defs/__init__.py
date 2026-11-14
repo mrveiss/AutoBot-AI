@@ -10,7 +10,7 @@ This module helps ensure type safety, better IDE support, and clearer documentat
 """
 
 from type_defs.api import (
-    APIErrorResponse,
+    APIErrorEnvelope,
     APIResponse,
     APISuccessResponse,
     PaginatedResponse,
@@ -44,7 +44,7 @@ __all__ = [
     # API types
     "APIResponse",
     "APISuccessResponse",
-    "APIErrorResponse",
+    "APIErrorEnvelope",
     "PaginatedResponse",
     # MCP types
     "MCPToolDefinition",

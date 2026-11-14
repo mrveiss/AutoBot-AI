@@ -25,17 +25,13 @@ nginx needs: a directory containing an `index.html` with content in it.
 
 from __future__ import annotations
 
-# stdlib logging, not autobot_shared.logging_manager: this package's test
-# harness mocks the config that LoggingManager reads at import time, so the
-# managed logger raises during collection. Same reason api/health.py next door
-# uses stdlib, and the exception CLAUDE.md records for config-mocking harnesses.
-import logging
 from pathlib import Path
 from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # The build output nginx aliases for this node's UI. Relative to the SSOT
 # base_dir, never a literal path (#15462 review: an absolute default here would

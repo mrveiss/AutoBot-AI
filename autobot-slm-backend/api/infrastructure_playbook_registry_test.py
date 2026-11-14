@@ -91,7 +91,7 @@ def test_the_agent_names_the_playbook_this_registry_exposes():
     fails rather than leaving the registry exposing something nobody is told to
     run.
     """
-    agent = (_ANSIBLE_DIR / "roles" / "slm_agent" / "files" / "slm" / "agent" / "agent.py").read_text(encoding="utf-8")
+    agent = (_ANSIBLE_DIR.parent / "slm" / "agent" / "agent.py").read_text(encoding="utf-8")
 
     assert (
         "deploy-slm-agent.yml" in agent
@@ -171,7 +171,7 @@ def test_the_subprocess_runs_from_the_ansible_directory():
 def test_the_playbook_file_comes_from_the_same_tree_as_the_config():
     """The cross-tree split this PR was blocked on.
 
-    `PLAYBOOKS_DIR` defaults to the DEPLOYED tree; `_ansible_dir()` prefers
+    `PLAYBOOKS_DIR` (retired in #18094) defaulted to the DEPLOYED tree; `_ansible_dir()` prefers
     `code_source`, which is hard-reset to origin HEAD on every canonical run and
     is therefore routinely ahead. Taking the playbook file from one and
     roles/config from the other runs an old play against new roles — the same

@@ -5,15 +5,15 @@
 """Re-export shim — canonical home is ``autobot_shared.plugin_sdk.capabilities`` (#11636)."""
 
 from autobot_shared.plugin_sdk.capabilities import (
-    Capability,
     CapabilityChecker,
     CapabilityContext,
     CapabilityError,
+    PluginCapability,
     TrustTier,
 )
 
 __all__ = [
-    "Capability",
+    "PluginCapability",
     "CapabilityChecker",
     "CapabilityContext",
     "CapabilityError",

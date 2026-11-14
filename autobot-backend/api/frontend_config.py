@@ -24,6 +24,7 @@ from fastapi import APIRouter
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config as ssot_config
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PathConstants
 from services.config_service import ConfigService
@@ -158,16 +159,16 @@ def _build_fallback_config() -> Dict[str, Any]:
     Returns:
         Complete fallback frontend configuration dict
     """
-    from config import unified_config_manager
+    from config import config_manager
 
-    backend_config = unified_config_manager.get_backend_config()
+    backend_config = config_manager.get_backend_config()
 
     # Get defaults from config manager
-    api_config = unified_config_manager.get_config_section("api") or {}
-    websocket_config = unified_config_manager.get_config_section("websocket") or {}
-    features_config = unified_config_manager.get_config_section("features") or {}
-    ui_config = unified_config_manager.get_config_section("ui") or {}
-    performance_config = unified_config_manager.get_config_section("performance") or {}
+    api_config = config_manager.get_config_section("api") or {}
+    websocket_config = config_manager.get_config_section("websocket") or {}
+    features_config = config_manager.get_config_section("features") or {}
+    ui_config = config_manager.get_config_section("ui") or {}
+    performance_config = config_manager.get_config_section("performance") or {}
 
     return {
         "project": _build_project_config(),
@@ -222,7 +223,7 @@ async def get_frontend_config():
                 "timeouts": _build_timeouts_config(full_config.get("api", {}).get("timeouts", {})),
             },
             "websocket": {
-                "url": NetworkConstants.get_websocket_url(),
+                "url": ssot_config.websocket_url,
                 "reconnect_attempts": full_config.get("websocket", {}).get("reconnect_attempts", 5),
                 "reconnect_delay": full_config.get("websocket", {}).get("reconnect_delay", 1000),
             },

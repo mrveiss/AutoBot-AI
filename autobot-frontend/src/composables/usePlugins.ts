@@ -15,6 +15,7 @@ import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { useLoadingState } from '@/composables/useLoadingState'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('usePlugins')
 
@@ -57,14 +58,8 @@ export interface CapabilityInfo {
   pending_approval: string[]
 }
 
-export interface AuditLogEntry {
-  timestamp: string
-  plugin_name: string
-  capability: string
-  granted: boolean
-  operation: string
-  metadata?: string
-}
+/** One plugin-capability audit row (GET /plugins/audit), the backend's `CapabilityAuditEntry`. */
+export type PluginAuditEntry = components['schemas']['CapabilityAuditEntry']
 
 // ===== Composable =====
 
@@ -281,11 +276,11 @@ export function usePlugins() {
     }
   }
 
-  async function getAuditLog(limit = 50): Promise<AuditLogEntry[]> {
+  async function getAuditLog(limit = 50): Promise<PluginAuditEntry[]> {
     error.value = null
     try {
       const data = await wrap(() =>
-        ApiClient.get<{ entries: AuditLogEntry[] }>(`${getApiBase()}/plugins/audit?limit=${limit}`),
+        ApiClient.get<{ entries: PluginAuditEntry[] }>(`${getApiBase()}/plugins/audit?limit=${limit}`),
       )
       return data.entries ?? []
     } catch (err: unknown) {

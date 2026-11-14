@@ -35,10 +35,10 @@ from agent_loop.types import (
     AgentMessage,
     HumanQuestion,
     IterationResult,
+    LoopMessageType,
     LoopOutcome,
     LoopPhase,
     LoopState,
-    MessageType,
     SteeringEntry,
     TaskContext,
     ThinkCategory,
@@ -117,13 +117,13 @@ class AgentLoop:
     Implements the Manus-inspired 6-step iteration pattern with
     event stream integration, planning, and parallel tool execution.
 
-    PRODUCTION STATUS (#11221): this class is **not instantiated anywhere in
-    production** — the only references to ``AgentLoop`` are this module and the
-    re-export/docstring in ``agent_loop/__init__.py``. The live tool-execution
-    seam is ``chat_workflow`` (``_dispatch_tool_call``), not this loop. Reusable
-    building blocks under ``agent_loop/`` (belief_state, extractors, guards) are
-    imported directly by other subsystems, but the loop *orchestrator* below is
-    dormant.
+    PORTED TO THE CHAT GRAPH (maintainer decision 2026-11-07, #20846): the chat
+    graph (``chat_workflow/graph.py``) is the canonical loop. The planner and the
+    stall escalation are ported as graph nodes (#21023, #21022). ``AgentLoop`` is
+    never instantiated in production (#11221); whether to retire it is #21025.
+
+    Reusable parts under ``agent_loop/`` (belief_state, extractors, guards) are
+    imported by other subsystems; the orchestrator below is dormant.
 
     Consequence: any capability wired ONLY into this loop (e.g. the guard stack,
     which is additionally inert until the loop is given an ``agent_id``) has no
@@ -146,7 +146,7 @@ class AgentLoop:
 
     STILL UNPORTED: everything else in the guard stack — schema self-correction
     (``max_schema_retries``), the approval workflow fields, and the belief-state
-    and planning machinery — remains dormant here.
+    machinery — remains dormant here. Planning has its own graph node (#21023).
     """
 
     def __init__(
@@ -1026,7 +1026,7 @@ class AgentLoop:
             metadata: Optional metadata
         """
         message = AgentMessage(
-            message_type=MessageType.NOTIFY,
+            message_type=LoopMessageType.NOTIFY,
             content=content,
             metadata=metadata or {},
             task_id=self._current_context.task_id if self._current_context else None,
@@ -1057,7 +1057,7 @@ class AgentLoop:
             User's response
         """
         message = AgentMessage(
-            message_type=MessageType.ASK,
+            message_type=LoopMessageType.ASK,
             content=content,
             options=options,
             metadata=metadata or {},

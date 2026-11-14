@@ -102,6 +102,11 @@ def build_auth_middleware_stub() -> types.ModuleType:
 
     auth_stub.get_current_user = _get_current_user_stub  # type: ignore[attr-defined]
 
+    async def _resolve_human_user_stub(request: _FastAPIRequest = None) -> dict | None:  # type: ignore[assignment]
+        return _current_user_payload()
+
+    auth_stub.resolve_human_user = _resolve_human_user_stub  # type: ignore[attr-defined]
+
     # check_admin_permission must be a proper no-arg callable so FastAPI can
     # inspect its signature at route-registration time without producing
     # spurious (*args, **kwargs) query parameters (#10472).

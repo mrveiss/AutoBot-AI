@@ -8,15 +8,17 @@ Standardizes logging configuration across all components
 """
 
 import logging
-import logging.handlers
 import os
+import sys
 import threading
 import time
 from collections import OrderedDict
-from pathlib import Path
-from typing import TYPE_CHECKING, Dict
+from pathlib import Path, PurePath
+from typing import TYPE_CHECKING, Any, Dict
 
 from autobot_shared.env_utils import env_flag, env_float, env_int_clamped
+from autobot_shared.log_dir import FirstWriteFileHandler, resolve_logs_dir
+from autobot_shared.logging_once import first_time
 from autobot_shared.stream_logging import build_stderr_handler, build_stdout_handler
 
 if TYPE_CHECKING:
@@ -27,6 +29,13 @@ _logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for log types
 _LOG_TYPES = ("backend", "frontend", "llm", "debug", "audit")
+
+# Documented defaults for every config value the get_logger path reads. A value of the wrong type
+# falls back to these instead of raising at import time (#19288).
+_DEFAULT_MAX_BYTES = 10485760  # 10MB
+_DEFAULT_BACKUP_COUNT = 5
+_DEFAULT_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+_DEFAULT_LOG_LEVEL = "INFO"
 
 # Log-flood suppression (#15774). A hot failure path -- a retry loop against a
 # dependency that is down -- logs once per attempt with no ceiling, so a
@@ -75,11 +84,11 @@ class LogFloodSuppressionFilter(logging.Filter):
         self._window = window_seconds
         self._max_keys = max(1, max_keys)
         # key -> [window_start, seen_in_window, emitted_in_window]
-        self._state: "OrderedDict[tuple, list]" = OrderedDict()
+        self._state: "OrderedDict[tuple[object, ...], list[Any]]" = OrderedDict()
         self._lock = threading.Lock()
 
     @staticmethod
-    def _key(record: logging.LogRecord) -> tuple:
+    def _key(record: logging.LogRecord) -> tuple[object, ...]:
         return (record.name, record.levelno, str(record.msg), record.pathname, record.lineno)
 
     def _evict(self) -> None:
@@ -163,11 +172,11 @@ class _ConfigManagerFallback:
     """
 
     @staticmethod
-    def get(key, default=None):  # noqa: ANN001, ANN205
+    def get(key: str, default: object = None) -> object:
         return default
 
     @staticmethod
-    def get_nested(path, default=None):  # noqa: ANN001, ANN205
+    def get_nested(path: str, default: object = None) -> object:
         """Dotted-path reads fall back too (#15575).
 
         Every read in this module moved from ``get`` to ``get_nested`` because
@@ -180,13 +189,127 @@ class _ConfigManagerFallback:
         return default
 
 
+def _warn_config_fallback(key: str, value: object, default: object) -> None:
+    """Say once per key, on stderr, that *key* held an unusable value (#19288).
+
+    Written straight to stderr, never through a logger: this runs while a logger is being built,
+    so logging here would re-enter get_logger. Only the value's type is shown, never the value.
+    """
+    if not first_time(__name__, key):
+        return
+    sys.stderr.write(
+        f"autobot logging: config {key!r} is a {type(value).__name__}, not usable; using default {default!r}\n"
+    )
+
+
+def _warn_file_logging_off(path: Path, exc: OSError) -> None:
+    """Say once per path, on stderr, that file logging to *path* is off and why (#19628).
+
+    Straight to stderr for the same reason as ``_warn_config_fallback``: a logger is being built.
+    """
+    key = f"file:{path}"
+    if not first_time(__name__, key):
+        return
+    sys.stderr.write(f"autobot logging: cannot write logs at {str(path)!r} ({exc.strerror}); logging to console only\n")
+
+
+def _config_non_negative_int(key: str, default: int) -> int:
+    """Read *key* as a non-negative int; bool, MagicMock or anything else yields *default*."""
+    value = _get_config_manager().get_nested(key, default)
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    _warn_config_fallback(key, value, default)
+    return default
+
+
+def _as_str_path(value: object) -> str | None:
+    """*value* as a str path when it is a str or a ``PurePath``, else None.
+
+    Not the general ``os.PathLike`` protocol: a MagicMock implements ``__fspath__`` and returns a
+    str built from its own name, so a protocol check accepts it and the handler then creates a
+    ``MagicMock/...`` directory in the working tree. A config manager yields a str (YAML, env) or a
+    ``Path`` (Python defaults), which is everything this accepts.
+    """
+    if isinstance(value, str):
+        return value
+    if isinstance(value, PurePath):
+        return str(value)
+    return None
+
+
+def _configured_log_file(log_type: str) -> str | None:
+    """The configured log file for *log_type*, or None when unset or unusable (warned once)."""
+    key = f"logging.file_handlers.{log_type}"
+    value = _get_config_manager().get_nested(key)
+    if value is None or (isinstance(value, str) and not value):
+        return None
+    path = _as_str_path(value)
+    if path is None or "\x00" in path:
+        # A NUL byte makes every filesystem call on the path raise ValueError (#19288).
+        _warn_config_fallback(key, value, None)
+        return None
+    return path
+
+
+def _log_file_path(log_type: str) -> str:
+    """The configured log file for *log_type*, else ``$AUTOBOT_LOGS_DIR/<log_type>.log``."""
+    configured = _configured_log_file(log_type)
+    if configured is not None:
+        return configured
+    return str(resolve_logs_dir() / f"{log_type}.log")
+
+
+def _known_level(value: object) -> int | None:
+    """*value* as a level number when ``logging`` knows it: a name ("debug", "WARNING") or a number (10, 30).
+
+    ``getLevelName`` maps a known name to its number, a known number to its name, and anything else
+    to a "Level ..." str, which is what tells known from unknown here. Not getLevelNamesMapping():
+    it is 3.11+, and the pre-commit hooks import this module on older Pythons. bool is refused.
+    """
+    if isinstance(value, str):
+        level = logging.getLevelName(value.upper())
+        return level if isinstance(level, int) else None
+    if isinstance(value, int) and not isinstance(value, bool):
+        name = logging.getLevelName(value)
+        return value if not name.startswith("Level ") else None
+    return None
+
+
+def _config_log_level() -> int:
+    """The configured ``logging.log_level`` as a level number; anything ``logging`` does not know yields INFO.
+
+    Issue #15575: the config tree publishes "logging.log_level" (config/defaults.py, validated by
+    config/validation.py, mapped from AUTOBOT_LOG_LEVEL); there has never been a "logging.level" key.
+    """
+    key = "logging.log_level"
+    value = _get_config_manager().get_nested(key, _DEFAULT_LOG_LEVEL)
+    level = _known_level(value)
+    if level is not None:
+        return level
+    _warn_config_fallback(key, value, _DEFAULT_LOG_LEVEL)
+    return logging.INFO
+
+
 class LoggingManager:
     """
     Centralized logging manager that standardizes logging across all components
     """
 
     _initialized = False
+    # Set when the logs directory cannot be created (#19628): loggers get console handlers only.
+    _file_logging_disabled = False
     _loggers: Dict[str, logging.Logger] = {}
+    # One rotating handler per log file per process (#20139), keyed by absolute path. Handlers on one
+    # file that do not share a lock each see the file over the cap after another has renamed it, and
+    # rotate again: one rotation shifts the backups once per handler. Guarded by ``_lock``.
+    _file_handlers: Dict[str, FirstWriteFileHandler] = {}
+    # Off until a service's startup calls setup_logging() (#20894): before that a logger writes to the
+    # console only (journald/docker capture it), so importing a module that logs creates no file.
+    _file_logging_enabled = False
+    # Every logger this manager gave handlers, with its log type: setup_logging() adds the file handler.
+    _managed: Dict[str, tuple[logging.Logger, str]] = {}
+    # Set by set_level(): wins over the configured level for every logger, existing and future.
+    _level_override: int | None = None
     # Re-entrant: get_logger() holds this lock while the lazy config-manager
     # import chain it triggers (config -> network_constants -> redis -> metrics
     # -> monitoring) calls get_logger() again on the same thread. A plain Lock
@@ -226,9 +349,9 @@ class LoggingManager:
 
             # Don't add handlers if already configured
             if not logger.handlers:
-                handler = cls._get_file_handler(log_type)
-                if handler:
-                    logger.addHandler(handler)
+                cls._managed[logger_key] = (logger, log_type)
+                if cls._file_logging_enabled:
+                    cls._attach_file_handler(logger, log_type)
 
                 # Console handler is intentionally unconditional (#12506).
                 # This used to be gated on `_get_config_manager().get_nested(
@@ -253,13 +376,8 @@ class LoggingManager:
                 logger.addHandler(build_stdout_handler(formatter))
                 logger.addHandler(build_stderr_handler(formatter))
 
-            # Set log level. Issue #15575: the config tree publishes
-            # "logging.log_level" (config/defaults.py, validated by
-            # config/validation.py, mapped from AUTOBOT_LOG_LEVEL) -- there has
-            # never been a "logging.level" key, so this lookup always fell
-            # through to the "INFO" default regardless of configuration.
-            log_level = getattr(logging, _get_config_manager().get_nested("logging.log_level", "INFO").upper())
-            logger.setLevel(log_level)
+            log_level = _config_log_level()
+            logger.setLevel(cls._level_override if cls._level_override is not None else log_level)
 
             # Flood guard (#15774): attached to the logger, not the handlers,
             # so one filter covers the file, stdout and stderr handlers at once.
@@ -271,56 +389,97 @@ class LoggingManager:
             return logger
 
     @classmethod
+    def set_level(cls, level: int) -> None:
+        """Run every logger this manager has made, and every one it makes later, at *level* (e.g. a CLI --verbose)."""
+        with cls._lock:
+            cls._level_override = level
+            for logger in cls._loggers.values():
+                logger.setLevel(level)
+
+    @classmethod
     def _setup_logging_internal(cls) -> None:
-        """Setup basic logging configuration (internal, called under lock)"""
-        # Create logs directory if it doesn't exist
-        logs_dir_path = os.getenv("AUTOBOT_LOGS_DIR", "logs")
-        logs_dir = Path(logs_dir_path)
-        logs_dir.mkdir(exist_ok=True)
+        """Setup basic logging configuration (internal, called under lock).
 
-        # Create backup directory
-        backup_dir_name = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")  # ssot-config-exempt: pre-init logging
-        backup_dir = logs_dir / backup_dir_name
-        backup_dir.mkdir(exist_ok=True)
-
+        Touches nothing on disk (#20894): the logs directory is created by the file handler at the
+        first record, so importing a module that asks for a logger writes nothing. A logs directory
+        that cannot be created then (a ``ProtectSystem=strict`` unit whose working directory is
+        read-only, #19628) turns file logging off with one stderr warning -- see ``_file_unwritable``.
+        """
         cls._initialized = True
 
     @classmethod
+    def _file_unwritable(cls, path: Path, exc: OSError) -> None:
+        """A file handler's first write failed: warn once; a logs directory that cannot be created
+        turns file logging off for every log type, a single unopenable file only for its own."""
+        if path == resolve_logs_dir():
+            cls._file_logging_disabled = True
+        _warn_file_logging_off(path, exc)
+
+    @classmethod
     def _setup_logging(cls) -> None:
-        """Setup basic logging configuration (thread-safe public method)"""
+        """Start file logging for every logger made so far and every later one; idempotent (#20894)."""
         with cls._lock:
             if not cls._initialized:
                 cls._setup_logging_internal()
+            if cls._file_logging_enabled:
+                return
+            cls._file_logging_enabled = True
+            for logger, log_type in cls._managed.values():
+                cls._attach_file_handler(logger, log_type)
+
+    @classmethod
+    def _attach_file_handler(cls, logger: logging.Logger, log_type: str) -> None:
+        """Give *logger* the shared file handler for *log_type*, once (called under ``_lock``)."""
+        handler = cls._get_file_handler(log_type)
+        if handler is not None and handler not in logger.handlers:
+            logger.addHandler(handler)
 
     @classmethod
     def _get_file_handler(cls, log_type: str) -> logging.Handler | None:
-        """Get file handler for specific log type"""
-        log_file = _get_config_manager().get_nested(f"logging.file_handlers.{log_type}")
-        if not log_file:
-            # Fallback to default path using environment-configurable logs directory
-            logs_dir = os.getenv("AUTOBOT_LOGS_DIR", "logs")
-            log_file = f"{logs_dir}/{log_type}.log"
+        """Get the rotating file handler for *log_type*; loggers writing to one file share it (#20139).
 
-        # Create directory if needed
-        log_path = Path(log_file)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
+        Every config value is validated first (#19288): a wrong-typed value -- a malformed config,
+        or the MagicMock a config-mocking test harness returns -- falls back to its default with one
+        stderr warning instead of raising here, at the import of whichever module asked for a logger.
+        """
+        # No _file_logging_disabled short-cut here: a log file configured outside the logs dir may
+        # still be writable; a failing one turns off only its own handler, at its first write
+        # (#19628 review, #20894).
+        log_file = _log_file_path(log_type)
 
         # Use rotating file handler to prevent large log files
-        max_bytes = _get_config_manager().get_nested("logging.rotation.max_bytes", 10485760)  # 10MB
-        backup_count = _get_config_manager().get_nested("logging.rotation.backup_count", 5)
+        max_bytes = _config_non_negative_int("logging.rotation.max_bytes", _DEFAULT_MAX_BYTES)
+        backup_count = _config_non_negative_int("logging.rotation.backup_count", _DEFAULT_BACKUP_COUNT)
 
-        handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
+        key = os.path.abspath(log_file)
+        cached = cls._file_handlers.get(key)
+        if cached is not None:
+            # Also one whose first write failed: it is the path's disabled marker (it writes nothing and
+            # warned once), so a later logger shares it instead of rebuilding and warning again (#20894).
+            return cached
+        handler = FirstWriteFileHandler(
+            log_file, max_bytes=max_bytes, backup_count=backup_count, on_unwritable=cls._file_unwritable
+        )
         handler.setFormatter(cls._get_formatter())
-
+        cls._file_handlers[key] = handler
         return handler
 
     @classmethod
     def _get_formatter(cls) -> logging.Formatter:
-        """Get log formatter"""
-        log_format = _get_config_manager().get_nested(
-            "logging.format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        return logging.Formatter(log_format)
+        """Get the log formatter; a non-str or invalid ``logging.format`` yields the default (#19288)."""
+        key = "logging.format"
+        log_format = _get_config_manager().get_nested(key, _DEFAULT_FORMAT)
+        if isinstance(log_format, str):
+            try:
+                formatter = logging.Formatter(log_format)
+                # Probe one record: a template naming a field a LogRecord lacks constructs fine
+                # and then fails on every record it formats (#19288).
+                formatter.format(logging.makeLogRecord({"msg": "probe"}))
+                return formatter
+            except (ValueError, KeyError, TypeError):
+                pass  # an unusable %-style template; reported below and replaced by the default
+        _warn_config_fallback(key, log_format, _DEFAULT_FORMAT)
+        return logging.Formatter(_DEFAULT_FORMAT)
 
     @classmethod
     def setup_component_logging(cls, component_name: str, log_type: str = "backend") -> logging.Logger:
@@ -344,17 +503,20 @@ class LoggingManager:
         Args:
             log_type: Specific log type to rotate, or None for all
         """
+        if cls._file_logging_disabled:
+            return  # no logs dir and no backup dir to rotate into (#19628)
         # Issue #380: Use module-level constant
         log_types_to_rotate = list(_LOG_TYPES) if not log_type else [log_type]
 
         for lt in log_types_to_rotate:
-            log_file = _get_config_manager().get_nested(f"logging.file_handlers.{lt}")
+            log_file = _configured_log_file(lt)
             if log_file and os.path.exists(log_file):
                 # Create backup using environment-configurable paths
-                logs_dir = os.getenv("AUTOBOT_LOGS_DIR", "logs")
+                logs_dir = resolve_logs_dir()
                 backup_dir = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")
                 backup_path = f"{logs_dir}/{backup_dir}/{lt}_{int(__import__('time').time())}.log"
                 try:
+                    Path(logs_dir, backup_dir).mkdir(parents=True, exist_ok=True)  # created when first used
                     os.rename(log_file, backup_path)
                     _logger.info("Rotated %s to %s", log_file, backup_path)
                 except OSError as e:
@@ -404,12 +566,20 @@ def get_debug_logger(name: str) -> logging.Logger:
     return get_logger(name, "debug")
 
 
-def get_audit_logger(name: str) -> logging.Logger:
-    """Get audit logger"""
+def get_audit_channel_logger(name: str) -> logging.Logger:
+    """Get the stdlib logger of the ``audit`` log channel.
+
+    This is a log channel only: it writes no audit record. Audit records go
+    through ``services.audit.audit.record`` (#17312).
+    """
     return get_logger(name, "audit")
 
 
-# Maintain backward compatibility with existing logging setup
 def setup_logging() -> None:
-    """Setup logging - backward compatibility function"""
+    """Start file logging: the ONE call every service entry point makes at startup (#20894).
+
+    Until it runs, loggers write to the console only, so importing a module never creates a log file.
+    It attaches the file handler to every logger already made and to every later one. Idempotent.
+    Enforced for every entry point by repo_tests/entry_points_start_file_logging_20894_test.py.
+    """
     LoggingManager._setup_logging()

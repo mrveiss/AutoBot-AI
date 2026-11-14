@@ -311,7 +311,7 @@ The multi-agent system integrates with the existing frontend through:
    ```python
    class NewAgent:
        def __init__(self):
-           self.model_name = global_config_manager.get_task_specific_model("new_agent")
+           self.model_name = config_manager.get_task_specific_model("new_agent")
 
        async def process_request(self, request, context=None):
            # Implementation
@@ -388,7 +388,7 @@ agent.health_check()  # Returns status and capabilities
    - Screen understanding and interaction
 
 4. **Specialized Code Agent**
-   - CodeLlama integration
+   - CodeLlama integration (planned; not provisioned)
    - Advanced code analysis and generation
 
 ### Scalability Considerations

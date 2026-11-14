@@ -24,14 +24,14 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from constants.api_constants import PATH_OLLAMA_GENERATE
-from dependencies import get_config
+from dependencies import provide_config_manager
 
-from .types import AgentTask, OverseerUpdate, StepResult, StepStatus, TaskPlan
+from .types import AgentTask, OverseerStepStatus, OverseerUpdate, StepRunResult, TaskPlan
 
 logger = get_logger(__name__)
 
 
-def _build_previous_context(task: AgentTask, completed_results: Dict[str, StepResult]) -> Dict[str, Dict[str, Any]]:
+def _build_previous_context(task: AgentTask, completed_results: Dict[str, StepRunResult]) -> Dict[str, Dict[str, Any]]:
     """
     Gather context from previous steps for a task.
 
@@ -109,7 +109,7 @@ class OverseerAgent:
     def _get_ollama_endpoint(self) -> str:
         """Get Ollama endpoint from config."""
         try:
-            endpoint = get_config().get_ollama_url()
+            endpoint = provide_config_manager().get_ollama_url()
             if not endpoint.endswith(PATH_OLLAMA_GENERATE):
                 endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
             return endpoint
@@ -122,7 +122,7 @@ class OverseerAgent:
     def _get_model(self) -> str:
         """Get LLM model from config."""
         try:
-            return get_config().get_selected_model()
+            return provide_config_manager().get_selected_model()
         except Exception:
             return DEFAULT_LLM_MODEL
 
@@ -245,7 +245,7 @@ Examples:
                     description=step_data.get("description", f"Step {i}"),
                     command=step_data.get("command"),
                     expected_outcome=step_data.get("expected_outcome"),
-                    status=StepStatus.PENDING,
+                    status=OverseerStepStatus.PENDING,
                 )
                 steps.append(task)
 
@@ -270,7 +270,7 @@ Examples:
             description=f"Execute query: {query}",
             command=None,  # Will need manual intervention
             expected_outcome="Complete the requested action",
-            status=StepStatus.PENDING,
+            status=OverseerStepStatus.PENDING,
         )
 
         return TaskPlan(
@@ -301,7 +301,7 @@ Examples:
     def _validate_task_dependencies(
         self,
         task: AgentTask,
-        completed_results: Dict[str, StepResult],
+        completed_results: Dict[str, StepRunResult],
         plan_id: str,
     ) -> tuple[bool, OverseerUpdate | None]:
         """
@@ -369,7 +369,7 @@ Examples:
         self,
         task: AgentTask,
         plan_id: str,
-        result: StepResult,
+        result: StepRunResult,
     ) -> OverseerUpdate:
         """
         Build an OverseerUpdate for step completion.
@@ -442,7 +442,7 @@ Examples:
             previous_context: Context from previous steps
 
         Yields:
-            Tuples of ("update", OverseerUpdate) or ("result", StepResult)
+            Tuples of ("update", OverseerUpdate) or ("result", StepRunResult)
         """
         # Yield step start (Issue #620: uses helper method)
         yield ("update", self._build_step_start_update(task, plan_id, previous_context))
@@ -450,7 +450,7 @@ Examples:
         try:
             # Execute the step through the executor
             async for update in executor.execute_step(task):
-                if isinstance(update, StepResult):
+                if isinstance(update, StepRunResult):
                     # Step completed - yield result for storage (Issue #620: uses helper)
                     yield (
                         "update",
@@ -506,7 +506,7 @@ Examples:
         yield self._build_plan_update(plan)
 
         # Track completed step results for dependency resolution
-        completed_results: Dict[str, StepResult] = {}
+        completed_results: Dict[str, StepRunResult] = {}
 
         for task in plan.steps:
             # Issue #665: Uses helper for dependency validation
@@ -540,11 +540,11 @@ Examples:
         summary_parts = [f"Plan: {self.current_plan.analysis}"]
         for step in self.current_plan.steps:
             status_icon = {
-                StepStatus.PENDING: "⏳",
-                StepStatus.RUNNING: "🔄",
-                StepStatus.STREAMING: "📡",
-                StepStatus.COMPLETED: "✅",
-                StepStatus.FAILED: "❌",
+                OverseerStepStatus.PENDING: "⏳",
+                OverseerStepStatus.RUNNING: "🔄",
+                OverseerStepStatus.STREAMING: "📡",
+                OverseerStepStatus.COMPLETED: "✅",
+                OverseerStepStatus.FAILED: "❌",
             }.get(step.status, "•")
 
             summary_parts.append(f"{status_icon} Step {step.step_number}: {step.description}")

@@ -37,7 +37,7 @@ from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 
 from .tracing import TraceContext, TraceEvent, new_trace_id
-from .types import A2ATaskStatus, Task, TaskArtifact, TaskState
+from .types import A2ATaskArtifact, A2ATaskStatus, Task, TaskState
 
 logger = get_logger(__name__)
 
@@ -92,7 +92,7 @@ def _task_from_json(raw: str) -> Task:
         timestamp=d["status"]["timestamp"],
     )
     artifacts = [
-        TaskArtifact(
+        A2ATaskArtifact(
             artifact_type=a["artifact_type"],
             content=a["content"],
             created_at=a["created_at"],
@@ -320,7 +320,7 @@ class TaskManager:
         logger.debug("A2A task %s → %s", task_id, state.value)
         return task
 
-    def add_artifact(self, task_id: str, artifact: TaskArtifact) -> bool:
+    def add_artifact(self, task_id: str, artifact: A2ATaskArtifact) -> bool:
         """Append an artifact to a task. Returns False if task not found."""
         task = self._load(task_id)
         if not task:

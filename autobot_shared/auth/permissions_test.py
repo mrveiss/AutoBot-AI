@@ -47,23 +47,25 @@ def test_admin_holds_every_permission():
         assert role_has_permission("admin", perm.value) is True, perm.value
 
 
-def test_superadmin_holds_no_permission():
-    """The inversion #13854 made deliberately, asserted as the whole set.
+def test_superadmin_holds_every_permission_admin_holds():
+    """#19125 (owner decision 2026-10-21): "Super admin is the highest form of admin".
 
-    This test previously asserted the exact opposite — superadmin held every
-    permission — and it passed for a reason that was never a decision:
-    `role_has_permission` short-circuited on `is_admin_role`, so `ADMIN_ROLES`
-    was silently the most permissive permission source in the system. Meanwhile
-    `SecurityLayer.check_permission` denied superadmin those same permissions.
-    Two canonical resolvers, opposite answers, for the most privileged role.
-
-    Superadmin is now a `Role` member with an explicitly empty
-    `ROLE_PERMISSIONS` entry, and every resolver reads that one mapping. It is
-    administrative as a predicate (see `is_admin_role`) and holds no granular
-    grant.
+    Asserted over the WHOLE `Permission` enum so it cannot drift: for every
+    permission P, admin holding P implies superadmin holding P. This reverses
+    #13854's empty SUPERADMIN entry; the grants are derived from admin's set,
+    so a permission later added to admin is inherited automatically.
     """
+    assert list(Permission), "Permission enum is empty -- this guard would be vacuous"
     for perm in Permission:
-        assert role_has_permission("superadmin", perm.value) is False, perm.value
+        if role_has_permission("admin", perm.value):
+            assert role_has_permission("superadmin", perm.value) is True, perm.value
+    assert set(ROLE_PERMISSIONS[Role.ADMIN]) <= set(ROLE_PERMISSIONS[Role.SUPERADMIN])
+    assert ROLE_PERMISSIONS[Role.SUPERADMIN] is not ROLE_PERMISSIONS[Role.ADMIN], "derived, not aliased"
+
+
+def test_superadmin_holds_every_permission():
+    for perm in Permission:
+        assert role_has_permission("superadmin", perm.value) is True, perm.value
 
 
 def test_superadmin_is_still_administrative():
@@ -74,16 +76,19 @@ def test_superadmin_is_still_administrative():
     """
     assert is_admin_role("superadmin") is True
     assert Role("superadmin") is Role.SUPERADMIN
-    assert ROLE_PERMISSIONS[Role.SUPERADMIN] == []
 
 
-def test_being_administrative_does_not_grant_permissions():
-    """#13854 AC: `ADMIN_ROLES` must not be a permission source.
+def test_being_administrative_does_not_grant_permissions(monkeypatch):
+    """#13854 AC, kept by #19125: `ADMIN_ROLES` must not be a permission source.
 
-    Membership of ADMIN_ROLES and possession of a permission are now decided by
-    different data. Asserted through a role that is in one and not the other, so
-    a reintroduced short-circuit fails here rather than being invisible.
+    Superadmin now HOLDS permissions, but through its ROLE_PERMISSIONS entry,
+    not through the predicate. Emptying that entry's resolved table must deny
+    even though `is_admin_role` stays True -- a reintroduced short-circuit
+    fails here.
     """
+    from autobot_shared.auth import permissions as mod
+
+    monkeypatch.setitem(mod._ROLE_PERMISSION_VALUES, Role.SUPERADMIN, frozenset())
     assert is_admin_role("superadmin") is True
     assert role_has_permission("superadmin", Permission.SHELL_EXECUTE.value) is False
     assert role_has_permission("superadmin", Permission.ADMIN_SYSTEM.value) is False

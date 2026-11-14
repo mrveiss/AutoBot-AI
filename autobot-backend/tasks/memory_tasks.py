@@ -15,16 +15,16 @@ Design decisions:
 - acks_late=True on all tasks — message is only removed from queue after
   successful completion, preventing data loss on worker crash.
 - max_retries + retry(countdown=N) — all tasks are idempotent so safe retry.
-- run_or_schedule() — Celery workers are synchronous; the shared helper from
-  ``autobot_shared.async_compat`` defends against re-entrancy if a worker
-  ever runs inside an already-active event loop (#7469).
+- run_in_worker_loop() — Celery workers are synchronous; the shared helper from
+  ``autobot_shared.worker_loop`` runs every coroutine on the worker's one
+  persistent loop, so loop-bound Redis pools are reused across tasks (#20887).
 - Deferred imports inside task bodies to avoid circular-import issues at
   module load time (Celery autodiscovers this module before the app is fully
   initialised).
 """
 
-from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
 
 logger = get_logger(__name__)
@@ -74,54 +74,96 @@ async def _async_extract_facts(session_id: str, conversation_text: str, user_id:
     return result.get("facts_count", 0) if isinstance(result, dict) else 0
 
 
-async def _async_update_graph(session_id: str, entities: list, relations: list) -> dict:
-    """Write entities and relations into AutoBotMemoryGraph."""
-    from autobot_memory_graph import AutoBotMemoryGraph
+async def _upsert_graph_entity(graph, entity: dict, session_id: str, owner) -> None:
+    """Atomically get-or-create the entity, then append observations if it existed (#18417).
 
-    graph = AutoBotMemoryGraph()
-    await graph.initialize()
+    A lookup error propagates (the caller counts it as a failure); it is never read as absence.
+    """
+    name = entity.get("name", "")
+    observations = [f"{k}: {v}" for k, v in (entity.get("properties") or {}).items()]
+    _, created = await graph.get_or_create_entity(
+        entity_type=entity.get("type", "unknown"),
+        name=name,
+        observations=observations,
+        metadata={"session_id": session_id},
+        owner=owner,  # #18825: the session owner, so scoped reads can see what this task wrote
+    )
+    if not created and observations:
+        await graph.add_observations(entity_name=name, observations=observations)
 
-    entities_written = 0
-    relations_written = 0
 
+MAX_REPORTED_GRAPH_FAILURES = 20
+
+
+def _record_failure(failures: list, kind: str, item: str, exc: Exception) -> None:
+    """Keep a capped {kind, item, error} list so the task result says what failed."""
+    if len(failures) < MAX_REPORTED_GRAPH_FAILURES:
+        failures.append({"kind": kind, "item": item, "error": str(exc)})
+
+
+async def _write_graph_entities(graph, entities: list, session_id: str, failures: list, owner) -> int:
+    """Write entities; every failure is logged with the item name and recorded."""
+    written = 0
     for entity in entities:
         try:
-            await graph.add_or_update_entity(
-                name=entity.get("name", ""),
-                entity_type=entity.get("type", "unknown"),
-                properties=entity.get("properties", {}),
-                session_id=session_id,
-            )
-            entities_written += 1
+            await _upsert_graph_entity(graph, entity, session_id, owner)
+            written += 1
         except Exception as ent_exc:
-            logger.warning(
-                "memory.update_graph: entity write failed (%s): %s",
-                entity.get("name"),
-                ent_exc,
-            )
+            _record_failure(failures, "entity", str(entity.get("name")), ent_exc)
+            logger.warning("memory.update_graph: entity write failed (%s): %s", entity.get("name"), ent_exc)
+    return written
 
+
+async def _write_graph_relations(graph, relations: list, session_id: str, failures: list) -> int:
+    """Write relations; every failure is logged with both endpoints and recorded."""
+    written = 0
     for relation in relations:
         try:
-            await graph.add_relation(
-                source=relation.get("source", ""),
-                target=relation.get("target", ""),
+            await graph.create_relation(
+                from_entity=relation.get("source", ""),
+                to_entity=relation.get("target", ""),
                 relation_type=relation.get("relation_type", "related_to"),
-                properties=relation.get("properties", {}),
-                session_id=session_id,
+                metadata={**(relation.get("properties") or {}), "session_id": session_id},
             )
-            relations_written += 1
+            written += 1
         except Exception as rel_exc:
+            _record_failure(failures, "relation", f"{relation.get('source')}->{relation.get('target')}", rel_exc)
             logger.warning(
-                "memory.update_graph: relation write failed (%s→%s): %s",
+                "memory.update_graph: relation write failed (%s->%s): %s",
                 relation.get("source"),
                 relation.get("target"),
                 rel_exc,
             )
+    return written
+
+
+async def _async_update_graph(
+    session_id: str, entities: list, relations: list, user_id: str | None = None, org_id: str | None = None
+) -> dict:
+    """Write entities and relations into AutoBotMemoryGraph under the session owner's scope (#18825).
+
+    Raises ``OwnerScopeRequired`` when ``user_id`` is missing: no owner, no write.
+    """
+    from autobot_memory_graph import AutoBotMemoryGraph
+    from autobot_memory_graph.owner_scope import OwnerScope
+
+    owner = OwnerScope.for_user(user_id, org_id)  # fails closed before any connection is opened
+    graph = AutoBotMemoryGraph()
+    await graph.initialize()
+
+    failures: list = []
+    entities_written = await _write_graph_entities(graph, entities, session_id, failures, owner)
+    relations_written = await _write_graph_relations(graph, relations, session_id, failures)
+    entities_failed = len(entities) - entities_written
+    relations_failed = len(relations) - relations_written
 
     return {
-        "status": "ok",
+        "status": "partial" if entities_failed or relations_failed else "ok",
         "entities_written": entities_written,
         "relations_written": relations_written,
+        "entities_failed": entities_failed,
+        "relations_failed": relations_failed,
+        "failures": failures,
     }
 
 
@@ -202,7 +244,7 @@ def write_verbatim_task(
         Dict with ``chunk_id`` and ``status``.
     """
     try:
-        chunk_id = run_or_schedule(_async_write_verbatim(session_id, turn, role, text, timestamp, user_id))
+        chunk_id = run_in_worker_loop(_async_write_verbatim(session_id, turn, role, text, timestamp, user_id))
         logger.debug(
             "memory.write_verbatim: stored chunk %s (session=%s turn=%d role=%s)",
             chunk_id,
@@ -249,7 +291,7 @@ def extract_facts_task(
         Dict with ``status`` and ``facts_count``.
     """
     try:
-        facts_count = run_or_schedule(_async_extract_facts(session_id, conversation_text, user_id))
+        facts_count = run_in_worker_loop(_async_extract_facts(session_id, conversation_text, user_id))
         logger.info(
             "memory.extract_facts: extracted %d facts (session=%s)",
             facts_count,
@@ -277,6 +319,8 @@ def update_graph_task(
     session_id: str,
     entities: list,
     relations: list,
+    user_id: str | None = None,
+    org_id: str | None = None,
 ) -> dict:
     """Update the memory graph with entities and relations from a turn.
 
@@ -289,12 +333,17 @@ def update_graph_task(
             ``properties``).
         relations: List of relation dicts (keys: ``source``, ``target``,
             ``relation_type``, ``properties``).
+        user_id: Session owner (scalar id of the authenticated principal); required.
+        org_id: Owner's organisation id, if any.
 
     Returns:
         Dict with ``status``, ``entities_written``, ``relations_written``.
+        ``status == "rejected"`` (nothing written, no retry) when ``user_id`` is missing.
     """
+    from autobot_memory_graph.owner_scope import OwnerScopeRequired
+
     try:
-        result = run_or_schedule(_async_update_graph(session_id, entities, relations))
+        result = run_in_worker_loop(_async_update_graph(session_id, entities, relations, user_id, org_id))
         logger.info(
             "memory.update_graph: wrote %d entities, %d relations (session=%s)",
             result.get("entities_written", 0),
@@ -303,6 +352,9 @@ def update_graph_task(
         )
         _log_queue_depth("memory.update_graph")
         return result
+    except OwnerScopeRequired as exc:  # a retry cannot conjure an owner
+        logger.warning("memory.update_graph rejected (session=%s): %s", session_id, exc)
+        return {"status": "rejected", "reason": str(exc), "entities_written": 0, "relations_written": 0}
     except Exception as exc:
         logger.warning(
             "memory.update_graph failed (session=%s): %s — retrying",
@@ -339,7 +391,7 @@ def compact_snapshot_task(
         Dict with ``status`` and ``session_id``.
     """
     try:
-        run_or_schedule(_async_compact_snapshot(session_id, conversation_snapshot, user_id))
+        run_in_worker_loop(_async_compact_snapshot(session_id, conversation_snapshot, user_id))
         logger.info(
             "memory.compact_snapshot: saved snapshot for session=%s (%d chars)",
             session_id,

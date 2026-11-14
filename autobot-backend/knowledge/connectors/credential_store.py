@@ -132,7 +132,7 @@ def _configured_lock_ttl_ms() -> int:
     consequence rather than a performance one.
     """
     derived = _derived_lock_ttl_ms()
-    raw = os.getenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "").strip()
+    raw = os.getenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "").strip()  # ssot-config-exempt: unset -> derived TTL
     if not raw:
         return derived
     try:
@@ -179,6 +179,22 @@ def _refresh_wait_s() -> float:
 def _refresh_poll_s() -> float:
     """Guarded against 0 from the environment, which would busy-loop the executor."""
     return env_float_clamped("AUTOBOT_OAUTH_REFRESH_POLL_S", 0.2, min_v=0.05)
+
+
+def refresh_lease(secret_id: str) -> LeaderLease:
+    """The per-credential refresh lease (#13627). Anything that rewrites a bundle takes THIS one.
+
+    A unique worker id per lease, NOT the default hostname-pid: two leases in one
+    process would otherwise share an identity and ``release()``'s "only delete if
+    it is still mine" guard would delete the other holder's key.
+    """
+    return LeaderLease(
+        key=_refresh_lock_key(secret_id),
+        database=_REFRESH_DB,
+        ttl_ms=_refresh_lock_ttl_ms(),
+        worker_id=uuid.uuid4().hex,
+        label="OAuth refresh",
+    )
 
 
 async def _release_quietly(lease: LeaderLease) -> None:
@@ -365,18 +381,17 @@ class ConnectorCredentialStore:
         owner_id: str,
         provider: str,
         token_response: dict,
-        client_id: str,
-        client_secret: str,
         token_url: str,
         scopes: list,
     ) -> str:
         """Persist a token set obtained via the OAuth auth-code flow.
 
-        Stores a self-contained credential bundle (access + refresh token,
-        client app creds, token endpoint) so :meth:`get_access_token` can
-        refresh later without re-reading provider config.  Returns the secret id.
+        Stores the user's credential bundle (access + refresh token, provider,
+        token endpoint).  The OAuth *application* credentials are operator-owned
+        and are NOT copied in: :meth:`get_access_token` resolves them from
+        provider config at refresh time (#13630).  Returns the secret id.
         """
-        creds = self._oauth_bundle(token_response, client_id, client_secret, token_url, scopes, provider)
+        creds = self._oauth_bundle(token_response, token_url, scopes, provider)
         name = f"connector:{connector_id}:auth"
         value = json.dumps(creds, ensure_ascii=False)
         result = await asyncio.get_running_loop().run_in_executor(
@@ -462,13 +477,7 @@ class ConnectorCredentialStore:
             # Take over if the holder died or its refresh failed — otherwise one
             # provider error costs every waiter the full wait and then reports a
             # misleading "timed out waiting for a concurrent refresh".
-            takeover = LeaderLease(
-                key=_refresh_lock_key(secret_id),
-                database=_REFRESH_DB,
-                ttl_ms=_refresh_lock_ttl_ms(),
-                worker_id=uuid.uuid4().hex,
-                label="OAuth refresh",
-            )
+            takeover = refresh_lease(secret_id)
             if await takeover.update_leadership():
                 try:
                     return await self._refresh_and_store(secret_id, owner_id, creds)
@@ -506,19 +515,7 @@ class ConnectorCredentialStore:
         # permanently and the user must re-authorize. Some providers treat reuse of
         # a rotated token as a breach signal and revoke the whole grant family
         # (OAuth 2.0 Security BCP 4.14.2), turning the race into a full disconnect.
-        lease = LeaderLease(
-            key=_refresh_lock_key(secret_id),
-            database=_REFRESH_DB,
-            ttl_ms=_refresh_lock_ttl_ms(),
-            # A unique id per lease, NOT the default hostname-pid. Two refreshes in
-            # one process would otherwise share an identity, and ``release()``'s
-            # "only delete if it is still mine" guard would happily delete the other
-            # holder's key — letting a third caller in while the second still
-            # refreshes. The scheduler never hit this because it holds one lease per
-            # process; this is the first multi-lease-per-process user.
-            worker_id=uuid.uuid4().hex,
-            label="OAuth refresh",
-        )
+        lease = refresh_lease(secret_id)
         if not await lease.update_leadership():
             # LeaderLease returns False both when another holder has the lease and
             # when Redis is simply unavailable, and the two need opposite handling.
@@ -558,7 +555,13 @@ class ConnectorCredentialStore:
         from knowledge.connectors import oauth_flow
 
         token_url, client_id, client_secret = self._resolve_app_credentials(creds)
-        token_response = await oauth_flow.refresh_access_token(token_url, client_id, client_secret, refresh_token)
+        token_response = await oauth_flow.refresh_access_token(
+            token_url,
+            client_id,
+            client_secret,
+            refresh_token,
+            provider=oauth_flow.find_provider(creds.get("provider")),
+        )
         creds["access_token"] = token_response["access_token"]
         # #13626: ``expires_in`` is RECOMMENDED, not REQUIRED, on a refresh
         # response (RFC 6749 §5.1) and several providers omit it. Writing None
@@ -617,8 +620,6 @@ class ConnectorCredentialStore:
     def _oauth_bundle(
         cls,
         token_response: dict,
-        client_id: str,
-        client_secret: str,
         token_url: str,
         scopes: list,
         provider: str,
@@ -634,8 +635,6 @@ class ConnectorCredentialStore:
             "access_token_lifetime_seconds": cls._lifetime_seconds(token_response.get("expires_in")),
             "token_type": token_response.get("token_type", "Bearer"),
             "scope": token_response.get("scope", " ".join(scopes)),
-            "client_id": client_id,
-            "client_secret": client_secret,
             "token_url": token_url,
         }
 
@@ -667,39 +666,30 @@ class ConnectorCredentialStore:
     def _resolve_app_credentials(creds: dict) -> tuple[str, str, str]:
         """Return (token_url, client_id, client_secret) for a refresh (#13630).
 
-        Prefers the operator's *current* OAuth app config over the copy embedded in
-        this user's credential bundle. That copy is a snapshot taken when the user
-        connected, so rotating the app secret would otherwise strand every existing
-        connection — refresh keeps presenting the old secret and starts failing,
-        and no code path anywhere rewrites those stored copies.
-
-        Falls back to the stored copy when the provider is unknown or unconfigured,
-        so this needs no migration and cannot make a working credential worse: a
-        bundle whose provider was since removed from config keeps refreshing
-        exactly as it does today.
+        Resolved from operator provider config at use time, so a rotated app secret
+        takes effect on the next refresh. Pre-#13630 bundles still carry a snapshot
+        copy, used only when config yields nothing and logged at WARNING (no value).
+        Raises ValueError when neither source has the credentials.
         """
-        stored = (
-            creds.get("token_url", ""),
-            creds.get("client_id", ""),
-            creds.get("client_secret", ""),
-        )
-        provider_name = creds.get("provider")
-        if not provider_name:
-            return stored
-        try:
+        stored = (creds.get("token_url", ""), creds.get("client_id", ""), creds.get("client_secret", ""))
+        provider = resolved = None
+        if creds.get("provider"):
             from knowledge.connectors import oauth_flow
 
-            provider = oauth_flow.get_provider(provider_name)
-            client_id, client_secret = oauth_flow.resolve_client_credentials(provider)
-        except Exception:
-            # Unknown or unconfigured provider — the stored snapshot is all we have.
-            return stored
-        if (client_id, client_secret) != (stored[1], stored[2]):
-            logger.info(
-                "Refreshing with the operator's current OAuth app credentials; "
-                "the copy stored in this credential is stale (#13630)."
-            )
-        return (getattr(provider, "token_url", "") or stored[0], client_id, client_secret)
+            try:
+                provider = oauth_flow.get_provider(creds["provider"])
+                resolved = oauth_flow.resolve_client_credentials(provider)
+            except (KeyError, ValueError):
+                pass  # unknown or unconfigured: try the legacy copy
+        if resolved is not None:
+            return (getattr(provider, "token_url", "") or stored[0], resolved[0], resolved[1])
+        if not (stored[1] and stored[2]):
+            raise ValueError("OAuth app credentials are not configured for this credential's provider")
+        logger.warning(
+            "OAuth refresh used the app credentials copied into a legacy credential bundle because "
+            "provider config yields none; configure the provider's OAuth app (#13630)."
+        )
+        return stored
 
     @staticmethod
     def _lifetime_seconds(expires_in) -> int | None:

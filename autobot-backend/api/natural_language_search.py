@@ -21,8 +21,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Tuple
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from api.embedding_refusal import reraise_http_or_refusal
 from api.schemas_knowledge import (
     NLCodeExplanationResponse,
     NLDomainsResponse,
@@ -34,13 +35,14 @@ from api.schemas_knowledge import (
     SearchResultWithExplanation,
 )
 from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.slug import sanitize_token
 
 logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for query parsing and code analysis
-_NON_WORD_CHARS_RE = re.compile(r"[^\w\s\-_]")
 _CAMEL_CASE_RE = re.compile(r"\b(?:[A-Z][a-z]{1,30}){2,10}\b")
 _SNAKE_CASE_RE = re.compile(r"\b[a-z]+(?:_[a-z]+)+\b")
 _QUOTED_STRING_RE = re.compile(r'"([^"]+)"|\'([^\']+)\'')
@@ -48,11 +50,8 @@ _FUNC_DEF_RE = re.compile(r"def\s+(\w+)")
 _CLASS_DEF_RE = re.compile(r"class\s+(\w+)")
 _ASYNC_FUNC_RE = re.compile(r"async\s+def\s+(\w+)")
 
-# Issue #336: Keyword heuristics dispatch table for intent classification
-KEYWORD_INTENT_FALLBACKS: Dict[Tuple[str, ...], "QueryIntent"] = {}  # Populated after enum defined
-
 # Issue #3355: prefix moved to router registry (feature_routers.py)
-router = APIRouter(tags=["natural-language-search", "code-search"])
+router = APIRouter(tags=["natural-language-search", "code-search"], dependencies=[Depends(get_current_user)])
 
 
 # =============================================================================
@@ -60,7 +59,7 @@ router = APIRouter(tags=["natural-language-search", "code-search"])
 # =============================================================================
 
 
-class QueryIntent(str, Enum):
+class CodeQueryIntent(str, Enum):
     """Classified intent of a natural language query."""
 
     FIND_DEFINITION = "find_definition"  # "Where is X defined?"
@@ -100,7 +99,7 @@ class ParsedQuery:
 
     original_query: str
     normalized_query: str
-    intent: QueryIntent
+    intent: CodeQueryIntent
     domain: QueryDomain
     entities: List[str]  # Extracted code entities (function names, classes, etc.)
     keywords: List[str]  # Important keywords
@@ -129,7 +128,7 @@ class SearchSuggestion:
 
     suggestion: str
     reason: str
-    intent: QueryIntent
+    intent: CodeQueryIntent
     relevance_score: float
 
 
@@ -139,7 +138,7 @@ class SearchSuggestion:
 
 # Patterns for query intent classification
 INTENT_PATTERNS = {
-    QueryIntent.FIND_DEFINITION: [
+    CodeQueryIntent.FIND_DEFINITION: [
         r"where\s+is\s+(\w+)\s+defined",
         r"where\s+do\s+we\s+define",
         r"show\s+me\s+the\s+definition\s+of",
@@ -147,7 +146,7 @@ INTENT_PATTERNS = {
         r"what\s+is\s+the\s+definition",
         r"where\s+is\s+(\w+)\s+declared",
     ],
-    QueryIntent.FIND_USAGE: [
+    CodeQueryIntent.FIND_USAGE: [
         r"where\s+is\s+(\w+)\s+used",
         r"where\s+do\s+we\s+use",
         r"find\s+all\s+usages?\s+of",
@@ -155,53 +154,53 @@ INTENT_PATTERNS = {
         r"who\s+calls\s+(\w+)",
         r"what\s+uses\s+(\w+)",
     ],
-    QueryIntent.FIND_IMPLEMENTATION: [
+    CodeQueryIntent.FIND_IMPLEMENTATION: [
         r"how\s+is\s+(\w+)\s+implemented",
         r"show\s+me\s+the\s+implementation",
         r"how\s+does\s+(\w+)\s+work",
         r"what\s+is\s+the\s+logic\s+for",
         r"show\s+me\s+how\s+(\w+)\s+works",
     ],
-    QueryIntent.FIND_ERROR_HANDLING: [
+    CodeQueryIntent.FIND_ERROR_HANDLING: [
         r"how\s+are\s+errors?\s+handled",
         r"error\s+handling\s+for",
         r"exception\s+handling",
         r"what\s+happens\s+when\s+(\w+)\s+fails",
         r"how\s+do\s+we\s+handle\s+(\w+)\s+errors",
     ],
-    QueryIntent.FIND_CONFIGURATION: [
+    CodeQueryIntent.FIND_CONFIGURATION: [
         r"where\s+is\s+(\w+)\s+configured",
         r"configuration\s+for",
         r"settings?\s+for",
         r"how\s+is\s+(\w+)\s+set\s+up",
         r"environment\s+variables?\s+for",
     ],
-    QueryIntent.FIND_TESTS: [
+    CodeQueryIntent.FIND_TESTS: [
         r"tests?\s+for\s+(\w+)",
         r"test\s+cases?\s+for",
         r"how\s+is\s+(\w+)\s+tested",
         r"unit\s+tests?\s+for",
         r"testing\s+(\w+)",
     ],
-    QueryIntent.FIND_DEPENDENCIES: [
+    CodeQueryIntent.FIND_DEPENDENCIES: [
         r"what\s+does\s+(\w+)\s+depend\s+on",
         r"dependencies\s+of",
         r"imports?\s+in\s+(\w+)",
         r"what\s+modules?\s+does\s+(\w+)\s+use",
     ],
-    QueryIntent.FIND_PATTERN: [
+    CodeQueryIntent.FIND_PATTERN: [
         r"find\s+all\s+(\w+)\s+patterns?",
         r"show\s+me\s+all\s+(\w+)",
         r"list\s+all\s+(\w+)",
         r"where\s+do\s+we\s+have\s+(\w+)",
     ],
-    QueryIntent.EXPLAIN_CODE: [
+    CodeQueryIntent.EXPLAIN_CODE: [
         r"explain\s+(\w+)",
         r"what\s+does\s+(\w+)\s+do",
         r"purpose\s+of\s+(\w+)",
         r"why\s+do\s+we\s+have\s+(\w+)",
     ],
-    QueryIntent.COMPARE_CODE: [
+    CodeQueryIntent.COMPARE_CODE: [
         r"compare\s+(\w+)\s+and\s+(\w+)",
         r"difference\s+between\s+(\w+)\s+and",
         r"(\w+)\s+vs\s+(\w+)",
@@ -337,36 +336,36 @@ QUESTION_TYPES = {
 }
 
 # Issue #336: Keyword heuristics dispatch table for intent classification fallback
-# Maps (keyword1, keyword2, ...) tuples to QueryIntent
-KEYWORD_INTENT_FALLBACKS = {
-    ("define", "declaration"): QueryIntent.FIND_DEFINITION,
-    ("use", "call"): QueryIntent.FIND_USAGE,
-    ("implement", "work"): QueryIntent.FIND_IMPLEMENTATION,
-    ("error", "exception"): QueryIntent.FIND_ERROR_HANDLING,
-    ("test",): QueryIntent.FIND_TESTS,
-    ("config", "setting"): QueryIntent.FIND_CONFIGURATION,
+# Maps (keyword1, keyword2, ...) tuples to CodeQueryIntent
+KEYWORD_INTENT_FALLBACKS: Dict[Tuple[str, ...], CodeQueryIntent] = {
+    ("define", "declaration"): CodeQueryIntent.FIND_DEFINITION,
+    ("use", "call"): CodeQueryIntent.FIND_USAGE,
+    ("implement", "work"): CodeQueryIntent.FIND_IMPLEMENTATION,
+    ("error", "exception"): CodeQueryIntent.FIND_ERROR_HANDLING,
+    ("test",): CodeQueryIntent.FIND_TESTS,
+    ("config", "setting"): CodeQueryIntent.FIND_CONFIGURATION,
 }
 
 
-def _match_keyword_fallback(query: str) -> Tuple[QueryIntent, float]:
+def _match_keyword_fallback(query: str) -> Tuple[CodeQueryIntent, float]:
     """Match query against keyword fallback patterns (Issue #336 - extracted helper)."""
     for keywords, intent in KEYWORD_INTENT_FALLBACKS.items():
         if any(kw in query for kw in keywords):
             return intent, 0.6
-    return QueryIntent.GENERAL_SEARCH, 0.5
+    return CodeQueryIntent.GENERAL_SEARCH, 0.5
 
 
 # Issue #336: Intent-based query generator dispatch table
-INTENT_QUERY_TEMPLATES: Dict[QueryIntent, str] = {
-    QueryIntent.FIND_USAGE: "Where is {} used?",
-    QueryIntent.FIND_DEFINITION: "Where is {} defined?",
-    QueryIntent.FIND_TESTS: "What tests exist for {}?",
-    QueryIntent.FIND_IMPLEMENTATION: "How is {} implemented?",
-    QueryIntent.FIND_ERROR_HANDLING: "How are errors handled in {}?",
+INTENT_QUERY_TEMPLATES: Dict[CodeQueryIntent, str] = {
+    CodeQueryIntent.FIND_USAGE: "Where is {} used?",
+    CodeQueryIntent.FIND_DEFINITION: "Where is {} defined?",
+    CodeQueryIntent.FIND_TESTS: "What tests exist for {}?",
+    CodeQueryIntent.FIND_IMPLEMENTATION: "How is {} implemented?",
+    CodeQueryIntent.FIND_ERROR_HANDLING: "How are errors handled in {}?",
 }
 
 
-def _generate_intent_query(intent: QueryIntent, entity: str) -> str | None:
+def _generate_intent_query(intent: CodeQueryIntent, entity: str) -> str | None:
     """Generate query for intent using dispatch table (Issue #336 - extracted helper)."""
     template = INTENT_QUERY_TEMPLATES.get(intent)
     if template:
@@ -529,12 +528,12 @@ class NaturalLanguageQueryParser:
         # Remove extra whitespace
         query = " ".join(query.split())
         # Remove punctuation except hyphens and underscores
-        query = _NON_WORD_CHARS_RE.sub(" ", query)
+        query = sanitize_token(query, allowed=r"\w\s\-_", replacement=" ", collapse=False)
         return query.strip()
 
-    def _classify_intent(self, query: str) -> Tuple[QueryIntent, float]:
+    def _classify_intent(self, query: str) -> Tuple[CodeQueryIntent, float]:
         """Classify the intent of the query."""
-        best_intent = QueryIntent.GENERAL_SEARCH
+        best_intent = CodeQueryIntent.GENERAL_SEARCH
         best_confidence = 0.0
 
         for intent, patterns in INTENT_PATTERNS.items():
@@ -602,16 +601,16 @@ class NaturalLanguageQueryParser:
 
     # Issue #315: Intent to keywords dispatch table
     _INTENT_KEYWORDS = {
-        QueryIntent.FIND_DEFINITION: ["def", "class", "function", "define"],
-        QueryIntent.FIND_ERROR_HANDLING: [
+        CodeQueryIntent.FIND_DEFINITION: ["def", "class", "function", "define"],
+        CodeQueryIntent.FIND_ERROR_HANDLING: [
             "try",
             "except",
             "catch",
             "error",
             "exception",
         ],
-        QueryIntent.FIND_TESTS: ["test", "assert", "pytest", "unittest"],
-        QueryIntent.FIND_CONFIGURATION: ["config", "settings", "env", "yaml"],
+        CodeQueryIntent.FIND_TESTS: ["test", "assert", "pytest", "unittest"],
+        CodeQueryIntent.FIND_CONFIGURATION: ["config", "settings", "env", "yaml"],
     }
 
     def _generate_search_terms(
@@ -619,7 +618,7 @@ class NaturalLanguageQueryParser:
         query: str,
         entities: List[str],
         keywords: List[str],
-        intent: QueryIntent,
+        intent: CodeQueryIntent,
     ) -> List[str]:
         """Generate optimized search terms for the search engine."""
         terms = list(entities)  # Start with entities (most specific)
@@ -628,7 +627,7 @@ class NaturalLanguageQueryParser:
         intent_keywords = self._INTENT_KEYWORDS.get(intent)
         if intent_keywords:
             terms.extend(intent_keywords)
-        elif intent == QueryIntent.FIND_USAGE:
+        elif intent == CodeQueryIntent.FIND_USAGE:
             terms.extend(keywords)
 
         # Add remaining keywords not already in terms
@@ -682,20 +681,20 @@ class QuerySuggestionGenerator:
 
         # Suggest related intents
         intent_relations = {
-            QueryIntent.FIND_DEFINITION: [
-                (QueryIntent.FIND_USAGE, "Also find where it's used"),
-                (QueryIntent.FIND_TESTS, "Find tests for this"),
+            CodeQueryIntent.FIND_DEFINITION: [
+                (CodeQueryIntent.FIND_USAGE, "Also find where it's used"),
+                (CodeQueryIntent.FIND_TESTS, "Find tests for this"),
             ],
-            QueryIntent.FIND_USAGE: [
-                (QueryIntent.FIND_DEFINITION, "Find the definition"),
-                (QueryIntent.FIND_IMPLEMENTATION, "See how it's implemented"),
+            CodeQueryIntent.FIND_USAGE: [
+                (CodeQueryIntent.FIND_DEFINITION, "Find the definition"),
+                (CodeQueryIntent.FIND_IMPLEMENTATION, "See how it's implemented"),
             ],
-            QueryIntent.FIND_IMPLEMENTATION: [
-                (QueryIntent.FIND_TESTS, "Find related tests"),
-                (QueryIntent.FIND_ERROR_HANDLING, "Check error handling"),
+            CodeQueryIntent.FIND_IMPLEMENTATION: [
+                (CodeQueryIntent.FIND_TESTS, "Find related tests"),
+                (CodeQueryIntent.FIND_ERROR_HANDLING, "Check error handling"),
             ],
-            QueryIntent.FIND_ERROR_HANDLING: [
-                (QueryIntent.FIND_TESTS, "Find error test cases"),
+            CodeQueryIntent.FIND_ERROR_HANDLING: [
+                (CodeQueryIntent.FIND_TESTS, "Find error test cases"),
             ],
         }
 
@@ -729,7 +728,7 @@ class QuerySuggestionGenerator:
                 SearchSuggestion(
                     suggestion=f"Find all functions in {entity}",
                     reason=f"Explore {entity} module",
-                    intent=QueryIntent.FIND_PATTERN,
+                    intent=CodeQueryIntent.FIND_PATTERN,
                     relevance_score=0.6,
                 )
             )
@@ -765,7 +764,7 @@ class QuerySuggestionGenerator:
                     SearchSuggestion(
                         suggestion=query,
                         reason=reason,
-                        intent=QueryIntent.FIND_PATTERN,
+                        intent=CodeQueryIntent.FIND_PATTERN,
                         relevance_score=0.5,
                     )
                 )
@@ -783,7 +782,7 @@ class QuerySuggestionGenerator:
                 SearchSuggestion(
                     suggestion=f"Search for: {broader_query}",
                     reason="Try a broader search",
-                    intent=QueryIntent.GENERAL_SEARCH,
+                    intent=CodeQueryIntent.GENERAL_SEARCH,
                     relevance_score=0.4,
                 )
             )
@@ -793,7 +792,7 @@ class QuerySuggestionGenerator:
             SearchSuggestion(
                 suggestion=f"Find {parsed.keywords[0] if parsed.keywords else 'code'} in Python files",
                 reason="Filter by language",
-                intent=QueryIntent.FIND_PATTERN,
+                intent=CodeQueryIntent.FIND_PATTERN,
                 relevance_score=0.4,
             )
         )
@@ -1028,9 +1027,7 @@ def _convert_suggestions_to_dicts(suggestions: list) -> list:
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
 async def natural_language_search(request: NLSearchRequest):
-    """
-    Search codebase using natural language queries.
-
+    """Search codebase using natural language queries.
     Issue #665: Refactored to use extracted helper functions.
 
     Examples:
@@ -1077,6 +1074,7 @@ async def natural_language_search(request: NLSearchRequest):
         )
 
     except Exception as e:
+        reraise_http_or_refusal(e)  # a refused query space is a 503 with its reason (#18185)
         logger.error("Natural language search error: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -1189,33 +1187,33 @@ async def list_supported_intents():
             {
                 "intent": intent.value,
                 "description": {
-                    QueryIntent.FIND_DEFINITION: "Find where something is defined",
-                    QueryIntent.FIND_USAGE: "Find where something is used",
-                    QueryIntent.FIND_IMPLEMENTATION: "Find how something is implemented",
-                    QueryIntent.FIND_ERROR_HANDLING: "Find error handling logic",
-                    QueryIntent.FIND_CONFIGURATION: "Find configuration settings",
-                    QueryIntent.FIND_TESTS: "Find test cases",
-                    QueryIntent.FIND_DEPENDENCIES: "Find dependencies",
-                    QueryIntent.FIND_PATTERN: "Find code patterns",
-                    QueryIntent.EXPLAIN_CODE: "Get code explanation",
-                    QueryIntent.COMPARE_CODE: "Compare code implementations",
-                    QueryIntent.GENERAL_SEARCH: "General code search",
+                    CodeQueryIntent.FIND_DEFINITION: "Find where something is defined",
+                    CodeQueryIntent.FIND_USAGE: "Find where something is used",
+                    CodeQueryIntent.FIND_IMPLEMENTATION: "Find how something is implemented",
+                    CodeQueryIntent.FIND_ERROR_HANDLING: "Find error handling logic",
+                    CodeQueryIntent.FIND_CONFIGURATION: "Find configuration settings",
+                    CodeQueryIntent.FIND_TESTS: "Find test cases",
+                    CodeQueryIntent.FIND_DEPENDENCIES: "Find dependencies",
+                    CodeQueryIntent.FIND_PATTERN: "Find code patterns",
+                    CodeQueryIntent.EXPLAIN_CODE: "Get code explanation",
+                    CodeQueryIntent.COMPARE_CODE: "Compare code implementations",
+                    CodeQueryIntent.GENERAL_SEARCH: "General code search",
                 }.get(intent, "Unknown intent"),
                 "example_queries": {
-                    QueryIntent.FIND_DEFINITION: ["Where is UserModel defined?"],
-                    QueryIntent.FIND_USAGE: ["Where is authenticate() used?"],
-                    QueryIntent.FIND_IMPLEMENTATION: ["How is caching implemented?"],
-                    QueryIntent.FIND_ERROR_HANDLING: ["How are Redis errors handled?"],
-                    QueryIntent.FIND_CONFIGURATION: ["Where is logging configured?"],
-                    QueryIntent.FIND_TESTS: ["What tests exist for auth?"],
-                    QueryIntent.FIND_DEPENDENCIES: ["What does the API module depend on?"],
-                    QueryIntent.FIND_PATTERN: ["Find all async functions"],
-                    QueryIntent.EXPLAIN_CODE: ["Explain the router initialization"],
-                    QueryIntent.COMPARE_CODE: ["Compare Redis and in-memory cache"],
-                    QueryIntent.GENERAL_SEARCH: ["search authentication"],
+                    CodeQueryIntent.FIND_DEFINITION: ["Where is UserModel defined?"],
+                    CodeQueryIntent.FIND_USAGE: ["Where is authenticate() used?"],
+                    CodeQueryIntent.FIND_IMPLEMENTATION: ["How is caching implemented?"],
+                    CodeQueryIntent.FIND_ERROR_HANDLING: ["How are Redis errors handled?"],
+                    CodeQueryIntent.FIND_CONFIGURATION: ["Where is logging configured?"],
+                    CodeQueryIntent.FIND_TESTS: ["What tests exist for auth?"],
+                    CodeQueryIntent.FIND_DEPENDENCIES: ["What does the API module depend on?"],
+                    CodeQueryIntent.FIND_PATTERN: ["Find all async functions"],
+                    CodeQueryIntent.EXPLAIN_CODE: ["Explain the router initialization"],
+                    CodeQueryIntent.COMPARE_CODE: ["Compare Redis and in-memory cache"],
+                    CodeQueryIntent.GENERAL_SEARCH: ["search authentication"],
                 }.get(intent, []),
             }
-            for intent in QueryIntent
+            for intent in CodeQueryIntent
         ]
     }
 

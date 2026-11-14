@@ -44,7 +44,7 @@ ServiceName = Literal[
     "user",
 ]
 
-MessageType = Literal[
+ServiceMessageType = Literal[
     "task",
     "result",
     "error",

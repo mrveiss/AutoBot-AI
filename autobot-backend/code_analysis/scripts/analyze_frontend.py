@@ -15,6 +15,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from frontend_analyzer import FrontendAnalyzer
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.status_enums import Severity
 
 
 def _print_analysis_summary(results: dict) -> None:
@@ -177,7 +178,7 @@ def _print_detailed_issues(results: dict) -> None:
         # Show top issues by severity
         sorted_issues = sorted(
             type_issues,
-            key=lambda x: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(x["severity"], 0),
+            key=lambda x: Severity.rank_of(x["severity"]),
             reverse=True,
         )
 

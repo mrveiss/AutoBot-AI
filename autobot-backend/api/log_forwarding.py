@@ -54,7 +54,7 @@ DestinationScope = _log_forwarder_imports["DestinationScope"]  # type: ignore[as
 DestinationType = _log_forwarder_imports["DestinationType"]  # type: ignore[assignment, misc]
 LogForwarder = _log_forwarder_imports["LogForwarder"]  # type: ignore[assignment, misc]
 SyslogProtocol = _log_forwarder_imports["SyslogProtocol"]  # type: ignore[assignment, misc]
-from api.schemas_system import (
+from api.schemas_log_forwarding import (
     LogForwardingDestinationItem,
     LogFwdAutoStartResponse,
     LogFwdCreateUpdateResponse,
@@ -141,6 +141,19 @@ def _build_updated_destination_config(
     )
 
 
+def _served_destination(dest: Any) -> Dict[str, Any]:
+    """One destination as served: its sanitized config plus health (#18734).
+
+    The masked credentials go out as `api_key_masked` / `password_masked`: a response
+    model must never name a stored credential, masked or not (#17865).
+    """
+    data = dest.config.to_dict_sanitized()
+    data["api_key_masked"] = data.pop("api_key", None)
+    data["password_masked"] = data.pop("password", None)
+    health = {"healthy": dest.is_healthy, "last_error": dest._last_error}
+    return {**data, **health, "sent_count": dest._sent_count, "failed_count": dest._failed_count}
+
+
 def _config_to_destination_config(data: LogFwdDestinationCreate) -> DestinationConfig:
     """Convert API model to DestinationConfig."""
     try:
@@ -221,18 +234,7 @@ async def list_destinations(
     """
     try:
         forwarder = await _get_forwarder()
-        destinations = []
-        for dest in forwarder.destinations.values():
-            destinations.append(
-                {
-                    **dest.config.to_dict_sanitized(),
-                    "healthy": dest.is_healthy,
-                    "last_error": dest._last_error,
-                    "sent_count": dest._sent_count,
-                    "failed_count": dest._failed_count,
-                }
-            )
-        return destinations
+        return [_served_destination(dest) for dest in forwarder.destinations.values()]
     except Exception as e:
         logger.error("Error listing destinations: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -258,13 +260,7 @@ async def get_destination(
             raise HTTPException(status_code=404, detail=f"Destination not found: {name}")
 
         dest = forwarder.destinations[name]
-        return {
-            **dest.config.to_dict_sanitized(),
-            "healthy": dest.is_healthy,
-            "last_error": dest._last_error,
-            "sent_count": dest._sent_count,
-            "failed_count": dest._failed_count,
-        }
+        return _served_destination(dest)
     except HTTPException:
         raise
     except Exception as e:
@@ -302,13 +298,7 @@ async def create_destination_endpoint(
         dest = forwarder.destinations[data.name]
         return {
             "message": f"Destination created: {data.name}",
-            "destination": {
-                **dest.config.to_dict_sanitized(),
-                "healthy": dest.is_healthy,
-                "last_error": dest._last_error,
-                "sent_count": dest._sent_count,
-                "failed_count": dest._failed_count,
-            },
+            "destination": _served_destination(dest),
         }
     except HTTPException:
         raise
@@ -351,13 +341,7 @@ async def update_destination(
         dest = forwarder.destinations[name]
         return {
             "message": f"Destination updated: {name}",
-            "destination": {
-                **dest.config.to_dict_sanitized(),
-                "healthy": dest.is_healthy,
-                "last_error": dest._last_error,
-                "sent_count": dest._sent_count,
-                "failed_count": dest._failed_count,
-            },
+            "destination": _served_destination(dest),
         }
     except HTTPException:
         raise

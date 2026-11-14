@@ -14,7 +14,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.schemas_workflows import (
+from api.approval_gates_approver import require_action_approver_role
+from api.schemas_approvals import (
     ApprovalAddCommentRequest,
     ApprovalCommentResponse,
     ApprovalGateResponse,
@@ -27,15 +28,25 @@ from api.schemas_workflows import (
 from api.user_management.dependencies import get_db_session
 from api.user_management.human_decider import classify_author_type, require_interactive_human
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
-from models.approval import ApprovalStatus, ApprovalType
-from services.approval_execution import is_registered_action
+from autobot_shared.risk_tier import RiskTier
+from models.approval import ApprovalSource, ApprovalStatus, ApprovalType
+from services.ai_line_change_action import register_ai_line_change_action
+from services.approval_execution import context_change_violation, is_registered_action, is_server_only_action
 from services.approval_gate_service import ApprovalGateService
+from services.knowledge.collection_space_stamp_action import register_stamp_action
+from services.project_backfill_action import register_project_backfill_action
+from services.workflow_automation.step_approval_gate import register_workflow_step_resume
 
 logger = get_logger(__name__)
 router = APIRouter()
+register_stamp_action()  # registered with the router so the handler exists before any approve()
+register_ai_line_change_action()  # #18430: a person's approval is what changes an AI line
+register_project_backfill_action()  # #18978: a person's approval is what back-fills work item projects
+register_workflow_step_resume()  # #20917: a person's approval is what releases a waiting workflow step
 
 
 # -- Helpers -----------------------------------------------------------
@@ -89,9 +100,22 @@ def _to_response(approval) -> ApprovalGateResponse:
         decided_at=(approval.decided_at.isoformat() if approval.decided_at else None),
         created_at=(approval.created_at.isoformat() if approval.created_at else None),
         updated_at=(approval.updated_at.isoformat() if approval.updated_at else None),
+        source=approval.source,
+        risk_tier=approval.risk_tier,
+        expires_at=(approval.expires_at.isoformat() if approval.expires_at else None),
+        payload_hash=approval.payload_hash,
+        resume_ref=approval.resume_ref,
         comments=_build_comments(approval),
         task_links=_build_task_links(approval),
     )
+
+
+def _user_uuid(current_user: dict) -> uuid.UUID | None:
+    """The authenticated user's id (never a username), or ``None`` if the principal carries none."""
+    try:
+        return uuid.UUID(str(current_user.get("id") or current_user.get("user_id")))
+    except ValueError:
+        return None
 
 
 def _reject_unregistered_action(context: dict | None) -> None:
@@ -114,6 +138,11 @@ def _reject_unregistered_action(context: dict | None) -> None:
     action = (context or {}).get("action")
     if action is None:
         return
+    if is_server_only_action(action):
+        # #18430: only the action's own proposer may create it, with a requester taken from the session.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="this action can be proposed only by the server"
+        )
     if not isinstance(action, str) or not is_registered_action(action):
         # Deliberately does not echo the value back or list what IS
         # registered: the caller supplied it, and the set of live actions is
@@ -122,6 +151,51 @@ def _reject_unregistered_action(context: dict | None) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="context.action names no registered post-approval handler",
         )
+
+
+def _requester_matches(approval, current_user: dict) -> bool:
+    """Whether the AUTHENTICATED caller is the person who made this request (#17349).
+
+    ``requested_by_agent`` is ``<kind>:<user id>`` for server-made proposals and free text elsewhere; either the
+    whole value or the part after the last colon must equal the caller's verified id or username. A request with
+    no recorded requester can be resubmitted by nobody.
+    """
+    requester = str(approval.requested_by_agent or "").strip()
+    if not requester:
+        return False
+    mine = {str(v) for v in (current_user.get("id"), current_user.get("user_id"), current_user.get("username")) if v}
+    return requester in mine or requester.rsplit(":", 1)[-1] in mine
+
+
+def _guard_resubmit(approval, new_context: dict | None, current_user: dict) -> None:
+    """Refuse a resubmit by anyone but the requester, or one that rewrites what was reviewed (#17349, #18430)."""
+    if approval is None:
+        return  # the service reports a missing approval exactly as before
+    if not _requester_matches(approval, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="only the requester can resubmit")
+    if new_context is None:
+        return
+    if (approval.context or {}).get("action") != new_context.get("action"):
+        _reject_unregistered_action(new_context)  # an unregistered or server-only action is refused first, as on create
+    changed = context_change_violation(approval.context, new_context)
+    if changed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=f"{changed} cannot change on resubmit; file a new request"
+        )
+
+
+async def _require_visible(svc: ApprovalGateService, approval_id: uuid.UUID, current_user: dict):
+    """404 an approval the caller may not see, exactly as a missing one, before any write (#18413, #17161).
+
+    Same rule as the reads: an admin, the row's ``owner_user``, or a legacy unsourced unowned row. Nothing
+    is read into the response and nothing is written when it refuses.
+    """
+    visible = await svc.get_visible(
+        approval_id, viewer=current_user.get("username"), is_admin=is_admin_role(current_user.get("role"))
+    )
+    if visible is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Approval {approval_id} not found")
+    return visible
 
 
 # -- Endpoints ---------------------------------------------------------
@@ -172,17 +246,52 @@ async def list_approvals(
     approval_type: ApprovalType | None = None,
     workflow_id: str | None = None,
     agent_id: str | None = None,
+    source: ApprovalSource | None = None,
+    risk_tier: RiskTier | None = None,
     pagination: PaginationParams = Depends(),
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """List approval gates with optional filters (#1402)."""
+    """List approval gates with optional filters (#1402, #13421)."""
     svc = ApprovalGateService(session)
     approvals = await svc.list_approvals(
         status=status_filter.value if status_filter else None,
         approval_type=approval_type.value if approval_type else None,
         workflow_id=workflow_id,
         agent_id=agent_id,
+        limit=pagination.limit,
+        offset=pagination.offset,
+        source=source.value if source else None,
+        risk_tier=risk_tier.value if risk_tier else None,
+        extra_where=svc.visibility(current_user.get("username"), is_admin_role(current_user.get("role"))),
+    )
+    return [_to_response(a) for a in approvals]
+
+
+# Declared before ``/approval-gates/{approval_id}`` so "pending" is never parsed as a UUID.
+@router.get(
+    "/approval-gates/pending",
+    response_model=List[ApprovalGateResponse],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_pending_approvals",
+    error_code_prefix="APPROVAL_GATES",
+)
+async def list_pending_approvals(
+    source: ApprovalSource | None = None,
+    risk_tier: RiskTier | None = None,
+    pagination: PaginationParams = Depends(),
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Every pending approval across all sources -- the one approval inbox (#13421)."""
+    svc = ApprovalGateService(session)
+    approvals = await svc.list_pending(
+        viewer=current_user.get("username"),
+        is_admin=is_admin_role(current_user.get("role")),
+        source=source.value if source else None,
+        risk_tier=risk_tier.value if risk_tier else None,
         limit=pagination.limit,
         offset=pagination.offset,
     )
@@ -203,9 +312,11 @@ async def get_approval(
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Get a single approval gate by ID (#1402)."""
+    """Get a single approval gate by ID; another user's approval is a 404 (#1402, #18413)."""
     svc = ApprovalGateService(session)
-    approval = await svc.get(approval_id)
+    approval = await svc.get_visible(
+        approval_id, viewer=current_user.get("username"), is_admin=is_admin_role(current_user.get("role"))
+    )
     if approval is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -232,6 +343,8 @@ async def approve(
     """Approve a pending approval gate (#1402); only a person may (#17042)."""
     require_interactive_human(current_user, "approval gate approve")
     svc = ApprovalGateService(session)
+    visible = await _require_visible(svc, approval_id, current_user)
+    await require_action_approver_role(visible, current_user)
     username = current_user.get("username", "unknown")
     try:
         approval = await svc.approve(
@@ -239,6 +352,7 @@ async def approve(
             username,
             body.comment,
             author_type=classify_author_type(current_user),
+            decider_id=_user_uuid(current_user),
         )
     except ValueError:
         raise HTTPException(
@@ -266,6 +380,7 @@ async def reject(
     """Reject a pending approval gate (#1402); only a person may (#17042)."""
     require_interactive_human(current_user, "approval gate reject")
     svc = ApprovalGateService(session)
+    await _require_visible(svc, approval_id, current_user)
     username = current_user.get("username", "unknown")
     try:
         approval = await svc.reject(
@@ -300,6 +415,7 @@ async def request_revision(
     """Request revision on a pending approval gate (#1402); only a person may (#17042)."""
     require_interactive_human(current_user, "approval gate request_revision")
     svc = ApprovalGateService(session)
+    await _require_visible(svc, approval_id, current_user)
     username = current_user.get("username", "unknown")
     try:
         approval = await svc.request_revision(
@@ -333,6 +449,8 @@ async def resubmit(
 ):
     """Resubmit an approval after revision request (#1402)."""
     svc = ApprovalGateService(session)
+    await _require_visible(svc, approval_id, current_user)
+    _guard_resubmit(await svc.get(approval_id), body.context, current_user)
     try:
         approval = await svc.resubmit(
             approval_id,
@@ -365,6 +483,7 @@ async def add_comment(
 ):
     """Add a comment to an approval gate (#1402)."""
     svc = ApprovalGateService(session)
+    await _require_visible(svc, approval_id, current_user)
     username = current_user.get("username", "unknown")
     if body.author_type is not None:
         logger.warning(
@@ -412,6 +531,7 @@ async def link_task(
 ):
     """Link a task/issue to an approval gate (#1402)."""
     svc = ApprovalGateService(session)
+    await _require_visible(svc, approval_id, current_user)
     try:
         link = await svc.link_task(
             approval_id,
@@ -449,6 +569,7 @@ async def unlink_task(
 ):
     """Unlink a task from an approval gate (#1402)."""
     svc = ApprovalGateService(session)
+    await _require_visible(svc, approval_id, current_user)
     try:
         removed = await svc.unlink_task(approval_id, task_id)
     except ValueError:

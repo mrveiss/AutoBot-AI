@@ -22,6 +22,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.secrets_vault import VAULT_ADMIN_PERMISSION, VAULT_PERMISSION_PREFIX
 from llc.models.enums import MembershipRole
 from llc.models.membership import LLCCompanyMembership
 from services.secrets_authz import PrincipalFacts
@@ -30,8 +31,8 @@ from user_management.models.team import TeamMembership
 from user_management.models.user import User
 
 #: Permission name that marks an instance administrator (grants system vault + any user vault).
-ADMIN_PERMISSION = "admin:access"
-_SECRETS_PREFIX = "secrets:"
+ADMIN_PERMISSION = VAULT_ADMIN_PERMISSION
+_SECRETS_PREFIX = VAULT_PERMISSION_PREFIX
 
 
 def _company_role(value: str) -> MembershipRole | None:

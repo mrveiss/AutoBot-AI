@@ -60,7 +60,7 @@ if should_orchestrate:
 **Key Features:**
 ```python
 @app.post("/research/tools")
-async def research_tools(request: ResearchRequest):
+async def research_tools(request: WebResearchRequest):
     # Specialized endpoint for researching tools and software
 
 @app.get("/research/installation/{tool_name}")

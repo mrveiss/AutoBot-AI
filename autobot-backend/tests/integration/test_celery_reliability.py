@@ -157,12 +157,12 @@ def test_redis_unavailable_fails_open(monkeypatch, eager_app):
 
 def test_transient_errors_match_canonical_retryable_set():
     """CELERY_TRANSIENT_ERRORS must stay identical to the canonical set (#11689)."""
-    from autobot_shared.retry_mechanism import RETRYABLE_EXCEPTIONS, RetryConfig
+    from autobot_shared.retry_mechanism import RETRYABLE_EXCEPTIONS, RetryPolicy
 
     assert CELERY_TRANSIENT_ERRORS == RETRYABLE_EXCEPTIONS
     # Every celery-transient error must be retryable (and not non-retryable)
-    # under the canonical RetryConfig split.
-    config = RetryConfig()
+    # under the canonical RetryPolicy split.
+    config = RetryPolicy()
     for exc_type in CELERY_TRANSIENT_ERRORS:
         assert issubclass(exc_type, config.retryable_exceptions)
         assert not issubclass(exc_type, config.non_retryable_exceptions)
@@ -258,7 +258,7 @@ def test_dead_letter_list_is_bounded(fake_sync_redis, monkeypatch):
 
 async def test_dead_letter_status_queryable(monkeypatch):
     """get_dead_letter_status must expose count + recent entries (health API)."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     aclient = fakeredis_async.FakeRedis(server=server, decode_responses=True)
 
     async def _fake_async_client(*_a, **_k):

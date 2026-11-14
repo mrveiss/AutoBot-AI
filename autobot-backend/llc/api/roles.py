@@ -52,6 +52,7 @@ from ..services.role_rate import RoleRateService
 from ..services.role_tool import RoleToolService, ToolRegistryUnavailable
 from ..services.role_workflow import RoleWorkflowService
 from ..services.step_cost import derive_step_cost
+from ._common import actor_id, bad_request, forbidden, registry_unavailable
 
 router = APIRouter(prefix="/roles", tags=["llc-roles"])
 
@@ -67,12 +68,6 @@ _NAME_MAX = 100  # matches Role.name = String(100)
 _DESCRIPTION_MAX = 2000
 
 
-def _actor_id(current_user: dict) -> uuid.UUID:
-    """The acting user, from the session — never from the body or query."""
-    raw = current_user.get("id") or current_user.get("user_id")
-    return uuid.UUID(str(raw))
-
-
 class RoleCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=_NAME_MAX)
     description: Optional[str] = Field(None, max_length=_DESCRIPTION_MAX)
@@ -83,7 +78,7 @@ class RoleUpdate(BaseModel):
     description: Optional[str] = Field(None, max_length=_DESCRIPTION_MAX)
 
 
-class RoleResponse(BaseModel):
+class CompanyRoleResponse(BaseModel):
     id: uuid.UUID
     company_id: uuid.UUID
     name: str
@@ -157,9 +152,9 @@ class StepCostResponse(BaseModel):
     missing: List[str]
 
 
-def _as_role(role) -> RoleResponse:  # noqa: ANN001
+def _as_role(role) -> CompanyRoleResponse:  # noqa: ANN001
     """``org_id`` is the company — see the service docstring for why they are one column."""
-    return RoleResponse(
+    return CompanyRoleResponse(
         id=role.id,
         company_id=role.org_id,
         name=role.name,
@@ -179,39 +174,25 @@ def _as_holder(assignment) -> HolderResponse:  # noqa: ANN001
     )
 
 
-def _bad_request(exc: ValueError) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-
-
-def _forbidden(exc: NotAuthorisedError) -> HTTPException:
-    """403, distinct from 400.
-
-    "You may not do this" and "what you asked makes no sense" are different
-    answers, and collapsing them hides an authorisation failure behind what
-    looks like a malformed request.
-    """
-    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
-
-
-@router.get("/{company_id}", response_model=List[RoleResponse])
+@router.get("/{company_id}", response_model=List[CompanyRoleResponse])
 async def list_roles(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> List[RoleResponse]:
+) -> List[CompanyRoleResponse]:
     assert_company_access(ctx, company_id)
     return [_as_role(r) for r in await _get_roles().list_by_company(session, company_id)]
 
 
-@router.post("/{company_id}", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{company_id}", response_model=CompanyRoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     company_id: uuid.UUID,
     payload: RoleCreate,
     session: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> RoleResponse:
+) -> CompanyRoleResponse:
     assert_company_access(ctx, company_id)
     try:
         role = await _get_roles().create(
@@ -219,17 +200,17 @@ async def create_role(
             company_id=company_id,
             name=payload.name,
             description=payload.description,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     except ValueError as exc:
-        raise _bad_request(exc) from exc
+        raise bad_request(exc) from exc
     await session.commit()
     return _as_role(role)
 
 
-@router.patch("/{company_id}/{role_id}", response_model=RoleResponse)
+@router.patch("/{company_id}/{role_id}", response_model=CompanyRoleResponse)
 async def update_role(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
@@ -237,15 +218,15 @@ async def update_role(
     session: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> RoleResponse:
+) -> CompanyRoleResponse:
     assert_company_access(ctx, company_id)
     fields = payload.model_dump(exclude_unset=True)
     try:
-        role = await _get_roles().update(session, company_id, role_id, actor_user_id=_actor_id(current_user), **fields)
+        role = await _get_roles().update(session, company_id, role_id, actor_user_id=actor_id(current_user), **fields)
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     except ValueError as exc:
-        raise _bad_request(exc) from exc
+        raise bad_request(exc) from exc
     if role is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
     await session.commit()
@@ -262,11 +243,11 @@ async def delete_role(
 ) -> None:
     assert_company_access(ctx, company_id)
     try:
-        deleted = await _get_roles().delete(session, company_id, role_id, actor_user_id=_actor_id(current_user))
+        deleted = await _get_roles().delete(session, company_id, role_id, actor_user_id=actor_id(current_user))
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     except ValueError as exc:
-        raise _bad_request(exc) from exc
+        raise bad_request(exc) from exc
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
     await session.commit()
@@ -313,12 +294,12 @@ async def assign_holder(
             role_id=role_id,
             holder_type=payload.holder_type,
             holder_id=payload.holder_id,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     except ValueError as exc:
-        raise _bad_request(exc) from exc
+        raise bad_request(exc) from exc
     await session.commit()
     return _as_holder(assignment)
 
@@ -334,7 +315,7 @@ async def end_tenure(
 ) -> None:
     """Ends the tenure. The row survives — a DELETE here is not a row deletion."""
     assert_company_access(ctx, company_id)
-    ended = await _get_holders().end_tenure(session, company_id, assignment_id, actor_user_id=_actor_id(current_user))
+    ended = await _get_holders().end_tenure(session, company_id, assignment_id, actor_user_id=actor_id(current_user))
     if ended is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Open tenure not found")
     await session.commit()
@@ -369,12 +350,12 @@ async def grant_permission(
             company_id=company_id,
             role_id=role_id,
             permission=payload.permission,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     except ValueError as exc:
-        raise _bad_request(exc) from exc
+        raise bad_request(exc) from exc
     await session.commit()
 
 
@@ -394,12 +375,12 @@ async def revoke_permission(
             company_id=company_id,
             role_id=role_id,
             permission=permission,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     except ValueError as exc:
-        raise _bad_request(exc) from exc
+        raise bad_request(exc) from exc
     if not revoked:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grant not found")
     await session.commit()
@@ -434,12 +415,12 @@ async def attach_workflow(
             company_id=company_id,
             role_id=role_id,
             workflow_id=payload.workflow_id,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     except ValueError as exc:
-        raise _bad_request(exc) from exc
+        raise bad_request(exc) from exc
     await session.commit()
 
 
@@ -455,10 +436,10 @@ async def detach_workflow(
     assert_company_access(ctx, company_id)
     try:
         detached = await _get_workflows().detach(
-            session, company_id, role_id, workflow_id, actor_user_id=_actor_id(current_user)
+            session, company_id, role_id, workflow_id, actor_user_id=actor_id(current_user)
         )
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     if not detached:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
     await session.commit()
@@ -470,15 +451,6 @@ class ToolAttach(BaseModel):
 
 class CredentialAttach(BaseModel):
     secret_id: uuid.UUID
-
-
-def _unavailable(exc: ToolRegistryUnavailable) -> HTTPException:
-    """503, not 400.
-
-    An unpopulated tool registry is an environment problem; reporting it as a
-    bad request would send the caller looking for a typo in their own payload.
-    """
-    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
 
 
 @router.get("/{company_id}/{role_id}/tools", response_model=List[str])
@@ -509,14 +481,14 @@ async def attach_tool(
             company_id=company_id,
             role_id=role_id,
             tool_name=payload.tool_name,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except ToolRegistryUnavailable as exc:
-        raise _unavailable(exc) from exc
+        raise registry_unavailable(exc) from exc
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     except ValueError as exc:
-        raise _bad_request(exc) from exc
+        raise bad_request(exc) from exc
     await session.commit()
 
 
@@ -532,10 +504,10 @@ async def detach_tool(
     assert_company_access(ctx, company_id)
     try:
         detached = await _get_tools().detach(
-            session, company_id, role_id, tool_name, actor_user_id=_actor_id(current_user)
+            session, company_id, role_id, tool_name, actor_user_id=actor_id(current_user)
         )
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     if not detached:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
     await session.commit()
@@ -574,12 +546,12 @@ async def attach_credential(
             company_id=company_id,
             role_id=role_id,
             secret_id=payload.secret_id,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     except ValueError as exc:
-        raise _bad_request(exc) from exc
+        raise bad_request(exc) from exc
     await session.commit()
 
 
@@ -595,10 +567,10 @@ async def detach_credential(
     assert_company_access(ctx, company_id)
     try:
         detached = await _get_credentials().detach(
-            session, company_id, role_id, secret_id, actor_user_id=_actor_id(current_user)
+            session, company_id, role_id, secret_id, actor_user_id=actor_id(current_user)
         )
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     if not detached:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
     await session.commit()
@@ -663,12 +635,12 @@ async def set_step_cost_inputs(
             workflow_id=workflow_id,
             estimated_minutes=payload.estimated_minutes,
             runs_per_month=payload.runs_per_month,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     except ValueError as exc:
-        raise _bad_request(exc) from exc
+        raise bad_request(exc) from exc
     await session.commit()
     return await get_step_cost(company_id, role_id, workflow_id, session, current_user, ctx)
 
@@ -710,12 +682,12 @@ async def set_role_rate(
             role_id=role_id,
             hourly_rate=payload.hourly_rate,
             currency=payload.currency,
-            actor_user_id=_actor_id(current_user),
+            actor_user_id=actor_id(current_user),
         )
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     except ValueError as exc:
-        raise _bad_request(exc) from exc
+        raise bad_request(exc) from exc
     await session.commit()
     return RoleRateResponse(role_id=role_id, hourly_rate=rate.hourly_rate, currency=rate.currency)
 
@@ -732,10 +704,10 @@ async def clear_role_rate(
     assert_company_access(ctx, company_id)
     try:
         cleared = await _get_rates().clear(
-            session, company_id=company_id, role_id=role_id, actor_user_id=_actor_id(current_user)
+            session, company_id=company_id, role_id=role_id, actor_user_id=actor_id(current_user)
         )
     except NotAuthorisedError as exc:
-        raise _forbidden(exc) from exc
+        raise forbidden(exc) from exc
     if not cleared:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rate not found")
     await session.commit()

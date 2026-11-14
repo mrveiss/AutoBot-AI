@@ -177,7 +177,7 @@ class MeshDB:
             await conn.execute(sql, params)
         logger.debug("Updated edge %s", edge_id)
 
-    async def get_neighbors(
+    async def fetch_neighbor_rows(
         self,
         node_id: str,
         min_weight: float = 0.0,

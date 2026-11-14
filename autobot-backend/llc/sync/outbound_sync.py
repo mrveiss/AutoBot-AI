@@ -20,13 +20,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
-import socket
 import uuid
 from typing import Any, Dict, Optional
 
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.field_encryption import FieldDecryptionError
+from autobot_shared.leader_lease import worker_identity
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import expire_if_value
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +43,6 @@ _LEADER_TTL_MS = 30_000  # 30-second lease
 _LEADER_REFRESH_S = 10  # leader refreshes its lease every 10 s
 _LEADER_POLL_S = 15  # non-leaders poll every 15 s
 
-# Atomic compare-and-expire: refresh TTL only if the key still holds our
-# worker_id.  A plain GET→PEXPIRE pair is non-atomic and risks dual-leader
-# under GC pause or network delay.
-_REFRESH_LUA = """
-if redis.call('GET', KEYS[1]) == ARGV[1] then
-    return redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[2]))
-else
-    return 0
-end
-"""
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Field mapping: LLC → external PM
@@ -140,16 +131,27 @@ def map_status(pm_config: Dict[str, Any], llc_status: str) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _decrypt_pm_config(encrypted_blob: str) -> Dict[str, Any]:
-    """Decrypt the AES-256 encrypted PM config blob.
+def pm_config_context(company_id: object) -> str:
+    """Where a company's PM credentials are stored; the seal is bound to it (#17981)."""
+    return f"organization:{uuid.UUID(str(company_id))}:external_pm_config"  # one spelling of the id
 
-    Uses ``AUTOBOT_FIELD_ENCRYPTION_KEY`` from the environment (same key used
-    by the secrets module).  Returns the decoded JSON dict.
-    """
-    from autobot_shared.field_encryption import decrypt_field
 
-    plaintext = decrypt_field(encrypted_blob)
-    return json.loads(plaintext)
+def seal_pm_config(company_id: object, credentials: Dict[str, Any]) -> str:
+    """Seal a company's PM credentials, bound to that company's record (#17981)."""
+    from autobot_shared.field_encryption import encrypt_field
+
+    return encrypt_field(json.dumps(credentials, ensure_ascii=False), context=pm_config_context(company_id))
+
+
+def open_pm_config(encrypted_blob: str, company_id: object) -> Dict[str, Any]:
+    """Open a company's sealed PM config. Raises ``FieldDecryptionError``, never returns nothing."""
+    from autobot_shared.field_encryption import FieldDecryptionError, decrypt_field
+
+    try:
+        return json.loads(decrypt_field(encrypted_blob, context=pm_config_context(company_id)))
+    except FieldDecryptionError as exc:
+        logger.error("PM config unreadable: %s", exc)
+        raise
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -322,7 +324,7 @@ class LLCOutboundSyncService:
         self._leader_task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
         self._stop_event = asyncio.Event()
         self._is_leader = False
-        self._worker_id = "%s-%d" % (socket.gethostname(), os.getpid())
+        self._worker_id = worker_identity()
 
     async def start(self) -> None:
         """Start the background subscriber task and leader election loop."""
@@ -377,10 +379,7 @@ class LLCOutboundSyncService:
             if self._is_leader:
                 # Atomic refresh via server-side Lua — prevents dual-leader from
                 # a non-atomic GET+PEXPIRE pair splitting under GC pause.
-                result = await redis.eval(  # noqa: S603  (Redis server-side Lua, not Python eval)
-                    _REFRESH_LUA, 1, _LEADER_KEY, self._worker_id, str(_LEADER_TTL_MS)
-                )
-                return bool(result)
+                return await expire_if_value(redis, _LEADER_KEY, self._worker_id, _LEADER_TTL_MS)
             else:
                 result = await redis.set(_LEADER_KEY, self._worker_id, nx=True, px=_LEADER_TTL_MS)
                 return result is not None
@@ -460,7 +459,7 @@ class LLCOutboundSyncService:
             if not pm_type or pm_type == "none" or not encrypted_config:
                 return
 
-            pm_config = _decrypt_pm_config(encrypted_config)
+            pm_config = open_pm_config(encrypted_config, company_id)
             dispatcher = _DISPATCHER.get(pm_type)
             if dispatcher is None:
                 logger.warning("LLCOutboundSyncService: unsupported pm_type=%s", pm_type)
@@ -474,6 +473,13 @@ class LLCOutboundSyncService:
                 pm_type,
             )
 
+        except FieldDecryptionError as exc:
+            # #17981: one structured line naming where the credential is stored, never the value,
+            # and a sync_failed entry that says why, so the PM status shows it.
+            logger.error(
+                "LLC outbound sync: PM credential unreadable: company=%s event=%s (%s)", company_id, event, exc
+            )
+            await _log_sync_failed(company_id, work_item_id, event, f"credential unreadable: {exc}")
         except Exception as exc:
             logger.exception(
                 "LLC outbound sync failed: company=%s event=%s",

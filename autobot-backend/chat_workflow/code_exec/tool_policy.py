@@ -20,6 +20,11 @@ sets are derived views with invariants enforced at import:
 - ``mutating = injectable − readonly`` — the gray zone: shimmable, but every
   run containing one always forces the WORKFLOW_GATE (never auto-approved).
 
+Since #18294 the *facts* come from ``autobot_shared.tool_catalogue.TOOL_EFFECTS``:
+sensitive = every catalogued tool with a non-read effect (``ToolEffect.MUTATING``),
+default read-only = the catalogue's ``ISOLATED_READ`` tools. The policy (exact names,
+env-widenable injectable set, invariants below) stays here.
+
 NOTE: this is the *code-exec sandbox* classification (exact tool names).
 It is distinct from ``autobot_shared.tool_catalogue.SENSITIVE_TOOLS``, the
 agent-loop approval plane (prefix-matched patterns via ``match_tool_name``);
@@ -30,28 +35,14 @@ from __future__ import annotations
 
 import os
 
+from autobot_shared.tool_catalogue import ToolEffect, tools_with
+
 #: Tools that must NEVER be injectable into the sandbox, regardless of any
 #: env allowlist (GH#11568 MAJOR-3). Hardcoded — intentionally not
 #: env-representable so an operator cannot widen it away.
-SENSITIVE_TOOLS: frozenset[str] = frozenset(
-    {
-        "execute_command",
-        "compose",
-        "delegate",
-        "deploy",
-        "git_push",
-        "navigate",
-        "click",
-        "fill",
-        "select",
-        "evaluate",
-        "write_file",
-        "edit_file",
-        "delete_file",
-    }
-)
+SENSITIVE_TOOLS: frozenset[str] = tools_with(ToolEffect.MUTATING)
 
-_DEFAULT_READONLY_CSV = "web_search,scrape_url,map_site,extract_structured_data"
+_DEFAULT_READONLY_CSV = ",".join(sorted(tools_with(ToolEffect.ISOLATED_READ)))
 
 
 def _env_toolset(name: str) -> frozenset[str]:

@@ -138,6 +138,9 @@ class _NeverDegraded:
     async def is_degraded(self, name, model_name=None):  # noqa: ANN001, ANN201
         return False
 
+    async def needs_reauth(self, name, model_name=None):  # noqa: ANN001, ANN201
+        return False  # the registry asks this too since #15022
+
 
 def _registry(monkeypatch: pytest.MonkeyPatch, registered, chain, unreachable=()):
     """A registry whose providers are all healthy except those named unreachable.

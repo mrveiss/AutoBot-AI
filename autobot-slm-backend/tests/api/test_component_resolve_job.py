@@ -21,6 +21,8 @@ import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from testkit.fake_async_session import FakeAsyncSession
+
 # ---------------------------------------------------------------------------
 # Dev-host stub: provide minimal real Pydantic models for models.schemas so
 # the router can be imported without a full SLM venv.
@@ -119,28 +121,8 @@ def _make_db_service_mock(row: _FakeRow | None = None):
 
     fake_row = row
 
-    class _FakeSession:
-        def __init__(self):
-            self._committed = False
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_):
-            pass
-
-        async def execute(self, _stmt):
-            result = MagicMock()
-            result.scalar_one_or_none.return_value = fake_row
-            return result
-
-        async def commit(self):
-            self._committed = True
-
-        def add(self, obj):
-            pass
-
-    db_service_mock.session.return_value = _FakeSession()
+    fake_session = FakeAsyncSession(default_result=[] if fake_row is None else [fake_row])
+    db_service_mock.session.return_value = fake_session
     return db_service_mock
 
 
@@ -282,27 +264,14 @@ def test_run_component_resolve_job_happy_path() -> None:
 
     restart_order: list[str] = []
 
-    class _TrackingSession:
+    class _TrackingSession(FakeAsyncSession):
         """Session that records commit() timing vs restart calls."""
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_):
-            pass
-
-        async def execute(self, _stmt):
-            result = MagicMock()
-            result.scalar_one_or_none.return_value = row
-            return result
 
         async def commit(self):
             restart_order.append("committed")
+            await super().commit()
 
-        def add(self, _obj):
-            pass
-
-    db_mock.session.return_value = _TrackingSession()
+    db_mock.session.return_value = _TrackingSession(default_result=[row])
 
     async def _fake_restart(component, steps):
         restart_order.append("restarted")
@@ -413,22 +382,9 @@ def _make_reconcile_db_mock(rows):
     """db_service mock whose session().execute returns scalars().all() == rows."""
     db_service_mock = MagicMock()
 
-    class _FakeSession:
-        async def __aenter__(self):
-            return self
+    fake_session = FakeAsyncSession(default_result=list(rows))
 
-        async def __aexit__(self, *_):
-            pass
-
-        async def execute(self, _stmt):
-            result = MagicMock()
-            result.scalars.return_value.all.return_value = rows
-            return result
-
-        async def commit(self):
-            pass
-
-    db_service_mock.session.return_value = _FakeSession()
+    db_service_mock.session.return_value = fake_session
     return db_service_mock
 
 

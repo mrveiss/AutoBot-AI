@@ -18,7 +18,7 @@ Usage::
     ctx = await causal_executor.execute(dag, workflow_id, metadata_map)
 
     # Access the effect trace
-    print(causal_executor.effect_trace)
+    trace = causal_executor.effect_trace
     cascade_report = causal_executor.analyze_cascades()
 """
 
@@ -32,7 +32,7 @@ from orchestration.causal_models import (
     EffectTrace,
     StateFrame,
 )
-from orchestration.causal_validator import CausalValidator, ValidationResult
+from orchestration.causal_validator import CausalValidator, WorkflowValidation
 from orchestration.dag_executor import (
     DAGExecutionContext,
     DAGExecutor,
@@ -71,7 +71,7 @@ class CausalExecutor:
         self.executor = executor
         self.metadata_map = metadata_map or {}
         self.effect_trace: EffectTrace | None = None
-        self.validation_result: ValidationResult | None = None
+        self.validation_result: WorkflowValidation | None = None
 
     async def execute(
         self,

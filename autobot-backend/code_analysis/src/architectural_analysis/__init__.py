@@ -23,7 +23,7 @@ Part of Issue #394 god class refactoring initiative.
 from .cohesion_calculator import CohesionCalculator
 from .complexity_calculator import ComplexityCalculator
 from .component_discovery import ComponentDiscovery
-from .dependency_analyzer import DependencyAnalyzer
+from .dependency_analyzer import ComponentDependencyAnalyzer
 from .issue_detector import IssueDetector
 from .pattern_detector import PatternDetector
 from .types import ArchitecturalComponent, ArchitecturalIssue, ArchitecturalMetrics
@@ -35,7 +35,7 @@ __all__ = [
     "ArchitecturalMetrics",
     # Analyzer classes
     "ComponentDiscovery",
-    "DependencyAnalyzer",
+    "ComponentDependencyAnalyzer",
     "CohesionCalculator",
     "ComplexityCalculator",
     "PatternDetector",

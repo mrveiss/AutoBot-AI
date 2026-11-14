@@ -3,12 +3,19 @@ Description=AutoBot User Backend API
 Documentation=https://github.com/mrveiss/AutoBot-AI
 After=network.target redis-stack-server.service autobot-chromadb.service
 Wants=redis-stack-server.service autobot-chromadb.service
+# #20620, #4090: a restarting unit must be able to reach `failed`. The window has to exceed
+# RestartSec * StartLimitBurst, or the limit is never hit and the unit loops forever while
+# showing `activating`. Same values as the role-rendered units.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
 User=autobot
 Group=autobot
 WorkingDirectory=/opt/autobot/autobot-user-backend
+# #20894: the log directory, as before the resolver (the working directory's logs/)
+Environment=AUTOBOT_LOGS_DIR=/opt/autobot/autobot-user-backend/logs
 Environment="PATH=/opt/autobot/autobot-user-backend/venv/bin:/usr/local/bin:/usr/bin"
 Environment="PYTHONPATH=/opt/autobot/autobot-user-backend"
 EnvironmentFile=-/opt/autobot/autobot-user-backend/.env
@@ -42,6 +49,8 @@ PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/opt/autobot/autobot-user-backend/data
+# #20894: AUTOBOT_LOGS_DIR above; ProtectSystem=strict leaves it read-only otherwise (optional "-": no task creates the directory, and a missing one must not stop the unit starting)
+ReadWritePaths=-/opt/autobot/autobot-user-backend/logs
 
 [Install]
 WantedBy=multi-user.target

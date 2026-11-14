@@ -23,6 +23,8 @@ from typing import Any, Dict, List
 
 import yaml
 
+from utils.config_bootstrap import DEFAULT_WORKER_PORT
+
 logger = logging.getLogger(__name__)
 
 if sys.platform == "win32":
@@ -40,7 +42,7 @@ if sys.platform == "win32":
 # Constants (Issue #68 - Code smells fix: Extract magic numbers)
 # =============================================================================
 DEFAULT_HOST = "0.0.0.0"
-DEFAULT_PORT = 8082
+DEFAULT_PORT = DEFAULT_WORKER_PORT  # #19325: one in-bundle home, utils/config_bootstrap
 DEFAULT_WORKERS = 1
 DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

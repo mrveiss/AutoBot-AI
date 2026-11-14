@@ -192,3 +192,19 @@ The separated voice dependencies ensure that:
 2. **Optional enhancement** - Voice features when system supports it
 3. **CI/CD friendly** - Build pipelines won't fail due to audio library issues
 4. **Production ready** - Graceful degradation in server environments
+
+## Tuning how fast a reply starts speaking
+
+The chat speaks a reply's opening chunk as soon as it reaches a clause boundary of at least
+`OPENING_CLAUSE_MIN_CHARS` (16) characters, or a word boundary of at least
+`OPENING_WORD_MIN_CHARS` (48) (`autobot-frontend/src/utils/ttsSentences.ts`, #13103). To hear
+other values before changing them, render candidates through the real chunker and voice:
+
+```bash
+AUTOBOT_API_BASE=https://<your-host>/api AUTOBOT_TOKEN=<a logged-in user's bearer token> \
+  node autobot-frontend/scripts/tts-listening-test.mjs [out-dir]
+```
+
+It writes one WAV per candidate, plus `LISTEN.md` (what to listen for) and `manifest.md` (every
+chunk's text), to `out-dir`, by default `<os temp dir>/autobot-tts-listening-test`. `--dry` writes
+only `manifest.md`, without calling the backend. It needs Node 22.18+ or 24.

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
@@ -22,36 +23,56 @@ if TYPE_CHECKING:
 
 
 def agent_org_nodes_with_latest_heartbeat(company_id: str) -> "Select":
-    """AgentOrgNode LEFT JOINed to each agent's own latest heartbeat run.
+    """AgentOrgNode LEFT JOINed to ONE heartbeat run per agent -- the run that says what it is doing.
 
     Shared by ``llc/api/agents.py::list_agents`` and
     ``protocols.agent_presence_feeds.sync_company_os_presence`` (#16947) --
     agent_id is the logical slug (the dual-keyspace column shared by
     heartbeat/controls/budgets), not the UUID PK; joining on the wrong one
     silently returns 0 rows in Postgres (see ``models.agent_org.AgentOrgNode``).
-    """
-    from sqlalchemy import func, select
 
+    Which run (#18654, owner ruling 2026-10-17): any RUNNING run wins, so an older
+    run still working is never hidden behind a newer queued or finished one; among
+    equals the newest by ``created_at``, then by ``id``. Exactly one run per agent,
+    so a ``created_at`` tie no longer lists the agent twice.
+    """
     from models.agent_org import AgentOrgNode
 
     from ..models.heartbeat_run import LLCHeartbeatRun
 
-    latest_runs = (
-        select(LLCHeartbeatRun.agent_id, func.max(LLCHeartbeatRun.created_at).label("latest_at"))
-        .where(LLCHeartbeatRun.company_id == company_id)
-        .group_by(LLCHeartbeatRun.agent_id)
-        .subquery()
-    )
+    chosen = _chosen_run_ids(company_id)
     return (
         select(AgentOrgNode, LLCHeartbeatRun)
-        .outerjoin(latest_runs, latest_runs.c.agent_id == AgentOrgNode.agent_id)
         .outerjoin(
             LLCHeartbeatRun,
-            (LLCHeartbeatRun.agent_id == latest_runs.c.agent_id)
-            & (LLCHeartbeatRun.created_at == latest_runs.c.latest_at),
+            (LLCHeartbeatRun.agent_id == AgentOrgNode.agent_id)
+            # Agent slugs are not unique across companies.
+            & (LLCHeartbeatRun.company_id == company_id) & LLCHeartbeatRun.id.in_(chosen),
         )
         .where(AgentOrgNode.company_id == company_id)
     )
+
+
+def _chosen_run_ids(company_id: str) -> "Select":
+    """The id of each agent's rank-1 run in *company_id*: running first, then newest, then highest id."""
+    from ..models.enums import LLCRunStatus
+    from ..models.heartbeat_run import LLCHeartbeatRun as run_model
+
+    running_first = case((run_model.status == LLCRunStatus.RUNNING.value, 0), else_=1)
+    ranked = (
+        select(
+            run_model.id.label("run_id"),
+            func.row_number()
+            .over(
+                partition_by=run_model.agent_id,
+                order_by=(running_first, run_model.created_at.desc(), run_model.id.desc()),
+            )
+            .label("rank"),
+        )
+        .where(run_model.company_id == company_id)
+        .subquery()
+    )
+    return select(ranked.c.run_id).where(ranked.c.rank == 1)
 
 
 async def distinct_company_ids_with_agents(session: AsyncSession) -> list[str]:

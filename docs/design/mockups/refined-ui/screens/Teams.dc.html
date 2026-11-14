@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Teams</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.av{width:32px;height:32px;border-radius:99px;border:var(--bw) solid var(--tile-b);background:var(--tile);display:grid;place-items:center;font-weight:600;font-size:12px;flex:none;box-sizing:border-box;color:var(--text)}
+.r-owner,.r-admin,.r-lead,.r-member,.r-guest{color:var(--text);border:var(--bw) solid var(--border)}
+.r-owner{background:var(--i3t)}.r-admin{background:var(--i2t)}.r-lead{background:var(--i1t)}.r-member{background:var(--surface)}.r-guest{background:var(--surface2);border-style:dashed;color:var(--text2)}
+.th .btn.dng{color:var(--alert-text);border-color:var(--danger-tile-b)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld label{font-size:13px;font-weight:600}
+.fld select{height:36px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:13.5px;padding:0 10px;color:var(--text)}
+.hint{margin:0;font-size:12px;color:var(--muted)}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html" class="on" aria-current="page">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Platform admin, opens the SLM console" data-tip="Platform admin — opens the SLM console ↗" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">JD</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Company OS" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <button type="button" data-tip="Switch company" data-tip-pos="bottom" style="margin: 0 0 6px; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px; border: var(--bw) solid var(--border); background: var(--surface2); font: inherit; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; text-align: left">
+        <span style="width: 26px; height: 26px; border-radius: 6px; background: var(--brand-bg); color: var(--brand-fg); display: grid; place-items: center; font-size: 12px">AL</span><span style="flex-grow: 1; display: flex; flex-direction: column; line-height: 1.2">AutoBot Labs<span style="font-size: 11.5px; font-weight: 400; color: var(--muted)">Company OS</span></span><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+      <p class="sect">Overview</p>
+      <a href="CompanyOS.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg>Dashboard</a>
+      <a href="MyPlace.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9H4z"/><circle cx="12" cy="14" r="2.5" class="i2"/></svg>My place</a>
+      <a href="ReviewInbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>My Reviews</a>
+      <a href="Approvals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Approvals<span class="pill warn" data-tip="3 approvals waiting on you" data-tip-pos="right" style="margin-left: auto">3</span></a>
+      <a href="Activity.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/></svg>Activity</a>
+      <a href="RunSupervision.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M10 9l4 2-4 2z" class="i2"/><path d="M8 21h8"/></svg>Run supervision</a>
+      <a href="OperationHistory.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"/><path d="M12 8v4l3 2"/></svg>Operation history</a>
+      <a href="AgentLedger.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" class="it2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>Agent ledger</a>
+      <a href="CeoChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/></svg>CEO Chat</a>
+      <a href="CompanyMailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6" class="it2"/></svg>Mailbox</a>
+      <p class="sect">Work</p>
+      <a href="Backlog.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Backlog</a>
+      <a href="Boards.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1" class="it1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1" class="it2"/></svg>Boards</a>
+      <a href="Portfolios.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" class="it2"/><path d="M9 7V5h6v2M3 12h18"/></svg>Portfolios</a>
+      <a href="Timeline.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M8 12h12M4 18h7"/></svg>Timeline</a>
+      <a href="Goals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4" class="it3"/></svg>Goals</a>
+      <a href="Automation.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg>Automation</a>
+      <a href="ProcessCanvas.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1" class="it2"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h4a2 2 0 0 1 2 2V15"/></svg>Process canvas</a>
+      <a href="Routines.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Routines</a>
+      <a href="TranscriberProjects.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Transcriber</a>
+      <p class="sect">Organization</p>
+      <a href="OrgChart.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="it2"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg>Org Chart</a>
+      <a href="Members.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/></svg>Members</a>
+      <a href="Teams.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3" class="i2"/><path d="M2 20a6 6 0 0 1 12 0M10 20a6 6 0 0 1 12 0"/></svg>Teams</a>
+      <a href="Roles.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h3"/></svg>Roles</a>
+      <a href="Handbook.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" class="it2"/><path d="M5 17a3 3 0 0 1 3-3h10M9 8h5"/></svg>Handbook</a>
+      <a href="Costs.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M12 7v10"/></svg>Costs &amp; Budget</a>
+      <a href="BusinessIntelligence.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M5 16l4-5 4 3 6-8" /><circle cx="19" cy="6" r="1.6" class="i2"/></svg>Business intelligence</a>
+      <a href="HeartbeatMonitor.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-4 4 8 2-4h6"/></svg>Heartbeat</a>
+      <a href="Portability.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M13 9l3 3-3 3"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Portability</a>
+      <a href="CompanySecrets.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3"/></svg>Secrets</a>
+      <a href="CompanySettings.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Company settings</a>
+      <div class="only-min minnote" style="margin: 16px 10px 0; padding-top: 12px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 320px; min-width: 0">
+          <span class="sub2"><a href="CompanyOS.dc.html" style="color: var(--muted); text-decoration: none">Company OS</a> / Organization</span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Teams</h1>
+          <p class="sub2" style="margin: 0">Group people and agents into teams, give each team a lead, and make sure every person has a manager.</p>
+        </div>
+        <nav aria-label="Organization views" style="display: flex; gap: 2px; padding: 3px; border-radius: 7px; background: var(--surface2); border: var(--bw) solid var(--border)">
+          <a href="Members.dc.html" class="seg" style="display: inline-flex; align-items: center; text-decoration: none; box-sizing: border-box">Members</a>
+          <a href="Teams.dc.html" class="seg on" aria-current="page" style="display: inline-flex; align-items: center; text-decoration: none; box-sizing: border-box">Teams</a>
+        </nav>
+        <button type="button" class="btn pri" onClick="{{openCreate}}" aria-expanded="{{createExpanded}}" aria-controls="ct"><svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Create team</button>
+      </header>
+
+      <span class="sr" role="status" aria-live="polite">{{toast}}</span>
+      <sc-if value="{{hasToast}}" hint-placeholder-val="{{ false }}">
+        <div class="card" style="padding: 10px 14px; display: flex; align-items: center; gap: 10px; border-color: var(--ok-fg)">
+          <span class="pill ok">Saved</span>
+          <span style="flex-grow: 1; font-size: 13.5px">{{toast}}</span>
+          <button type="button" class="btn sm" onClick="{{dismiss}}" aria-label="Dismiss message" data-tip="Dismiss" data-tip-pos="left" style="width: 32px; padding: 0; justify-content: center"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{createOpen}}" hint-placeholder-val="{{ false }}">
+        <section id="ct" class="card" role="dialog" aria-labelledby="ct-h" style="border-color: var(--primary)">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3" class="i1"/><circle cx="16" cy="9" r="3" class="i2"/><path d="M3 19a5 5 0 0 1 10 0M11 19a5 5 0 0 1 10 0"/></svg></span>
+            <h2 id="ct-h">Create team</h2>
+            <button type="button" class="btn sm" onClick="{{closeCreate}}" aria-label="Close dialog" data-tip="Close · Esc" data-tip-pos="left" style="width: 32px; padding: 0; justify-content: center"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+          <div style="padding: 14px 16px 16px; display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end">
+            <div class="fld" style="flex: 1 1 220px">
+              <label for="ct-name">Team name</label>
+              <input id="ct-name" type="text" placeholder="e.g. Docs guild" aria-describedby="ct-err" style="height: 36px; border-radius: 6px; border: var(--bw) solid var(--border); background: var(--surface); font: inherit; font-size: 13.5px; padding: 0 10px; color: var(--text); box-sizing: border-box">
+            </div>
+            <div class="fld" style="flex: 1 1 200px">
+              <label for="ct-lead">Team lead</label>
+              <select id="ct-lead"><option value="mv">Jane Doe</option><option value="ao" selected>Alex Smith</option><option value="jb">Sam Lee</option><option value="lk">Chris Park</option><option value="el">Morgan Hale</option><option value="rs">Taylor Reed</option></select>
+            </div>
+            <div style="display: flex; gap: 8px">
+              <button type="button" class="btn" onClick="{{closeCreate}}">Cancel</button>
+              <button type="button" class="btn pri" onClick="{{submitCreate}}">Create team</button>
+            </div>
+            <p id="ct-err" class="hint" style="flex: 1 1 100%">The lead joins the team automatically. Add more people and agents after the team is created.</p>
+            <sc-if value="{{createErr}}" hint-placeholder-val="{{ false }}"><p role="alert" style="flex: 1 1 100%; margin: 0; font-size: 12.5px; color: var(--alert-text); font-weight: 600">Enter a team name of 2 to 60 characters, then select Create team.</p></sc-if>
+          </div>
+        </section>
+      </sc-if>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+        <section class="card" aria-labelledby="tl-h" style="flex: 999 1 480px; min-width: 0">
+          <div class="ch">
+            <h2 id="tl-h">{{teamCount}}</h2>
+            <span class="sub2">Select a team to manage it</span>
+          </div>
+          <div style="overflow-x: auto">
+            <table style="border-collapse: collapse; width: 100%">
+              <thead><tr><th scope="col">Team</th><th scope="col">Lead</th><th scope="col">Members</th><th scope="col">Projects</th></tr></thead>
+              <tbody>
+                <sc-for list="{{teamRows}}" as="t" hint-placeholder-count="3">
+                  <tr style="background: {{t.bg}}">
+                    <td style="border-left: 3px solid {{t.edge}}"><button type="button" class="linkbtn" onClick="{{t.pick}}" aria-pressed="{{t.pressed}}" style="font-size: 13.5px">{{t.name}}</button></td>
+                    <td>{{t.lead}}</td>
+                    <td><span tabindex="0" data-tip="{{t.membersTip}}">{{t.counts}}</span></td>
+                    <td><span class="sub2" style="color: var(--text2)">{{t.projects}}</span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="td-h" style="flex: 1 1 340px; min-width: 0; border-color: var(--primary)">
+          <div class="ch" style="flex-wrap: wrap">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3" class="i1"/><circle cx="16" cy="9" r="3" class="i2"/><path d="M3 19a5 5 0 0 1 10 0M11 19a5 5 0 0 1 10 0"/></svg></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0">
+              <h2 id="td-h">{{sel.name}}</h2>
+              <span class="sub2">Lead: {{sel.lead}} · {{sel.counts}}</span>
+            </div>
+          </div>
+          <ul style="list-style: none; margin: 0; padding: 0">
+            <sc-for list="{{selMembers}}" as="m" hint-placeholder-count="4">
+              <li class="row" style="flex-wrap: wrap">
+                <sc-if value="{{m.isAgent}}" hint-placeholder-val="{{ false }}"><span class="av" aria-hidden="true" style="background: var(--info-bg)"><svg class="ic" width="18" height="18" viewBox="0 0 30 30" aria-hidden="true"><rect x="5" y="9" width="20" height="15" rx="4" class="i1"/><circle cx="11" cy="16" r="2" class="iw"/><circle cx="19" cy="16" r="2" class="iw"/><path d="M15 9V5"/></svg></span></sc-if>
+                <sc-if value="{{m.isPerson}}" hint-placeholder-val="{{ true }}"><span class="av" aria-hidden="true" style="background: {{m.bg}}">{{m.init}}</span></sc-if>
+                <span style="display: flex; flex-direction: column; flex: 1 1 120px; min-width: 0"><strong style="font-weight: 600; font-size: 13.5px">{{m.name}}</strong><span class="sub2">{{m.title}}</span></span>
+                <span class="pill {{m.kindCls}}">{{m.kind}}</span>
+                <sc-if value="{{m.isLead}}" hint-placeholder-val="{{ false }}"><span class="pill r-lead" tabindex="0" data-tip="Team lead — plans the team's work and approves its output" data-tip-pos="left">Lead</span></sc-if>
+                <sc-if value="{{m.canLead}}" hint-placeholder-val="{{ true }}"><button type="button" class="btn sm" onClick="{{m.makeLead}}" aria-label="{{m.leadLabel}}">Set as lead</button></sc-if>
+                <sc-if value="{{m.canRemove}}" hint-placeholder-val="{{ true }}"><button type="button" class="btn sm dng" onClick="{{m.remove}}" aria-label="{{m.removeLabel}}" data-tip="{{m.removeLabel}}" data-tip-pos="left" style="width: 32px; padding: 0; justify-content: center"><svg class="ic sacc" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></sc-if>
+                <sc-if value="{{m.isLead}}" hint-placeholder-val="{{ false }}"><span tabindex="0" data-tip="Set someone else as lead before removing the current lead" data-tip-pos="left" style="display: inline-flex"><button type="button" class="btn sm dng" disabled aria-label="{{m.removeLabel}}" style="width: 32px; padding: 0; justify-content: center"><svg class="ic sacc" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></sc-if>
+              </li>
+            </sc-for>
+          </ul>
+          <div style="padding: 14px 16px; border-top: var(--bw) solid var(--line); display: flex; flex-direction: column; gap: 10px">
+            <sc-if value="{{sel.hasCand}}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end">
+                <div class="fld" style="flex: 1 1 180px">
+                  <label for="tm-add">Add member</label>
+                  <select id="tm-add"><option>{{sel.candLabel}}</option></select>
+                </div>
+                <button type="button" class="btn" onClick="{{addMember}}">Add to team</button>
+              </div>
+              <p class="hint">Only people and agents not yet in this team are listed.</p>
+            </sc-if>
+            <sc-if value="{{sel.noCand}}" hint-placeholder-val="{{ false }}"><p class="hint">Everyone available is already in this team. Add people on the <a href="Members.dc.html">Members</a> page or hire an agent in <a href="OrgChart.dc.html">Org chart</a>.</p></sc-if>
+            <span class="sect" style="margin: 4px 0 0">Projects</span>
+            <sc-if value="{{sel.hasProjects}}" hint-placeholder-val="{{ true }}">
+              <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px">
+                <sc-for list="{{sel.projectList}}" as="p" hint-placeholder-count="2"><li><a href="ProjectDetail.dc.html" class="pill idle" style="display: inline-block; text-decoration: none; font-size: 12.5px">{{p.name}}</a></li></sc-for>
+              </ul>
+            </sc-if>
+            <sc-if value="{{sel.noProjects}}" hint-placeholder-val="{{ false }}"><p class="hint">No projects yet. Assign this team to a project from the project's Members tab.</p></sc-if>
+          </div>
+        </section>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+        <section class="card" aria-labelledby="mg-h" style="flex: 999 1 480px; min-width: 0">
+          <div class="ch" style="flex-wrap: wrap">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="it2"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg></span>
+            <div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 1px; min-width: 0">
+              <h2 id="mg-h">Managers</h2>
+              <span class="sub2">Every person except the CEO needs a manager. Anyone without one shows up as a separate root of the org chart.</span>
+            </div>
+            <span class="pill {{rootCls}}" tabindex="0" data-tip="{{rootTip}}" data-tip-pos="left">{{rootText}}</span>
+          </div>
+          <div style="overflow-x: auto">
+            <table style="border-collapse: collapse; width: 100%">
+              <thead><tr><th scope="col">Person</th><th scope="col">Title</th><th scope="col">Manager</th><th scope="col" style="text-align: right">Actions</th></tr></thead>
+              <tbody>
+                <sc-for list="{{mgrRows}}" as="r" hint-placeholder-count="6">
+                  <tr>
+                    <td><span style="display: flex; align-items: center; gap: 10px"><span class="av" aria-hidden="true" style="background: {{r.bg}}">{{r.init}}</span><button type="button" class="linkbtn" onClick="{{r.open}}" aria-label="{{r.openLabel}}" style="font-size: 13.5px">{{r.name}}</button></span></td>
+                    <td>{{r.title}}</td>
+                    <td>
+                      <sc-if value="{{r.isRoot}}" hint-placeholder-val="{{ false }}"><span class="pill idle" tabindex="0" data-tip="The CEO is the one intended root of the org chart">None — top of the org chart</span></sc-if>
+                      <sc-if value="{{r.hasMgr}}" hint-placeholder-val="{{ true }}"><span>{{r.mgrName}}</span></sc-if>
+                      <sc-if value="{{r.noMgr}}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; gap: 8px; color: var(--warn-fg); font-weight: 600"><span class="dot d-warn" aria-hidden="true"></span>No manager — shown as a root of the org chart</span></sc-if>
+                    </td>
+                    <td style="text-align: right">
+                      <sc-if value="{{r.showPicker}}" hint-placeholder-val="{{ false }}">
+                        <span style="display: inline-flex; gap: 8px; align-items: center">
+                          <label for="{{r.selId}}" class="sr">{{r.selLabel}}</label>
+                          <select id="{{r.selId}}" style="height: 32px; border-radius: 6px; border: var(--bw) solid var(--border); background: var(--surface); font: inherit; font-size: 13px; padding: 0 8px; color: var(--text)"><option value="ao" selected>Alex Smith</option><option value="mv">Jane Doe</option><option value="jb">Sam Lee</option><option value="lk">Chris Park</option><option value="el">Morgan Hale</option><option value="rs">Taylor Reed</option></select>
+                          <button type="button" class="btn sm pri" onClick="{{r.save}}">Set manager</button>
+                        </span>
+                      </sc-if>
+                      <sc-if value="{{r.canChange}}" hint-placeholder-val="{{ true }}"><button type="button" class="btn sm" onClick="{{r.edit}}" aria-label="{{r.changeLabel}}">Change manager</button></sc-if>
+                      <sc-if value="{{r.isRoot}}" hint-placeholder-val="{{ false }}"><span class="sub2">—</span></sc-if>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          <sc-if value="{{mgrErr}}" hint-placeholder-val="{{ false }}"><p role="alert" style="margin: 0; padding: 10px 16px; font-size: 12.5px; color: var(--alert-text); font-weight: 600; border-top: var(--bw) solid var(--line)">{{mgrErrText}}</p></sc-if>
+          <p class="hint adv" style="padding: 10px 16px 14px; border-top: var(--bw) solid var(--line)">Agents get their manager in <a href="OrgChart.dc.html">Org chart</a>. Guests aren't placed on the org chart.</p>
+        </section>
+
+        <sc-if value="{{hasDrawer}}" hint-placeholder-val="{{ true }}">
+          <aside class="card" aria-labelledby="pd-h" style="flex: 1 1 320px; min-width: 0; box-sizing: border-box; border-color: var(--primary)">
+            <div class="ch">
+              <span class="av" aria-hidden="true" style="width: 44px; height: 44px; font-size: 14px; background: {{pd.bg}}">{{pd.init}}</span>
+              <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0">
+                <span class="sect" style="margin: 0">Person</span>
+                <h2 id="pd-h" style="margin: 0; font-size: 15px; font-weight: 600">{{pd.name}}</h2>
+              </div>
+              <button type="button" class="btn sm" onClick="{{closeDrawer}}" aria-label="Close person details" data-tip="Close · Esc" data-tip-pos="left" style="width: 32px; padding: 0; justify-content: center"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            </div>
+            <div style="padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 12px">
+              <div>
+                <div style="display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: var(--bw) solid var(--line); font-size: 13px"><span style="color: var(--muted)">Title</span><strong style="font-weight: 600">{{pd.title}}</strong></div>
+                <div style="display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: var(--bw) solid var(--line); font-size: 13px"><span style="color: var(--muted)">Role</span><a href="Roles.dc.html">{{pd.role}}</a></div>
+                <div style="display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: var(--bw) solid var(--line); font-size: 13px"><span style="color: var(--muted)">Manager</span><strong style="font-weight: 600">{{pd.manager}}</strong></div>
+                <div style="display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: var(--bw) solid var(--line); font-size: 13px"><span style="color: var(--muted)">Teams</span><span>{{pd.teams}}</span></div>
+                <div style="display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 13px"><span style="color: var(--muted)">Direct reports</span><span style="text-align: right; white-space: normal">{{pd.reports}}</span></div>
+              </div>
+
+              <span class="sect" style="margin: 0">Activity · last 30 days</span>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px">
+                <div style="padding: 10px; border-radius: 8px; background: var(--surface2); border: var(--bw) solid var(--line)"><b style="display: block; font-size: 20px; font-weight: 600">{{pd.appr}}</b><span class="sub2">Approvals</span></div>
+                <div style="padding: 10px; border-radius: 8px; background: var(--surface2); border: var(--bw) solid var(--line)"><b style="display: block; font-size: 20px; font-weight: 600">{{pd.closed}}</b><span class="sub2">Items closed</span></div>
+                <div style="padding: 10px; border-radius: 8px; background: var(--surface2); border: var(--bw) solid var(--line)"><b style="display: block; font-size: 20px; font-weight: 600">{{pd.comm}}</b><span class="sub2">Comments</span></div>
+              </div>
+              <span class="sub2">Last active {{pd.last}} · <a href="Activity.dc.html" class="adv">See all activity</a></span>
+
+              <div class="adv" style="display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 8px; border: var(--bw) solid var(--border)">
+                <span class="sect" style="margin: 0">Cost this month</span>
+                <sc-if value="{{pd.costed}}" hint-placeholder-val="{{ true }}">
+                  <span style="display: flex; align-items: baseline; gap: 6px"><b class="mono" style="font-size: 20px; font-weight: 500">{{pd.cost}}</b><span class="mono sub2" tabindex="0" data-tip="Euro">EUR</span></span>
+                  <span class="sub2">{{pd.costSrc}}</span>
+                </sc-if>
+                <sc-if value="{{pd.notCosted}}" hint-placeholder-val="{{ false }}">
+                  <span class="pill warn" tabindex="0" data-tip="No hourly rate on this person's role, so no cost can be calculated" style="align-self: flex-start">Not costed</span>
+                  <span class="sub2">Set an hourly rate on the {{pd.role}} role to see this person's cost.</span>
+                </sc-if>
+                <sc-if value="{{pd.hasAgentSpend}}" hint-placeholder-val="{{ true }}">
+                  <span style="font-size: 13px; padding-top: 6px; border-top: var(--bw) dashed var(--line)">Agents reporting to {{pd.first}}: <b class="mono" style="font-weight: 500">{{pd.agentSpend}}</b></span>
+                  <span class="hint">Shown separately — agent spend is billed in a different currency.</span>
+                </sc-if>
+                <a href="Costs.dc.html" style="font-size: 12.5px; font-weight: 600">Open Costs &amp; budget</a>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 8px">
+                <span class="sect" style="margin: 0">Comments</span>
+                <div style="padding: 10px 12px; border-radius: 8px; background: var(--surface2); border: var(--bw) solid var(--line); font-size: 13px; display: flex; flex-direction: column; gap: 4px">
+                  <span class="sub2"><strong style="color: var(--text); font-weight: 600">{{pd.lastBy}}</strong> · {{pd.lastWhen}}</span>
+                  <span>{{pd.lastText}}</span>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px">
+                  <button type="button" class="btn sm"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it1"/></svg>Open thread ({{pd.thread}})</button>
+                  <button type="button" class="btn sm">Add comment</button>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </sc-if>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1440}}'>
+const PEOPLE = {
+  mv: { name: 'Jane Doe', init: 'JD', title: 'Founder & CEO', bg: 'var(--i2t)', agent: false },
+  ao: { name: 'Alex Smith', init: 'AS', title: 'Head of Operations', bg: 'var(--i1t)', agent: false },
+  jb: { name: 'Sam Lee', init: 'SL', title: 'Engineering lead', bg: 'var(--i3t)', agent: false },
+  lk: { name: 'Chris Park', init: 'CP', title: 'Software engineer', bg: 'var(--i1t)', agent: false },
+  el: { name: 'Morgan Hale', init: 'MH', title: 'Operations engineer', bg: 'var(--i2t)', agent: false },
+  rs: { name: 'Taylor Reed', init: 'TR', title: 'Technical Writer', bg: 'var(--i3t)', agent: false },
+  'research-agent': { name: 'research-agent', title: 'Head of Research', agent: true },
+  'code-agent': { name: 'code-agent', title: 'Staff Engineer', agent: true },
+  'code-reviewer': { name: 'code-reviewer', title: 'Reviewer', agent: true },
+  'documentation-engineer': { name: 'documentation-engineer', title: 'Technical Writer', agent: true },
+  'devops-engineer': { name: 'devops-engineer', title: 'Ops Lead', agent: true },
+  'performance-engineer': { name: 'performance-engineer', title: 'Performance Lead', agent: true }
+};
+const PERSON_IDS = ['mv', 'ao', 'jb', 'lk', 'el', 'rs'];
+const BASE_MGR = { mv: '', ao: 'mv', jb: 'mv', lk: 'jb', el: '', rs: 'mv' };
+const AGENT_REPORTS = { mv: ['research-agent', 'code-agent'], ao: ['devops-engineer'], jb: [], lk: [], el: [], rs: [] };
+const TEAMS = [
+  { id: 'plat', name: 'Platform engineering', lead: 'jb', members: ['jb', 'lk', 'code-agent', 'code-reviewer'], projects: ['NPU inference worker'], cand: 'performance-engineer' },
+  { id: 'ops', name: 'Operations', lead: 'ao', members: ['ao', 'el', 'devops-engineer', 'performance-engineer'], projects: ['NPU inference worker', 'Model cache service'], cand: 'lk' },
+  { id: 'rd', name: 'Research & docs', lead: 'mv', members: ['mv', 'rs', 'research-agent', 'documentation-engineer'], projects: ['Model cache service'], cand: 'code-reviewer' }
+];
+const DETAIL = {
+  mv: { role: 'Owner', appr: 21, closed: 4, comm: 33, last: 'today, 10:05', costed: false, cost: '', costSrc: '', agentSpend: '$4.10 USD · research-agent, code-agent', thread: 5, lastBy: 'Alex Smith', lastWhen: 'yesterday', lastText: 'The Q4 budget draft is ready for your review.' },
+  ao: { role: 'Ops Lead', appr: 12, closed: 7, comm: 19, last: 'today, 09:12', costed: true, cost: '€378.00', costSrc: 'Estimated from Ops Lead step costs — 1 of 2 steps costed.', agentSpend: '$11.40 USD · devops-engineer', thread: 3, lastBy: 'Jane Doe', lastWhen: '2 h ago', lastText: 'Can you take over the node-04 incident review?' },
+  jb: { role: 'Lead', appr: 9, closed: 11, comm: 24, last: 'today, 08:40', costed: false, cost: '', costSrc: '', agentSpend: '', thread: 1, lastBy: 'Chris Park', lastWhen: '3 days ago', lastText: 'Pairing on the INT4 loader fix tomorrow?' },
+  lk: { role: 'Member', appr: 0, closed: 14, comm: 17, last: 'yesterday, 17:22', costed: false, cost: '', costSrc: '', agentSpend: '', thread: 0, lastBy: 'No comments yet', lastWhen: 'start the thread', lastText: 'Comments about Chris Park appear here.' },
+  el: { role: 'Member', appr: 0, closed: 6, comm: 8, last: 'today, 07:55', costed: false, cost: '', costSrc: '', agentSpend: '', thread: 2, lastBy: 'Alex Smith', lastWhen: 'last week', lastText: 'Welcome to Operations. Pick up OPS-094 when you are ready.' },
+  rs: { role: 'Technical Writer', appr: 0, closed: 1, comm: 3, last: 'today, 09:30', costed: false, cost: '', costSrc: '', agentSpend: '', thread: 1, lastBy: 'Jane Doe', lastWhen: 'Mon 5 Oct', lastText: 'Welcome aboard, Taylor. Start with the release notes workflow.' }
+};
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  nm(id) { return PEOPLE[id] ? PEOPLE[id].name : id; }
+  mgrMap() { return Object.assign({}, BASE_MGR, (this.state || {}).mgrs || {}); }
+  readVal(id) { try { const el = document.getElementById(id); return el ? String(el.value || '') : ''; } catch (e) { return ''; } }
+  membersOf(t) {
+    const st = this.state || {};
+    const added = st.added || {};
+    const removed = (st.removed || {})[t.id] || [];
+    const base = t.members.concat(added[t.id] && t.cand ? [t.cand] : []);
+    return base.filter((m) => removed.indexOf(m) < 0);
+  }
+  leadOf(t) { return ((this.state || {}).leads || {})[t.id] || t.lead; }
+  saveManager(id) {
+    const v = this.readVal('mgr-' + id) || 'ao';
+    const map = this.mgrMap();
+    if (v === id) { this.setState({ mgrErr: 'A person can’t be their own manager. Pick someone else, then select Set manager.' }); return; }
+    let cur = v; let guard = 0;
+    while (cur && guard < 10) { if (cur === id) { this.setState({ mgrErr: 'That would create a reporting loop. Pick someone higher in the org, then select Set manager.' }); return; } cur = map[cur]; guard += 1; }
+    const mgrs = Object.assign({}, (this.state || {}).mgrs || {});
+    mgrs[id] = v;
+    const fixedRoot = !BASE_MGR[id] && id !== 'mv' && !((this.state || {}).mgrs || {})[id];
+    const msg = 'Manager set. ' + this.nm(id) + ' now reports to ' + this.nm(v) + '.' + (fixedRoot ? ' The org chart has one root again.' : '');
+    this.setState({ mgrs: mgrs, editMgr: '', mgrErr: '', toast: msg });
+  }
+  createTeam() {
+    const name = this.readVal('ct-name').trim();
+    const lead = this.readVal('ct-lead') || 'ao';
+    if (name.length < 2 || name.length > 60) { this.setState({ createErr: true }); return; }
+    const extra = ((this.state || {}).extra || []).slice();
+    const id = 'new' + extra.length;
+    extra.push({ id: id, name: name, lead: lead, members: [lead], projects: [], cand: '' });
+    this.setState({ extra: extra, team: id, createOpen: false, createErr: false, toast: 'Team created. ' + name + ' is ready — add people and agents to it.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    const teams = TEAMS.concat(st.extra || []);
+    const teamId = st.team || 'ops';
+    const sel = teams.filter((t) => t.id === teamId)[0] || teams[0];
+    const countsOf = (ms) => {
+      const ag = ms.filter((m) => PEOPLE[m].agent).length;
+      const pp = ms.length - ag;
+      return (pp === 1 ? '1 person' : pp + ' people') + ' · ' + (ag === 1 ? '1 agent' : ag + ' agents');
+    };
+    const teamRows = teams.map((t) => {
+      const ms = this.membersOf(t);
+      const on = t.id === sel.id;
+      return {
+        name: t.name,
+        lead: this.nm(this.leadOf(t)),
+        counts: countsOf(ms),
+        membersTip: ms.map((m) => this.nm(m)).join(', '),
+        projects: t.projects.length ? t.projects.join(', ') : 'No projects yet',
+        bg: on ? 'var(--surface2)' : 'transparent',
+        edge: on ? 'var(--primary)' : 'transparent',
+        pressed: on ? 'true' : 'false',
+        pick: () => this.setState({ team: t.id })
+      };
+    });
+    const selLead = this.leadOf(sel);
+    const selMs = this.membersOf(sel);
+    const selMembers = selMs.map((m) => {
+      const p = PEOPLE[m];
+      const isLead = m === selLead;
+      return {
+        name: p.name, init: p.init || '', bg: p.bg || 'var(--surface)', title: p.title,
+        isAgent: p.agent, isPerson: !p.agent,
+        kind: p.agent ? 'Agent' : 'Person', kindCls: p.agent ? 'info' : 'idle',
+        isLead: isLead, canLead: !isLead, canRemove: !isLead,
+        leadLabel: 'Set ' + p.name + ' as lead of ' + sel.name,
+        removeLabel: 'Remove ' + p.name + ' from ' + sel.name,
+        makeLead: () => { const l = Object.assign({}, st.leads || {}); l[sel.id] = m; this.setState({ leads: l, toast: p.name + ' is now the lead of ' + sel.name + '.' }); },
+        remove: () => { const r = Object.assign({}, st.removed || {}); r[sel.id] = (r[sel.id] || []).concat([m]); this.setState({ removed: r, toast: p.name + ' removed from ' + sel.name + '.' }); }
+      };
+    });
+    const hasCand = !!sel.cand && !(st.added || {})[sel.id];
+    const map = this.mgrMap();
+    const noMgrIds = PERSON_IDS.filter((id) => id !== 'mv' && !map[id]);
+    const mgrRows = PERSON_IDS.map((id) => {
+      const p = PEOPLE[id];
+      const isRoot = id === 'mv';
+      const m = map[id];
+      const editing = st.editMgr === id;
+      return {
+        name: p.name, init: p.init, bg: p.bg, title: p.title,
+        isRoot: isRoot, noMgr: !isRoot && !m, hasMgr: !isRoot && !!m, mgrName: m ? this.nm(m) : '',
+        showPicker: !isRoot && (!m || editing), canChange: !isRoot && !!m && !editing,
+        selId: 'mgr-' + id, selLabel: 'Manager for ' + p.name,
+        changeLabel: 'Change manager for ' + p.name,
+        openLabel: 'Open details for ' + p.name,
+        open: () => this.setState({ drawer: id }),
+        edit: () => this.setState({ editMgr: id, mgrErr: '' }),
+        save: () => this.saveManager(id)
+      };
+    });
+    const d = st.drawer === undefined ? 'ao' : st.drawer;
+    const dp = PEOPLE[d] || PEOPLE.ao;
+    const dd = DETAIL[d] || DETAIL.ao;
+    const reports = PERSON_IDS.filter((id) => map[id] === d).map((id) => this.nm(id)).concat(AGENT_REPORTS[d] || []);
+    const memberOf = teams.filter((t) => this.membersOf(t).indexOf(d) >= 0).map((t) => t.name);
+    const pd = {
+      name: dp.name, init: dp.init, bg: dp.bg, title: dp.title, first: dp.name.split(' ')[0],
+      role: dd.role, manager: map[d] ? this.nm(map[d]) : (d === 'mv' ? 'None — top of the org chart' : 'No manager yet'),
+      teams: memberOf.length ? memberOf.join(', ') : 'No team yet',
+      reports: reports.length ? reports.join(', ') : 'None',
+      appr: dd.appr, closed: dd.closed, comm: dd.comm, last: dd.last,
+      costed: dd.costed, notCosted: !dd.costed, cost: dd.cost, costSrc: dd.costSrc,
+      hasAgentSpend: !!dd.agentSpend, agentSpend: dd.agentSpend,
+      thread: dd.thread, lastBy: dd.lastBy, lastWhen: dd.lastWhen, lastText: dd.lastText
+    };
+    const roots = noMgrIds.length + 1;
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      toast: st.toast || '',
+      hasToast: !!st.toast,
+      dismiss: () => this.setState({ toast: '' }),
+      createOpen: !!st.createOpen,
+      createExpanded: st.createOpen ? 'true' : 'false',
+      createErr: !!st.createErr,
+      openCreate: () => this.setState({ createOpen: true, createErr: false }),
+      closeCreate: () => this.setState({ createOpen: false, createErr: false }),
+      submitCreate: () => this.createTeam(),
+      teamCount: teams.length === 1 ? '1 team' : teams.length + ' teams',
+      teamRows: teamRows,
+      sel: {
+        name: sel.name, lead: this.nm(selLead), counts: countsOf(selMs),
+        hasCand: hasCand, noCand: !hasCand,
+        candLabel: sel.cand ? this.nm(sel.cand) + ' · ' + (PEOPLE[sel.cand].agent ? 'agent' : 'person') : '',
+        hasProjects: sel.projects.length > 0, noProjects: sel.projects.length === 0,
+        projectList: sel.projects.map((n) => ({ name: n }))
+      },
+      selMembers: selMembers,
+      addMember: () => { const a = Object.assign({}, st.added || {}); a[sel.id] = true; this.setState({ added: a, toast: this.nm(sel.cand) + ' added to ' + sel.name + '.' }); },
+      mgrRows: mgrRows,
+      mgrErr: !!st.mgrErr,
+      mgrErrText: st.mgrErr || '',
+      rootCls: roots > 1 ? 'warn' : 'ok',
+      rootText: roots > 1 ? roots + ' org chart roots' : '1 org chart root',
+      rootTip: roots > 1 ? 'People without a manager appear as extra roots. Set a manager for ' + noMgrIds.map((id) => this.nm(id)).join(', ') + '.' : 'Only the CEO is a root. Everyone else has a manager.',
+      hasDrawer: !!d,
+      closeDrawer: () => this.setState({ drawer: '' }),
+      pd: pd,
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -20,12 +20,14 @@ from api.schemas_knowledge import (
     KnowledgePermissionChangesResponse,
 )
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.time_utils import now_utc
+from knowledge.search_filters import fact_not_found, parse_fact_metadata, require_fact_owner
 from knowledge_factory import get_or_create_knowledge_base
-from services.audit.audit import KnowledgeAuditLog  # GH#8290 Phase 2
+from services.audit.knowledge_view import KnowledgeAuditLog  # #17225: canonical audit trail
 
 logger = get_logger(__name__)
 
@@ -128,20 +130,16 @@ async def get_fact_access_log(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        # Verify user is the owner
+        # Verify user is the owner; a non-reader sees the missing-fact 404 (#18220)
+        if not getattr(kb, "ownership_manager", None):  # before the lookup: a degraded KB must not leak existence
+            raise HTTPException(status_code=503, detail="Knowledge base not available")
         fact_data = await kb.redis().hget(f"fact:{fact_id}", "metadata")
         if not fact_data:
-            raise HTTPException(status_code=404, detail="Fact not found")
-
-        import json
-
-        if isinstance(fact_data, bytes):
-            fact_data = fact_data.decode("utf-8")
-        metadata = json.loads(fact_data)
-
-        user_id = current_user.get("user_id") or current_user.get("username", "")
-        if metadata.get("owner_id") != user_id:
-            raise HTTPException(status_code=403, detail="Only the owner can view access logs")
+            raise fact_not_found()
+        metadata = parse_fact_metadata(fact_id, fact_data)
+        await require_fact_owner(
+            kb.ownership_manager, fact_id, metadata, current_user, "Only the owner can view access logs"
+        )
 
         # Get access log
         audit_log = await _get_audit_log(kb)
@@ -186,7 +184,7 @@ async def get_organization_audit_log(
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     user_role = current_user.get("role", "")
-    if user_role not in ("admin", "org_admin"):
+    if not (is_admin_role(user_role) or user_role == "org_admin"):
         raise HTTPException(status_code=403, detail="Organization admin role required")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
@@ -305,7 +303,7 @@ async def generate_compliance_report(
         org_id = user_org_id
 
     user_role = current_user.get("role", "")
-    if user_role not in ("admin", "org_admin"):
+    if not (is_admin_role(user_role) or user_role == "org_admin"):
         raise HTTPException(status_code=403, detail="Organization admin role required")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
@@ -366,7 +364,7 @@ async def get_compliance_summary(
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     user_role = current_user.get("role", "")
-    if user_role not in ("admin", "org_admin"):
+    if not (is_admin_role(user_role) or user_role == "org_admin"):
         raise HTTPException(status_code=403, detail="Organization admin role required")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)

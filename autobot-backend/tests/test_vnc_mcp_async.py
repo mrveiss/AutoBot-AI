@@ -175,6 +175,8 @@ def _install_stubs() -> dict:
 
     # auth_middleware
     _stub("auth_middleware", check_admin_permission=MagicMock())
+    # #19087: vnc_mcp gates the control tools on a permission via auth_rbac.
+    _stub("auth_rbac", check_admin_mcp_tool_permission=MagicMock())
 
     # autobot_shared and sub-modules
     _stub("autobot_shared")

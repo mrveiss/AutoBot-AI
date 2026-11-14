@@ -11,8 +11,6 @@ Security (fail-closed):
 - Validates GitHub PR URLs with strict parsing and repo matching
 """
 
-import hashlib
-import hmac
 import json
 import os
 import re
@@ -25,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.webhook_signature import verify_webhook_signature
 from llc.deps import get_session
 
 from ..models.enums import WorkItemStatus
@@ -108,18 +107,6 @@ def validate_github_pr_url(url: str, expected_repo: Optional[str] = None) -> boo
             return False
 
     return True
-
-
-def verify_webhook_signature(body: bytes, signature: str, secret: str) -> bool:
-    """Verify a GitHub webhook HMAC-SHA256 signature.
-
-    Prevents spoofed webhook payloads from untrusted sources.
-    """
-    if not signature or not signature.startswith("sha256="):
-        return False
-
-    expected_sig = "sha256=" + hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected_sig, signature)
 
 
 def _system_comment(item: LLCWorkItem, body: str) -> LLCWorkItemComment:

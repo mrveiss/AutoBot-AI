@@ -36,7 +36,11 @@ if [ -r "$SECRETS_FILE" ]; then
     # consumer degrades silently when it is absent, so an unset root key looked
     # exactly like "that secret does not exist".
     : "${AUTOBOT_SECRETS_ROOT_KEY:=${_GEN_SECRETS_ROOT_KEY:-}}"
-    export AUTOBOT_JWT_SECRET SECRET_KEY SLM_SECRET_KEY AUTOBOT_SECRETS_ROOT_KEY
+    # #16375: assigned, not defaulted. Prometheus reads the same value from the
+    # file secrets-init writes beside autobot.env, so an operator override here
+    # would leave the two sides on different tokens and every scrape refused.
+    AUTOBOT_PROMETHEUS_SCRAPE_TOKEN="${_GEN_PROMETHEUS_SCRAPE_TOKEN:-}"
+    export AUTOBOT_JWT_SECRET SECRET_KEY SLM_SECRET_KEY AUTOBOT_SECRETS_ROOT_KEY AUTOBOT_PROMETHEUS_SCRAPE_TOKEN
 fi
 
 exec "$@"

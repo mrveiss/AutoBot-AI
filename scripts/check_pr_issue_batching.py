@@ -62,12 +62,70 @@ _SEP_RE = r"\s*(?:,\s*(?:and\s+)?|and\s+)"
 # *not examined* is worse than an absent one, because the green is read as a
 # judgement. The wider set still answers "is anything linked at all", which is
 # the only question the sibling gate owns.
-_CLOSING_WORDS = "resolves|closes|fixes"
+#
+# #17580: both gates knew three of GitHub's nine closing keywords, and the two
+# agreeing with each other is what hid it -- the invariant they were written to
+# protect ("the two gates cannot disagree about what a reference is") held while
+# both diverged from the platform that does the closing. `Fix #N` read here as no
+# reference at all while GitHub closed the issue on merge, and `Fix #A`/`Fix #B`
+# scored as closing nothing, so a batch was never asked for its rationale. Four
+# merged PRs closed an issue with a body that said "does not close #N" -- GitHub
+# does not parse negation, and neither gate saw a closing keyword to argue with.
+#
+# Longest alternative first per verb, as a CONVENTION rather than a requirement.
+# I wrote it believing `close` ahead of `closes` would match the stem, leave the
+# `s` and fail `\s+`; the mutation test says otherwise -- alphabetical order still
+# recognises all nine, because Python's `re` backtracks into the other
+# alternatives and POSIX ERE (the sibling gate's `grep -E`) is leftmost-longest.
+# The order is kept for readability and to stay diffable against the workflow's
+# copy, and `test_the_longest_inflection_comes_first_in_each_verb` pins the
+# convention, not a behaviour. Recorded because the trap is real in engines that
+# are leftmost-first without backtracking, and a future port would meet it.
+_CLOSING_WORDS = "closes|closed|close|fixes|fixed|fix|resolves|resolved|resolve"
 _MENTION_WORDS = "refs|references|part of"
 _RUN = rf"({_ONE_REF}(?:{_SEP_RE}{_ONE_REF})*)"
-_CLOSING = re.compile(rf"(?:{_CLOSING_WORDS})\s+{_RUN}", re.IGNORECASE)
-_REFERENCE = re.compile(rf"(?:{_CLOSING_WORDS}|{_MENTION_WORDS})\s+{_RUN}", re.IGNORECASE)
+# The left boundary is load-bearing, and widening the verb set is what made it
+# load-bearing here: with bare stems in the alternation, `unresolved #1234`
+# matches `resolved #1234`, `prefixes #12` matches `fixes #12`, and `discloses
+# #5` matches `closes #5`. Every one of those reads as a reference the author
+# never wrote, and all three errors point the same way -- the link gate is
+# SATISFIED and the batching count is INFLATED -- so the guard reports
+# compliance for a body that claims the opposite. `.github/workflows/
+# pr-issue-validation.yml` already carried this guard on its fork-override
+# alternation, with a comment saying why; the widened patterns did not inherit
+# it. A lookbehind rather than a consumed character, so two references can sit
+# adjacent and the group numbering of `_RUN` is untouched.
+# GitHub accepts a colon after the keyword. Its own documentation: "The keywords
+# can be followed by colons or in uppercase. For example: `Closes: #10`,
+# `CLOSES #10`, or `CLOSES: #10`." Both gates required whitespace IMMEDIATELY
+# after the keyword, so `Fixes: #123` closed the issue on merge while the link
+# gate rejected the PR for having no linkage and the batching count omitted it
+# (#17580, review). Same divergence this file exists to remove, in the other
+# direction from the missing-inflections one: there the gate saw no reference
+# where GitHub saw one, here it sees none where GitHub closes.
+_COLON = r":?"
+_LEFT_EDGE = r"(?<![A-Za-z0-9_-])"
+_CLOSING = re.compile(rf"{_LEFT_EDGE}(?:{_CLOSING_WORDS}){_COLON}\s+{_RUN}", re.IGNORECASE)
+_REFERENCE = re.compile(rf"{_LEFT_EDGE}(?:{_CLOSING_WORDS}|{_MENTION_WORDS}){_COLON}\s+{_RUN}", re.IGNORECASE)
 _SPLIT = re.compile(_SEP_RE, re.IGNORECASE)
+# #17580 AC3: a closing keyword at the START of a line is a deliberate
+# declaration; the same keyword inside a sentence is usually prose. GitHub does
+# not care about the difference and closes on both, which is how #16464 was
+# closed by a body whose sentence read "this PR does not close #16464". The
+# negation blindness is the platform's and cannot be fixed here, so the only
+# defence is telling the author before the merge. Markdown lead-ins are allowed
+# because `- Closes #1`, `> Closes #1` and `**Closes #1**` are all deliberate.
+# A numbered list and a task-list checkbox are line-start declarations too, and
+# the original lead-in class excluded both: digits, `.`, `)`, `[` and `]` are
+# not in it, so `1. Closes #123` and `- [x] Closes #123` were reported as
+# mid-sentence prose. Both are idiomatic in a PR body -- the second is how this
+# repository's own template asks for them -- so the warning fired on exactly the
+# authors who had done it right.
+_MARKDOWN_LEAD = r"[\s>*_#\-]*"
+_LIST_LEAD = rf"(?:(?:\d+[.)]|\[[ xX]\]){_MARKDOWN_LEAD})*"
+_LINE_START_CLOSING = re.compile(
+    rf"^{_MARKDOWN_LEAD}{_LIST_LEAD}(?:{_CLOSING_WORDS}){_COLON}\s+{_RUN}", re.IGNORECASE | re.MULTILINE
+)
 # A reference inside a fenced block or inline code is an EXAMPLE, not a link.
 # Found on this gate's own PR, whose worked examples scored as six extra issues:
 # left in, a PR could satisfy the rule with sample text and never link anything.
@@ -151,6 +209,40 @@ def closing_issues(body: str) -> set[str]:
     a mention links context, only a closing keyword makes a PR batched.
     """
     return _issues_under(body, _CLOSING)
+
+
+def mid_sentence_closings(body: str) -> set[str]:
+    """Issues closed by a keyword that is NOT at the start of its line (#17580).
+
+    These are the dangerous ones. An author writing "this PR does not close #N"
+    has said the opposite of what GitHub will do, and the gate that agreed with
+    the author's intent is exactly what let #16464 close on merge while the check
+    reported "closes nothing". Returned so the author can be warned; the set is
+    deliberately not subtracted from :func:`closing_issues`, because GitHub does
+    close them and the batching count must reflect the platform.
+    """
+    text = _FENCE.sub(" ", body or "")
+    # Occurrences, not sets (review). This was
+    # `closing_issues(body) - _issues_under(body, _LINE_START_CLOSING)`, so a body
+    # containing BOTH "Closes #42" and "this does not close #42" cancelled to the
+    # empty set and the author was never warned -- the one shape most likely to be
+    # a real mistake, silently exempt because the same number also appeared in a
+    # deliberate declaration.
+    #
+    # Both patterns capture the reference run as group 1, so `start(1)` is the same
+    # offset for the same occurrence under either. An occurrence whose run is not
+    # at a declared line start is mid-sentence, whatever else the body says about
+    # that issue.
+    declared_at = {match.start(1) for match in _LINE_START_CLOSING.finditer(text)}
+    risky: set[str] = set()
+    for match in _CLOSING.finditer(text):
+        if match.start(1) in declared_at:
+            continue
+        for ref in _SPLIT.split(match.group(1)):
+            ref = ref.strip().lstrip("#")
+            if ref:
+                risky.add(ref.upper() if ref.upper().startswith("MVA-") else ref)
+    return risky
 
 
 # #16104: an ATX heading is 1-6 `#` followed by a space, a tab, or end of line.
@@ -303,6 +395,27 @@ def warning_annotation(text: str) -> str:
     return "::warning::" + text.replace("\n", "%0A")
 
 
+def _mid_sentence_warning(body: str) -> str:
+    """The #17580 AC3 notice, or "" when no closing keyword sits mid-sentence.
+
+    Prepended to every verdict rather than returned from one branch: GitHub closes
+    on these regardless of whether the PR is batched, excused or a vehicle, so the
+    warning cannot be gated on this gate's own policy.
+    """
+    risky = mid_sentence_closings(body)
+    if not risky:
+        return ""
+    return (
+        warning_annotation(
+            f"A closing keyword for {_render(risky)} appears mid-sentence. GitHub closes on it and "
+            "does not read negation -- #16464 was closed by a body saying it did not close it. "
+            "Move the keyword to the start of its own line if you mean it, or reword to 'Refs' if "
+            "you do not."
+        )
+        + "\n"
+    )
+
+
 def check(body: str, actor: str = "", branch: str = "", title: str = "") -> tuple[bool, str]:
     """Return (ok, message) for one pull request.
 
@@ -322,6 +435,12 @@ def check(body: str, actor: str = "", branch: str = "", title: str = "") -> tupl
     gate always printed. A vehicle (see :func:`is_vehicle`) short-circuits
     everything else and passes outright, however many issues it closes or refs.
     """
+    ok, message = _verdict(body, actor=actor, branch=branch, title=title)
+    return ok, _mid_sentence_warning(body) + message
+
+
+def _verdict(body: str, actor: str = "", branch: str = "", title: str = "") -> tuple[bool, str]:
+    """The batching verdict itself, unchanged by #17580."""
     if is_vehicle(branch, body):
         return True, _vehicle_notice(closing_issues(body), referenced_issues(body))
 

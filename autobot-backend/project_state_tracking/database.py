@@ -98,7 +98,7 @@ DATABASE_SCHEMA_INDICES = (
 )
 
 
-def init_database(db_path: str) -> None:
+def init_state_tracking_database(db_path: str) -> None:
     """
     Initialize SQLite database for enhanced state tracking.
 

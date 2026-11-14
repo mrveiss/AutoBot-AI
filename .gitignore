@@ -151,6 +151,7 @@ config/settings.json
 backend/config/settings.json
 .env
 docker/.env.secrets
+docker/.redis-users.acl
 .env.local
 .env.development.local
 .env.test.local
@@ -551,9 +552,12 @@ autobot-backend/data/scheduled_workflows.json
 # per-checkout convenience, and the hook recreates it on demand.
 autobot-backend/backend
 
-# #14678: generated at CI time from inventory/group_vars/all.yml, never tracked
-autobot-slm-backend/ansible/tests/inventory/group_vars/all.yml
+# #14678: generated at CI time from inventory/group_vars/, never tracked
+autobot-slm-backend/ansible/tests/inventory/group_vars/
 
 # Session handoffs are working notes, not repository content (owner ruling 2026-09-25).
 # They name branches, worktrees and in-flight state that is false the moment work moves.
 .session/
+
+# Offline OpenAPI dump for the main app (npm run gen:types:openapi); regenerated, never committed (#12363)
+/autobot-frontend/openapi.json

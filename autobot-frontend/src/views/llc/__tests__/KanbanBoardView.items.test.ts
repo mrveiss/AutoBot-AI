@@ -120,7 +120,7 @@ const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', mes
 
 async function mountView() {
   get.mockImplementation((url: string) => {
-    if (url.endsWith('/items')) return Promise.resolve(BOARD_ITEMS_RESPONSE)
+    if (url.endsWith('/items')) return Promise.resolve(structuredClone(BOARD_ITEMS_RESPONSE)) // a copy: a test that moves a card must not edit the next test's fixture
     return Promise.resolve(BOARD_RESPONSE)
   })
   const wrapper = mount(KanbanBoardView, {
@@ -183,5 +183,76 @@ describe('KanbanBoardView items wiring (GH#13993)', () => {
     // happened while the filter compared against the literal "human".
     expect(wrapper.findAll('.work-card')).toHaveLength(2)
     expect(wrapper.findAll('.lane-empty')).toHaveLength(2)
+  })
+
+  it('locks a card while its move is pending, so a rollback cannot restore a stale column (#20930)', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      items: WorkItemLike[]
+      onDragStart(item: WorkItemLike): void
+      onDrop(col: string): Promise<void>
+    }
+    let settle: (err?: Error) => void = () => {}
+    post.mockImplementation(() => new Promise((_, reject) => { settle = reject }))
+    const card = vm.items.find(i => i.id === 'wi-1') as WorkItemLike
+    vm.onDragStart(card)
+    const first = vm.onDrop('col-progress')
+    await flushPromises()
+    expect(wrapper.find('.work-card[aria-busy="true"]').exists()).toBe(true)
+    expect(wrapper.find("[role='status']").text()).toBe(en.llc.kanban.moving)
+
+    vm.onDragStart(card) // refused: the first move has not settled
+    await vm.onDrop('col-ready')
+    expect(post).toHaveBeenCalledTimes(1)
+
+    settle(new Error('refused'))
+    await first
+    await flushPromises()
+    expect(card.column_id).toBe('col-ready')
+    expect(wrapper.find('.work-card[aria-busy="true"]').exists()).toBe(false)
+  })
+
+  it('does not roll back over a column a live update placed while the move was pending (#20930)', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      items: WorkItemLike[]
+      onDragStart(item: WorkItemLike): void
+      onDrop(col: string): Promise<void>
+    }
+    let settle: (err?: Error) => void = () => {}
+    post.mockImplementation(() => new Promise((_, reject) => { settle = reject }))
+    const card = vm.items.find(i => i.id === 'wi-1') as WorkItemLike
+    vm.onDragStart(card)
+    const move = vm.onDrop('col-progress')
+    card.column_id = 'col-done' // a /ws/live board event
+    settle(new Error('refused'))
+    await move
+    expect(card.column_id).toBe('col-done')
+  })
+
+  it('rolls back the CURRENT card when onItemUpdated replaced the object that was dragged (#21032)', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      items: WorkItemLike[]
+      onDragStart(item: WorkItemLike): void
+      onDrop(col: string): Promise<void>
+      onItemUpdated(updated: { id: string; title: string; type: string; status: string; priority: string }): void
+    }
+    let settle: (err?: Error) => void = () => {}
+    post.mockImplementation(() => new Promise((_, reject) => { settle = reject }))
+    const dragged = vm.items.find(i => i.id === 'wi-1') as WorkItemLike
+    vm.onDragStart(dragged)
+    const move = vm.onDrop('col-progress')
+    // The detail panel saved the card while the move was pending: the list now holds a NEW object for it.
+    vm.onItemUpdated({ id: 'wi-1', title: 'Renamed', type: 'task', status: 'ready', priority: 'medium' })
+    const replacement = vm.items.find(i => i.id === 'wi-1') as WorkItemLike
+    expect(replacement).not.toBe(dragged)
+    expect(replacement.column_id).toBe('col-progress')
+
+    settle(new Error('refused'))
+    await move
+    await flushPromises()
+
+    expect(vm.items.find(i => i.id === 'wi-1')?.column_id).toBe('col-ready')
   })
 })

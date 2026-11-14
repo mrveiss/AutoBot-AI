@@ -10,6 +10,7 @@
   register: python_version_check
   changed_when: false
   failed_when: python_version_check.rc != 0
+  when: not ansible_check_mode
 
 - name: Verify required Python packages
   command: "{{ venv_dir }}/bin/pip list"
@@ -37,7 +38,9 @@
   command: node --version
   register: node_version_final
   changed_when: false
-  when: install_nodejs
+  when:
+    - install_nodejs
+    - not ansible_check_mode
 
 - name: Verify directory permissions
   stat:
@@ -53,9 +56,9 @@
 - name: Display verification summary
   debug:
     msg:
-      - "Python: {{ python_version_check.stdout }}"
+      - "Python: {{ python_version_check.stdout | default('not probed under --check') }}"
       - "OpenVINO: {{ 'Installed' if install_openvino else 'Skipped' }}"
       - "Ollama: {{ 'Running' if (install_ollama and ollama_status.status.ActiveState == 'active') else 'Skipped' }}"
-      - "Node.js: {{ node_version_final.stdout if install_nodejs else 'Skipped' }}"
+      - "Node.js: {{ (node_version_final.stdout | default('not probed under --check')) if install_nodejs else 'Skipped' }}"
       - "Playwright: Installed"
       - "Service: autobot-agent"

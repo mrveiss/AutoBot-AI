@@ -12,12 +12,16 @@ Usage:
     python3 tools/schema-split/update_imports.py [--dry-run]
 """
 
-import re
+import logging
 import os
+import re
+import sys
 from collections import defaultdict
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-API_DIR = os.path.join(REPO_ROOT, "autobot-backend", "api")
+from schema_rules import API_DIR, classify_class
+
+logger = logging.getLogger(__name__)
+
 
 DOMAIN_MODULE = {
     "terminal": "schemas_terminal",
@@ -29,32 +33,6 @@ DOMAIN_MODULE = {
     "code": "schemas_code",
     "common": "schemas_common",
 }
-
-DOMAIN_RULES = [
-    (r"^(AgentTerminal)", "terminal"),
-    (r"^(AgentMessage|AgentCommand|AgentHealth|AgentConfig|AgentCommandApproval|AgentCommandExecute)", "agent"),
-    (r"^(Terminal|SSH|CommandAssess|AdminExecute|PackageManagers)", "terminal"),
-    (r"^(Analytics|Cost|Budget|UsageSummary|UsageBy|RecentUsage|ModelPricing|AllAgent|Metrics)", "analytics"),
-    (r"^Knowledge", "knowledge"),
-    (r"^(LLM|Memory)", "agent"),
-    (r"^(System|NPU|WakeWord|FeatureFlag|AdminFile)", "system"),
-    (
-        r"^(ValidationDashboard|ValidationJudge|ValidationJudgment|Workflow|Registry|RUM|Elevation|AdvancedControl|StateTracking|StructuredThinking)",
-        "workflows",
-    ),
-    (
-        r"^(CodeReview|Git|Skills|SkillsDraft|SkillsApproval|SkillsGovernance|SkillsGap|Database|Template|Templates|Log|Voice|AccessControl|FileSandbox|MCP|HTTP)",
-        "code",
-    ),
-    (r"^(Success|Data|UsageRecord)", "common"),
-]
-
-
-def classify_class(cls: str) -> str:
-    for pattern, domain in DOMAIN_RULES:
-        if re.match(pattern, cls):
-            return domain
-    return "common"
 
 
 def _parse_names(names_text: str) -> list[str]:
@@ -117,18 +95,20 @@ def update(dry_run: bool = False) -> None:
 
         if new_content != content:
             if dry_run:
-                print(f"Would update: {fname}")
+                logger.info(f"Would update: {fname}")
             else:
                 with open(fpath, "w", encoding="utf-8") as f:
                     f.write(new_content)
-                print(f"Updated: {fname}")
+                logger.info(f"Updated: {fname}")
             updated += 1
 
     label = "Would update" if dry_run else "Updated"
-    print(f"\n{label} {updated} files total")
+    logger.info(f"\n{label} {updated} files total")
 
 
 if __name__ == "__main__":
+    # Report text stays on stdout, where these scripts always wrote it.
+    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
     import argparse
 
     parser = argparse.ArgumentParser(description="Rewrite schemas_common imports to domain files")

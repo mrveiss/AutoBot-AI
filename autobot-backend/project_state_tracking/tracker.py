@@ -37,7 +37,7 @@ except ImportError as _phase_validator_import_error:
 from autobot_shared.singleton_factory import lazy_singleton
 
 from .database import (
-    init_database,
+    init_state_tracking_database,
     load_milestones_from_db,
     load_snapshots_from_db,
     record_state_change_sync,
@@ -126,7 +126,7 @@ class ProjectStateTracker:
         self._counter_lock = asyncio.Lock()
 
         # Initialize database and load state
-        init_database(self.db_path)
+        init_state_tracking_database(self.db_path)
         self._define_milestones()
         self._load_state()
 

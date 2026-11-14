@@ -111,7 +111,7 @@ def test_a_stale_fallback_makes_update_code_source_target_the_wrong_directory(tm
 
     result = asyncio.run(executor._update_code_source())
 
-    assert result is True, "reports success, but never examined code_source_root's real .git"
+    assert result is None, "reports success, but never examined code_source_root's real .git"
     assert not (executor.ansible_dir.parent.parent / ".git").exists()
 
 

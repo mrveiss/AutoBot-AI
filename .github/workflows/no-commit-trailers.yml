@@ -60,6 +60,18 @@ jobs:
           # have comparison but no arithmetic, hence a threshold, not `commits + N`.
           fetch-depth: ${{ (github.event_name == 'merge_group' || github.event.pull_request.commits > 90) && '0' || '100' }}
 
+      # #19466: a PR into `release` is judged only on commits not already on main
+      # (owner ruling 2026-10-24: "Gates judge only new commits"). Every commit on
+      # main passed this gate on its own PR, and main cannot be rewritten, so
+      # re-scanning a promotion's 1670 commits found 36 trailers nothing can ever
+      # remove. The action yields the head's merge base with main and the count of
+      # commits not on main; for any other event or base it yields nothing and the
+      # range below is the PR's own, as before.
+      - uses: ./.github/actions/release-promotion-base
+        id: release-base
+        with:
+          fetch: 'true'
+
       - name: Scan PR commits for banned trailers
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
@@ -67,8 +79,23 @@ jobs:
           # The TRUE number of commits in the PR, from GitHub rather than from the
           # clone. This is what makes truncation detectable (#16210 review).
           EXPECTED_COMMITS: ${{ github.event.pull_request.commits || '' }}
+          RELEASE_BASE_SHA: ${{ steps.release-base.outputs.base-sha }}
+          RELEASE_NEW_COMMITS: ${{ steps.release-base.outputs.new-commits }}
         run: |
           set -euo pipefail
+          # #19466: on a PR into release, the range and its true size are the commits
+          # not on main. Chosen here, not in an expression `||` chain, because a
+          # promotion's count is "0" and an expression would have to decide whether
+          # that string is falsy. The checkout depth was sized for the whole PR; the
+          # deepen makes every commit in the narrower range present, and the count
+          # check below still refuses a truncated scan.
+          if [ -n "${RELEASE_BASE_SHA}" ]; then
+            BASE_SHA="${RELEASE_BASE_SHA}"
+            EXPECTED_COMMITS="${RELEASE_NEW_COMMITS}"
+            if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+              git fetch --no-tags --depth="$((RELEASE_NEW_COMMITS + 1))" origin "${HEAD_SHA}"
+            fi
+          fi
           echo "Scanning commits ${BASE_SHA}..${HEAD_SHA}"
           # An unreachable endpoint makes `git rev-list BASE..HEAD` scan nothing, and
           # a gate that scans zero commits reports clean. That is worse than the

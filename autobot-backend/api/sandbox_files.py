@@ -20,7 +20,13 @@ from pathlib import Path
 import aiofiles
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
-from api.files import ALLOWED_EXTENSIONS, get_file_info
+from api.files import (
+    ALLOWED_EXTENSIONS,
+    _check_file_permission,
+    build_directory_tree,
+    collect_directory_stats,
+    get_file_info,
+)
 from api.schemas_code import (
     FileSandboxCreateDirResponse,
     FileSandboxDeleteResponse,
@@ -30,7 +36,6 @@ from api.schemas_code import (
     FileSandboxTreeResponse,
     FileSandboxViewResponse,
 )
-from auth_middleware import get_auth_middleware
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.paths import scrubbed_git_env
@@ -58,7 +63,7 @@ _sandbox_root_ready = False
 _GIT_STATUS_TIMEOUT_SECONDS = env_int_clamped("AUTOBOT_SANDBOX_GIT_STATUS_TIMEOUT_SECONDS", 10, min_v=1)
 
 
-def ensure_sandbox_root() -> None:
+def ensure_sandbox_files_root() -> None:
     """Create the sandbox root directory on first use, not on import (#14217)."""
     global _sandbox_root_ready
     if not _sandbox_root_ready:
@@ -67,18 +72,11 @@ def ensure_sandbox_root() -> None:
         _sandbox_root_ready = True
 
 
-router = APIRouter(dependencies=[Depends(ensure_sandbox_root)])
+router = APIRouter(dependencies=[Depends(ensure_sandbox_files_root)])
 
 
-def _check_permission(request: Request, permission: str) -> dict:
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, permission)
-    if not has_permission:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Insufficient permissions for file {permission} operations",
-        )
-    request.state.user = user_data
-    return user_data
+async def _check_permission(request: Request, permission: str) -> dict:
+    return await _check_file_permission(request, permission)
 
 
 def _validate_path(path: str) -> Path:
@@ -102,7 +100,7 @@ def _validate_path(path: str) -> Path:
 )
 async def view_file(request: Request, file_path: str):
     """View file content (for text files) or get file metadata."""
-    _check_permission(request, "view")
+    await _check_permission(request, "view")
     target_file = _validate_path(file_path)
 
     if not await run_in_file_executor(target_file.exists):
@@ -135,7 +133,7 @@ async def view_file(request: Request, file_path: str):
 )
 async def rename_file_or_directory(request: Request, path: str = Form(...), new_name: str = Form(...)):
     """Rename a file or directory within the sandbox."""
-    _check_permission(request, "upload")
+    await _check_permission(request, "upload")
 
     if is_invalid_name(new_name):
         raise HTTPException(status_code=400, detail="Invalid file/directory name")
@@ -166,7 +164,7 @@ async def rename_file_or_directory(request: Request, path: str = Form(...), new_
 )
 async def preview_file(request: Request, path: str):
     """Get file preview with content and metadata."""
-    _check_permission(request, "view")
+    await _check_permission(request, "view")
     target_file = _validate_path(path)
 
     if not await run_in_file_executor(target_file.exists):
@@ -335,7 +333,7 @@ async def delete_file(request: Request, path: str, recursive: bool = False, forc
     A non-empty directory needs `recursive`, and one holding uncommitted work
     needs `force` on top of it -- see #15777.
     """
-    user = _check_permission(request, "delete")
+    user = await _check_permission(request, "delete")
     target_path = _validate_path(path)
 
     if not await run_in_file_executor(target_path.exists):
@@ -372,7 +370,7 @@ async def delete_file(request: Request, path: str, recursive: bool = False, forc
 )
 async def create_directory(request: Request, path: str = Form(...), name: str = Form(...)):
     """Create a new directory within the sandbox."""
-    _check_permission(request, "upload")
+    await _check_permission(request, "upload")
 
     if is_invalid_name(name):
         raise HTTPException(status_code=400, detail="Invalid directory name")
@@ -399,7 +397,7 @@ async def create_directory(request: Request, path: str = Form(...), name: str = 
 )
 async def get_directory_tree(request: Request, path: str = ""):
     """Get directory tree structure."""
-    _check_permission(request, "view")
+    await _check_permission(request, "view")
     target_path = _validate_path(path)
 
     if not await run_in_file_executor(target_path.exists):
@@ -407,31 +405,7 @@ async def get_directory_tree(request: Request, path: str = ""):
     if not await run_in_file_executor(target_path.is_dir):
         raise HTTPException(status_code=400, detail="Path is not a directory")
 
-    def build_tree(directory: Path) -> list:
-        try:
-            items = []
-            for item in sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
-                try:
-                    rel = str(item.relative_to(SANDBOX_FILES_ROOT))
-                    entry: dict = {
-                        "name": item.name,
-                        "path": rel,
-                        "type": "directory" if item.is_dir() else "file",
-                    }
-                    if item.is_file():
-                        entry["size"] = item.stat().st_size
-                        entry["extension"] = item.suffix.lower() if item.suffix else None
-                    else:
-                        entry["children"] = build_tree(item)
-                    items.append(entry)
-                except (OSError, PermissionError) as e:
-                    logger.warning("Skipping inaccessible item %s: %s", item, e)
-            return items
-        except Exception as e:
-            logger.error("Error building tree for %s: %s", directory, e)
-            return []
-
-    tree_data = await run_in_file_executor(build_tree, target_path)
+    tree_data = await run_in_file_executor(build_directory_tree, target_path, SANDBOX_FILES_ROOT)
     return {"path": path, "tree": tree_data}
 
 
@@ -443,21 +417,9 @@ async def get_directory_tree(request: Request, path: str = ""):
 )
 async def get_file_stats(request: Request):
     """Get file system statistics for the sandbox root."""
-    _check_permission(request, "view")
+    await _check_permission(request, "view")
 
-    def _collect_stats_sync() -> tuple:
-        total_files = 0
-        total_directories = 0
-        total_size = 0
-        for item in SANDBOX_FILES_ROOT.rglob("*"):
-            if item.is_file():
-                total_files += 1
-                total_size += item.stat().st_size
-            elif item.is_dir():
-                total_directories += 1
-        return total_files, total_directories, total_size
-
-    total_files, total_directories, total_size = await run_in_file_executor(_collect_stats_sync)
+    total_files, total_directories, total_size = await run_in_file_executor(collect_directory_stats, SANDBOX_FILES_ROOT)
 
     return {
         "sandbox_root": str(SANDBOX_FILES_ROOT),

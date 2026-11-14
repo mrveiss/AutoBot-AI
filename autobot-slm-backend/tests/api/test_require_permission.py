@@ -4,14 +4,11 @@
 # Author: mrveiss
 """Unit tests for require_permission logic — MVA-126.
 
-Tests the three required denial scenarios plus the role-derivation logic
-extracted from require_permission._check, without importing FastAPI
-(avoids the pre-existing python_multipart env conflict that blocks all
-FastAPI-importing tests in this environment — see tests/services failures).
-
-These tests exercise the same code path as the live dependency: the role
-derivation and ROLE_PERMISSIONS lookup are pure Python and can be tested
-directly.
+Tests the three required denial scenarios plus role resolution through the
+shared evaluator (``autobot_shared.auth.permission_evaluator``, #18263) that
+``services.auth.require_permission`` applies. Role resolution is strict: the
+``role`` claim must be exactly a ``Role`` value, with no legacy ``admin``-flag
+fallback and no unknown-role-means-user.
 """
 
 import sys
@@ -20,27 +17,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "autobot_shared"))
 
+from autobot_shared.auth.permission_evaluator import permission_allowed
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 
-# ---------------------------------------------------------------------------
-# Replicate the role-derivation logic from services/auth.py::require_permission
-# so the tests are independent of the FastAPI import chain.
-# ---------------------------------------------------------------------------
-
-
-def _derive_role(user_payload: dict) -> Role:
-    role_str = user_payload.get("role")
-    if role_str:
-        try:
-            return Role(role_str)
-        except ValueError:
-            return Role.USER
-    return Role.ADMIN if user_payload.get("admin", False) else Role.USER
+# The decision under test is the shared evaluator itself (#18263), not a replica
+# of it: a replica is how the old lenient role fallback outlived its decision.
 
 
 def _has_permission(user_payload: dict, permission: Permission) -> bool:
-    role = _derive_role(user_payload)
-    return permission in ROLE_PERMISSIONS.get(role, [])
+    return permission_allowed(user_payload, permission)
 
 
 # ---------------------------------------------------------------------------
@@ -118,45 +103,28 @@ class TestAdminConfigPermissions:
 
 
 # ---------------------------------------------------------------------------
-# Legacy token fallback (admin boolean, no 'role' field)
+# Strict role resolution (#18263): what the SLM used to resolve leniently
 # ---------------------------------------------------------------------------
 
 
-class TestLegacyTokenFallback:
-    def test_legacy_admin_token_derives_admin_role(self):
-        assert _derive_role(LEGACY_ADMIN) == Role.ADMIN
+class TestStrictRoleResolution:
+    def test_a_token_without_a_role_claim_is_denied_whatever_its_admin_flag(self):
+        assert not _has_permission(LEGACY_ADMIN, Permission.ADMIN_SYSTEM)
+        assert not _has_permission(LEGACY_USER, Permission.CHAT_USE)
 
-    def test_legacy_user_token_derives_user_role(self):
-        assert _derive_role(LEGACY_USER) == Role.USER
-
-    def test_legacy_admin_granted_admin_system(self):
-        assert _has_permission(LEGACY_ADMIN, Permission.ADMIN_SYSTEM)
-
-    def test_legacy_user_denied_admin_system(self):
-        assert not _has_permission(LEGACY_USER, Permission.ADMIN_SYSTEM)
-
-
-# ---------------------------------------------------------------------------
-# Invalid / injected role strings
-# ---------------------------------------------------------------------------
-
-
-class TestInvalidRoleHandling:
-    def test_unknown_role_string_falls_back_to_user(self):
+    def test_an_unknown_role_is_denied_not_treated_as_user(self):
         bad = {"sub": "attacker", "admin": False, "role": "superadmin_inject"}
-        assert _derive_role(bad) == Role.USER
         assert not _has_permission(bad, Permission.ADMIN_SYSTEM)
+        assert not _has_permission(bad, Permission.CHAT_USE)
 
-    def test_empty_role_string_falls_back_via_admin_flag(self):
-        # Empty string is falsy: `if role_str:` is False → falls back to admin flag
-        empty_role_admin = {"sub": "x", "admin": True, "role": ""}
-        assert _derive_role(empty_role_admin) == Role.ADMIN
+    def test_an_empty_role_is_denied_whatever_its_admin_flag(self):
+        assert not _has_permission({"sub": "x", "admin": True, "role": ""}, Permission.ADMIN_SYSTEM)
 
-        empty_role_user = {"sub": "y", "admin": False, "role": ""}
-        assert _derive_role(empty_role_user) == Role.USER
+    def test_the_role_claim_is_case_sensitive(self):
+        assert not _has_permission({"sub": "x", "role": "Admin"}, Permission.CHAT_USE)
 
-    def test_no_payload_fields_is_user(self):
-        assert _derive_role({}) == Role.USER
+    def test_the_control_an_exact_role_is_granted(self):
+        assert _has_permission({"sub": "x", "role": "user"}, Permission.CHAT_USE)
 
 
 # ---------------------------------------------------------------------------
@@ -188,10 +156,11 @@ class TestRolePermissionsMapping:
         for perm in forbidden:
             assert perm not in user_perms, f"USER must NOT have {perm}"
 
-    def test_services_auth_defines_require_permission(self):
-        """Verify require_permission is defined in services/auth.py (no import)."""
-        auth_src = (Path(__file__).parent.parent.parent / "services" / "auth.py").read_text()
-        assert "def require_permission" in auth_src
+    def test_services_auth_does_not_define_its_own_require_permission(self):
+        """#18263: services/auth.py re-exports the shared gate's factories; a local def is a fork."""
+        auth_src = (Path(__file__).parent.parent.parent / "services" / "auth.py").read_text(encoding="utf-8")
+        assert "def require_permission" not in auth_src
+        assert "require_permission = _permission_gate.require_permission" in auth_src
 
     def test_services_auth_imports_shared_permission(self):
         """Verify services/auth.py imports Permission from autobot_shared."""

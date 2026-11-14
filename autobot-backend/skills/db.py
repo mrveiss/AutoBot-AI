@@ -2,7 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Skills DB engine — uses autobot_data.db (same as main backend)."""
+"""Skills DB engine — the shared local SQLite store, located via SSOT config.
+
+Not "the same as the main backend": the backend's own engine is PostgreSQL,
+built from ``config.postgres_url`` in ``user_management/database.py``. This is
+the separate ``autobot_data.db`` SQLite store, whose path is ``config.data_db``
+-- the same key ``nl_database_service`` and ``conversation_file_manager`` read.
+"""
 
 import os
 import threading
@@ -31,8 +37,12 @@ class _SkillsEngineManager:
         if self._engine is None:
             with self._lock:
                 if self._engine is None:
-                    base = config.base_dir
-                    db_path = os.path.join(base, "data", "autobot_data.db")
+                    # The location of autobot_data.db is SSOT config, not a
+                    # path reassembled here. `nl_database_service.py:68` and
+                    # `conversation_file_manager.py:128` already read
+                    # `config.data_db`; this module hand-built the same path and
+                    # so could not be repointed with the others.
+                    db_path = config.data_db or os.path.join(config.base_dir, "data", "autobot_data.db")
                     self._engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
         return self._engine
 

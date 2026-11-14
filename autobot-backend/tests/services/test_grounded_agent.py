@@ -30,8 +30,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from services.grounded_agent import GroundedAgent
-from services.grounded_agent_models import Claim, ClaimStatus, GroundedResponse, VerifiedClaim
-from services.knowledge_grounding_models import VerificationMethod
+from services.grounded_agent_models import GroundedResponse
+from services.knowledge_grounding_models import Claim, ClaimStatus, VerificationMethod, VerifiedClaim
 
 
 @pytest.fixture
@@ -146,7 +146,7 @@ async def test_extract_claims_error(grounded_agent):
 
 
 @pytest.mark.asyncio
-async def test_classify_claim_in_kb(grounded_agent, sample_claim):
+async def test_classify_claim_in_kb(grounded_agent, kb_reader, sample_claim):
     """Test claim found in KB."""
     mock_kb = AsyncMock()
     mock_kb.search = AsyncMock(
@@ -160,7 +160,7 @@ async def test_classify_claim_in_kb(grounded_agent, sample_claim):
     )
     grounded_agent.kb = mock_kb
 
-    verified = await grounded_agent._classify_and_verify_claim(sample_claim)
+    verified = await grounded_agent._classify_and_verify_claim(sample_claim, kb_reader)
 
     assert verified.kb_status == ClaimStatus.IN_KB
     assert verified.confidence > 0.85
@@ -181,7 +181,7 @@ async def test_classify_claim_unknown(grounded_agent, sample_claim):
 
 
 @pytest.mark.asyncio
-async def test_classify_claim_partial_match(grounded_agent, sample_claim):
+async def test_classify_claim_partial_match(grounded_agent, kb_reader, sample_claim):
     """Test claim with partial KB match."""
     mock_kb = AsyncMock()
     mock_kb.search = AsyncMock(
@@ -195,7 +195,7 @@ async def test_classify_claim_partial_match(grounded_agent, sample_claim):
     )
     grounded_agent.kb = mock_kb
 
-    verified = await grounded_agent._classify_and_verify_claim(sample_claim)
+    verified = await grounded_agent._classify_and_verify_claim(sample_claim, kb_reader)
 
     assert verified.kb_status == ClaimStatus.VERIFIED
     assert 0.5 < verified.confidence < 0.85
@@ -225,7 +225,7 @@ async def test_classify_claim_no_kb(grounded_agent, sample_claim):
 
 
 @pytest.mark.asyncio
-async def test_classify_claim_calls_real_search_signature_and_returns_content(grounded_agent, sample_claim):
+async def test_classify_claim_calls_real_search_signature_and_returns_content(grounded_agent, kb_reader, sample_claim):
     """#13024: search_mode= isn't a valid kwarg and limit= routes to the
     Enhanced dict-returning path, which this method can't consume (it does
     ``search_results[0]``) -- both silently produced UNKNOWN via the broad
@@ -245,7 +245,7 @@ async def test_classify_claim_calls_real_search_signature_and_returns_content(gr
     mock_kb.search.return_value = [{"fact_id": "f1", "content": "Latency increased", "similarity_score": 0.92}]
     grounded_agent.kb = mock_kb
 
-    verified = await grounded_agent._classify_and_verify_claim(sample_claim)
+    verified = await grounded_agent._classify_and_verify_claim(sample_claim, kb_reader)
 
     assert verified.kb_status == ClaimStatus.IN_KB
     assert verified.kb_source == "f1"
@@ -355,7 +355,7 @@ async def test_trace_verification_empty(grounded_agent):
 
 
 @pytest.mark.asyncio
-async def test_grounding_all_verified(grounded_agent):
+async def test_grounding_all_verified(grounded_agent, kb_reader):
     """Test grounding with all claims verified."""
     mock_llm = AsyncMock()
     mock_llm.chat = AsyncMock(
@@ -388,10 +388,7 @@ async def test_grounding_all_verified(grounded_agent):
     grounded_agent.llm_service = mock_llm
     grounded_agent.kb = mock_kb
 
-    result = await grounded_agent.respond_with_grounding(
-        "Why slow?",
-        "Latency increased",
-    )
+    result = await grounded_agent.respond_with_grounding("Why slow?", "Latency increased", user_id=kb_reader)
 
     assert isinstance(result, GroundedResponse)
     assert len(result.verified_claims) > 0
@@ -399,7 +396,7 @@ async def test_grounding_all_verified(grounded_agent):
 
 
 @pytest.mark.asyncio
-async def test_grounding_mixed(grounded_agent):
+async def test_grounding_mixed(grounded_agent, kb_reader):
     """Test grounding with mixed verified/unverified."""
     mock_llm = AsyncMock()
     mock_llm.chat = AsyncMock(
@@ -442,10 +439,7 @@ async def test_grounding_mixed(grounded_agent):
     grounded_agent.llm_service = mock_llm
     grounded_agent.kb = mock_kb
 
-    result = await grounded_agent.respond_with_grounding(
-        "Q",
-        "Mixed response",
-    )
+    result = await grounded_agent.respond_with_grounding("Q", "Mixed response", user_id=kb_reader)
 
     assert len(result.verified_claims) >= 1
     assert len(result.unverified_claims) >= 1
@@ -610,7 +604,7 @@ async def test_grounding_special_chars(grounded_agent):
 
 
 @pytest.mark.asyncio
-async def test_full_workflow(grounded_agent):
+async def test_full_workflow(grounded_agent, kb_reader):
     """Test complete grounding workflow."""
     # 1. Ground response
     mock_llm = AsyncMock()
@@ -661,8 +655,7 @@ async def test_full_workflow(grounded_agent):
     grounded_agent.kb = mock_kb
 
     grounded = await grounded_agent.respond_with_grounding(
-        "Why slow?",
-        "Latency increased and DB slow",
+        "Why slow?", "Latency increased and DB slow", user_id=kb_reader
     )
 
     assert grounded.original_query == "Why slow?"

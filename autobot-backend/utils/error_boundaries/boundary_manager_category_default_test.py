@@ -7,8 +7,8 @@
 
 from unittest.mock import MagicMock
 
-from constants.threshold_constants import CategoryDefaults
-from utils.error_boundaries.boundary_manager import ErrorBoundaryManager
+from autobot_shared.error_boundaries.boundary_manager import ErrorBoundaryManager
+from autobot_shared.ssot_constants import CategoryDefaults
 
 
 def test_missing_category_defaults_to_unknown():

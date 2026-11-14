@@ -15,6 +15,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict
 
+from autobot_shared.config_file_loading import format_key_value, load_config_file, parse_key_value
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.sql_identifier import validate_sql_identifier
 
@@ -31,18 +32,6 @@ def _is_path_in_allowed_dir(path_obj: Path, allowed_dirs: list) -> bool:
         except ValueError:
             continue
     return False
-
-
-def _parse_key_value_file(file_obj) -> Dict[str, str]:
-    """Parse key=value format config file. (Issue #315 - extracted)"""
-    config = {}
-    for line in file_obj:
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        config[key.strip()] = value.strip()
-    return config
 
 
 def _try_delete_old_file(file_path: Path, current_time: float, max_age_seconds: int) -> bool:
@@ -77,23 +66,10 @@ class CommonUtils:
         Returns:
             Configuration dictionary
         """
-        if default is None:
-            default = {}
-
-        config_path = Path(config_path)
-
-        if not config_path.exists():
-            return default.copy()
-
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                if config_path.suffix.lower() == ".json":
-                    return json.load(f)
-                # Parse key=value format (Issue #315 - uses helper)
-                return _parse_key_value_file(f)
-        except Exception as e:
-            logging.warning(f"Failed to load config from {config_path}: {e}")
-            return default.copy()
+        default = {} if default is None else default
+        parser = json.load if Path(config_path).suffix.lower() == ".json" else parse_key_value
+        # Shared loader (#17855): a miss or an unreadable/non-mapping file yields a copy of *default*.
+        return load_config_file(config_path, default.copy, "Common utils", parser=parser).values
 
     @staticmethod
     def save_config(config: Dict[str, Any], config_path: str | Path) -> bool:
@@ -117,9 +93,7 @@ class CommonUtils:
                 if config_path.suffix.lower() == ".json":
                     json.dump(config, f, indent=2, ensure_ascii=False)
                 else:
-                    # Save as key=value format
-                    for key, value in config.items():
-                        f.write(f"{key}={value}\n")
+                    f.write(format_key_value(config))
             return True
         except Exception as e:
             logging.error(f"Failed to save config to {config_path}: {e}")

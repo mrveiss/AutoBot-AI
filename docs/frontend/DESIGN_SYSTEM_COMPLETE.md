@@ -139,7 +139,7 @@ AutoBot now has a **cohesive, sharp technical aesthetic** with full light/dark m
 
 ### Already Using Design Tokens
 - ✅ `src/components/analytics/CodebaseAnalytics.vue` - Issue #704
-- ✅ `src/components/base/BaseButton.vue` - Design token migration
+- ✅ `src/components/base/BaseButton.vue` - Design token migration — superseded (#18849): the main app now uses the shared kit button, `import { BaseButton } from '@autobot/ui'` (`libs/autobot-ui/src/components/BaseButton.vue`); the local file is gone
 - ✅ `src/components/base/BasePanel.vue` - Design token migration
 
 ## 🎨 Color Palette

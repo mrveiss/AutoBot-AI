@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 
 from transcriber.database import Database
-from transcriber.deps import authenticate, get_db
+from transcriber.deps import authenticate, get_transcriber_db_from_request
 from transcriber.routes.projects import router
 
 TEST_CALLER = "test-user"
@@ -32,7 +32,7 @@ async def client(tmp_path):
     async def override_db():
         return db
 
-    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_transcriber_db_from_request] = override_db
     app.dependency_overrides[authenticate] = _as_test_user
     app.include_router(router, prefix="/api/transcriber")
 

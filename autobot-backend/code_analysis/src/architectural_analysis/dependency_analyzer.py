@@ -16,14 +16,14 @@ from typing import Dict, List
 _FUNC_OR_CLASS_TYPES = (ast.FunctionDef, ast.ClassDef)
 
 
-class DependencyAnalyzer:
+class ComponentDependencyAnalyzer:
     """
     Analyzer for component dependencies.
 
     Extracts and analyzes dependencies from AST nodes.
 
     Example:
-        >>> analyzer = DependencyAnalyzer()
+        >>> analyzer = ComponentDependencyAnalyzer()
         >>> deps = analyzer.extract_class_dependencies(class_node, content)
     """
 
@@ -151,4 +151,4 @@ class DependencyAnalyzer:
         return circular
 
 
-__all__ = ["DependencyAnalyzer"]
+__all__ = ["ComponentDependencyAnalyzer"]

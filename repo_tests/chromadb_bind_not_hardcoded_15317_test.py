@@ -60,7 +60,7 @@ import re
 from pathlib import Path
 
 import pytest
-import yaml
+from repo_tests._compose_files import COMPOSE_FILES, load_yaml_mapping  # one compose enumeration (#17500)
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
@@ -118,14 +118,7 @@ _OVERRIDE_SEARCH_PATTERNS = (
 # docker/ (e.g. the MCP-bridges overlay, which does not have "compose" in its
 # own filename -- #15317 review round 2 asked for "any compose file", not one
 # matching a naming convention).
-_COMPOSE_FILE_PATTERNS = ("docker-compose*.yml", "docker/*.yml")
-
-
-def _load_yaml_mapping(path: Path) -> dict:
-    """Parse *path* as YAML, tolerating an empty or non-mapping document."""
-    with path.open(encoding="utf-8") as fh:
-        data = yaml.safe_load(fh)
-    return data if isinstance(data, dict) else {}
+_load_yaml_mapping = load_yaml_mapping
 
 
 def _bind_host_value_in_file(path: Path) -> str | None:
@@ -218,20 +211,6 @@ def _compose_port_offender(entry: object) -> str | None:
     return parts[0] if parts[0] in _WILDCARD_BIND_VALUES else None
 
 
-def _discover_compose_files(root: Path) -> list[str]:
-    """Every tracked compose-shaped YAML file: docker-compose*.yml at the repo
-    root, and any compose file under docker/ -- filtered to files that
-    actually declare `services:`, so a stray non-compose .yml cannot inflate
-    the count."""
-    found: list[str] = []
-    for pattern in _COMPOSE_FILE_PATTERNS:
-        try:
-            found.extend(tracked_paths(root, pattern))
-        except EmptyEnumeration:
-            continue
-    return [rel for rel in found if "services" in _load_yaml_mapping(root / rel)]
-
-
 def _uses_host_networking(service: dict) -> bool:
     """`network_mode: host` binds every interface with no `ports:` entry at
     all -- a `ports:`-only sweep would miss it entirely (#15317 review round 2)."""
@@ -291,15 +270,6 @@ BIND_HOST_OVERRIDE_CANDIDATES = declare(
     what="group_vars/host_vars/role-defaults files scanned for a chromadb_bind_host override (#15317)",
 )
 
-#: 4 compose-shaped files today: docker-compose.yml, docker-compose.hardened.yml,
-#: docker-compose.override.example.yml, docker/mcp-bridges.yml.
-COMPOSE_FILES = declare(
-    "chromadb-compose-files",
-    discover=_discover_compose_files,
-    floor=3,
-    growth=3,
-    what="docker-compose-shaped YAML files scanned for a ChromaDB service (#15317 review round 2)",
-)
 
 #: 2 known service blocks today: docker-compose.yml's and
 #: docker-compose.hardened.yml's autobot-chromadb.

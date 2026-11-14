@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, WebSocket
 from fastapi.responses import JSONResponse
 
 from api.analytics_shared import no_data_response
@@ -38,6 +38,7 @@ from api.schemas_analytics import (
 from api.schemas_common import DataResponse
 from api.ws_security import open_authenticated_ws
 from auth_middleware import check_admin_permission
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -208,10 +209,9 @@ async def _get_problems_from_chromadb(
     metrics to the selected project's files only.
 
     Issue #6670: When source_id is provided, the codebase_stats document is
-    looked up under the per-source key ``codebase_stats_{source_id}`` first,
-    falling back to the global ``codebase_stats`` document. This matches the
-    write path in chromadb_storage.py:649 and the read pattern already used
-    by sources.py:447-456 and stats.py:222.
+    read from the per-source key ``codebase_stats_{source_id}``, matching the
+    write path in chromadb_storage.py. A source with no document gets no stats,
+    never the global document's, which describes another tree (#20513).
 
     Args:
         source_root: Absolute path used to filter problem file paths.  Pass
@@ -256,18 +256,8 @@ async def _get_problems_from_chromadb(
                     }
                 )
 
-        # Fetch codebase stats — per-source key first, fall back to global (#6670, #1716)
-        stats_results = None
-        if source_id:
-            stats_results = await collection.get(
-                ids=[f"codebase_stats_{source_id}"],
-                include=["metadatas"],
-            )
-        if not stats_results or not stats_results.get("metadatas"):
-            stats_results = await collection.get(
-                ids=["codebase_stats"],
-                include=["metadatas"],
-            )
+        stats_id = f"codebase_stats_{source_id}" if source_id else "codebase_stats"
+        stats_results = await collection.get(ids=[stats_id], include=["metadatas"])
         if stats_results and stats_results.get("metadatas"):
             stats = stats_results["metadatas"][0]
 
@@ -993,7 +983,7 @@ def _export_quality_as_csv(health: Any, metrics: dict) -> str:
 # ============================================================================
 
 
-class ConnectionManager:
+class QualityWebSocketHub:
     """Manage WebSocket connections for real-time updates."""
 
     def __init__(self):
@@ -1024,7 +1014,7 @@ class ConnectionManager:
             self.disconnect(conn)
 
 
-manager = ConnectionManager()
+manager = QualityWebSocketHub()
 
 
 # ============================================================================
@@ -1682,7 +1672,6 @@ async def websocket_quality_updates(websocket: WebSocket):
         return
     await manager.connect(websocket)
 
-    # Send initial snapshot
     try:
         snapshot = await get_quality_snapshot()
         await websocket.send_json({"type": "snapshot", "data": snapshot})
@@ -1702,7 +1691,7 @@ async def websocket_quality_updates(websocket: WebSocket):
             except json.JSONDecodeError:
                 await websocket.send_json({"type": "error", "message": "Invalid JSON"})
 
-    except WebSocketDisconnect:
+    except PEER_CLOSED_ERRORS:
         manager.disconnect(websocket)
     except Exception as e:
         logger.error("WebSocket error: %s", e)

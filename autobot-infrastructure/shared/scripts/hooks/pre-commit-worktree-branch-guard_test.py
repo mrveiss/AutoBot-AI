@@ -24,7 +24,7 @@ import stat
 import subprocess
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, isolated_git_env, make_repo
 
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-worktree-branch-guard"
 
@@ -32,23 +32,21 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-worktree-branch-guard"
 def _test_git_env() -> dict[str, str]:
     """#15246: env for every git subprocess this suite spawns.
 
-    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    Isolated (#18940) rather than os.environ: the pre-push hook runs this suite with
     GIT_DIR pointing at the worktree it is pushing (every checkout here is
     one), and an unscrubbed `git init`/`git add`/`git commit` in a
     fixture then operates on THAT repository instead of tmp_path's. See
     autobot_shared/paths_test.py and #15246 for the reproduced incident.
     """
-    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+    return isolated_git_env()
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env())
+    return git(repo, *args)
 
 
 def _init_repo(tmp_path: Path) -> Path:
-    _git(tmp_path, "init", "--quiet")
-    _git(tmp_path, "config", "user.email", "t@t")
-    _git(tmp_path, "config", "user.name", "t")
+    make_repo(tmp_path)
     (tmp_path / "README.md").write_text("seed\n", encoding="utf-8")
     _git(tmp_path, "add", "README.md")
     _git(tmp_path, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "seed")

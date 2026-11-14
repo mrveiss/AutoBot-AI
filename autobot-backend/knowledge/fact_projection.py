@@ -32,17 +32,14 @@ relationship between the stores, not about what a fact is.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 from collections import Counter, defaultdict
 from typing import Any, Dict
 
+from autobot_shared.content_digest import fact_dedup_key
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
-
-#: Width of the deduplication fingerprint carried by ``content_hash:<hash>``.
-_CONTENT_HASH_WIDTH = 16
 
 
 class FactProjectionMixin:
@@ -130,7 +127,7 @@ class FactProjectionMixin:
         from knowledge import fact_store
 
         try:
-            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:_CONTENT_HASH_WIDTH]
+            content_hash = fact_dedup_key(content)
             existing_id = await asyncio.to_thread(self.redis_client.get, "content_hash:%s" % content_hash)
 
             if isinstance(existing_id, bytes):

@@ -44,6 +44,7 @@ logger = get_logger(__name__)
 _COLLECTION_NAME = "topic_retrieval_cache"
 _REDIS_KEY_PREFIX = "topic_cache:"
 _REDIS_DATABASE = "cache"
+_SCOPE_FIELD = "scope"  # ChromaDB metadata key holding the visibility scope of a topic (#16664)
 _DEFAULT_SIMILARITY_THRESHOLD = 0.70
 _DEFAULT_MAX_TOPICS = 500
 _DEFAULT_TTL = 1800  # 30 minutes (shorter than LLM cache)
@@ -103,10 +104,13 @@ class TopicRetrievalCache(AsyncInitializable):
 
         cache = TopicRetrievalCache()
         await cache.initialize()
-        chunks = await cache.lookup(query_embedding)
+        chunks = await cache.lookup(query_embedding, scope=scope)
         if chunks is None:
             chunks = <run ChromaDB search>
-            await cache.store(chunk_embeddings, chunks)
+            await cache.store(chunk_embeddings, chunks, scope=scope)
+
+    ``scope`` is the caller's visibility scope key (``services.rag_visibility.cache_scope``);
+    a topic is only ever matched inside the scope that stored it (#16664).
     """
 
     def __init__(self, cache_config: TopicCacheConfig | None = None) -> None:
@@ -153,11 +157,12 @@ class TopicRetrievalCache(AsyncInitializable):
     # Lookup
     # ------------------------------------------------------------------
 
-    async def lookup(self, query_embedding: List[float]) -> List[CachedChunk] | None:
-        """Search for a cached topic cluster matching the query.
+    async def lookup(self, query_embedding: List[float], *, scope: str) -> List[CachedChunk] | None:
+        """Search for a cached topic cluster matching the query inside *scope*.
 
         Args:
             query_embedding: The query's embedding vector.
+            scope: Visibility scope key; only topics stored under it can match (#16664).
 
         Returns:
             List of cached chunks on hit, None on miss.
@@ -168,6 +173,7 @@ class TopicRetrievalCache(AsyncInitializable):
             results = await self._collection.query(
                 query_embeddings=[query_embedding],
                 n_results=1,
+                where={_SCOPE_FIELD: scope},
                 include=["metadatas", "distances"],
             )
             return await self._evaluate_topic_match(results)
@@ -215,12 +221,15 @@ class TopicRetrievalCache(AsyncInitializable):
         self,
         chunk_embeddings: List[List[float]],
         chunks: List[CachedChunk],
+        *,
+        scope: str,
     ) -> bool:
-        """Cache retrieved chunks under their topic centroid.
+        """Cache retrieved chunks under their topic centroid, inside *scope*.
 
         Args:
             chunk_embeddings: Embedding vectors for each chunk.
             chunks: The retrieved chunks to cache.
+            scope: Visibility scope key the topic is stored under (#16664).
 
         Returns:
             True on success, False otherwise.
@@ -233,7 +242,7 @@ class TopicRetrievalCache(AsyncInitializable):
             centroid = compute_centroid(chunk_embeddings)
             if not centroid:
                 return False
-            return await self._persist_topic(centroid, chunks)
+            return await self._persist_topic(centroid, chunks, scope)
         except Exception as exc:
             self._errors += 1
             logger.warning("Topic cache store error: %s", exc)
@@ -243,6 +252,7 @@ class TopicRetrievalCache(AsyncInitializable):
         self,
         centroid: List[float],
         chunks: List[CachedChunk],
+        scope: str,
     ) -> bool:
         """Write topic entry to Redis + ChromaDB. Ref: #1376."""
         topic_id = str(uuid.uuid4())
@@ -260,6 +270,7 @@ class TopicRetrievalCache(AsyncInitializable):
                     "redis_key": redis_key,
                     "chunk_count": len(chunks),
                     "created_at": time.time(),
+                    _SCOPE_FIELD: scope,
                 }
             ],
         )

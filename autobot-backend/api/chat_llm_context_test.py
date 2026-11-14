@@ -203,8 +203,11 @@ class _RecordingHistory(MessagesMixin):
     async def load_session(self, session_id: str) -> List[Dict[str, Any]]:
         return list(self.sessions.get(session_id, []))
 
-    async def save_session(self, session_id: str, messages: List[Dict[str, Any]], **_: Any) -> bool:
-        self.sessions[session_id] = list(messages)
+    async def save_session(
+        self, session_id: str, messages: List[Dict[str, Any]], append: bool = False, **_: Any
+    ) -> bool:
+        stored = self.sessions.get(session_id, []) if append else []  # the real writer appends under its lease
+        self.sessions[session_id] = stored + list(messages)
         return True
 
 
@@ -253,10 +256,17 @@ class TestWebsocketTelemetryPinnedDecision:
         MESSAGE_TYPE_FORMATTERS changes."""
         from api.websockets import MESSAGE_TYPE_FORMATTERS
 
-        assert NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES == set(MESSAGE_TYPE_FORMATTERS) - {
-            "user_message",
-            "llm_response",
-        }
+        # #21006: the stored attachment notice is not a websocket dispatch type
+        # (it is written straight to history), but it is a non-conversational
+        # entry the LLM context builders must exclude, so the set carries it
+        # on top of the dispatch table.
+        from chat_history.message_schema import ATTACHMENT_NOTICE_TYPE
+
+        assert NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES == (
+            set(MESSAGE_TYPE_FORMATTERS) - {"user_message", "llm_response"}
+        ) | {ATTACHMENT_NOTICE_TYPE}
+        assert ATTACHMENT_NOTICE_TYPE in NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
+        assert ATTACHMENT_NOTICE_TYPE not in MESSAGE_TYPE_FORMATTERS
         assert "tool_output" in NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
         assert "workflow_failed" in NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
         assert "user_message" not in NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES

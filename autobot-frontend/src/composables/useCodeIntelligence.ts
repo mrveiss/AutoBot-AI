@@ -8,8 +8,11 @@
  * Issue #899 - Code Intelligence Tools
  */
 
+import type { components } from '@/types/generated/api'
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
 import ApiClient from '@/utils/ApiClient'
+import { useCachedSecurityScore } from '@/composables/analytics/useCachedSecurityScore'
+import type { CachedSecurityScoreRaw } from '@/composables/analytics/codeIntelTypes'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 
@@ -66,6 +69,10 @@ export interface CodeSuggestion {
   impact: string
 }
 
+/** Wire shape of POST /api/code-intelligence/scan-file (bare JSON, one file). */
+/** POST /api/code-intelligence/scan-file body (the generated contract; the handler sends it bare, #18744). */
+export type CodeScanFileResult = components['schemas']['CodeIntelScanFileResultResponse']
+
 export interface QualityScore {
   overall_score: number
   metrics: {
@@ -75,8 +82,27 @@ export interface QualityScore {
     testing: number
     security: number
   }
-  grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F'
-  trend: 'improving' | 'stable' | 'declining'
+  grade: string
+  /** The served score is a point-in-time value; no trend is reported. */
+  trend?: 'improving' | 'stable' | 'declining'
+}
+
+/** Wire shape of GET /api/analytics/code/metrics/quality-score (bare JSON, codebase-wide). */
+type CodebaseQualityScoreResponse = components['schemas']['AnalyticsCodeQualityScoreResponse']
+
+function toQualityScore(raw: CodebaseQualityScoreResponse): QualityScore {
+  const factor = (key: string): number => Number(raw.quality_factors?.[key] ?? 0)
+  return {
+    overall_score: raw.overall_score,
+    grade: raw.grade,
+    metrics: {
+      complexity: factor('complexity'),
+      maintainability: factor('maintainability'),
+      documentation: factor('documentation'),
+      testing: factor('test_coverage'),
+      security: factor('security'),
+    },
+  }
 }
 
 export interface CodeHealthScore {
@@ -112,30 +138,19 @@ export interface ComparisonResult {
   quality_change: number
 }
 
-export interface SecurityScoreCached {
-  status: 'success' | 'no_data'
-  from_cache?: boolean
-  completed_at?: string
-  security_score?: number
-  grade?: string
-  risk_level?: string
-  status_message?: string
-  total_findings?: number
-  critical_issues?: number
-  high_issues?: number
-  files_analyzed?: number
-  severity_breakdown?: Record<string, number>
-  owasp_breakdown?: Record<string, number>
-}
+/** The cached-score payload; one definition, owned with the reader (#18907). */
+export type SecurityScoreCached = CachedSecurityScoreRaw
 
 export interface UseCodeIntelligenceOptions {
   autoFetch?: boolean
+  /** Scopes `/code-intelligence/security/score/cached`, which requires `source_id` (#20491). */
+  withSourceId?: (url: string) => string
 }
 
 // ===== Composable Implementation =====
 
 export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
-  const { autoFetch = false } = options
+  const { autoFetch = false, withSourceId } = options
 
   // State
   const currentAnalysis = ref<CodeAnalysisResult | null>(null)
@@ -205,10 +220,12 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     }
   }
 
-  async function getQualityScore(code: string, language?: string): Promise<QualityScore | null> {
+  /** Codebase-wide quality score (admin); the server scores the last analysis, not a snippet. */
+  async function getQualityScore(): Promise<QualityScore | null> {
     startLoading()
     try {
-      const data = await ApiClient.post<QualityScore>(`${getApiBase()}/code-intelligence/quality-score`, { code, language })
+      const raw = await ApiClient.get<CodebaseQualityScoreResponse>(`${getApiBase()}/analytics/code/metrics/quality-score`)
+      const data = toQualityScore(raw)
       qualityScore.value = data
       logger.debug('Quality score:', data)
       return data
@@ -255,18 +272,31 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     }
   }
 
+  // The read is owned by useCachedSecurityScore (#18907); this wraps it for callers here.
+  const cachedScore = useCachedSecurityScore({ withSourceId })
+
+  let cachedScoreCallSeq = 0
+
   async function getSecurityScoreCached(): Promise<SecurityScoreCached | null> {
+    // The route requires source_id (#20491); without a scoper the call could only answer 422.
+    if (!withSourceId) {
+      logger.debug('Cached security score skipped: no withSourceId supplied')
+      return null
+    }
     startLoading()
     try {
-      const data = await ApiClient.get<SecurityScoreCached>(`${getApiBase()}/code-intelligence/security/score/cached`)
-      securityScoreCached.value = data
-      logger.debug('Cached security score:', data)
-      return data
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch cached security score'
-      logger.error('Failed to fetch cached security score:', err)
-      errors.value = [...errors.value, message]
-      return null
+      const before = cachedScore.raw.value
+      const callId = ++cachedScoreCallSeq
+      await cachedScore.load()
+      // A newer call aborted this one: its answer, or its error, is the newer call's.
+      if (callId !== cachedScoreCallSeq) return null
+      if (cachedScore.error.value) {
+        errors.value = [...errors.value, cachedScore.error.value]
+        return null
+      }
+      if (cachedScore.raw.value === before) return null // no answer recorded for this call
+      securityScoreCached.value = cachedScore.raw.value
+      return securityScoreCached.value
     } finally {
       stopLoading()
     }
@@ -351,6 +381,23 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     }
   }
 
+  /** Quick-scan one Python file by server-side path (admin, .py only). */
+  async function scanFile(filePath: string): Promise<CodeScanFileResult | null> {
+    startLoading()
+    try {
+      const data = await ApiClient.post<CodeScanFileResult>(`${getApiBase()}/code-intelligence/scan-file`, { file_path: filePath })
+      logger.debug('File scan complete:', data.statistics)
+      return data
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to scan file'
+      logger.error('Failed to scan file:', err)
+      errors.value = [...errors.value, message]
+      return null
+    } finally {
+      stopLoading()
+    }
+  }
+
   /** Clear all accumulated errors. */
   function clearErrors(): void {
     errors.value = []
@@ -395,6 +442,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     getAnalysisHistory,
     deleteAnalysis,
     batchAnalyze,
+    scanFile,
     clearErrors,
   }
 }

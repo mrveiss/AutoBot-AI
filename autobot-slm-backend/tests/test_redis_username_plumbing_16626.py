@@ -66,7 +66,8 @@ def test_redis_role_readiness_ping_sends_the_user_first():
     ctx = {"redis_port": 6379, "redis_client_password": _PW}
     assert "--user" not in _render(task["command"], redis_username="", **ctx)
     rendered = _render(task["command"], redis_username="default", **ctx)
-    assert rendered.index("--user default") < rendered.index(f"-a {_PW}")
+    assert "--user default" in rendered
+    assert _PW not in rendered  # #19846: the password travels in REDISCLI_AUTH
 
 
 @pytest.mark.parametrize("name", ["Get current replication info", "Get new replication info"])
@@ -147,7 +148,7 @@ def test_backend_env_renders_the_username():
 
 def _playbook_redis_cli_lines(playbook: str) -> list[str]:
     text = (_ANSIBLE / "playbooks" / playbook).read_text(encoding="utf-8")
-    return [line for line in text.splitlines() if "redis-cli" in line and "AUTOBOT_REDIS_PASSWORD" in line]
+    return [line for line in text.splitlines() if "redis-cli" in line and "AUTOBOT_REDIS_USERNAME" in line]
 
 
 @pytest.mark.parametrize(("playbook", "count"), [("deploy-native-services.yml", 1), ("deploy-hybrid-docker.yml", 2)])
@@ -158,9 +159,9 @@ def test_deploy_playbook_redis_cli_sends_the_user_first(playbook, count):
     for line in lines:
         # #16678: with no username configured the password still travels with `default`
         bare = _render(line, _env=env)
-        assert "default" in bare[bare.index("--user") : bare.rindex("-a")]
+        assert "default" in bare[bare.index("--user") :]
         custom = _render(line, _env={**env, "AUTOBOT_REDIS_USERNAME": "svc"})
-        assert "svc" in custom[custom.index("--user") : custom.rindex("-a")]
+        assert "svc" in custom[custom.index("--user") :]
 
 
 def _playbook_username_env_lines(playbook: str) -> list[str]:

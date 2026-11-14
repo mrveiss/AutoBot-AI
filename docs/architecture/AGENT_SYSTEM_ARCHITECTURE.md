@@ -176,7 +176,7 @@ Step 6: Security Scanner Agent → Verification
 #### **Base Agent Interface (`autobot-backend/agents/base_agent.py`)**
 ```python
 class BaseAgent:
-    - process_request(AgentRequest) → AgentResponse
+    - process_request(AgentRequest) → StandardizedAgentResponse
     - health_check() → AgentHealth
     - get_capabilities() → List[str]
     - performance tracking (success rates, response times)
@@ -184,7 +184,7 @@ class BaseAgent:
 
 #### **Standardized Communication**
 - **AgentRequest**: Unified request format with context and metadata
-- **AgentResponse**: Structured response with results and execution metrics
+- **StandardizedAgentResponse**: Structured response with results and execution metrics
 - **AgentHealth**: Comprehensive health reporting with resource usage
 - **Deployment Modes**: LOCAL, CONTAINER, REMOTE with automatic failover
 

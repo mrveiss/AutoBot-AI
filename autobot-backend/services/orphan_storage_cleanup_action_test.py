@@ -10,22 +10,9 @@ import pytest
 
 from models.approval import Approval
 from services import orphan_storage, orphan_storage_cleanup_action
+from testkit.fake_async_session import FakeAsyncSession
 
 pytestmark = pytest.mark.asyncio
-
-
-class _FakeSession:
-    """Records every ApprovalComment added and every commit, nothing else."""
-
-    def __init__(self):
-        self.added = []
-        self.commits = 0
-
-    def add(self, obj):
-        self.added.append(obj)
-
-    async def commit(self):
-        self.commits += 1
 
 
 def _approval(**context) -> Approval:
@@ -61,7 +48,7 @@ class TestExecuteOrphanStorageDelete:
         monkeypatch.setattr(orphan_storage_cleanup_action, "audit_log", _audit_log)
 
         approval = _approval(action="orphan_storage_delete", provider="code_source_clone", candidate_id="abc")
-        session = _FakeSession()
+        session = FakeAsyncSession()
 
         await orphan_storage_cleanup_action.execute_orphan_storage_delete(approval, session)
 
@@ -96,7 +83,7 @@ class TestExecuteOrphanStorageDelete:
         monkeypatch.setattr(orphan_storage_cleanup_action, "audit_log", _audit_log)
 
         approval = _approval(action="orphan_storage_delete", provider="code_source_clone", candidate_id="abc")
-        session = _FakeSession()
+        session = FakeAsyncSession()
 
         await orphan_storage_cleanup_action.execute_orphan_storage_delete(approval, session)
 
@@ -119,7 +106,7 @@ class TestExecuteOrphanStorageDelete:
         monkeypatch.setattr(orphan_storage_cleanup_action, "delete_candidate", _delete)
 
         approval = _approval(action="orphan_storage_delete")
-        session = _FakeSession()
+        session = FakeAsyncSession()
 
         with pytest.raises(ValueError, match="missing provider/candidate_id"):
             await orphan_storage_cleanup_action.execute_orphan_storage_delete(approval, session)
@@ -133,7 +120,7 @@ class TestRegistration:
         from services import approval_execution
 
         monkeypatch.setattr(approval_execution, "_REGISTRY", {})
-        orphan_storage_cleanup_action.register()
+        orphan_storage_cleanup_action.register_cleanup_action()
 
         assert approval_execution._REGISTRY[orphan_storage_cleanup_action.ACTION] is (
             orphan_storage_cleanup_action.execute_orphan_storage_delete
@@ -144,7 +131,7 @@ class TestRegistration:
         from services import approval_execution
 
         monkeypatch.setattr(approval_execution, "_REGISTRY", {})
-        orphan_storage_cleanup_action.register()
+        orphan_storage_cleanup_action.register_cleanup_action()
 
         called = {}
 
@@ -156,7 +143,7 @@ class TestRegistration:
         monkeypatch.setattr(orphan_storage_cleanup_action, "audit_log", lambda *a, **k: _noop())
 
         approval = _approval(action="orphan_storage_delete", provider="code_source_clone", candidate_id="xyz")
-        session = _FakeSession()
+        session = FakeAsyncSession()
 
         await approval_execution.run_post_approval_actions(approval, session)
 
@@ -171,7 +158,7 @@ class TestRegistration:
         from services import approval_execution
 
         monkeypatch.setattr(approval_execution, "_REGISTRY", {})
-        orphan_storage_cleanup_action.register()
+        orphan_storage_cleanup_action.register_cleanup_action()
 
         audited = {}
 
@@ -184,7 +171,7 @@ class TestRegistration:
 
         # No provider/candidate_id in context -- the malformed shape.
         approval = _approval(action="orphan_storage_delete")
-        session = _FakeSession()
+        session = FakeAsyncSession()
 
         await approval_execution.run_post_approval_actions(approval, session)
         # No raise reaching here proves the dispatcher's own never-crash guarantee held.

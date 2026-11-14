@@ -51,6 +51,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _SLM_ROOT = Path(__file__).resolve().parent.parent
 if str(_SLM_ROOT) not in sys.path:
     sys.path.insert(0, str(_SLM_ROOT))
@@ -199,7 +201,8 @@ def test_remediate_failed_service_uses_its_own_playbook_timeout_constant():
         service = reconciler.ReconcilerService()
         node = SimpleNamespace(node_id="node-14524", hostname="node-14524", ansible_target="node-14524")
         service_row = SimpleNamespace(service_name="autobot-pg-backup", extra_data=None)
-        db = _FakeSession()
+        # The row is already persisted (the reconciler loaded it); a real session refuses to refresh anything else.
+        db = FakeAsyncSession(rows={(SimpleNamespace, "autobot-pg-backup"): service_row})
         result = asyncio.run(service._remediate_failed_service(db, node, service_row))
     finally:
         real_playbook_executor_module.get_playbook_executor = original_getter
@@ -270,17 +273,6 @@ class _Clock:
         self.current = self.current + timedelta(seconds=seconds)
 
 
-class _FakeSession:
-    def add(self, _obj):
-        pass
-
-    async def commit(self):
-        pass
-
-    async def refresh(self, _obj):
-        pass
-
-
 def _degraded_node() -> SimpleNamespace:
     return SimpleNamespace(node_id="node-14524", hostname="node-14524", ansible_target="node-14524")
 
@@ -349,7 +341,7 @@ def test_escalation_reachable_at_the_shipped_default():
     try:
         reconciler.datetime = clock
         reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1  # force the floor, not the 1800s default, to be binding
-        db = _FakeSession()
+        db = FakeAsyncSession()
         node = _degraded_node()
         work_duration = reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S + reconciler.REMEDIATION_HEARTBEAT_WAIT_S
         outer_advance = _gap_after_one_attempt(work_duration) - work_duration
@@ -404,7 +396,7 @@ def test_floor_extension_matters_once_an_operator_raises_the_playbook_timeout():
         reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S = 280
         reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
         reconciler.datetime = clock
-        db = _FakeSession()
+        db = FakeAsyncSession()
         node = _degraded_node()
         work_duration = reconciler.REMEDIATION_PLAYBOOK_TIMEOUT_S + reconciler.REMEDIATION_HEARTBEAT_WAIT_S
         outer_advance = _gap_after_one_attempt(work_duration) - work_duration

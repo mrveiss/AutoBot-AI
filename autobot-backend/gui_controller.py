@@ -193,7 +193,7 @@ class GUIController:
     ) -> Dict[str, Any]:
         """Locate an element by image and click it (Issue #11970 parity).
 
-        Interface parity with gui_controller_dummy.GUIController.click_element,
+        Interface parity with gui_controller_dummy.DummyGUIController.click_element,
         required by task_handlers/gui_handlers.py's GUIClickElementHandler.
         """
         try:
@@ -235,7 +235,7 @@ class GUIController:
     async def move_mouse(self, x: int, y: int, duration: float = 0.0) -> Dict[str, Any]:
         """Move the mouse to the specified coordinates (Issue #11970 parity).
 
-        Interface parity with gui_controller_dummy.GUIController.move_mouse,
+        Interface parity with gui_controller_dummy.DummyGUIController.move_mouse,
         required by task_handlers/gui_handlers.py's GUIMoveMouseHandler.
         """
         try:
@@ -252,7 +252,7 @@ class GUIController:
         Uses xdotool (same tool already relied on by api.vnc_manager for
         desktop interaction on the canonical display), since pyautogui has
         no native cross-platform window-focus API. Interface parity with
-        gui_controller_dummy.GUIController.bring_window_to_front, required
+        gui_controller_dummy.DummyGUIController.bring_window_to_front, required
         by task_handlers/gui_handlers.py's GUIBringWindowToFrontHandler.
         """
         try:

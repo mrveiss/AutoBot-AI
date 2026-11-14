@@ -44,11 +44,6 @@ Issue #1330: Language switcher component in Settings
         </div>
       </fieldset>
     </div>
-
-    <!-- Screen reader announcements -->
-    <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">
-      {{ announcement }}
-    </div>
   </form>
 </template>
 
@@ -60,6 +55,7 @@ import { usePreferences } from '@/composables/usePreferences'
 import { useAvailableLanguages } from '@/composables/useAvailableLanguages'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { createLogger } from '@/utils/debugUtils'
+import { useAnnounce } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('LanguageSettingsPanel')
@@ -73,7 +69,7 @@ const selectedLanguage = ref(language.value)
 const languages = computed<Record<string, string>>(() =>
   Object.fromEntries(availableLanguages.value.map(l => [l.code, l.name]))
 )
-const announcement = ref('')
+const { announce } = useAnnounce()
 
 async function handleLanguageChange() {
   const locale = selectedLanguage.value
@@ -82,7 +78,7 @@ async function handleLanguageChange() {
     await setLanguage(locale)
 
     showToast(t('settings.languageChanged'), 'success')
-    announceChange(t('settings.languageChanged'))
+    announce(t('settings.languageChanged'))
     logger.debug(`Language changed to: ${locale}`)
   } catch (error) {
     logger.error('Failed to change language', error)
@@ -90,12 +86,6 @@ async function handleLanguageChange() {
   }
 }
 
-function announceChange(message: string): void {
-  announcement.value = message
-  setTimeout(() => {
-    announcement.value = ''
-  }, 1000)
-}
 </script>
 
 <style scoped>
@@ -104,18 +94,6 @@ function announceChange(message: string): void {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
   overflow: hidden;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: var(--spacing-0);
-  margin: var(--spacing-neg-px);
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
 }
 
 .panel-header {
@@ -131,13 +109,13 @@ function announceChange(message: string): void {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin: var(--spacing-0);
 }
 
-.panel-title i {
+.panel-title .icon {
   color: var(--color-primary);
 }
 
@@ -161,20 +139,21 @@ function announceChange(message: string): void {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-.preference-label i {
-  font-size: var(--font-size-xs);
+.preference-label .icon {
+  width: var(--text-xs);
+  height: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .preference-hint {
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: var(--spacing-0);
   line-height: var(--leading-normal);
@@ -193,7 +172,7 @@ function announceChange(message: string): void {
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   appearance: none;
@@ -215,7 +194,7 @@ function announceChange(message: string): void {
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-tertiary);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   pointer-events: none;
 }
 

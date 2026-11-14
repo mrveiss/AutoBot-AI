@@ -46,10 +46,13 @@ from dataclasses import asdict, dataclass
 from datetime import timedelta
 from typing import Any
 
+from autobot_shared.coordination.claim_company import resolve_company
+from autobot_shared.coordination.ledger_events import cap_text
 from autobot_shared.coordination.work_claims import (
     ClaimMode,
     ClaimUnavailable,
     Scope,
+    ScopeError,
     _require_holder,
 )
 from autobot_shared.env_utils import env_int_clamped
@@ -84,6 +87,8 @@ class Waiter:
     #: redundantly because the queue scripts compare and subtract expiries in
     #: Lua, and parsing ISO-8601 there costs more than storing one float.
     expires_epoch: float
+    #: The authenticated writer's company; None = install-wide or legacy (#18391).
+    company_id: str | None = None
 
     def is_expired(self, now_epoch: float) -> bool:
         return self.expires_epoch <= now_epoch
@@ -218,6 +223,7 @@ async def join(
     intent: str,
     priority: int = 0,
     ttl_s: int | None = None,
+    company_id: str | None = None,
 ) -> int:
     """Queue behind *scope*. Returns this waiter's 1-based position.
 
@@ -245,11 +251,12 @@ async def join(
         agent_id=agent_id,
         task_id=task_id,
         mode=mode.value if isinstance(mode, ClaimMode) else str(mode),
-        intent=intent,
+        intent=cap_text(intent),
         priority=priority,
         joined_at=joined.isoformat(),
         expires_at=expires.isoformat(),
         expires_epoch=expires.timestamp(),
+        company_id=resolve_company(company_id),
     )
     client = await _redis()
     return int(
@@ -318,3 +325,27 @@ async def next_waiter(scope: str | Scope) -> Waiter | None:
 async def depth(scope: str | Scope) -> int:
     """How many live waiters are queued behind *scope*."""
     return len(await waiters(scope))
+
+
+async def all_waiters() -> dict[str, list[Waiter]]:
+    """Every live queue, keyed by scope, each in position order (#18391).
+
+    Walks the ``work_claims:wait:`` keyspace, so it is for a ledger view, not a
+    hot path. Each queue goes through :func:`waiters`, so expired entries are
+    dropped the same way. Raises :class:`ClaimUnavailable` rather than returning
+    ``{}`` when Redis is unreachable -- no queues and no answer must read differently.
+    """
+    client = await _redis()
+    prefix = _WAIT_KEY.format(kind="", path="").rstrip(":")
+    queues: dict[str, list[Waiter]] = {}
+    async for raw in client.scan_iter(match=f"{prefix}:*"):
+        key = raw.decode() if isinstance(raw, bytes) else raw
+        kind, _, path = key[len(prefix) + 1 :].partition(":")
+        try:
+            scope = Scope.parse(f"{kind}:{path}")
+        except ScopeError:
+            logger.warning("claim_waitlist: skipping malformed wait key %r", key)
+            continue
+        if queued := await waiters(scope):
+            queues[str(scope)] = queued
+    return queues

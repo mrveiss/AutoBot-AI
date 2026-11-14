@@ -8,7 +8,7 @@ Project State API
 Exposes project development phase information and validation status
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_system import (
     PhaseStatus,
@@ -22,6 +22,7 @@ from api.schemas_system import (
     ValidationResultModel,
 )
 from api.system_health import register_singleton_probe
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from project_state_manager import DevelopmentPhase, get_project_state_manager
@@ -29,7 +30,14 @@ from utils.advanced_cache_manager import smart_cache
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/project", tags=["project_state"])
+# #16375: /phase/{id}/activate and /auto-progress change which development phase
+# the whole deployment is in and persist it via save_state(). One caller's effect
+# is every caller's state, so admin rather than authentication.
+router = APIRouter(
+    prefix="/project",
+    tags=["project_state"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 @router.get("/status", response_model=ProjectStatus)

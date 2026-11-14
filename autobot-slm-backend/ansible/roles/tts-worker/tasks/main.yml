@@ -59,6 +59,7 @@
     mode: "0640"
     owner: root
     group: "{{ tts_group }}"
+  diff: false  # the file carries secrets (#20941)
   notify: restart tts-worker
   tags: ['tts', 'config']
 
@@ -103,9 +104,20 @@
     - "{{ tts_voices_dir }}"
   tags: ['tts', 'dirs']
 
+- name: "Ensure the application log directory exists (#20894)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/ensure_app_log_dir.yml
+    apply:
+      tags: ['tts', 'config', 'dirs']
+  vars:
+    app_log_dir: "{{ tts_app_log_dir }}"
+    app_log_dir_owner: "{{ tts_user }}"
+    app_log_dir_group: "{{ tts_group }}"
+  tags: ['tts', 'config', 'dirs']
+
 # #12425: tts_log_dir defaults to the SHARED /var/log/autobot (common role),
 # not a TTS-exclusive path — re-chowning it to tts_user/tts_group above (as
-# the other three, genuinely TTS-exclusive dirs correctly are) clobbered
+# the genuinely TTS-exclusive dirs created above and by the shared log-dir task correctly are) clobbered
 # common's autobot:autobot ownership on every run of this role, leaving the
 # `autobot` service user (autobot-slm-backend) unable to create its own
 # self-update-ansible.log. Converge to the SAME canonical ownership the
@@ -163,12 +175,12 @@
     tasks_from: ensure_venv_version
   vars:
     venv_path: "{{ tts_install_dir }}/venv"
-    venv_python: python3.14
+    venv_python: "{{ python_interpreter_binary }}"
   tags: ['tts', 'venv']
 
 - name: "TTS Worker | Create Python virtual environment"
   ansible.builtin.command:
-    cmd: python3.14 -m venv {{ tts_install_dir }}/venv
+    cmd: "{{ python_interpreter_binary }} -m venv {{ tts_install_dir }}/venv"
     creates: "{{ tts_install_dir }}/venv/bin/python"
   tags: ['tts', 'venv']
 
@@ -198,40 +210,42 @@
   timeout: 120  # Issue #2835: prevent indefinite hang on network issues
   tags: ['tts', 'venv']
 
-# #15598: every floor here is now the specifier text `autobot-tts-worker/
-# requirements.txt` declares. This role provisions the very worker whose
-# manifest annotates `fastapi>=0.141.1` as a SECURITY UPDATE requiring starlette
-# >=0.52.1, and it asked for `>=0.100.0` -- so a fresh provision satisfied the
-# task below the floor the security note exists to hold, and the role never
-# installs that manifest to correct it afterwards. `-r` is not used because the
-# worker's packages are split across three pip tasks by index (torch comes from
-# the CPU-only wheel index below); the parity guard (#15568) binds the literals
-# to the manifest instead.
-- name: "TTS Worker | Install FastAPI and server dependencies"
-  ansible.builtin.pip:
-    name:
-      - fastapi>=0.141.1
-      - uvicorn[standard]>=0.53.0
-      - python-multipart>=0.0.32
-      - aiofiles>=25.1.0
-    virtualenv: "{{ tts_install_dir }}/venv"
-    # #16641: see "TTS Worker | Upgrade pip in venv" above.
-    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
-    state: present
-  become_user: "{{ tts_user }}"
-  environment:
-    PIP_DEFAULT_TIMEOUT: "120"
-  timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
+# #15598 raised this floor by hand to match `autobot-tts-worker/requirements.txt`,
+# and #18127 is what that hand-editing costs: a dependabot bump moved the manifest and
+# not this file, so `ansible_requirements_parity_test` failed #18105 on a shard. One
+# declaration now -- the manifest -- read here instead of restated.
+#
+# Read from the CONTROLLER via role_path, whose depth is fixed (#20509), the same anchor
+# `_shared/tasks/stage_shared_manifests.yml` uses for `constraints/shared.txt`; the
+# component manifest is not synced to the node, so it cannot be read from there.
+#
+# `[^\s#]*` stops at whitespace, so a trailing comment is excluded and so is an
+# environment marker. A marker on torch would be silently dropped, which is why the
+# assert below also fails if the extracted value is not a torch requirement.
+- name: "TTS Worker | Read the torch requirement from the component manifest (#18127)"
+  ansible.builtin.set_fact:
+    _tts_torch_requirement: >-
+      {{ lookup('file', role_path ~ '/../../../../autobot-tts-worker/requirements.txt')
+         | regex_search('^torch(?![A-Za-z0-9_.-])[^\s#]*', multiline=True) }}
   tags: ['tts', 'packages']
 
-# #15598: floor raised from `>=2.5.0` to the `>=2.13.0` that
-# `autobot-tts-worker/requirements.txt` declares. Pocket TTS needs >=2.5, but
-# the worker ships against 2.13 and this task is what actually populates its
-# venv, so the lower number was the one that bound.
+# Fail closed: an unreadable manifest or a renamed package would otherwise render an
+# empty pip name, and `pip install ""` is not an error pip reports usefully.
+- name: "TTS Worker | The torch requirement must have been found (#18127)"
+  ansible.builtin.assert:
+    that:
+      - _tts_torch_requirement is string
+      - _tts_torch_requirement.startswith('torch')
+    fail_msg: >-
+      Could not read a torch requirement from autobot-tts-worker/requirements.txt
+      (got {{ _tts_torch_requirement | default('<undefined>') }}). This role installs
+      torch from the CPU wheel index and takes its version from that manifest (#18127).
+  tags: ['tts', 'packages']
+
 - name: "TTS Worker | Install torch CPU-only from the CPU wheel index"
   ansible.builtin.pip:
     name:
-      - "torch>=2.14.0"
+      - "{{ _tts_torch_requirement }}"
     virtualenv: "{{ tts_install_dir }}/venv"
     # #16641: see "TTS Worker | Upgrade pip in venv" above.
     virtualenv_command: "{{ python_interpreter_binary }} -m venv"
@@ -257,6 +271,47 @@
   # tags would go stale; `always` cannot.
   tags: [always]
 
+# #18060: names whose floors live in constraints/shared.txt. `latest`, not `present`: the pip module
+# treats an installed bare name as satisfied without calling pip, so on a re-provision the `-c` would
+# never be consulted. `latest` installs the newest release satisfying shared.txt; only names with an
+# upper bound there (today numpy) are capped, the floor-only names float upward on each re-provision.
+- name: "TTS Worker | Install the packages constrained by constraints/shared.txt (#18060)"
+  ansible.builtin.pip:
+    name:
+      # #15568: numpy carries no floor here -- constraints/shared.txt is the
+      # single source of truth for it (#10524), and `autobot-tts-worker/
+      # requirements.txt` already lists it bare against that constraint. The
+      # `>=1.24.0` this replaced admitted numpy 1.x into the very venv the
+      # requirements file pins to >=2.5.2, which is the ABI skew the SSOT
+      # exists to prevent. Same bare-name + `-c` shape as roles/npu-worker.
+      # The `-c` fallback derives from `autobot.base_dir` (inventory/group_vars/all.yml)
+      # rather than restating a literal: an override of `code_source_dir` is still
+      # honoured, but the default no longer hardcodes a path. #15601 brought
+      # roles/npu-worker, roles/agent_config/openvino and roles/browser onto this
+      # same shape, so all five pip constraint sites now agree.
+      - numpy
+      # #18060: fastapi's floor lives in constraints/shared.txt, so it is installed here,
+      # in a task that carries the `-c` for it.
+      - fastapi
+      # #18060: the server dependencies moved here from their own task: their floors live in
+      # constraints/shared.txt, which only this task (after the staging above) can pass as `-c`.
+      - uvicorn[standard]
+      - python-multipart
+      - aiofiles
+      - scipy
+    virtualenv: "{{ tts_install_dir }}/venv"
+    # #16641: see "TTS Worker | Upgrade pip in venv" above.
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
+    state: latest
+    extra_args: >-
+      --timeout 300
+      -c {{ autobot.base_dir }}/constraints/shared.txt
+  become_user: "{{ tts_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "300"
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
+  tags: ['tts', 'packages']
+
 - name: "TTS Worker | Install pocket-tts and audio dependencies"
   ansible.builtin.pip:
     name:
@@ -272,26 +327,21 @@
       # A major bump is not a floor move. The parity guard fires on the
       # NUMBER and cannot know whether the API that number gates still
       # exists; answering that is the only reason this pin carries a comment.
-      - pocket-tts>=3.1.0
+      #
+      # Raised 3.1.0 -> 3.3.0 with `autobot-tts-worker/requirements.txt` (#17707).
+      # This does NOT re-open the API question the paragraph above answers: the old
+      # `>=3.1.0` already admitted 3.3.0 and everything above it, so the floor move
+      # narrows what may install rather than widening it. If `generate_audio_stream`
+      # had gone in 3.3.x, the previous floor was already unsafe.
+      - pocket-tts>=3.3.0
       # #15598: `>=0.14.0` is the floor `autobot-tts-worker/requirements.txt`
       # declares for this worker; `>=0.12.0` here undercut it by two minors.
       - soundfile>=0.14.0
-      # #15568: numpy carries no floor here -- constraints/shared.txt is the
-      # single source of truth for it (#10524), and `autobot-tts-worker/
-      # requirements.txt` already lists it bare against that constraint. The
-      # `>=1.24.0` this replaced admitted numpy 1.x into the very venv the
-      # requirements file pins to >=2.5.2, which is the ABI skew the SSOT
-      # exists to prevent. Same bare-name + `-c` shape as roles/npu-worker.
-      # The `-c` fallback derives from `autobot.base_dir` (inventory/group_vars/all.yml)
-      # rather than restating a literal: an override of `code_source_dir` is still
-      # honoured, but the default no longer hardcodes a path. #15601 brought
-      # roles/npu-worker, roles/agent_config/openvino and roles/browser onto this
-      # same shape, so all five pip constraint sites now agree.
-      - numpy
-      - scipy>=1.18.1
     virtualenv: "{{ tts_install_dir }}/venv"
     # #16641: see "TTS Worker | Upgrade pip in venv" above.
     virtualenv_command: "{{ python_interpreter_binary }} -m venv"
+    # Only names with their own floor above: nothing here is in constraints/shared.txt, so `latest`
+    # would float across majors on every re-provision. The `-c` still bounds what they pull in.
     state: present
     extra_args: >-
       --timeout 300
@@ -334,9 +384,17 @@
   register: _tts_predownload
   # Exit 2 = could not download (gated/no-token or offline); the worker retries
   # on first start, so do not fail provisioning. Only a crash (rc 1) is fatal.
-  failed_when: _tts_predownload.rc not in [0, 2]
+  no_log: true  # #19846: the environment carries the Hugging Face token
+  failed_when: false
   changed_when: _tts_predownload.rc == 0
   timeout: 900  # Model shards are large; cap the download like the torch step.
+  when: tts_predownload_model | default(true) | bool
+  tags: ['tts', 'model']
+
+- name: "TTS Worker | Check the pre-download did not crash"
+  ansible.builtin.assert:
+    that: _tts_predownload.rc in [0, 2]
+    fail_msg: "predownload-model.py exited {{ _tts_predownload.rc }}: {{ _tts_predownload.stderr_lines | default([]) | last | default('') }}"
   when: tts_predownload_model | default(true) | bool
   tags: ['tts', 'model']
 

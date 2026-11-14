@@ -5,7 +5,7 @@
 """Failure-path behaviour of ``with_default_on_error`` (#14191).
 
 This decorator was named ``with_error_handling`` until #14191, sharing a name
-with ``utils.error_boundaries.decorators.with_error_handling`` while behaving
+with ``autobot_shared.error_boundaries.decorators.with_error_handling`` while behaving
 oppositely on the one case both had to make a decision about — what happens to
 ``HTTPException``. It had zero test coverage under either name, so these pin
 its actual failure-path contract: log-and-return-default, the ``reraise``
@@ -22,8 +22,8 @@ import logging
 import pytest
 from fastapi import HTTPException
 
+from autobot_shared.error_boundaries.decorators import with_error_handling
 from error_handler import with_default_on_error
-from utils.error_boundaries.decorators import with_error_handling
 
 
 class _Boom(Exception):
@@ -62,7 +62,7 @@ def test_http_exception_is_swallowed_not_preserved():
     """The property #14191 exists to protect.
 
     ``with_default_on_error`` and the survivor
-    (``utils.error_boundaries.decorators.with_error_handling``) must keep
+    (``autobot_shared.error_boundaries.decorators.with_error_handling``) must keep
     OPPOSITE behaviour on ``HTTPException``, or the two silently reconverge
     into the exact same-name-different-behaviour confusion the rename was
     meant to end. This one catches ``HTTPException`` like any other

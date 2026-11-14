@@ -332,13 +332,15 @@ async def main():
     logger.info("COMPREHENSIVE MAN PAGE INDEXING")
     logger.info("=" * 80)
 
+    kb_v2 = None
     try:
         # Initialize Knowledge Base V2
-        from knowledge_base import KnowledgeBase
+        from knowledge_factory import get_knowledge_base_async
 
         logger.info("\n1. Initializing Knowledge Base V2...")
-        kb_v2 = KnowledgeBase()
-        await kb_v2.initialize()
+        kb_v2 = await get_knowledge_base_async()
+        if kb_v2 is None:
+            raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
         if not kb_v2.initialized:
             logger.error("✗ Knowledge Base V2 initialization failed")
@@ -383,6 +385,11 @@ async def main():
 
         traceback.print_exc()
         return 1
+
+    finally:
+        # Facts stored before a failure still count; this process's loop would cancel a waiting recompute (#19726).
+        if kb_v2 is not None:
+            await kb_v2._get_keyword_searcher().flush_refresh()
 
 
 if __name__ == "__main__":

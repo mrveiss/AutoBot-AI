@@ -76,7 +76,7 @@ if str(_BACKEND) not in sys.path:
 
 from sqlalchemy import text  # noqa: E402
 
-from autobot_shared.logging_manager import get_logger  # noqa: E402
+from autobot_shared.logging_manager import get_logger, setup_logging  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -336,4 +336,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     main()

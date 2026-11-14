@@ -175,9 +175,10 @@ import { createLogger } from '@/utils/debugUtils'
 import { useTransientError } from '@/composables/useTransientError'
 import { extractEntities as extractEntitiesApi } from '@/composables/knowledge/useKnowledgeEntities'
 import type { EntityMessage } from '@/composables/knowledge/useKnowledgeEntities'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('EntityExtractor')
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 
 // ============================================================================
@@ -341,13 +342,7 @@ function selectHistoryItem(item: ExtractionResult): void {
   extractionResult.value = item
 }
 
-function formatTime(timestamp?: number): string {
-  if (!timestamp) return ''
-  return new Date(timestamp).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+const formatTime = createDateFormatter({ kind: 'time', locale: () => locale.value, intl: { hour: '2-digit', minute: '2-digit' } })
 </script>
 
 <style scoped>
@@ -368,7 +363,7 @@ function formatTime(timestamp?: number): string {
   margin: var(--spacing-0);
 }
 
-.extractor-header h4 i {
+.extractor-header h4 .icon {
   color: var(--color-primary);
 }
 
@@ -399,7 +394,7 @@ function formatTime(timestamp?: number): string {
   margin-bottom: var(--spacing-sm);
 }
 
-.form-group label i {
+.form-group label .icon {
   color: var(--text-tertiary);
 }
 
@@ -514,7 +509,7 @@ function formatTime(timestamp?: number): string {
 
 .action-btn.primary {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: transparent;
 }
 
@@ -688,7 +683,7 @@ function formatTime(timestamp?: number): string {
   margin: 0 0 var(--spacing-md) 0;
 }
 
-.history-section h5 i {
+.history-section h5 .icon {
   color: var(--text-tertiary);
 }
 

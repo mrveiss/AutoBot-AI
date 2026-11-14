@@ -24,6 +24,7 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from api.codebase_analytics.task_routes import add_clear_stuck_route
 from api.schemas_code import (
     CachedSecurityScoreResponse,
     ClearStuckResponse,
@@ -63,24 +64,23 @@ from api.schemas_code import (
     SuggestionsResponse,
 )
 from api.schemas_common import DataResponse
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import parse_utc_iso
+from code_intelligence.anti_pattern_detection import AntiPatternSuiteAnalyzer, Thresholds
 from code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
     AntiPatternSeverity,
 )
 from code_intelligence.performance_analyzer import (
     PerformanceAnalyzer,
-    PerformanceSeverity,
     get_performance_issue_types,
 )
 from code_intelligence.redis_optimizer import OptimizationSeverity, RedisOptimizer
 from code_intelligence.security import (
     SecurityAnalyzer,
-    SecuritySeverity,
     get_vulnerability_types,
 )
 from code_intelligence.shared.process_offload import run_directory_scan, run_isolated
@@ -96,9 +96,6 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 _REDIS_PREFIX = "sec_task:"
-
-# Issue #380: Module-level tuple for severity ordering (used in 4 endpoints)
-_SEVERITY_ORDER = ("info", "low", "medium", "high", "critical")
 
 # Issue #281: Pattern type definitions extracted from get_supported_pattern_types
 # This enables reuse and reduces function length
@@ -190,7 +187,7 @@ PATTERN_TYPE_DEFINITIONS = {
         "name": "Magic Number",
         "category": "naming",
         "description": "Unexplained numeric literals repeated in code",
-        "threshold": f"Same number appears >{AntiPatternDetector.MAGIC_NUMBER_THRESHOLD} times",
+        "threshold": f"Same number appears at least {Thresholds.MAGIC_NUMBER_THRESHOLD} times",
     },
     # Other
     "complex_conditional": {
@@ -265,7 +262,7 @@ REDIS_OPTIMIZATION_TYPES = {
     "connection_per_request": {
         "name": "Connection Per Request",
         "category": "connection",
-        "description": "Direct redis.Redis() instantiation - should use pool",  # noqa: redis
+        "description": "Direct redis.Redis() instantiation - should use pool",
         "recommendation": "Use get_redis_client() from autobot_shared.redis_client",
     },
     "blocking_in_async": {
@@ -471,8 +468,7 @@ def _filter_results_by_severity(results: list, min_severity: str | None) -> list
         return results
 
     try:
-        min_idx = _SEVERITY_ORDER.index(min_severity.lower())
-        return [r for r in results if _SEVERITY_ORDER.index(r.severity.value) >= min_idx]
+        return Severity.at_or_above(results, min_severity)
     except ValueError as e:
         logger.debug("Value parsing failed during severity filtering: %s", e)
         return results
@@ -539,8 +535,7 @@ def _filter_antipatterns_by_severity(
         return anti_patterns
 
     try:
-        min_idx = _SEVERITY_ORDER.index(min_severity.lower())
-        return [p for p in anti_patterns if _SEVERITY_ORDER.index(p.severity.value) >= min_idx]
+        return Severity.at_or_above(anti_patterns, min_severity)
     except ValueError:
         logger.warning("Invalid severity filter: %s", min_severity)
         return anti_patterns
@@ -602,8 +597,7 @@ def _filter_redis_results_by_severity(
         return results
 
     try:
-        min_idx = _SEVERITY_ORDER.index(min_severity.lower())
-        return [r for r in results if _SEVERITY_ORDER.index(r.severity.value) >= min_idx]
+        return Severity.at_or_above(results, min_severity)
     except ValueError:
         logger.warning("Invalid severity filter: %s", min_severity)
         return results
@@ -688,7 +682,7 @@ async def _generate_report_response(
     operation="analyze_codebase",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-async def analyze_codebase(
+async def analyze_code_anti_patterns(
     request: CodeIntelAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -709,11 +703,9 @@ async def analyze_codebase(
     await _validate_path_is_directory(request.path)
 
     try:
+        # #12771: analyze_directory and exclude_dirs are the suite analyzer's, not the canonical detector's.
         report = await run_isolated(
-            AntiPatternDetector,
-            {"exclude_dirs": request.exclude_dirs},
-            "analyze_directory",
-            request.path,
+            AntiPatternSuiteAnalyzer, {"exclude_dirs": request.exclude_dirs}, "analyze_directory", request.path
         )
         report.anti_patterns = _filter_antipatterns_by_severity(
             report.anti_patterns,
@@ -899,7 +891,8 @@ async def get_codebase_health_score(
         raise_invalid_input("path", f"does not exist: {path}")
 
     try:
-        report = await run_isolated(AntiPatternDetector, {}, "analyze_directory", path)
+        # #12771: analyze_directory lives on the suite analyzer, not the canonical detector.
+        report = await run_isolated(AntiPatternSuiteAnalyzer, {}, "analyze_directory", path)
 
         # Calculate health score
         score = _calculate_health_score(report.anti_patterns)
@@ -1046,7 +1039,7 @@ async def scan_redis_file(
                 "optimizations": [r.to_dict() for r in results],
                 "total_findings": len(results),
                 "severity_breakdown": {
-                    sev.value: len([r for r in results if r.severity == sev]) for sev in OptimizationSeverity
+                    sev.value: len([r for r in results if r.severity == sev]) for sev in Severity.finding_ladder()
                 },
             },
         )
@@ -1173,7 +1166,7 @@ async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
         "total_optimizations": len(results),
         "files_with_issues": len(set(r.file_path for r in results)),
         "severity_breakdown": {
-            sev.value: len([r for r in results if r.severity == sev]) for sev in OptimizationSeverity
+            sev.value: len([r for r in results if r.severity == sev]) for sev in Severity.finding_ladder()
         },
         "category_breakdown": optimizer.get_summary().get("by_type", {}),
     }
@@ -1283,7 +1276,7 @@ async def security_scan_file(
                 "total_findings": len(results),
                 "by_type": by_type,
                 "severity_counts": {
-                    sev.value: len([r for r in results if r.severity == sev]) for sev in SecuritySeverity
+                    sev.value: len([r for r in results if r.severity == sev]) for sev in Severity.finding_ladder()
                 },
             },
         )
@@ -1339,7 +1332,7 @@ async def list_vulnerability_types(
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def get_security_score(
-    path: str = Query(..., description="Directory path to analyze"),
+    path: str = Query(..., min_length=1, description="Directory path to analyze"),  # #17758
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -1368,7 +1361,7 @@ async def get_security_score(
         # (POST /security/score/analyze -> run_security_analysis). Serve the
         # latest completed result and enqueue a refresh instead of scanning in
         # the request. Same response shape either way, so callers are unchanged.
-        cached = await get_latest_task_result(_REDIS_PREFIX)
+        cached = await get_latest_task_result(f"{_REDIS_PREFIX}path:{path}:")  # #17758: dimension-tagged
         if cached and cached.get("result"):
             return JSONResponse(
                 status_code=200,
@@ -1382,7 +1375,7 @@ async def get_security_score(
             )
 
         queued = run_security_analysis.delay(path)
-        await store_latest_task_id(_REDIS_PREFIX, queued.id)
+        await store_latest_task_id(f"{_REDIS_PREFIX}path:{path}:", queued.id)  # #17758: same key as the read
         logger.info("Security score not cached; queued analysis task %s for %s", queued.id, path)
         return JSONResponse(
             status_code=200,
@@ -1536,7 +1529,7 @@ async def performance_scan_file(
                 "total_findings": len(results),
                 "by_type": by_type,
                 "severity_counts": {
-                    sev.value: len([r for r in results if r.severity == sev]) for sev in PerformanceSeverity
+                    sev.value: len([r for r in results if r.severity == sev]) for sev in Severity.finding_ladder()
                 },
             },
         )
@@ -1996,10 +1989,10 @@ async def get_full_evolution_report(
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def get_cached_security_score(
-    source_id: str | None = Query(default=None, description="GH#8436: scope result by project source_id"),
+    source_id: str = Query(..., min_length=1, pattern=r"^[A-Za-z0-9_.-]{1,128}$", description="Required (#17758)"),
 ):
     """Return the latest completed security score result (#1540, GH#8436)."""
-    prefix = f"{_REDIS_PREFIX}{source_id}:" if source_id else _REDIS_PREFIX
+    prefix = f"{_REDIS_PREFIX}source_id:{source_id}:"  # #17758: tagged, no unscoped branch
     cached = await get_latest_task_result(prefix)
     if cached and cached.get("result"):
         return {
@@ -2022,7 +2015,7 @@ _NO_PATH_RESULT = {"status": "no_data", "message": "Path does not exist", "secur
 )
 async def start_security_analysis(
     path: str = Query(..., description="Directory path to analyze"),
-    source_id: str | None = Query(default=None, description="GH#8436: scope cached result by project source_id"),
+    source_id: str = Query(..., min_length=1, pattern=r"^[A-Za-z0-9_.-]{1,128}$", description="Required (#17758)"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Enqueue security score analysis as a Celery task (GH#6505).
@@ -2038,7 +2031,7 @@ async def start_security_analysis(
             "status": "completed",
             "result": {**_NO_PATH_RESULT, "message": f"Path does not exist: {path}"},
         }
-    prefix = f"{_REDIS_PREFIX}{source_id}:" if source_id else _REDIS_PREFIX
+    prefix = f"{_REDIS_PREFIX}source_id:{source_id}:"  # #17758: tagged, no unscoped branch
     result = run_security_analysis.delay(path)
     await store_latest_task_id(prefix, result.id)
     return {"task_id": result.id, "status": "pending"}
@@ -2050,7 +2043,7 @@ async def start_security_analysis(
     operation="get_security_score_status",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-async def get_security_score_status(task_id: str):
+async def get_security_score_status(task_id: str, _user: Dict = Depends(get_current_user)):
     """Get security score analysis task status (GH#8437: handle no_path sentinel)."""
     if task_id == "no_path":
         return {
@@ -2069,17 +2062,13 @@ async def get_security_score_status(task_id: str):
     return status
 
 
-@router.post("/security/score/tasks/clear-stuck", response_model=ClearStuckResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_stuck_sec_tasks",
-    error_code_prefix="CODE_INTELLIGENCE",
+add_clear_stuck_route(
+    router,
+    "/security/score/tasks/clear-stuck",
+    name="clear_stuck_sec_tasks",
+    error_prefix="CODE_INTELLIGENCE",
+    response_model=ClearStuckResponse,
 )
-async def clear_stuck_sec_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-):
-    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
 
 
 # Issue #2068: Stub GET endpoints for security/performance/redis findings.

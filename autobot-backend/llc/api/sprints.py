@@ -48,7 +48,6 @@ from llc.deps import get_session
 from llc.deps import load_owned_project as _load_owned_project
 from user_management.services import TenantContext
 
-from ..kb.collections import KbCollectionManager
 from ..models.enums import ApprovalType, SprintStatus, WorkItemRelationType, WorkItemStatus
 from ..models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from ..models.work_item import LLCWorkItem, LLCWorkItemRelation
@@ -59,13 +58,14 @@ from ..services.project_disposal import dispose
 from ..services.sprint_autoclose import SprintAutoCloseService
 from ..services.sprint_planning import SprintNotFound, SprintPlanningService
 from ..services.timeline import compute_critical_path, duration_days
+from ._common import actor_id
+from .sprint_access import require_sprint_in_org
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["llc-sprints"])
 
 _approval_svc = ApprovalService()
 _autoclose_svc = SprintAutoCloseService(approval_service=_approval_svc)
-_kb_manager = KbCollectionManager()
 
 
 # ------------------------------------------------------------------ Schemas
@@ -235,7 +235,6 @@ class SprintResponse(BaseModel):
 
 class SprintCloseRequest(BaseModel):
     approval_id: uuid.UUID
-    decided_by: uuid.UUID
 
 
 # ------------------------------------------------------------------ Portfolio routes
@@ -322,9 +321,9 @@ async def _project_source_summary(code_source_id: Optional[str]) -> Optional[Cod
     """Resolve a CodeSource to a summary DTO; returns None when id is absent or source missing."""
     if not code_source_id:
         return None
-    from api.codebase_analytics.source_storage import get_source  # noqa: PLC0415 — lazy to avoid heavy __init__
+    from api.codebase_analytics.source_storage import get_source_or_none_if_unreadable  # noqa: PLC0415
 
-    src = await get_source(code_source_id)
+    src = await get_source_or_none_if_unreadable(code_source_id)
     if not src:
         return None
     return CodeSourceSummary(
@@ -588,7 +587,6 @@ async def create_project(
     session.add(project)
     await session.commit()
     await session.refresh(project)
-    await _kb_manager.ensure_collection(KbCollectionManager.PROJECT_PREFIX, project.id)
     return project
 
 
@@ -843,7 +841,6 @@ async def create_sprint(
     session.add(sprint)
     await session.commit()
     await session.refresh(sprint)
-    await _kb_manager.ensure_collection(KbCollectionManager.SPRINT_PREFIX, sprint.id)
     return sprint
 
 
@@ -921,29 +918,23 @@ async def close_sprint(
     sprint_id: uuid.UUID,
     body: SprintCloseRequest,
     session: AsyncSession = Depends(get_session),
-    _current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCSprint:
-    """Manual sprint close trigger — board only, requires an APPROVED approval.
+    """Close a sprint whose SPRINT_CLOSE approval is APPROVED but not yet applied.
 
-    Flow:
-      1. Caller must first request a SPRINT_CLOSE approval via ApprovalService
-         (or let the scheduler do it automatically).
-      2. Board approves the approval record.
-      3. This endpoint is called with the approval_id to execute the close.
+    Deciding the approval closes the sprint itself (#8214), so after a decision this answers 400
+    (the sprint no longer has that approval pending). It remains for an approval granted before
+    deciding applied the close.
     """
-    # IDOR guard (#10148): verify the sprint belongs to the caller's org before closing.
-    _sprint_check = (await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))).scalar_one_or_none()
-    if _sprint_check is None or str(_sprint_check.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Sprint not found")
+    await require_sprint_in_org(session, sprint_id, ctx.org_id)
+    caller = actor_id(current_user)
     try:
         sprint = await _autoclose_svc.execute_close(
-            session,
-            sprint_id=sprint_id,
-            approval_id=body.approval_id,
-            decided_by=body.decided_by,
+            session, sprint_id=sprint_id, approval_id=body.approval_id, decided_by=caller, actor_user_id=str(caller)
         )
         await session.commit()
+        _autoclose_svc.schedule_closed_sprint_summary(sprint_id)  # after the commit, off the request (#8214)
         await session.refresh(sprint)
         return sprint
     except (ApprovalNotFoundError, ApprovalStateError) as exc:
@@ -1116,11 +1107,9 @@ async def get_project_knowledge(
     proj = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
     if proj is None or str(proj.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
-    from autobot_shared.singleton_factory import lazy_singleton
+    from ..services.accessors import get_work_product_service
 
-    from ..services.work_product_service import WorkProductService
-
-    svc = lazy_singleton(WorkProductService)()
+    svc = get_work_product_service()
     artifacts = await svc.list_indexed_by_project(
         session=None,  # type: ignore[arg-type]  — no DB needed, reads ChromaDB directly
         project_id=str(project_id),

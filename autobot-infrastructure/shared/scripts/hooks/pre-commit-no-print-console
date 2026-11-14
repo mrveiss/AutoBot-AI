@@ -69,6 +69,12 @@ source "$SCRIPT_DIR/lib/_common.sh" || {
     echo "FATAL: cannot load lib/_common.sh — refusing to report clean" >&2
     exit 1
 }
+# shellcheck source=../../../../scripts/lib/hook-python.sh
+source "$SCRIPT_DIR/../../../../scripts/lib/hook-python.sh" || {
+    echo "FATAL: cannot load scripts/lib/hook-python.sh — refusing to report clean" >&2
+    exit 1
+}
+HOOK_PYTHON="$(resolve_repo_python)" || exit 1  # #21163: the repo interpreter, never bare python3
 
 VIOLATIONS=0
 
@@ -236,7 +242,7 @@ CLI_OUTPUT_ROOTS='^scripts/'
 # -- call print() zero times. The property separates the population exactly,
 # which is why it can replace the prefix rather than merely widen it.
 is_cli_entry_point() {
-    python3 "$SCRIPT_DIR/lib/is_cli_entry_point.py" "$1" 2>/dev/null
+    "$HOOK_PYTHON" "$SCRIPT_DIR/lib/is_cli_entry_point.py" "$1" 2>/dev/null
 }
 
 get_staged_python_files() {

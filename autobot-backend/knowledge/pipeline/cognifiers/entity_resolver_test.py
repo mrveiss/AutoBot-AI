@@ -13,14 +13,14 @@ from uuid import uuid4
 import pytest
 
 from knowledge.pipeline.base import PipelineContext
-from knowledge.pipeline.cognifiers.entity_resolver import EntityResolver
+from knowledge.pipeline.cognifiers.entity_resolver import EntityResolverCognifier
 from knowledge.pipeline.models.entity import Entity
 
 
 @pytest.fixture
 def entity_resolver():
     """Create an entity resolver instance for testing."""
-    return EntityResolver(
+    return EntityResolverCognifier(
         similarity_threshold=0.85,
         use_synonyms=True,
         use_fuzzy_matching=True,
@@ -177,7 +177,7 @@ class TestEntityResolverFuzzyMatching:
 
     def test_string_similarity(self):
         """Test string similarity calculation."""
-        resolver = EntityResolver()
+        resolver = EntityResolverCognifier()
 
         # Identical strings
         assert resolver._string_similarity("test", "test") == 1.0

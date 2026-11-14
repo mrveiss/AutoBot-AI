@@ -163,7 +163,7 @@ autobot-backend/computer_vision/
     __init__.py              # Re-exports all public names
     types.py                 # ElementType, InteractionType, UIElement, ScreenState
     collections.py           # UIElementCollection, ProcessingResultExtractor
-    classifiers.py           # ElementClassifier, TemplateMatchingEngine, ContextAnalyzer
+    classifiers.py           # ElementClassifier, TemplateMatchingEngine, ScreenContextAnalyzer
     screen_analyzer.py       # ScreenAnalyzer (multimodal screen analysis)
     system.py                # ComputerVisionSystem (coordinator)
 ```
@@ -298,7 +298,7 @@ The `ScreenAnalyzer` initializes:
 
 - `TemplateMatchingEngine` -- template-based element detection
 - `ElementClassifier` -- ML-based element classification
-- `ContextAnalyzer` -- screen context understanding
+- `ScreenContextAnalyzer` -- screen context understanding
 - `unified_processor` -- multimodal processor integration (vision + audio)
 
 ### Analysis Pipeline
@@ -318,7 +318,7 @@ Stage 3: Element Detection & Classification
     TemplateMatchingEngine -> merge results
 
 Stage 4: Context Analysis
-    ContextAnalyzer.analyze_context()
+    ScreenContextAnalyzer.analyze_context()
     + cross-modal confidence + voice intent
 
 Stage 5: Build ScreenState
@@ -2022,7 +2022,7 @@ visual analysis with other modalities.
               +----------v-----------+
               |  ElementClassifier   |
               |  TemplateMatching    |
-              |  ContextAnalyzer     |
+              |  ScreenContextAnalyzer     |
               +----------+-----------+
                          |
               +----------v-----------+

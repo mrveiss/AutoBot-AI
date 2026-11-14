@@ -12,23 +12,30 @@ Issue: #148 - Extract frontend analysis library (Phase 3 - 200 line reduction)
 """
 
 import logging
+import sys
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from playwright.sync_api import Page, sync_playwright
 
+# `autobot_shared` lives at the repository root, which is not on the path when the
+# debug scripts are run standalone (#18098 keeps them runnable without PYTHONPATH).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.status_enums import Severity  # noqa: E402 - follows the sys.path setup above
+
 logger = logging.getLogger(__name__)
 
 
-class IssueSeverity(Enum):
-    """Severity levels for frontend issues."""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
+# #18098: this was a four-rung fork of the canonical ladder with identical values.
+# Only identity comparisons and the four members are used here -- the enum is never
+# iterated, serialized by member, or rendered by name -- so the alias is wire-neutral.
+IssueSeverity = Severity
 
 
 class IssueType(Enum):

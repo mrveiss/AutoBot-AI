@@ -1,0 +1,574 @@
+/* Copyright 2025-2026 mrveiss
+   SPDX-License-Identifier: Apache-2.0 */
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Author: mrveiss
+ *
+ * slm-scheme.css - the Refined SLM scheme (#18223, token contract #17566)
+ *
+ * The SLM control plane always wears its own teal scheme plus a dark identity
+ * bar, in every theme, so a user can tell it from the user frontend. It is
+ * keyed on data-app="slm" on <html> (index.html), never on the theme.
+ *
+ * Same token NAMES as the user frontend (--bg, --surface, --text, ... and the
+ * existing --bg-primary, --text-primary, --border-default, card/table/input
+ * names), SLM's own VALUES. The values below are the SLM columns of the
+ * Refined tokens, merged with the neutral parts they inherit, so this app
+ * does not import the user frontend's stylesheets.
+ *
+ * Themes: no data-theme / "light", "dark", "contrast", "mono". The legacy
+ * data-theme="high-contrast" (useAccessibility.ts) keeps its own palette in
+ * main.css and is excluded from the mapping at the end of this file.
+ */
+
+/* ===== Identity bar (every theme) ===== */
+:root[data-app='slm'] {
+  --slm-bar: #0B2E2B;
+  --slm-bar-fg: #E6F4F1;
+  --slm-bar-muted: #A9CBC5;
+  --slm-bar-hover: #14423D;
+  --slm-bar-line: #1D4A45;
+  --slm-stripe: #14A38B;
+  --slm-badge-bg: #14A38B;
+  --slm-badge-fg: #062220;
+  --slm-bar-on: #2CC5A8;
+}
+
+/* ===== Shared names the @autobot/ui adapter reads =====
+   libs/autobot-ui/src/tokens/adapter.css maps the --aui-* contract onto these
+   semantic names for BOTH frontends. The user frontend declares them in
+   design-tokens.css; these are the SLM's values for the ones main.css did not
+   already define (#17566). Not tied to data-app: they are plain definitions. */
+:root {
+  --color-primary-hover: var(--color-primary-600);
+  --color-primary-active: var(--color-primary-700);
+  --text-on-primary: var(--color-white);
+  /* #19872: white on the green and yellow fills is 2.28 / 1.92:1, so those two
+     take dark ink (as the main app does). Red and sky carry white on their
+     darker solid-fill shades below, not on --color-error / --color-info. */
+  --text-on-success: var(--color-black);
+  --text-on-warning: var(--color-black);
+  --text-on-error: var(--color-white);
+  --text-on-info: var(--color-white);
+  --color-error-solid: var(--color-error-600);
+  --color-error-solid-hover: var(--color-error-700);
+  --color-info-solid: var(--color-primary-700);
+  --border-strong: var(--a11y-text-muted);
+  --border-focus: var(--a11y-focus-ring);
+  --focus-ring-width: var(--a11y-focus-width);
+  --bg-overlay: rgb(0 0 0 / 0.5);
+  --shadow-2xl: var(--shadow-lg);
+  /* Tailwind's own defaults, restated so the adapter has them even when the
+     build tree-shakes the theme variables. */
+  --font-sans: ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --duration-200: 200ms;
+  /* Brand mark + tooltip names the adapter reads (#18240). The mark keeps the
+     SLM primary the old "S" tile used. */
+  --brand-bg: var(--color-primary-600);
+  --brand-fg: var(--color-white);
+  --tooltip-delay: 500ms;
+  --tooltip-hide-delay: 100ms;
+  --tooltip-offset: 8px;
+  --tooltip-max: 280px;
+  --duration-300: 300ms;
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* The rest of the contract: names the user frontend defines and the SLM did
+     not, with SLM values derived from its own palette (#14775, #17566). */
+  --bg-active: color-mix(in srgb, var(--text) 8%, transparent);
+  --color-primary-light: var(--color-primary-300);
+  --color-primary-dark: var(--color-primary-700);
+  --color-primary-bg: color-mix(in srgb, var(--color-primary-500) 10%, transparent);
+  --color-secondary: var(--slm-gray-500);
+  --color-secondary-hover: var(--slm-gray-700);
+  --color-secondary-light: var(--slm-gray-300);
+  --color-success-hover: var(--color-success-600);
+  --color-success-light: color-mix(in srgb, var(--color-success-500) 60%, white);
+  --color-success-bg: color-mix(in srgb, var(--color-success-500) 10%, transparent);
+  --color-warning-hover: var(--color-warning-600);
+  --color-warning-light: color-mix(in srgb, var(--color-warning-500) 60%, white);
+  --color-warning-bg: color-mix(in srgb, var(--color-warning-500) 10%, transparent);
+  --color-error-hover: var(--color-error-600);
+  --color-error-light: color-mix(in srgb, var(--color-error-500) 60%, white);
+  --color-error-bg: color-mix(in srgb, var(--color-error-500) 10%, transparent);
+  --color-info-hover: var(--color-primary-600);
+  --color-info-light: color-mix(in srgb, var(--color-primary-500) 60%, white);
+  --color-info-bg: color-mix(in srgb, var(--color-primary-500) 10%, transparent);
+  --chart-1: var(--color-primary-500);
+  --chart-2: var(--color-success-500);
+  --chart-3: var(--color-warning-500);
+  --chart-4: var(--color-error-500);
+  --chart-5: var(--slm-violet-600);
+  --chart-6: var(--slm-indigo-500);
+  --chart-7: var(--slm-emerald-500);
+  --chart-8: var(--slm-orange-600);
+  --chart-9: var(--slm-amber-500);
+  --chart-10: var(--slm-slate-800);
+}
+
+/* ===== Colour themes ===== */
+:root[data-app='slm']:not([data-theme]),
+:root[data-app='slm'][data-theme='light'] {
+  /* Surfaces and borders */
+  --bg: #F2F8F7;
+  --surface: #FFFFFF;
+  --surface2: #F6FBFA;
+  --border: #D7E6E3;
+  --line: #E6F0EE;
+  --bw: 1px;
+  /* Text and links */
+  --text: #10302D;
+  --text2: #3C5A56;
+  --muted: #52706C;
+  --link: #0D5C55;
+  --link-h: #0A4740;
+  /* Brand, accent and focus */
+  --primary: #0D5C55;
+  --primary-h: #0A4A44;
+  --on-primary: #FFFFFF;
+  --accent: #14A38B;
+  --focus: #2563EB;
+  --brand-bg: #0D5C55;
+  --brand-fg: #FFFFFF;
+  --nav-on-bw: 2px;
+  /* Illustration */
+  --tile: #EAF4F2;
+  --tile-b: #D7E6E3;
+  --stroke: #10302D;
+  --i1: #9FD8CC;
+  --i2: #E9CF7A;
+  --i3: #5FB8A6;
+  --i1t: #D6EEE9;
+  --i2t: #F5EBC6;
+  --i3t: #CBE8E1;
+  /* Bars and alert text */
+  --bar: #0D5C55;
+  --bar-alert: #D9603F;
+  --bar-track: #E6F0EE;
+  --alert-text: #9A3412;
+  /* Status pills */
+  --ok-bg: #E6F4EC;
+  --ok-fg: #1D6A3E;
+  --warn-bg: #FCF1D9;
+  --warn-fg: #7A5300;
+  --bad-bg: #FBE5DF;
+  --bad-fg: #9A3412;
+  --idle-bg: #E8F1EF;
+  --idle-fg: #3C5A56;
+  --info-bg: #DFF1EE;
+  --info-fg: #0D5C55;
+  --pill-b: 0 solid transparent;
+  /* Status dots */
+  --dot-ok: #2E9E60;
+  --dot-idle: #B7BECB;
+  --dot-warn: #E0A93A;
+  --dot-bad: #D9603F;
+  /* Danger tile */
+  --danger-tile: #FBE5DF;
+  --danger-tile-b: #F2C9BC;
+}
+
+:root[data-app='slm'][data-theme='dark'] {
+  /* Surfaces and borders */
+  --bg: #0B1C1B;
+  --surface: #112624;
+  --surface2: #15302D;
+  --border: #24423E;
+  --line: #1B3532;
+  --bw: 1px;
+  /* Text and links */
+  --text: #DDEFEB;
+  --text2: #B3D1CB;
+  --muted: #8FB3AC;
+  --link: #DDEFEB;
+  --link-h: #2CC5A8;
+  /* Brand, accent and focus */
+  --primary: #2CC5A8;
+  --primary-h: #4FD3BA;
+  --on-primary: #06201D;
+  --accent: #2CC5A8;
+  --focus: #7FD8FF;
+  --brand-bg: #2CC5A8;
+  --brand-fg: #06201D;
+  --nav-on-bw: 2px;
+  /* Illustration */
+  --tile: #173330;
+  --tile-b: #24423E;
+  --stroke: #CBE7E1;
+  --i1: #3E8F80;
+  --i2: #B8973F;
+  --i3: #2E7A6D;
+  --i1t: #1D3F3A;
+  --i2t: #3A3420;
+  --i3t: #1A3A35;
+  /* Bars and alert text */
+  --bar: #8FD3C4;
+  --bar-alert: #F08A6C;
+  --bar-track: #1B3532;
+  --alert-text: #F5A48C;
+  /* Status pills */
+  --ok-bg: #163A28;
+  --ok-fg: #8EE0B2;
+  --warn-bg: #3D3016;
+  --warn-fg: #F2CF7A;
+  --bad-bg: #45231B;
+  --bad-fg: #F7A893;
+  --idle-bg: #1B3532;
+  --idle-fg: #B3D1CB;
+  --info-bg: #123A35;
+  --info-fg: #9FE3D4;
+  --pill-b: 0 solid transparent;
+  /* Status dots */
+  --dot-ok: #4CC486;
+  --dot-idle: #6B7690;
+  --dot-warn: #E8B44E;
+  --dot-bad: #F08A6C;
+  /* Danger tile */
+  --danger-tile: #45231B;
+  --danger-tile-b: #6B3326;
+  /* SLM identity bar */
+  --slm-bar: #050F0E;
+  --slm-bar-fg: #DDEFEB;
+  --slm-bar-muted: #8FB3AC;
+  --slm-bar-hover: #10272A;
+  --slm-bar-line: #1B3532;
+  --slm-stripe: #2CC5A8;
+  --slm-badge-bg: #2CC5A8;
+  --slm-badge-fg: #06201D;
+  --slm-bar-on: #2CC5A8;
+}
+
+:root[data-app='slm'][data-theme='contrast'] {
+  /* Surfaces and borders */
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface2: #FFFFFF;
+  --border: #000000;
+  --line: #000000;
+  --bw: 2px;
+  /* Text and links */
+  --text: #000000;
+  --text2: #000000;
+  --muted: #1A1A1A;
+  --link: #003D36;
+  --link-h: #001F1B;
+  /* Brand, accent and focus */
+  --primary: #003D36;
+  --primary-h: #002420;
+  --on-primary: #FFFFFF;
+  --accent: #00695C;
+  --focus: #0033CC;
+  --brand-bg: #003D36;
+  --brand-fg: #FFFFFF;
+  --nav-on-bw: 4px;
+  /* Illustration */
+  --tile: #FFFFFF;
+  --tile-b: #000000;
+  --stroke: #000000;
+  --i1: #FFFFFF;
+  --i2: #FFFFFF;
+  --i3: #FFFFFF;
+  --i1t: #FFFFFF;
+  --i2t: #FFFFFF;
+  --i3t: #FFFFFF;
+  /* Bars and alert text */
+  --bar: #000000;
+  --bar-alert: #B00020;
+  --bar-track: #FFFFFF;
+  --alert-text: #B00020;
+  /* Status pills */
+  --ok-bg: #FFFFFF;
+  --ok-fg: #000000;
+  --warn-bg: #FFFFFF;
+  --warn-fg: #000000;
+  --bad-bg: #B00020;
+  --bad-fg: #FFFFFF;
+  --idle-bg: #FFFFFF;
+  --idle-fg: #000000;
+  --info-bg: #FFFFFF;
+  --info-fg: #000000;
+  --pill-b: 1.5px solid #000000;
+  /* Status dots */
+  --dot-ok: #000000;
+  --dot-idle: #FFFFFF;
+  --dot-warn: #000000;
+  --dot-bad: #B00020;
+  /* Danger tile */
+  --danger-tile: #FFFFFF;
+  --danger-tile-b: #B00020;
+  /* SLM identity bar */
+  --slm-bar: #002420;
+  --slm-bar-fg: #FFFFFF;
+  --slm-bar-muted: #FFFFFF;
+  --slm-bar-hover: #003D36;
+  --slm-bar-line: #FFFFFF;
+  --slm-stripe: #00695C;
+  --slm-badge-bg: #FFFFFF;
+  --slm-badge-fg: #002420;
+  --slm-bar-on: #FFFFFF;
+}
+
+:root[data-app='slm'][data-theme='mono'] {
+  /* Surfaces and borders */
+  --bg: #EEEEF0;
+  --surface: #FFFFFF;
+  --surface2: #F7F7F8;
+  --border: #E4E4E7;
+  --line: #F0F0F2;
+  --bw: 1px;
+  /* Text and links */
+  --text: #18181B;
+  --text2: #3F3F46;
+  --muted: #52525B;
+  --link: #18181B;
+  --link-h: #000000;
+  /* Brand, accent and focus */
+  --primary: #18181B;
+  --primary-h: #27272A;
+  --on-primary: #FFFFFF;
+  --accent: #18181B;
+  --focus: #18181B;
+  --brand-bg: #18181B;
+  --brand-fg: #FFFFFF;
+  --nav-on-bw: 2px;
+  /* Illustration */
+  --tile: #F4F4F5;
+  --tile-b: #E4E4E7;
+  --stroke: #18181B;
+  --i1: #D4D4D8;
+  --i2: #E4E4E7;
+  --i3: #A1A1AA;
+  --i1t: #EDEDEF;
+  --i2t: #F4F4F5;
+  --i3t: #E4E4E7;
+  /* Bars and alert text */
+  --bar: #A1A1AA;
+  --bar-alert: #18181B;
+  --bar-track: #EDEDEF;
+  --alert-text: #18181B;
+  /* Status pills */
+  --ok-bg: #F4F4F5;
+  --ok-fg: #18181B;
+  --warn-bg: #E4E4E7;
+  --warn-fg: #18181B;
+  --bad-bg: #18181B;
+  --bad-fg: #FFFFFF;
+  --idle-bg: #F4F4F5;
+  --idle-fg: #52525B;
+  --info-bg: #F4F4F5;
+  --info-fg: #3F3F46;
+  --pill-b: 1px solid #D4D4D8;
+  /* Status dots */
+  --dot-ok: #18181B;
+  --dot-idle: #D4D4D8;
+  --dot-warn: #71717A;
+  --dot-bad: #18181B;
+  /* Danger tile */
+  --danger-tile: #F4F4F5;
+  --danger-tile-b: #18181B;
+  /* SLM identity bar */
+  --slm-bar: #27272A;
+  --slm-bar-fg: #FAFAFA;
+  --slm-bar-muted: #D4D4D8;
+  --slm-bar-hover: #3F3F46;
+  --slm-bar-line: #3F3F46;
+  --slm-stripe: #71717A;
+  --slm-badge-bg: #FAFAFA;
+  --slm-badge-fg: #18181B;
+  --slm-bar-on: #FAFAFA;
+}
+
+/* ===== Shared token names (the contract with the user frontend) =====
+   Identical mapping to autobot-frontend css/themes/refined-map.css: the
+   existing semantic names resolve to the Refined name of the active theme. */
+/* Table metrics the kit adapter reads (#14778), in every theme including high-contrast. */
+:root[data-app='slm'] {
+  --tbl-font-size: 13px;
+  --tbl-row-h: 44px;
+  --tbl-cell-px: 16px;
+  --tbl-cell-py: 10px;
+  --tbl-head-h: 36px;
+  --tbl-head-font: 600 11.5px/1.2 var(--font-sans);
+  --tbl-head-case: uppercase;
+  --tbl-head-ls: .05em;
+  --tbl-check-col-w: 44px;
+  --tbl-min-col: 96px;
+  --tbl-num: tabular-nums;
+}
+
+/* Input metrics the kit adapter reads (#14778), in every theme including high-contrast. */
+:root[data-app='slm'] {
+  --input-height-sm: 32px;
+  --input-height-md: 40px;
+  --input-height-lg: 48px;
+  --input-padding-x: var(--spacing-3);
+}
+
+/* High-contrast table colours come from the accessibility palette (main.css, #754). */
+:root[data-app='slm'][data-theme='high-contrast'] {
+  --tbl-head-bg: var(--a11y-bg-muted);
+  --tbl-head-fg: var(--a11y-text);
+  --tbl-head-border: 1px solid var(--a11y-border);
+  --tbl-border: 1px solid var(--a11y-border);
+  --tbl-row-hover: var(--a11y-bg-muted);
+  --tbl-row-selected: var(--a11y-bg-muted);
+  --tbl-selected-edge: 3px solid var(--a11y-focus-ring);
+  --tbl-zebra-bg: var(--a11y-bg-surface);
+  --input-bg: var(--a11y-bg-surface);
+  --input-border: var(--a11y-border);
+}
+
+:root[data-app='slm']:not([data-theme='high-contrast']) {
+  --bg-primary: var(--bg);
+  --bg-secondary: var(--surface);
+  --bg-tertiary: var(--surface2);
+  --bg-elevated: var(--surface);
+  --bg-surface: var(--surface);
+  --bg-card: var(--surface);
+  --bg-input: var(--surface);
+  --bg-hover: var(--surface2);
+  --text-primary: var(--text);
+  --text-secondary: var(--text2);
+  --text-tertiary: var(--muted);
+  --text-muted: var(--muted);
+  --text-inverse: var(--on-primary);
+  --text-link: var(--link);
+  --text-link-hover: var(--link-h);
+  --border-default: var(--border);
+  --border-subtle: var(--line);
+  --card-bg: var(--surface);
+  --card-border: var(--border);
+  --table-header-bg: var(--surface2);
+  --table-row-bg: var(--surface);
+  --table-border: var(--border);
+  /* Table colours the kit adapter reads (#14778); same names and values as the main app. */
+  --tbl-head-bg: var(--surface2);
+  --tbl-head-fg: var(--muted);
+  --tbl-head-border: var(--bw) solid var(--border);
+  --tbl-border: var(--bw) solid var(--line);
+  --tbl-row-hover: var(--surface2);
+  --tbl-row-selected: var(--surface2);
+  --tbl-selected-edge: 3px solid var(--primary);
+  --tbl-zebra-bg: var(--surface2);
+  --input-bg: var(--surface);
+  --input-border: var(--border);
+  --color-focus: var(--focus);
+  --color-focus-ring: var(--focus);
+  --color-accent: var(--accent);
+
+  /* SLM's own accessibility set follows the scheme (it fed the old values). */
+  --a11y-bg: var(--bg);
+  --a11y-bg-surface: var(--surface);
+  --a11y-bg-muted: var(--surface2);
+  --a11y-text: var(--text);
+  --a11y-text-muted: var(--muted);
+  --a11y-border: var(--border);
+  --a11y-focus-ring: var(--focus);
+  --a11y-sidebar-bg: var(--slm-bar);
+  --a11y-sidebar-text: var(--slm-bar-fg);
+  --a11y-sidebar-active: var(--slm-bar-on);
+}
+
+/* ===== Tailwind aliases: the same --color-autobot-* names as autobot-frontend =====
+   A component written against bg-autobot-bg-card or text-autobot-error means the
+   same thing in both apps; only the values differ. A test-time rule
+   (scripts/canonical/rules/ds_theme_contract.mjs) fails when this set and the
+   user frontend's drift apart (#14775). */
+@theme {
+  --color-autobot-primary: var(--color-primary);
+  --color-autobot-primary-hover: var(--color-primary-hover);
+  --color-autobot-primary-active: var(--color-primary-active);
+  --color-autobot-primary-light: var(--color-primary-light);
+  --color-autobot-primary-dark: var(--color-primary-dark);
+  --color-autobot-primary-bg: var(--color-primary-bg);
+  --color-autobot-secondary: var(--color-secondary);
+  --color-autobot-secondary-hover: var(--color-secondary-hover);
+  --color-autobot-secondary-light: var(--color-secondary-light);
+  --color-autobot-success: var(--color-success);
+  --color-autobot-success-hover: var(--color-success-hover);
+  --color-autobot-success-light: var(--color-success-light);
+  --color-autobot-success-bg: var(--color-success-bg);
+  --color-autobot-warning: var(--color-warning);
+  --color-autobot-warning-hover: var(--color-warning-hover);
+  --color-autobot-warning-light: var(--color-warning-light);
+  --color-autobot-warning-bg: var(--color-warning-bg);
+  --color-autobot-error: var(--color-error);
+  --color-autobot-error-solid: var(--color-error-solid);
+  --color-autobot-error-hover: var(--color-error-hover);
+  --color-autobot-error-light: var(--color-error-light);
+  --color-autobot-error-bg: var(--color-error-bg);
+  --color-autobot-info: var(--color-info);
+  --color-autobot-info-solid: var(--color-info-solid);
+  --color-autobot-info-hover: var(--color-info-hover);
+  --color-autobot-info-light: var(--color-info-light);
+  --color-autobot-info-bg: var(--color-info-bg);
+  --color-autobot-bg-primary: var(--bg-primary);
+  --color-autobot-bg-secondary: var(--bg-secondary);
+  --color-autobot-bg-tertiary: var(--bg-tertiary);
+  --color-autobot-bg-elevated: var(--bg-elevated);
+  --color-autobot-bg-surface: var(--bg-surface);
+  --color-autobot-bg-card: var(--bg-card);
+  --color-autobot-bg-input: var(--bg-input);
+  --color-autobot-bg-hover: var(--bg-hover);
+  --color-autobot-bg-active: var(--bg-active);
+  --color-autobot-text-primary: var(--text-primary);
+  --color-autobot-text-secondary: var(--text-secondary);
+  --color-autobot-text-tertiary: var(--text-tertiary);
+  --color-autobot-text-muted: var(--text-muted);
+  --color-autobot-text-inverse: var(--text-inverse);
+  --color-autobot-text-link: var(--text-link);
+  --color-autobot-border: var(--border-default);
+  --color-autobot-border-subtle: var(--border-subtle);
+  --color-autobot-border-strong: var(--border-strong);
+  --color-autobot-chart-1: var(--chart-1);
+  --color-autobot-chart-2: var(--chart-2);
+  --color-autobot-chart-3: var(--chart-3);
+  --color-autobot-chart-4: var(--chart-4);
+  --color-autobot-chart-5: var(--chart-5);
+  --color-autobot-chart-6: var(--chart-6);
+  --color-autobot-chart-7: var(--chart-7);
+  --color-autobot-chart-8: var(--chart-8);
+  --color-autobot-chart-9: var(--chart-9);
+  --color-autobot-chart-10: var(--chart-10);
+  --color-autobot-surface2: var(--surface2);
+  --color-autobot-line: var(--line);
+  --color-autobot-accent: var(--accent);
+  --color-autobot-focus: var(--focus);
+  --color-autobot-ink: var(--primary);
+  --color-autobot-ink-hover: var(--primary-h);
+  --color-autobot-on-ink: var(--on-primary);
+  --color-autobot-brand-bg: var(--brand-bg);
+  --color-autobot-brand-fg: var(--brand-fg);
+  --color-autobot-alert-text: var(--alert-text);
+  --color-autobot-bar: var(--bar);
+  --color-autobot-bar-alert: var(--bar-alert);
+  --color-autobot-bar-track: var(--bar-track);
+  --color-autobot-tile: var(--tile);
+  --color-autobot-tile-border: var(--tile-b);
+  --color-autobot-stroke: var(--stroke);
+  --color-autobot-illus-1: var(--i1);
+  --color-autobot-illus-2: var(--i2);
+  --color-autobot-illus-3: var(--i3);
+  --color-autobot-illus-1-tint: var(--i1t);
+  --color-autobot-illus-2-tint: var(--i2t);
+  --color-autobot-illus-3-tint: var(--i3t);
+  --color-autobot-danger-tile: var(--danger-tile);
+  --color-autobot-danger-tile-border: var(--danger-tile-b);
+  --color-autobot-pill-ok-bg: var(--ok-bg);
+  --color-autobot-pill-ok-fg: var(--ok-fg);
+  --color-autobot-pill-warn-bg: var(--warn-bg);
+  --color-autobot-pill-warn-fg: var(--warn-fg);
+  --color-autobot-pill-bad-bg: var(--bad-bg);
+  --color-autobot-pill-bad-fg: var(--bad-fg);
+  --color-autobot-pill-idle-bg: var(--idle-bg);
+  --color-autobot-pill-idle-fg: var(--idle-fg);
+  --color-autobot-pill-info-bg: var(--info-bg);
+  --color-autobot-pill-info-fg: var(--info-fg);
+  --color-autobot-dot-ok: var(--dot-ok);
+  --color-autobot-dot-idle: var(--dot-idle);
+  --color-autobot-dot-warn: var(--dot-warn);
+  --color-autobot-dot-bad: var(--dot-bad);
+}

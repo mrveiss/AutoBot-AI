@@ -7,16 +7,21 @@
 Simple Redis hash test
 """
 
-import os
+import sys
+from pathlib import Path
 
-import redis
+# Runs from any directory with no PYTHONPATH: the repository root provides `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
-# DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
-_DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
+# #19232: the knowledge database's host, port, credentials and number come from the one
+# endpoint resolver and the one name -> number table, not a private chain with literals.
+from autobot_shared.redis_client import require_redis_client  # noqa: E402
 
 
 def simple_redis_test():
-    client = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True)
+    client = require_redis_client(database="knowledge")
 
     # Get first key directly from FT.SEARCH
     result = client.execute_command("FT.SEARCH", "llama_index", "*", "LIMIT", "0", "1")

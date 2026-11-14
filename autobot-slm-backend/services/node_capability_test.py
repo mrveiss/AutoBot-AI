@@ -14,9 +14,9 @@ exactly one existence check followed by exactly one write.
 """
 
 import asyncio
-from types import SimpleNamespace
 
 from services.node_capability import _gpu_summary, apply_capability_profile
+from testkit.fake_async_session import FakeAsyncSession
 
 MEASURED = {
     "device_type": "nvidia-gpu",
@@ -39,18 +39,9 @@ FULL_HEARTBEAT = {
 }
 
 
-class _Db:
-    """Records every ``execute()`` call; the first answers the existence check."""
-
-    def __init__(self, existing: bool = False):
-        self._existing = existing
-        self.calls = []
-
-    async def execute(self, statement):
-        self.calls.append(statement)
-        if len(self.calls) == 1:
-            return SimpleNamespace(scalar_one_or_none=lambda: ("node-1" if self._existing else None))
-        return SimpleNamespace()
+def _db(existing: bool = False) -> FakeAsyncSession:
+    """Records every ``execute()`` call (``statements``); the first answers the existence check."""
+    return FakeAsyncSession(results=[["node-1"] if existing else []])
 
 
 class TestGpuSummary:
@@ -72,31 +63,31 @@ class TestGpuSummary:
 
 class TestApplyCapabilityProfile:
     def test_a_new_node_is_checked_then_inserted(self):
-        db = _Db(existing=False)
+        db = _db(existing=False)
 
         asyncio.run(apply_capability_profile(db, "node-1", FULL_HEARTBEAT))
 
-        assert len(db.calls) == 2
+        assert len(db.statements) == 2
 
     def test_a_known_node_is_checked_then_updated(self):
-        db = _Db(existing=True)
+        db = _db(existing=True)
 
         asyncio.run(apply_capability_profile(db, "node-1", FULL_HEARTBEAT))
 
-        assert len(db.calls) == 2
+        assert len(db.statements) == 2
 
     def test_a_pre_15495_heartbeat_is_a_no_op(self):
         """An agent that predates #15495 sends none of the three keys -- must never write."""
-        db = _Db()
+        db = _db()
 
         asyncio.run(apply_capability_profile(db, "node-1", {"gpu": [MEASURED], "services": {}}))
 
-        assert db.calls == []
+        assert db.statements == []
 
     def test_partial_keys_are_a_no_op_not_a_partial_write(self):
         """Only two of three keys present must not blank the third with None."""
-        db = _Db()
+        db = _db()
 
         asyncio.run(apply_capability_profile(db, "node-1", {"total_ram_mb": 16000, "npu_present": False}))
 
-        assert db.calls == []
+        assert db.statements == []

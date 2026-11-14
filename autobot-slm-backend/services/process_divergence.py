@@ -56,23 +56,16 @@ so this stays a pure, layering-clean detector.
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import time
 from pathlib import Path
 from typing import Dict, Literal, Mapping, Optional, Sequence
 
 from autobot_shared.env_utils import env_float, env_int
+from autobot_shared.logging_manager import get_logger
 from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
 
-# Plain stdlib logging, deliberately (#15323). This module is real-loaded (not
-# MagicMock-stubbed) by autobot-slm-backend/conftest.py so api/code_sync.py's
-# tests exercise the genuine detector; `autobot_shared.logging_manager.get_logger`
-# builds a RotatingFileHandler from config at call time and raises under that
-# harness (config is itself a MagicMock there). Same trade as
-# `autobot_shared/user_management/password_epoch.py`, which CLAUDE.md's pattern
-# table names as the sanctioned exception for exactly this case.
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DivergenceStatus = Literal["stale", "healthy", "unknown"]
 

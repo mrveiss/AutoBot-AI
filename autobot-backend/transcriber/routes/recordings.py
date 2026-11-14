@@ -6,7 +6,10 @@
 """Recording upload, list, delete, audio playback and waveform routes."""
 
 import array
+import asyncio
+import json
 import mimetypes
+import time
 import uuid
 import wave
 from pathlib import Path
@@ -26,12 +29,14 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_constants import SecurityConstants
+from security.upload_filename_policy import require_safe_upload
 from transcriber.database import Database
-from transcriber.deps import authenticate, caller_can_access, caller_id_of, get_db
-from transcriber.models import RecordingOut
+from transcriber.deps import authenticate, caller_can_access, caller_id_of, get_transcriber_db_from_request
+from transcriber.models import RecordingOut, RecordingStatus
 from transcriber.upload_security import MAX_FILE_SIZE
 
 logger = get_logger(__name__)
@@ -42,6 +47,17 @@ router = APIRouter(tags=["transcriber-recordings"], dependencies=[Depends(authen
 # route guard admitting a format the validator rejects would be a gap.
 _ALLOWED_EXTENSIONS = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
 _CHUNK_SIZE = 65536
+# Progress stream pacing (env-backed, never hard-coded).
+# Clamped to the registered ranges: a malformed value falls back to the default
+# and a 0/negative poll interval can never turn the loop into a busy DB poll.
+# Route-local binding: a test can replace the pause without touching the shared asyncio module.
+_sleep = asyncio.sleep
+_PROGRESS_POLL_S = env_float_clamped(
+    "AUTOBOT_TRANSCRIBER_PROGRESS_POLL_S", 1.0, min_v=0.1, max_v=60.0, positive_finite=True
+)
+_PROGRESS_MAX_S = env_float_clamped(
+    "AUTOBOT_TRANSCRIBER_PROGRESS_MAX_S", 3600.0, min_v=1.0, max_v=86400.0, positive_finite=True
+)
 
 
 def _upload_dir(request: Request) -> Path:
@@ -55,14 +71,13 @@ async def upload_recording(
     project_id: int,
     request: Request,
     file: UploadFile = File(...),
-    db: Database = Depends(get_db),
+    db: Database = Depends(get_transcriber_db_from_request),
 ):
     project = await db.get_project(project_id)
     if not project or not caller_can_access(project, request):
         raise HTTPException(404, "Project not found")
-    ext = Path(file.filename or "").suffix.lower()
-    if ext not in _ALLOWED_EXTENSIONS:
-        raise HTTPException(400, f"Unsupported audio format: {ext}")
+    require_safe_upload(file.filename, _ALLOWED_EXTENSIONS)  # #19088: bare name + audio allow-list
+    ext = Path(file.filename).suffix.lower()
     safe_name = f"{uuid.uuid4().hex}{ext}"
     dest = _upload_dir(request) / safe_name
     # GH#12331: enforce MAX_FILE_SIZE during streaming (never buffer the whole
@@ -125,7 +140,7 @@ async def upload_recording(
 async def list_recordings(
     project_id: int,
     request: Request,
-    db: Database = Depends(get_db),
+    db: Database = Depends(get_transcriber_db_from_request),
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ):
@@ -137,15 +152,64 @@ async def list_recordings(
 
 
 @router.get("/recordings/{recording_id}", response_model=RecordingOut)
-async def get_recording(recording_id: int, request: Request, db: Database = Depends(get_db)):
+async def get_recording(recording_id: int, request: Request, db: Database = Depends(get_transcriber_db_from_request)):
     rec = await db.get_recording(recording_id)
     if not rec or not caller_can_access(rec, request):
         raise HTTPException(404, "Recording not found")
     return RecordingOut(**rec)
 
 
+def _progress_event(status: str) -> dict:
+    """Map a recording lifecycle state to the SSE payload the UI consumes."""
+    if status == RecordingStatus.COMPLETE.value:
+        return {"percent": 100, "step": status}
+    if status == RecordingStatus.ERROR.value:
+        return {"error": True, "step": status}
+    return {"percent": 0, "step": status}
+
+
+async def _progress_stream(recording_id: int, db: Database) -> AsyncIterator[str]:
+    """Poll the recording status, emitting an SSE event on each change until terminal."""
+    last = None
+    waited = 0.0
+    deadline = time.monotonic() + _PROGRESS_MAX_S  # slow DB calls and slow clients count too, not only the sleeps
+    while waited < _PROGRESS_MAX_S and time.monotonic() < deadline:
+        rec = await db.get_recording(recording_id)
+        if not rec:
+            yield f"data: {json.dumps({'error': True, 'step': 'missing'})}\n\n"
+            return
+        status = rec["status"]
+        if status != last:
+            last = status
+            yield f"data: {json.dumps(_progress_event(status))}\n\n"
+        if status in (RecordingStatus.COMPLETE.value, RecordingStatus.ERROR.value):
+            return
+        await _sleep(_PROGRESS_POLL_S)
+        waited += _PROGRESS_POLL_S
+    # Bound reached without a terminal state: tell the UI (a silent close would
+    # make EventSource reconnect forever) so it stops instead of retrying.
+    yield f"data: {json.dumps({'error': True, 'step': 'timeout'})}\n\n"
+
+
+@router.get("/recordings/{recording_id}/progress")
+async def stream_recording_progress(
+    recording_id: int, request: Request, db: Database = Depends(get_transcriber_db_from_request)
+):
+    """SSE stream of processing progress for a recording (consumed by useSseProgress)."""
+    rec = await db.get_recording(recording_id)
+    if not rec or not caller_can_access(rec, request):
+        raise HTTPException(404, "Recording not found")
+    return StreamingResponse(
+        _progress_stream(recording_id, db),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @router.delete("/recordings/{recording_id}", status_code=204)
-async def delete_recording(recording_id: int, request: Request, db: Database = Depends(get_db)):
+async def delete_recording(
+    recording_id: int, request: Request, db: Database = Depends(get_transcriber_db_from_request)
+):
     rec = await db.get_recording(recording_id)
     if not rec or not caller_can_access(rec, request):
         raise HTTPException(404, "Recording not found")
@@ -258,7 +322,7 @@ async def _file_iterator(path: Path) -> AsyncIterator[bytes]:
 
 
 @router.get("/recordings/{recording_id}/audio/chunks")
-async def audio_chunks(recording_id: int, request: Request, db: Database = Depends(get_db)):
+async def audio_chunks(recording_id: int, request: Request, db: Database = Depends(get_transcriber_db_from_request)):
     """Stream audio file with HTTP Range support (RFC 7233)."""
     rec = await db.get_recording(recording_id)
     if not rec or not caller_can_access(rec, request):
@@ -320,7 +384,7 @@ def _handle_range_request(audio_path: Path, range_header: str, file_size: int, c
 async def audio_waveform(
     recording_id: int,
     request: Request,
-    db: Database = Depends(get_db),
+    db: Database = Depends(get_transcriber_db_from_request),
     width: int = Query(1000, ge=1, le=10000),
 ):
     """Return waveform peak data and speaker segments for timeline visualization."""

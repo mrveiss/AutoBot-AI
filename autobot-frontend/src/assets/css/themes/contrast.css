@@ -1,0 +1,108 @@
+/* Copyright 2025-2026 mrveiss
+   SPDX-License-Identifier: Apache-2.0 */
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Author: mrveiss
+ *
+ * contrast.css - High contrast Theme (#18223)
+ * Issue #14785: one token system. Follows themes/_template.css.
+ *
+ * Accessibility theme: 2px borders, bordered pills, black on white, 4px active-nav underline.
+ * Activated via [data-theme="contrast"] on document root (useTheme.ts).
+ * Light-based: themes/light.css supplies the non-colour-name tokens (charts,
+ * badges, scrollbars) for this theme too; code syntax is this theme's own. Surfaces, text and
+ * borders reach the existing names through themes/refined-map.css.
+ */
+
+[data-theme="contrast"] {
+  /* Surfaces and borders */
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface2: #FFFFFF;
+  --border: #000000;
+  --line: #000000;
+  --bw: 2px;
+  /* Text and links */
+  --text: #000000;
+  --text2: #000000;
+  --muted: #1A1A1A;
+  --link: #0033CC;
+  --link-h: #001A66;
+  /* Brand, accent and focus */
+  --primary: #000000;
+  --primary-h: #000000;
+  --on-primary: #FFFFFF;
+  --accent: #B00020;
+  --focus: #0033CC;
+  --brand-bg: #000000;
+  --brand-fg: #FFFFFF;
+  --nav-on-bw: 4px;
+  /* Illustration */
+  --tile: #FFFFFF;
+  --tile-b: #000000;
+  --stroke: #000000;
+  --i1: #FFFFFF;
+  --i2: #FFFFFF;
+  --i3: #FFFFFF;
+  --i1t: #FFFFFF;
+  --i2t: #FFFFFF;
+  --i3t: #FFFFFF;
+  /* Bars and alert text */
+  --bar: #000000;
+  --bar-alert: #B00020;
+  --bar-track: #FFFFFF;
+  --alert-text: #B00020;
+  /* Status pills */
+  --ok-bg: #FFFFFF;
+  --ok-fg: #000000;
+  --warn-bg: #FFFFFF;
+  --warn-fg: #000000;
+  --bad-bg: #B00020;
+  --bad-fg: #FFFFFF;
+  --idle-bg: #FFFFFF;
+  --idle-fg: #000000;
+  --info-bg: #FFFFFF;
+  --info-fg: #000000;
+  --pill-b: 1.5px solid #000000;
+  /* Status dots */
+  --dot-ok: #000000;
+  --dot-idle: #FFFFFF;
+  --dot-warn: #000000;
+  --dot-bad: #B00020;
+  /* Danger tile */
+  --danger-tile: #FFFFFF;
+  --danger-tile-b: #B00020;
+
+  /* Light supplies a slate strong border; here every border is already black. */
+  --border-strong: var(--border);
+  /* Code syntax (#18497): this theme's own ink, link and danger colours, every
+     one AA or better on the white code surface (the guard computes it);
+     keywords also carry weight. Replaces light.css's GitHub palette here. */
+  --code-bg: #FFFFFF;
+  --code-text: #000000;
+  --code-keyword: #B00020;
+  --code-operator: #B00020;
+  --code-string: #001A66;
+  --code-number: #0033CC;
+  --code-comment: #1A1A1A;
+  --code-function: #0033CC;
+  --code-variable: #000000;
+  --code-class: #B00020;
+  --code-tag: #B00020;
+  --code-attribute: #001A66;
+  --code-keyword-weight: 700;
+}
+
+/* The Refined contrast theme owns the primary colour: an accent preset
+   (accents.css) would swap in a hue and drop the black-on-white contrast, so
+   the accent attribute is matched here at higher specificity. */
+[data-theme="contrast"],
+[data-theme="contrast"][data-accent] {
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-h);
+  --color-primary-active: var(--primary-h);
+  --color-primary-light: var(--muted);
+  --color-primary-dark: var(--primary-h);
+  --color-primary-bg: color-mix(in srgb, var(--primary) 10%, transparent);
+  --color-primary-bg-hover: color-mix(in srgb, var(--primary) 15%, transparent);
+}

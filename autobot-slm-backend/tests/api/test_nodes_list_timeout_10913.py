@@ -111,7 +111,11 @@ def _load_nodes_module():
     """Import the real ``api.nodes`` module under the real-module swap."""
     with _real_modules_swapped():
         sys.modules.pop("api.nodes", None)
-        return importlib.import_module("api.nodes")
+        sys.modules.pop("services.node_events", None)  # bind to the real models, then do not leak them (#17856)
+        try:
+            return importlib.import_module("api.nodes")
+        finally:
+            sys.modules.pop("services.node_events", None)
 
 
 class TestListNodesTimeout:

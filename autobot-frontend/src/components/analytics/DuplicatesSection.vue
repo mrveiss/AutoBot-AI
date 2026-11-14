@@ -19,6 +19,7 @@
       <span>{{ $t('analytics.codebase.actions.loading') }}</span>
     </div>
     <div v-else-if="duplicates && duplicates.length > 0" class="section-content">
+      <StaleResultNotice kind="duplicates" />
       <!-- Similarity Summary Cards -->
       <div class="summary-cards">
         <div class="summary-card total">
@@ -69,7 +70,7 @@
           <transition name="accordion">
             <div v-if="isGroupExpanded(similarity)" class="accordion-items">
               <div
-                v-for="(duplicate, index) in group.slice(0, 20)"
+                v-for="(duplicate, index) in visible(similarity, group)"
                 :key="index"
                 class="list-item"
                 :class="`item-${similarity}`"
@@ -83,20 +84,32 @@
                   <div class="item-file">{{ duplicate.file2 }}</div>
                 </div>
               </div>
-              <div v-if="group.length > 20" class="show-more">
-                <span class="muted">{{ $t('analytics.duplicates.showingOf', { shown: 20, total: group.length.toLocaleString() }) }}</span>
-              </div>
+              <TruncationNotice :shown="shown(similarity, group.length)" :total="group.length" :step="20" @show-more="showMore(similarity)" />
             </div>
           </transition>
         </div>
       </div>
     </div>
+    <!-- #17983: a failed or never-run scan is not "no duplicates found" -->
     <EmptyState
-      v-else-if="!loading"
-      icon="check-circle"
-      :message="$t('analytics.duplicates.emptyMessage')"
-      variant="success"
+      v-else-if="scanState === 'failed'"
+      icon="exclamation-triangle"
+      :message="$t('analytics.duplicates.scanFailed')"
     />
+    <EmptyState
+      v-else-if="scanState === 'not_scanned'"
+      icon="search"
+      :message="$t('analytics.duplicates.notScanned')"
+    />
+    <!-- #17982: "none found" from a cached result older than the last sync says so too -->
+    <template v-else-if="!loading">
+      <StaleResultNotice kind="duplicates" />
+      <EmptyState
+        icon="check-circle"
+        :message="$t('analytics.duplicates.emptyMessage')"
+        variant="success"
+      />
+    </template>
   </div>
 </template>
 
@@ -114,9 +127,13 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
+import { useShowMore } from '@autobot/ui'
+import TruncationNotice from './TruncationNotice.vue'
+import StaleResultNotice from './StaleResultNotice.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import type { DuplicateScanState } from '@/composables/analytics/duplicatePayload'
 import { useAggregationMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
 
@@ -133,9 +150,15 @@ interface Props {
   duplicates: Duplicate[]
   /** #5368: render a spinner during the scan instead of empty-state. */
   loading?: boolean
+  /** #17983: done | not_scanned | failed -- only "done" may show "none found". */
+  scanState?: DuplicateScanState
 }
 
 const props = defineProps<Props>()
+
+// #12741: a capped list is expandable; the notice below it is the control.
+const PAGE_SIZE = 20
+const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => props.duplicates)
 const emit = defineEmits<{
   export: [format: 'md' | 'json']
 }>()
@@ -210,7 +233,7 @@ const formatSimilarityGroup = (similarity: string): string => {
   font-size: var(--text-sm);
 }
 
-.section-loading i {
+.section-loading .icon {
   color: var(--color-info);
 }
 
@@ -345,16 +368,6 @@ const formatSimilarityGroup = (similarity: string): string => {
   color: var(--text-secondary);
   font-size: var(--text-xs);
   font-family: var(--font-mono);
-}
-
-.show-more {
-  text-align: center;
-  padding: var(--spacing-2);
-}
-
-.muted {
-  color: var(--text-disabled);
-  font-size: var(--text-xs);
 }
 
 .accordion-enter-active,

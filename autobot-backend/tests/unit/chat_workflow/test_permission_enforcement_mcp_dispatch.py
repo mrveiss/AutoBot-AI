@@ -20,7 +20,7 @@ that only proves the extension's own logic would have passed before either
 gap was closed.
 """
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -38,6 +38,17 @@ _TOOL_ENTRY = {
     # autobot_shared.auth.mcp_tool_permissions.required_permission().
     "required_permission": "mcp.database.write",
 }
+
+
+@pytest.fixture(autouse=True)
+def _line_one_for_permission_tests():
+    """These tests are about RBAC; the AI-line decision has its own suite (#18430)."""
+    with patch.dict(
+        _try_mcp_dispatch.__globals__, {"enforce_ai_line": AsyncMock(return_value=None)}
+    ):  # the function's own module
+        yield
+
+
 _ARGUMENTS = {"query": "UPDATE accounts SET balance = balance + 1"}
 
 
@@ -53,6 +64,9 @@ class _StubDispatcher:
 
     def find_tool(self, name: str):
         return self._tool_cache.get(name)
+
+    async def ensure_loaded(self) -> None:  # pragma: no cover - cache pre-seeded
+        return None
 
     async def refresh_tool_cache(self) -> int:  # pragma: no cover - cache pre-seeded
         return len(self._tool_cache)

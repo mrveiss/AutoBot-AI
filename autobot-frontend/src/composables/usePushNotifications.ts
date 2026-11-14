@@ -4,6 +4,7 @@
 // Author: mrveiss
 
 import { ref, readonly } from 'vue'
+import { HttpError } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
@@ -157,7 +158,7 @@ export function usePushNotifications() {
           body: JSON.stringify({ endpoint: subscription.endpoint }),
         })
         if (!response.ok && response.status !== 404) {
-          throw new Error(`HTTP ${response.status}`)
+          throw new HttpError(response.status)
         }
         await subscription.unsubscribe()
       }

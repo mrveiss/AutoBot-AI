@@ -90,7 +90,7 @@ class TestAtomicCheckout:
         assert result.checkout_locked_at is not None
         assert str(result.assignee_agent_id) == agent_id
         assert result.version == 2
-        mock_redis.set.assert_called_once_with(f"llc:checkout:{item.id}", agent_id, nx=True, ex=1800)
+        mock_redis.set.assert_called_once_with(f"llc:checkout:{item.id}", f"{agent_id}#{run_id}", nx=True, ex=1800)
 
     async def test_checkout_conflict_different_agent(self, service, mock_session, mock_redis):
         """Redis NX returns False (key exists for another agent) → CheckoutConflict."""
@@ -153,7 +153,7 @@ class TestAtomicCheckout:
 
 class TestRelease:
     async def test_release_clears_checkout_fields(self, service, mock_session):
-        """Service clears DB checkout fields; Redis deletion happens in the route after commit."""
+        """Service clears DB checkout fields; the fence drop is queued to run when the caller's commit lands."""
         agent_id = str(uuid.uuid4())
         item = _make_item(
             checkout_run_id="run-123",

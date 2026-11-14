@@ -26,9 +26,9 @@ from constants.threshold_constants import TimingConstants
 from events.bus import PersistStrategy, publish_event
 from models.npu_models import (
     LoadBalancingConfig,
-    NPUWorkerConfig,
+    NPUWorkerDefinition,
     NPUWorkerDetails,
-    NPUWorkerMetrics,
+    NPUWorkerLoadMetrics,
     NPUWorkerStatus,
     WorkerStatus,
     WorkerTestResult,
@@ -105,7 +105,7 @@ class NPUWorkerManager(AsyncInitializable):
         # independent of CWD so a stray write cannot land in an arbitrary place.
         self.config_file = config_file or (PATH.BACKEND_DIR / "config" / "npu_workers.yaml")
         self.redis_client = redis_client
-        self._workers: Dict[str, NPUWorkerConfig] = {}
+        self._workers: Dict[str, NPUWorkerDefinition] = {}
         self._worker_clients: Dict[str, NPUWorkerClient] = {}
         self._health_check_task: asyncio.Task | None = None
         self._running = False
@@ -137,7 +137,7 @@ class NPUWorkerManager(AsyncInitializable):
             True if successfully parsed, False otherwise
         """
         try:
-            worker = NPUWorkerConfig(**worker_data)
+            worker = NPUWorkerDefinition(**worker_data)
             self._workers[worker.id] = worker
             logger.info("Loaded worker config: %s (%s)", worker.id, worker.name)
             return True
@@ -843,7 +843,7 @@ class NPUWorkerManager(AsyncInitializable):
             logger.debug("Failed to aggregate avg_response_time_ms for %s: %s", worker_id, exc)
             return 0.0
 
-    async def _build_worker_metrics(self, worker_id: str, status: NPUWorkerStatus) -> NPUWorkerMetrics:
+    async def _build_worker_metrics(self, worker_id: str, status: NPUWorkerStatus) -> NPUWorkerLoadMetrics:
         """Derive per-worker metrics from heartbeat-reported counters (#10697, #10698).
 
         success_rate is computed from the heartbeat's task counters.
@@ -856,7 +856,7 @@ class NPUWorkerManager(AsyncInitializable):
         total = completed + failed
         uptime = getattr(status, "uptime_seconds", 0) or 0
         avg_rt_ms = await self._aggregate_avg_response_time_ms(worker_id)
-        return NPUWorkerMetrics(
+        return NPUWorkerLoadMetrics(
             id=worker_id,
             success_rate=round(completed / total * 100.0, 2) if total else 100.0,
             requests_per_minute=round(completed / (uptime / 60.0), 2) if uptime else 0.0,
@@ -864,7 +864,7 @@ class NPUWorkerManager(AsyncInitializable):
             avg_response_time_ms=avg_rt_ms,
         )
 
-    async def _store_worker_metrics(self, worker_id: str, metrics: NPUWorkerMetrics) -> None:
+    async def _store_worker_metrics(self, worker_id: str, metrics: NPUWorkerLoadMetrics) -> None:
         """Store worker metrics in Redis (#10697; mirrors _store_worker_status)."""
         if not self.redis_client:
             return
@@ -961,7 +961,7 @@ class NPUWorkerManager(AsyncInitializable):
 
         return NPUWorkerDetails(config=config, status=status, metrics=metrics)
 
-    async def add_worker(self, worker_config: NPUWorkerConfig) -> NPUWorkerDetails:
+    async def add_worker(self, worker_config: NPUWorkerDefinition) -> NPUWorkerDetails:
         """Add new worker to registry"""
         if worker_config.id in self._workers:
             raise ValueError(f"Worker with ID '{worker_config.id}' already exists")
@@ -986,7 +986,7 @@ class NPUWorkerManager(AsyncInitializable):
 
         return worker_details
 
-    async def update_worker(self, worker_id: str, worker_config: NPUWorkerConfig) -> NPUWorkerDetails:
+    async def update_worker(self, worker_id: str, worker_config: NPUWorkerDefinition) -> NPUWorkerDetails:
         """Update existing worker configuration"""
         if worker_id not in self._workers:
             raise ValueError(f"Worker with ID '{worker_id}' not found")
@@ -1094,7 +1094,7 @@ class NPUWorkerManager(AsyncInitializable):
             persist=PersistStrategy.NONE,
         )
 
-    async def test_worker_connection(self, worker_config: NPUWorkerConfig) -> WorkerTestResult:
+    async def test_worker_connection(self, worker_config: NPUWorkerDefinition) -> WorkerTestResult:
         """Test connection to a worker"""
         from services.npu_profile_suggester import suggest_profile  # GH#6738: lazy import
 
@@ -1141,11 +1141,11 @@ class NPUWorkerManager(AsyncInitializable):
         finally:
             await client.close()
 
-    async def get_worker_metrics(self, worker_id: str) -> NPUWorkerMetrics | None:
+    async def get_worker_metrics(self, worker_id: str) -> NPUWorkerLoadMetrics | None:
         """Get performance metrics for a worker"""
         return await self._get_worker_metrics(worker_id)
 
-    async def _get_worker_metrics(self, worker_id: str) -> NPUWorkerMetrics | None:
+    async def _get_worker_metrics(self, worker_id: str) -> NPUWorkerLoadMetrics | None:
         """Get worker metrics from Redis"""
         if not self.redis_client:
             return None
@@ -1155,7 +1155,7 @@ class NPUWorkerManager(AsyncInitializable):
             value = await self.redis_client.get(key)
 
             if value:
-                return NPUWorkerMetrics.parse_raw(value)
+                return NPUWorkerLoadMetrics.parse_raw(value)
 
         except Exception as e:
             logger.error("Failed to get worker metrics from Redis: %s", e)

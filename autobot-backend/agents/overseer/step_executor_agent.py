@@ -37,9 +37,9 @@ from .types import (
     AgentTask,
     CommandExplanation,
     OutputExplanation,
-    StepResult,
-    StepStatus,
-    StreamChunk,
+    OverseerStepStatus,
+    StepChunk,
+    StepRunResult,
 )
 
 # Import PTY manager for terminal integration
@@ -60,17 +60,17 @@ logger = get_logger(__name__)
 _OVERSEER_COMMAND_TIMEOUT_S = env_int("AUTOBOT_OVERSEER_COMMAND_TIMEOUT_S", 60)
 
 
-def _build_no_command_result(task: "AgentTask", execution_time: float) -> StepResult:
+def _build_no_command_result(task: "AgentTask", execution_time: float) -> StepRunResult:
     """
-    Build StepResult for steps with no command to execute.
+    Build StepRunResult for steps with no command to execute.
 
     Issue #665: Extracted from execute_step to reduce function length.
     """
-    return StepResult(
+    return StepRunResult(
         task_id=task.task_id,
         step_number=task.step_number,
         total_steps=task.total_steps,
-        status=StepStatus.COMPLETED,
+        status=OverseerStepStatus.COMPLETED,
         command=None,
         command_explanation=None,
         output="No command to execute for this step.",
@@ -82,17 +82,17 @@ def _build_no_command_result(task: "AgentTask", execution_time: float) -> StepRe
     )
 
 
-def _build_blocked_command_result(task: "AgentTask", safety_reason: str | None, execution_time: float) -> StepResult:
+def _build_blocked_command_result(task: "AgentTask", safety_reason: str | None, execution_time: float) -> StepRunResult:
     """
-    Build StepResult for commands blocked by security validation.
+    Build StepRunResult for commands blocked by security validation.
 
     Issue #665: Extracted from execute_step to reduce function length.
     """
-    return StepResult(
+    return StepRunResult(
         task_id=task.task_id,
         step_number=task.step_number,
         total_steps=task.total_steps,
-        status=StepStatus.FAILED,
+        status=OverseerStepStatus.FAILED,
         command=task.command,
         command_explanation=None,
         output=f"Command blocked: {safety_reason}",
@@ -106,17 +106,17 @@ def _build_blocked_command_result(task: "AgentTask", safety_reason: str | None, 
     )
 
 
-def _build_execution_error_result(task: "AgentTask", error: Exception, execution_time: float) -> StepResult:
+def _build_execution_error_result(task: "AgentTask", error: Exception, execution_time: float) -> StepRunResult:
     """
-    Build StepResult for command execution failures.
+    Build StepRunResult for command execution failures.
 
     Issue #665: Extracted from execute_step to reduce function length.
     """
-    return StepResult(
+    return StepRunResult(
         task_id=task.task_id,
         step_number=task.step_number,
         total_steps=task.total_steps,
-        status=StepStatus.FAILED,
+        status=OverseerStepStatus.FAILED,
         command=task.command,
         command_explanation=None,
         output=f"Error: {error}",
@@ -213,7 +213,7 @@ class StepExecutorAgent:
                 self._command_executor = None
         return self._command_executor
 
-    async def _execute_and_stream_command(self, task: AgentTask) -> AsyncGenerator[StreamChunk, None]:
+    async def _execute_and_stream_command(self, task: AgentTask) -> AsyncGenerator[StepChunk, None]:
         """
         Execute command and stream output chunks.
 
@@ -223,10 +223,10 @@ class StepExecutorAgent:
             task: The task containing the command to execute
 
         Yields:
-            StreamChunk objects during execution
+            StepChunk objects during execution
         """
         # Notify that execution is starting
-        yield StreamChunk(
+        yield StepChunk(
             task_id=task.task_id,
             step_number=task.step_number,
             chunk_type="execution_start",
@@ -254,7 +254,7 @@ class StepExecutorAgent:
             Tuple of (command_explanation, output_explanation)
         """
         # Notify that we're generating explanations
-        task.status = StepStatus.EXPLAINING
+        task.status = OverseerStepStatus.EXPLAINING
 
         # Generate BOTH explanations AFTER execution
         command_explanation = await self._generate_command_explanation(task.command)
@@ -262,7 +262,7 @@ class StepExecutorAgent:
 
         return command_explanation, output_explanation
 
-    def _extract_return_code_from_chunk(self, chunk: StreamChunk, current_code: int) -> int:
+    def _extract_return_code_from_chunk(self, chunk: StepChunk, current_code: int) -> int:
         """
         Extract return code from a final chunk if available.
 
@@ -282,7 +282,7 @@ class StepExecutorAgent:
                 pass
         return current_code
 
-    def _create_explaining_notification(self, task: AgentTask) -> StreamChunk:
+    def _create_explaining_notification(self, task: AgentTask) -> StepChunk:
         """
         Create a notification chunk for explanation phase.
 
@@ -292,9 +292,9 @@ class StepExecutorAgent:
             task: The task being executed
 
         Returns:
-            StreamChunk for explaining notification
+            StepChunk for explaining notification
         """
-        return StreamChunk(
+        return StepChunk(
             task_id=task.task_id,
             step_number=task.step_number,
             chunk_type="explaining",
@@ -315,7 +315,7 @@ class StepExecutorAgent:
             Start time for execution timing
         """
         start_time = time.time()
-        task.status = StepStatus.RUNNING
+        task.status = OverseerStepStatus.RUNNING
         task.started_at = datetime.now(tz=timezone.utc)
 
         logger.info(
@@ -326,7 +326,7 @@ class StepExecutorAgent:
         )
         return start_time
 
-    async def _handle_command_validation(self, task: AgentTask, start_time: float) -> StepResult | None:
+    async def _handle_command_validation(self, task: AgentTask, start_time: float) -> StepRunResult | None:
         """
         Validate command safety and return error result if unsafe.
 
@@ -337,11 +337,11 @@ class StepExecutorAgent:
             start_time: Execution start time for timing
 
         Returns:
-            StepResult if command is blocked, None if safe to proceed
+            StepRunResult if command is blocked, None if safe to proceed
         """
         is_safe, safety_reason = self._validate_command(task.command)
         if not is_safe:
-            task.status = StepStatus.FAILED
+            task.status = OverseerStepStatus.FAILED
             task.error = safety_reason
             return _build_blocked_command_result(task, safety_reason, time.time() - start_time)
         return None
@@ -358,7 +358,7 @@ class StepExecutorAgent:
         Returns:
             Tuple of (output_buffer, return_code, error_if_any)
         """
-        task.status = StepStatus.STREAMING
+        task.status = OverseerStepStatus.STREAMING
         output_buffer = []
         return_code = 0
 
@@ -368,7 +368,7 @@ class StepExecutorAgent:
                 return_code = self._extract_return_code_from_chunk(chunk, return_code)
         except Exception as e:
             logger.error("[StepExecutor] Command execution failed: %s", e)
-            task.status = StepStatus.FAILED
+            task.status = OverseerStepStatus.FAILED
             task.error = str(e)
             return output_buffer, return_code, e
 
@@ -399,9 +399,9 @@ class StepExecutorAgent:
         command_explanation: CommandExplanation,
         output_explanation: OutputExplanation,
         start_time: float,
-    ) -> StepResult:
+    ) -> StepRunResult:
         """
-        Build the final StepResult with all explanations.
+        Build the final StepRunResult with all explanations.
 
         Issue #665: Extracted from execute_step to reduce function length.
 
@@ -414,16 +414,16 @@ class StepExecutorAgent:
             start_time: The execution start time for calculating duration
 
         Returns:
-            Complete StepResult with all data
+            Complete StepRunResult with all data
         """
-        task.status = StepStatus.COMPLETED
+        task.status = OverseerStepStatus.COMPLETED
         task.completed_at = datetime.now(tz=timezone.utc)
 
-        return StepResult(
+        return StepRunResult(
             task_id=task.task_id,
             step_number=task.step_number,
             total_steps=task.total_steps,
-            status=StepStatus.COMPLETED,
+            status=OverseerStepStatus.COMPLETED,
             command=task.command,
             command_explanation=command_explanation,
             output=full_output,
@@ -434,15 +434,15 @@ class StepExecutorAgent:
             stream_complete=True,
         )
 
-    async def execute_step(self, task: AgentTask) -> AsyncGenerator[StreamChunk | StepResult, None]:
+    async def execute_step(self, task: AgentTask) -> AsyncGenerator[StepChunk | StepRunResult, None]:
         """
         Execute a single step with streaming output and explanations.
 
         Issue #620: Refactored using Extract Method pattern to reduce from 83 to 47 lines.
 
         Yields:
-            StreamChunk objects during command execution
-            StepResult when complete (with explanations)
+            StepChunk objects during command execution
+            StepRunResult when complete (with explanations)
         """
         start_time = self._initialize_step_execution(task)
 
@@ -539,7 +539,7 @@ class StepExecutorAgent:
         logger.warning("[StepExecutor] Step command timed out after %ss; interrupting", _OVERSEER_COMMAND_TIMEOUT_S)
         pty.write_input("\x03")
 
-    async def _stream_pty_execution(self, pty, command: str, task_id: str) -> AsyncGenerator[StreamChunk, None]:
+    async def _stream_pty_execution(self, pty, command: str, task_id: str) -> AsyncGenerator[StepChunk, None]:
         """
         Run *command* in the step's PTY and stream its status, output and return code.
 
@@ -549,10 +549,10 @@ class StepExecutorAgent:
         command itself. A command that times out is interrupted and reported with
         return code 124, never as a success.
         """
-        yield StreamChunk(task_id, 0, "pty_execution", f"Executing: {command}", False)
+        yield StepChunk(task_id, 0, "pty_execution", f"Executing: {command}", False)
         marker, start = pty_command.new_marker(), pty.transcript_position()
         if not pty.write_input(pty_command.typed_input(command, marker)):
-            yield StreamChunk(task_id, 0, "error", "Failed to write command to PTY", True)
+            yield StepChunk(task_id, 0, "error", "Failed to write command to PTY", True)
             return
         exit_code, timed_out = await pty_command.await_exit_code(
             pty, start, marker, _OVERSEER_COMMAND_TIMEOUT_S, on_timeout=lambda: self._interrupt(pty)
@@ -563,10 +563,10 @@ class StepExecutorAgent:
             output += f"\n[timed out after {_OVERSEER_COMMAND_TIMEOUT_S}s and interrupted]"
         elif exit_code is None:
             exit_code, output = 1, output + "\n[the shell ended before the command reported an exit code]"
-        yield StreamChunk(task_id, 0, "stdout", output.strip(), False)
-        yield StreamChunk(task_id, 0, "return_code", str(exit_code), True)
+        yield StepChunk(task_id, 0, "stdout", output.strip(), False)
+        yield StepChunk(task_id, 0, "return_code", str(exit_code), True)
 
-    async def _execute_command_streaming(self, command: str) -> AsyncGenerator[StreamChunk, None]:
+    async def _execute_command_streaming(self, command: str) -> AsyncGenerator[StepChunk, None]:
         """
         Execute a command in PTY terminal and stream output.
 
@@ -588,7 +588,7 @@ class StepExecutorAgent:
         async for chunk in self._execute_subprocess_streaming(command, task_id):
             yield chunk
 
-    async def _execute_subprocess_streaming(self, command: str, task_id: str) -> AsyncGenerator[StreamChunk, None]:
+    async def _execute_subprocess_streaming(self, command: str, task_id: str) -> AsyncGenerator[StepChunk, None]:
         """
         Fallback: Execute command via subprocess (output won't appear in terminal UI).
 
@@ -596,8 +596,8 @@ class StepExecutorAgent:
         """
         try:
             async for base_chunk in execute_shell_command_streaming(command):
-                # Convert BaseStreamChunk to local StreamChunk with task context
-                yield StreamChunk(
+                # Convert BaseStreamChunk to local StepChunk with task context
+                yield StepChunk(
                     task_id=task_id,
                     step_number=0,
                     chunk_type=base_chunk.chunk_type,
@@ -607,7 +607,7 @@ class StepExecutorAgent:
 
         except Exception as e:
             logger.error("[StepExecutor] Subprocess error: %s", e)
-            yield StreamChunk(
+            yield StepChunk(
                 task_id="error",
                 step_number=0,
                 chunk_type="error",
@@ -615,14 +615,14 @@ class StepExecutorAgent:
                 is_final=True,
             )
 
-    async def _collect_stream(self, stream: AsyncGenerator[StreamChunk, None]) -> list:
+    async def _collect_stream(self, stream: AsyncGenerator[StepChunk, None]) -> list:
         """Collect all chunks from a stream into a list."""
         chunks = []
         async for chunk in stream:
             chunks.append(chunk)
         return chunks
 
-    async def execute_simple(self, command: str) -> StepResult:
+    async def execute_simple(self, command: str) -> StepRunResult:
         """
         Execute a single command directly (non-streaming, for simple commands).
 
@@ -630,7 +630,7 @@ class StepExecutorAgent:
             command: The command to execute
 
         Returns:
-            StepResult with explanations
+            StepRunResult with explanations
         """
         # Create a temporary task
         task = AgentTask(
@@ -644,7 +644,7 @@ class StepExecutorAgent:
         # Collect all results (non-streaming collection)
         result = None
         async for update in self.execute_step(task):
-            if isinstance(update, StepResult):
+            if isinstance(update, StepRunResult):
                 result = update
 
         return result

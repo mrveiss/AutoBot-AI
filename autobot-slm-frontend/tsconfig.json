@@ -19,8 +19,12 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
+      "@autobot/ui": ["../libs/autobot-ui/index.ts"],
+      "@autobot/backend-contract": ["../autobot-frontend/src/types/generated/api.ts"],
       "@shared/*": ["../autobot_shared/*"],
       "vue": ["./node_modules/vue/dist/vue.d.ts"],
+      "dompurify": ["./node_modules/dompurify/dist/purify.es.d.mts"],
+      "reka-ui": ["./node_modules/reka-ui/dist/index.d.ts"],
       "@autobot/terminal": ["./src/types/autobot-terminal.d.ts"]
     }
   },

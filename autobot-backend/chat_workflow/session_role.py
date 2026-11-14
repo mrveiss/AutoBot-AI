@@ -19,6 +19,7 @@ import json
 import os
 from typing import List, Optional
 
+from autobot_shared.ai_lines import VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -61,7 +62,31 @@ AUTH_ROLE_CONTEXT_KEY = "auth_role"
 DEFAULT_AUTH_ROLE = "user"
 
 
-def apply_auth_role(context: "dict | None", role: Optional[str]) -> "dict | None":
+def _identity_pairs(scope: "dict | None") -> tuple:
+    """The verified-context keys paired with the authenticated principal's values (#18430)."""
+    return (
+        (VERIFIED_COMPANY_KEY, (scope or {}).get("org_id")),
+        (VERIFIED_USER_KEY, (scope or {}).get("user_id")),
+    )
+
+
+def overlay_verified_identity(context: "dict | None", scope: "dict | None") -> dict:
+    """Return *context* with the verified principal REPLACED by *scope*'s (#18430, #20709).
+
+    The one overlay for a new turn (``apply_auth_role``) and a resumed one (``resume_context``). Fail closed: a
+    present value overwrites the old one, an absent value removes the key, so a previous or client-supplied
+    identity never survives into the tool seam and the audit row falls to ``system``, never to another user.
+    """
+    merged = {**(context or {})}
+    for key, value in _identity_pairs(scope):
+        if value:
+            merged[key] = str(value)
+        else:
+            merged.pop(key, None)
+    return merged
+
+
+def apply_auth_role(context: "dict | None", role: Optional[str], scope: "dict | None" = None) -> "dict | None":
     """Overlay the trusted authenticated *role* onto *context* (#13821).
 
     Unlike ``apply_role``, a falsy *role* **strips** the key rather than leaving
@@ -71,13 +96,33 @@ def apply_auth_role(context: "dict | None", role: Optional[str]) -> "dict | None
     would let exactly that value survive into the tool seam and grant the
     privileges it names. Every path therefore writes or removes the key — the
     caller's value is never the one that reaches ``dispatch()``.
+
+    #18430: *scope* (``{"org_id", "user_id"}`` of the AUTHENTICATED principal) is overlaid the same way as
+    ``verified_company_id`` / ``verified_user_id``, the scope the AI lines are decided for. The request's own
+    ``company_id`` and ``user_id`` are client claims and never scope a decision.
     """
-    merged = {**(context or {})}
+    merged = overlay_verified_identity(context, scope)
+    if (scope or {}).get("attachment_access") is True:  # #20195: the route's STRICT check, never the client's word
+        merged[VERIFIED_ATTACHMENT_ACCESS_KEY] = True
+    else:
+        merged.pop(VERIFIED_ATTACHMENT_ACCESS_KEY, None)
     if role:
         merged[AUTH_ROLE_CONTEXT_KEY] = role
     else:
         merged.pop(AUTH_ROLE_CONTEXT_KEY, None)
     return merged
+
+
+def stamp_verified_identity(metadata: dict, context: "dict | None") -> None:
+    """Record the AUTHENTICATED principal on session *metadata*, replacing whatever a prior turn left (#18825).
+
+    ``metadata["user_id"]`` / ``["org_id"]`` bound the memory-graph owner scope (L2 context, trajectory reads), so
+    they come from the verified keys ``apply_auth_role`` overlaid -- never the request's own ``user_id`` /
+    ``org_id``. A turn with no verified principal (or no context) writes ``""``: the scope fails closed rather
+    than inheriting the previous turn's identity.
+    """
+    metadata["user_id"] = (context or {}).get(VERIFIED_USER_KEY) or ""
+    metadata["org_id"] = (context or {}).get(VERIFIED_COMPANY_KEY) or ""
 
 
 def resolve_auth_role(context: "dict | None") -> str:
@@ -181,3 +226,30 @@ class SessionRoleService(AsyncRedisClientMixin):
         """Remove the session's approval-category declaration."""
         redis = await self._get_redis()
         await redis.delete(_APPROVAL_KEY.format(session_id=session_id))
+
+
+async def apply_session_governance(
+    session_id: str, context: "dict | None", auth_role: Optional[str] = None, scope: "dict | None" = None
+) -> "dict | None":
+    """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202/#20195).
+
+    A server-set session role overrides any client-supplied ``agent_id`` so the pinned agent's ``forbidden_work``
+    is enforced at the tool seam and cannot be lifted by the caller. When the approval gate flag is on, the
+    baseline and the session's approval categories are overlaid as ``requires_approval_before``. #20195: the
+    attachment floor (this chat used a file; an admin may waive it) is written from server state, never the client.
+    """
+    from chat_workflow.approval_baseline import with_baseline_categories
+    from chat_workflow.attachment_floor import stamp_attachment_floor
+    from chat_workflow.session_work_item import SessionWorkItemService, apply_work_item
+
+    svc = SessionRoleService()
+    # #13821: the authenticated caller's RBAC role, applied unconditionally (it strips a missing one).
+    context = apply_auth_role(context, auth_role, scope)  # scope: #18430, the AI lines' verified principal
+    context = apply_role(context, await svc.get_role(session_id))
+    # #13704: a server-set work-item binding overrides any client-supplied work_item_id (#13687).
+    context = apply_work_item(context, await SessionWorkItemService().get_work_item(session_id))
+    context = await stamp_attachment_floor(context, session_id)
+    if CHAT_APPROVAL_GATE_ENABLED:
+        # #18294: all categories gated by default; only the SLM setting relaxes one.
+        context = await with_baseline_categories(context, await svc.get_approval_categories(session_id))
+    return context

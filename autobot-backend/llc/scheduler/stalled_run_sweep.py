@@ -26,23 +26,56 @@ stalled?" had to match a formatted, human-readable ``error`` string, which is in
 and breaks on a re-wording. ``error`` still carries the detail; ``status`` now carries
 the fact.
 
-What this sweep deliberately does NOT do is release what the run held. Claims,
-assignments and workspace leases are released in #16818, which models the lease this
-sweep will then have something to release. Marking a run stalled and leaving its
-holdings is an improvement over never noticing, and it is not the finished job: a
-status nobody acts on is close to what we have today.
+Marking the run is only half of it. On the same pass, in the same transaction and
+under the same ``SKIP LOCKED`` row lock, the sweep releases exactly what the run
+itself acquired, and nothing else:
+
+1. **Workspace leases** -- every ``LLCWorkspaceLease`` whose ``heartbeat_run_id`` is
+   the run (``release_for_run``), reason ``STALL_RELEASE_REASON``.
+2. **Work-item checkouts** -- every ``LLCWorkItem`` whose ``checkout_run_id`` is the
+   run, released by ``llc.services.run_checkouts`` (the one release a cancel and the
+   liveness monitor use as well, #19601): ``checkout_run_id`` and ``checkout_locked_at`` cleared, ``version`` bumped,
+   one ``work_item.updated`` activity entry each with ``reason="stalled"``. An item still ``in_progress`` is
+   parked as ``blocked``, not offered again (a run that reported nothing for the whole stall window needs a
+   person to look at what it was doing; offering the item back would let the same claim and stall repeat for
+   ever). An item in any other status keeps it. The activity entry is the signal for that person; unlike the
+   liveness monitor, the sweep files no recovery item. After the
+   commit, the item's ``llc:checkout:{id}`` Redis fence is dropped when it still
+   names the checkout's holder.
+
+That is the half that was missing on 2026-09-16, when one abandoned run held three
+already-merged worktrees and nothing could take them back -- a status nobody acts on
+is close to never noticing at all.
+
+What it deliberately does NOT release is the **assignment**. ``assignee_agent_id``
+records who the item belongs to, not which run made it so: an item assigned to an
+agent before the run started would be unassigned because the run died, which is a
+reassignment decision, not a release. The checkout is the run-scoped claim; the
+assignment stays.
+
+The release frees the *slot*, not the directory. Whether the directory may be
+removed is a separate question with its own evidence, and it is asked in
+``llc.services.workspace_disposal``.
 """
 
-import asyncio
-import logging
 from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
 from sqlalchemy import func, select
 
 from autobot_shared.env_utils import env_int
-from llc.models.enums import LLCRunStatus
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.worker_loop import run_in_worker_loop
+from llc.models.enums import LLCRunStatus, WorkItemStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
+from llc.services.run_checkouts import (
+    NON_TERMINAL_STATUSES,
+    ReleasedCheckout,
+    ReleaseWhy,
+    drop_released_fences,
+    release_checkouts_for_run,
+)
+from llc.services.workspace_lease import release_for_run
 from user_management.database import get_async_session_factory
 from utils.celery_reliability import (
     CELERY_MAX_RETRIES,
@@ -51,7 +84,7 @@ from utils.celery_reliability import (
     DeadLetterTask,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Env-var-backed, never a literal at the call site. Six hours is longer than any
 # adapter run observed to date and short enough that an abandoned run is noticed
@@ -59,13 +92,25 @@ logger = logging.getLogger(__name__)
 # the failure it exists to catch stays invisible for longer.
 STALL_TIMEOUT_SECONDS = env_int("LLC_RUN_STALL_TIMEOUT_SECONDS", 6 * 60 * 60)
 
-#: Statuses a run can sit in while still believed to be alive.
-NON_TERMINAL_STATUSES = (LLCRunStatus.QUEUED.value, LLCRunStatus.RUNNING.value)
-
 #: Written to ``error`` for the human-readable detail. It is no longer the only
 #: thing distinguishing a stall from an adapter timeout — ``STALLED`` is — so a
 #: re-wording here can no longer make the two indistinguishable.
 STALL_ERROR = "run stalled: no completion reported within {seconds}s; closed out by the stalled-run sweep (#16817)"
+
+#: Written to the lease's ``release_reason``. A workspace handed back because its run
+#: stalled reads differently from one whose lease simply expired, and the audit trail
+#: keeps them apart -- the first means the run died, the second means the holder did.
+STALL_RELEASE_REASON = "run stalled: workspace released by the stalled-run sweep (#16817/#16818)"
+
+#: The ``reason`` on a released checkout's activity entry. ``stalled`` rather than
+#: ``failed`` or ``cancelled``: the run did not report an outcome, the sweep decided
+#: it had none (#16817 AC4).
+STALL_CHECKOUT_REASON = LLCRunStatus.STALLED.value
+
+#: Why and by whom a stalled run's checkouts are released: the system, on the sweep's own decision. Like a
+#: liveness timeout, a stall parks the unfinished item as BLOCKED for a person; only a cancel and startup
+#: recovery return it to READY.
+_STALL_RELEASE = ReleaseWhy(reason=STALL_CHECKOUT_REASON, source="stalled_run_sweep", then=WorkItemStatus.BLOCKED)
 
 
 @shared_task(
@@ -80,17 +125,24 @@ STALL_ERROR = "run stalled: no completion reported within {seconds}s; closed out
 )
 def run_stalled_run_sweep(self: object) -> dict:  # type: ignore[type-arg]
     """Sync Celery entry point — closes out runs that stopped reporting."""
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    stalled = loop.run_until_complete(_async_sweep())
-    return {"stalled": stalled}
+    return run_in_worker_loop(_async_sweep())
 
 
-def _cutoff(now: datetime | None = None) -> datetime:
+def stall_cutoff(now: datetime | None = None) -> datetime:
+    """The instant before which a non-terminal run counts as stalled.
+
+    Public because ``run_status`` asks the same question (#19582 review): a run this
+    sweep would close out no longer counts as the agent being busy.
+    """
     return (now or datetime.now(timezone.utc)) - timedelta(seconds=STALL_TIMEOUT_SECONDS)
+
+
+def run_age_anchor(entity=LLCHeartbeatRun):  # noqa: ANN001,ANN201 - an ORM entity or alias
+    """How old a run is: ``started_at``, else ``created_at`` for one never picked up.
+
+    One definition for this sweep and ``run_status``'s busy check (#19582 review).
+    """
+    return func.coalesce(entity.started_at, entity.created_at)
 
 
 def _stalled_candidates(cutoff: datetime):
@@ -107,7 +159,7 @@ def _stalled_candidates(cutoff: datetime):
     # #16817: that reasoning was right and the implementation did not follow it --
     # the comparison ran in Python over EVERY non-terminal row, so each sweep scanned
     # the whole live population to act on a few. COALESCE puts the same rule in SQL.
-    age_anchor = func.coalesce(LLCHeartbeatRun.started_at, LLCHeartbeatRun.created_at)
+    age_anchor = run_age_anchor()
     return (
         select(LLCHeartbeatRun).where(
             LLCHeartbeatRun.status.in_(NON_TERMINAL_STATUSES),
@@ -115,48 +167,62 @@ def _stalled_candidates(cutoff: datetime):
             age_anchor.is_not(None),
             age_anchor <= cutoff,
         )
-        # #16817 AC5: two beat workers can overlap. Today both would write the same
-        # terminal status and the race would be invisible. #16818 adds the release of
-        # claims, assignments and workspace leases to this path, and the same race
-        # then releases each holding twice. SKIP LOCKED makes the sweep partition
-        # rather than collide, so the lock is in place BEFORE the side effects that
-        # need it -- a defect armed by its own dependency is cheaper to prevent than
-        # to diagnose.
+        # #16817 AC5: two beat workers can overlap. SKIP LOCKED makes them partition
+        # the runs rather than collide, so each run -- and so each lease and checkout
+        # it holds -- is released by exactly one sweeper.
         .with_for_update(skip_locked=True)
     )
 
 
-async def _async_sweep() -> int:
-    """Select non-terminal runs older than the cutoff and close them out."""
+def _mark_stalled(run: LLCHeartbeatRun) -> None:
+    run.status = LLCRunStatus.STALLED.value
+    run.finished_at = datetime.now(timezone.utc)
+    run.error = STALL_ERROR.format(seconds=STALL_TIMEOUT_SECONDS)
+
+
+async def _release_held(session, run: LLCHeartbeatRun, report: dict, fences: list[ReleasedCheckout]) -> None:
+    """Everything the run acquired, inside the transaction that marks it stalled."""
+    leases = await release_for_run(session, run.id, STALL_RELEASE_REASON)
+    released = await release_checkouts_for_run(session, run, _STALL_RELEASE)
+    report["workspace_leases"] += len(leases)
+    report["checkouts"] += len(released)
+    fences.extend(released)
+
+
+async def _async_sweep() -> dict:
+    """Close out non-terminal runs older than the cutoff and release what they held."""
     factory = get_async_session_factory()
-    cutoff = _cutoff()
-    stalled = 0
+    report = {"stalled": 0, "workspace_leases": 0, "checkouts": 0}
+    fences: list[ReleasedCheckout] = []
     async with factory() as session:
-        # The age anchor: started_at is NULL for a run that never got picked up, so
-        # fall back to created_at and a queued-then-abandoned run is swept too. A bare
-        # ``started_at <= cutoff`` would exclude those rows through SQL three-valued
-        # logic and strand them exactly as the disposal sweep found.
-        #
-        # #16817: that reasoning was right and the implementation did not follow it --
-        # the comparison ran in Python over EVERY non-terminal row, so each sweep
-        # scanned the whole live population to act on a few. COALESCE puts the same
-        # rule in SQL, where the index can serve it.
-        result = await session.execute(_stalled_candidates(cutoff))
+        result = await session.execute(_stalled_candidates(stall_cutoff()))
         for run in result.scalars().all():
-            run.status = LLCRunStatus.STALLED.value
-            run.finished_at = datetime.now(timezone.utc)
-            run.error = STALL_ERROR.format(seconds=STALL_TIMEOUT_SECONDS)
-            stalled += 1
+            _mark_stalled(run)
+            report["stalled"] += 1
+            # Same transaction and same SKIP LOCKED selection as the status write: a
+            # run this worker did not claim is not this worker's to release.
+            await _release_held(session, run, report, fences)
         await session.commit()
+    await drop_released_fences(fences)
     # Logged unconditionally: a sweep that found nothing and a sweep that did not
     # run must not look the same in the logs.
-    logger.info("Stalled-run sweep closed out %d run(s) older than %ds", stalled, STALL_TIMEOUT_SECONDS)
-    return stalled
+    logger.info(
+        "Stalled-run sweep closed out %d run(s) older than %ds; released %d workspace lease(s) and %d checkout(s)",
+        report["stalled"],
+        STALL_TIMEOUT_SECONDS,
+        report["workspace_leases"],
+        report["checkouts"],
+    )
+    return report
 
 
 __all__ = [
     "run_stalled_run_sweep",
     "STALL_TIMEOUT_SECONDS",
     "STALL_ERROR",
+    "STALL_RELEASE_REASON",
+    "STALL_CHECKOUT_REASON",
     "NON_TERMINAL_STATUSES",
+    "run_age_anchor",
+    "stall_cutoff",
 ]

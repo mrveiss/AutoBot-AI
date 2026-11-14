@@ -27,8 +27,6 @@ def _make_search_instance():
     obj._l1_hits = 0
     obj._l2_hits = 0
     obj._cache_misses = 0
-    # Issue #12251: cache key is (model, text); the engine keys on this id.
-    obj._embedding_model = "test-embed-model"
 
     # Minimal embedding_cache stub
     cache = MagicMock()
@@ -37,6 +35,15 @@ def _make_search_instance():
     obj.embedding_cache = cache
 
     return obj
+
+
+@pytest.fixture(autouse=True)
+def _recorded_space():
+    """Every index here resolves to one recorded space, so the cache paths are reachable (#18185)."""
+    from knowledge.index_embedding_space import IndexSpace
+
+    with patch("npu_semantic_search.index_embedding_space", return_value=IndexSpace("m", 2)):
+        yield
 
 
 def _embedding_bytes(arr: np.ndarray) -> bytes:
@@ -57,7 +64,7 @@ async def test_l2_cache_get_returns_array_on_hit():
     mock_redis.get = AsyncMock(return_value=_embedding_bytes(expected))
 
     with patch("npu_semantic_search.get_async_redis_client", return_value=mock_redis):
-        result = await obj._l2_cache_get("hello world")
+        result = await obj._l2_cache_get("space", "hello world")
 
     assert result is not None
     np.testing.assert_array_almost_equal(result, expected)
@@ -71,7 +78,7 @@ async def test_l2_cache_get_returns_none_on_miss():
     mock_redis.get = AsyncMock(return_value=None)
 
     with patch("npu_semantic_search.get_async_redis_client", return_value=mock_redis):
-        result = await obj._l2_cache_get("no such text")
+        result = await obj._l2_cache_get("space", "no such text")
 
     assert result is None
 
@@ -81,7 +88,7 @@ async def test_l2_cache_get_returns_none_when_redis_unavailable():
     obj = _make_search_instance()
 
     with patch("npu_semantic_search.get_async_redis_client", return_value=None):
-        result = await obj._l2_cache_get("text")
+        result = await obj._l2_cache_get("space", "text")
 
     assert result is None
 
@@ -94,7 +101,7 @@ async def test_l2_cache_get_swallows_redis_exceptions():
     mock_redis.get = AsyncMock(side_effect=ConnectionError("redis down"))
 
     with patch("npu_semantic_search.get_async_redis_client", return_value=mock_redis):
-        result = await obj._l2_cache_get("text")
+        result = await obj._l2_cache_get("space", "text")
 
     assert result is None
 
@@ -113,7 +120,7 @@ async def test_l2_cache_set_stores_bytes():
     mock_redis.set = AsyncMock()
 
     with patch("npu_semantic_search.get_async_redis_client", return_value=mock_redis):
-        await obj._l2_cache_set("store me", embedding)
+        await obj._l2_cache_set("space", "store me", embedding)
 
     mock_redis.set.assert_awaited_once()
     call_args = mock_redis.set.call_args
@@ -131,7 +138,7 @@ async def test_l2_cache_set_noop_when_redis_unavailable():
 
     with patch("npu_semantic_search.get_async_redis_client", return_value=None):
         # Should not raise
-        await obj._l2_cache_set("text", embedding)
+        await obj._l2_cache_set("space", "text", embedding)
 
 
 @pytest.mark.asyncio
@@ -143,7 +150,7 @@ async def test_l2_cache_set_swallows_redis_exceptions():
     mock_redis.set = AsyncMock(side_effect=ConnectionError("redis down"))
 
     with patch("npu_semantic_search.get_async_redis_client", return_value=mock_redis):
-        await obj._l2_cache_set("text", embedding)  # must not raise
+        await obj._l2_cache_set("space", "text", embedding)  # must not raise
 
 
 # ---------------------------------------------------------------------------
@@ -159,7 +166,7 @@ async def test_generate_optimized_embedding_l2_hit_warms_l1():
 
     with patch.object(obj, "_l2_cache_get", AsyncMock(return_value=l2_embedding)):
         with patch.object(obj, "_l2_cache_set", AsyncMock()):
-            embedding, label = await obj._generate_optimized_embedding("query", True, None)
+            embedding, label = await obj._generate_optimized_embedding("query", "idx")
 
     assert label == "l2_cached"
     np.testing.assert_array_almost_equal(embedding, l2_embedding)
@@ -178,7 +185,7 @@ async def test_generate_optimized_embedding_l1_hit_skips_l2():
     obj.embedding_cache.get = AsyncMock(return_value=l1_embedding)
 
     with patch.object(obj, "_l2_cache_get", AsyncMock()) as mock_l2_get:
-        embedding, label = await obj._generate_optimized_embedding("query", True, None)
+        embedding, label = await obj._generate_optimized_embedding("query", "idx")
 
     assert label == "l1_cached"
     mock_l2_get.assert_not_awaited()
@@ -195,17 +202,44 @@ async def test_generate_optimized_embedding_miss_populates_both_caches():
 
     with patch.object(obj, "_l2_cache_get", AsyncMock(return_value=None)):
         with patch.object(obj, "_l2_cache_set", AsyncMock()) as mock_l2_set:
-            with patch.object(
-                obj,
-                "_generate_embedding_with_device",
-                AsyncMock(return_value=(npu_embedding, "npu")),
-            ):
-                embedding, label = await obj._generate_optimized_embedding("new query", True, None)
+            with patch("npu_semantic_search.embed_in_index_space", AsyncMock(return_value=npu_embedding)):
+                embedding, label = await obj._generate_optimized_embedding("new query", "idx")
 
-    assert label == "npu"
+    assert label == "index_space"
     np.testing.assert_array_almost_equal(embedding, npu_embedding)
     obj.embedding_cache.put.assert_awaited_once()
     mock_l2_set.assert_awaited_once()
     assert obj._cache_misses == 1
     assert obj._l1_hits == 0
     assert obj._l2_hits == 0
+
+
+# ---------------------------------------------------------------------------
+# Both cache keys name the space that produced the vector (#18143)
+# ---------------------------------------------------------------------------
+
+
+def test_l2_key_differs_per_space_and_text_only_key_collided():
+    import hashlib
+
+    from npu_semantic_search import NPUSemanticSearch
+
+    key_a = NPUSemanticSearch._l2_key("model-a/768", "same text")
+    key_b = NPUSemanticSearch._l2_key("model-b/384", "same text")
+    assert key_a != key_b
+    old = f"emb:{hashlib.sha256(b'same text').hexdigest()[:16]}"  # the old text-only key: space-blind
+    assert old not in (key_a, key_b)
+
+
+@pytest.mark.asyncio
+async def test_l1_and_l2_are_keyed_on_the_index_space_not_the_active_model():
+    obj = _make_search_instance()
+    with (
+        patch.object(obj, "_l2_cache_get", AsyncMock(return_value=None)) as l2_get,
+        patch.object(obj, "_l2_cache_set", AsyncMock()) as l2_set,
+        patch("npu_semantic_search.embed_in_index_space", AsyncMock(return_value=np.array([1.0, 2.0]))),
+    ):
+        await obj._generate_optimized_embedding("q", "idx")
+    assert obj.embedding_cache.get.await_args.kwargs["model"] == "m/2"
+    assert obj.embedding_cache.put.await_args.kwargs["model"] == "m/2"
+    assert l2_get.await_args.args[0] == "m/2" and l2_set.await_args.args[0] == "m/2"

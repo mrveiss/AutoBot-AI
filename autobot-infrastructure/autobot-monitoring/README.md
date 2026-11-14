@@ -70,6 +70,13 @@ Configured in `autobot-infrastructure/autobot-monitoring/prometheus.yml`:
 - SLM backend: `localhost:8000/metrics`
 - NPU worker: `172.16.168.22:8081/metrics`
 
+**Backend metrics need the scrape token (#16375).** `/api/metrics/prometheus` refuses a
+scrape without a bearer token. The SLM generates it once (`prometheus_scrape_token` in its
+secret store) and every deploy delivers it to the backend (`AUTOBOT_PROMETHEUS_SCRAPE_TOKEN`)
+and to Prometheus as a 0640 file named by `bearer_token_file` (`prometheus_scrape_token_file`).
+Rotate by updating the secret in the SLM and redeploying the backend and monitoring roles.
+In docker-compose, `autobot-secrets-init` generates it into the shared secrets volume.
+
 ---
 
 ## Known Gotchas

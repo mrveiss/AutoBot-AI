@@ -21,34 +21,62 @@ import { ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('useAgentActivityData')
 
+// The wire shape of GET /agents/status, from the backend schema (#17514).
+type AgentStatusListResponse = components['schemas']['AgentStatusListResponse']
+type AgentStatusItem = components['schemas']['AgentStatusItem']
+
+/** The schema types `type`/`status` and the task lists loosely; ActivityAgent narrows them to what the widget renders. */
+function toAgent(item: AgentStatusItem): ActivityAgent {
+  return {
+    ...item,
+    type: item.type as ActivityAgent['type'],
+    status: (item.status ?? null) as ActivityAgent['status'],
+    tasksCompleted: item.tasksCompleted ?? null,
+    uptime: item.uptime ?? null,
+    successRate: item.successRate ?? null,
+    // #21270: null = the history was not readable; [] = measured, nothing happened.
+    recentTasks: (item.recentTasks ?? null) as ActivityAgent['recentTasks'],
+    activityTimeline: (item.activityTimeline ?? null) as ActivityAgent['activityTimeline'],
+    activityWindowStart: item.activityWindowStart ?? null,
+  }
+}
+
 // ── Shared Types ─────────────────────────────────────────────────────────────
 
-export interface Agent {
+export interface ActivityAgent {
   id: string
   name: string
   type: 'orchestrator' | 'worker' | 'monitor' | 'analyzer' | 'executor'
-  // #9724: 'abstained' added — AgentActivityVisualization renders this state
-  status: 'working' | 'idle' | 'error' | 'paused' | 'abstained'
-  currentTask?: string
-  tasksCompleted: number
-  uptime: number
-  successRate: number
+  // #9724: 'abstained' added — AgentActivityVisualization renders this state.
+  // #17514: null = not reported. The server sends null for anything it does not measure,
+  // never a 0 that reads as observed; the widget shows "not reported".
+  status: 'working' | 'idle' | 'error' | 'paused' | 'abstained' | null
+  companyId?: string | null
+  companyName?: string | null
+  currentTask?: string | null
+  tasksCompleted: number | null
+  uptime: number | null
+  successRate: number | null
+  // #21270: null = not reported (feed unreadable); [] = measured, none.
   recentTasks: Array<{
     id: string
     name: string
     status: 'completed' | 'failed' | 'cancelled'
     completedAt: number
-  }>
+  }> | null
   activityTimeline: Array<{
     task: string
     type: 'working' | 'idle' | 'error'
     startPercent: number
     widthPercent: number
     duration: number
-  }>
+  }> | null
+  // #21270: UTC ms the timeline axis starts at; the widget labels its columns from it.
+  activityWindowStart?: number | null
 }
 
 export interface ActivityEvent {
@@ -66,7 +94,7 @@ export interface ActivityEvent {
 // surfaces an error state so the UI shows an empty/error message instead of
 // presenting fabricated data as if it were real.
 
-export function getSampleAgents(): Agent[] {
+export function getSampleAgents(): ActivityAgent[] {
   const now = Date.now()
   return [
     {
@@ -171,7 +199,7 @@ export function getSampleEvents(): ActivityEvent[] {
 // ── Composable ────────────────────────────────────────────────────────────────
 
 export function useAgentActivityData() {
-  const agents = ref<Agent[]>([])
+  const agents = ref<ActivityAgent[]>([])
   const recentEvents = ref<ActivityEvent[]>([])
   // BUG1: surface load failures to the UI instead of silently showing samples.
   const error = ref<string | null>(null)
@@ -179,13 +207,13 @@ export function useAgentActivityData() {
 
   async function fetchAgents(): Promise<void> {
     try {
-      const data = await apiClient.get<{ agents?: Agent[] }>(
+      const data: AgentStatusListResponse = await apiClient.get(
         `${getApiBase()}/agents/status`,
         // Optional widget: a 404 (endpoint unmounted) or timeout is handled
         // below, so don't emit console noise. 404s are not retried by the client.
         { suppressErrorLog: true },
       )
-      agents.value = data.agents ?? []
+      agents.value = (data.agents ?? []).map(toAgent)
       error.value = null
     } catch (e) {
       // Visible empty/error state — do NOT fall back to fabricated sample data.

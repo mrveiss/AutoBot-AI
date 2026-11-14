@@ -7,19 +7,46 @@
  * Integrates with ConversationFileManager backend for per-session file operations.
  */
 
+import { saveBlob } from '@autobot/ui'
 import { getFileIconNameByMimeType } from '@/utils/iconMappings'
 import { formatFileSize } from '@/utils/formatHelpers'
 import type { IconName } from '@/components/ui/Icon.vue'
-import { ref, computed } from 'vue'
+import { ref, computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { useBatchSelection } from './useBatchSelection'
+import { useLoadingState } from './useLoadingState'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage } from '@/utils/errorExtract'
+import { describeApiRefusal } from '@/utils/conversationFileUpload'
+import i18n from '@/i18n'
 import { getApiBase } from '@/config/ssot-config'
-import { useLoadingState } from '@/composables/useLoadingState'
+import { mapFileList, type BackendFileList } from '@/utils/conversationFileList'
+import { useLatestRequest } from './useLatestRequest'
+import {
+  useConversationFilePreview,
+  isPreviewable,
+  type PreviewPane
+} from './useConversationFilePreview'
+
+export type { PreviewPane }
 
 // Create scoped logger for useConversationFiles
 const logger = createLogger('useConversationFiles')
+
+/** The translated text for a `chat.conversationFiles.*` key (#21159). */
+function tr(key: string): string {
+  return i18n.global.t(`chat.conversationFiles.${key}`)
+}
+
+/**
+ * A failure's user-facing text, from the already-translated fallback: a recognised 413 refusal translated (#20723),
+ * else the server's own detail when it sent one, else the fallback (#21159).
+ */
+function failureText(err: unknown, fallback: string): string {
+  const t = (key: string, params?: Record<string, unknown>) => i18n.global.t(key, params ?? {})
+  // An empty message (e.g. `new Error('')`) is no message: the translated fallback applies (#21185).
+  return describeApiRefusal(err, t) ?? (extractApiErrorMessage(err, fallback) || fallback)
+}
 
 /**
  * File metadata interface matching backend ConversationFile model
@@ -32,7 +59,6 @@ export interface ConversationFile {
   size_bytes: number
   upload_timestamp: string
   download_url: string
-  preview_url: string
 }
 
 /** Issue #70: Sort options for file list */
@@ -57,10 +83,12 @@ export interface UploadProgressEvent {
 /**
  * Composable for conversation file management operations
  *
- * @param sessionId - Chat session ID for file operations
+ * @param sessionIdSource - Chat session ID (string, ref or getter); resolved on every call
  */
-export function useConversationFiles(sessionId: string) {
+export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) {
   const api = useApiClient()
+  // Resolved per call so a conversation switch is honoured by every request.
+  const currentSessionId = (): string => toValue(sessionIdSource)
 
   // Reactive state
   const files = ref<ConversationFile[]>([])
@@ -70,8 +98,17 @@ export function useConversationFiles(sessionId: string) {
     uploads_count: 0,
     generated_count: 0
   })
-  const { isLoading: loading, wrap } = useLoadingState()
+  /**
+   * Mutations (upload, delete, ...) in flight for the CURRENT conversation (#21159). `resetOps()` on a conversation
+   * switch drops those started in the previous one so they neither count toward `loading` nor settle the new count.
+   */
+  const { isLoading: opLoading, wrap, reset: resetOps } = useLoadingState()
+  /** True while the latest list request is in flight; a superseded request never clears it (#21159). */
+  const listLoading = ref(false)
+  const loading = computed(() => opLoading.value || listLoading.value)
   const error = ref<string | null>(null)
+  const listRequest = useLatestRequest()
+  const uploadRequest = useLatestRequest()
   const uploadProgress = ref<number>(0)
   const searchQuery = ref('')
   const sortField = ref<SortField>('date')
@@ -110,110 +147,107 @@ export function useConversationFiles(sessionId: string) {
     return result
   })
 
-  const API = `${getApiBase()}/conversation-files/conversation/${sessionId}`
+  const conversationApi = (): string =>
+    `${getApiBase()}/conversation-files/conversation/${currentSessionId()}`
 
   const loadFiles = async (): Promise<void> => {
-    if (!sessionId) {
-      error.value = 'No session ID provided'
+    if (!currentSessionId()) {
+      listRequest.invalidate()
+      listLoading.value = false
+      error.value = tr('noSession')
       return
     }
 
     error.value = null
-    await wrap(async () => {
-      try {
-        const data = await api.get<{ files: ConversationFile[]; stats: FileStats }>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
+    const token = listRequest.begin()
+    const requestedSession = currentSessionId()
+    const base = conversationApi()
+    listLoading.value = true
+    try {
+      const data = await api.get<BackendFileList>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/list`)
+      // Only the latest request may write: a reply for a conversation the user left, or an older one, is dropped.
+      if (data && listRequest.isCurrent(token) && requestedSession === currentSessionId()) {
+        const mapped = mapFileList(data, base)
+        files.value = mapped.files
+        stats.value = mapped.stats
+      }
+    } catch (err: unknown) {
+      if (listRequest.isCurrent(token) && requestedSession === currentSessionId()) {
+        error.value = failureText(err, tr('loadFailed'))
+      }
+      logger.error('Load error:', err)
+    } finally {
+      if (listRequest.isCurrent(token)) listLoading.value = false
+    }
+  }
 
-        if (data) {
-          files.value = data.files || []
-          stats.value = data.stats || {
-            total_files: 0,
-            total_size_bytes: 0,
-            uploads_count: 0,
-            generated_count: 0
+  /** Run one upload; progress, errors and the reload belong to the session that started it (#21159). */
+  const sendUpload = async (fileList: FileList | File[], session: string, token: number): Promise<boolean> => {
+    const inSession = (): boolean => currentSessionId() === session
+    // The token only gates the shared progress display; the reload and the error belong to the session.
+    const owns = (): boolean => uploadRequest.isCurrent(token) && inSession()
+    try {
+      const formData = new FormData()
+      Array.from(fileList).forEach((file) => formData.append('files', file))
+      const data = await api.post<{ success: boolean }>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent: UploadProgressEvent) => {
+          if (progressEvent.total && owns()) {
+            uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total)
           }
         }
-      } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Failed to load files')
-        logger.error('Load error:', err)
+      })
+      if (data?.success) {
+        if (inSession()) await loadFiles()
+        if (owns()) uploadProgress.value = 100
+        return true
       }
-    })
+      if (inSession()) error.value = i18n.global.t('chat.input.uploadError.unknown')
+      return false
+    } catch (err: unknown) {
+      if (inSession()) error.value = failureText(err, i18n.global.t('chat.input.uploadError.unknown'))
+      logger.error('Upload error:', err)
+      return false
+    } finally {
+      // Reset progress after a short delay, unless a newer upload or a conversation switch took it over.
+      setTimeout(() => { if (owns()) uploadProgress.value = 0 }, 2000)
+    }
   }
 
   const uploadFiles = async (fileList: FileList | File[]): Promise<boolean> => {
-    if (!sessionId) {
-      error.value = 'No session ID provided'
+    if (!currentSessionId()) {
+      error.value = tr('noSession')
       return false
     }
-
     if (!fileList || fileList.length === 0) {
-      error.value = 'No files selected'
+      error.value = tr('noFilesSelected')
       return false
     }
-
     error.value = null
     uploadProgress.value = 0
-
-    return wrap(async () => {
-      try {
-        const formData = new FormData()
-
-        // Add all files to FormData
-        Array.from(fileList).forEach((file) => {
-          formData.append('files', file)
-        })
-
-        const data = await api.post<{ success: boolean }>(
-          `${getApiBase()}/conversation-files/conversation/${sessionId}/upload`,
-          formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data'
-            },
-            onUploadProgress: (progressEvent: UploadProgressEvent) => {
-              if (progressEvent.total) {
-                uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-              }
-            }
-          }
-        )
-
-        if (data?.success) {
-          // Reload files to get updated list
-          await loadFiles()
-          uploadProgress.value = 100
-          return true
-        }
-
-        error.value = 'Upload failed'
-        return false
-
-      } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Upload failed')
-        logger.error('Upload error:', err)
-        return false
-      } finally {
-        // Reset progress after a short delay
-        setTimeout(() => {
-          uploadProgress.value = 0
-        }, 2000)
-      }
-    })
+    const session = currentSessionId()
+    const token = uploadRequest.begin()
+    return wrap(() => sendUpload(fileList, session, token))
   }
 
   const deleteFile = async (fileId: string): Promise<boolean> => {
-    if (!sessionId || !fileId) {
-      error.value = 'Missing session ID or file ID'
+    if (!currentSessionId() || !fileId) {
+      error.value = tr('missingParameters')
       return false
     }
 
     error.value = null
+    const session = currentSessionId()
 
     return wrap(async () => {
       try {
-        await api.delete<unknown>(`${getApiBase()}/conversation-files/conversation/${sessionId}/files/${fileId}`)
+        await api.delete<unknown>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/files/${fileId}`)
 
+        // A switch while the delete was pending: the new conversation's state is not ours to touch.
+        if (currentSessionId() !== session) return true
         // Remove file from local state
         files.value = files.value.filter(f => f.file_id !== fileId)
+        dropPreviewOf([fileId])
 
         // Update stats
         await loadFiles()
@@ -221,7 +255,7 @@ export function useConversationFiles(sessionId: string) {
         return true
 
       } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Failed to delete file')
+        if (currentSessionId() === session) error.value = failureText(err, tr('deleteFailed'))
         logger.error('Delete error:', err)
         return false
       }
@@ -229,81 +263,47 @@ export function useConversationFiles(sessionId: string) {
   }
 
   const downloadFile = async (fileId: string, filename?: string): Promise<void> => {
-    if (!sessionId || !fileId) {
-      error.value = 'Missing session ID or file ID'
+    if (!currentSessionId() || !fileId) {
+      error.value = tr('missingParameters')
       return
     }
 
+    const session = currentSessionId()
     try {
       const response = await api.rawRequest(
-        `${getApiBase()}/conversation-files/conversation/${sessionId}/download/${fileId}`,
+        `${getApiBase()}/conversation-files/conversation/${currentSessionId()}/download/${fileId}`,
         { method: 'GET' }
       )
 
       const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-
       // Use provided filename or get from file list
-      if (filename) {
-        link.download = filename
-      } else {
-        const file = files.value.find(f => f.file_id === fileId)
-        link.download = file?.filename || `file_${fileId}`
-      }
-
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
+      const name = filename || files.value.find(f => f.file_id === fileId)?.filename || `file_${fileId}`
+      saveBlob(blob, name)
 
     } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Download failed')
+      if (currentSessionId() === session) error.value = failureText(err, tr('downloadFailed'))
       logger.error('Download error:', err)
     }
   }
 
-  const previewFile = async (fileId: string): Promise<void> => {
-    if (!sessionId || !fileId) {
-      error.value = 'Missing session ID or file ID'
-      return
-    }
+  const { preview, previewLoading, previewFile, closePreview, dropPreviewOf } = useConversationFilePreview({
+    api, currentSessionId, files, error, tr, failureText, downloadFile
+  })
 
-    try {
-      const file = files.value.find(f => f.file_id === fileId)
-
-      if (!file) {
-        error.value = 'File not found'
-        return
-      }
-
-      // For previewable types, open preview URL
-      if (isPreviewable(file.mime_type)) {
-        const previewUrl = `${getApiBase()}/conversation-files/conversation/${sessionId}/preview/${fileId}`
-        window.open(previewUrl, '_blank')
-      } else {
-        // For non-previewable types, download instead
-        await downloadFile(fileId, file.filename)
-      }
-
-    } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Preview failed')
-      logger.error('Preview error:', err)
-    }
-  }
-
-  const isPreviewable = (mimeType: string): boolean => {
-    const previewableTypes = [
-      'image/',
-      'text/',
-      'application/pdf',
-      'application/json',
-      'video/',
-      'audio/'
-    ]
-
-    return previewableTypes.some(type => mimeType.startsWith(type))
+  /**
+   * Conversation switch (#21159): drop everything that belongs to the previous conversation at once, and revoke
+   * the in-flight list/upload/preview requests so none of their replies can land in the new one.
+   */
+  const resetForSession = (): void => {
+    listRequest.invalidate()
+    uploadRequest.invalidate()
+    resetOps()
+    listLoading.value = false
+    uploadProgress.value = 0
+    files.value = []
+    stats.value = { total_files: 0, total_size_bytes: 0, uploads_count: 0, generated_count: 0 }
+    fileSelection.clear()
+    closePreview()
   }
 
   // #9724: consumed by <Icon :name="..."> (ChatFilePanel) — must return an
@@ -315,16 +315,17 @@ export function useConversationFiles(sessionId: string) {
   // Issue #70: New file manager operations
 
   const createFile = async (filename: string, content: string = '', mimeType: string = 'text/plain'): Promise<boolean> => {
-    if (!sessionId) { error.value = 'No session ID'; return false }
+    if (!currentSessionId()) { error.value = tr('noSession'); return false }
     error.value = null
+    const session = currentSessionId()
     return wrap(async () => {
       try {
-        const data = await api.post<{ success: boolean }>(`${API}/files/create`, { filename, content, mime_type: mimeType })
+        const data = await api.post<{ success: boolean }>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/files/create`, { filename, content, mime_type: mimeType })
         if (data?.success) { await loadFiles(); return true }
-        error.value = 'Failed to create file'
+        if (currentSessionId() === session) error.value = tr('createFailed')
         return false
       } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Failed to create file')
+        if (currentSessionId() === session) error.value = failureText(err, tr('createFailed'))
         logger.error('Create file error:', err)
         return false
       }
@@ -332,62 +333,68 @@ export function useConversationFiles(sessionId: string) {
   }
 
   const renameFile = async (fileId: string, newFilename: string): Promise<boolean> => {
-    if (!sessionId || !fileId) { error.value = 'Missing parameters'; return false }
+    if (!currentSessionId() || !fileId) { error.value = tr('missingParameters'); return false }
     error.value = null
+    const session = currentSessionId()
     try {
-      const data = await api.put<{ success: boolean }>(`${API}/files/${fileId}/rename`, { new_filename: newFilename })
+      const data = await api.put<{ success: boolean }>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/files/${fileId}/rename`, { new_filename: newFilename })
       if (data?.success) {
+        if (currentSessionId() !== session) return true
         const file = files.value.find(f => f.file_id === fileId)
         if (file) file.filename = newFilename
+        dropPreviewOf([fileId])
         return true
       }
-      error.value = 'Rename failed'
+      if (currentSessionId() === session) error.value = tr('renameFailed')
       return false
     } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Rename failed')
+      if (currentSessionId() === session) error.value = failureText(err, tr('renameFailed'))
       logger.error('Rename error:', err)
       return false
     }
   }
 
   const getFileContent = async (fileId: string): Promise<string | null> => {
-    if (!sessionId || !fileId) { error.value = 'Missing parameters'; return null }
+    if (!currentSessionId() || !fileId) { error.value = tr('missingParameters'); return null }
+    const session = currentSessionId()
     try {
-      const data = await api.get<{ content: string }>(`${API}/files/${fileId}/content`)
+      const data = await api.get<{ content: string }>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/files/${fileId}/content`)
       return data?.content ?? null
     } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Failed to read file')
+      if (currentSessionId() === session) error.value = failureText(err, tr('readFailed'))
       logger.error('Get content error:', err)
       return null
     }
   }
 
   const updateFileContent = async (fileId: string, content: string): Promise<boolean> => {
-    if (!sessionId || !fileId) { error.value = 'Missing parameters'; return false }
+    if (!currentSessionId() || !fileId) { error.value = tr('missingParameters'); return false }
     error.value = null
+    const session = currentSessionId()
     try {
-      const data = await api.put<{ success: boolean }>(`${API}/files/${fileId}/content`, { content })
+      const data = await api.put<{ success: boolean }>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/files/${fileId}/content`, { content })
       if (data?.success) { await loadFiles(); return true }
-      error.value = 'Save failed'
+      if (currentSessionId() === session) error.value = tr('saveFailed')
       return false
     } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Save failed')
+      if (currentSessionId() === session) error.value = failureText(err, tr('saveFailed'))
       logger.error('Update content error:', err)
       return false
     }
   }
 
   const copyFile = async (fileId: string, newFilename?: string): Promise<boolean> => {
-    if (!sessionId || !fileId) { error.value = 'Missing parameters'; return false }
+    if (!currentSessionId() || !fileId) { error.value = tr('missingParameters'); return false }
     error.value = null
+    const session = currentSessionId()
     return wrap(async () => {
       try {
-        const data = await api.post<{ success: boolean }>(`${API}/files/${fileId}/copy`, { new_filename: newFilename || null })
+        const data = await api.post<{ success: boolean }>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/files/${fileId}/copy`, { new_filename: newFilename || null })
         if (data?.success) { await loadFiles(); return true }
-        error.value = 'Copy failed'
+        if (currentSessionId() === session) error.value = tr('copyFailed')
         return false
       } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Copy failed')
+        if (currentSessionId() === session) error.value = failureText(err, tr('copyFailed'))
         logger.error('Copy error:', err)
         return false
       }
@@ -413,17 +420,37 @@ export function useConversationFiles(sessionId: string) {
     }
   }
 
+  /** Delete each id in the session that started the bulk delete; returns the ids that were deleted and the first failure (#21337). */
+  const deleteEach = async (ids: string[], session: string): Promise<{ deleted: string[]; failure: unknown }> => {
+    const deleted: string[] = []
+    let failure: unknown = null
+    for (const fid of ids) {
+      try {
+        await api.call('delete', '/api/conversation-files/conversation/{session_id}/files/{file_id}', { path: { session_id: session, file_id: fid } })
+        deleted.push(fid)
+      } catch (err: unknown) {
+        failure ??= err
+        logger.error('Bulk delete error:', err)
+      }
+    }
+    return { deleted, failure }
+  }
+
   const deleteSelectedFiles = async (): Promise<boolean> => {
     const ids = Array.from(fileSelection.selected.value)
     if (ids.length === 0) return false
     error.value = null
+    const session = currentSessionId()
     return wrap(async () => {
-      for (const fid of ids) {
-        try { await api.delete<unknown>(`${API}/files/${fid}`) } catch { /* continue */ }
-      }
-      fileSelection.clear()
+      const { deleted, failure } = await deleteEach(ids, session)
+      // A switch mid-loop already reset the new conversation's state; only report into the session that asked.
+      if (currentSessionId() !== session) return failure === null
+      dropPreviewOf(deleted)
+      deleted.forEach(fid => fileSelection.deselectByKey(fid))
       await loadFiles()
-      return true
+      // The reload may have outlived the conversation: its failure text is not the new conversation's to show.
+      if (failure !== null && currentSessionId() === session) error.value = failureText(failure, tr('deleteFailed'))
+      return failure === null
     })
   }
 
@@ -444,6 +471,8 @@ export function useConversationFiles(sessionId: string) {
     stats,
     loading,
     error,
+    preview,
+    previewLoading,
     uploadProgress,
     searchQuery,
     sortField,
@@ -463,6 +492,8 @@ export function useConversationFiles(sessionId: string) {
     deleteFile,
     downloadFile,
     previewFile,
+    closePreview,
+    resetForSession,
 
     // Issue #70: New operations
     createFile,

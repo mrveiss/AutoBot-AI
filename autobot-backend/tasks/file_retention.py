@@ -13,33 +13,18 @@ AUTOBOT_FILE_RETENTION_DAYS is set to a positive integer.
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from celery_app import celery_app
-from services.audit.audit import AuditCategory, AuditEvent
-from services.audit.audit import emit as audit_emit
+from tasks.retention_audit import emit_deletion_audit
 
 logger = get_logger(__name__)
 
 # Module-level constant — reads env at import time (cache.py pattern)
 _FILE_RETENTION_DAYS = ssot_config.file_retention_days
 _STORAGE_BASE = Path(ssot_config.misc.chats_directory or "data") / "uploads"
-
-
-def _emit_deletion_audit(file_path: str, extra: Dict[str, Any]) -> None:
-    """Fire-and-forget audit event for a file retention deletion."""
-    audit_emit(
-        AuditEvent(
-            category=AuditCategory.SECURITY,
-            action="retention_purge",
-            actor_id="system:retention_worker",
-            resource_type="file_attachment",
-            resource_id=file_path,
-            metadata=extra,
-        )
-    )
 
 
 def _cleanup_expired_files(retention_days: int, dry_run: bool = False) -> Dict[str, int]:
@@ -80,8 +65,9 @@ def _cleanup_expired_files(retention_days: int, dry_run: bool = False) -> Dict[s
                 deleted_bytes += size
             else:
                 file_path.unlink()
-                _emit_deletion_audit(
+                emit_deletion_audit(
                     str(file_path),
+                    "file_attachment",
                     {"age_days": age_days, "size_bytes": size, "retention_days": retention_days},
                 )
                 deleted_files += 1

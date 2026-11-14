@@ -20,10 +20,17 @@ from autobot_shared.logging_manager import get_logger
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 # Import initialization modules
+from autobot_shared.client_disconnect import (
+    CLIENT_CLOSED_REQUEST,
+    install_client_disconnect_guard,
+    is_boundary_disconnect,
+    log_client_disconnect,
+    register_client_disconnect_handlers,
+)
 from autobot_shared.fastapi_validation_handlers import register_validation_error_handlers
 
 # Issue #697: OpenTelemetry distributed tracing
@@ -38,7 +45,14 @@ from initialization import (
     load_optional_routers,
     register_root_endpoints,
 )
+from initialization.credential_handlers import register_credential_handlers
 from initialization.integrity_handlers import register_integrity_handlers
+from initialization.memory_graph_handlers import register_memory_graph_handlers
+from initialization.registry_handlers import register_registry_handlers
+from initialization.router_registry.route_dependencies import dependencies_for
+from initialization.session_lease_handlers import register_session_lease_handlers
+from knowledge.upload_rejections import UploadRejection, upload_rejection_handler
+from utils.error_boundaries import register_backend_hooks
 
 # Store logger for app usage
 logger = get_logger(__name__)
@@ -56,13 +70,25 @@ def _register_exception_handlers(app: FastAPI) -> None:
     # integrity violation has a specific, actionable answer and must not be
     # flattened into a 500 (#15775).
     register_integrity_handlers(app)
+    register_registry_handlers(app)
+    register_credential_handlers(app)
+    register_memory_graph_handlers(app)
+    register_session_lease_handlers(app)  # a busy chat session is a 409 on every route (#20862)
     # A 422's default body echoes the submitted payload verbatim -- the
     # concrete case is a secret disclosed through a failed request model
     # validator (#16428 security review).
     register_validation_error_handlers(app)
+    register_client_disconnect_handlers(app)  # consumed in ExceptionMiddleware, not re-raised to the server (#20939)
+
+    # Upload rejections carry a stable detail_code the frontend maps to i18n (#17577).
+    app.add_exception_handler(UploadRejection, upload_rejection_handler)
 
     @app.exception_handler(Exception)
-    async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    async def _unhandled_exception_handler(request: Request, exc: Exception) -> Response | JSONResponse:
+        if is_boundary_disconnect(exc):
+            # Nobody is reading: no traceback, no 500 body (#20939).
+            log_client_disconnect(logger, exc, f"{request.method} {request.url.path}")
+            return Response(status_code=CLIENT_CLOSED_REQUEST)
         logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
         return JSONResponse(
             status_code=500,
@@ -85,7 +111,9 @@ def _register_routers(app: FastAPI) -> None:
 
     for router, prefix, tags, name in core_routers:
         try:
-            app.include_router(router, prefix=f"/api{prefix}", tags=tags)
+            # #16857: cross-cutting controls a router's own module cannot hold
+            deps = dependencies_for(name)
+            app.include_router(router, prefix=f"/api{prefix}", tags=tags, dependencies=deps)
             logger.info("✅ Registered core router: %s at /api%s", name, prefix)
         except Exception as e:
             logger.error("❌ Failed to register core router %s: %s", name, e)
@@ -192,6 +220,7 @@ class AppFactory:
 
         # Issue #1733: Global exception handler — prevent stack traces in responses
         _register_exception_handlers(app)
+        install_client_disconnect_guard(app)  # outermost: outer-middleware disconnects too (#20939)
 
         configure_middleware(app, allow_origins=allow_origins)
         register_root_endpoints(app)
@@ -220,6 +249,8 @@ def create_app(**kwargs) -> FastAPI:
         app = create_app(title="My App", version="2.0.0")
         ```
     """
+    # #18554: the shared boundaries get cancel scopes and error metrics only by registration.
+    register_backend_hooks()
     factory = AppFactory()
     return factory.create_fastapi_app(**kwargs)
 

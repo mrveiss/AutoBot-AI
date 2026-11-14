@@ -14,6 +14,7 @@ from auth_middleware import check_admin_permission
 # Issue #208: Code Pattern Detection & Optimization
 from .endpoints import api_endpoints  # Issue #527: API Endpoint Checker
 from .endpoints import environment  # Issue #538: Environment analysis
+from .endpoints import environment_default_model  # Issue #15502: AI filter model served to the UI
 from .endpoints import impact  # Issue #13506: impact analysis (REST/GUI path)
 from .endpoints import ownership  # Issue #248: Code Ownership and Expertise Map
 from .endpoints import (
@@ -31,6 +32,7 @@ from .endpoints import (
 from .endpoints import queue as queue_router
 from .endpoints import (
     report,
+    run_state,
     sources,
     stats,
 )
@@ -47,6 +49,7 @@ router = APIRouter(
 # Include all endpoint routers
 router.include_router(indexing.router)
 router.include_router(stats.router)
+router.include_router(run_state.router)  # Issue #21003: partial-run label
 router.include_router(charts.router)
 router.include_router(dependencies.router)
 router.include_router(import_tree.router)
@@ -57,6 +60,7 @@ router.include_router(cache.router)
 router.include_router(report.router)
 router.include_router(api_endpoints.router)  # Issue #527: API Endpoint Checker
 router.include_router(environment.router)  # Issue #538: Environment analysis
+router.include_router(environment_default_model.router)  # Issue #15502
 router.include_router(cross_language_patterns.router)  # Issue #244: Cross-Language Patterns
 router.include_router(pattern_analysis.router)  # Issue #208: Code Pattern Detection
 router.include_router(ownership.router)  # Issue #248: Code Ownership and Expertise Map

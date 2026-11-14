@@ -34,7 +34,3 @@ class ConfigSettings(BaseSettings):
     # Redis settings for distributed config
     use_redis_cache: bool = Field(default=True, validation_alias="USE_REDIS_CONFIG_CACHE")
     redis_key_prefix: str = Field(default="config:", validation_alias="CONFIG_REDIS_PREFIX")
-
-
-# Deprecated: use ConfigSettings instead
-UnifiedConfigSettings = ConfigSettings

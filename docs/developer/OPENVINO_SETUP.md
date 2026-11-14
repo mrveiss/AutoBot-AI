@@ -128,7 +128,7 @@ embeddings = OpenVINOEmbeddings(
 from langchain_community.document_compressors.openvino_rerank import OpenVINOReranker
 
 reranker = OpenVINOReranker(
-    model_name_or_path="cross-encoder/ms-marco-MiniLM-L-6-v2",
+    model_name_or_path="cross-encoder/ms-marco-MiniLM-L6-v2",
     device="CPU"
 )
 ```

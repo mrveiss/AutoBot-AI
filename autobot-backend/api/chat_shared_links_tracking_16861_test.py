@@ -20,6 +20,8 @@ import pytest
 from fastapi import HTTPException
 
 import api.chat_shared_links as shared_links
+from testkit.canonical_gate import install_canonical_resolver
+from testkit.fake_async_session import FakeAsyncSession
 
 
 def _link(require_login: bool = False, view_count: int = 0, last_accessed_at=None) -> types.SimpleNamespace:
@@ -38,38 +40,32 @@ class _FakeAuthMiddleware:
         return self._user
 
 
-class _FakeDB:
-    def __init__(self) -> None:
-        self.committed = False
-
-    async def commit(self) -> None:
-        self.committed = True
-
-
 def test_enforce_require_login_is_a_noop_when_not_required() -> None:
     link = _link(require_login=False)
-    shared_links._enforce_require_login(link, request=None)  # must not raise
+    asyncio.run(shared_links._enforce_require_login(link, request=None))  # must not raise
 
 
 def test_enforce_require_login_allows_an_authenticated_visitor(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(shared_links, "get_auth_middleware", lambda: _FakeAuthMiddleware({"username": "alice"}))
+    install_canonical_resolver(
+        monkeypatch, "api.chat_shared_links.resolve_human_user", _FakeAuthMiddleware({"username": "alice"})
+    )
     link = _link(require_login=True)
-    shared_links._enforce_require_login(link, request=None)  # must not raise
+    asyncio.run(shared_links._enforce_require_login(link, request=None))  # must not raise
 
 
 def test_enforce_require_login_rejects_an_anonymous_visitor(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(shared_links, "get_auth_middleware", lambda: _FakeAuthMiddleware(None))
+    install_canonical_resolver(monkeypatch, "api.chat_shared_links.resolve_human_user", _FakeAuthMiddleware(None))
     link = _link(require_login=True)
 
     with pytest.raises(HTTPException) as exc_info:
-        shared_links._enforce_require_login(link, request=None)
+        asyncio.run(shared_links._enforce_require_login(link, request=None))
 
     assert exc_info.value.status_code == 401
 
 
 def test_record_access_increments_view_count_and_stamps_last_accessed() -> None:
     link = _link(view_count=3, last_accessed_at=None)
-    db = _FakeDB()
+    db = FakeAsyncSession()
 
     asyncio.run(shared_links._record_access(link, db))
 
@@ -80,7 +76,7 @@ def test_record_access_increments_view_count_and_stamps_last_accessed() -> None:
 
 def test_record_access_is_cumulative_across_repeated_visits() -> None:
     link = _link(view_count=0)
-    db = _FakeDB()
+    db = FakeAsyncSession()
 
     asyncio.run(shared_links._record_access(link, db))
     asyncio.run(shared_links._record_access(link, db))

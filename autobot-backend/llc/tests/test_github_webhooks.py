@@ -107,7 +107,7 @@ class TestValidatePrUrl:
 
 class TestVerifySignature:
     def _fn(self):
-        from llc.api.github_webhooks import verify_webhook_signature  # noqa: PLC0415
+        from autobot_shared.webhook_signature import verify_webhook_signature  # noqa: PLC0415
 
         return verify_webhook_signature
 

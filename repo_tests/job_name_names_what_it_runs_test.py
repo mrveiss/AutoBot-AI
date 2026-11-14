@@ -82,8 +82,9 @@ def _jobs(root: Path = _REPO_ROOT) -> list[tuple]:
     return found
 
 
-#: MEASURED 2026-09-11 against this tree: 103 jobs parse -- unchanged from the
-#: figure #15934 left behind. Migrated to `_reach.declare` (#15928) rather than
+#: MEASURED 2026-10-10 against this tree: 97 jobs parse (was 112 before #15360 turned
+#: sixteen self-contained `changes` jobs into `uses:` calls, which carry no `steps` and are
+#: not jobs this sweep can read; the reusable job adds one). Migrated to `_reach.declare` (#15928) rather than
 #: left as a bare constant, so the empty-tree case is proven by
 #: `reach_declarations_test` instead of relying on this file's own floor test.
 #: `growth=10` absorbs an ordinary new workflow or two before asking for a
@@ -92,7 +93,6 @@ def _jobs(root: Path = _REPO_ROOT) -> list[tuple]:
 REACH = declare(
     "workflow-job-parse-sweep",
     discover=_jobs,
-    floor=103,
     growth=10,
     skips=0,
     what="parsed workflow jobs",

@@ -5,7 +5,7 @@
 """
 AutoBot Team Management API
 
-Manages teams in the remote AutoBot database (AUTOBOT_DB_HOST:5432/autobot_users).
+Manages teams in the remote AutoBot database (AUTOBOT_POSTGRES_HOST:5432/autobot_users).
 Teams group application users for collaboration and shared resources.
 """
 
@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.permissions import Permission
 from services.auth import require_permission
-from user_management.database import get_autobot_session
+from user_management.database import get_autobot_db
 from user_management.services import TeamService, TenantContext
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/autobot-teams", tags=["autobot-teams"])
 
 
 # Pydantic schemas for teams
-class TeamCreate(BaseModel):
+class AutobotTeamCreate(BaseModel):
     """Schema for creating a team."""
 
     name: str = Field(..., min_length=1, max_length=100)
@@ -34,14 +34,14 @@ class TeamCreate(BaseModel):
     organization_id: uuid.UUID | None = None
 
 
-class TeamUpdate(BaseModel):
+class AutobotTeamUpdate(BaseModel):
     """Schema for updating a team."""
 
     name: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = None
 
 
-class TeamResponse(BaseModel):
+class AutobotTeamResponse(BaseModel):
     """Schema for team response."""
 
     id: uuid.UUID
@@ -55,10 +55,10 @@ class TeamResponse(BaseModel):
         from_attributes = True
 
 
-class TeamListResponse(BaseModel):
+class AutobotTeamListResponse(BaseModel):
     """Schema for paginated team list response."""
 
-    teams: list[TeamResponse]
+    teams: list[AutobotTeamResponse]
     total: int
     limit: int
     offset: int
@@ -71,18 +71,12 @@ class TeamMemberAdd(BaseModel):
     role: str = "member"
 
 
-async def get_autobot_db():
-    """Dependency for AutoBot database session."""
-    async with get_autobot_session() as session:
-        yield session
-
-
-@router.post("", response_model=TeamResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AutobotTeamResponse, status_code=status.HTTP_201_CREATED)
 async def create_team(
-    team_data: TeamCreate,
+    team_data: AutobotTeamCreate,
     current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
-) -> TeamResponse:
+) -> AutobotTeamResponse:
     """Create a new AutoBot team."""
     logger.info("Creating AutoBot team: %s", team_data.name)
     context = TenantContext(is_platform_admin=True)
@@ -94,40 +88,40 @@ async def create_team(
             description=team_data.description,
             organization_id=team_data.organization_id,
         )
-        return TeamResponse.model_validate(team)
+        return AutobotTeamResponse.model_validate(team)
     except Exception as e:
         logger.error("Failed to create AutoBot team: %s", e)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error") from e
 
 
-@router.get("", response_model=TeamListResponse)
+@router.get("", response_model=AutobotTeamListResponse)
 async def list_teams(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     search: str = Query(None),
     current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
-) -> TeamListResponse:
+) -> AutobotTeamListResponse:
     """List AutoBot teams with pagination and search."""
     logger.info("Listing AutoBot teams (skip=%d, limit=%d, search=%s)", skip, limit, search)
     context = TenantContext(is_platform_admin=True)
     team_service = TeamService(db, context)
 
     teams, total = await team_service.list_teams(limit=limit, offset=skip, search=search)
-    return TeamListResponse(
-        teams=[TeamResponse.model_validate(team) for team in teams],
+    return AutobotTeamListResponse(
+        teams=[AutobotTeamResponse.model_validate(team) for team in teams],
         total=total,
         limit=limit,
         offset=skip,
     )
 
 
-@router.get("/{team_id}", response_model=TeamResponse)
+@router.get("/{team_id}", response_model=AutobotTeamResponse)
 async def get_team(
     team_id: uuid.UUID,
     current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
-) -> TeamResponse:
+) -> AutobotTeamResponse:
     """Get AutoBot team by ID."""
     context = TenantContext(is_platform_admin=True)
     team_service = TeamService(db, context)
@@ -135,16 +129,16 @@ async def get_team(
     team = await team_service.get_team(team_id)
     if not team:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
-    return TeamResponse.model_validate(team)
+    return AutobotTeamResponse.model_validate(team)
 
 
-@router.patch("/{team_id}", response_model=TeamResponse)
+@router.patch("/{team_id}", response_model=AutobotTeamResponse)
 async def update_team(
     team_id: uuid.UUID,
-    updates: TeamUpdate,
+    updates: AutobotTeamUpdate,
     current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
-) -> TeamResponse:
+) -> AutobotTeamResponse:
     """Update AutoBot team."""
     logger.info("Updating AutoBot team: %s", team_id)
     context = TenantContext(is_platform_admin=True)
@@ -156,7 +150,7 @@ async def update_team(
             name=updates.name,
             description=updates.description,
         )
-        return TeamResponse.model_validate(team)
+        return AutobotTeamResponse.model_validate(team)
     except Exception as e:
         logger.error("Failed to update AutoBot team: %s", e)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e

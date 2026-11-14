@@ -12,7 +12,6 @@ node addition, enrollment, role assignment, and fleet provisioning.
 
 import asyncio
 import logging
-import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
@@ -25,12 +24,14 @@ from pydantic import BaseModel
 
 from api.websocket import ws_manager
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.role_group_ownership import split_node_role_rows, warn_stale_detected_roles, withhold_unowned_groups
+from autobot_shared.ssot_config import config
 from config import settings
-from services.ansible_secrets import fetch_deploy_secrets
 from services.auth import get_current_user
 from services.database import db_service
 from services.inventory_builder import _DECLARED_ONLY_GROUPS, _declared_roles, groups_for_role_tokens
-from services.playbook_executor import ANSIBLE_LOCAL_TMP, get_playbook_executor, link_group_vars
+from services.llm_placement import llm_infra_vars
+from services.playbook_executor import get_playbook_executor
 from services.provision_progress import (
     PROVISION_STALE_SECONDS,
     handle_provision_result,
@@ -39,6 +40,8 @@ from services.provision_progress import is_stale as _provision_is_stale
 from services.provision_progress import mark_progress as _mark_provision_progress
 from services.provision_progress import write_provision_log as _write_provision_log
 from services.role_registry import ROLE_ANSIBLE_GROUPS
+from services.ssh_utils import ssh_destination_args, ssh_options
+from services.temp_inventory import write_linked_inventory
 
 logger = logging.getLogger(__name__)
 
@@ -115,22 +118,17 @@ async def _set_setting(key: str, value: str) -> None:
         await session.commit()
 
 
-def _groups_for_role_tokens_both_vocabularies(role_tokens: list[str]) -> set[str]:
+def _groups_for_role_tokens_both_vocabularies(role_tokens: list[str], detected_tokens: list[str] = ()) -> set[str]:
     """Union of the canonical map AND the legacy ``ROLE_ANSIBLE_GROUPS`` one.
 
-    Split out so both the raw (all NodeRole rows) and declared (Node.roles
-    alone) group sets in ``_ansible_groups_for_nodes`` are computed the same
-    way -- a role like ``vnc`` reaches ``backend`` ONLY through the legacy
-    map (it has no entry in ``inventory_builder._ROLE_TO_GROUPS`` at all), so
-    computing "declared" through the canonical map alone would strip a role
-    the node genuinely declared (#14638).
+    Raw and declared sets in ``_ansible_groups_for_nodes`` share it: ``vnc``
+    reaches ``backend`` ONLY through the legacy map (#14638). ``detected_tokens``
+    take the same owner gate as ``build_registry_inventory`` (#19197).
     """
-    groups = set(groups_for_role_tokens(role_tokens))
-    for token in role_tokens:
-        legacy = ROLE_ANSIBLE_GROUPS.get(token)
-        if legacy:
-            groups.add(legacy)
-    return groups
+    legacy = {ROLE_ANSIBLE_GROUPS[t] for t in role_tokens if t in ROLE_ANSIBLE_GROUPS}
+    legacy_seen = {ROLE_ANSIBLE_GROUPS[t] for t in detected_tokens if t in ROLE_ANSIBLE_GROUPS}
+    owned = withhold_unowned_groups(legacy_seen, detected_tokens)
+    return groups_for_role_tokens(role_tokens, detected_tokens) | legacy | owned
 
 
 def _ansible_groups_for_nodes(
@@ -173,23 +171,25 @@ def _ansible_groups_for_nodes(
         Every group each host belongs to, from both mappings, privileged
         groups stripped for any node that did not declare its way in.
     """
-    roles_by_node: dict[str, list[str]] = {}
+    rows_by_node: dict[str, list] = {}
     raw_node_groups: dict[str, set[str]] = {}
 
     for nr in node_roles:
         inv_name = node_id_to_inv_name.get(nr.node_id)
         if not inv_name:
             continue
-        roles_by_node.setdefault(inv_name, []).append(nr.role_name)
-
-    for inv_name, role_tokens in roles_by_node.items():
-        raw_node_groups[inv_name] = _groups_for_role_tokens_both_vocabularies(role_tokens)
+        rows_by_node.setdefault(inv_name, []).append(nr)
 
     declared_roles_by_inv: dict[str, list[str]] = {}
     for node in db_nodes:
         inv_name = node_id_to_inv_name.get(node.node_id)
         if inv_name:
             declared_roles_by_inv[inv_name] = _declared_roles(node)
+            warn_stale_detected_roles(node, _groups_for_role_tokens_both_vocabularies)
+
+    for inv_name, rows in rows_by_node.items():
+        split = split_node_role_rows(rows, declared_roles_by_inv.get(inv_name, []))
+        raw_node_groups[inv_name] = _groups_for_role_tokens_both_vocabularies(*split)
 
     groups: dict[str, set[str]] = {}
     for inv_name, node_group_set in raw_node_groups.items():
@@ -247,29 +247,22 @@ def _build_inventory_children(
     return children, ansible_groups
 
 
-# Role name -> (variable_name, port) for infrastructure service discovery.
-# Maps active roles to the Ansible vars that templates expect (#1431).
-# Ports are INTERNAL service ports (uvicorn/service listen ports), not the
-# external nginx TLS port (8443).  Co-located nodes use 127.0.0.1 so uvicorn
-# binds to loopback; nginx already holds 8443 on the same host (#3426).
+# Role name -> (variable_name, port) for service discovery (#1431). Ports are INTERNAL listen ports, not nginx's
+# 8443. Co-located nodes use 127.0.0.1 so uvicorn binds to loopback; nginx already holds 8443 there (#3426).
 _ROLE_INFRA_VARS: dict[str, tuple[str, int]] = {
     "backend": ("backend_host", 8001),  # uvicorn internal port (#3426: was 8443)
     "redis": ("redis_host", 6379),
     "frontend": ("frontend_host", 5173),
     "ai-stack": ("ai_stack_host", 8080),
     "npu-worker": ("npu_worker_host", 8081),
-    "browser-service": ("browser_host", 3000),
-    "tts-worker": (
-        "tts_host",
-        8083,
-    ),  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU)
+    "browser-service": ("browser_host", config.port.browser),  # #19324: was Grafana's 3000
+    "tts-worker": ("tts_host", 8083),  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU)
 }
 
-# ChromaDB runs on the AI stack VM but is NOT a separately-routed role, so it
-# has no entry in _ROLE_INFRA_VARS.  This constant must match chromadb_port in
-# ansible/roles/ai-stack/defaults/main.yml and backend_chromadb_port in
-# ansible/roles/backend/defaults/main.yml (#3526).
-_CHROMADB_PORT = 8100
+# ChromaDB runs on the AI stack VM but is NOT a separately-routed role, so it has no
+# _ROLE_INFRA_VARS entry (#3526). Its port is the SSOT's (#19321); the ansible
+# chromadb_port / backend_chromadb_port defaults are pinned to it by a repo test.
+_CHROMADB_PORT = config.port.chromadb
 
 
 def _build_infra_vars(
@@ -297,6 +290,7 @@ def _build_infra_vars(
             resolved = "127.0.0.1" if (local_ips and ip in local_ips) else ip
             infra_vars[host_var] = resolved
             infra_vars[host_var.replace("_host", "_port")] = port
+    infra_vars.update(llm_infra_vars(node_roles, node_id_to_ip))
     return infra_vars
 
 
@@ -656,13 +650,8 @@ def _write_wizard_inventory(inventory: dict) -> str:
     Returns:
         Path to the written file, as a string.
     """
-    tmp_dir = Path(ANSIBLE_LOCAL_TMP)
-    tmp_dir.mkdir(mode=0o700, exist_ok=True)
-    fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-", dir=str(tmp_dir))
-    with open(fd, "w", encoding="utf-8") as f:
-        yaml.dump(inventory, f, default_flow_style=False)
-    link_group_vars(Path(path), get_playbook_executor().ansible_dir)
-    return path
+    content = yaml.dump(inventory, default_flow_style=False)
+    return str(write_linked_inventory(content, "wizard-inventory-", get_playbook_executor().ansible_dir))
 
 
 async def _generate_dynamic_inventory(
@@ -735,17 +724,11 @@ async def _ssh_check_host(hostname: str, ip: str, user: str, key: str) -> tuple[
     try:
         proc = await asyncio.create_subprocess_exec(
             "ssh",
-            "-o",
-            "ConnectTimeout=5",
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "BatchMode=yes",
+            *ssh_options("ConnectTimeout=5", "StrictHostKeyChecking=no", "BatchMode=yes"),
             "-i",
             key,
-            f"{user}@{ip}",
-            "echo",
-            "ok",
+            *ssh_destination_args(user, ip),
+            "echo ok",
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
@@ -765,7 +748,7 @@ async def _check_node_reachability(inventory_path: Path) -> dict[str, bool]:
 
     Returns a dict mapping inventory hostname -> reachable (bool).
     """
-    raw = yaml.safe_load(inventory_path.read_text(encoding="utf-8"))
+    raw = yaml.safe_load(await asyncio.to_thread(inventory_path.read_text, encoding="utf-8"))
     all_vars = raw.get("all", {}).get("vars", {})
     default_key = str(
         Path(
@@ -956,9 +939,72 @@ async def _complete_wizard_deployments(
         logger.warning("Failed to update wizard deployment records: %s", exc)
 
 
-async def _run_provisioning_task(
-    node_ids: list[str] | None,
-) -> None:
+_ALL_UNREACHABLE_ERROR = "All nodes are unreachable -- ensure nodes are enrolled before provisioning"
+
+
+async def _fail_provisioning(error: str, file_log: str | None = None) -> None:
+    """Record a failed run in the state, the provision log and the websocket."""
+    _provision_state["status"] = "failed"
+    _provision_state["error"] = error
+    _provision_state["finished_at"] = time.time()
+    _write_provision_log(f"ERROR: {file_log or error}")
+    await ws_manager.send_provision_status("failed", "", 0, error=error)
+    await ws_manager.send_provision_log("error", error)
+
+
+async def _fail_all_unreachable(node_to_deployment: dict[str, str]) -> None:
+    """Fail the run because the SSH pre-check reached no node, and close its deployment records."""
+    await _fail_provisioning(_ALL_UNREACHABLE_ERROR, "All nodes are unreachable")
+    await _complete_wizard_deployments(
+        node_to_deployment, success=False, output="", error=_ALL_UNREACHABLE_ERROR, reachable_nodes=None
+    )
+
+
+async def _warn_unreachable(unreachable: list[str], inventory_text: str) -> None:
+    """Log and broadcast one warning per node the SSH pre-check could not reach (#2897)."""
+    inv_hosts = yaml.safe_load(inventory_text).get("all", {}).get("hosts", {})
+    for hostname in unreachable:
+        host_vars = inv_hosts.get(hostname, {})
+        ip = host_vars.get("ansible_host", hostname) if isinstance(host_vars, dict) else hostname
+        msg = f"Node {hostname} ({ip}) is unreachable -- skipping (not enrolled?)"
+        _write_provision_log(f"WARNING: {msg}")
+        await ws_manager.send_provision_log("warning", msg)
+
+
+async def _provision_log_callback(progress: dict) -> None:
+    """Playbook progress -> provision log, state and websocket (#2754)."""
+    msg = progress.get("message", "")
+    stage = progress.get("stage", "")
+    if not msg:
+        return
+    _provision_state["output_lines"].append(msg)
+    _write_provision_log(msg)
+    _mark_provision_progress(_provision_state)  # #14856
+    log_type = "task"
+    if stage in ("heartbeat", "phase"):
+        log_type = stage
+    elif stage.endswith("_complete") or stage == "complete":
+        log_type = "success"
+    elif "error" in msg.lower() or "failed" in msg.lower():
+        log_type = "error"
+    await ws_manager.send_provision_log(log_type, msg)
+    elapsed = time.time() - (_provision_state.get("started_at") or time.time())
+    await ws_manager.send_provision_status("running", stage, elapsed)
+
+
+async def _report_provision_outcome(result: dict) -> None:
+    """Send the final completed/failed status and log line for a finished playbook run."""
+    elapsed = time.time() - (_provision_state.get("started_at") or time.time())
+    if result.get("success"):
+        await ws_manager.send_provision_status("completed", "complete", elapsed)
+        await ws_manager.send_provision_log("success", "Fleet provisioning completed successfully")
+    else:
+        human_error = _provision_state.get("error", "Provisioning failed")
+        await ws_manager.send_provision_status("failed", "", elapsed, error=human_error)
+        await ws_manager.send_provision_log("error", f"Provisioning failed — {human_error}")
+
+
+async def _run_provisioning_task(node_ids: list[str] | None) -> None:
     """Run Ansible provisioning in background (#1384)."""
     _write_provision_log(
         f"\n{'=' * 60}\n"
@@ -974,15 +1020,11 @@ async def _run_provisioning_task(
     try:
         temp_inventory_path = await _generate_dynamic_inventory(node_ids)
         if not temp_inventory_path:
-            _provision_state["status"] = "failed"
-            _provision_state["error"] = "No nodes found for provisioning"
-            _provision_state["finished_at"] = time.time()
-            _write_provision_log("ERROR: No nodes found for provisioning")
-            await ws_manager.send_provision_status("failed", "", 0, error="No nodes found for provisioning")
-            await ws_manager.send_provision_log("error", "No nodes found for provisioning")
+            await _fail_provisioning("No nodes found for provisioning")
             return
 
-        _write_provision_log(f"Inventory: {temp_inventory_path}\n" f"{temp_inventory_path.read_text(encoding='utf-8')}")
+        inventory_text = await asyncio.to_thread(temp_inventory_path.read_text, encoding="utf-8")
+        _write_provision_log(f"Inventory: {temp_inventory_path}\n{inventory_text}")
 
         # Create Deployment records before running the playbook (#3032)
         node_to_deployment = await _create_wizard_deployments(node_ids)
@@ -993,81 +1035,27 @@ async def _run_provisioning_task(
         reachable = [h for h, ok in reachability.items() if ok]
 
         if unreachable:
-            raw_inv = yaml.safe_load(temp_inventory_path.read_text(encoding="utf-8"))
-            inv_hosts = raw_inv.get("all", {}).get("hosts", {})
-            for hostname in unreachable:
-                host_vars = inv_hosts.get(hostname, {})
-                ip = host_vars.get("ansible_host", hostname) if isinstance(host_vars, dict) else hostname
-                msg = f"Node {hostname} ({ip}) is unreachable" " -- skipping (not enrolled?)"
-                _write_provision_log(f"WARNING: {msg}")
-                await ws_manager.send_provision_log("warning", msg)
+            await _warn_unreachable(unreachable, inventory_text)
 
         if not reachable:
-            _provision_state["status"] = "failed"
-            _provision_state["error"] = "All nodes are unreachable" " -- ensure nodes are enrolled before provisioning"
-            _provision_state["finished_at"] = time.time()
-            _write_provision_log("ERROR: All nodes are unreachable")
-            await ws_manager.send_provision_status(
-                "failed",
-                "",
-                0,
-                error=("All nodes are unreachable" " -- ensure nodes are enrolled before provisioning"),
-            )
-            await ws_manager.send_provision_log(
-                "error",
-                ("All nodes are unreachable" " -- ensure nodes are enrolled before provisioning"),
-            )
-            await _complete_wizard_deployments(
-                node_to_deployment,
-                success=False,
-                output="",
-                error="All nodes are unreachable -- ensure nodes are enrolled before provisioning",
-                reachable_nodes=None,
-            )
+            await _fail_all_unreachable(node_to_deployment)
             return
 
         # Build --limit to include only reachable nodes (#2897)
         reachability_limit: list[str] | None = None
         if unreachable:
             reachability_limit = reachable
-            logger.info(
-                "Excluding %d unreachable node(s) from provisioning: %s",
-                len(unreachable),
-                unreachable,
-            )
+            logger.info("Excluding %d unreachable node(s) from provisioning: %s", len(unreachable), unreachable)
 
         executor = get_playbook_executor()
 
-        async def log_callback(progress: dict) -> None:
-            msg = progress.get("message", "")
-            stage = progress.get("stage", "")
-            if msg:
-                _provision_state["output_lines"].append(msg)
-                _write_provision_log(msg)
-                _mark_provision_progress(_provision_state)  # #14856
-                # Broadcast via WebSocket (#2754)
-                log_type = "task"
-                if stage == "heartbeat":
-                    log_type = "heartbeat"
-                elif stage == "phase":
-                    log_type = "phase"
-                elif stage.endswith("_complete") or stage == "complete":
-                    log_type = "success"
-                elif "error" in msg.lower() or "failed" in msg.lower():
-                    log_type = "error"
-                await ws_manager.send_provision_log(log_type, msg)
-                elapsed = time.time() - (_provision_state.get("started_at") or time.time())
-                await ws_manager.send_provision_status("running", stage, elapsed)
-
-        # Issue #3079: Pass stored secrets as Ansible extra_vars (#3778)
-        extra_vars = await fetch_deploy_secrets()
-
+        # Stored secrets (#3778) are merged, untagged, by execute_playbook itself; passing them as
+        # caller vars would tag them !unsafe (#19005).
         result = await executor.execute_playbook(
             playbook_name="playbooks/provision-fleet-roles.yml",
-            extra_vars=extra_vars,
             limit=reachability_limit,
             inventory_path=temp_inventory_path,
-            progress_callback=log_callback,
+            progress_callback=_provision_log_callback,
         )
         handle_provision_result(_provision_state, result)
 
@@ -1084,14 +1072,7 @@ async def _run_provisioning_task(
         # Even with partial failures, roles on reachable nodes were deployed.
         await _activate_provisioned_roles(reachable or node_ids)
 
-        elapsed = time.time() - (_provision_state.get("started_at") or time.time())
-        if result.get("success"):
-            await ws_manager.send_provision_status("completed", "complete", elapsed)
-            await ws_manager.send_provision_log("success", "Fleet provisioning completed successfully")
-        else:
-            human_error = _provision_state.get("error", "Provisioning failed")
-            await ws_manager.send_provision_status("failed", "", elapsed, error=human_error)
-            await ws_manager.send_provision_log("error", f"Provisioning failed — {human_error}")
+        await _report_provision_outcome(result)
     except Exception as exc:
         _provision_state["status"] = "failed"
         _provision_state["error"] = str(exc)
@@ -1101,13 +1082,7 @@ async def _run_provisioning_task(
         # Sanitize -- Ansible exceptions may contain credentials (#2754)
         await ws_manager.send_provision_status("failed", "", elapsed, error="internal error")
         await ws_manager.send_provision_log("error", "Provisioning error: internal error (see server logs)")
-        await _complete_wizard_deployments(
-            node_to_deployment,
-            success=False,
-            output="",
-            error="internal error",
-            reachable_nodes=None,
-        )
+        await _complete_wizard_deployments(node_to_deployment, False, "", "internal error", None)
     finally:
         _provision_state["finished_at"] = time.time()
         if temp_inventory_path and temp_inventory_path.exists():

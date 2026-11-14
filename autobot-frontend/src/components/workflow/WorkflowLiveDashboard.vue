@@ -88,18 +88,15 @@
             <div class="progress-track">
               <div
                 class="progress-fill"
-                :style="{ width: getProgressPercent(wf) + '%' }"
+                :style="{ width: getWorkflowStepDisplay(wf).percent + '%' }"
                 :class="getProgressClass(wf)"
               ></div>
             </div>
             <div class="progress-meta">
               <span class="step-counter">
-                {{ $t('workflow.liveDashboard.stepOf', {
-                  current: wf.current_step + 1,
-                  total: wf.total_steps
-                }) }}
+                {{ $t('workflow.liveDashboard.stepOf', stepOf(wf)) }}
               </span>
-              <span class="progress-pct">{{ Math.round(getProgressPercent(wf)) }}%</span>
+              <span class="progress-pct">{{ getWorkflowStepDisplay(wf).percent }}%</span>
             </div>
           </div>
 
@@ -158,6 +155,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed, ref, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { getWorkflowStepDisplay } from '@/utils/workflowStepProgress';
 import { createLogger } from '@/utils/debugUtils';
 import { useEventBus } from '@/composables/useEventBus'
 import type { LiveEvent } from '@/services/LiveEventService'
@@ -276,16 +274,13 @@ function getStatusLabel(wf: ActiveWorkflow): string {
   return t('workflow.liveDashboard.pending');
 }
 
-function getProgressPercent(wf: ActiveWorkflow): number {
-  if (wf.total_steps === 0) return 0;
-  const done = wf.steps.filter(
-    s => s.status === 'completed' || s.status === 'skipped',
-  ).length;
-  return (done / wf.total_steps) * 100;
+function stepOf(wf: ActiveWorkflow): { current: number; total: number } {
+  const { current, total } = getWorkflowStepDisplay(wf);
+  return { current, total };
 }
 
 function getProgressClass(wf: ActiveWorkflow): string {
-  if (wf.steps.some(s => s.status === 'failed')) return 'progress-failed';
+  if (wf.is_cancelled || wf.steps.some(s => s.status === 'failed')) return 'progress-failed';
   if (wf.is_paused) return 'progress-paused';
   if (wf.completed_at) return 'progress-completed';
   return 'progress-active';
@@ -475,15 +470,15 @@ onUnmounted(() => {
   min-width: 140px;
 }
 
-.stat-chip i {
-  font-size: var(--text-base);
+.stat-chip .icon {
+  width: var(--text-base); height: var(--text-base);
   color: var(--text-secondary);
 }
 
-.stat-chip:nth-child(1) i { color: var(--color-success); }
-.stat-chip:nth-child(2) i { color: var(--color-warning); }
-.stat-chip:nth-child(3) i { color: var(--color-info); }
-.stat-chip:nth-child(4) i { color: var(--color-error); }
+.stat-chip:nth-child(1) .icon { color: var(--color-success); }
+.stat-chip:nth-child(2) .icon { color: var(--color-warning); }
+.stat-chip:nth-child(3) .icon { color: var(--color-info); }
+.stat-chip:nth-child(4) .icon { color: var(--color-error); }
 
 .stat-value {
   font-size: var(--text-lg);
@@ -513,7 +508,7 @@ onUnmounted(() => {
   gap: var(--spacing-2-5);
 }
 
-.section-header h3 i {
+.section-header h3 .icon {
   color: var(--color-primary);
 }
 
@@ -552,9 +547,9 @@ onUnmounted(() => {
   text-align: center;
 }
 
-.empty-state i,
-.loading-state i {
-  font-size: 40px;
+.empty-state .icon,
+.loading-state .icon {
+  width: 40px; height: 40px;
   margin-bottom: var(--spacing-3);
 }
 
@@ -712,7 +707,7 @@ onUnmounted(() => {
 }
 
 .timeline-dot.failed {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   border-color: var(--color-error);
   color: white;
 }
@@ -720,7 +715,7 @@ onUnmounted(() => {
 .timeline-dot.executing {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .timeline-dot.waiting_approval {

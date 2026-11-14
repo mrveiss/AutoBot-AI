@@ -15,22 +15,20 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from check_pr_template_sections import (  # noqa: E402
     REQUIRED_SECTIONS,
     TEMPLATE_PATH,
     headings,
+    multi_close_lines,
     report,
     section_content,
 )
 
-COMPLETE = (
-    "## Thinking Path\nwhy\n\n"
-    "## What Changed\nwhat\n\n"
-    "## Verification\nhow\n\n"
-    "## Model Used\nOpus 5\n"
-)
+COMPLETE = "## Thinking Path\nwhy\n\n" "## What Changed\nwhat\n\n" "## Verification\nhow\n\n" "## Model Used\nOpus 5\n"
 # The shape that produced four "empty section" errors on a complete body: a PR
 # opened with `gh pr create --body`, which never loads the template (#16793).
 WRONG_HEADINGS = "## Summary\nwhat this does\n\n## Test plan\nran the suite\n"
@@ -127,3 +125,40 @@ class TestTheRuleIsUnchanged:
 
     def test_an_empty_body_fails(self) -> None:
         assert not report("")[0]
+
+
+class TestOneClosingKeywordPerIssue:
+    """`Closes #A, #B` closes only #A; #19248 stayed open that way after #19451 (#19521)."""
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "Closes #1, #2",
+            "Fixes #1 and #2",
+            "resolves #1 & #2",
+            "Closes: #19397, #17120, #19248",
+            "closed mrveiss/AutoBot-AI#1, #2",
+        ],
+    )
+    def test_a_list_after_one_keyword_fails(self, line: str) -> None:
+        ok, lines = report(COMPLETE + "\n## Issue Link\n" + line + "\n")
+        assert not ok, lines
+        assert any("closes only the first" in out for out in lines), lines
+        assert any("one per line" in out for out in lines), lines
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            "Closes #1\nCloses #2",
+            "Closes #1, closes #2",
+            "Refs #1, #2, #3",
+            "Closes #1 (and see #2)",
+            "Example of the wrong form: `Closes #1, #2`",
+            "```\nCloses #1, #2\n```",
+            "<!-- Closes #1, #2 -->",
+        ],
+    )
+    def test_one_issue_per_keyword_refs_and_quoted_examples_pass(self, body: str) -> None:
+        assert multi_close_lines(body) == [], body
+        ok, lines = report(COMPLETE + "\n## Issue Link\n" + body + "\n")
+        assert ok, lines

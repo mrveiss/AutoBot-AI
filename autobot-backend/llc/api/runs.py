@@ -19,12 +19,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.logging_manager import get_logger
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ..adapters import get_adapter_for_agent
+from ..models.activity import ActorType
+from ..models.enums import LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
+from ..services.run_checkouts import ReleaseWhy, drop_released_fences, release_checkouts_for_run
+from ._common import acting_user_id
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["llc-runs"])
 
@@ -118,6 +124,17 @@ async def get_run(
     return data
 
 
+def _cancel_release(current_user: dict) -> ReleaseWhy:
+    """Why a cancel releases the run's checkouts: the cancelling person's act, or the system's for any other caller."""
+    user_id = acting_user_id(current_user)
+    return ReleaseWhy(
+        reason=LLCRunStatus.CANCELLED.value,
+        source="run_cancel",
+        actor_type=ActorType.USER if user_id else ActorType.SYSTEM,
+        actor_id=user_id,
+    )
+
+
 @router.post("/{agent_id}/runs/{run_id}/cancel", status_code=200)
 async def cancel_run(
     agent_id: str,
@@ -129,7 +146,7 @@ async def cancel_run(
     """Manual run cancel (board only).
 
     Sets run status = cancelled, calls adapter.cancel() best-effort,
-    and releases the Redis checkout lock when a work item was held.
+    and releases every work-item checkout the run made (and their Redis fences).
     """
     try:
         run_uuid = uuid.UUID(run_id)
@@ -165,16 +182,11 @@ async def cancel_run(
     except Exception:
         pass
 
-    # Release checkout lock
-    if run.work_item_id:
-        redis = await get_async_redis_client()
-        if redis is not None:
-            try:
-                await redis.delete(f"llc:checkout:{run.work_item_id}")
-            except Exception:
-                pass
+    # Every checkout this run made, by the run's own key: the DB claim and, after the commit, its fence.
+    released = await release_checkouts_for_run(session, run, _cancel_release(_current_user))
 
     await session.commit()
+    await drop_released_fences(released)
     return _run_to_dict(run)
 
 

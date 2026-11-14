@@ -18,7 +18,7 @@
   gather_facts: true
 
   vars:
-    backend_code_dir: /opt/autobot/autobot-backend
+    backend_code_dir: "{{ autobot.base_dir }}/autobot-backend"
     # symlink_action: remove|restore (must be provided via -e)
 
   pre_tasks:
@@ -98,7 +98,7 @@
         - name: Test import with symlink
           shell: |
             cd {{ backend_code_dir }}
-            export PYTHONPATH=/opt/autobot:{{ backend_code_dir }}
+            export PYTHONPATH={{ autobot.base_dir }}:{{ backend_code_dir }}
             {{ backend_code_dir }}/venv/bin/python -c "
             try:
                 from backend.models.user import User

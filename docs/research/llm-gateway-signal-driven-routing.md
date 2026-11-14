@@ -352,3 +352,17 @@ Umbrella **#16524**, children attached natively as sub-issues at filing time:
 | 6. No enforced per-backend concurrency admission control | #16527 | In progress |
 | 7. Extractive prompt compression written but unwired | #16526 | In progress |
 | 8. Duplicate semantic-cache implementations, one dead | #16528 | In progress |
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #16524 — Internal audit: close LLM request-pipeline gaps (safety scanning, caching, compression, admission control)
+- #16526 — Wire the existing extractive prompt compressor into the live LLM completion path (closed)
+- #16527 — Enforce the existing per-provider LLM concurrency cap (closed)
+- #16528 — Consolidate duplicate semantic LLM-response cache implementations (closed)
+- #16529 — Add PII scanning to the main chat path (closed)
+- #16530 — Add a blanket prompt-injection guard on raw user chat input (closed)
+- #16531 — Category-aware tuning for the semantic LLM-response cache
+- #16532 — Unified dispatch registry for safety-signal classifiers
+- #16533 — Post-generation grounding check for RAG answers

@@ -25,10 +25,17 @@ from dataclasses import dataclass, field
 from typing import Any, List
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.platform_docs import PLATFORM_DOCS_GRANT
 
 logger = get_logger(__name__)
 
 _LESSONS_COLLECTION = "autobot_lessons"
+
+#: Lesson domains distilled only from platform docs or system data (#18944): ``synthesis`` lessons come
+#: from ``analyze_synthesis_run``, fed by ``KBSynthesizer`` (indexed platform docs) and the autonomous
+#: loop (experiment params and scores). ``retrieval`` lessons come from a user's query and results, so
+#: they carry no grant and read as private.
+_PLATFORM_DERIVED_DOMAINS = frozenset({"synthesis"})
 
 _SYNTHESIS_ANALYSIS_PROMPT = (
     "You are an expert knowledge engineer reviewing a synthesis run. "
@@ -72,8 +79,10 @@ class Lesson:
         return "lesson_" + hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()[:12]
 
     def to_metadata(self) -> dict:
-        """Flat string metadata dict suitable for ChromaDB."""
+        """Flat string metadata dict suitable for ChromaDB; platform-derived domains carry the docs grant."""
+        grant = PLATFORM_DOCS_GRANT if self.domain in _PLATFORM_DERIVED_DOMAINS else {}
         return {
+            **grant,
             "domain": self.domain,
             "score_delta": str(self.score_delta),
             "tags": ",".join(self.tags),

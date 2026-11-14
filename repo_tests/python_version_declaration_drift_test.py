@@ -39,8 +39,14 @@ by reading the source (no literal + the derivation call present) or, for
 so importing it here cannot leak `sys.modules` into other test files' own
 conftest-swapping, which the repo's sys-modules-leak guard treats as a bug).
 
-Two families remain genuine, independently-checked literals because TOML and
-Dockerfile `ARG` defaults cannot themselves read a file:
+#20903 enforces the floor at runtime (`autobot_shared/python_floor.py`, called
+from `autobot_shared/__init__.py`) and the pre-push hook reads it from
+`.python-version`; the structural tests at the bottom pin both. The other
+literals that cannot read a file (requires-python, installer scripts, the
+code-sync target, docs, the fallback) are swept below.
+
+Genuine, independently-checked literals because TOML and Dockerfile `ARG`
+defaults cannot themselves read a file:
 
 * `pyproject.toml`'s `[tool.mypy] python_version`.
 * `ARG PYTHON_VERSION=X.Y` in `docker/backend/Dockerfile` AND
@@ -115,6 +121,69 @@ _SWEEPS: tuple[Sweep, ...] = (
         min_files_swept=1,
         min_declarations=1,
     ),
+    Sweep(
+        "requires-python in pyprojects",
+        ("pyproject.toml", "*/pyproject.toml"),
+        re.compile(r"^requires-python\s*=\s*[\"']>=(\d+\.\d+)[\"']"),
+        min_files_swept=3,
+        min_declarations=3,
+    ),
+    Sweep(
+        "setup-ci-parity-env.sh REQUIRED_MAJOR_MINOR",
+        ("scripts/setup-ci-parity-env.sh",),
+        re.compile(r"^REQUIRED_MAJOR_MINOR=[\"'](\d+\.\d+)[\"']"),
+        min_files_swept=1,
+        min_declarations=1,
+    ),
+    Sweep(
+        "install-bare-metal.sh PYTHON_VERSION",
+        ("autobot-infrastructure/shared/scripts/install-bare-metal.sh",),
+        re.compile(r"^PYTHON_VERSION=[\"'](\d+\.\d+)[\"']"),
+        min_files_swept=1,
+        min_declarations=1,
+    ),
+    Sweep(
+        "install.sh deadsnakes python3.N provisioning",
+        ("install.sh",),
+        re.compile(r"[Pp]ython ?(\d+\.\d+)"),
+        min_files_swept=1,
+        min_declarations=7,
+    ),
+    Sweep(
+        "code_sync _COMPONENT_PYTHON_TARGET",
+        ("autobot-slm-backend/api/code_sync.py",),
+        re.compile(r"^\s+\"autobot(?:-slm)?-backend\": \"python(\d+\.\d+)\","),
+        min_files_swept=1,
+        min_declarations=2,
+    ),
+    Sweep(
+        "parity venv test REQUIRED",
+        ("repo_tests/parity_venv_reconciles_15130_test.py",),
+        re.compile(r"^REQUIRED = \((\d+), (\d+)\)"),
+        min_files_swept=1,
+        min_declarations=1,
+    ),
+    Sweep(
+        "python_floor fallback",
+        ("autobot_shared/python_floor.py",),
+        re.compile(r"^_FALLBACK_PYTHON_FLOOR = \((\d+), (\d+)\)"),
+        min_files_swept=1,
+        min_declarations=1,
+    ),
+    Sweep(
+        "pre-commit python3.N lines",
+        (".pre-commit-config.yaml",),
+        re.compile(r"^\s*(?:language_version|python):\s*python(\d+\.\d+)\s*$"),
+        min_files_swept=1,
+        min_declarations=2,
+    ),
+    Sweep(
+        "DEPENDENCIES.md python lines",
+        ("docs/DEPENDENCIES.md",),
+        re.compile(r"^(?:python3 \(|\| Python \| )(\d+\.\d+)\+"),
+        min_files_swept=1,
+        min_declarations=6,
+    ),
 )
 
 
@@ -141,11 +210,7 @@ def _tracked(pathspecs: tuple[str, ...]) -> list[str]:
         check=True,
         env=scrubbed_git_env(),
     ).stdout
-    return [
-        rel
-        for rel in out.split("\0")
-        if rel and not any(part in _SKIP_PARTS for part in Path(rel).parts)
-    ]
+    return [rel for rel in out.split("\0") if rel and not any(part in _SKIP_PARTS for part in Path(rel).parts)]
 
 
 def versions_in_text(text: str, pattern: re.Pattern[str]) -> list[tuple[int, str]]:
@@ -225,21 +290,17 @@ def test_every_declared_python_version_agrees_with_the_python_version_file() -> 
     """
     reference = _reference_version()
     declarations = _all_declarations()
-    assert len(declarations) >= 5, (
-        f"only {len(declarations)} declarations collected — FIX THE SWEEP, "
-        "this comparison would pass vacuously"
+    assert len(declarations) >= 20, (
+        f"only {len(declarations)} declarations collected — FIX THE SWEEP, " "this comparison would pass vacuously"
     )
     drifted = [
-        f"{d.relative_path}:{d.line}  declares {d.version}  ({d.label})"
-        for d in declarations
-        if d.version != reference
+        f"{d.relative_path}:{d.line}  declares {d.version}  ({d.label})" for d in declarations if d.version != reference
     ]
     assert not drifted, (
         f"these declare a Python interpreter version other than the {reference} in "
         f"{_REFERENCE_FILE}. Every one of them is a tree that builds, deploys or "
         "type-checks against a different interpreter than the rest of the "
-        "repository, with no check anywhere that would notice (#13842):\n  "
-        + "\n  ".join(drifted)
+        "repository, with no check anywhere that would notice (#13842):\n  " + "\n  ".join(drifted)
     )
 
 
@@ -370,9 +431,9 @@ def test_no_ansible_file_restates_python_interpreter_version_as_a_literal() -> N
         offenders
     )
 
-    role_tasks = (_REPO_ROOT / _ROLE_DIR / "tasks" / "main.yml").read_text(encoding="utf-8")
+    role_tasks = (_REPO_ROOT / _ROLE_DIR / "tasks" / "resolve.yml").read_text(encoding="utf-8")
     assert "lookup('file', role_path" in role_tasks and ".python-version" in role_tasks, (
-        f"{_ROLE_DIR}tasks/main.yml no longer derives python_interpreter_version from .python-version — "
+        f"{_ROLE_DIR}tasks/resolve.yml no longer derives python_interpreter_version from .python-version — "
         "FIX THE SWEEP or the derivation itself"
     )
 
@@ -399,8 +460,7 @@ def test_startup_validator_derives_the_floor_at_runtime() -> None:
         [
             sys.executable,
             "-c",
-            "from startup_validator import _minimum_python_version; "
-            "print('%d.%d' % _minimum_python_version())",
+            "from startup_validator import _minimum_python_version; " "print('%d.%d' % _minimum_python_version())",
         ],
         env=env,
         capture_output=True,
@@ -414,3 +474,38 @@ def test_startup_validator_derives_the_floor_at_runtime() -> None:
         f"startup_validator._minimum_python_version() returned {reported}, "
         f".python-version declares {_reference_version()!r} (#13842)"
     )
+
+
+# --- Floor enforcement (#20903) ------------------------------------------------
+
+
+def test_python_floor_derives_from_python_version_and_holds_no_literal() -> None:
+    """The only number in python_floor.py is the swept fallback; the floor is read."""
+    source = (_REPO_ROOT / "autobot_shared/python_floor.py").read_text(encoding="utf-8")
+    assert (
+        '".python-version"' in source and "read_text" in source
+    ), "python_floor.py no longer reads .python-version — the floor would be a restated literal"
+    assert not re.search(
+        r"version(?:_info)?[^\n]*[<>]=?\s*\(\d+,\s*\d+", source
+    ), "python_floor.py compares against a literal version tuple (#20903)"
+    assert (
+        len(re.findall(r"3\.1\d|\(3,\s*1\d\)", re.sub(r"#.*|\"\"\"[\s\S]*?\"\"\"", "", source))) == 1
+    ), "python_floor.py holds a version literal besides the one swept fallback (#20903)"
+
+
+def test_every_git_hook_reads_the_floor_through_the_one_resolver() -> None:
+    """#21163: the pre-push gate and the pre-commit wrappers hold no floor literal of their own."""
+    resolver = (_REPO_ROOT / "scripts/lib/hook-python.sh").read_text(encoding="utf-8")
+    assert '"$1/.python-version"' in resolver, "the hook resolver no longer reads .python-version (#21163)"
+    assert not re.search(r"\b3\.1\d\b|\(3,\s*1\d\)", re.sub(r"#.*", "", resolver)), "the resolver restates a version"
+    text = (_REPO_ROOT / "tools/git-hooks/pre-push").read_text(encoding="utf-8")
+    assert "resolve_repo_python" in text and "floor_fallback" not in text, "pre-push restates its own floor (#21163)"
+    assert "(3, 11)" not in text, "pre-push restates the old 3.11 floor literal (#20903)"
+
+
+def test_autobot_shared_init_enforces_the_floor_on_import() -> None:
+    text = (_REPO_ROOT / "autobot_shared/__init__.py").read_text(encoding="utf-8")
+    assert "from autobot_shared.python_floor import require_supported_python" in text
+    assert re.search(
+        r"^require_supported_python\(\)$", text, re.M
+    ), "autobot_shared/__init__.py no longer calls require_supported_python() at import (#20903)"

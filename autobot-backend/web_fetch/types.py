@@ -10,7 +10,6 @@ Issue #7400: Foundation package for unified web search/scrape/crawl.
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from enum import Enum
 
@@ -38,6 +37,8 @@ ERR_CONNECTION = "connection"
 ERR_TOO_LARGE = "too_large"
 ERR_REDIRECT_LIMIT = "redirect_limit"
 ERR_UNKNOWN = "unknown"
+# #18826: the body is not HTML, text or JSON (binary, image, PDF); it is never extracted as a page.
+ERR_UNSUPPORTED_CONTENT_TYPE = "unsupported_content_type"
 
 
 @dataclass
@@ -66,7 +67,9 @@ class FetchResult:
     retryable: bool = False
     status_code: int | None = None
 
-    def cache_key(self, mode: RenderMode) -> str:
-        """Return sha256-based cache key for (url, render_mode) pair."""
-        raw = f"{self.url}|{mode.value}"
-        return "web_fetch:content:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    def cache_key(self, mode: RenderMode, profile: str) -> str:
+        """Return this result's web_fetch cache key -- the one key builder, in web_fetch.cache (#18826)."""
+        # Deferred: web_fetch.cache loads config and the extractor; this module stays dependency-free.
+        from web_fetch.cache import _content_cache_key
+
+        return _content_cache_key(self.url, mode.value, profile)

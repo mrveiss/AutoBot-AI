@@ -70,7 +70,7 @@ _SYNC_THEN_DELETE_SITES: tuple[tuple[str, str], ...] = (
     # update-all-nodes.yml plays (see test_slm_agent_role_is_imported_in_full
     # below) -- unlike backend/frontend, this one IS reachable from the
     # update path through its own main.yml.
-    ("roles/slm_agent/tasks/main.yml", "SLM Agent | Copy agent source - heartbeat_payload.py"),
+    ("roles/slm_agent/tasks/main.yml", "SLM Agent | Copy agent source modules from code_source (#18548)"),
     # update-all-nodes.yml PLAY 1 (SLM self-update).
     (_UPDATE_ALL_PLAYBOOK, "SLM | Deploy autobot-slm-frontend"),
     # update-all-nodes.yml PLAY 2 (fleet update) -- every component it syncs.
@@ -483,7 +483,7 @@ def test_npu_workers_cleanup_is_included_right_after_the_deletion_task_in_main_y
 
     def _includes_npu_cleanup(task: dict) -> bool:
         target = task.get("ansible.builtin.include_tasks") or task.get("include_tasks")
-        return target == "npu_workers_cleanup.yml"
+        return (target.get("file") if isinstance(target, dict) else target) == "npu_workers_cleanup.yml"  # #20941
 
     remove_index = _index_of(tasks[delete_index:], _includes_npu_cleanup)
     assert remove_index != -1, f"{_BACKEND_MAIN}: no npu_workers_cleanup.yml include after sync_deletions"

@@ -32,7 +32,7 @@ class DecisionType(Enum):
     WORKFLOW_OPTIMIZATION = "workflow_optimization"
 
 
-class ConfidenceLevel(Enum):
+class DecisionConfidenceLevel(Enum):
     """Confidence levels for decision making."""
 
     VERY_HIGH = "very_high"  # > 0.9

@@ -350,7 +350,7 @@
     - name: Create health check script
       template:
         src: "health-check.sh.j2"
-        dest: "/opt/autobot/scripts/health-check.sh"
+        dest: "{{ autobot.base_dir }}/scripts/health-check.sh"
         mode: '0755'
         owner: "{{ autobot_user }}"
         group: "{{ autobot_group }}"
@@ -359,7 +359,7 @@
       cron:
         name: "AutoBot health check"
         minute: "*/5"
-        job: "/opt/autobot/scripts/health-check.sh >> /var/log/autobot/health.log 2>&1"
+        job: "{{ autobot.base_dir }}/scripts/health-check.sh >> /var/log/autobot/health.log 2>&1"
         user: "{{ autobot_user }}"
       when: monitoring.health_checks.enabled
 

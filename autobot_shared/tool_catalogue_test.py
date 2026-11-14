@@ -149,6 +149,19 @@ _ORIG_SENSITIVE = {
     "code_interpreter",
 }
 
+#: #18294 (owner decision 2026-10-11): every mutating tool is gated by a category. These seventeen
+#: were mutating tools the approval plane did not name. Added DELIBERATELY to the pin -- the
+#: extraction snapshot above is the floor, this is the reviewed growth on top of it.
+_ADDED_18294 = {
+    "create_file", "rename_file",
+    "run_shell", "start_process", "stop_process", "manage_service",
+    "set_redis_value", "insert_database",
+    "navigate", "click", "fill", "select", "evaluate",
+    "compose", "delegate",
+    "multi_edit", "apply_patch",
+}  # fmt: skip
+_EXPECTED_SENSITIVE = _ORIG_SENSITIVE | _ADDED_18294
+
 _ORIG_APPROVAL = {
     "pushing commits": {"git_push", "git_commit", "git_merge", "git_rebase", "git_force_push"},
     "publishing": {"deploy", "publish", "content_reach"},
@@ -173,7 +186,7 @@ def test_infra_and_shell_parity():
 
 
 def test_sensitive_tools_parity():
-    assert set(SENSITIVE_TOOLS) == _ORIG_SENSITIVE
+    assert set(SENSITIVE_TOOLS) == _EXPECTED_SENSITIVE
 
 
 def test_approval_categories_parity():
@@ -201,7 +214,7 @@ def test_consumers_reexport_the_catalogue():
     from chat_workflow.tool_handler import _APPROVAL_CATEGORY_TOOLS as handler_approval
     from orchestration.agent_registry import _INFRA_AND_SHELL_TOOLS as reg_infra
 
-    assert set(loop_sensitive) == _ORIG_SENSITIVE
+    assert set(loop_sensitive) == _EXPECTED_SENSITIVE
     assert set(reg_infra) == _ORIG_INFRA_AND_SHELL
     assert handler_approval is APPROVAL_CATEGORY_TOOLS
 

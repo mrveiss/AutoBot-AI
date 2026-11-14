@@ -27,6 +27,10 @@ name: frontend-codegen-drift
 
 on:
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       # Canonical sources covered by MANIFEST (#7122 / #7226)
       - 'autobot_shared/workflow/types.py'
@@ -37,6 +41,7 @@ on:
       - 'autobot-frontend/src/types/_generated/**'
       - 'autobot-infrastructure/shared/scripts/gen_frontend_types.py'
       - '.github/workflows/frontend-codegen-drift.yml'
+      - 'requirements-ci/framework.txt'
   push:
     branches: [main]
     paths:
@@ -46,6 +51,7 @@ on:
       - 'autobot-backend/services/workflow_automation/models.py'
       - 'autobot-frontend/src/types/_generated/**'
       - 'autobot-infrastructure/shared/scripts/gen_frontend_types.py'
+      - 'requirements-ci/framework.txt'
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -67,6 +73,7 @@ permissions:
 
 jobs:
   check-drift:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -81,11 +88,14 @@ jobs:
             requirements*.txt
             autobot-backend/requirements*.txt
             autobot-slm-backend/requirements*.txt
+            requirements-ci/framework.txt
 
       - name: Install minimal codegen deps
-        # pydantic is the only non-stdlib import any MANIFEST source file
-        # currently needs. Pin to <3 to keep CI fast.
-        run: pip install 'pydantic>=2,<3'
+        # The MANIFEST sources import pydantic, and autobot_shared/workflow/types.py
+        # reads RetryConfig from ssot_constants, which loads ssot_config and so
+        # pydantic-settings. requirements-ci/framework.txt declares both versions
+        # once; installing from it keeps this job on those pins.
+        run: pip install -r requirements-ci/framework.txt
 
       - name: Run codegen drift check
         run: |

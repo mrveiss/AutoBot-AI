@@ -13,13 +13,17 @@ API keys are never logged.
 
 Extended thinking (#3258):
   Pass a ``thinking`` dict in ``request.metadata["api_kwargs"]`` to enable
-  chain-of-thought reasoning on supported models (claude-3-7-sonnet and later):
+  chain-of-thought reasoning on supported models (Claude 3.7 Sonnet and later):
 
       api_kwargs = {
-          "thinking": {"type": "enabled", "budget_tokens": 63000},
+          "thinking": {"type": "adaptive"},
+          "output_config": {"effort": "high"},
           "max_tokens": 64000,
-          "extra_headers": {"anthropic-beta": "output-128k-2025-02-19"},
       }
+
+  A pre-4.6 model takes ``{"type": "enabled", "budget_tokens": N}`` instead. A caller-supplied
+  ``enabled`` dict for a model that requires adaptive thinking (``budget_tokens`` is a 400 there)
+  is converted to the adaptive form by ``_build_request_kwargs`` (#20884).
 
   Thinking blocks are stripped from the returned ``content`` unless
   ``preserve_reasoning=True`` is present in ``api_kwargs``.
@@ -43,6 +47,7 @@ import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_claude_models import CLAUDE_MODEL_IDS, requires_adaptive_thinking
 
 # ---------------------------------------------------------------------------
 # Adapter helpers — lazy so tests that don't boot the full app still work.
@@ -83,6 +88,7 @@ async def _apply_adapter_pre_send(request: LLMRequest, context_type: str) -> Non
 
 
 from autobot_shared.ssot_config import config
+from autobot_shared.ssot_hosted_models import hosted_default_model
 from constants.model_constants import (
     ANTHROPIC_CLAUDE3_OPUS_DATED,
     ANTHROPIC_CLAUDE35_HAIKU,
@@ -97,6 +103,7 @@ from llm_shared.types import ProviderType
 from services.provider_key_vault import resolve_provider_key
 
 from ..base_provider import BaseProvider
+from .anthropic_format import split_system_and_chat
 
 # Re-exported: the request-shaping unit moved to anthropic_request.py when this
 # file hit its size ceiling (#17305). `_thinking_budget_to_effort` is unused here
@@ -113,6 +120,7 @@ from .cache_utils import sorted_for_cache
 logger = get_logger(__name__)
 
 _ANTHROPIC_MODELS = [
+    *CLAUDE_MODEL_IDS,  # the current generation first (#20884)
     ANTHROPIC_CLAUDE_OPUS4_6,
     ANTHROPIC_CLAUDE_SONNET4_6,
     ANTHROPIC_CLAUDE_SONNET4,
@@ -150,6 +158,49 @@ def _extract_text_content(response_content: list, preserve_reasoning: bool) -> s
     """
     text, _ = _extract_content_pair(response_content, preserve_reasoning)
     return text
+
+
+def _tool_calls_from(response_content: list) -> list:
+    """The ``tool_use`` blocks of an Anthropic response as ToolCalls (from _chat_completion_impl)."""
+    return [
+        ToolCall(id=block.id, name=block.name, arguments=block.input if isinstance(block.input, dict) else {})
+        for block in response_content
+        if getattr(block, "type", None) == "tool_use"
+    ]
+
+
+def _usage_from(usage: Any, total_tokens: int) -> Dict[str, Any]:
+    """Token usage, with thinking tokens when the response reports them (MVA-3089)."""
+    usage_dict: Dict[str, Any] = {
+        "prompt_tokens": usage.input_tokens,
+        "completion_tokens": usage.output_tokens,
+        "total_tokens": total_tokens,
+    }
+    output_details = getattr(usage, "output_tokens_details", None)
+    thinking_tokens = getattr(output_details, "thinking_tokens", None) if output_details else None
+    if thinking_tokens is not None and thinking_tokens > 0:
+        usage_dict["thinking_tokens"] = thinking_tokens
+    return usage_dict
+
+
+async def _record_adapter_send(
+    adapter: Any, context_type: str, request: LLMRequest, response_time: float, error: str | None = None
+) -> None:
+    """Adapter post-send metric recording (#10849); best-effort, never raises."""
+    if adapter is None or not adapter.is_initialized:
+        return
+    outcome: Dict[str, Any] = {"success": error is None}
+    if error is not None:
+        outcome["error_message"] = error
+    try:
+        await adapter.record_send_result(
+            context_type=context_type,
+            content_len=sum(len(m.get("content", "")) for m in request.messages if isinstance(m, dict)),
+            response_time=response_time,
+            **outcome,
+        )
+    except Exception as rec_err:
+        logger.debug("Claude adapter post-send record skipped: %s", rec_err)
 
 
 def _extract_content_pair(response_content: list, preserve_reasoning: bool) -> tuple[str, Optional[str]]:
@@ -213,6 +264,7 @@ class AnthropicProvider(BaseProvider):
         super().__init__(settings)
         self._api_key: str | None = None
         self._client = None
+        self._oauth_client = None  # #19241: base client for signed-in tokens
 
     def _resolve_api_key(self) -> str | None:
         """Resolve API key from settings or environment."""
@@ -227,28 +279,38 @@ class AnthropicProvider(BaseProvider):
         """Lazily initialize the async Anthropic client."""
         if self._client is not None:
             return self._client
-        try:
-            import anthropic
-        except ImportError as exc:
-            raise ImportError("anthropic package not installed. Run: pip install anthropic") from exc
         api_key = self._resolve_api_key()
         if not api_key:
             raise ValueError(
                 "Anthropic API key not configured. " "Set ANTHROPIC_API_KEY or provide api_key in provider settings."
             )
-        self._client = anthropic.AsyncAnthropic(api_key=api_key)
+        self._client = self._new_client(api_key=api_key)
         return self._client
 
-    def _split_messages(self, messages: list) -> tuple[str, list]:
-        """Separate the optional system message from conversational messages."""
-        system_content = ""
-        chat_messages = []
-        for msg in messages:
-            if msg.get("role") == "system":
-                system_content = msg.get("content", "")
-            else:
-                chat_messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
-        return system_content, chat_messages
+    def _new_client(self, **credential: str):
+        """An ``AsyncAnthropic`` for one credential: ``api_key=`` or a signed-in ``auth_token=`` (#19241)."""
+        try:
+            import anthropic
+        except ImportError as exc:
+            raise ImportError("anthropic package not installed. Run: pip install anthropic") from exc
+        kwargs: Dict[str, Any] = dict(credential)
+        http_client = self._headroom_http_client(getattr(anthropic, "DefaultAsyncHttpxClient", None))
+        if http_client is not None:
+            kwargs["http_client"] = http_client  # #15026: harvest rate-limit headers
+        return anthropic.AsyncAnthropic(**kwargs)
+
+    async def _request_client(self):
+        """The client for this call: a signed-in bearer token when there is one, else the API key (#19241).
+
+        An explicit ``auth_token`` stops the SDK reading ANTHROPIC_API_KEY, so the
+        request carries the bearer only; copies share the base client's pool.
+        """
+        token = await self._signed_in_token()
+        if not token:
+            return self._ensure_client()
+        if self._oauth_client is None:
+            self._oauth_client = self._new_client(auth_token=token)
+        return self._oauth_client.with_options(auth_token=token)
 
     def _apply_system_content(self, kwargs: Dict[str, Any], request: LLMRequest, system_content: str) -> None:
         """Set ``kwargs["system"]``, in place. Prompt caching (#8171, #10597):
@@ -276,9 +338,34 @@ class AnthropicProvider(BaseProvider):
         if request.tool_choice:
             kwargs["tool_choice"] = {"type": request.tool_choice}
 
+    @staticmethod
+    def _normalise_caller_thinking(api_kwargs: Dict[str, Any], model: str) -> None:
+        """Convert a caller's ``enabled`` thinking dict to adaptive when *model* rejects ``budget_tokens`` (#20884)."""
+        thinking = api_kwargs.get("thinking")
+        if not isinstance(thinking, dict) or thinking.get("type") != "enabled":
+            return
+        if not requires_adaptive_thinking(model):
+            return
+        budget = thinking.get("budget_tokens")
+        caller_output_config = api_kwargs.get("output_config")
+        api_kwargs.pop("thinking")
+        _apply_thinking_budget(api_kwargs, model, int(budget) if budget else 0)
+        if not budget and isinstance(caller_output_config, dict) and caller_output_config.get("effort"):
+            api_kwargs["output_config"] = caller_output_config  # no budget to map: the caller's effort stands
+        # Interleaved thinking is automatic on an adaptive model: the caller's beta for it is dropped (#20884).
+        beta = "interleaved-thinking-2025-05-14"
+        if api_kwargs.get("betas"):
+            api_kwargs["betas"] = [b for b in api_kwargs["betas"] if b != beta]
+        headers = api_kwargs.get("extra_headers") or {}
+        if headers.get("anthropic-beta"):
+            kept = [b for b in headers["anthropic-beta"].split(",") if b and b.strip() != beta]
+            api_kwargs["extra_headers"] = {**headers, "anthropic-beta": ",".join(kept)}
+            if not kept:
+                del api_kwargs["extra_headers"]["anthropic-beta"]
+
     def _build_request_kwargs(self, model: str, request: LLMRequest) -> tuple[Dict[str, Any], Dict[str, Any], bool]:
         """Build kwargs and extra_headers for an Anthropic SDK call."""
-        system_content, chat_messages = self._split_messages(request.messages)
+        system_content, chat_messages = split_system_and_chat(request.messages)
         kwargs: Dict[str, Any] = {
             "model": model,
             "max_tokens": request.max_tokens or 4096,
@@ -294,6 +381,7 @@ class AnthropicProvider(BaseProvider):
         thinking_tokens: int | None = api_kwargs.pop("thinking_tokens", None)
         if thinking_tokens and "thinking" not in api_kwargs:
             _apply_thinking_budget(api_kwargs, model, thinking_tokens)
+        self._normalise_caller_thinking(api_kwargs, model)
         preserve_reasoning: bool = bool(api_kwargs.get("preserve_reasoning", False))
         kwargs, extra_headers = _build_api_kwargs(kwargs, api_kwargs)
         kwargs = _route_sampling_kwargs(kwargs)
@@ -320,14 +408,14 @@ class AnthropicProvider(BaseProvider):
         """
         self._total_requests += 1
         start = time.time()
-        model = request.model_name or self._get_setting("default_model", ANTHROPIC_CLAUDE_SONNET4_6)
+        model = request.model_name or self._get_setting("default_model", hosted_default_model("anthropic"))
 
         _adapter = _get_adapter_sync()
         _context_type: str = request.llm_type.value if hasattr(request.llm_type, "value") else "general"
         await _apply_adapter_pre_send(request, _context_type)
 
         try:
-            client = self._ensure_client()
+            client = await self._request_client()
             kwargs, extra_headers, preserve_reasoning = self._build_request_kwargs(model, request)
 
             call_kwargs: Dict[str, Any] = dict(kwargs)
@@ -340,29 +428,9 @@ class AnthropicProvider(BaseProvider):
             total_tokens = response.usage.input_tokens + response.usage.output_tokens
             processing_time = time.time() - start
 
-            tool_calls = []
-            for block in response.content:
-                if getattr(block, "type", None) == "tool_use":
-                    tool_calls.append(
-                        ToolCall(
-                            id=block.id,
-                            name=block.name,
-                            arguments=block.input if isinstance(block.input, dict) else {},
-                        )
-                    )
+            tool_calls = _tool_calls_from(response.content)
             finish_reason = "tool_calls" if tool_calls else response.stop_reason
-
-            # MVA-3089: Extract thinking metadata from Anthropic response
-            usage_dict = {
-                "prompt_tokens": response.usage.input_tokens,
-                "completion_tokens": response.usage.output_tokens,
-                "total_tokens": total_tokens,
-            }
-            output_details = getattr(response.usage, "output_tokens_details", None)
-            if output_details:
-                thinking_tokens = getattr(output_details, "thinking_tokens", None)
-                if thinking_tokens is not None and thinking_tokens > 0:
-                    usage_dict["thinking_tokens"] = thinking_tokens
+            usage_dict = _usage_from(response.usage, total_tokens)
 
             llm_response = LLMResponse(
                 content=content,
@@ -380,37 +448,13 @@ class AnthropicProvider(BaseProvider):
                 ),
                 reasoning_content=reasoning_content,
             )
-            # --- Adapter post-send: metric recording (#10849) ---------------------
-            if _adapter is not None and _adapter.is_initialized:
-                try:
-                    _raw_len = sum(len(m.get("content", "")) for m in request.messages if isinstance(m, dict))
-                    await _adapter.record_send_result(
-                        context_type=_context_type,
-                        content_len=_raw_len,
-                        response_time=processing_time,
-                        success=True,
-                    )
-                except Exception as _rec_err:
-                    logger.debug("Claude adapter post-send record skipped: %s", _rec_err)
-            # ----------------------------------------------------------------------
+            await _record_adapter_send(_adapter, _context_type, request, processing_time)
             return llm_response
         except Exception as exc:
             self._total_errors += 1
             logger.error("Anthropic chat_completion error: %s", exc)
             processing_time = time.time() - start
-            # --- Adapter post-send: error metric recording (#10849) ---------------
-            if _adapter is not None and _adapter.is_initialized:
-                try:
-                    await _adapter.record_send_result(
-                        context_type=_context_type,
-                        content_len=sum(len(m.get("content", "")) for m in request.messages if isinstance(m, dict)),
-                        response_time=processing_time,
-                        success=False,
-                        error_message=str(exc),
-                    )
-                except Exception as _rec_err:
-                    logger.debug("Claude adapter post-send error record skipped: %s", _rec_err)
-            # ----------------------------------------------------------------------
+            await _record_adapter_send(_adapter, _context_type, request, processing_time, error=str(exc))
             return LLMResponse(
                 content="",
                 model=model,
@@ -436,7 +480,7 @@ class AnthropicProvider(BaseProvider):
         payload instead of only computing (and discarding) an optimized string.
         """
         self._total_requests += 1
-        model = request.model_name or self._get_setting("default_model", ANTHROPIC_CLAUDE_SONNET4_6)
+        model = request.model_name or self._get_setting("default_model", hosted_default_model("anthropic"))
 
         _stream_adapter = _get_adapter_sync()
         _stream_context_type = request.llm_type.value if hasattr(request.llm_type, "value") else "general"
@@ -444,7 +488,7 @@ class AnthropicProvider(BaseProvider):
 
         _stream_start = time.time()
         try:
-            client = self._ensure_client()
+            client = await self._request_client()
             kwargs, extra_headers, _preserve = self._build_request_kwargs(model, request)
 
             call_kwargs: Dict[str, Any] = dict(kwargs)
@@ -478,7 +522,7 @@ class AnthropicProvider(BaseProvider):
         try:
             client = self._ensure_client()
             await client.messages.count_tokens(
-                model="claude-haiku-4-5-20251001",
+                model=hosted_default_model("anthropic", "light"),  # #15501: the cheap tier for a ping
                 messages=[{"role": "user", "content": "ping"}],
             )
             return True

@@ -36,7 +36,6 @@ def main() -> int:
     print("\n✓ Grafana Configuration Files:")
     config_files = [
         "grafana.ini",
-        "provisioning/datasources/prometheus.yml",
         "provisioning/dashboards/dashboards.yml",
     ]
     for file in config_files:
@@ -45,6 +44,16 @@ def main() -> int:
             print(f"  ✅ {file}")
         else:
             print(f"  ❌ {file} - MISSING")
+
+    # The Prometheus datasource is owned by the Ansible monitoring role (#18556).
+    role_datasource = (
+        Path(__file__).resolve().parents[3]
+        / "autobot-slm-backend/ansible/roles/monitoring/templates/grafana-datasource.yml.j2"
+    )
+    if role_datasource.exists():
+        print("  ✅ monitoring role: grafana-datasource.yml.j2")
+    else:
+        print("  ❌ monitoring role: grafana-datasource.yml.j2 - MISSING")
 
     # Check dashboard JSON files
     dashboard_dir = config_dir / "dashboards"

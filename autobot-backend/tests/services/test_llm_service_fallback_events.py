@@ -16,33 +16,18 @@ directly.
 
 from __future__ import annotations
 
-import importlib.util as _ilu
 import pathlib
-import sys
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock
 
 import pytest
 
+from testkit.real_llm_service import load_real_llm_service
+
 _BACKEND = pathlib.Path(__file__).resolve().parents[2]  # autobot-backend/
 
 
-def _load_real_module(private_name: str, relpath: str):
-    """Load a real module file under a private name (no sys.modules clobber)."""
-    spec = _ilu.spec_from_file_location(private_name, str(_BACKEND / relpath))
-    assert spec and spec.loader
-    mod = _ilu.module_from_spec(spec)
-    sys.modules[private_name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-if "llm_shared.rate_limit_backoff" not in sys.modules:
-    _load_real_module("llm_shared.rate_limit_backoff", "llm_shared/rate_limit_backoff.py")
-if "llm_shared.fallback_events" not in sys.modules:
-    _load_real_module("llm_shared.fallback_events", "llm_shared/fallback_events.py")
-
-_llm_service_mod = _load_real_module("_real_llm_service_11995", "services/llm_service.py")
+_llm_service_mod = load_real_llm_service()
 LLMService = _llm_service_mod.LLMService
 
 # services.llm_fallback_chain (#16526/#620 extraction) is a normal, lightweight

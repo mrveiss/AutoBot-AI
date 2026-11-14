@@ -118,6 +118,11 @@ MANIFEST: List[Tuple[str, str]] = [
     ("autobot_shared/workflow/types.py", "WorkflowPlan"),
     # #7226: extend MANIFEST to cover hand-written types prone to drift
     ("autobot-backend/services/workflow_automation/models.py", "WorkflowStepStatus"),
+    # #19334: unions the composables hand-copied, each missing a member the backend emits
+    ("autobot-backend/services/notification_types.py", "NotificationEvent"),
+    ("autobot-backend/services/notification_types.py", "NotificationChannel"),
+    ("autobot-backend/services/workflow_automation/phases.py", "WorkflowPhase"),
+    ("autobot-backend/agents/overseer/types.py", "OverseerStepStatus"),
     ("autobot_shared/status_enums.py", "Severity"),  # exported as RiskLevel via alias below
     # #14937: the canonical role vocabulary, so the frontend role unions derive
     # from it instead of three hand-maintained copies drifting apart.

@@ -22,7 +22,7 @@
   gather_facts: true
 
   vars:
-    browser_worker_install_dir: /opt/autobot
+    browser_worker_install_dir: "{{ autobot.base_dir }}"
     browser_worker_code_dir: "{{ browser_worker_install_dir }}/autobot-browser-worker"
     browser_worker_user: autobot
     browser_worker_group: autobot

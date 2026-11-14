@@ -9,15 +9,12 @@ Issue #369: Added async ChromaDB operations to prevent event loop blocking.
 """
 
 import re
-from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import chromadb_data_dir
 from knowledge.backends import get_async_default_client, get_default_client
 
 logger = get_logger(__name__)
-
-# Module-level project root constant (Issue #380 - avoid repeated Path computation)
-_PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 
 async def get_redis_connection():
@@ -48,8 +45,7 @@ def get_code_collection():
     For async contexts, use get_code_collection_async() instead.
     """
     try:
-        # Use module-level constant
-        chroma_path = _PROJECT_ROOT / "data" / "chromadb"
+        chroma_path = chromadb_data_dir()
 
         # Create persistent client with telemetry disabled using shared utility
         chroma_client = get_default_client(db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False)
@@ -78,8 +74,7 @@ async def get_code_collection_async():
         AsyncChromaCollection wrapper or None on failure
     """
     try:
-        # Use module-level constant
-        chroma_path = _PROJECT_ROOT / "data" / "chromadb"
+        chroma_path = chromadb_data_dir()
 
         # Get async ChromaDB client
         async_client = await get_async_default_client(
@@ -172,7 +167,7 @@ _CODE_GRAPH_DESCRIPTION = "Code graph: resolved call nodes and edges (record_typ
 def get_code_graph_collection():
     """The code-graph collection (sync). Mirrors get_code_collection."""
     try:
-        chroma_path = _PROJECT_ROOT / "data" / "chromadb"
+        chroma_path = chromadb_data_dir()
         chroma_client = get_default_client(db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False)
         collection = chroma_client.get_or_create_collection(
             name=CODE_GRAPH_COLLECTION,
@@ -185,10 +180,26 @@ def get_code_graph_collection():
         return None
 
 
+def get_existing_code_graph_collection():
+    """The code-graph collection if it already exists, else None. Never creates it.
+
+    For read paths: a query must not bring an empty collection into being, so a graph that
+    was never built stays "not indexed" instead of turning into "exists but empty".
+    """
+    try:
+        chroma_client = get_default_client(
+            db_path=str(chromadb_data_dir()), allow_reset=False, anonymized_telemetry=False
+        )
+        return chroma_client.get_collection(name=CODE_GRAPH_COLLECTION)
+    except Exception as e:
+        logger.info("ChromaDB %s collection not available for reading: %s", CODE_GRAPH_COLLECTION, e)
+        return None
+
+
 async def get_code_graph_collection_async():
     """The code-graph collection (async). Mirrors get_code_collection_async."""
     try:
-        chroma_path = _PROJECT_ROOT / "data" / "chromadb"
+        chroma_path = chromadb_data_dir()
         async_client = await get_async_default_client(
             db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
         )

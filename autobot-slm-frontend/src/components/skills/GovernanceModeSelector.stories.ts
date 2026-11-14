@@ -16,7 +16,7 @@ const meta = {
 export default meta
 
 export const FullAuto = {
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { GovernanceModeSelector },
     setup() {
       const mode = ref('full_auto')
@@ -28,7 +28,7 @@ export const FullAuto = {
 }
 
 export const SemiAuto = {
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { GovernanceModeSelector },
     setup() {
       const mode = ref('semi_auto')
@@ -40,7 +40,7 @@ export const SemiAuto = {
 }
 
 export const Locked = {
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { GovernanceModeSelector },
     setup() {
       const mode = ref('locked')

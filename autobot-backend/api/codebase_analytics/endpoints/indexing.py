@@ -11,14 +11,17 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from api.source_scope import SourceIdQuery, require_source_id
+from auth_middleware import get_current_user
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from constants.path_constants import PATH
+from security.human_admin import HUMAN_ADMIN_DEPENDENCIES
 
 
 class IndexCodebaseRequest(BaseModel):
@@ -26,12 +29,26 @@ class IndexCodebaseRequest(BaseModel):
 
     root_path: str | None = Field(
         default=None,
-        description="Path to index. Defaults to PROJECT_ROOT if not provided.",
+        description="Dev mode (#20513): a path under an allowed project root. Exclusive with source_id.",
     )
     source_id: str | None = Field(
         default=None,
-        description="Code source registry ID (#1133). Resolves to the source's clone_path.",
+        description="Code source registry ID (#1133). Resolves to the source's clone_path. Exclusive with root_path.",
     )
+
+    @model_validator(mode="after")
+    def _exactly_one_target(self) -> "IndexCodebaseRequest":
+        """Exactly one of ``source_id`` and ``root_path`` (#20513).
+
+        An empty body used to index AutoBot's own project root, so a client that
+        forgot the source silently indexed the wrong tree. ``root_path`` stays as the
+        explicit dev mode; naming both is ambiguous, naming neither is the old default.
+        """
+        if bool(self.source_id) == bool(self.root_path):
+            raise ValueError("exactly one of source_id and root_path is required")
+        if self.source_id:
+            require_source_id(self.source_id, "indexing job")
+        return self
 
 
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
@@ -52,6 +69,8 @@ from ..scanner import (
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+_NO_JOB_FOR_SOURCE = "No indexing job is currently running for this source"
 
 
 async def _check_existing_task_and_queue(source_id: str | None, root_path_for_queue: str) -> JSONResponse | None:
@@ -99,14 +118,14 @@ class _SyncNeeded:
 
 
 async def _validate_and_get_path(
-    request: IndexCodebaseRequest | None,
+    request: IndexCodebaseRequest,
 ) -> "str | _SyncNeeded":
     """Validate request and return the resolved index path (Issue #398 + #1133).
 
     Returns the path string when ready. Returns a ``_SyncNeeded`` sentinel when
     the source's clone directory does not exist and a sync must run first.
     """
-    if request and request.source_id:
+    if request.source_id:
         from ..source_storage import get_source
 
         source = await get_source(request.source_id)
@@ -129,7 +148,7 @@ async def _validate_and_get_path(
             return _SyncNeeded(source)
 
         return source.clone_path
-    if request and request.root_path:
+    if request.root_path:
         try:
             safe_path_str = validate_path(request.root_path, must_exist=True, allowed_roots=PROJECT_ALLOWED_ROOTS)
             target_path = Path(safe_path_str)
@@ -150,7 +169,8 @@ async def _validate_and_get_path(
                 detail="Cannot access path",
             )
         return str(target_path.resolve())
-    return str(PATH.PROJECT_ROOT)
+    # Unreachable through the route: the request model refuses a body naming neither.
+    raise HTTPException(status_code=400, detail="exactly one of source_id and root_path is required")
 
 
 def _start_next_queued_job() -> None:
@@ -195,11 +215,11 @@ def _create_cleanup_callback(task_id: str):
     operation="index_codebase",
     error_code_prefix="CODEBASE",
 )
-async def index_codebase(http_request: Request, request: IndexCodebaseRequest | None = None):
+async def index_codebase(http_request: Request, request: IndexCodebaseRequest):
     """
     Start background indexing of a codebase path (Issue #398: refactored, #1133: queued).
 
-    Accepts optional source_id (code source registry) or root_path.
+    Requires exactly one of source_id (code source registry) or root_path (#20513).
     Returns immediately with a task_id. If another job is running, queues the request.
     """
     global _current_indexing_task_id
@@ -207,7 +227,7 @@ async def index_codebase(http_request: Request, request: IndexCodebaseRequest | 
     # Issue #12358: the source_id here arrives in the request body, so the
     # router-level require_source_access dependency (path/query only) cannot see
     # it. Authorize it explicitly before resolving the source's clone path.
-    if request and request.source_id:
+    if request.source_id:
         from auth_middleware import get_current_user  # noqa: PLC0415
 
         from .shared import authorize_source_access  # noqa: PLC0415
@@ -237,7 +257,7 @@ async def index_codebase(http_request: Request, request: IndexCodebaseRequest | 
         )
 
     root_path = path_or_sync
-    source_id = request.source_id if request else None
+    source_id = request.source_id
     logger.info("Indexing path: %s", root_path)
 
     async with _tasks_lock:
@@ -266,7 +286,7 @@ async def index_codebase(http_request: Request, request: IndexCodebaseRequest | 
     )
 
 
-@router.get("/index/status/{task_id}")
+@router.get("/index/status/{task_id}", dependencies=[Depends(get_current_user)])
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -314,6 +334,71 @@ async def get_indexing_status(task_id: str):
     return JSONResponse(response)
 
 
+def _idle_job_body(message: str = "No indexing job is currently running") -> dict:
+    return {"has_active_job": False, "task_id": None, "status": "idle", "message": message}
+
+
+def _queued_job_body(source_id: str) -> dict | None:
+    """This source's own request waiting behind the running job, or None (#20513).
+
+    ``POST /index`` queues ``{source_id, root_path, ...}`` while a job runs (``status:
+    "queued"``, the word its response already uses). A queued request has no task id yet:
+    one is minted when it starts, so ``task_id`` is null until the poll sees it running.
+    """
+    for position, entry in enumerate(list(_index_queue), start=1):
+        if entry.get("source_id") == source_id:
+            return {
+                "has_active_job": True,
+                "task_id": None,
+                "source_id": source_id,
+                "status": "queued",
+                "position": position,
+                "message": f"Queued behind the running job (position {position})",
+            }
+    return None
+
+
+async def _finished_job_body(task_id: str, source_id: str) -> dict:
+    """The last job's final state (#1210), or idle when that job belongs to another source (#20513)."""
+    task_data = await _load_task_from_redis(task_id)
+    if not task_data:
+        task_data = dict(indexing_tasks.get(task_id, {}))
+    if task_data.get("source_id") != source_id:
+        return _queued_job_body(source_id) or _idle_job_body(_NO_JOB_FOR_SOURCE)
+    return {
+        "has_active_job": False,
+        "task_id": task_id,
+        "source_id": task_data.get("source_id"),
+        "status": task_data.get("status", "unknown"),
+        "result": task_data.get("result"),
+        "error": task_data.get("error"),
+        "message": "Last indexing job has completed",
+    }
+
+
+async def _running_job_body(task_id: str, in_memory: dict, source_id: str) -> dict:
+    """The running job's state, or idle when that job belongs to another source (#20513).
+
+    The subprocess updates Redis, not the parent's in-memory dict, so fresh state
+    comes from Redis for progress to advance (#1210).
+    """
+    task_data = await _load_task_from_redis(task_id) or in_memory
+    if task_data.get("source_id") != source_id:
+        return _queued_job_body(source_id) or _idle_job_body(_NO_JOB_FOR_SOURCE)
+    return {
+        "has_active_job": True,
+        "task_id": task_id,
+        "source_id": task_data.get("source_id"),
+        "status": task_data.get("status", "running"),
+        "progress": task_data.get("progress"),
+        "phases": task_data.get("phases"),
+        "batches": task_data.get("batches"),
+        "stats": task_data.get("stats"),
+        "started_at": task_data.get("started_at"),
+        "message": "Indexing job is in progress",
+    }
+
+
 @router.get("/index/current")
 @bounded(60.0)
 @with_error_handling(
@@ -321,71 +406,31 @@ async def get_indexing_status(task_id: str):
     operation="get_current_indexing_job",
     error_code_prefix="CODEBASE",
 )
-async def get_current_indexing_job():
+async def get_current_indexing_job(source_id: SourceIdQuery):
     """
-    Get the status of the currently running indexing job (if any)
+    Get the status of the currently running indexing job, if it belongs to ``source_id``.
+
+    One job runs at a time across all sources (#20491). A job that belongs to another
+    source is not reported: the answer for this source is its own request queued behind
+    that job (``status: "queued"``, ``task_id: null``), else idle (#20513).
 
     Returns:
-    - has_active_job: Whether an indexing job is currently running
-    - task_id: The current job's task ID (if running)
+    - has_active_job: Whether an indexing job of this source is running or queued
+    - task_id: The current job's task ID (if running or just finished)
+    - source_id: The source it indexes (always the requested one when a job is named)
     - status: Current job status
     - progress: Current progress details
     """
     # All accesses to shared state under lock
     async with _tasks_lock:
-        if _current_indexing_task_id is None:
-            return JSONResponse(
-                {
-                    "has_active_job": False,
-                    "task_id": None,
-                    "status": "idle",
-                    "message": "No indexing job is currently running",
-                }
-            )
-
-        current_task_id = _current_indexing_task_id
-
-        # Check if task is still running
-        existing_task = _active_tasks.get(current_task_id)
+        task_id = _current_indexing_task_id
+        if task_id is None:
+            return JSONResponse(_queued_job_body(source_id) or _idle_job_body())
+        existing_task = _active_tasks.get(task_id)
         if existing_task is None or existing_task.done():
-            # Task finished — load final state from Redis (#1210)
-            task_data = await _load_task_from_redis(current_task_id)
-            if not task_data:
-                task_data = dict(indexing_tasks.get(current_task_id, {}))
-            return JSONResponse(
-                {
-                    "has_active_job": False,
-                    "task_id": current_task_id,
-                    "status": task_data.get("status", "unknown"),
-                    "result": task_data.get("result"),
-                    "error": task_data.get("error"),
-                    "message": "Last indexing job has completed",
-                }
-            )
-
-        # Task is still running — prefer Redis state (subprocess writes there)
-        # because the subprocess has its own in-memory indexing_tasks (#1210).
-        task_data = dict(indexing_tasks.get(current_task_id, {}))
-
-    # Subprocess updates Redis, not parent's in-memory dict.
-    # Load fresh state from Redis so progress actually advances (#1210).
-    redis_state = await _load_task_from_redis(current_task_id)
-    if redis_state:
-        task_data = redis_state
-
-    return JSONResponse(
-        {
-            "has_active_job": True,
-            "task_id": current_task_id,
-            "status": task_data.get("status", "running"),
-            "progress": task_data.get("progress"),
-            "phases": task_data.get("phases"),
-            "batches": task_data.get("batches"),
-            "stats": task_data.get("stats"),
-            "started_at": task_data.get("started_at"),
-            "message": "Indexing job is in progress",
-        }
-    )
+            return JSONResponse(await _finished_job_body(task_id, source_id))
+        in_memory = dict(indexing_tasks.get(task_id, {}))
+    return JSONResponse(await _running_job_body(task_id, in_memory, source_id))
 
 
 def _cancel_active_task(task_id: str, existing_task) -> JSONResponse:
@@ -421,7 +466,7 @@ def _cancel_active_task(task_id: str, existing_task) -> JSONResponse:
         )
 
 
-@router.post("/index/cancel")
+@router.post("/index/cancel", dependencies=HUMAN_ADMIN_DEPENDENCIES)
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

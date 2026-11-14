@@ -1,6 +1,6 @@
 # Single Source of Truth Configuration Architecture
 
-> **Freshness:** superseded — 2026-08-30. "Architecture Design" is stale: this shipped as `autobot_shared/ssot_config.py` (the actual SSOT) plus `autobot-backend/services/config_service.py`; `UnifiedConfigManager` referenced here is now a deprecated alias (`autobot-backend/config/__init__.py:148-157`), not the primary path.
+> **Freshness:** superseded — 2026-08-30. "Architecture Design" is stale: this shipped as `autobot_shared/ssot_config.py` (the actual SSOT) plus `autobot-backend/services/config_service.py`; the configuration manager class this document describes is `ConfigManager` in `autobot-backend/config/manager.py` (renamed in #959; the old-name alias was removed in #21526).
 
 
 <!--
@@ -30,7 +30,7 @@ This document defines the Single Source of Truth (SSOT) configuration architectu
 | Category | File/Module | Lines | Purpose | Problems |
 |----------|-------------|-------|---------|----------|
 | **Backend - Config Package** | | | | |
-| | `src/config/manager.py` | ~96 | Core UnifiedConfigManager | Good architecture |
+| | `src/config/manager.py` | ~96 | Core ConfigManager | Good architecture |
 | | `src/config/settings.py` | ~35 | Pydantic settings | Separate from main |
 | | `src/config/defaults.py` | ~183 | Default config generation | Hardcoded fallbacks |
 | | `src/config/loader.py` | ~192 | Config loading/merging | Complex precedence |
@@ -310,7 +310,7 @@ AUTOBOT_PORT_VNC=6080
 AUTOBOT_PORT_BROWSER=3000
 AUTOBOT_PORT_AISTACK=8080
 AUTOBOT_PORT_NPU=8081
-AUTOBOT_PORT_NPU_WINDOWS=8082
+AUTOBOT_NPU_WORKER_WINDOWS_PORT=8082
 AUTOBOT_PORT_PROMETHEUS=9090
 AUTOBOT_PORT_GRAFANA=3000
 
@@ -509,13 +509,6 @@ interface PortConfig {
   npu: number;
 }
 
-interface LLMConfig {
-  defaultModel: string;
-  embeddingModel: string;
-  provider: string;
-  timeout: number;
-}
-
 interface TimeoutConfig {
   http: number;
   httpLong: number;
@@ -535,7 +528,6 @@ interface FeatureConfig {
 export interface AutoBotConfig {
   vm: VMConfig;
   port: PortConfig;
-  llm: LLMConfig;
   timeout: TimeoutConfig;
   feature: FeatureConfig;
   deploymentMode: string;
@@ -591,12 +583,8 @@ export function getConfig(): AutoBotConfig {
     npu: getEnvNumber('VITE_PORT_NPU', 8081),
   };
 
-  const llm: LLMConfig = {
-    defaultModel: getEnv('VITE_LLM_DEFAULT_MODEL', 'qwen3.5:9b'),
-    embeddingModel: getEnv('VITE_LLM_EMBEDDING_MODEL', 'nomic-embed-text:latest'),
-    provider: getEnv('VITE_LLM_PROVIDER', 'ollama'),
-    timeout: getEnvNumber('VITE_LLM_TIMEOUT', 120),
-  };
+  // No `llm` block: the frontend holds no model name. Model names are served by
+  // the backend from the source-of-truth tier map (#15502).
 
   const timeout: TimeoutConfig = {
     http: getEnvNumber('VITE_TIMEOUT_HTTP', 30000),
@@ -788,7 +776,7 @@ All configuration-related documentation must be updated during SSOT migration:
 **Tasks**:
 1. Update `network_constants.py` to read from SSOT config
 2. Update `model_constants.py` to read from SSOT config
-3. Update `UnifiedConfigManager` to use SSOT as base
+3. Update `ConfigManager` to use SSOT as base
 4. Migrate `config_service.py` to wrap SSOT
 5. Add deprecation warnings to old accessors
 

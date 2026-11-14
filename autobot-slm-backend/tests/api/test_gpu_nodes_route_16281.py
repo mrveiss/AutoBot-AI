@@ -27,6 +27,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 pytest.importorskip("fastapi")
 
 from fastapi import Depends, FastAPI, status  # noqa: E402
@@ -63,14 +65,6 @@ def _node(hostname: str, **extra) -> SimpleNamespace:
     )
 
 
-class _Db:
-    def __init__(self, nodes):
-        self._nodes = nodes
-
-    async def execute(self, _statement):
-        return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: self._nodes))
-
-
 async def _requires_bearer(credentials: HTTPAuthorizationCredentials = Depends(_BEARER)) -> dict:
     return {"sub": "tester"}
 
@@ -80,7 +74,7 @@ def _client(nodes) -> TestClient:
     app.include_router(gpu_api.router, prefix="/api/monitoring")
 
     async def _db():
-        yield _Db(nodes)
+        yield FakeAsyncSession(default_result=list(nodes))
 
     app.dependency_overrides[gpu_api.get_db] = _db
     app.dependency_overrides[gpu_api.get_current_user] = _requires_bearer
@@ -139,7 +133,8 @@ def test_the_router_is_mounted_on_the_monitoring_router():
 
     mounts = _include_router_calls(tree, "monitoring_router")
 
-    assert [ast.unparse(call.args[0]) for call in mounts] == ["gpu_router"]
+    # The GPU router is mounted here; other routers may share monitoring_router (#18391 adds the ledger).
+    assert "gpu_router" in [ast.unparse(call.args[0]) for call in mounts]
 
 
 def test_main_includes_the_monitoring_router_behind_service_management():

@@ -29,7 +29,7 @@ import pytest
 import chat_workflow
 from chat_workflow import delegation
 from chat_workflow.models import AgentContext
-from chat_workflow.tool_dispatch_guards import enforce_work_item_approval
+from tests.unit.chat_workflow.test_ai_line_support import arun_guard
 
 #: A file write, which the ``writing files`` category gates.
 _WRITE = {"name": "write_file", "params": {"path": "notes.md", "content": "x"}}
@@ -73,7 +73,7 @@ async def test_the_parent_is_held_and_the_delegation_runs():
     """The preconditions, asserted where a failure is a real failure and never an expected one."""
     parent = _held_parent()
 
-    assert enforce_work_item_approval(dict(_WRITE), parent, []) is not None, "the parent must be held"
+    assert (await arun_guard(dict(_WRITE), parent, []))[0] is not None, "the parent must be held"
 
     results, captured = await _delegate_write(parent)
 
@@ -87,6 +87,6 @@ async def test_the_child_is_held_as_its_parent_is():
     if "child" not in captured:
         pytest.fail("the delegation did not run, so the check below would pass or fail for the wrong reason")
 
-    held = enforce_work_item_approval(dict(_WRITE), captured["child"], [])
+    held, _ = await arun_guard(dict(_WRITE), captured["child"], [])
 
     assert held is not None, "a parent held for approval delegated the write, and the child ran it unapproved"

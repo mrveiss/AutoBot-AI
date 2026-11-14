@@ -8,16 +8,27 @@ AutoBot Environment File Generator
 Generates standardized .env files from complete.yaml configuration
 """
 
+import sys
 from pathlib import Path
 
-import yaml
+# autobot_shared is the repo-root package; this script runs standalone from
+# autobot-infrastructure/shared/scripts.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
+from autobot_shared.network_constants import NetworkConstants  # noqa: E402
+from autobot_shared.ssot_config import TimeoutConfig  # noqa: E402
 
-def load_config():
-    """Load the complete.yaml configuration"""
-    config_path = Path(__file__).parent.parent / "config" / "complete.yaml"
-    with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+# Sibling helper module: the importing script may have been loaded by file path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from env_files_config import load_config  # noqa: E402
+
+#: Frontend API timeout in ms, from the SSOT field default (#17856 row 6).
+#: complete.yaml's http.standard is seconds as a float, and appending "000" to
+#: it wrote "30.0000" -- a 30 ms timeout.
+API_TIMEOUT_MS = TimeoutConfig.model_fields["api"].default
 
 
 def resolve_template_value(value, config):
@@ -44,6 +55,102 @@ def resolve_template_value(value, config):
             pass
 
     return value
+
+
+def _redis_database_lines() -> list:
+    """The ``AUTOBOT_REDIS_DB_<NAME>`` overrides in effect here, read from the one table (#19232).
+
+    complete.yaml has no ``redis.databases`` section, so the hand-listed lookups this
+    replaces raised KeyError. redis-databases.yaml holds the numbers, so a generated file
+    carries only the databases this environment moves -- never a copy of the table.
+    """
+    from autobot_shared.redis_management.database_overrides import env_var_name
+    from autobot_shared.redis_management.types import DATABASE_MAPPING, DECLARED_DATABASES
+
+    moved = [
+        f"{env_var_name(name)}={DATABASE_MAPPING[name]}"
+        for name, number in DECLARED_DATABASES.items()
+        if DATABASE_MAPPING[name] != number
+    ]
+    return ["# Redis database numbers: redis-databases.yaml; overrides only (#19232)", *moved]
+
+
+#: (service, scheme) for each computed service URL, in output order.
+#: Redis is not here: its URL comes from RedisEndpoint.url, the one Redis URL builder (#19232).
+_SERVICE_URLS = (
+    ("backend", "http"),
+    ("frontend", "http"),
+    ("ollama", "http"),
+    ("ai_stack", "http"),
+    ("npu_worker", "http"),
+    ("browser_service", "http"),
+)
+
+
+def _redis_url(host, port) -> str:
+    """A credential-free Redis URL for a generated file, from the one URL builder (#19232).
+
+    The generator describes a TARGET deployment from complete.yaml, so it formats that
+    host and port with ``RedisEndpoint.url`` rather than resolving this process's endpoint.
+    """
+    from autobot_shared.redis_management.endpoint import RedisEndpoint
+
+    return RedisEndpoint(host=str(host), port=int(port)).url(with_auth=False)
+
+
+def _legacy_lines(config) -> list:
+    """The legacy REDIS_*/OLLAMA_* names some older code still reads."""
+    hosts, ports = config["infrastructure"]["hosts"], config["infrastructure"]["ports"]
+    return [
+        "# Legacy Compatibility",
+        f"REDIS_HOST={hosts['redis']}",
+        f"REDIS_PORT={ports['redis']}",
+        f"OLLAMA_HOST={hosts['ollama']}",
+        f"OLLAMA_PORT={ports['ollama']}",
+        "",
+    ]
+
+
+def _service_url_lines(config, label: str) -> list:
+    """The computed service URLs and the WebSocket URL, from the hosts and ports."""
+    hosts, ports = config["infrastructure"]["hosts"], config["infrastructure"]["ports"]
+    lines = [f"# Service URLs ({label})"]
+    lines += [f"AUTOBOT_{name.upper()}_URL={scheme}://{hosts[name]}:{ports[name]}" for name, scheme in _SERVICE_URLS]
+    lines.append(f"AUTOBOT_REDIS_URL={_redis_url(hosts['redis'], ports['redis'])}")
+    return [*lines, "", "# WebSocket Configuration", f"AUTOBOT_WS_URL=ws://{hosts['backend']}:{ports['backend']}/ws"]
+
+
+def _bare_service_url_lines(config) -> list:
+    """The service URLs under their unprefixed names (``BACKEND_URL``, ...) for .env.network."""
+    hosts, ports = config["infrastructure"]["hosts"], config["infrastructure"]["ports"]
+    urls = [f"{name.upper()}_URL={scheme}://{hosts[name]}:{ports[name]}" for name, scheme in _SERVICE_URLS]
+    urls.append(f"REDIS_URL={_redis_url(hosts['redis'], ports['redis'])}")
+    return ["# Service URL Construction", *urls]
+
+
+def _docker_ops_lines() -> list:
+    """Static monitoring, logging and Docker settings for the production compose file."""
+    return [
+        "# Monitoring Configuration (Optional)",
+        "AUTOBOT_PROMETHEUS_PORT=9090",
+        "AUTOBOT_GRAFANA_PORT=3000",
+        "AUTOBOT_GRAFANA_PASSWORD=autobot123  # pragma: allowlist secret",
+        "",
+        "# Centralized Logging Configuration",
+        "AUTOBOT_FLUENTD_HOST=localhost",
+        "AUTOBOT_FLUENTD_PORT=24224",
+        "AUTOBOT_FLUENTD_EXTERNAL_PORT=24224",
+        "AUTOBOT_FLUENTD_INTERNAL_PORT=24224",
+        "AUTOBOT_SEQ_EXTERNAL_PORT=5341",
+        "AUTOBOT_SEQ_INTERNAL_PORT=80",
+        "AUTOBOT_SEQ_ADMIN_PASSWORD=Autobot123!  # pragma: allowlist secret",
+        "",
+        "# Docker Configuration",
+        "AUTOBOT_DOCKER_SUBNET=172.20.0.0/16",
+        "AUTOBOT_HOST_DOCKER_CONTAINERS=/var/lib/docker/containers",
+        "AUTOBOT_HOST_DOCKER_SOCKET=/var/run/docker.sock",
+        "",
+    ]
 
 
 def generate_main_env(config):
@@ -77,47 +184,9 @@ def generate_main_env(config):
         f"AUTOBOT_BROWSER_SERVICE_PORT={config['infrastructure']['ports']['browser_service']}",
         f"AUTOBOT_VNC_PORT={config['infrastructure']['ports']['vnc']}",
         "",
-        "# Redis Database Configuration",
-        f"AUTOBOT_REDIS_DB_MAIN={config['redis']['databases']['main']}",
-        f"AUTOBOT_REDIS_DB_KNOWLEDGE={config['redis']['databases']['knowledge']}",
-        f"AUTOBOT_REDIS_DB_PROMPTS={config['redis']['databases']['prompts']}",
-        f"AUTOBOT_REDIS_DB_AGENTS={config['redis']['databases']['agents']}",
-        f"AUTOBOT_REDIS_DB_METRICS={config['redis']['databases']['metrics']}",
-        f"AUTOBOT_REDIS_DB_CACHE={config['redis']['databases']['cache']}",
-        f"AUTOBOT_REDIS_DB_SESSIONS={config['redis']['databases']['sessions']}",
-        f"AUTOBOT_REDIS_DB_TASKS={config['redis']['databases']['tasks']}",
-        f"AUTOBOT_REDIS_DB_LOGS={config['redis']['databases']['logs']}",
-        f"AUTOBOT_REDIS_DB_TEMP={config['redis']['databases']['temp']}",
-        f"AUTOBOT_REDIS_DB_BACKUP={config['redis']['databases']['backup']}",
-        f"AUTOBOT_REDIS_DB_TESTING={config['redis']['databases']['testing']}",
+        *_redis_database_lines(),
         "",
-        "# Service URLs (Computed)",
-        f"AUTOBOT_BACKEND_URL=http://"
-        f"{config['infrastructure']['hosts']['backend']}:"
-        f"{config['infrastructure']['ports']['backend']}",
-        f"AUTOBOT_FRONTEND_URL=http://"
-        f"{config['infrastructure']['hosts']['frontend']}:"
-        f"{config['infrastructure']['ports']['frontend']}",
-        f"AUTOBOT_REDIS_URL=redis://"
-        f"{config['infrastructure']['hosts']['redis']}:"
-        f"{config['infrastructure']['ports']['redis']}",
-        f"AUTOBOT_OLLAMA_URL=http://"
-        f"{config['infrastructure']['hosts']['ollama']}:"
-        f"{config['infrastructure']['ports']['ollama']}",
-        f"AUTOBOT_AI_STACK_URL=http://"
-        f"{config['infrastructure']['hosts']['ai_stack']}:"
-        f"{config['infrastructure']['ports']['ai_stack']}",
-        f"AUTOBOT_NPU_WORKER_URL=http://"
-        f"{config['infrastructure']['hosts']['npu_worker']}:"
-        f"{config['infrastructure']['ports']['npu_worker']}",
-        f"AUTOBOT_BROWSER_SERVICE_URL=http://"
-        f"{config['infrastructure']['hosts']['browser_service']}:"
-        f"{config['infrastructure']['ports']['browser_service']}",
-        "",
-        "# WebSocket Configuration",
-        f"AUTOBOT_WS_URL=ws://"
-        f"{config['infrastructure']['hosts']['backend']}:"
-        f"{config['infrastructure']['ports']['backend']}/ws",
+        *_service_url_lines(config, "Computed"),
         "",
         "# Performance and Limits",
         f"AUTOBOT_API_TIMEOUT={config['timeouts']['http']['standard']}000",  # Convert to milliseconds
@@ -134,12 +203,7 @@ def generate_main_env(config):
         "TF_USE_LEGACY_KERAS=1",
         "KERAS_BACKEND=tensorflow",
         "",
-        "# Legacy Compatibility (for existing code)",
-        f"REDIS_HOST={config['infrastructure']['hosts']['redis']}",
-        f"REDIS_PORT={config['infrastructure']['ports']['redis']}",
-        f"OLLAMA_HOST={config['infrastructure']['hosts']['ollama']}",
-        f"OLLAMA_PORT={config['infrastructure']['ports']['ollama']}",
-        "",
+        *_legacy_lines(config),
     ]
 
     return "\n".join(content)
@@ -172,24 +236,12 @@ def generate_localhost_env(config):
         f"AUTOBOT_BROWSER_SERVICE_PORT={config['infrastructure']['ports']['browser_service']}",
         f"AUTOBOT_VNC_PORT={config['infrastructure']['ports']['vnc']}",
         "",
-        "# Redis Database Configuration (Standardized)",
-        f"AUTOBOT_REDIS_DB_MAIN={config['redis']['databases']['main']}",
-        f"AUTOBOT_REDIS_DB_KNOWLEDGE={config['redis']['databases']['knowledge']}",
-        f"AUTOBOT_REDIS_DB_PROMPTS={config['redis']['databases']['prompts']}",
-        f"AUTOBOT_REDIS_DB_AGENTS={config['redis']['databases']['agents']}",
-        f"AUTOBOT_REDIS_DB_METRICS={config['redis']['databases']['metrics']}",
-        f"AUTOBOT_REDIS_DB_CACHE={config['redis']['databases']['cache']}",
-        f"AUTOBOT_REDIS_DB_SESSIONS={config['redis']['databases']['sessions']}",
-        f"AUTOBOT_REDIS_DB_TASKS={config['redis']['databases']['tasks']}",
-        f"AUTOBOT_REDIS_DB_LOGS={config['redis']['databases']['logs']}",
-        f"AUTOBOT_REDIS_DB_TEMP={config['redis']['databases']['temp']}",
-        f"AUTOBOT_REDIS_DB_BACKUP={config['redis']['databases']['backup']}",
-        f"AUTOBOT_REDIS_DB_TESTING={config['redis']['databases']['testing']}",
+        *_redis_database_lines(),
         "",
         "# Service URLs (Localhost)",
         f"AUTOBOT_BACKEND_URL=http://127.0.0.1:{config['infrastructure']['ports']['backend']}",
         f"AUTOBOT_FRONTEND_URL=http://127.0.0.1:{config['infrastructure']['ports']['frontend']}",
-        f"AUTOBOT_REDIS_URL=redis://127.0.0.1:{config['infrastructure']['ports']['redis']}",
+        f"AUTOBOT_REDIS_URL={_redis_url(NetworkConstants.LOCALHOST_IP, config['infrastructure']['ports']['redis'])}",
         f"AUTOBOT_OLLAMA_URL=http://127.0.0.1:{config['infrastructure']['ports']['ollama']}",
         f"AUTOBOT_AI_STACK_URL=http://127.0.0.1:{config['infrastructure']['ports']['ai_stack']}",
         f"AUTOBOT_NPU_WORKER_URL=http://127.0.0.1:{config['infrastructure']['ports']['npu_worker']}",
@@ -249,47 +301,9 @@ def generate_native_vm_env(config):
         f"AUTOBOT_BROWSER_SERVICE_PORT={config['infrastructure']['ports']['browser_service']}",
         f"AUTOBOT_VNC_PORT={config['infrastructure']['ports']['vnc']}",
         "",
-        "# Redis Database Configuration (Standardized)",
-        f"AUTOBOT_REDIS_DB_MAIN={config['redis']['databases']['main']}",
-        f"AUTOBOT_REDIS_DB_KNOWLEDGE={config['redis']['databases']['knowledge']}",
-        f"AUTOBOT_REDIS_DB_PROMPTS={config['redis']['databases']['prompts']}",
-        f"AUTOBOT_REDIS_DB_AGENTS={config['redis']['databases']['agents']}",
-        f"AUTOBOT_REDIS_DB_METRICS={config['redis']['databases']['metrics']}",
-        f"AUTOBOT_REDIS_DB_CACHE={config['redis']['databases']['cache']}",
-        f"AUTOBOT_REDIS_DB_SESSIONS={config['redis']['databases']['sessions']}",
-        f"AUTOBOT_REDIS_DB_TASKS={config['redis']['databases']['tasks']}",
-        f"AUTOBOT_REDIS_DB_LOGS={config['redis']['databases']['logs']}",
-        f"AUTOBOT_REDIS_DB_TEMP={config['redis']['databases']['temp']}",
-        f"AUTOBOT_REDIS_DB_BACKUP={config['redis']['databases']['backup']}",
-        f"AUTOBOT_REDIS_DB_TESTING={config['redis']['databases']['testing']}",
+        *_redis_database_lines(),
         "",
-        "# Service URLs (Distributed)",
-        f"AUTOBOT_BACKEND_URL=http://"
-        f"{config['infrastructure']['hosts']['backend']}:"
-        f"{config['infrastructure']['ports']['backend']}",
-        f"AUTOBOT_FRONTEND_URL=http://"
-        f"{config['infrastructure']['hosts']['frontend']}:"
-        f"{config['infrastructure']['ports']['frontend']}",
-        f"AUTOBOT_REDIS_URL=redis://"
-        f"{config['infrastructure']['hosts']['redis']}:"
-        f"{config['infrastructure']['ports']['redis']}",
-        f"AUTOBOT_OLLAMA_URL=http://"
-        f"{config['infrastructure']['hosts']['ollama']}:"
-        f"{config['infrastructure']['ports']['ollama']}",
-        f"AUTOBOT_AI_STACK_URL=http://"
-        f"{config['infrastructure']['hosts']['ai_stack']}:"
-        f"{config['infrastructure']['ports']['ai_stack']}",
-        f"AUTOBOT_NPU_WORKER_URL=http://"
-        f"{config['infrastructure']['hosts']['npu_worker']}:"
-        f"{config['infrastructure']['ports']['npu_worker']}",
-        f"AUTOBOT_BROWSER_SERVICE_URL=http://"
-        f"{config['infrastructure']['hosts']['browser_service']}:"
-        f"{config['infrastructure']['ports']['browser_service']}",
-        "",
-        "# WebSocket Configuration",
-        f"AUTOBOT_WS_URL=ws://"
-        f"{config['infrastructure']['hosts']['backend']}:"
-        f"{config['infrastructure']['ports']['backend']}/ws",
+        *_service_url_lines(config, "Distributed"),
         "",
         "# Deployment Configuration",
         "AUTOBOT_DEPLOYMENT_MODE=distributed",
@@ -306,12 +320,7 @@ def generate_native_vm_env(config):
         "TF_USE_LEGACY_KERAS=1",
         "KERAS_BACKEND=tensorflow",
         "",
-        "# Legacy Compatibility",
-        f"REDIS_HOST={config['infrastructure']['hosts']['redis']}",
-        f"REDIS_PORT={config['infrastructure']['ports']['redis']}",
-        f"OLLAMA_HOST={config['infrastructure']['hosts']['ollama']}",
-        f"OLLAMA_PORT={config['infrastructure']['ports']['ollama']}",
-        "",
+        *_legacy_lines(config),
     ]
 
     return "\n".join(content)
@@ -332,7 +341,7 @@ def generate_frontend_env(config):
         f"VITE_WS_BASE_URL=ws://"
         f"{config['infrastructure']['hosts']['backend']}:"
         f"{config['infrastructure']['ports']['backend']}/ws",
-        f"VITE_API_TIMEOUT={config['timeouts']['http']['standard']}000",
+        f"VITE_API_TIMEOUT={API_TIMEOUT_MS}",
         "",
         "# Service Host Configuration",
         f"VITE_BACKEND_HOST={config['infrastructure']['hosts']['backend']}",
@@ -356,10 +365,6 @@ def generate_frontend_env(config):
         f"{config['infrastructure']['hosts']['ollama']}:"
         f"{config['infrastructure']['ports']['ollama']}",
         "",
-        "# Redis Configuration (for frontend services)",
-        f"VITE_REDIS_URL=redis://"
-        f"{config['infrastructure']['hosts']['redis']}:"
-        f"{config['infrastructure']['ports']['redis']}",
         f"VITE_AI_STACK_URL=http://"
         f"{config['infrastructure']['hosts']['ai_stack']}:"
         f"{config['infrastructure']['ports']['ai_stack']}",
@@ -409,46 +414,13 @@ def generate_network_env(config):
         f"AUTOBOT_VNC_PORT={config['infrastructure']['ports']['vnc']}",
         f"AUTOBOT_WEBSOCKET_PORT={config['infrastructure']['ports']['websocket']}",
         "",
-        "# Redis Database Configuration",
-        f"AUTOBOT_REDIS_DB_MAIN={config['redis']['databases']['main']}",
-        f"AUTOBOT_REDIS_DB_KNOWLEDGE={config['redis']['databases']['knowledge']}",
-        f"AUTOBOT_REDIS_DB_PROMPTS={config['redis']['databases']['prompts']}",
-        f"AUTOBOT_REDIS_DB_AGENTS={config['redis']['databases']['agents']}",
-        f"AUTOBOT_REDIS_DB_METRICS={config['redis']['databases']['metrics']}",
-        f"AUTOBOT_REDIS_DB_CACHE={config['redis']['databases']['cache']}",
-        f"AUTOBOT_REDIS_DB_SESSIONS={config['redis']['databases']['sessions']}",
-        f"AUTOBOT_REDIS_DB_TASKS={config['redis']['databases']['tasks']}",
-        f"AUTOBOT_REDIS_DB_LOGS={config['redis']['databases']['logs']}",
-        f"AUTOBOT_REDIS_DB_TEMP={config['redis']['databases']['temp']}",
-        f"AUTOBOT_REDIS_DB_BACKUP={config['redis']['databases']['backup']}",
-        f"AUTOBOT_REDIS_DB_TESTING={config['redis']['databases']['testing']}",
+        *_redis_database_lines(),
         "",
         "# Network Configuration — set at install time via install.sh",
         "DOCKER_SUBNET=",
         "DOCKER_GATEWAY=",
         "",
-        "# Service URL Construction",
-        f"BACKEND_URL=http://"
-        f"{config['infrastructure']['hosts']['backend']}:"
-        f"{config['infrastructure']['ports']['backend']}",
-        f"FRONTEND_URL=http://"
-        f"{config['infrastructure']['hosts']['frontend']}:"
-        f"{config['infrastructure']['ports']['frontend']}",
-        f"REDIS_URL=redis://"
-        f"{config['infrastructure']['hosts']['redis']}:"
-        f"{config['infrastructure']['ports']['redis']}",
-        f"OLLAMA_URL=http://"
-        f"{config['infrastructure']['hosts']['ollama']}:"
-        f"{config['infrastructure']['ports']['ollama']}",
-        f"AI_STACK_URL=http://"
-        f"{config['infrastructure']['hosts']['ai_stack']}:"
-        f"{config['infrastructure']['ports']['ai_stack']}",
-        f"NPU_WORKER_URL=http://"
-        f"{config['infrastructure']['hosts']['npu_worker']}:"
-        f"{config['infrastructure']['ports']['npu_worker']}",
-        f"BROWSER_SERVICE_URL=http://"
-        f"{config['infrastructure']['hosts']['browser_service']}:"
-        f"{config['infrastructure']['ports']['browser_service']}",
+        *_bare_service_url_lines(config),
         "",
         "# Legacy Compatibility",
         f"REDIS_HOST_IP={config['infrastructure']['hosts']['redis']}",
@@ -499,39 +471,9 @@ def generate_docker_production_env(config):
         f"AUTOBOT_BROWSER_SERVICE_PORT={config['infrastructure']['ports']['browser_service']}",
         f"AUTOBOT_VNC_PORT={config['infrastructure']['ports']['vnc']}",
         "",
-        "# Redis Database Configuration (Production)",
-        f"AUTOBOT_REDIS_DB_MAIN={config['redis']['databases']['main']}",
-        f"AUTOBOT_REDIS_DB_KNOWLEDGE={config['redis']['databases']['knowledge']}",
-        f"AUTOBOT_REDIS_DB_PROMPTS={config['redis']['databases']['prompts']}",
-        f"AUTOBOT_REDIS_DB_AGENTS={config['redis']['databases']['agents']}",
-        f"AUTOBOT_REDIS_DB_METRICS={config['redis']['databases']['metrics']}",
-        f"AUTOBOT_REDIS_DB_CACHE={config['redis']['databases']['cache']}",
-        f"AUTOBOT_REDIS_DB_SESSIONS={config['redis']['databases']['sessions']}",
-        f"AUTOBOT_REDIS_DB_TASKS={config['redis']['databases']['tasks']}",
-        f"AUTOBOT_REDIS_DB_LOGS={config['redis']['databases']['logs']}",
-        f"AUTOBOT_REDIS_DB_TEMP={config['redis']['databases']['temp']}",
-        f"AUTOBOT_REDIS_DB_BACKUP={config['redis']['databases']['backup']}",
-        f"AUTOBOT_REDIS_DB_TESTING={config['redis']['databases']['testing']}",
+        *_redis_database_lines(),
         "",
-        "# Monitoring Configuration (Optional)",
-        "AUTOBOT_PROMETHEUS_PORT=9090",
-        "AUTOBOT_GRAFANA_PORT=3000",
-        "AUTOBOT_GRAFANA_PASSWORD=autobot123  # pragma: allowlist secret",
-        "",
-        "# Centralized Logging Configuration",
-        "AUTOBOT_FLUENTD_HOST=localhost",
-        "AUTOBOT_FLUENTD_PORT=24224",
-        "AUTOBOT_FLUENTD_EXTERNAL_PORT=24224",
-        "AUTOBOT_FLUENTD_INTERNAL_PORT=24224",
-        "AUTOBOT_SEQ_EXTERNAL_PORT=5341",
-        "AUTOBOT_SEQ_INTERNAL_PORT=80",
-        "AUTOBOT_SEQ_ADMIN_PASSWORD=Autobot123!  # pragma: allowlist secret",
-        "",
-        "# Docker Configuration",
-        "AUTOBOT_DOCKER_SUBNET=172.20.0.0/16",
-        "AUTOBOT_HOST_DOCKER_CONTAINERS=/var/lib/docker/containers",
-        "AUTOBOT_HOST_DOCKER_SOCKET=/var/run/docker.sock",
-        "",
+        *_docker_ops_lines(),
         "# Application Configuration",
         "AUTOBOT_ENVIRONMENT=production",
         f"AUTOBOT_LOG_LEVEL={config['monitoring']['log_level']}",
@@ -544,15 +486,31 @@ def generate_docker_production_env(config):
         "HOST_LOGS_PATH=./logs",
         "HOST_REPORTS_PATH=./reports",
         "",
-        "# Legacy Compatibility",
-        f"REDIS_HOST={config['infrastructure']['hosts']['redis']}",
-        f"REDIS_PORT={config['infrastructure']['ports']['redis']}",
-        f"OLLAMA_HOST={config['infrastructure']['hosts']['ollama']}",
-        f"OLLAMA_PORT={config['infrastructure']['ports']['ollama']}",
-        "",
+        *_legacy_lines(config),
     ]
 
     return "\n".join(content)
+
+
+#: Native overlays on .env.base (#18555): written holding only what differs from the base.
+NATIVE_OVERLAYS = {".env.localhost", ".env.native-vm", ".env.network"}
+
+
+def strip_base_keys(content: str, base_text: str) -> str:
+    """Drop every KEY=value line that repeats .env.base exactly, so a generated overlay passes the
+    base/overlay guard (repo_tests/env_file_family_18555_test.py)."""
+    base = {}
+    for line in base_text.splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and not key.startswith("#"):
+            base[key] = value
+    kept = []
+    for line in content.splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and not key.startswith("#") and base.get(key) == value:
+            continue
+        kept.append(line)
+    return "\n".join(kept) + "\n"
 
 
 def main():
@@ -591,6 +549,9 @@ def main():
 
             # Generate content
             content = generator_func(config)
+            base_path = full_path.parent / ".env.base"
+            if file_path in NATIVE_OVERLAYS and base_path.exists():
+                content = strip_base_keys(content, base_path.read_text(encoding="utf-8"))
 
             # Write file
             with open(full_path, "w", encoding="utf-8") as f:

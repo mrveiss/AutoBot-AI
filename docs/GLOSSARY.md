@@ -99,7 +99,7 @@ The frontend role (`<frontend-ip>:5173`) - the **only** place allowed to run the
 A code smell where a class has too many responsibilities. Should be refactored into smaller, focused classes.
 
 ### Governance
-The platform-core controls that every layer above inherits: role-based access control (RBAC), review/approval gates, and budgets. Modules such as [AutoBot LLC](llc/_index.md) rely on this rather than implementing their own.
+The platform-core controls that every layer above inherits: role-based access control (RBAC), review/approval gates, and budgets. Modules such as [Company OS](llc/_index.md) rely on this rather than implementing their own.
 
 ### Graceful Degradation
 The ability to continue operating at reduced functionality when components fail.
@@ -144,8 +144,8 @@ The agent responsible for maintaining the knowledge base, indexing documents, an
 ### LlamaIndex
 The RAG (Retrieval-Augmented Generation) framework used for knowledge base queries and document indexing.
 
-### LLC (AutoBot LLC Module)
-AutoBot's flagship [module](#module): an autonomous *agent-company* you install on the platform. It adds companies, org charts, goals, backlogs, sprints, heartbeat scheduling, and board governance, while its agents inherit [institutional memory](#institutional-memory), local inference, [hooks](#hooks), and [governance](#governance) from the core. Here "LLC" names the module — not a legal "limited liability company." See [AutoBot LLC](llc/_index.md).
+### Company OS
+AutoBot's flagship [module](#module): an autonomous *agent-company* you install on the platform. It adds companies, org charts, goals, backlogs, sprints, heartbeat scheduling, and board governance, while its agents inherit [institutional memory](#institutional-memory), local inference, [hooks](#hooks), and [governance](#governance) from the core. Its code package, API paths and file names keep the historical name `llc`. See [Company OS](llc/_index.md).
 
 ### LLM (Large Language Model)
 AI models that generate text responses (run locally or via a provider). AutoBot routes all of them through one LLM gateway with provider fallback. **Note:** an LLM is *not* the SLM — see [Service Lifecycle Manager (SLM)](#service-lifecycle-manager-slm).
@@ -164,7 +164,7 @@ Tasks that exceed normal request timeouts. Managed by the async task framework w
 The system for storing and retrieving context, decisions, and findings across sessions.
 
 ### Module
-An installable capability built on the AutoBot [platform core](#platform-core). A module inherits the core's primitives — [institutional memory](#institutional-memory), [local inference](#local-inference), [hooks](#hooks), and [governance](#governance) — so it stays small relative to what it delivers. [AutoBot LLC](#llc-autobot-llc-module) is the flagship module. See [The AutoBot Platform Model](architecture/PLATFORM_MODEL.md).
+An installable capability built on the AutoBot [platform core](#platform-core). A module inherits the core's primitives — [institutional memory](#institutional-memory), [local inference](#local-inference), [hooks](#hooks), and [governance](#governance) — so it stays small relative to what it delivers. [Company OS](#company-os) is the flagship module. See [The AutoBot Platform Model](architecture/PLATFORM_MODEL.md).
 
 ### Multi-Modal
 AI capabilities that span multiple modalities: text, image, voice, and desktop interaction.
@@ -300,7 +300,7 @@ Windows Subsystem for Linux - where the main AutoBot backend runs.
 | DR | Disaster Recovery |
 | HMR | Hot Module Replacement |
 | KB | Knowledge Base |
-| LLC | AutoBot LLC (autonomous agent-company module) |
+| `llc` | Code and API name of Company OS (autonomous agent-company module) |
 | LLM | Large Language Model |
 | MCP | Memory Context Protocol |
 | NPU | Neural Processing Unit |

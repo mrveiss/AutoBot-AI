@@ -46,6 +46,16 @@ class DispensableDetector:
         self.lazy_class_method_threshold = lazy_class_method_threshold
         self.lazy_class_line_threshold = lazy_class_line_threshold
 
+    def detect_file_level(self, tree: ast.AST, file_path: str) -> List[AntiPatternResult]:
+        """Every dispensable rule that reads a whole file, in one call.
+
+        #18067: ``detect_duplicate_classes`` existed and no analyzer called it,
+        so ``duplicate_abstraction`` could not emit a single row. Routing the
+        file-level rules through here means a new one cannot be left unwired by
+        forgetting a second call site in the analyzer.
+        """
+        return self.detect_dead_code(tree, file_path) + self.detect_duplicate_classes(tree, file_path)
+
     # =========================================================================
     # Dead Code Detection
     # =========================================================================

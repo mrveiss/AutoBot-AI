@@ -15,9 +15,9 @@
 
 import { ref } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-import { useBackgroundTask } from '@/composables/useBackgroundTask'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
+import { buildCodeQuality } from './codeQualityOverview'
+import type { CodeQualityData } from './codeQualityOverview'
 
 const logger = createLogger('useDashboardLoaders')
 
@@ -35,12 +35,7 @@ export interface CommunicationPatternsData {
   unique_endpoints: number
 }
 
-export interface CodeQualityData {
-  overall_score: number
-  test_coverage: number
-  code_duplicates: number
-  technical_debt: number
-}
+export type { CodeQualityData } from './codeQualityOverview'
 
 export interface PerformanceMetricsData {
   efficiency_score: number
@@ -57,8 +52,6 @@ export interface UseDashboardLoadersDeps {
 }
 
 export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
-  const dashboardTask = useBackgroundTask(`${getApiBase()}/analytics/dashboard/overview`)
-
   const systemOverview = ref<SystemOverviewData | null>(null)
   const communicationPatterns = ref<CommunicationPatternsData | null>(null)
   const codeQuality = ref<CodeQualityData | null>(null)
@@ -88,8 +81,9 @@ export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
 
   const duplicatesEndpoint = useFetchEndpoint<Raw, Raw>(
     {
-      path: '/api/analytics/codebase/duplicates',
+      path: '/api/analytics/codebase/duplicates/cached', // #20491: page open reads, never scans
       scopeToSource: true,
+      requireSource: true,
       pickData: (r) => r,
       label: 'Codebase duplicates',
     },
@@ -114,11 +108,18 @@ export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
     label: 'Monitoring status',
   })
 
+  // #20491: a plain read of live metrics; the POST form queues a task on every page open.
+  const overviewEndpoint = useFetchEndpoint<Raw, Raw>({
+    path: '/api/analytics/dashboard/overview',
+    pickData: (r) => r,
+    label: 'System overview',
+  })
+
   const loadSystemOverview = async () => {
     try {
-      const ok = await dashboardTask.start()
-      if (ok && dashboardTask.result.value) {
-        const result = dashboardTask.result.value as Record<string, unknown>
+      await overviewEndpoint.load()
+      if (overviewEndpoint.data.value) {
+        const result = overviewEndpoint.data.value
 
         const commPatterns = (result.communication_patterns || {}) as Record<string, unknown>
         const perfMetrics = (result.performance_metrics || {}) as Record<string, unknown>
@@ -203,30 +204,7 @@ export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
       return
     }
 
-    const breakdown = (healthData?.breakdown as Record<string, number>) || {}
-    const testCoverage = breakdown.testability || 50
-    const performanceScore = breakdown.performance || 0
-    const overallScore = (healthData?.health_score as number) || performanceScore
-
-    let duplicateCount = 0
-    if (duplicatesData?.status === 'success') {
-      duplicateCount =
-        (duplicatesData.total_duplicates as number) ||
-        (duplicatesData.count as number) ||
-        0
-    }
-
-    const technicalDebt =
-      (debtData?.total_debt_hours as number) ||
-      (debtData?.total_items as number) ||
-      0
-
-    codeQuality.value = {
-      overall_score: Math.round(overallScore),
-      test_coverage: Math.round(testCoverage),
-      code_duplicates: duplicateCount,
-      technical_debt: technicalDebt,
-    }
+    codeQuality.value = buildCodeQuality(healthData, duplicatesData, debtData)
   }
 
   const loadPerformanceMetrics = async () => {

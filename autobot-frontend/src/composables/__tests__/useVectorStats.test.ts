@@ -49,15 +49,24 @@ describe('useVectorStats', () => {
       initialized: true,
       redis_db: '0',
       index_name: 'test-index',
-      categories: [{ name: 'cat1' }, 'cat2'] as unknown as string[]
+      categories: [{ name: 'cat1' }, 'cat2'] as unknown as string[],
+      embedding_model: 'served-model',
+      embedding_dimensions: 123
     })
     const { vectorStats } = useVectorStats()
     expect(vectorStats.value).not.toBeNull()
     expect(vectorStats.value?.total_facts).toBe(10)
     expect(vectorStats.value?.redis_db).toBe(0)
     expect(vectorStats.value?.categories).toEqual(['cat1', 'cat2'])
-    expect(vectorStats.value?.embedding_model).toBe('nomic-embed-text')
-    expect(vectorStats.value?.embedding_dimensions).toBe(768)
+    expect(vectorStats.value?.embedding_model).toBe('served-model')
+    expect(vectorStats.value?.embedding_dimensions).toBe(123)
+  })
+
+  it('assumes no embedding model when the backend reports none (#15502)', () => {
+    mockStore({ total_facts: 1 })
+    const { vectorStats } = useVectorStats()
+    expect(vectorStats.value?.embedding_model).toBeUndefined()
+    expect(vectorStats.value?.embedding_dimensions).toBeUndefined()
   })
 
   it('applies defaults for missing optional fields', () => {

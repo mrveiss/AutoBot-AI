@@ -43,14 +43,16 @@ from web_fetch import (
     ERR_SSRF_BLOCKED,
     ERR_TIMEOUT,
     ERR_UNKNOWN,
+    ERR_UNSUPPORTED_CONTENT_TYPE,
     FetchResult,
     Frontier,
     RenderMode,
     RobotsCache,
     WebFetcher,
 )
-from web_fetch.extractors import extract_markdown
+from web_fetch.content_types import UnsupportedContentType
 from web_fetch.frontier import extract_links
+from web_fetch.profile import IngestProfile, require_implemented
 
 logger = get_logger(__name__)
 
@@ -104,6 +106,8 @@ def _no_content_reason(result: FetchResult) -> str:
 
     status = result.status_code
     code = result.error_code or ERR_UNKNOWN
+    if code == ERR_UNSUPPORTED_CONTENT_TYPE:
+        return "skipped: not an HTML, text or JSON page (unsupported content type): %s" % url
     if status is not None:
         if status == 403:
             return (
@@ -156,6 +160,8 @@ class WebCrawlerConnector(AbstractConnector):
         respect_robots (bool): Honour robots.txt. Default True.
         same_origin (bool): Restrict crawl to same domain. Default True.
         playwright_service_url (str): Unused legacy key (kept for compat).
+        profile (str): What to keep from each page (#18826). Default ``document``;
+            an unknown or unimplemented value fails construction.
     """
 
     connector_type = "web_crawler"
@@ -204,6 +210,7 @@ class WebCrawlerConnector(AbstractConnector):
         self._max_pages: int = int(cfg.get("max_pages", 100))
         self._respect_robots: bool = bool(cfg.get("respect_robots", True))
         self._same_origin: bool = bool(cfg.get("same_origin", True))
+        self._profile: IngestProfile = require_implemented(cfg.get("profile", IngestProfile.DOCUMENT))
 
     # ------------------------------------------------------------------
     # AbstractConnector interface
@@ -216,7 +223,7 @@ class WebCrawlerConnector(AbstractConnector):
         url = self._seed_urls[0]
 
         async def _do_fetch():
-            r = await WebFetcher.fetch(url)
+            r = await WebFetcher.fetch(url, profile=self._profile)
             if not r.success and (r.status_code is None or r.status_code in (429, 500, 502, 503, 504)):
                 raise RetryableError("HTTP %s" % (r.status_code or "connection error"), r.status_code or 0)
             return r
@@ -258,7 +265,7 @@ class WebCrawlerConnector(AbstractConnector):
             return None
 
         async def _do_fetch():
-            r = await WebFetcher.fetch(url)
+            r = await WebFetcher.fetch(url, profile=self._profile)
             if not r.success and (r.status_code is None or r.status_code in (429, 500, 502, 503, 504)):
                 raise RetryableError("HTTP %s" % (r.status_code or "connection error"), r.status_code or 0)
             return r
@@ -331,6 +338,7 @@ class WebCrawlerConnector(AbstractConnector):
                 ingest=False,
                 same_origin=self._same_origin,
                 on_seed_complete=_on_seed_done,
+                profile=self._profile,
             )
             # #12744: on_seed_complete is an OPTIONAL callback — a crawl backend
             # that does not invoke it left the checkpoint empty, so a resumed sync
@@ -383,11 +391,12 @@ class WebCrawlerConnector(AbstractConnector):
         ingest: bool = True,
         same_origin: bool = True,
         on_seed_complete: Callable[[str], Awaitable[None]] | None = None,
+        profile: IngestProfile = IngestProfile.DOCUMENT,
     ) -> List[FetchResult]:
         """BFS crawl starting from *seed_urls*.
 
         Uses web_fetch.Frontier for BFS queue/dedup, web_fetch.RobotsCache
-        for per-domain robots.txt enforcement, and ``WebFetcher.fetch_raw_html``
+        for per-domain robots.txt enforcement, and ``WebFetcher.fetch_raw_page``
         for every URL (single request yields both HTML for link extraction and
         content for KB ingest).
 
@@ -398,12 +407,13 @@ class WebCrawlerConnector(AbstractConnector):
             respect_robots: When True, skip URLs disallowed by robots.txt.
             ingest: When True, write successful pages to the KB.
             same_origin: When True, restrict crawl to same scheme+host per seed.
+            profile: What to keep from each page (#18826); passed to the fetcher's extractor.
 
         Returns:
             List of FetchResult (successful + failed pages encountered).
         """
         robots_cache = await self._build_robots_cache(respect_robots)
-        fetcher = WebFetcher(robots_cache=robots_cache if respect_robots else None)
+        fetcher = WebFetcher(robots_cache=robots_cache if respect_robots else None, profile=profile)
 
         all_results: List[FetchResult] = []
         pages_remaining = max_pages
@@ -457,7 +467,7 @@ class WebCrawlerConnector(AbstractConnector):
         max_depth=1, preserving the pre-#7402 default behaviour.
 
         Uses _fetch_page_with_html to obtain raw HTML for both link extraction
-        and markdown conversion in a single HTTP request per URL.
+        and document extraction in a single HTTP request per URL.
         """
         frontier_depth = max(0, max_depth - 1)
         frontier = Frontier(seed, max_pages=max_pages, max_depth=frontier_depth, same_origin=same_origin)
@@ -498,13 +508,13 @@ class WebCrawlerConnector(AbstractConnector):
                 return FetchResult(url=url, success=False, error_code=ERR_ROBOTS_BLOCKED), ""
 
         async def _do_fetch():
-            h, s = await WebFetcher.fetch_raw_html(url, timeout=30.0)
+            h, s, ct = await WebFetcher.fetch_raw_page(url, timeout=30.0)
             if s is None or s in (429, 500, 502, 503, 504):
                 raise RetryableError("HTTP %s" % (s or "connection error"), s or 0)
-            return h, s
+            return h, s, ct
 
         try:
-            html, status = await self.fetch_with_retry(_do_fetch)
+            html, status, content_type = await self.fetch_with_retry(_do_fetch)
         except RetryableError as exc:
             # Retries exhausted. status_code is preserved so the report can show
             # HTTP 429/5xx; None means a genuine connection failure.
@@ -521,7 +531,11 @@ class WebCrawlerConnector(AbstractConnector):
             # _no_content_reason() can surface it (Issue #12486).
             return FetchResult(url=url, success=False, error_code=ERR_HTTP_ERROR, status_code=status), ""
 
-        title, markdown = extract_markdown(html)
+        try:
+            # The response's own Content-Type decides the page type; the body is sniffed only without one (#18826).
+            title, markdown = fetcher.page_text(html, url, content_type)
+        except UnsupportedContentType:
+            return FetchResult(url=url, success=False, error_code=ERR_UNSUPPORTED_CONTENT_TYPE, status_code=status), ""
         fetch_result = FetchResult(
             url=url,
             success=True,

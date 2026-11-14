@@ -14,7 +14,7 @@ _PROJECT_ROOT="$SCRIPT_DIR"
 while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
     _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
 done
-source "$_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+source "$_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true; : "${AUTOBOT_AI_STACK_PORT:?ssot-config.sh not loaded — AUTOBOT_AI_STACK_PORT unset}"
 LOG_FILE="/var/log/autobot/health-check-$(date +%Y%m%d-%H%M%S).log"
 TIMEOUT=10
 
@@ -26,11 +26,11 @@ AIML_HOST="${AUTOBOT_AI_STACK_HOST:-localhost}"
 BROWSER_HOST="${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}"
 
 # Service ports (from SSOT config with fallbacks)
-FRONTEND_PORT="80"
+FRONTEND_PORT="${AUTOBOT_FRONTEND_HTTP_PORT}"
 BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
 REDISINSIGHT_PORT="8002"
-AI_STACK_PORT="${AUTOBOT_AI_STACK_PORT:-8080}"
+AI_STACK_PORT="${AUTOBOT_AI_STACK_PORT}"
 NPU_WORKER_PORT="${AUTOBOT_NPU_WORKER_PORT:-8081}"
 PLAYWRIGHT_PORT="${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
 VNC_PORT="5901"

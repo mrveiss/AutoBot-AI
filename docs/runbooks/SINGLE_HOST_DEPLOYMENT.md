@@ -309,7 +309,7 @@ redis-cli -h 127.0.0.7 ping
 # Expected: PONG
 
 # Test ChromaDB
-curl http://127.0.0.7:8100/api/v1/heartbeat
+curl http://127.0.0.7:8100/api/v2/heartbeat
 # Expected: 200 OK
 ```
 

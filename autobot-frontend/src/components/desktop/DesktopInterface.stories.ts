@@ -105,7 +105,7 @@ export const CustomVmHost: Story = {
   args: {
     host: {
       host: 'worker-vm.local',
-      vnc_port: 6081,
+      vnc_port: 6080,
       name: 'Worker VM',
     } satisfies Partial<SelectorHost>,
   },

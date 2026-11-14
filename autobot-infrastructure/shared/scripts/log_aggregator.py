@@ -38,7 +38,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -56,44 +56,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # by this script: deployment_mode).
 
 
-class DeploymentMode(Enum):
-    """Deployment modes (mirrors backend utils/service_registry.py)."""
-
-    LOCAL = "local"
-    DOCKER_LOCAL = "docker_local"
-    DISTRIBUTED = "distributed"
-    KUBERNETES = "kubernetes"
-    CLOUD = "cloud"
-
-
-class ServiceRegistry:
-    """Env-driven standalone stand-in for the backend ServiceRegistry."""
-
-    def __init__(self):
-        """Initialize registry from environment."""
-        self.deployment_mode = self._detect_deployment_mode()
-
-    @staticmethod
-    def _detect_deployment_mode() -> DeploymentMode:
-        """Detect deployment mode from env, falling back to container heuristic."""
-        mode = os.environ.get("AUTOBOT_DEPLOYMENT_MODE", "").lower()
-        if mode:
-            try:
-                return DeploymentMode(mode)
-            except ValueError:
-                logger.warning("Invalid AUTOBOT_DEPLOYMENT_MODE: %s", mode)
-        return DeploymentMode.DOCKER_LOCAL if os.path.exists("/.dockerenv") else DeploymentMode.LOCAL
-
-
-_registry: Optional[ServiceRegistry] = None
-
-
-def get_service_registry() -> ServiceRegistry:
-    """Get the process-wide ServiceRegistry instance."""
-    global _registry
-    if _registry is None:
-        _registry = ServiceRegistry()
-    return _registry
+# #18132: these were defined in six scripts with six distinct class bodies -- one
+# copied class, each copy trimmed to what its script used. The union now lives in
+# deployment_registry.py beside this file.
+from deployment_registry import (  # noqa: E402
+    DeploymentMode,
+    get_deployment_registry,
+)
 
 
 # --- end standalone replacements (#11761) -----------------------------------
@@ -130,7 +99,7 @@ class LogAggregator:
         self.logs_dir.mkdir(exist_ok=True)
         self.archive_dir.mkdir(exist_ok=True)
 
-        self.service_registry = get_service_registry()
+        self.service_registry = get_deployment_registry()
 
         # Log sources configuration
         self.log_sources = self._configure_log_sources()

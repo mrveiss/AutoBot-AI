@@ -14,7 +14,7 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 
-class MeshDB(Protocol):
+class EdgeStore(Protocol):
     """Protocol for mesh database operations required by EdgeLearner."""
 
     async def get_edge(self, node_a: str, node_b: str) -> dict | None: ...
@@ -58,7 +58,7 @@ class EdgeLearner:
 
     def __init__(
         self,
-        db: MeshDB,
+        db: EdgeStore,
         redis,
         ema_decay: float = 0.95,
         creation_threshold: int = 3,

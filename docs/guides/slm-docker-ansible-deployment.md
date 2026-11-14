@@ -1,6 +1,9 @@
 # Deploying Docker Containers via SLM Ansible Playbooks
 
 
+
+> **Scope:** the `ansible-playbook` commands in this guide are for writing and testing a playbook. A deployed fleet is updated only through the SLM's builtin updater (Maintenance → Updates → Code Sync), never by hand.
+
 ## Quick Answer
 
 **How do you deploy a Docker container using the SLM and an Ansible playbook?**
@@ -1209,8 +1212,8 @@ All endpoints are prefixed with `/api` and require JWT Bearer authentication unl
 |--------|----------|-------------|
 | `GET` | `/api/roles` | List all role definitions (from `roles` table). |
 | `GET` | `/api/roles/definitions` | Lightweight role definitions for agents (**no auth required**). |
-| `GET` | `/api/roles/fleet-health` | Fleet health: `{"health": "healthy|degraded|critical", "required_down", "optional_down"}`. |
-| `GET` | `/api/roles/owners` | Role-to-node ownership mapping (`{"owners": {"role": "node_id"}}`). |
+| `GET` | `/api/roles/fleet-health` | Fleet health: `{"health": "healthy|degraded|critical", "required_down", "optional_down", "roles_with_nodes_down"}`. |
+| `GET` | `/api/roles/owners` | Role-to-nodes mapping and the roles allowed on several nodes (`{"owners": {"role": ["node_id"]}, "multi_node_roles": ["role"]}`). |
 | `GET` | `/api/roles/{role_name}` | Get specific role details including `ansible_playbook` field. |
 | `POST` | `/api/roles` | Create a new role definition. |
 | `PUT` | `/api/roles/{role_name}` | Update a role definition. |
@@ -1619,6 +1622,10 @@ The `serial: 1` directive ensures Ansible completes all tasks on one host before
 
 ## 9. Operational Gotchas
 
+### Change a linked person in the main app, not the SLM
+
+Once the main app is installed it is the record for a linked person's password and active state. Disabling or re-enabling that person, or changing their password, in the SLM alone is undone by the next compare, within 5 minutes (`AUTOBOT_PERSON_COPY_COMPARE_INTERVAL_S`). If the SLM's user settings page reports that the SLM could not be updated for someone, a change made in the main app has not reached the SLM yet, and a deactivated person may still be able to use it.
+
 These are hard-won lessons from operating the AutoBot fleet. Violating these will cause deployment failures.
 
 ### Both Inventories Are Required
@@ -1724,9 +1731,9 @@ If SSH fails, check:
 All changes must follow the local-edit-then-sync pattern. See CLAUDE.md for details:
 
 ```bash
-# CORRECT - edit locally, sync via Ansible
+# CORRECT - edit locally, commit, then update the host through the builtin updater
 vim autobot-slm-backend/ansible/deploy-container.yml
-ansible-playbook ansible/playbooks/deploy-infrastructure.yml
+# SLM: Maintenance -> Updates -> Code Sync (runs playbooks/deploy_role.yml for the node's roles)
 
 # WRONG - direct editing on VM
 ssh autobot@<slm-manager-ip> "vim /opt/autobot/.../deploy-container.yml"

@@ -7,6 +7,7 @@
 // #10032), NOT the logical slug.
 import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
+import { isMembersEnvelope, type MembersResponse } from '@/composables/llc/useCompanyMembers'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useCompanyPeople')
@@ -55,24 +56,29 @@ export function useCompanyPeople(companyId: string) {
   const humans = ref<HumanOption[]>([])
   const inactiveHumans = ref<InactiveMember[]>([])
   const isLoading = ref(false)
+  // #20542: the server's verdict on the owner/admin writes, read off the members response this load already makes.
+  const viewerCanManage = ref(false)
+  // #15945: an empty list after a failed load is not an empty company; a picker must tell them apart.
+  const loadFailed = ref(false)
 
   async function load(): Promise<void> {
     const api = useApiClient()
     isLoading.value = true
+    loadFailed.value = false
     try {
       const [org, members] = await Promise.all([
         api.get<{ nodes: OrgNode[] }>(`/api/llc/companies/${companyId}/org-chart`),
-        api.get<
-          // #14939: never null -- `list_members` resolves the whole ladder server-side.
-          { user_id: string; display_name: string; role: string; is_active?: boolean }[]
-        >(
-          `/api/llc/companies/${companyId}/members`,
-        ),
+        api.get<MembersResponse>(`/api/llc/companies/${companyId}/members`),
       ])
+      // #21096: a reply without the envelope (a legacy array) is a failed load, not an empty company.
+      if (!isMembersEnvelope(members)) throw new Error('members response is not the envelope')
       const flat: AgentOption[] = []
       flattenAgents(org?.nodes ?? [], flat)
       agents.value = flat
-      const rows = members ?? []
+      // #14939: `display_name` is never null -- `list_members` resolves the whole ladder server-side.
+      // #21096: the verdict is the response's own, so a company with no rows still carries it.
+      const rows = members.members
+      viewerCanManage.value = members.viewer_can_manage === true
       // `is_active !== false` rather than a truthy test: a server that predates
       // this field omits it, and treating "absent" as inactive would empty
       // every picker during a rolling update.
@@ -91,10 +97,12 @@ export function useCompanyPeople(companyId: string) {
       agents.value = []
       humans.value = []
       inactiveHumans.value = []
+      viewerCanManage.value = false
+      loadFailed.value = true
     } finally {
       isLoading.value = false
     }
   }
 
-  return { agents, humans, inactiveHumans, isLoading, load }
+  return { agents, humans, inactiveHumans, viewerCanManage, isLoading, loadFailed, load }
 }

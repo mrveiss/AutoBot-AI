@@ -18,8 +18,8 @@ the survivor.
 import pytest
 from fastapi import HTTPException
 
-from utils.error_boundaries.decorators import with_error_handling
-from utils.error_boundaries.types import ErrorCategory
+from autobot_shared.error_boundaries.decorators import with_error_handling
+from autobot_shared.error_boundaries.types import ErrorCategory
 
 
 def test_bare_usage_raises_typeerror_instead_of_silently_misbinding():

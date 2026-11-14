@@ -13,15 +13,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict
 
+from autobot_shared.status_enums import Severity
 
-class PerformanceSeverity(Enum):
-    """Severity levels for performance issues."""
-
-    INFO = "info"  # Minor optimization opportunity
-    LOW = "low"  # Small performance impact
-    MEDIUM = "medium"  # Moderate performance impact
-    HIGH = "high"  # Significant performance impact
-    CRITICAL = "critical"  # Severe bottleneck
+#: An exact subset of the canonical ladder, so an alias rather than a class (#18098).
+#: Breakdowns that used to iterate this enum iterate `Severity.finding_ladder()` so the
+#: wire keeps its five keys.
+PerformanceSeverity = Severity
 
 
 class PerformanceIssueType(Enum):

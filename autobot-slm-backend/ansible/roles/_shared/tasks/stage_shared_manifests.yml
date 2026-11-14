@@ -40,7 +40,7 @@
 
 - name: "Shared manifests | Stage constraints/shared.txt onto the node (#17331)"
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../../constraints/shared.txt"
+    src: "{{ role_path | default(playbook_dir ~ '/x') }}/../../../../constraints/shared.txt"
     dest: "{{ autobot.base_dir }}/constraints/shared.txt"
     owner: "{{ autobot.user }}"
     mode: "0644"
@@ -53,8 +53,39 @@
 # It declares no includes of its own, so staging it needs nothing further.
 - name: "Shared manifests | Stage the root requirements.txt onto the node (#17331)"
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../../requirements.txt"
+    src: "{{ role_path | default(playbook_dir ~ '/x') }}/../../../../requirements.txt"
     dest: "{{ autobot.base_dir }}/requirements.txt"
+    owner: "{{ autobot.user }}"
+    mode: "0644"
+  become: true
+
+# #20942: autobot_shared/python_floor.py reads <install root>/.python-version at
+# startup (the Python floor SSOT, #13842). Nothing placed it on a node, so every
+# backend start logged ".python-version unreadable" and fell back to a hardcoded floor.
+# Read from deploy_ref -- the same ref Play 0 archives autobot_shared from -- and never
+# from code_source_dir's WORKING TREE: a checkout that is not at deploy_ref would
+# overwrite the archive's correct copy with a different version. HEAD applies only to
+# a caller that defines no deploy_ref, whose checkout is then the deployed tree.
+- name: "Shared manifests | Read .python-version at deploy_ref on the controller (#20942)"
+  ansible.builtin.command:
+    argv:
+      - git
+      - -c
+      - "safe.directory={{ code_source_dir | default((role_path | default(playbook_dir ~ '/x')) ~ '/../../../..') }}"
+      - -C
+      - "{{ code_source_dir | default((role_path | default(playbook_dir ~ '/x')) ~ '/../../../..') }}"
+      - show
+      - "{{ deploy_ref | default('HEAD') }}:.python-version"
+  register: shared_manifests_python_version
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false
+
+- name: "Shared manifests | Stage .python-version onto the node (#20942)"
+  ansible.builtin.copy:
+    content: "{{ shared_manifests_python_version.stdout }}\n"
+    dest: "{{ autobot.base_dir }}/.python-version"
     owner: "{{ autobot.user }}"
     mode: "0644"
   become: true

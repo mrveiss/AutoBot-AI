@@ -20,6 +20,7 @@ import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.status_enums import Severity
 from services.knowledge_grounding_models import VerificationMethod
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -151,3 +152,82 @@ def test_no_bare_verification_method_literal_outside_the_enum_or_prose():
 def test_the_deliberate_prose_file_still_carries_the_literal():
     """A stale exemption would exempt nothing while looking authoritative."""
     assert _DELIBERATE_PROSE_FILE in _bare_literal_files()
+
+
+class TestTheMergedClaimKeepsEveryProducersWireShape:
+    """#18086: one Claim for the classifier, GroundedAgent and the conflict resolver."""
+
+    _PRE_MERGE_PAYLOAD = {
+        "claim_text": "port 8080 is open",
+        "claim_type": "factual",
+        "kb_status": "in_kb",
+        "confidence": 0.9,
+        "sources": [],
+        "kb_fact": None,
+        "timestamp": 1.0,
+        "metadata": {"k": "v"},
+    }
+
+    def test_a_cached_pre_merge_payload_still_loads(self):
+        from services.knowledge_grounding_models import Claim, ClaimType, KBStatus
+
+        claim = Claim.from_dict(self._PRE_MERGE_PAYLOAD)
+        assert (claim.claim_type, claim.kb_status) == (ClaimType.FACTUAL, KBStatus.IN_KB)
+        assert claim.source == "" and claim.subject == ""
+
+    def test_an_unclassified_claim_round_trips(self):
+        from services.knowledge_grounding_models import Claim
+
+        claim = Claim(claim_text="x", source="agent", subject="s", predicate="p", object="o")
+        assert Claim.from_dict(claim.to_dict()) == claim
+
+    def test_confidence_is_validated_and_timestamp_is_stamped(self):
+        import pytest
+
+        from services.knowledge_grounding_models import Claim
+
+        assert Claim(claim_text="x").timestamp is not None
+        with pytest.raises(ValueError):
+            Claim(claim_text="x", confidence=1.5)
+
+
+class TestTheMergedVerifiedClaimAndConflictKeepTheirWireShapes:
+    """#18086: one VerifiedClaim and one Conflict for GroundedAgent and its siblings."""
+
+    def test_a_cached_pre_merge_verifier_payload_still_loads(self):
+        from services.knowledge_grounding_models import Claim, VerificationStatus, VerifiedClaim
+
+        payload = {
+            "original_claim": Claim(claim_text="x", confidence=0.4).to_dict(),
+            "verified_as": "verified",
+            "source": "kb_rag",
+            "source_text": "t",
+            "source_url": None,
+            "confidence": 0.9,
+            "timestamp": 2.0,
+            "requires_human_review": True,
+        }
+        loaded = VerifiedClaim.from_dict(payload)
+        assert loaded.verified_as is VerificationStatus.VERIFIED and loaded.kb_status is None
+        assert loaded.claim.claim_text == "x" and loaded.requires_human_review is True
+
+    def test_a_grounded_verified_claim_round_trips(self):
+        from services.knowledge_grounding_models import Claim, ClaimStatus, VerifiedClaim
+
+        vc = VerifiedClaim(claim=Claim(claim_text="x"), kb_status=ClaimStatus.IN_KB, kb_source="f1", evidence=["e"])
+        assert VerifiedClaim.from_dict(vc.to_dict()) == vc
+
+    def test_conflict_without_either_producers_identity_raises(self):
+        import pytest
+
+        from api.knowledge_grounding_models import Conflict
+
+        with pytest.raises(ValueError):
+            Conflict()
+
+    def test_both_conflict_producers_build_the_same_class(self):
+        from api.knowledge_grounding_models import Conflict, ConflictResolution
+
+        by_id = Conflict(claim_1_id="c1", description="d", severity=Severity.HIGH.value)
+        assert by_id.resolution is ConflictResolution.PENDING_REVIEW.__class__("pending_review")
+        assert by_id.max_confidence() == 0.0 and by_id.kb_says is None

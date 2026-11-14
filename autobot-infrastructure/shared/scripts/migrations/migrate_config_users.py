@@ -30,16 +30,17 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "autobot_shared"))
-sys.path.insert(0, str(project_root))
+# A backend tool (#18288, #18289): it puts the backend and the repository root (for `autobot_shared`)
+# on its own path, so it runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 from autobot_shared.time_utils import parse_utc_iso  # noqa: E402
 
 from config import ConfigManager
-from user_management.config import DeploymentMode, get_deployment_config
+from user_management.config import get_deployment_config
 from user_management.database import db_session_context, init_database
 from user_management.models import Organization, Permission, Role, User, UserRole
 from user_management.models.role import SYSTEM_PERMISSIONS, SYSTEM_ROLES
@@ -80,14 +81,6 @@ class ConfigUserMigrator:
             Migration statistics
         """
         deployment_config = get_deployment_config()
-
-        if deployment_config.mode == DeploymentMode.SINGLE_USER:
-            logger.warning(
-                "Deployment mode is 'single_user'. User management system is not "
-                "needed in this mode. Set AUTOBOT_USER_MODE to single_company,"
-                "multi_company, or provider to enable database user management."
-            )
-            return self.stats
 
         if not deployment_config.postgres_enabled:
             logger.error(
@@ -162,7 +155,6 @@ class ConfigUserMigrator:
             slug=self.org_slug,
             description="Migrated from config-based authentication",
             settings={},
-            subscription_tier="free",
             max_users=-1,  # Unlimited
             is_active=True,
         )

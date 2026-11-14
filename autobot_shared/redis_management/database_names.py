@@ -34,7 +34,7 @@ any of them was repointed.
 
 from __future__ import annotations
 
-from autobot_shared.redis_management.types import DATABASE_MAPPING, RedisDatabase
+from autobot_shared.redis_management.types import _ALIASES, DATABASE_MAPPING, RedisDatabase
 
 __all__ = ["database_name", "database_number", "validated_name"]
 
@@ -78,3 +78,12 @@ def validated_name(database: RedisDatabase | str) -> str:
     name = database_name(database)
     database_number(name)
     return name
+
+
+def alias_target(database: RedisDatabase | str) -> str | None:
+    """The declared database *database* is an alias of, or ``None`` when it names a database of its own.
+
+    An alias shares its target's number, so anything that acts on a whole database (a flush)
+    through an alias acts on the target -- callers that must not do that silently ask here (#19497).
+    """
+    return _ALIASES.get(database_name(database))

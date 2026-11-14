@@ -1,6 +1,7 @@
 {
   "ignoreFiles": [
-    "**/assets/styles/main.css"
+    "**/assets/styles/main.css",
+    "**/assets/styles/slm-scheme.css"
   ],
   "overrides": [
     {

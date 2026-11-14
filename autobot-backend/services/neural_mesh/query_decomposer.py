@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass, field
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.chunk_identity import resolve_chunk_id
 from security.prompt_injection_detector import PromptInjectionDetector
 
 logger = get_logger(__name__)
@@ -67,7 +68,7 @@ class DecompositionPlan:
 
 
 @dataclass
-class StepResult:
+class RetrievalStepResult:
     """Evidence gathered during a single executed step.
 
     Attributes:
@@ -131,16 +132,16 @@ class QueryDecomposer:
         steps = self._parse_steps(raw, fallback_query=sanitized)
         return DecompositionPlan(original_query=query, steps=steps)
 
-    async def execute(self, plan: DecompositionPlan) -> list[StepResult]:
+    async def execute(self, plan: DecompositionPlan) -> list[RetrievalStepResult]:
         """Execute each step sequentially, passing prior results as context.
 
         Args:
             plan: A DecompositionPlan produced by :meth:`decompose`.
 
         Returns:
-            List of StepResult, one per plan step, in order.
+            List of RetrievalStepResult, one per plan step, in order.
         """
-        results: list[StepResult] = []
+        results: list[RetrievalStepResult] = []
         for step in plan.steps:
             context = self._build_step_context(step, results)
             augmented_query = f"{step.query} {context}".strip()
@@ -153,7 +154,7 @@ class QueryDecomposer:
                     step.step,
                 )
                 evidence = []
-            results.append(StepResult(step=step, evidence=evidence))
+            results.append(RetrievalStepResult(step=step, evidence=evidence))
         return results
 
     # ------------------------------------------------------------------
@@ -256,12 +257,12 @@ class QueryDecomposer:
             logger.warning("QueryDecomposer._parse_steps: parse failed, using fallback")
         return [DecompositionStep(step=1, query=fallback_query, depends_on=[])]
 
-    def _build_step_context(self, step: DecompositionStep, prior_results: list[StepResult]) -> str:
+    def _build_step_context(self, step: DecompositionStep, prior_results: list[RetrievalStepResult]) -> str:
         """Build a context string from evidence of steps this step depends on.
 
         Args:
             step:          The step about to be executed.
-            prior_results: All StepResult objects collected so far.
+            prior_results: All RetrievalStepResult objects collected so far.
 
         Returns:
             Space-joined content snippets, or empty string when no deps.
@@ -300,7 +301,7 @@ class QueryDecomposer:
             else:
                 evidence.append(
                     {
-                        "chunk_id": getattr(chunk, "source_path", ""),
+                        "chunk_id": resolve_chunk_id(chunk),
                         "content": getattr(chunk, "content", ""),
                         "score": getattr(chunk, "score", 0.0),
                         "metadata": getattr(chunk, "metadata", {}),

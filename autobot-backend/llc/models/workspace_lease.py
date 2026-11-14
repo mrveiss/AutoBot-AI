@@ -40,13 +40,36 @@ class LLCWorkspaceLease(Base):
 
     __tablename__ = "llc_workspace_leases"
 
+    __table_args__ = (
+        # Mirrors migration 097. Declared here so a database built from the models --
+        # a test fixture's create_all, a fresh dev box -- gets the same shape as one
+        # built by alembic. The two disagreeing is how the original table-wide UNIQUE
+        # would have survived its own fix.
+        #
+        # The predicate is WEAKER than :meth:`is_live`, and cannot be otherwise: a
+        # partial index cannot call ``now()``, so it can express "not released" but not
+        # "not expired". It is therefore exact only while **every writer reclaims
+        # expired leases before inserting** -- which ``acquire_lease`` does as its first
+        # statement, and a test pins that ordering. Any future insert path that skips
+        # the reclaim can collide with an expired-but-unreleased row, and the index will
+        # not stop it.
+        sa.Index(
+            "uq_llc_workspace_leases_live_path",
+            "path",
+            unique=True,
+            postgresql_where=sa.text("released_at IS NULL"),
+        ),
+    )
+
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
     )
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    #: Filesystem path of the workspace. Unique: two live leases on one directory is the
-    #: collision the ledger exists to prevent, so the database refuses it outright.
-    path: Mapped[str] = mapped_column(sa.Text(), nullable=False, unique=True)
+    #: Filesystem path of the workspace. Unique among LIVE leases only -- see
+    #: ``__table_args__``. A table-wide UNIQUE here would let a path be leased exactly
+    #: once in the lifetime of the installation, because a released row keeps occupying
+    #: the constraint (#16818, migration 097).
+    path: Mapped[str] = mapped_column(sa.Text(), nullable=False)
     #: Who holds it. A session name, an agent id -- whatever took it, recorded so a
     #: reclaim can say whose lease it was rather than only that one expired.
     owner: Mapped[str] = mapped_column(sa.String(255), nullable=False, index=True)

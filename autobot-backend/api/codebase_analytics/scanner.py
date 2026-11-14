@@ -80,6 +80,7 @@ from .progress_tracker import (
 from .progress_tracker import _update_task_batch_info as _pt_update_task_batch_info
 from .progress_tracker import _update_task_phase as _pt_update_task_phase
 from .progress_tracker import _update_task_stats as _pt_update_task_stats
+from .run_status import STATUS_COMPLETED, STATUS_FAILED, record_run_finished
 from .stats_aggregation import _aggregate_from_file_result  # noqa: F401
 from .stats_aggregation import (  # noqa: F401
     _aggregate_all_results,
@@ -199,7 +200,7 @@ async def recover_index_queue() -> int:
 
     Returns the number of recovered entries.
     """
-    from .progress_tracker import recover_index_queue as _pt_recover
+    from .progress_tracker import recover_index_queue_into as _pt_recover
 
     return await _pt_recover(_tasks_lock, _index_queue)
 
@@ -365,11 +366,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str, source_id: str
     Issue #1710: source_id scopes all storage to one project.
     """
     try:
-        logger.info(
-            "[Task %s] Starting background codebase indexing for: %s",
-            task_id,
-            root_path,
-        )
+        logger.info("[Task %s] Starting background codebase indexing for: %s", task_id, root_path)
 
         async with _tasks_lock:
             state = _create_initial_task_state_bound()
@@ -403,6 +400,10 @@ async def do_indexing_with_progress(task_id: str, root_path: str, source_id: str
         )
 
         update_phase("finalize", "running")
+        # #18055: the supervisor reads task state from Redis, so a phase
+        # change it cannot see is not a liveness signal.  update_phase only
+        # mutates in-process state; persist it here.
+        await _save_task_to_redis_bound(task_id)
 
         await _verify_chromadb_storage(task_id, analysis_results)
 
@@ -412,19 +413,28 @@ async def do_indexing_with_progress(task_id: str, root_path: str, source_id: str
         # so a missing dep doesn't break the existing per-file pipeline.
         try:
             from api.codebase_analytics.cross_file_analysis import (
-                run_cross_file_analysis,
+                analyze_cross_file_with_outcome,
             )
 
-            await run_cross_file_analysis(root_path, source_id=source_id)
+            outcome = await analyze_cross_file_with_outcome(
+                root_path, source_id=source_id, progress_callback=update_progress
+            )
+            if not outcome.ran:
+                # #18067: a pass that never ran is not "no findings".
+                logger.warning("[Task %s] Cross-file rules did not run: %s", task_id, outcome.reason)
         except Exception as exc:
             logger.warning("[Task %s] Cross-file analysis skipped: %s", task_id, exc)
 
         _mark_task_completed_bound(task_id, analysis_results, hardcodes_stored, "chromadb")
         update_phase("finalize", "completed")
         await _save_task_to_redis_bound(task_id)
+        # #21003: only this advances the "latest complete run" pointer.
+        await record_run_finished(source_id, task_id, STATUS_COMPLETED)
         logger.info("[Task %s] Indexing completed successfully", task_id)
 
     except Exception as e:
         logger.error("[Task %s] Indexing failed: %s", task_id, e, exc_info=True)
         _mark_task_failed_bound(task_id, e)
         await _save_task_to_redis_bound(task_id)
+        # The reason is served to readers, so it names the failure class only; the text is logged above.
+        await record_run_finished(source_id, task_id, STATUS_FAILED, f"indexing failed ({type(e).__name__})")

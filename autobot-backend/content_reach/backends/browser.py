@@ -4,17 +4,17 @@
 # Author: mrveiss
 """Shared browser-backed content backend (#10932, #13236).
 
-BrowserBackend asks the canonical browser interface for a browser that can
+BrowserContentBackend asks the canonical browser interface for a browser that can
 navigate *and* extract structured content, and maps the ``BrowserResult`` onto
-``ContentResult``. It no longer names a stack: ``EXTRACT_STRUCTURED`` is what
+``ContentReachResult``. It no longer names a stack: ``EXTRACT_STRUCTURED`` is what
 selects the research browser, because that is the only stack producing the
-``structured`` half of a ``ContentResult`` (ADR-009 step 3).
+``structured`` half of a ``ContentReachResult`` (ADR-009 step 3).
 
 Everything stays lazy — the interface, the backends and Playwright itself are
 imported inside the methods that need them, so importing this module never
 loads the browser stack.
 
-BrowserSearchBackend extends BrowserBackend for query→search: it builds a
+BrowserSearchBackend extends BrowserContentBackend for query→search: it builds a
 DuckDuckGo HTML search URL from the request query, then delegates to the browser
 for navigation and content extraction.
 """
@@ -24,21 +24,21 @@ from __future__ import annotations
 from urllib.parse import quote_plus
 
 from autobot_shared.browser import (
-    Capability,
+    BrowserCapability,
     NavigateRequest,
     get_browser,
 )
 from autobot_shared.logging_manager import get_logger
 from content_reach._url_guard import ensure_public_url, ensure_robots_allowed
-from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
-from source_attribution import SourceReliability, SourceType
+from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
+from source_attribution import SourceKind, SourceReliability
 
 logger = get_logger(__name__)
 
 _DDG_SEARCH_URL = "https://duckduckgo.com/html/?q={}"
 
 
-class BrowserBackend(ContentBackend):
+class BrowserContentBackend(ContentBackend):
     """Content backend that uses the Playwright-based research browser manager.
 
     probe() returns PLAYWRIGHT_AVAILABLE — imported lazily to avoid loading the
@@ -46,14 +46,14 @@ class BrowserBackend(ContentBackend):
     """
 
     #: What this backend needs from a browser. EXTRACT_STRUCTURED because the
-    #: ContentResult carries `structured` alongside `text`, and only the
+    #: ContentReachResult carries `structured` alongside `text`, and only the
     #: research stack produces it — so this both states the requirement and
     #: pins the routing (#13236).
-    _REQUIRES = frozenset({Capability.NAVIGATE, Capability.EXTRACT_STRUCTURED})
+    _REQUIRES = frozenset({BrowserCapability.NAVIGATE, BrowserCapability.EXTRACT_STRUCTURED})
 
     def __init__(
         self,
-        source_type: SourceType,
+        source_type: SourceKind,
         name: str = "browser",
     ) -> None:
         self.source_type = source_type
@@ -77,13 +77,13 @@ class BrowserBackend(ContentBackend):
         except NoCapableBackendError:
             return False
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """Navigate to request.url and return extracted content.
 
         Raises BackendError if request.url is empty or the browser fetch fails.
         """
         if not request.url:
-            raise BackendError("BrowserBackend requires a non-empty url on the request")
+            raise BackendError("BrowserContentBackend requires a non-empty url on the request")
 
         await ensure_public_url(request.url)
         await ensure_robots_allowed(request.url)
@@ -103,15 +103,15 @@ class BrowserBackend(ContentBackend):
         in-process backend carries it through in ``details``.
         """
         if result.details.get("blocked_by_guard"):
-            raise BackendError(f"BrowserBackend: blocked by SSRF guard at navigate time for {url!r}")
+            raise BackendError(f"BrowserContentBackend: blocked by SSRF guard at navigate time for {url!r}")
         error = result.error or "unknown error"
-        raise BackendError(f"BrowserBackend: navigation failed for {url!r}: {error}")
+        raise BackendError(f"BrowserContentBackend: navigation failed for {url!r}: {error}")
 
-    async def _navigate(self, request: ContentRequest) -> ContentResult:
-        """Issue the browser navigation call and map result to ContentResult.
+    async def _navigate(self, request: ContentRequest) -> ContentReachResult:
+        """Issue the browser navigation call and map result to ContentReachResult.
 
         Guards (SSRF/robots) are NOT re-checked here — callers must run them
-        before calling _navigate (BrowserBackend.fetch does; BrowserSearchBackend
+        before calling _navigate (BrowserContentBackend.fetch does; BrowserSearchBackend
         runs SSRF-only before delegating here, skipping robots for search results).
         research_url's navigate_to re-validates the SSRF guard immediately
         before Playwright's own DNS resolution as a compensating control
@@ -135,7 +135,7 @@ class BrowserBackend(ContentBackend):
         if not result.success:
             self._raise_for_failed_result(result, request.url)
 
-        return ContentResult(
+        return ContentReachResult(
             success=True,
             source_type=self.source_type,
             backend_used=self.name,
@@ -150,18 +150,18 @@ class BrowserBackend(ContentBackend):
         )
 
 
-class BrowserSearchBackend(BrowserBackend):
+class BrowserSearchBackend(BrowserContentBackend):
     """Browser backend for query-to-search: builds a DDG HTML search URL then delegates.
 
     Encodes request.query into a DuckDuckGo HTML search URL and passes it to the
-    parent BrowserBackend._navigate() so the browser navigates to the results page and
+    parent BrowserContentBackend._navigate() so the browser navigates to the results page and
     extracts content. robots.txt is intentionally skipped for search-results pages.
     """
 
-    def __init__(self, source_type: SourceType) -> None:
+    def __init__(self, source_type: SourceKind) -> None:
         super().__init__(source_type=source_type, name="browser_search")
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """Build a DDG search URL from request.query and fetch via browser."""
         search_url = _DDG_SEARCH_URL.format(quote_plus(request.query))
         await ensure_public_url(search_url)

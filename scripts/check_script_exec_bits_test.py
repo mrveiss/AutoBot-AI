@@ -17,13 +17,12 @@ Run: python3 -m pytest scripts/check_script_exec_bits_test.py
 from __future__ import annotations
 
 import importlib.util
-import os
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 _MODULE_PATH = Path(__file__).resolve().parent / "check_script_exec_bits.py"
 _spec = importlib.util.spec_from_file_location("check_script_exec_bits", _MODULE_PATH)
@@ -105,8 +104,8 @@ def test_ignores_interpreter_prefixed_and_directives(line):
 # through. The pre-push hook exports it pointing at the pushing worktree's
 # own git directory, so `git init`/`add`/`update-index` below would write to
 # THAT repository instead of `root` -- the identical bug autobot_shared/
-# paths_test.py hit under the same hook. scrubbed_git_env() strips it first.
-_GIT_ENV = {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
+# paths_test.py hit under the same hook. isolated_git_env() strips it first.
+_GIT_ENV = isolated_git_env()
 
 
 def _init_repo(root: Path) -> None:

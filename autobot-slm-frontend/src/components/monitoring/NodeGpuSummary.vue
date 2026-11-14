@@ -34,7 +34,7 @@ function percent(value: number | null | undefined): string {
 
 function tone(value: number | null | undefined): string {
   if (value == null) return 'text-gray-500'
-  if (value >= 90) return 'text-danger-600'
+  if (value >= 90) return 'text-error-600'
   if (value >= 70) return 'text-warning-600'
   return 'text-success-600'
 }

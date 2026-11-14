@@ -12,6 +12,9 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatStore, type SessionActivity } from '@/stores/useChatStore'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
+import { createDateFormatter } from '@/utils/formatHelpers'
+
+const formatDay = createDateFormatter({ kind: 'date' })
 
 const { t } = useI18n()
 
@@ -39,7 +42,7 @@ const groupedActivities = computed<ActivityGroup[]>(() => {
   const groups = new Map<string, SessionActivity[]>()
 
   activities.value.forEach(activity => {
-    const date = activity.timestamp.toLocaleDateString()
+    const date = formatDay(activity.timestamp)
     if (!groups.has(date)) {
       groups.set(date, [])
     }
@@ -53,9 +56,7 @@ const groupedActivities = computed<ActivityGroup[]>(() => {
 })
 
 // Format time
-const formatTime = (date: Date): string => {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
+const formatTime = createDateFormatter({ kind: 'time', intl: { hour: '2-digit', minute: '2-digit' } })
 
 // Get activity type styling
 const getTypeStyle = (type: SessionActivity['type']): { icon: string; color: string; label: string } => {

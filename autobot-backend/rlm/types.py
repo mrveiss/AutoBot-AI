@@ -18,6 +18,7 @@ from enum import Enum, auto
 from typing import Any, Dict
 
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.ssot_constants import AgentThresholds
 from autobot_shared.time_utils import now_utc
 
 
@@ -82,7 +83,7 @@ class RLMConfig:
 
     enabled: bool = True
     max_reflections: int = 3
-    quality_threshold: float = 0.7
+    quality_threshold: float = AgentThresholds.QUALITY_THRESHOLD  # #19730
     complexity_gate: float = 0.7
     model: str = DEFAULT_LLM_MODEL
     temperature: float = 0.2

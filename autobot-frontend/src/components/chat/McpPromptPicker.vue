@@ -148,8 +148,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useApiClient } from '@/plugins/api'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -347,7 +346,7 @@ function closeModal() {
   border-radius: 0.375rem;
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .prompts-list {
@@ -386,7 +385,7 @@ function closeModal() {
 
 .prompt-description {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   margin-bottom: 0.75rem;
 }
 
@@ -398,7 +397,7 @@ function closeModal() {
 }
 
 .args-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   font-weight: 500;
 }
@@ -408,7 +407,7 @@ function closeModal() {
   padding: 0.125rem 0.5rem;
   background: var(--bg-tertiary);
   border-radius: 0.25rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-primary);
   font-family: 'Monaco', 'Courier New', monospace;
 }
@@ -436,7 +435,7 @@ function closeModal() {
 }
 
 .form-header h4 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -446,7 +445,7 @@ function closeModal() {
   background: var(--bg-secondary);
   border-radius: 0.375rem;
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   margin-bottom: 1.5rem;
 }
 
@@ -465,7 +464,7 @@ function closeModal() {
 .field-label {
   font-weight: 500;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .required {
@@ -473,7 +472,7 @@ function closeModal() {
 }
 
 .field-description {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin-top: -0.25rem;
 }
@@ -484,7 +483,7 @@ function closeModal() {
   border-radius: 0.375rem;
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .field-input:focus {
@@ -501,7 +500,7 @@ function closeModal() {
   border: 1px solid var(--color-error);
   border-radius: 0.375rem;
   color: var(--color-error);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   margin-top: 1rem;
 }
 

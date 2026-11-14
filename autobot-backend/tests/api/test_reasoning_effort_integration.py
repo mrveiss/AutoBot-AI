@@ -153,13 +153,13 @@ async def test_update_preferences_full_flow_stores_effort():
 class TestAppearancePreferencesModel:
     def test_appearance_defaults(self):
         pref = UserPreferences()
-        assert pref.theme == "dark"
-        assert pref.accent_color == "blue"
+        assert pref.theme == "light"
+        assert pref.accent_color == "theme"
         assert pref.layout_density == "comfortable"
         assert pref.font_size == "medium"
         assert pref.theme_preset == "auto"
 
-    @pytest.mark.parametrize("theme", ["dark", "light", "system"])
+    @pytest.mark.parametrize("theme", ["light", "dark", "contrast", "mono", "system"])
     def test_valid_theme_accepted(self, theme):
         assert UserPreferences(theme=theme).theme == theme
 
@@ -168,6 +168,10 @@ class TestAppearancePreferencesModel:
 
         with pytest.raises(pydantic.ValidationError):
             UserPreferences(theme="neon")
+
+    def test_the_theme_accent_is_accepted(self):
+        # #18223: `theme` is the accent that sets none; a client sending it must not get a 422.
+        assert UserPreferences(accent_color="theme").accent_color == "theme"
 
     def test_invalid_accent_rejected(self):
         import pydantic
@@ -283,8 +287,8 @@ async def test_chat_send_message_passes_thinking_fields_to_process():
 
     with (
         patch("api.chat.process_chat_message", return_value=fake_response_data) as mock_process,
-        patch("api.chat.get_config", return_value=MagicMock(chat_timeout=30.0)),
-        patch("api.chat.get_knowledge_base", return_value=MagicMock()),
+        patch("api.chat.provide_config_manager", return_value=MagicMock(chat_timeout=30.0)),
+        patch("api.chat.provide_knowledge_base", return_value=MagicMock()),
         patch("api.chat.get_chat_history_manager", return_value=AsyncMock()),
         patch("api.chat.get_llm_service", return_value=AsyncMock()),
         patch("api.chat.get_memory_interface", return_value=AsyncMock()),

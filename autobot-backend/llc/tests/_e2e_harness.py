@@ -39,9 +39,11 @@ Responsibilities:
 
 from __future__ import annotations
 
+import uuid
 from typing import List
 
 import sqlalchemy as sa
+from sqlalchemy import ColumnDefault
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.compiler import compiles
@@ -72,14 +74,17 @@ def _uuid_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN202
 # gate, goal/work-product/relation/comment that work_item relationships need).
 import llc.models.company  # noqa: E402,F401
 import llc.models.goal  # noqa: E402,F401  (work_item FK target)
+from llc.models.activity import LLCActivityLog  # noqa: E402
 from llc.models.budget import LLCAgentBudget  # noqa: E402
 from llc.models.company_ceo import LLCCompanyCEO  # noqa: E402
+from llc.models.company_os_cost import CompanyOsCostEvent  # noqa: E402
 from llc.models.goal import LLCGoal  # noqa: E402
 from llc.models.heartbeat_run import LLCHeartbeatRun  # noqa: E402
 from llc.models.label import LLCLabel, LLCWorkItemLabel  # noqa: E402
 from llc.models.membership import LLCCompanyMembership  # noqa: E402
 from llc.models.reporting_line import LLCReportingLine  # noqa: E402
 from llc.models.review_gate import LLCReviewGatePolicy  # noqa: E402
+from llc.models.sprint import LLCProject  # noqa: E402
 from llc.models.work_item import (  # noqa: E402
     LLCWorkItem,
     LLCWorkItemComment,
@@ -101,12 +106,15 @@ from user_management.models.user import User  # noqa: E402
 # only constructs irrelevant to this test.
 _LOOP_MODELS = [
     Organization,
+    LLCProject,  # #18978: every work item names a project, checked against the company's own
+    LLCActivityLog,  # #20101: every LLC service writes its audit row by default
     LLCGoal,
     LLCWorkItem,
     LLCWorkItemComment,
     LLCWorkItemRelation,
     LLCWorkProduct,
     LLCAgentBudget,
+    CompanyOsCostEvent,  # #16016: every ingest writes a per-event row
     LLCHeartbeatRun,
     LLCReviewGatePolicy,
     LLCCompanyMembership,
@@ -142,6 +150,8 @@ def _scrub_pg_server_defaults(table) -> None:  # noqa: ANN001
         text_l = str(arg).lower()
         if any(marker in text_l for marker in _DROP_DEFAULT_MARKERS):
             column.server_default = None
+            if column.primary_key and "gen_random_uuid" in text_l:
+                column.default = ColumnDefault(uuid.uuid4)  # SQLite has no gen_random_uuid(): mint the id in Python
         elif "now()" in text_l:
             column.server_default = sa.func.now()
 
@@ -181,14 +191,13 @@ def _clientside_timestamps(table) -> None:  # noqa: ANN001
     Production (asyncpg) is untouched — this only adapts the in-process test
     mapping.
     """
-    from sqlalchemy import ColumnDefault
 
     def _now() -> "datetime":  # noqa: F821
         from datetime import datetime, timezone
 
         return datetime.now(timezone.utc)
 
-    for name in ("created_at", "updated_at"):
+    for name in ("created_at", "updated_at", "occurred_at"):  # occurred_at: the append-only activity log (#20101)
         if name not in table.c:
             continue
         col = table.c[name]
@@ -257,3 +266,15 @@ def _preload_empty_relationships() -> None:
 
 
 _preload_empty_relationships()
+
+
+async def seed_project(session, company_id) -> str:  # noqa: ANN001
+    """Insert a project for *company_id* and return its id.
+
+    Every work item belongs to a project of its own company (#18978), so a fixture that
+    creates an item through the service needs one first.
+    """
+    project_id = uuid.uuid4()
+    session.add(LLCProject(id=project_id, company_id=uuid.UUID(str(company_id)), name="Project"))
+    await session.flush()
+    return str(project_id)

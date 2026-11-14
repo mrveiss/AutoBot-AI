@@ -28,11 +28,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth_middleware import get_auth_middleware, verify_internal_api_key
+from api._service_principal_refusal import validated_service
+from api.envelope_secrets_delete import delete_as_service, delete_as_user
+from auth_middleware import resolve_human_user, verify_internal_api_key
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from llc.deps import get_session
 from models.secret import Secret
-from security.service_auth import validate_service_auth
 from services.envelope_secrets_service import SecretAccessError, SecretNotFoundError
 from services.secrets_coordinator import SecretsCoordinator
 
@@ -58,8 +59,8 @@ def get_coordinator() -> SecretsCoordinator:
 
 
 async def principal(request: Request) -> tuple[uuid.UUID, set[str]]:
-    """Resolve the caller to ``(user_id, permission_names)``; 401 when unauthenticated."""
-    user = get_auth_middleware().get_user_from_request(request)
+    """Resolve the caller to ``(user_id, permission_names)``; 401 when unauthenticated or revoked (#18688)."""
+    user = await resolve_human_user(request)
     if not user or not user.get("user_id"):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "authentication required")
     user_id = uuid.UUID(str(user["user_id"]))
@@ -91,10 +92,7 @@ async def service_principal(request: Request) -> str:
         )
         return service_id
 
-    try:
-        info = await validate_service_auth(request)
-    except HTTPException:
-        raise
+    info = await validated_service(request)  # #20750: a refusal logs the credential form presented
     service_id = info["service_id"]
     logger.info(
         "service principal authenticated via HMAC for secrets API",
@@ -361,17 +359,13 @@ async def service_rotate_system_secret(
 @router.delete("/system/{secret_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def service_delete_system_secret(
     secret_id: uuid.UUID,
+    request: Request,
     service_id: str = Depends(service_principal),
     session: AsyncSession = Depends(get_session),
     coordinator: SecretsCoordinator = Depends(get_coordinator),
 ) -> None:
-    """Delete a system-vault secret via service identity."""
-    logger.info("service CRUD: delete system secret", extra={"service_id": service_id})
-    try:
-        await coordinator.service_delete(session, secret_id=secret_id, vault=_SYSTEM_VAULT)
-        await session.commit()
-    except (SecretAccessError, SecretNotFoundError) as exc:
-        raise _mapped(exc)
+    """Delete a system-vault secret via service identity; 409 while it has dependents (#20640)."""
+    await delete_as_service(request, session, coordinator, secret_id, service_id, _SYSTEM_VAULT, _mapped)
 
 
 @router.post("/system/{secret_id}/rewrap", response_model=SecretMetadata)
@@ -532,16 +526,15 @@ async def rotate_secret(
 @router.delete("/{secret_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_secret(
     secret_id: uuid.UUID,
+    request: Request,
+    dependents_digest: str | None = None,
     who: tuple[uuid.UUID, set[str]] = Depends(principal),
     session: AsyncSession = Depends(get_session),
     coordinator: SecretsCoordinator = Depends(get_coordinator),
 ) -> None:
+    """Delete a secret; 409 with the dependents listed unless ``dependents_digest`` confirms that set (#20640)."""
     user_id, perms = who
-    try:
-        await coordinator.delete(session, user_id=user_id, permissions=perms, secret_id=secret_id)
-        await session.commit()
-    except (SecretAccessError, SecretNotFoundError) as exc:
-        raise _mapped(exc)
+    await delete_as_user(request, session, coordinator, secret_id, user_id, perms, dependents_digest, _mapped)
 
 
 @router.post("/{secret_id}/share", status_code=status.HTTP_201_CREATED)

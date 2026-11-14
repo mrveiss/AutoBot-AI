@@ -46,6 +46,7 @@
   # just means the service is inactive, reported below.
   failed_when: false
   when: resolved_check.rc == 0
+  check_mode: false
 
 - name: Display systemd-resolved status
   debug:

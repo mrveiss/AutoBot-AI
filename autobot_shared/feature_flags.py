@@ -61,6 +61,7 @@ _SUBSYSTEM_FLAG_MAP: dict[str, str] = {
     "kb_enterprise_connectors": "kb_enterprise_connectors",
     "kb_mock_connector": "kb_mock_connector",
     "org_role_bound": "org_role_bound_enabled",
+    "company_os_workflow_planner": "company_os_workflow_planner_enabled",
 }
 
 F = TypeVar("F", bound=Callable)

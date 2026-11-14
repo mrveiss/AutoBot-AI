@@ -11,6 +11,7 @@ from autobot_shared.auth.interactive_principal import (
     NON_LOGIN_CLAIMS,
     is_interactive_human,
     is_login_token,
+    is_service_token,
 )
 
 _LOGIN_CLAIMS = {
@@ -77,3 +78,19 @@ def test_a_login_jwt_session_or_websocket_login_is_a_human(user):
 )
 def test_everything_else_is_refused(label, user):
     assert not is_interactive_human(user), label
+
+
+@pytest.mark.parametrize(
+    ("claims", "expected"),
+    [
+        ({"sub": "service:backend", "service": True}, True),
+        ({"sub": "service:backend", "service": True, "mfa_pending": True}, False),
+        ({"sub": "x", "service": True, "token_type": "login"}, False),
+        ({"sub": "x", "service": "true"}, False),
+        ({"sub": "x", "mfa_pending": True}, False),
+        ({"sub": "x", "role": "admin"}, False),
+    ],
+)
+def test_is_service_token_admits_only_a_pure_service_token(claims, expected):
+    """#18338: the SLM socket's exception to is_purpose_bound must not admit a pre-MFA token."""
+    assert is_service_token(claims) is expected

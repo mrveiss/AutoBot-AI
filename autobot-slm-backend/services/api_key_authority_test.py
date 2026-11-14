@@ -19,7 +19,6 @@ from services.api_key_authority import (
     key_scope_allows,
     legacy_grace_deadline,
     permission_allowed,
-    resolve_role,
     role_for_user,
 )
 
@@ -80,18 +79,12 @@ class TestRoleResolution:
         assert role_for_user(False) is Role.USER
 
     @pytest.mark.parametrize(
-        ("caller", "expected"),
-        [
-            ({"role": "admin"}, Role.ADMIN),
-            ({"role": "readonly"}, Role.READONLY),
-            ({"role": "not-a-role"}, Role.USER),
-            ({"admin": True}, Role.ADMIN),
-            ({"admin": False}, Role.USER),
-            ({}, Role.USER),
-        ],
+        "caller",
+        [{"role": "not-a-role"}, {"admin": True}, {"admin": False}, {}, {"role": "Admin"}],
     )
-    def test_the_role_claim_wins_and_the_legacy_flag_is_the_fallback(self, caller, expected):
-        assert resolve_role(caller) is expected
+    def test_an_unresolvable_role_grants_nothing(self, caller):
+        """#18263 strict reading: no legacy-flag fallback, no unknown-role-means-user."""
+        assert permission_allowed(caller, Permission.API_READ) is False
 
 
 class TestTheLegacyGracePeriod:

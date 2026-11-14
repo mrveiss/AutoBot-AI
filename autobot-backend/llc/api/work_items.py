@@ -10,7 +10,7 @@ Routes:
   POST   /api/llc/work-items/{work_item_id}/checkout
   POST   /api/llc/work-items/{work_item_id}/release
   POST   /api/llc/work-items/{work_item_id}/transition
-  POST   /api/llc/work-items/{work_item_id}/comments
+  POST   /api/llc/work-items/{work_item_id}/comments  (GET lives in work_item_comments.py — GH#18750)
   POST   /api/llc/work-items/{work_item_id}/claim    (human claim — GH#8223)
   POST   /api/llc/work-items/{work_item_id}/unclaim  (human unclaim — GH#8223)
   POST   /api/llc/work-items/{work_item_id}/handoff/to-agent  (GH#8232)
@@ -36,12 +36,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from api.user_management.human_decider import require_interactive_human
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.user_management.models.user import resolve_display_name
 from llc.deps import assert_company_access, get_session, service_dep
 from models.agent_org import AgentOrgNode
+from security.upload_filename_policy import require_safe_upload
 from user_management.models.user import User
 from user_management.services import TenantContext
 
@@ -50,26 +51,18 @@ from ..kb.collections import KbCollectionManager
 from ..models.enums import (
     AssigneeType,
     WorkItemPriority,
-    WorkItemRelationType,
     WorkItemStatus,
     WorkItemType,
 )
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
-from ..scheduler.heartbeat_scheduler import HeartbeatScheduler
+from ..services.accessors import get_attachment_service, get_work_product_service
 from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.attachment_service import (
     AttachmentNotFound,
     AttachmentService,
     AttachmentTooLarge,
 )
-from ..services.comment_wake_service import CommentWakeService
-from ..services.handoff import (
-    HandoffAttachment,
-    HandoffNotAllowed,
-    HandoffNotAuthorized,
-    HandoffService,
-)
-from ..services.work_item_relations import RelationConflict, WorkItemRelationService
+from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import (
     CheckoutConflict,
     CoWorkingPermissionError,
@@ -77,19 +70,22 @@ from ..services.work_item_service import (
     WorkItemService,
     resolve_actor_role,
 )
-from ..services.work_product_service import WorkProductService
+from ._common import FenceSafeAgentId
+from ._common import actor_id as verified_user_id
+from ._common import own_task_actor, refused_transition, write_refusal
+from ._handoff_identity import handing_off_agent, member_reviewer
+from ._release_request import ReleaseRequest
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
+from .work_item_comments import require_work_item_id, serialize_comment
 
 
 class HumanClaimRequest(BaseModel):
-    user_id: str
-    company_id: str
+    company_id: Optional[str] = None  # accepted, ignored: claimant and tenant are the session's (#13999)
 
 
-class HumanUnclaimRequest(BaseModel):
-    user_id: str
-    company_id: str
+class HumanUnclaimRequest(HumanClaimRequest):
+    """The same accepted-and-ignored fields as a claim."""
 
 
 class CoworkerRequest(BaseModel):
@@ -113,14 +109,9 @@ class CoworkerRequest(BaseModel):
 
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
-_get_product_service = lazy_singleton(WorkProductService)
+router = APIRouter(prefix="/work-items", tags=["llc-work-items"], dependencies=[Depends(require_work_item_id)])
 _get_handoff_service = lazy_singleton(HandoffService)
 _kb_manager = KbCollectionManager()
-_get_relation_service = lazy_singleton(WorkItemRelationService)
-_get_attachment_service = lazy_singleton(AttachmentService)
-_get_comment_wake_service = lazy_singleton(CommentWakeService)
-_get_heartbeat_scheduler = lazy_singleton(HeartbeatScheduler)
 _get_activity_service = lazy_singleton(LLCActivityLogService)
 _get_ac_suggester = lazy_singleton(AcSuggester)
 
@@ -131,12 +122,8 @@ def _handoff_service() -> HandoffService:
     return _get_handoff_service()
 
 
-def _relation_service() -> WorkItemRelationService:
-    return _get_relation_service()
-
-
 def _attachment_service() -> AttachmentService:
-    return _get_attachment_service()
+    return get_attachment_service()
 
 
 # ------------------------------------------------------------------
@@ -158,8 +145,6 @@ class WorkItemCreate(BaseModel):
     goal_id: Optional[str] = None
     assignee_agent_id: Optional[str] = None
     assignee_user_id: Optional[str] = None
-    created_by_agent_id: Optional[str] = None
-    created_by_user_id: Optional[str] = None
     labels: Optional[List[str]] = None
     # GH#11140: declarative approval-gated action categories (plan-time visibility).
     requires_approval_before: Optional[List[str]] = None
@@ -188,14 +173,10 @@ class WorkItemUpdate(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
-    agent_id: str
+    agent_id: FenceSafeAgentId
     run_id: Optional[str] = None
     # GH#9532: optional free-text intent for the audit trail + similarity check
     work_intent: Optional[str] = None
-
-
-class ReleaseRequest(BaseModel):
-    agent_id: str
 
 
 class TransitionRequest(BaseModel):
@@ -205,8 +186,6 @@ class TransitionRequest(BaseModel):
 class CommentCreate(BaseModel):
     company_id: str
     body: str
-    author_agent_id: Optional[str] = None
-    author_user_id: Optional[str] = None
 
 
 class LinkPrRequest(BaseModel):
@@ -225,44 +204,19 @@ class HandoffAttachmentRequest(BaseModel):
 
 
 class HandoffToAgentRequest(BaseModel):
-    user_id: str
-    company_id: str
     target_agent_id: str
     human_notes: str
-    user_display: str = ""
     attachments: Optional[List[HandoffAttachmentRequest]] = None
 
 
 class HandoffToHumanRequest(BaseModel):
-    agent_id: str
-    reviewer_user_id: str
-    company_id: str
+    reviewer_user_id: str  # who is being asked, a company member; never who is acting (#20476)
     agent_notes: Optional[str] = None
 
 
-class ReviewApproveRequest(BaseModel):
-    reviewer_user_id: str
-    company_id: str
-
-
 class ReviewChangesRequest(BaseModel):
-    reviewer_user_id: str
-    company_id: str
     change_request: str
     return_to_agent_id: Optional[str] = None
-
-
-class RelationCreate(BaseModel):
-    company_id: str
-    target_id: str
-    relation_type: WorkItemRelationType
-    created_by_agent_id: Optional[str] = None
-    created_by_user_id: Optional[str] = None
-
-
-class RelationDelete(BaseModel):
-    actor_agent_id: Optional[str] = None
-    actor_user_id: Optional[str] = None
 
 
 async def _assignee_display(item: Any, session: AsyncSession) -> Optional[Dict[str, Any]]:
@@ -439,15 +393,13 @@ async def create_work_item(
             goal_id=body.goal_id,
             assignee_agent_id=body.assignee_agent_id,
             assignee_user_id=body.assignee_user_id,
-            created_by_agent_id=body.created_by_agent_id,
-            created_by_user_id=body.created_by_user_id,
+            created_by_user_id=str(verified_user_id(_current_user)),  # never the body: it decides who owns the task
             labels=body.labels,
             requires_approval_before=body.requires_approval_before,
         )
-    except ValueError as exc:  # e.g. unknown approval category (GH#11206)
-        raise HTTPException(status_code=400, detail=str(exc))
+    except ValueError as exc:  # hierarchy breach -> 422; else 400, e.g. unknown approval category (GH#11206)
+        raise write_refusal(exc)
     await session.commit()
-    await _kb_manager.ensure_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
     return await _item_to_dict(item, session)
 
 
@@ -533,8 +485,8 @@ async def update_work_item(
     fields = {k: v for k, v in body.model_dump(exclude_none=True).items()}
     try:
         item = await _service().update(session, work_item_id, **fields)
-    except ValueError as exc:  # e.g. unknown approval category (GH#11206)
-        raise HTTPException(status_code=400, detail=str(exc))
+    except ValueError as exc:  # hierarchy breach -> 422; else 400, e.g. unknown approval category (GH#11206)
+        raise write_refusal(exc)
     if item is None:
         raise HTTPException(status_code=404, detail="Work item not found")
     await session.commit()
@@ -612,17 +564,18 @@ async def release_work_item(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    """Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one; an item held by a
+    person is refused (409). Not enforced: that the caller IS that agent (open, #20521)."""
     # IDOR guard (M4/GH#9861).
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     try:
-        item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id)
+        item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id, run_id=body.run_id)
         await session.commit()
-        redis = await get_async_redis_client()
-        if redis is not None:
-            await redis.delete(f"llc:checkout:{work_item_id}")
         return await _item_to_dict(item, session)
+    except CheckoutConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=400, detail="Internal server error")
@@ -641,22 +594,15 @@ async def transition_work_item(
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     try:
-        item = await _service().transition_status(session, work_item_id, body.status)
+        item = await _service().transition_status(
+            session, work_item_id, body.status, acting_user=own_task_actor(_current_user)
+        )
         await session.commit()
         if item.status == WorkItemStatus.DONE:
             await _kb_manager.archive_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
         return await _item_to_dict(item, session)
     except InvalidTransition as exc:
-        # #12740: the service already computed the exact, useful reason
-        # ("Cannot transition from X to Y. Allowed: [...]"). Replacing it with a
-        # generic 422 "Internal server error" threw that away, so the UI could
-        # not tell the user what went wrong or what IS allowed. The message is
-        # purely domain-level — statuses and permitted transitions, no internals
-        # — so it is safe to surface. 409 Conflict is the correct code: the
-        # request is well-formed (422 implies malformed), it conflicts with the
-        # item's current state.
-        logger.info("Rejected illegal work-item transition: %s", exc)
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise refused_transition(exc)
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
@@ -715,8 +661,8 @@ async def claim_work_item(
         item = await _service().claim_human(
             session,
             work_item_id=work_item_id,
-            user_id=body.user_id,
-            company_id=body.company_id,
+            user_id=str(verified_user_id(_current_user)),
+            company_id=str(ctx.org_id),
         )
         await session.commit()
         return await _item_to_dict(item, session)
@@ -745,8 +691,8 @@ async def unclaim_work_item(
         item = await _service().unclaim_human(
             session,
             work_item_id=work_item_id,
-            user_id=body.user_id,
-            company_id=body.company_id,
+            user_id=str(verified_user_id(_current_user)),
+            company_id=str(ctx.org_id),
         )
         await session.commit()
         return await _item_to_dict(item, session)
@@ -840,35 +786,14 @@ async def add_comment(
     comment = await _service().add_comment(
         session,
         work_item_id=work_item_id,
-        company_id=body.company_id,
+        company_id=str(ctx.org_id),
         body=body.body,
-        author_agent_id=body.author_agent_id,
-        author_user_id=body.author_user_id,
+        author_agent_id=None,
+        author_user_id=str(verified_user_id(_current_user)),  # the session's, never the body (#20521)
     )
-
-    # GH#9624: trigger comment-driven wake before commit
-    wake_result = await _get_comment_wake_service().trigger_comment_wake(
-        session,
-        work_item_id=work_item_id,
-        comment_id=str(comment.id),
-    )
-
+    # GH#9624/#19582: add_comment queued the comment and @mention wakes; they dispatch on this commit.
     await session.commit()
-
-    # GH#9624: dispatch the run after commit
-    if wake_result:
-        run_id, agent_config, context = wake_result
-        _get_heartbeat_scheduler().dispatch_run(agent_config, run_id, context)
-
-    return {
-        "id": str(comment.id),
-        "work_item_id": str(comment.work_item_id),
-        "company_id": str(comment.company_id),
-        "body": comment.body,
-        "author_agent_id": (str(comment.author_agent_id) if comment.author_agent_id else None),
-        "author_user_id": (str(comment.author_user_id) if comment.author_user_id else None),
-        "created_at": comment.created_at.isoformat() if comment.created_at else None,
-    }
+    return serialize_comment(comment)
 
 
 @router.post("/{work_item_id}/handoff/to-agent", status_code=200)
@@ -898,10 +823,10 @@ async def handoff_to_agent(
             session,
             work_item_id=work_item_id,
             target_agent_id=body.target_agent_id,
-            user_id=body.user_id,
-            company_id=body.company_id,
+            user_id=str(verified_user_id(_current_user)),
+            company_id=str(ctx.org_id),
             human_notes=body.human_notes,
-            user_display=body.user_display,
+            user_display=str(_current_user.get("display_name") or _current_user.get("username") or ""),
             attachments=atts,
         )
         await session.commit()
@@ -940,9 +865,9 @@ async def handoff_to_human(
         item = await _handoff_service().agent_to_human(
             session,
             work_item_id=work_item_id,
-            agent_id=body.agent_id,
-            reviewer_user_id=body.reviewer_user_id,
-            company_id=body.company_id,
+            agent_id=await handing_off_agent(session, existing, _current_user),
+            reviewer_user_id=await member_reviewer(session, ctx.org_id, body.reviewer_user_id),
+            company_id=str(ctx.org_id),
             agent_notes=body.agent_notes,
         )
         await session.commit()
@@ -958,11 +883,11 @@ async def handoff_to_human(
 @router.post("/{work_item_id}/review/approve")
 async def review_approve(
     work_item_id: str,
-    body: ReviewApproveRequest,
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    require_interactive_human(_current_user, "work item review")
     # IDOR guard (M4/GH#9861).
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
@@ -971,8 +896,8 @@ async def review_approve(
         item = await _handoff_service().approve(
             session,
             work_item_id=work_item_id,
-            reviewer_user_id=body.reviewer_user_id,
-            company_id=body.company_id,
+            reviewer_user_id=str(verified_user_id(_current_user)),
+            company_id=str(ctx.org_id),
         )
         await session.commit()
         return await _item_to_dict(item, session)
@@ -992,6 +917,7 @@ async def review_request_changes(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    require_interactive_human(_current_user, "work item review")
     # IDOR guard (M4/GH#9861).
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
@@ -1000,8 +926,8 @@ async def review_request_changes(
         item = await _handoff_service().request_changes(
             session,
             work_item_id=work_item_id,
-            reviewer_user_id=body.reviewer_user_id,
-            company_id=body.company_id,
+            reviewer_user_id=str(verified_user_id(_current_user)),
+            company_id=str(ctx.org_id),
             change_request=body.change_request,
             return_to_agent_id=body.return_to_agent_id,
         )
@@ -1047,7 +973,7 @@ async def list_work_products(
     item = await _service().get(session, work_item_id)
     if item is None or str(item.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
-    products = await _get_product_service().list_by_work_item(
+    products = await get_work_product_service().list_by_work_item(
         session,
         work_item_id=work_item_id,
         limit=limit,
@@ -1125,75 +1051,6 @@ async def list_work_item_activity(
         total=result.total,
         has_next=result.has_next,
     )
-
-
-# ------------------------------------------------------------------
-# Relation endpoints (GH#8252)
-# ------------------------------------------------------------------
-
-
-@router.post("/{work_item_id}/relations", status_code=201)
-async def add_relation(
-    work_item_id: str,
-    body: RelationCreate,
-    session: AsyncSession = Depends(get_session),
-    _current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(require_org_context),
-) -> Dict[str, Any]:
-    # IDOR guard (M4/GH#9861).
-    existing = await _service().get(session, work_item_id)
-    if existing is None or str(existing.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Work item not found")
-    try:
-        rel = await _relation_service().add(
-            company_id=body.company_id,
-            source_id=work_item_id,
-            target_id=body.target_id,
-            relation_type=body.relation_type,
-            created_by_agent_id=body.created_by_agent_id,
-            created_by_user_id=body.created_by_user_id,
-        )
-        await session.commit()
-        return {
-            "id": str(rel.id),
-            "source_id": work_item_id,
-            "target_id": body.target_id,
-            "relation_type": rel.relation_type,
-        }
-    except RelationConflict as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=409, detail="Internal server error")
-    except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="Internal server error")
-
-
-@router.delete("/{work_item_id}/relations/{relation_id}", status_code=204)
-async def remove_relation(
-    work_item_id: str,
-    relation_id: str,
-    company_id: str = Query(...),
-    actor_agent_id: Optional[str] = Query(None),
-    actor_user_id: Optional[str] = Query(None),
-    session: AsyncSession = Depends(get_session),
-    _current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(require_org_context),
-) -> None:
-    # IDOR guard (M4/GH#9861).
-    existing = await _service().get(session, work_item_id)
-    if existing is None or str(existing.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Work item not found")
-    try:
-        await _relation_service().remove(
-            company_id=company_id,
-            relation_id=relation_id,
-            actor_agent_id=actor_agent_id,
-            actor_user_id=actor_user_id,
-        )
-        await session.commit()
-    except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -1293,8 +1150,6 @@ async def upload_attachment(
     work_item_id: str,
     company_id: str = Query(...),
     file: UploadFile = File(...),
-    uploaded_by_agent_id: Optional[str] = Query(None),
-    uploaded_by_user_id: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -1303,17 +1158,16 @@ async def upload_attachment(
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    uploader = str(verified_user_id(_current_user))  # the session's, never the query (#20521); before the body is read
     try:
-        content = await file.read()
         row = await _attachment_service().upload(
             session,
             work_item_id=work_item_id,
             company_id=str(ctx.org_id),  # #17300: not the query param -- this builds the storage path
-            filename=file.filename or "upload",
+            filename=require_safe_upload(file.filename),  # #19088: gate before the body is read
             content_type=file.content_type or "application/octet-stream",
-            content=content,
-            uploaded_by_agent_id=uploaded_by_agent_id,
-            uploaded_by_user_id=uploaded_by_user_id,
+            content=await file.read(),
+            uploaded_by_user_id=uploader,
         )
     except (AttachmentTooLarge, ValueError) as exc:  # #17302: ValueError was an uncaught 500
         logger.warning("Attachment upload refused for %s: %s", work_item_id, exc)

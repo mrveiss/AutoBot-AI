@@ -1,0 +1,336 @@
+[
+ {
+  "focus": "Port extraction, cross-tool confirmation",
+  "iterations": 4,
+  "name": "Find backend port from process list + config file",
+  "number": 1,
+  "tool_calls": [
+   {
+    "args": {
+     "command": "lsof -i -P -n"
+    },
+    "is_repeat": false,
+    "output": {
+     "command": "lsof -i -P -n",
+     "exit_code": 0,
+     "stdout": "COMMAND   PID   USER   FD   TYPE DEVICE SIZE/OFF NODE NAME\npython3  1234  root    4u  IPv4  12345      0t0  TCP *:8080 (LISTEN)\nnode     5678  root    6u  IPv4  12346      0t0  TCP *:3000 (LISTEN)\n"
+    },
+    "tool_name": "run_command"
+   },
+   {
+    "args": {
+     "path": "/app/config.yaml"
+    },
+    "is_repeat": false,
+    "output": {
+     "content": "server:\n  port: 8080\n  host: 0.0.0.0\n",
+     "path": "/app/config.yaml"
+    },
+    "tool_name": "read_file"
+   },
+   {
+    "args": {
+     "command": "lsof -i -P -n"
+    },
+    "is_repeat": true,
+    "output": {
+     "command": "lsof -i -P -n",
+     "exit_code": 0,
+     "stdout": "COMMAND   PID   USER   FD   TYPE DEVICE SIZE/OFF NODE NAME\npython3  1234  root    4u  IPv4  12345      0t0  TCP *:8080 (LISTEN)\nnode     5678  root    6u  IPv4  12346      0t0  TCP *:3000 (LISTEN)\n"
+    },
+    "tool_name": "run_command"
+   },
+   {
+    "args": {
+     "path": "/app/config.yaml"
+    },
+    "is_repeat": true,
+    "output": {
+     "content": "server:\n  port: 8080\n  host: 0.0.0.0\n",
+     "path": "/app/config.yaml"
+    },
+    "tool_name": "read_file"
+   }
+  ]
+ },
+ {
+  "focus": "File-exists assertions, content-hash dedup",
+  "iterations": 5,
+  "name": "Read 3 files, summarize content differences",
+  "number": 2,
+  "tool_calls": [
+   {
+    "args": {
+     "path": "/src/api.py"
+    },
+    "is_repeat": false,
+    "output": {
+     "content": "def get_users(): return db.query(User).all()",
+     "path": "/src/api.py"
+    },
+    "tool_name": "read_file"
+   },
+   {
+    "args": {
+     "path": "/src/models.py"
+    },
+    "is_repeat": false,
+    "output": {
+     "content": "class User(Base):\n    id = Column(Integer, primary_key=True)",
+     "path": "/src/models.py"
+    },
+    "tool_name": "read_file"
+   },
+   {
+    "args": {
+     "path": "/src/routes.py"
+    },
+    "is_repeat": false,
+    "output": {
+     "content": "router.add_route('/users', get_users)",
+     "path": "/src/routes.py"
+    },
+    "tool_name": "read_file"
+   },
+   {
+    "args": {
+     "path": "/src/api.py"
+    },
+    "is_repeat": true,
+    "output": {
+     "content": "def get_users(): return db.query(User).all()",
+     "path": "/src/api.py"
+    },
+    "tool_name": "read_file"
+   },
+   {
+    "args": {
+     "path": "/src/models.py"
+    },
+    "is_repeat": true,
+    "output": {
+     "content": "class User(Base):\n    id = Column(Integer, primary_key=True)",
+     "path": "/src/models.py"
+    },
+    "tool_name": "read_file"
+   }
+  ]
+ },
+ {
+  "focus": "Exit-code assertions, command repetition",
+  "iterations": 4,
+  "name": "Run git commands, report branch/commit state",
+  "number": 3,
+  "tool_calls": [
+   {
+    "args": {
+     "command": "git status --short"
+    },
+    "is_repeat": false,
+    "output": {
+     "command": "git status --short",
+     "exit_code": 0,
+     "stdout": "M  src/api.py\n?? debug.log\n"
+    },
+    "tool_name": "run_command"
+   },
+   {
+    "args": {
+     "command": "git log --oneline -5"
+    },
+    "is_repeat": false,
+    "output": {
+     "command": "git log --oneline -5",
+     "exit_code": 0,
+     "stdout": "abc1234 fix: update user query\ndef5678 feat: add route\nghi9012 chore: init\n"
+    },
+    "tool_name": "run_command"
+   },
+   {
+    "args": {
+     "command": "git branch --show-current"
+    },
+    "is_repeat": false,
+    "output": {
+     "command": "git branch --show-current",
+     "exit_code": 0,
+     "stdout": "feature/belief-state-prototype\n"
+    },
+    "tool_name": "run_command"
+   },
+   {
+    "args": {
+     "command": "git status --short"
+    },
+    "is_repeat": true,
+    "output": {
+     "command": "git status --short",
+     "exit_code": 0,
+     "stdout": "M  src/api.py\n?? debug.log\n"
+    },
+    "tool_name": "run_command"
+   }
+  ]
+ },
+ {
+  "focus": "Search-topic reuse suppression",
+  "iterations": 5,
+  "name": "Web search 3 topics, answer composite question",
+  "number": 4,
+  "tool_calls": [
+   {
+    "args": {
+     "query": "Python async best practices 2024"
+    },
+    "is_repeat": false,
+    "output": {
+     "query": "Python async best practices 2024",
+     "results": [
+      {
+       "title": "Real Python: Async IO in Python",
+       "url": "https://realpython.com/async-io-python/"
+      },
+      {
+       "title": "Python Docs: asyncio",
+       "url": "https://docs.python.org/3/library/asyncio.html"
+      }
+     ]
+    },
+    "tool_name": "web_search"
+   },
+   {
+    "args": {
+     "query": "FastAPI performance optimization"
+    },
+    "is_repeat": false,
+    "output": {
+     "query": "FastAPI performance optimization",
+     "results": [
+      {
+       "title": "FastAPI Docs: Performance",
+       "url": "https://fastapi.tiangolo.com/"
+      }
+     ]
+    },
+    "tool_name": "web_search"
+   },
+   {
+    "args": {
+     "query": "Redis caching patterns Python"
+    },
+    "is_repeat": false,
+    "output": {
+     "query": "Redis caching patterns Python",
+     "results": [
+      {
+       "title": "Redis: Python client examples",
+       "url": "https://redis.io/docs/clients/python/"
+      }
+     ]
+    },
+    "tool_name": "web_search"
+   },
+   {
+    "args": {
+     "query": "Python async best practices 2024"
+    },
+    "is_repeat": true,
+    "output": {
+     "query": "Python async best practices 2024",
+     "results": [
+      {
+       "title": "Real Python: Async IO in Python",
+       "url": "https://realpython.com/async-io-python/"
+      },
+      {
+       "title": "Python Docs: asyncio",
+       "url": "https://docs.python.org/3/library/asyncio.html"
+      }
+     ]
+    },
+    "tool_name": "web_search"
+   },
+   {
+    "args": {
+     "query": "FastAPI performance optimization"
+    },
+    "is_repeat": true,
+    "output": {
+     "query": "FastAPI performance optimization",
+     "results": [
+      {
+       "title": "FastAPI Docs: Performance",
+       "url": "https://fastapi.tiangolo.com/"
+      }
+     ]
+    },
+    "tool_name": "web_search"
+   }
+  ]
+ },
+ {
+  "focus": "Contradiction handling when output varies",
+  "iterations": 6,
+  "name": "Multi-step debug: find error in log, read log, identify fix",
+  "number": 5,
+  "tool_calls": [
+   {
+    "args": {
+     "command": "grep -n 'ERROR\\|CRITICAL' /var/log/app.log | tail -20"
+    },
+    "is_repeat": false,
+    "output": {
+     "command": "grep -n 'ERROR\\|CRITICAL' /var/log/app.log | tail -20",
+     "exit_code": 0,
+     "stdout": "1042:ERROR:app:Database connection timeout after 30s\n1043:ERROR:app:Retrying connection (attempt 2/3)\n1044:CRITICAL:app:Max retries exceeded — DB unreachable\n"
+    },
+    "tool_name": "run_command"
+   },
+   {
+    "args": {
+     "path": "/var/log/app.log"
+    },
+    "is_repeat": false,
+    "output": {
+     "content": "2024-01-15 10:30:01 INFO  Starting application\n2024-01-15 10:30:42 ERROR Database connection timeout after 30s\n2024-01-15 10:30:43 ERROR Retrying connection (attempt 2/3)\n2024-01-15 10:30:44 CRITICAL Max retries exceeded — DB unreachable\n2024-01-15 10:30:44 INFO  Shutting down\n",
+     "path": "/var/log/app.log"
+    },
+    "tool_name": "read_file"
+   },
+   {
+    "args": {
+     "path": "/app/database.yaml"
+    },
+    "is_repeat": false,
+    "output": {
+     "content": "database:\n  timeout: 5\n  host: db.internal\n",
+     "path": "/app/database.yaml"
+    },
+    "tool_name": "read_file"
+   },
+   {
+    "args": {
+     "command": "grep -n 'ERROR\\|CRITICAL' /var/log/app.log | tail -20"
+    },
+    "is_repeat": true,
+    "output": {
+     "command": "grep -n 'ERROR\\|CRITICAL' /var/log/app.log | tail -20",
+     "exit_code": 0,
+     "stdout": "1042:ERROR:app:Database connection timeout after 30s\n1043:ERROR:app:Retrying connection (attempt 2/3)\n1044:CRITICAL:app:Max retries exceeded — DB unreachable\n"
+    },
+    "tool_name": "run_command"
+   },
+   {
+    "args": {
+     "path": "/var/log/app.log"
+    },
+    "is_repeat": true,
+    "output": {
+     "content": "2024-01-15 10:30:01 INFO  Starting application\n2024-01-15 10:30:42 ERROR Database connection timeout after 30s\n2024-01-15 10:30:43 ERROR Retrying connection (attempt 2/3)\n2024-01-15 10:30:44 CRITICAL Max retries exceeded — DB unreachable\n2024-01-15 10:30:44 INFO  Shutting down\n",
+     "path": "/var/log/app.log"
+    },
+    "tool_name": "read_file"
+   }
+  ]
+ }
+]

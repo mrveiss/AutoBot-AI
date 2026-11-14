@@ -12,7 +12,7 @@ code duplication and improve maintainability.
 Functions:
 - ID Generation: generate_request_id, generate_chat_session_id, generate_message_id
 - ID Validation: validate_chat_session_id
-- Response Formatting: create_chat_response, create_error_response
+- Response Formatting: create_chat_response
 - Dependency Injection: get_chat_history_manager (FastAPI)
 
 Usage:
@@ -40,7 +40,6 @@ from utils.path_validation import contains_injection_patterns
 
 # Issue #756: Consolidated from utils/request_utils.py
 from utils.request_utils import generate_request_id
-from utils.response_helpers import create_error_response as _canonical_create_error_response
 
 logger = get_logger(__name__)
 
@@ -180,8 +179,6 @@ def validate_message_content(content: str) -> bool:
 # Response Formatting Functions
 # =============================================================================
 
-# Note: _canonical_create_error_response imported at top of file (Issue #292)
-
 
 def create_chat_response(
     data: Any,
@@ -227,56 +224,6 @@ def create_chat_response(
     return JSONResponse(status_code=status_code, content=response)
 
 
-def create_error_response(
-    error_code: str = "INTERNAL_ERROR",
-    message: str = "An error occurred",
-    request_id: str = "unknown",
-    status_code: int = 500,
-) -> JSONResponse:
-    """
-    Create a standardized error response.
-
-    This is a wrapper around response_helpers.create_error_response that
-    provides backward compatibility with the default request_id="unknown".
-
-    Args:
-        error_code: Error code identifier (default: "INTERNAL_ERROR")
-        message: Human-readable error message
-        request_id: Request ID for error tracking (default: "unknown")
-        status_code: HTTP status code (default: 500)
-
-    Returns:
-        JSONResponse: Formatted error response
-
-    Common Error Codes:
-        - INTERNAL_ERROR: Server-side error (500)
-        - VALIDATION_ERROR: Invalid input (400)
-        - NOT_FOUND: Resource not found (404)
-        - UNAUTHORIZED: Authentication required (401)
-        - FORBIDDEN: Insufficient permissions (403)
-
-    Example:
-        >>> response = create_error_response(
-        ...     error_code="VALIDATION_ERROR",
-        ...     message="Invalid session ID",
-        ...     request_id="abc-123",
-        ...     status_code=400
-        ... )
-        >>> response.status_code
-        400
-
-    Note:
-        Consolidated from duplicate in response_helpers.py (Issue #292).
-        Uses canonical implementation from backend.utils.response_helpers.
-    """
-    return _canonical_create_error_response(
-        error_code=error_code,
-        message=message,
-        status_code=status_code,
-        request_id=request_id,
-    )
-
-
 # =============================================================================
 # FastAPI Dependency Injection Functions
 # =============================================================================
@@ -308,10 +255,19 @@ def get_chat_history_manager(request: Request):
         >>> manager = get_chat_history_manager(request)
         >>> # Use manager for chat operations...
     """
+    return chat_history_manager_for(request.app.state)
+
+
+def chat_history_manager_for(app_state: Any):
+    """The app-wide ChatHistoryManager, for callers that hold the app, not a request.
+
+    Background ingest (the Telegram poller, #19010) has no Request; this is the
+    body of ``get_chat_history_manager`` so both resolve the same singleton.
+    """
     from chat_history import ChatHistoryManager
     from utils.lazy_singleton import lazy_init_singleton
 
-    return lazy_init_singleton(request.app.state, "chat_history_manager", ChatHistoryManager)
+    return lazy_init_singleton(app_state, "chat_history_manager", ChatHistoryManager)
 
 
 # =============================================================================
@@ -386,7 +342,6 @@ __all__ = [
     "validate_message_content",
     # Response Formatting
     "create_chat_response",
-    "create_error_response",
     # Dependency Injection
     "get_chat_history_manager",
     # Logging

@@ -21,7 +21,7 @@
 
 
 ## Issue Link
-<!-- Closes #N or related #N -->
+<!-- Closes #N or related #N. One issue per closing keyword: `Closes #A, #B` closes only #A (#19521). -->
 Closes #
 
 ## Changelog fragment
@@ -44,3 +44,9 @@ Closes #
 - [ ] Pre-commit hooks pass (`git commit` runs them automatically)
 - [ ] PR targets `main` (not `release`)
 - [ ] No secrets or credentials in the diff
+
+### Pre-handover (docs/developer/CLAUDE_REVIEW.md, #19285)
+- [ ] Every guard or test this body claims exists and ran
+- [ ] Size ceilings met by splitting, not by trimming text
+- [ ] Every cited owner decision is quoted on its issue
+- [ ] Pre-push green: it runs the whole-tree guards (symbol forks, isolated-git, file size, reach)

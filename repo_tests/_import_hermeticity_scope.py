@@ -42,6 +42,9 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
+
 #: ``(sys.path entry relative to the repo root, package directory)``. Each backend
 #: puts its own directory on ``sys.path``, so ``api`` means a different package in
 #: each -- which is exactly why both are swept rather than one standing in for both.
@@ -114,7 +117,7 @@ def entries(root: Path) -> list[Entry]:
         if not package_dir.is_dir():
             continue
         for path in sorted(package_dir.rglob("*.py")):
-            if "__pycache__" in path.parts or path.name.endswith("_test.py") or path.name.startswith("test_"):
+            if "__pycache__" in path.parts or is_test_filename(path.name, include_js=False, include_conftest=False):
                 continue
             found.append(Entry(tree, module_name(package, path, package_dir), path.relative_to(root).as_posix()))
     return found
@@ -156,7 +159,7 @@ def imported_names(entry: Entry, source: str) -> set[str]:
     ``a`` and ``a.b``, which is either a submodule or matches nothing.
     """
     names: set[str] = set()
-    for node in ast.walk(ast.parse(source, filename=entry.path)):
+    for node in ast.walk(parse_cache.parse(source, filename=entry.path)):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 parts = alias.name.split(".")

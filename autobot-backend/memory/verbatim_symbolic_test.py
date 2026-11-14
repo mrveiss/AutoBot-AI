@@ -16,30 +16,7 @@ import pytest
 
 import memory.verbatim_store as vs
 from memory.verbatim_store import UNSCOPED_ALL_USERS, VerbatimStore, _extract_terms
-
-
-class _FakePipe:
-    def __init__(self, redis):
-        self._redis = redis
-        self.ops = []
-
-    def sadd(self, key, *vals):
-        self.ops.append(("sadd", key, vals))
-        self._redis.sets.setdefault(key, set()).update(vals)
-        return self
-
-    def srem(self, key, *vals):
-        self.ops.append(("srem", key, vals))
-        self._redis.sets.get(key, set()).difference_update(vals)
-        return self
-
-    def delete(self, key):
-        self.ops.append(("delete", key))
-        self._redis.sets.pop(key, None)
-        return self
-
-    async def execute(self):
-        return [True] * len(self.ops)
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 
 class _FakeRedis:
@@ -47,7 +24,18 @@ class _FakeRedis:
         self.sets: dict = {}
 
     def pipeline(self):
-        return _FakePipe(self)
+        return FakeAsyncPipeline(self)
+
+    async def sadd(self, key, *vals):
+        self.sets.setdefault(key, set()).update(vals)
+        return len(vals)
+
+    async def srem(self, key, *vals):
+        self.sets.get(key, set()).difference_update(vals)
+        return len(vals)
+
+    async def delete(self, key):
+        return 1 if self.sets.pop(key, None) is not None else 0
 
     async def smembers(self, key):
         return set(self.sets.get(key, set()))

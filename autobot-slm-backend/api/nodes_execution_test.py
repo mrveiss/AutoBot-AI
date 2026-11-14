@@ -28,6 +28,8 @@ Covers:
 - SSH uses known_hosts (StrictHostKeyChecking=yes or accept-new), never =no.
 """
 
+import asyncio
+import importlib.util
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -45,7 +47,7 @@ sys.path.insert(0, str(_backend_root))
 # Stub heavy dependencies before importing the module under test.
 _models_stub = MagicMock()
 _models_stub.EventSeverity = MagicMock()
-_models_stub.EventType = MagicMock()
+_models_stub.NodeEventType = MagicMock()
 _models_stub.Node = MagicMock()
 _models_stub.NodeEvent = MagicMock()
 _models_stub.NodeStatus = MagicMock()
@@ -54,8 +56,6 @@ sys.modules.setdefault("services.auth", MagicMock())
 sys.modules.setdefault("services.database", MagicMock())
 sys.modules.setdefault("sqlalchemy", MagicMock())
 sys.modules.setdefault("sqlalchemy.ext.asyncio", MagicMock())
-
-import importlib.util  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("nodes_execution", Path(__file__).parent / "nodes_execution.py")
 _mod = importlib.util.module_from_spec(_spec)
@@ -574,7 +574,7 @@ class TestRunViaSshKnownHosts:
     async def test_uses_strict_host_key_checking_when_known_hosts_exists(self, tmp_path):
         """When known_hosts file exists, StrictHostKeyChecking=yes is passed."""
         known_hosts = tmp_path / "known_hosts"
-        known_hosts.write_text("10.0.0.1 ssh-rsa AAAA...", encoding="utf-8")
+        await asyncio.to_thread(known_hosts.write_text, "10.0.0.1 ssh-rsa AAAA...", encoding="utf-8")
 
         captured_cmd: list[str] = []
 
@@ -602,7 +602,7 @@ class TestRunViaSshKnownHosts:
         """Falls back to system known_hosts when per-user file is absent (#3469)."""
         missing_user_path = str(tmp_path / "nonexistent_known_hosts")
         system_known_hosts = tmp_path / "ssh_known_hosts"
-        system_known_hosts.write_text("10.0.0.2 ssh-rsa AAAA...", encoding="utf-8")
+        await asyncio.to_thread(system_known_hosts.write_text, "10.0.0.2 ssh-rsa AAAA...", encoding="utf-8")
 
         captured_cmd: list[str] = []
 
@@ -655,7 +655,7 @@ class TestRunViaSshKnownHosts:
         shell never sees a compound string to interpret.
         """
         known_hosts = tmp_path / "known_hosts"
-        known_hosts.write_text("10.0.0.1 ssh-rsa AAAA...", encoding="utf-8")
+        await asyncio.to_thread(known_hosts.write_text, "10.0.0.1 ssh-rsa AAAA...", encoding="utf-8")
 
         captured_args: list[str] = []
 

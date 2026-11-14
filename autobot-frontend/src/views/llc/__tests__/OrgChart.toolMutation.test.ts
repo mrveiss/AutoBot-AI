@@ -21,6 +21,9 @@ import { createI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import en from '@/i18n/locales/en.json'
 
+// #20682: the attach/detach controls show only to an owner/admin, whom the members list reports.
+const ADMIN_MEMBERS = { members: [{ user_id: 'u1', display_name: 'Ada', role: 'owner' }], viewer_can_manage: true }
+
 const get = vi.fn()
 const post = vi.fn()
 const del = vi.fn()
@@ -76,10 +79,13 @@ const ROLES = [{ id: 'r1', name: 'Head of Sales' }, { id: 'r2', name: 'SRE' }]
 function respond(tools: unknown = TOOLS, afterTools: unknown = tools): void {
   let toolCalls = 0
   get.mockImplementation((url: string) => {
+    // #21242: the canvas lists the company's workflows on entry; answer it explicitly.
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
     if (url.includes('/tool-nodes')) {
       toolCalls += 1
       return Promise.resolve({ nodes: toolCalls === 1 ? tools : afterTools })
     }
+    if (url.includes('/members')) return Promise.resolve(ADMIN_MEMBERS)
     if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
     if (url.includes('/api/llc/roles/')) return Promise.resolve(ROLES)
     return Promise.resolve({ nodes: [] })
@@ -122,7 +128,10 @@ describe('OrgChart tool attach/detach (#14597)', () => {
   // dropped, because one demands the notice and the other forbids it.
   it('says "could not load" when the tool-nodes request fails, never "no tools"', async () => {
     get.mockImplementation((url: string) => {
+      // #21242: the canvas lists the company's workflows on entry; answer it explicitly.
+      if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
       if (url.includes('/tool-nodes')) return Promise.reject(new Error('HTTP 503: upstream'))
+      if (url.includes('/members')) return Promise.resolve(ADMIN_MEMBERS)
       if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
       if (url.includes('/api/llc/roles/')) return Promise.resolve(ROLES)
       return Promise.resolve({ nodes: [] })
@@ -152,7 +161,10 @@ describe('OrgChart tool attach/detach (#14597)', () => {
     // the assertion runs before the tool-nodes request settles.
     let resolveTools: (v: unknown) => void = () => {}
     get.mockImplementation((url: string) => {
+      // #21242: the canvas lists the company's workflows on entry; answer it explicitly.
+      if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
       if (url.includes('/tool-nodes')) return new Promise((r) => { resolveTools = r })
+      if (url.includes('/members')) return Promise.resolve(ADMIN_MEMBERS)
       if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
       if (url.includes('/api/llc/roles/')) return Promise.resolve(ROLES)
       return Promise.resolve({ nodes: [] })

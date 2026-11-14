@@ -127,8 +127,8 @@ def _bootstrap_pipeline_dispatcher():
 
 
 _pd_mod = _bootstrap_pipeline_dispatcher()
-WorkerNode = _pd_mod.WorkerNode
-WorkerState = _pd_mod.WorkerState
+PipelineWorker = _pd_mod.PipelineWorker
+PipelineWorkerState = _pd_mod.PipelineWorkerState
 
 
 # ---------------------------------------------------------------------------
@@ -145,9 +145,9 @@ def _make_request(model_bytes: int):
 
 
 def _make_worker(worker_id: str, vram_bytes: int, online: bool = True):
-    w = WorkerNode(worker_id=worker_id, vram_bytes=vram_bytes)
+    w = PipelineWorker(worker_id=worker_id, vram_bytes=vram_bytes)
     if not online:
-        w.state = WorkerState.OFFLINE
+        w.state = PipelineWorkerState.OFFLINE
     return w
 
 

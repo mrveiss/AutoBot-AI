@@ -62,9 +62,10 @@ from ci_dispatch_watchdog import (  # noqa: E402
 )
 from ci_red_cause import (  # noqa: E402
     INFRASTRUCTURE_CAUSES,
-    build_api,
     classify_commit,
+    request_timeout,
 )
+from github_api import build_api  # noqa: E402
 
 # Free-tier public repositories get roughly 20 concurrent jobs. Stopping a
 # little under it leaves room for the runs already on their way in, so a retry
@@ -81,43 +82,6 @@ DEFAULT_MAX_ATTEMPTS = 2
 
 # Enough headroom left for the rest of the sweep to finish and publish.
 DEFAULT_RATE_RESERVE = 200
-
-
-# These two live here rather than on GitHubApi in ci_dispatch_watchdog.py: that
-# module is a grandfathered file under the #14236 size ratchet, and the
-# exemption freezes the size it was granted for rather than licensing more.
-# `api.request` is the shared client's public entry point, so nothing is forked
-# by calling it from here -- only the two calls unique to this tool live here.
-
-
-def rerun_run(api: Any, run_id: int) -> Tuple[int, str]:
-    """Re-dispatch a run.
-
-    ``rerun-failed-jobs`` rather than ``rerun``: a run that never dispatched has
-    exactly one failed job and nothing worth repeating, and on a partly
-    successful run this avoids paying again for the jobs that passed. GitHub
-    rejects the request on state grounds if the run is not re-runnable, which is
-    returned rather than raised.
-    """
-    status, body = api.request("POST", f"/repos/{api.repository}/actions/runs/{run_id}/rerun-failed-jobs")
-    message = str(body.get("message", "")) if isinstance(body, dict) else ""
-    return status, message
-
-
-def rate_limit_remaining(api: Any) -> int:
-    """Remaining core REST budget, or -1 when it cannot be read.
-
-    Inside Actions the GITHUB_TOKEN budget is 1,000/hour per repository, not the
-    5,000 a PAT gets, and the sweep this rides on already spends against it. -1
-    means "unknown", which callers must treat as "do not spend" rather than as
-    headroom.
-    """
-    status, body = api.request("GET", "/rate_limit")
-    if status != 200 or not isinstance(body, dict):
-        return -1
-    core = (body.get("resources") or {}).get("core") or {}
-    remaining = core.get("remaining")
-    return int(remaining) if isinstance(remaining, int) else -1
 
 
 def _env_int(name: str, default: int) -> int:
@@ -146,7 +110,7 @@ def capacity_blocked(api: Any, ceiling: int) -> Optional[str]:
 
 def budget_blocked(api: Any, reserve: int) -> Optional[str]:
     """Refuse the sweep when the REST budget is low or unreadable."""
-    remaining = rate_limit_remaining(api)
+    remaining = api.rate_limit_remaining()
     if remaining < 0:
         return "rate-limit budget unreadable — treating as spent, not as headroom"
     if remaining < reserve:
@@ -215,7 +179,7 @@ def redispatch(
             )
             done += 1
             continue
-        status, message = rerun_run(api, run_id)
+        status, message = api.rerun_run(run_id)
         if 200 <= status < 300:
             lines.append(f"  re-dispatched PR #{pr} {red.check_name} (run {run_id}, was {red.cause})")
             done += 1
@@ -234,7 +198,7 @@ def _sweep_limits() -> Dict[str, int]:
 
 
 def run(dry_run: bool, base_branch: str = DEFAULT_BASE_BRANCH) -> int:
-    api = build_api()
+    api = build_api(request_timeout())
     limits = _sweep_limits()
     _emit(f"ci-dispatch-retry: sweeping open PRs targeting {base_branch}")
     blocked = budget_blocked(api, limits["reserve"]) or capacity_blocked(api, limits["ceiling"])

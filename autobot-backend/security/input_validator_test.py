@@ -9,7 +9,7 @@ from security.input_validator import (
     get_input_validator,
     sanitize_web_content,
     validate_research_query,
-    validate_url,
+    validate_url_report,
 )
 
 
@@ -191,7 +191,7 @@ class TestConvenienceFunctions:
         assert "safe" in result
 
     def test_validate_url_func(self):
-        result = validate_url("https://example.com")
+        result = validate_url_report("https://example.com")
         assert "safe" in result
 
     def test_sanitize_web_content_func(self):

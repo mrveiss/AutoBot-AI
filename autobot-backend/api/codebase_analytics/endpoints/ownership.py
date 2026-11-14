@@ -19,10 +19,11 @@ from pathlib import Path
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
-from .shared import resolve_project_root, resolve_scan_root
+from .shared import resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -68,11 +69,6 @@ def _get_ownership_analyzer():
     except Exception as e:
         logger.warning("OwnershipAnalyzer not available: %s", e)
         return None
-
-
-def _get_project_root() -> str:
-    """Get project root path — delegates to shared resolver (#10730)."""
-    return resolve_project_root()
 
 
 def _escapes_root(path: str, project_root: str) -> bool:
@@ -302,31 +298,31 @@ def _build_knowledge_gaps_error(message: str) -> dict:
     }
 
 
-async def _check_ownership_cache(refresh: bool, source_id: str | None = None) -> JSONResponse | None:
+async def _check_ownership_cache(refresh: bool, source_id: str) -> JSONResponse | None:
     """Check cache for ownership analysis results.
 
     Issue #665: Extracted from get_ownership_analysis to reduce function length.
     Issue #3685: Keyed by source_id to prevent cross-project cache leakage.
     """
     async with _ownership_analysis_cache_lock:
-        cached = _ownership_analysis_cache.get(source_id or "")
+        cached = _ownership_analysis_cache.get(require_source_id(source_id, "ownership cache key"))
         if cached and not refresh:
             logger.info(
                 "Returning cached ownership analysis (%d files)",
                 cached.get("summary", {}).get("total_files", 0),
             )
-            return JSONResponse(cached)
+            return JSONResponse({**cached, "source_id": source_id})
     return None
 
 
-async def _cache_ownership_result(result: dict, source_id: str | None = None) -> None:
+async def _cache_ownership_result(result: dict, source_id: str) -> None:
     """Cache ownership analysis result.
 
     Issue #665: Extracted from get_ownership_analysis to reduce function length.
     Issue #3685: Keyed by source_id to prevent cross-project cache leakage.
     """
     async with _ownership_analysis_cache_lock:
-        _ownership_analysis_cache[source_id or ""] = result
+        _ownership_analysis_cache[require_source_id(source_id, "ownership cache key")] = result
 
 
 @router.get("/analysis")
@@ -337,25 +333,26 @@ async def _cache_ownership_result(result: dict, source_id: str | None = None) ->
     error_code_prefix="CODEBASE",
 )
 async def get_ownership_analysis(
+    source_id: SourceIdQuery,
     path: str = Query(None, description="Root path to analyze"),
     refresh: bool = Query(False, description="Force fresh analysis"),
     patterns: str = Query("**/*.py,**/*.ts,**/*.vue", description="Glob patterns"),
     days: int = Query(90, description="Days for recency scoring"),
-    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
 ):
     """Analyze code ownership (Issue #248). Issue #665: Refactored with helpers."""
+    # Resolve the source first: a source without a checkout is a 404 even when a result is cached.
+    scan_root = str(await resolve_scan_root(source_id))
     cached = await _check_ownership_cache(refresh, source_id=source_id)
     if cached:
         return cached
 
-    # #13602: was `_get_project_root()` on the next-but-one line, discarding the
+    # #13602: was the project root on the next-but-one line, discarding the
     # clone path resolved just above. A source's clone path lives under
     # data/code-sources/<id> while the project root resolves to the checkout —
     # sibling subtrees that never nest, so the containment check rejected EVERY
     # source-scoped request. Deterministic, not layout-dependent.
     # Now uses the canonical resolver (#12330), as environment.py, call_graph.py
     # and dependencies.py already do, instead of hand-rolling the lookup.
-    scan_root = str(await resolve_scan_root(source_id))
     if not path:
         path = scan_root
 
@@ -377,7 +374,7 @@ async def get_ownership_analysis(
             return JSONResponse(
                 {
                     "status": "partial",
-                    "message": "Analysis timed out after 180s. Try with fewer patterns.",
+                    "message": f"Analysis timed out after {ANALYSIS_TIMEOUT}s. Try with fewer patterns.",
                     "summary": {},
                 }
             )
@@ -390,7 +387,7 @@ async def get_ownership_analysis(
             result["summary"].get("total_files", 0),
             result["summary"].get("knowledge_gaps_count", 0),
         )
-        return JSONResponse(result)
+        return JSONResponse({**result, "source_id": source_id})
 
     except Exception as e:
         logger.error("Ownership analysis failed: %s", e, exc_info=True)
@@ -405,8 +402,8 @@ async def get_ownership_analysis(
     error_code_prefix="CODEBASE",
 )
 async def get_expertise_scores(
+    source_id: SourceIdQuery,
     path: str = Query(None, description="Root path to analyze"),
-    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
 ):
     """
     Get contributor expertise scores for a codebase (Issue #248).
@@ -420,10 +417,10 @@ async def get_expertise_scores(
     """
     # Check cache first - Issue #3685: Scoped by source_id
     async with _ownership_analysis_cache_lock:
-        cached = _ownership_analysis_cache.get(source_id or "")
+        cached = _ownership_analysis_cache.get(require_source_id(source_id, "ownership cache key"))
         if cached and cached.get("expertise_scores"):
             scores = cached["expertise_scores"]
-            return JSONResponse(_build_expertise_response(scores, len(scores), "cache"))
+            return JSONResponse({**_build_expertise_response(scores, len(scores), "cache"), "source_id": source_id})
 
     # Run fresh analysis if no cache
     # #13602: these accepted `source_id` "for API consistency" and ignored it,
@@ -446,7 +443,12 @@ async def get_expertise_scores(
         analysis = await analyzer.analyze_ownership(path)
         expertise_scores = analysis.get("expertise_scores", [])
 
-        return JSONResponse(_build_expertise_response(expertise_scores[:20], len(expertise_scores), "live_analysis"))
+        return JSONResponse(
+            {
+                **_build_expertise_response(expertise_scores[:20], len(expertise_scores), "live_analysis"),
+                "source_id": source_id,
+            }
+        )
 
     except Exception as e:
         logger.error("Failed to get expertise scores: %s", e, exc_info=True)
@@ -461,9 +463,9 @@ async def get_expertise_scores(
     error_code_prefix="CODEBASE",
 )
 async def get_knowledge_gaps(
+    source_id: SourceIdQuery,
     path: str = Query(None, description="Root path to analyze"),
     risk_level: str = Query(None, description="Filter by risk level (critical, high, medium, low)"),
-    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
 ):
     """
     Get knowledge gaps in the codebase (Issue #248).
@@ -476,12 +478,12 @@ async def get_knowledge_gaps(
     """
     # Check cache first - Issue #3685: Scoped by source_id
     async with _ownership_analysis_cache_lock:
-        cached = _ownership_analysis_cache.get(source_id or "")
+        cached = _ownership_analysis_cache.get(require_source_id(source_id, "ownership cache key"))
         if cached and cached.get("knowledge_gaps"):
             gaps = cached["knowledge_gaps"]
             if risk_level:
                 gaps = [g for g in gaps if g.get("risk_level") == risk_level]
-            return JSONResponse(_build_knowledge_gaps_response(gaps, len(gaps), "cache"))
+            return JSONResponse({**_build_knowledge_gaps_response(gaps, len(gaps), "cache"), "source_id": source_id})
 
     # Run fresh analysis if no cache
     # #13602: these accepted `source_id` "for API consistency" and ignored it,
@@ -507,7 +509,9 @@ async def get_knowledge_gaps(
         if risk_level:
             gaps = [g for g in gaps if g.get("risk_level") == risk_level]
 
-        return JSONResponse(_build_knowledge_gaps_response(gaps[:30], len(gaps), "live_analysis"))
+        return JSONResponse(
+            {**_build_knowledge_gaps_response(gaps[:30], len(gaps), "live_analysis"), "source_id": source_id}
+        )
 
     except Exception as e:
         logger.error("Failed to get knowledge gaps: %s", e, exc_info=True)

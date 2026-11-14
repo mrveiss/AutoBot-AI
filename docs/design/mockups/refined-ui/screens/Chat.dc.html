@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot chat</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.ibtn{width:36px;height:36px;border-radius:6px;border:var(--bw) solid transparent;background:transparent;display:inline-grid;place-items:center;cursor:pointer;color:var(--text)}
+.ibtn:hover{background:var(--surface2);border-color:var(--border)}
+.th button.tab{border-top:0;border-left:0;border-right:0;background:transparent;font:inherit;font-size:13.5px;font-weight:500;cursor:pointer}
+.th button.tab:hover{color:var(--text);background:var(--surface2)}
+.th button.tab.on{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.scr .tx{fill:var(--text);stroke:none}
+.scr .tp{fill:var(--on-primary);stroke:none}
+.scr .pk{fill:var(--primary)}
+.scr .ln{fill:var(--line);stroke:none}
+.estate{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:40px 24px;text-align:center;min-height:320px}
+.estate b{font-size:16px;font-weight:600}
+.estate span{font-size:13.5px;color:var(--muted);max-width:420px}
+.hbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px clamp(16px, 2.5vw, 32px);background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+.prev{border-style:dashed;border-color:var(--muted)}
+.ibtn[aria-pressed="true"]{background:var(--surface2);border-color:var(--stroke)}
+.vsel{height:32px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:13px;padding:0 8px;color:var(--text);flex-grow:1;min-width:0}
+.vring{width:96px;height:96px;border-radius:99px;display:grid;place-items:center;box-sizing:border-box;border:3px solid var(--stroke);background:var(--surface2)}
+.vring.idle{border-style:dashed;border-color:var(--muted)}
+.vring.listening{background:var(--i3t);border-color:var(--accent)}
+.vring.processing{background:var(--i1t)}
+.vring.speaking{background:var(--i2t)}
+.vmic{width:64px;height:64px;border-radius:99px;border:var(--bw) solid var(--primary);background:var(--primary);display:grid;place-items:center;cursor:pointer;position:relative;z-index:1;padding:0}
+.vmic:hover{background:var(--primary-h)}
+.vmic:disabled{opacity:.55;cursor:not-allowed}
+.vmic.listening{background:var(--accent);border-color:var(--accent)}
+.vpulse{position:absolute;border-radius:99px;border:2px solid var(--accent);box-sizing:border-box}
+.vsl{accent-color:var(--primary);flex-grow:1;min-width:0}
+.tab{height:44px;padding:0 12px;display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-weight:500;color:var(--text2);text-decoration:none;border-bottom:var(--nav-on-bw) solid transparent;box-sizing:border-box}
+.th a.tab.on{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.chip{height:30px;padding:0 10px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.chip[aria-pressed="true"]{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--stroke)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.step{display:flex;gap:10px;align-items:center;padding:9px 16px;border-bottom:var(--bw) solid var(--line);font-size:13.5px}
+.step:last-child{border-bottom:0}
+.sc{width:20px;height:20px;border-radius:99px;border:1px solid var(--stroke);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.term{background:var(--primary);color:var(--on-primary);border-radius:8px;padding:12px 14px;font-size:12.5px;line-height:1.65;overflow-x:auto;white-space:pre}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html" class="on" aria-current="page">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Platform admin, opens the SLM console" data-tip="Platform admin — opens the SLM console ↗" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">JD</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Chats" style="flex: 1 1 260px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <div style="display: flex; gap: 8px; margin-bottom: 8px">
+        <button type="button" class="btn pri" style="flex-grow: 1; justify-content: center" data-tip="New chat · Ctrl ⇧ O" data-tip-pos="bottom"><svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New chat</button>
+        <button type="button" class="ibtn" aria-label="Select chats" data-tip="Select chats" data-tip-pos="bottom" style="border-color: var(--border)"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6" class="sacc"/></svg></button>
+      </div>
+      <label style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; margin-bottom: 4px; border-radius: 6px; background: var(--surface); border: var(--bw) solid var(--border); box-sizing: border-box">
+        <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>
+        <span class="sr">Search chats</span>
+        <input type="search" placeholder="Search chats" style="border: 0; outline: 0; font: inherit; font-size: 13.5px; background: transparent; flex-grow: 1; min-width: 0; color: var(--text)">
+      </label>
+      <p class="sect">Folders</p>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" class="i2"/></svg>Infrastructure<span class="sub2" style="margin-left: auto">6</span></a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" class="i1"/></svg>Clients<span class="sub2" style="margin-left: auto">3</span></a>
+      <a href="#"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" class="it3"/></svg>Research<span class="sub2" style="margin-left: auto">9</span></a>
+      <p class="sect">Chat History</p>
+      <a href="#" class="on" aria-current="page"><span class="dot d-bad" style="background: var(--accent)" data-tip="Current chat" data-tip-pos="right"></span><span style="flex-grow: 1">Fleet health check</span><span class="sub2" style="font-weight: 400">14 msgs</span></a>
+      <a href="#"><span class="dot d-idle"></span><span style="flex-grow: 1">NPU INT4 benchmark plan</span><span class="sub2">22 msgs</span></a>
+      <a href="#"><span class="dot d-idle"></span><span style="flex-grow: 1">Contextual retrieval notes</span><span class="sub2">8 msgs</span></a>
+      <a href="#"><span class="dot d-idle"></span><span style="flex-grow: 1">Supplier questionnaire draft</span><span class="sub2">31 msgs</span></a>
+      <a href="#"><span class="dot d-idle"></span><span style="flex-grow: 1">Vue migration checklist</span><span class="sub2">5 msgs</span></a>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column">
+      <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px clamp(16px, 2.5vw, 32px); background: var(--surface); border-bottom: var(--bw) solid var(--line)">
+        <span class="tile lg"><svg class="ic" width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 180px">
+          <span class="sub2"><span data-tip="Overseer plans multi-step tasks and asks before risky commands" data-tip-pos="bottom">Overseer on</span> · <span data-tip="Answers draw on your knowledge base" data-tip-pos="bottom">Knowledge on</span> · started <span class="mono">10:42</span></span>
+          <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em">Fleet health check</h1>
+        </div>
+        <div class="only-min minnote"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+        <div data-tip="Context window: 12.3k of 128k tokens used in this chat" data-tip-pos="bottom" tabindex="0" class="adv" style="display: flex; flex-direction: column; gap: 4px; min-width: 120px">
+          <span class="mono sub2" style="font-size: 12px">12.3k / 128k</span>
+          <div class="bar" role="img" aria-label="Context window 10% used"><div class="bf" style="width: 10%"></div></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 2px">
+          <button type="button" class="ibtn adv" aria-label="Voice chat" aria-pressed="{{voicePressed}}" onClick="{{toggleVoice}}" data-tip="Voice chat — talk with AutoBot" data-tip-pos="bottom"><svg class="ic" width="19" height="19" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="13" width="4" height="7" rx="1.5" class="i2"/><rect x="17" y="13" width="4" height="7" rx="1.5" class="i2"/></svg></button>
+          <button type="button" class="ibtn" aria-label="Toggle file panel" aria-pressed="{{filesPressed}}" onClick="{{toggleFiles}}" data-tip="Toggle file panel" data-tip-pos="bottom"><svg class="ic" width="19" height="19" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 7l-7 7a2 2 0 0 0 3 3l7-7a4 4 0 0 0-6-6l-7 7a6 6 0 0 0 8 8l6-6"/></svg></button>
+          <button type="button" class="ibtn adv" aria-label="Compare models" data-tip="Compare models side by side" data-tip-pos="bottom"><svg class="ic" width="19" height="19" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="8" height="16" rx="2" class="i1"/><rect x="13" y="4" width="8" height="16" rx="2" class="it3"/></svg></button>
+          <button type="button" class="ibtn adv" aria-label="Export chat" data-tip="Export chat" data-tip-pos="bottom"><svg class="ic" width="19" height="19" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M8 11l4 4 4-4"/><path d="M4 17v3h16v-3"/></svg></button>
+          <button type="button" class="ibtn adv" aria-label="Chat settings" data-tip="Chat settings" data-tip-pos="bottom"><svg class="ic" width="19" height="19" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i2"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg></button>
+        </div>
+        <span class="pill ok" data-tip="Connected to the backend — replies stream live" data-tip-pos="left">Connected</span>
+      </header>
+
+      <div role="tablist" aria-label="Chat tabs" style="display: flex; flex-wrap: wrap; gap: 2px; padding: 0 clamp(16px, 2.5vw, 32px); background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+        <button type="button" role="tab" aria-selected="{{tabs.chat.sel}}" class="tab {{tabs.chat.cls}}" onClick="{{tabs.chat.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="i1"/></svg>Chat</button>
+        <button type="button" role="tab" aria-selected="{{tabs.files.sel}}" class="tab {{tabs.files.cls}}" onClick="{{tabs.files.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" class="i2"/></svg>Files</button>
+        <button type="button" role="tab" aria-selected="{{tabs.terminal.sel}}" class="tab adv {{tabs.terminal.cls}}" onClick="{{tabs.terminal.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M7 9l3 2.5L7 14M12 14h4"/></svg>Terminal</button>
+        <button type="button" role="tab" aria-selected="{{tabs.browser.sel}}" class="tab adv {{tabs.browser.cls}}" onClick="{{tabs.browser.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" class="it1"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>Browser</button>
+        <button type="button" role="tab" aria-selected="{{tabs.novnc.sel}}" class="tab adv {{tabs.novnc.cls}}" onClick="{{tabs.novnc.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" class="it1"/><path d="M9 20h6M12 16v4"/></svg>Remote desktop</button>
+      </div>
+
+      <sc-if value="{{tabChat}}" hint-placeholder-val="{{ true }}">
+      <div style="flex-grow: 1; padding: 24px clamp(16px, 2.5vw, 32px); display: flex; flex-direction: column; gap: 20px; max-width: 900px; width: 100%; box-sizing: border-box; margin: 0 auto">
+
+        <div style="align-self: flex-end; max-width: 78%; display: flex; flex-direction: column; gap: 4px; align-items: flex-end">
+          <div style="background: var(--primary); color: var(--on-primary); padding: 12px 16px; border-radius: 10px 10px 2px 10px; font-size: 14px; line-height: 1.5">Check every node in the SLM fleet and restart anything that isn't answering.</div>
+          <span class="sub2" style="font-size: 12px">You · <span class="mono">10:42</span></span>
+        </div>
+
+        <div style="display: flex; gap: 12px; align-items: flex-start">
+          <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" class="iw"/><circle cx="29" cy="27" r="3" class="iw"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+            <span style="font-size: 13px; font-weight: 600">Overseer</span>
+
+            <section class="card only-min" aria-labelledby="sum-h" style="padding: 12px 16px; gap: 12px; align-items: center">
+              <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="6" rx="2" class="i1"/><rect x="3" y="13" width="18" height="6" rx="2" class="it2"/><circle cx="7" cy="8" r="1" class="ik"/><circle cx="7" cy="16" r="1" class="i3"/></svg></span>
+              <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0">
+                <h2 id="sum-h" style="margin: 0; font-size: 14px; font-weight: 600">AutoBot checked 6 nodes · 1 needs a restart — approve?</h2>
+                <span class="sub2">5 nodes are healthy. node-04 stopped answering; see the approval below.</span>
+              </div>
+              <span class="pill warn">Needs you</span>
+            </section>
+
+            <section class="card adv" aria-labelledby="plan-h">
+              <div class="ch">
+                <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2" class="iw"/><rect x="9" y="2.5" width="6" height="3.5" rx="1" class="i2"/><path d="M8.5 11l1.5 1.5 3-3M8.5 16.5l1.5 1.5 3-3" class="sacc"/></svg>
+                <h2 id="plan-h">Execution Plan</h2>
+                <span class="sub2" style="font-weight: 500">2 of 4 steps</span>
+              </div>
+              <div style="padding: 12px 16px 4px"><div class="bar" role="img" aria-label="50% of plan complete"><div class="bf" style="width: 50%"></div></div></div>
+              <ol style="margin: 0; padding: 0; list-style: none">
+                <li class="step"><span class="sc" style="background: var(--i1)"><svg class="ic" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3.5"><path d="M5 12l5 5 9-10"/></svg></span>Read fleet inventory from Ansible<span class="pill ok" style="margin-left: auto">Completed</span></li>
+                <li class="step"><span class="sc" style="background: var(--i1)"><svg class="ic" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3.5"><path d="M5 12l5 5 9-10"/></svg></span>Ping all 6 nodes<span class="pill ok" style="margin-left: auto">Completed</span></li>
+                <li class="step" style="font-weight: 600"><span class="sc" style="background: var(--i2)"></span>Restart services on node-04<span class="pill warn" style="margin-left: auto">Awaiting approval</span></li>
+                <li class="step" style="color: var(--muted)"><span class="sc" style="background: var(--surface); border-style: dashed"></span>Verify health and summarise<span class="pill idle" style="margin-left: auto">Pending</span></li>
+              </ol>
+            </section>
+
+            <section class="card adv" aria-labelledby="step2-h">
+              <div class="ch"><h2 id="step2-h" style="font-size: 14px">Step 2 · Ping all 6 nodes</h2><span class="mono sub2">1.8s</span></div>
+              <div style="padding: 12px 16px; display: flex; flex-direction: column; gap: 8px">
+                <div class="mono term" role="region" aria-label="Terminal output">$ ansible slm_fleet -m ping
+node-01 | SUCCESS
+node-02 | SUCCESS
+node-03 | SUCCESS
+node-04 | <strong style="text-decoration: underline">UNREACHABLE</strong> · ssh timeout
+node-05 | SUCCESS
+node-06 | SUCCESS</div>
+                <span class="sub2"><span data-tip="Exit code 4: Ansible reports one or more hosts unreachable">Exit: <span class="mono">4</span></span> · 5 of 6 reachable</span>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="appr-h" style="border-color: var(--stroke)">
+              <div class="ch" style="background: var(--warn-bg); border-radius: 10px 10px 0 0">
+                <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 5l15 6v11c0 10-7 17-15 20C16 39 9 32 9 22V11z" class="iw"/><path d="M24 5v37C16 39 9 32 9 22V11z" class="i2"/><path d="M24 17v9M24 31v.5" stroke-width="3"/></svg></span>
+                <h2 id="appr-h">Command Approval Required</h2>
+                <span class="pill warn" data-tip="Medium risk: changes a running service; reversible, but may interrupt work" data-tip-pos="left">Risk: Medium</span>
+              </div>
+              <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
+                <div class="mono" style="background: var(--surface2); border: var(--bw) solid var(--border); border-radius: 6px; padding: 10px 12px; font-size: 12.5px; overflow-x: auto">ansible node-04 -b -m systemd -a "name=autobot-worker state=restarted"</div>
+                <p style="margin: 0; font-size: 13.5px; line-height: 1.5"><strong style="font-weight: 600">Purpose:</strong> node-04 stopped answering after the last deploy. A service restart is the least invasive fix before a reboot.</p>
+                <label style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text2); min-height: 28px"><input type="checkbox" style="width: 16px; height: 16px; accent-color: var(--primary)">Automatically approve similar commands</label>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end">
+                  <button type="button" class="btn">Deny</button>
+                  <button type="button" class="btn">Approve with comment</button>
+                  <button type="button" class="btn pri">Approve</button>
+                </div>
+              </div>
+            </section>
+
+            <details style="font-size: 13.5px">
+              <summary style="cursor: pointer; font-weight: 500; color: var(--text2); min-height: 28px; display: flex; align-items: center; gap: 8px"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="it1"/></svg>Sources · 2</summary>
+            </details>
+            <span class="mono sub2 adv" style="font-size: 12px; align-self: flex-start" data-tip="Model · tokens generated · response time">qwen2.5:14b · 612 tokens · 2340 ms</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding: 0 clamp(16px, 2.5vw, 32px) 24px; max-width: 900px; width: 100%; box-sizing: border-box; margin: 0 auto">
+        <details class="card adv" style="padding: 8px 14px; margin-bottom: 10px; font-size: 13px">
+          <summary style="cursor: pointer; font-weight: 500; color: var(--text2); min-height: 26px; line-height: 26px">Reasoning trace · 6 entries</summary>
+        </details>
+        <div class="card" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; border-color: var(--stroke)">
+          <label class="sr" for="msg">Message</label>
+          <textarea id="msg" rows="2" placeholder="Ask AutoBot anything…" style="border: 0; outline: 0; resize: none; font: inherit; font-size: 14px; color: var(--text); background: transparent"></textarea>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+            <button type="button" class="ibtn" aria-label="Attach file" data-tip="Attach file"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 7l-7 7a2 2 0 0 0 3 3l7-7a4 4 0 0 0-6-6l-7 7a6 6 0 0 0 8 8l6-6"/></svg></button>
+            <button type="button" class="ibtn" aria-label="Voice input" data-tip="Voice input — dictate one message"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+            <button type="button" class="chip" aria-pressed="true" data-tip="Ground answers in your knowledge base (RAG)">Use Knowledge</button>
+            <button type="button" class="chip adv" aria-pressed="true" data-tip="Plan multi-step tasks and request approval for risky commands">Overseer</button>
+            <button type="button" class="chip adv" aria-pressed="false" data-tip="Extended reasoning before answering — slower, more thorough">Thinking off</button>
+            <span class="adv" style="flex-grow: 1" aria-hidden="true"></span>
+            <span class="only-min" style="flex-grow: 1" aria-hidden="true"></span>
+            <label class="adv" style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text2)">Model
+              <select style="height: 32px; border-radius: 6px; border: var(--bw) solid var(--border); background: var(--surface); font: inherit; font-size: 12.5px; padding: 0 8px; color: var(--text)"><option>Auto (default model)</option></select>
+            </label>
+            <button type="button" class="btn pri" aria-label="Send" data-tip="Send · Enter" data-tip-pos="left" style="width: 36px; padding: 0; justify-content: center"><svg class="ic sonp" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
+          </div>
+        </div>
+        <p class="sub2" style="margin: 8px 2px 0; font-size: 12px">Enter to send, Shift+Enter for new line<span class="adv"> · type <span class="mono">/</span> for commands and <span data-tip="Model Context Protocol — external tools the assistant can call">MCP</span> tools</span></p>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{tabFiles}}" hint-placeholder-val="{{ false }}">
+      <section role="tabpanel" aria-label="Files" style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 12px; padding: 20px clamp(16px, 2.5vw, 32px) 32px">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+          <nav aria-label="Folder path" style="flex: 1 1 240px; display: flex; align-items: center; gap: 6px; font-size: 13.5px">
+            <a href="#">Chat files</a><span class="sub2" aria-hidden="true">/</span><strong style="font-weight: 600" aria-current="page">Fleet health check</strong>
+          </nav>
+          <button type="button" class="btn sm" data-tip="Add files to this chat"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M4 19h16"/></svg>Upload file</button>
+        </div>
+        <div class="card" style="overflow-x: auto">
+          <table style="border-collapse: collapse; width: 100%">
+            <thead><tr><th>Name</th><th>Size</th><th>Modified</th></tr></thead>
+            <tbody>
+              <tr><td><span style="display: inline-flex; align-items: center; gap: 8px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" class="i2"/></svg><a href="#">logs</a></span></td><td class="sub2">—</td><td class="mono sub2">10:51</td></tr>
+              <tr><td><span style="display: inline-flex; align-items: center; gap: 8px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4"/></svg>fleet-inventory.yml</span></td><td class="mono sub2">3.8 KB</td><td class="mono sub2">10:43</td></tr>
+              <tr><td><span style="display: inline-flex; align-items: center; gap: 8px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4"/></svg>ansible-ping-output.txt</span></td><td class="mono sub2">1.2 KB</td><td class="mono sub2">10:44</td></tr>
+              <tr><td><span style="display: inline-flex; align-items: center; gap: 8px"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4"/></svg>health-summary.md</span></td><td class="mono sub2">2.1 KB</td><td class="mono sub2">10:52</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      </sc-if>
+
+      <sc-if value="{{tabTerminal}}" hint-placeholder-val="{{ false }}">
+      <section class="adv" role="tabpanel" aria-label="Terminal" style="flex: 1 1 auto; display: flex; flex-direction: column">
+        <div class="hbar">
+          <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M7 9l3 2.5L7 14M12 14h4"/></svg>
+          <label class="sr" for="sshhost">SSH host</label>
+          <select id="sshhost" class="vsel" style="flex: 0 1 260px" value="{{sshHost}}" onChange="{{setSsh}}">
+            <option value="">Select an SSH host</option>
+            <option value="node-02">node-02 (SSH)</option>
+            <option value="node-03">node-03 (SSH)</option>
+            <option value="node-04">node-04 (SSH)</option>
+          </select>
+          <sc-if value="{{sshOn}}" hint-placeholder-val="{{ true }}"><span class="sub2">Connected to {{sshHost}}</span></sc-if>
+        </div>
+        <sc-if value="{{sshOn}}" hint-placeholder-val="{{ true }}">
+          <div class="mono term" role="region" aria-label="Terminal on {{sshHost}}" style="flex: 1 1 auto; min-height: 420px; border-radius: 0; font-size: 13px">autobot@{{sshHost}}:~$ systemctl status autobot-worker
+● autobot-worker.service - AutoBot worker
+   Active: active (running) since 10:41
+   Tasks: 18   Memory: 1.4G
+autobot@{{sshHost}}:~$ ollama ps
+qwen2.5:14b   GPU   9.1 GB
+autobot@{{sshHost}}:~$ ▌</div>
+        </sc-if>
+        <sc-if value="{{sshOff}}" hint-placeholder-val="{{ false }}">
+          <div class="estate"><span class="tile lg"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" class="iw"/><path d="M7 9l3 2.5L7 14M12 14h4"/></svg></span><b>Select an SSH host</b><span>Choose a host with SSH capability to start a terminal session.</span></div>
+        </sc-if>
+      </section>
+      </sc-if>
+
+      <sc-if value="{{tabBrowser}}" hint-placeholder-val="{{ false }}">
+      <section class="adv" role="tabpanel" aria-label="Browser" style="flex: 1 1 auto; display: flex; flex-direction: column">
+        <div class="hbar" style="flex-direction: column; align-items: stretch; gap: 8px">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 12.5px">
+            <span style="display: inline-flex; align-items: center; gap: 6px"><span class="dot {{brDot}}"></span><span>{{brStatus}}</span></span>
+            <sc-if value="{{brOn}}" hint-placeholder-val="{{ true }}"><span class="sub2" style="font-weight: 500">Fleet status</span></sc-if>
+            <span style="flex-grow: 1"></span>
+            <span class="sub2" tabindex="0" data-tip="Each chat gets its own browser session, so cookies are not shared between chats" data-tip-pos="left">This chat has its own browser session</span>
+            <button type="button" class="chip prev" aria-pressed="{{brIdlePressed}}" onClick="{{toggleBrIdle}}" data-tip="Design preview only — not in the product">Preview: not started</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px">
+            <button type="button" class="ibtn" aria-label="Back" data-tip="Back" data-tip-pos="bottom" disabled="{{brOff}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button>
+            <button type="button" class="ibtn" aria-label="Forward" data-tip="Forward" data-tip-pos="bottom" disabled="{{brOff}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+            <button type="button" class="ibtn" aria-label="Reload" data-tip="Reload" data-tip-pos="bottom" disabled="{{brOff}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v5h-5"/></svg></button>
+            <label style="flex-grow: 1; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: 6px; background: var(--surface); border: var(--bw) solid var(--border); box-sizing: border-box; min-width: 0">
+              <svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" class="it1"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>
+              <span class="sr">Address</span>
+              <input type="text" value="{{brUrl}}" onInput="{{onUrl}}" placeholder="Enter URL or search…" class="mono" style="border: 0; outline: 0; font-size: 13px; background: transparent; flex-grow: 1; min-width: 0; color: var(--text)">
+            </label>
+            <button type="button" class="btn pri" aria-label="Navigate" data-tip="Navigate" data-tip-pos="bottom" style="width: 36px; padding: 0; justify-content: center"><svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg></button>
+            <button type="button" class="ibtn" aria-label="Refresh screenshot" data-tip="Refresh screenshot" data-tip-pos="bottom" disabled="{{brOff}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" class="it1"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+            <button type="button" class="ibtn" aria-label="Toggle GUI automation panel" aria-pressed="{{brAutoPressed}}" onClick="{{toggleBrAuto}}" data-tip="Toggle GUI automation panel" data-tip-pos="left"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" class="i1"/><path d="M12 8V5M9.5 13h.01M14.5 13h.01"/><circle cx="12" cy="4" r="1" class="i3"/></svg></button>
+          </div>
+        </div>
+        <div style="flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: stretch">
+          <div style="flex: 999 1 420px; min-width: 0; padding: 16px clamp(16px, 2.5vw, 32px); display: flex; flex-direction: column; justify-content: center">
+            <sc-if value="{{brOn}}" hint-placeholder-val="{{ true }}">
+              <svg class="ic scr" viewBox="0 0 640 360" width="100%" role="img" aria-label="Screenshot of the page at the address above: a header, a banner and three cards" style="display: block; border-radius: 6px; stroke-width: 1.5">
+                <rect x="0" y="0" width="640" height="360" class="iw"/>
+                <rect x="0" y="0" width="640" height="40" class="it1"/>
+                <rect x="20" y="14" width="70" height="12" rx="3" class="pk"/>
+                <rect x="440" y="16" width="40" height="8" rx="3" class="ln"/><rect x="496" y="16" width="40" height="8" rx="3" class="ln"/><rect x="552" y="16" width="40" height="8" rx="3" class="ln"/>
+                <rect x="20" y="60" width="600" height="110" rx="8" class="it2"/>
+                <rect x="40" y="84" width="220" height="16" rx="4" class="pk"/>
+                <rect x="40" y="112" width="320" height="8" rx="4" class="ln"/><rect x="40" y="128" width="280" height="8" rx="4" class="ln"/>
+                <rect x="20" y="190" width="190" height="140" rx="8" class="it1"/><rect x="225" y="190" width="190" height="140" rx="8" class="it3"/><rect x="430" y="190" width="190" height="140" rx="8" class="it2"/>
+                <rect x="34" y="204" width="90" height="10" rx="3" class="pk"/><rect x="239" y="204" width="90" height="10" rx="3" class="pk"/><rect x="444" y="204" width="90" height="10" rx="3" class="pk"/>
+                <rect x="34" y="226" width="150" height="6" rx="3" class="ln"/><rect x="239" y="226" width="150" height="6" rx="3" class="ln"/><rect x="444" y="226" width="150" height="6" rx="3" class="ln"/>
+              </svg>
+            </sc-if>
+            <sc-if value="{{brOff}}" hint-placeholder-val="{{ false }}">
+              <div class="estate"><span class="tile lg"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" class="it1"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></span><b>Browser</b><span>Enter a URL above and press Enter or click the search icon to start browsing.</span></div>
+            </sc-if>
+          </div>
+          <sc-if value="{{brAutoOn}}" hint-placeholder-val="{{ false }}">
+            <aside aria-label="GUI automation" style="flex: 0 0 300px; max-width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px; background: var(--surface); border-left: var(--bw) solid var(--border)">
+              <div style="display: flex; align-items: flex-start; gap: 8px">
+                <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1"><h3 style="margin: 0; font-size: 14px; font-weight: 600">GUI automation opportunities</h3><span class="sub2" style="font-size: 12px">Discover and interact with UI elements on the current screen</span></div>
+                <button type="button" class="btn sm">Refresh</button>
+              </div>
+              <div class="card" style="padding: 10px 12px; display: flex; flex-direction: column; gap: 6px"><div style="display: flex; align-items: center; gap: 8px"><strong style="font-size: 13px; font-weight: 600; flex-grow: 1">Click</strong><span class="sub2">button</span><span class="pill ok">94%</span></div><span class="sub2">Open the status details link.</span><div style="display: flex; gap: 6px"><button type="button" class="btn sm">Execute</button><button type="button" class="btn sm">Details</button></div></div>
+              <div class="card" style="padding: 10px 12px; display: flex; flex-direction: column; gap: 6px"><div style="display: flex; align-items: center; gap: 8px"><strong style="font-size: 13px; font-weight: 600; flex-grow: 1">Click</strong><span class="sub2">link</span><span class="pill warn">71%</span></div><span class="sub2">Open the third card.</span><div style="display: flex; gap: 6px"><button type="button" class="btn sm">Execute</button><button type="button" class="btn sm">Details</button></div></div>
+            </aside>
+          </sc-if>
+        </div>
+      </section>
+      </sc-if>
+
+      <sc-if value="{{tabNovnc}}" hint-placeholder-val="{{ false }}">
+      <section class="adv" role="tabpanel" aria-label="Remote desktop" style="flex: 1 1 auto; display: flex; flex-direction: column">
+        <sc-if value="{{deskDenied}}" hint-placeholder-val="{{ false }}">
+          <div class="hbar" style="justify-content: flex-end"><button type="button" class="chip prev" aria-pressed="true" onClick="{{toggleDenied}}" data-tip="Design preview only — not in the product">Preview: access denied</button></div>
+          <div class="estate" role="status"><span class="tile lg"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" class="it2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><b>Remote desktop is not available for your role</b><span>Viewing and controlling the managed desktop requires the desktop-control permission. Ask an administrator to grant it to your role.</span></div>
+        </sc-if>
+        <sc-if value="{{deskAllowed}}" hint-placeholder-val="{{ true }}">
+          <div class="hbar">
+            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" class="it1"/><path d="M9 20h6M12 16v4"/></svg>
+            <label class="sr" for="vnchost">VNC host</label>
+            <select id="vnchost" class="vsel" style="flex: 0 1 260px" value="{{vncHost}}" onChange="{{setVnc}}">
+              <option value="">Select a VNC host</option>
+              <option value="node-03">node-03 (VNC)</option>
+              <option value="node-05">node-05 (VNC)</option>
+            </select>
+            <span style="flex-grow: 1"></span>
+            <button type="button" class="chip prev" aria-pressed="false" onClick="{{toggleDenied}}" data-tip="Design preview only — not in the product">Preview: access denied</button>
+          </div>
+          <sc-if value="{{vncOn}}" hint-placeholder-val="{{ true }}">
+            <div style="padding: 16px clamp(16px, 2.5vw, 32px)">
+              <div class="card" style="padding: 10px">
+                <svg class="ic scr" viewBox="0 0 640 360" width="100%" role="img" aria-label="Remote desktop of {{vncHost}} showing a terminal window" style="display: block; border-radius: 6px; stroke-width: 1.5">
+                  <rect x="0" y="0" width="640" height="360" class="it1"/>
+                  <path d="M0 290c80-30 160-40 250-20s170 20 250-5 110-10 140 0v95H0z" class="i1"/>
+                  <circle cx="560" cy="70" r="26" class="i2"/>
+                  <rect x="0" y="0" width="640" height="18" class="iw"/>
+                  <text x="10" y="13" font-family="IBM Plex Sans, sans-serif" font-size="10" font-weight="600" class="tx">Activities</text>
+                  <path d="M18 40h14l4 5h16v20H18z" class="i2"/>
+                  <rect x="90" y="150" width="250" height="140" rx="8" class="pk"/>
+                  <path d="M90 170h250" class="sonp"/>
+                  <g font-family="IBM Plex Mono, monospace" font-size="9.5">
+                    <text x="100" y="164" class="tp">autobot@{{vncHost}}: ~</text>
+                    <text x="100" y="188" class="tp">$ systemctl status autobot-worker</text>
+                    <text x="100" y="204" class="tp">● active (running) since 10:41</text>
+                    <text x="100" y="236" class="tp">$ ollama ps</text>
+                    <text x="100" y="270" class="tp">$ ▌</text>
+                  </g>
+                </svg>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{vncOff}}" hint-placeholder-val="{{ false }}">
+            <div class="estate"><span class="tile lg"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" class="it1"/><path d="M9 20h6M12 16v4"/></svg></span><b>Select a VNC host</b><span>Choose a host with VNC capability to start a remote desktop session.</span></div>
+          </sc-if>
+        </sc-if>
+      </section>
+      </sc-if>
+    </main>
+
+    <sc-if value="{{voiceOpen}}" hint-placeholder-val="{{ true }}">
+    <aside class="adv" aria-label="Voice chat" tabindex="-1" onKeyDown="{{onVoiceKey}}" style="flex: 0 0 320px; max-width: 100%; box-sizing: border-box; display: flex; flex-direction: column; background: var(--surface); border-left: var(--bw) solid var(--border)">
+
+      <div style="display: flex; flex-direction: column; gap: 10px; padding: 12px; border-bottom: var(--bw) solid var(--line); flex: none">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="13" width="4" height="7" rx="1.5" class="i2"/><rect x="17" y="13" width="4" height="7" rx="1.5" class="i2"/></svg></span>
+          <div style="display: flex; flex-direction: column; min-width: 0; flex-grow: 1">
+            <h2 style="margin: 0; font-size: 15px; font-weight: 600">Voice chat</h2>
+            <span class="sub2" style="font-size: 12px" role="status" aria-live="polite">{{stateLabel}}</span>
+          </div>
+          <sc-if value="{{showConn}}" hint-placeholder-val="{{ true }}">
+            <span class="dot {{connCls}}" role="img" tabindex="0" aria-label="{{connText}}" data-tip="{{connText}}" data-tip-pos="bottom"></span>
+          </sc-if>
+          <span class="pill idle" style="display: inline-flex; align-items: center; gap: 4px" tabindex="0" data-tip="Voice language" data-tip-pos="bottom"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>EN</span>
+          <button type="button" class="ibtn" aria-label="Close voice panel" data-tip="Close voice panel · Esc" data-tip-pos="left" onClick="{{closeVoice}}"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+        <div style="display: flex; align-items: center">
+          <label class="sr" for="vmode">Conversation mode</label>
+          <select id="vmode" class="vsel" value="{{mode}}" onChange="{{setMode}}">
+            <option value="walkie-talkie">Walkie-talkie</option>
+            <option value="hands-free">Hands-free</option>
+            <option value="full-duplex">Full-duplex</option>
+            <option value="realtime-webrtc">Realtime WebRTC</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="flex: 1 1 auto; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 16px">
+        <div class="vring {{state}}">
+          <sc-if value="{{stIdle}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="40" height="40" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="iw"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16"/></svg></sc-if>
+          <sc-if value="{{stListening}}" hint-placeholder-val="{{ true }}"><svg class="ic" width="40" height="40" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="i3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></sc-if>
+          <sc-if value="{{stProcessing}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="40" height="40" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg></sc-if>
+          <sc-if value="{{stSpeaking}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="40" height="40" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z" class="i2"/><path d="M16 9a4 4 0 0 1 0 6"/></svg></sc-if>
+        </div>
+        <p style="margin: 0; font-size: 14px; font-weight: 500; text-align: center">{{stateLabel}}</p>
+        <sc-if value="{{stIdle}}" hint-placeholder-val="{{ false }}"><p class="sub2" style="margin: 0; text-align: center">Tap the mic to start a conversation</p></sc-if>
+        <sc-if value="{{showTranscript}}" hint-placeholder-val="{{ true }}">
+          <div style="align-self: stretch; padding: 10px 12px; border-radius: 8px; border: var(--bw) solid var(--border); background: var(--surface2); font-size: 13.5px; line-height: 1.5"><span class="sub2" aria-hidden="true">… </span>Check every node and tell me which one is slow</div>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{showErr}}" hint-placeholder-val="{{ false }}">
+        <div role="alert" style="flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bad-bg); color: var(--bad-fg); border-top: var(--bw) solid var(--border); font-size: 12.5px; font-weight: 500"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/></svg>Speech service is not responding. Check your connection and try again.</div>
+      </sc-if>
+
+      <sc-if value="{{showWarn}}" hint-placeholder-val="{{ false }}">
+        <div role="alert" style="flex: none; display: flex; flex-direction: column; gap: 6px; padding: 12px; margin: 8px 12px 0; border-radius: 8px; background: var(--warn-bg); color: var(--warn-fg); border: var(--bw) solid var(--border); font-size: 12.5px; line-height: 1.5">
+          <p style="margin: 0; font-weight: 600; display: flex; align-items: center; gap: 6px"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Mic access blocked</p>
+          <p style="margin: 0">Your browser requires a trusted HTTPS certificate to use the microphone. To fix, choose one of:</p>
+          <ol style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px">
+            <li>Install the AutoBot CA certificate as a trusted root in your OS or browser.</li>
+            <li>In Chrome or Edge, open <span class="mono" style="font-size: 11.5px; overflow-wrap: anywhere">chrome://flags/#unsafely-treat-insecure-origin-as-secure</span>, add this origin, and restart.</li>
+          </ol>
+          <p style="margin: 0; display: flex; align-items: flex-start; gap: 6px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="stroke: currentColor; margin-top: 3px"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.5"/></svg>Walkie-talkie mode works without a trusted cert.</p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isHf}}" hint-placeholder-val="{{ true }}">
+        <div style="flex: none; display: flex; flex-direction: column; gap: 10px; padding: 12px; border-top: var(--bw) solid var(--line); margin-top: 8px">
+          <div class="bar" role="img" aria-label="Input level {{levelPct}}%" data-tip="Input level" data-tip-pos="top"><div class="bf" style="width: {{levelPct}}%"></div></div>
+          <div style="display: flex; align-items: center; gap: 8px">
+            <label for="vsil" class="sub2">Silence</label>
+            <input id="vsil" type="range" min="0.5" max="3" step="0.1" value="{{silence}}" onInput="{{onSilence}}" aria-valuetext="{{silenceText}}" class="vsl">
+            <span class="mono" style="font-size: 12.5px; min-width: 34px; text-align: right">{{silenceText}}</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="flex: none; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 12px; border-top: var(--bw) solid var(--line)">
+        <div style="position: relative; width: 104px; height: 80px; display: grid; place-items: center">
+          <sc-if value="{{showPulse}}" hint-placeholder-val="{{ true }}">
+            <span class="vpulse" aria-hidden="true" style="width: 80px; height: 80px"></span>
+            <span class="vpulse" aria-hidden="true" style="width: 100px; height: 100px; opacity: .5"></span>
+          </sc-if>
+          <button type="button" class="vmic {{micCls}}" aria-label="{{micLabel}}" data-tip="{{micLabel}}" data-tip-pos="top" disabled="{{micDisabled}}" onClick="{{onMic}}">
+            <sc-if value="{{micMic}}" hint-placeholder-val="{{ true }}"><svg class="ic sonp" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></sc-if>
+            <sc-if value="{{micStop}}" hint-placeholder-val="{{ false }}"><svg class="ic sonp" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></sc-if>
+            <sc-if value="{{micSpin}}" hint-placeholder-val="{{ false }}"><svg class="ic sonp" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg></sc-if>
+          </button>
+        </div>
+        <p class="sub2" style="margin: 0; text-align: center">{{hint}}</p>
+      </div>
+
+      <div style="flex: none; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-top: 1.5px dashed var(--muted); background: var(--surface2)" data-tip="Design preview only — not in the product" data-tip-pos="top">
+        <div style="display: flex; align-items: center; gap: 8px"><span class="pill info" tabindex="0">Design preview</span><span class="sub2" style="font-size: 12px">Not in the product</span></div>
+        <div role="group" aria-label="Preview state" style="display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: 7px; border: 1.5px dashed var(--muted); background: var(--surface)">
+          <sc-for list="{{states}}" as="s" hint-placeholder-count="4"><button type="button" class="seg {{s.cls}}" aria-pressed="{{s.pressed}}" onClick="{{s.pick}}">{{s.label}}</button></sc-for>
+        </div>
+        <div role="group" aria-label="Preview conditions" style="display: flex; flex-wrap: wrap; gap: 6px">
+          <sc-for list="{{flags}}" as="f" hint-placeholder-count="3"><button type="button" class="chip" style="border-style: dashed" aria-pressed="{{f.pressed}}" onClick="{{f.pick}}">{{f.label}}</button></sc-for>
+        </div>
+      </div>
+    </aside>
+    </sc-if>
+
+    <sc-if value="{{filesOpen}}" hint-placeholder-val="{{ false }}">
+    <aside aria-label="Chat files" style="flex: 0 0 320px; max-width: 100%; box-sizing: border-box; display: flex; flex-direction: column; background: var(--surface); border-left: var(--bw) solid var(--border)">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 12px; border-bottom: var(--bw) solid var(--line); flex: none">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z" class="i2"/></svg>
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600; flex-grow: 1">Chat files</h2>
+        <button type="button" class="ibtn" aria-label="New file" data-tip="New file" data-tip-pos="bottom"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button type="button" class="ibtn" aria-label="{{fpViewLabel}}" data-tip="{{fpViewLabel}}" data-tip-pos="bottom" onClick="{{toggleFpGrid}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg></button>
+        <button type="button" class="ibtn" aria-label="Close file panel" data-tip="Close file panel" data-tip-pos="left" onClick="{{closeFiles}}"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-bottom: var(--bw) solid var(--line); flex: none">
+        <div class="sub2" style="display: flex; justify-content: space-between; font-size: 12px"><span>{{fpCount}}</span><span>{{fpTotal}}</span></div>
+        <label style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 6px; background: var(--surface); border: var(--bw) solid var(--border); box-sizing: border-box">
+          <svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M16 16l4 4"/></svg>
+          <span class="sr">Search files</span>
+          <input type="search" value="{{fpQuery}}" onInput="{{onFpQuery}}" placeholder="Search files..." style="border: 0; outline: 0; font: inherit; font-size: 12.5px; background: transparent; flex-grow: 1; min-width: 0; color: var(--text)">
+        </label>
+        <div role="group" aria-label="Sort files" style="display: flex; flex-wrap: wrap; align-items: center; gap: 2px">
+          <span class="sub2" style="font-size: 12px; margin-right: 4px">Sort:</span>
+          <sc-for list="{{fpSorts}}" as="s" hint-placeholder-count="4"><button type="button" class="seg {{s.cls}}" style="height: 26px; padding: 0 8px; font-size: 12px" aria-pressed="{{s.pressed}}" onClick="{{s.pick}}">{{s.label}}<span aria-hidden="true">{{s.arrow}}</span></button></sc-for>
+        </div>
+        <sc-if value="{{fpSel}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; background: var(--surface2); border: var(--bw) solid var(--border)">
+            <span class="sub2" style="flex-grow: 1">{{fpSelText}}</span>
+            <button type="button" class="linkbtn" style="color: var(--bad-fg)">Delete</button>
+            <button type="button" class="linkbtn" onClick="{{toggleFpAll}}">{{fpAllLabel}}</button>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="padding: 12px; border-bottom: var(--bw) solid var(--line); flex: none">
+        <button type="button" style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; border-radius: 8px; border: 1.5px dashed var(--border); background: var(--surface2); color: var(--text2); font: inherit; font-size: 12.5px; cursor: pointer"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M4 19h16"/></svg>Click to browse or drag files here</button>
+      </div>
+
+      <div style="flex: 1 1 auto; overflow-y: auto; padding: 12px">
+        <sc-if value="{{fpEmpty}}" hint-placeholder-val="{{ false }}"><p class="sub2" style="margin: 24px 0; text-align: center">{{fpEmptyText}}</p></sc-if>
+        <div style="display: grid; grid-template-columns: {{fpCols}}; gap: 8px">
+          <sc-for list="{{fpFiles}}" as="f" hint-placeholder-count="4">
+            <div class="card" style="padding: 8px; display: flex; align-items: flex-start; gap: 8px; border-color: {{f.border}}">
+              <input type="checkbox" checked="{{f.checked}}" onChange="{{f.toggle}}" aria-label="Select {{f.name}}" style="margin-top: 3px; accent-color: var(--primary)">
+              <svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4"/></svg>
+              <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+                <span style="font-size: 12.5px; font-weight: 500; overflow-wrap: anywhere">{{f.name}}</span>
+                <span class="sub2" style="font-size: 12px">{{f.meta}}</span>
+                <span class="pill info" style="align-self: flex-start; display: {{f.genDisplay}}">AI generated</span>
+                <div style="display: flex; gap: 2px; margin-top: 2px">
+                  <button type="button" class="ibtn" style="width: 28px; height: 28px" aria-label="Preview {{f.name}}" data-tip="Preview"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                  <button type="button" class="ibtn" style="width: 28px; height: 28px" aria-label="Download {{f.name}}" data-tip="Download"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M8 11l4 4 4-4M4 19h16"/></svg></button>
+                  <button type="button" class="ibtn" style="width: 28px; height: 28px" aria-label="Delete {{f.name}}" data-tip="Delete"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="stroke: var(--bad-fg)"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </aside>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  extraVals(st, ui) {
+    const ADV = ['terminal', 'browser', 'novnc'];
+    const want = st.tab || 'chat';
+    const tab = (ui === 'minimal' && ADV.indexOf(want) >= 0) ? 'chat' : want;
+    const tabs = {};
+    ['chat', 'files', 'terminal', 'browser', 'novnc'].forEach((id) => {
+      tabs[id] = { cls: id === tab ? 'on' : '', sel: id === tab ? 'true' : 'false', pick: () => this.setState({ tab: id }) };
+    });
+    const ssh = st.sshHost === undefined ? 'node-02' : st.sshHost;
+    const vnc = st.vncHost === undefined ? 'node-03' : st.vncHost;
+    const brIdle = !!st.brIdle, brAuto = !!st.brAuto, denied = !!st.deskDenied;
+    const url = st.brUrl === undefined ? 'https://example.com/status' : st.brUrl;
+    const FILES = [
+      { id: 'a', name: 'ansible-ping-output.txt', bytes: 1229, min: 644, type: 'txt', gen: true },
+      { id: 'b', name: 'fleet-inventory.yml', bytes: 3891, min: 643, type: 'yml', gen: false },
+      { id: 'c', name: 'node-04-logs.zip', bytes: 219136, min: 651, type: 'zip', gen: false },
+      { id: 'd', name: 'health-summary.md', bytes: 2150, min: 652, type: 'md', gen: true }
+    ];
+    const fmtSize = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? (b / 1024).toFixed(1) + ' KB' : b + ' B';
+    const pad = (n) => (n < 10 ? '0' : '') + n;
+    const sortF = st.fpSort || 'name';
+    const dir = st.fpDir || 'asc';
+    const q = (st.fpQuery || '').toLowerCase();
+    const sel = st.fpSel || [];
+    const shown = FILES.filter((f) => f.name.toLowerCase().indexOf(q) >= 0).sort((x, y) => {
+      const k = sortF === 'date' ? 'min' : sortF === 'size' ? 'bytes' : sortF;
+      const r = x[k] < y[k] ? -1 : x[k] > y[k] ? 1 : 0;
+      return dir === 'asc' ? r : -r;
+    });
+    const total = FILES.reduce((a, f) => a + f.bytes, 0);
+    const allSel = shown.length > 0 && shown.every((f) => sel.indexOf(f.id) >= 0);
+    const sortDefs = [['name', 'Name'], ['date', 'Date'], ['size', 'Size'], ['type', 'Type']];
+    return {
+      tabs: tabs,
+      tabChat: tab === 'chat',
+      tabFiles: tab === 'files',
+      tabTerminal: tab === 'terminal',
+      tabBrowser: tab === 'browser',
+      tabNovnc: tab === 'novnc',
+      sshHost: ssh,
+      sshOn: ssh !== '',
+      sshOff: ssh === '',
+      setSsh: (e) => this.setState({ sshHost: e.target.value }),
+      vncHost: vnc,
+      vncOn: vnc !== '',
+      vncOff: vnc === '',
+      setVnc: (e) => this.setState({ vncHost: e.target.value }),
+      deskDenied: denied,
+      deskAllowed: !denied,
+      toggleDenied: () => this.setState({ deskDenied: !denied }),
+      brOn: !brIdle,
+      brOff: brIdle,
+      brDot: brIdle ? 'd-idle' : 'd-ok',
+      brStatus: brIdle ? 'Disconnected' : 'Connected',
+      brIdlePressed: brIdle ? 'true' : 'false',
+      toggleBrIdle: () => this.setState({ brIdle: !brIdle }),
+      brUrl: url,
+      onUrl: (e) => this.setState({ brUrl: e.target.value }),
+      brAutoOn: brAuto,
+      brAutoPressed: brAuto ? 'true' : 'false',
+      toggleBrAuto: () => this.setState({ brAuto: !brAuto }),
+      fpGridOn: !!st.fpGrid,
+      fpCols: st.fpGrid ? 'repeat(auto-fill, minmax(130px, 1fr))' : '1fr',
+      fpViewLabel: st.fpGrid ? 'List view' : 'Grid view',
+      toggleFpGrid: () => this.setState({ fpGrid: !st.fpGrid }),
+      fpCount: FILES.length + ' files',
+      fpTotal: fmtSize(total),
+      fpQuery: st.fpQuery || '',
+      onFpQuery: (e) => this.setState({ fpQuery: e.target.value }),
+      fpEmpty: shown.length === 0,
+      fpEmptyText: q ? 'No files match your search' : 'No files yet',
+      fpSel: sel.length > 0,
+      fpSelText: sel.length + ' selected',
+      fpAllLabel: allSel ? 'Deselect' : 'Select all',
+      toggleFpAll: () => this.setState({ fpSel: allSel ? [] : shown.map((f) => f.id) }),
+      fpSorts: sortDefs.map(([id, label]) => ({
+        label: label,
+        cls: id === sortF ? 'on' : '',
+        pressed: id === sortF ? 'true' : 'false',
+        arrow: id === sortF ? (dir === 'asc' ? ' ↑' : ' ↓') : '',
+        pick: () => this.setState(id === sortF ? { fpDir: dir === 'asc' ? 'desc' : 'asc' } : { fpSort: id, fpDir: id === 'date' ? 'desc' : 'asc' })
+      })),
+      fpFiles: shown.map((f) => {
+        const on = sel.indexOf(f.id) >= 0;
+        return {
+          name: f.name,
+          meta: fmtSize(f.bytes) + ' · Today ' + pad(Math.floor(f.min / 60)) + ':' + pad(f.min % 60),
+          genDisplay: f.gen ? 'inline-block' : 'none',
+          checked: on,
+          border: on ? 'var(--stroke)' : 'var(--border)',
+          toggle: () => this.setState({ fpSel: on ? sel.filter((i) => i !== f.id) : sel.concat([f.id]) })
+        };
+      })
+    };
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    const uiDefs = [['minimal', 'Minimal'], ['full', 'Full']];
+    const panel = st.panel === undefined ? 'voice' : st.panel;
+    const open = panel === 'voice';
+    const filesOn = panel === 'files';
+    const mode = st.vmode || 'hands-free';
+    const vs = st.vstate || 'listening';
+    const blockedOn = !!st.vBlocked, errOn = !!st.vError, discOn = !!st.vDisc;
+    const silence = st.vSilence === undefined ? 1.5 : st.vSilence;
+    const hf = mode === 'hands-free', fd = mode === 'full-duplex', rtc = mode === 'realtime-webrtc';
+    const auto = hf || fd || rtc;
+    let label = '';
+    if (rtc) label = 'Realtime — speak anytime';
+    else if (vs === 'idle') label = auto ? 'Ready — speak anytime' : 'Tap to speak';
+    else if (vs === 'listening') label = 'Listening...';
+    else if (vs === 'processing') label = 'Processing...';
+    else label = fd ? 'Speaking — interrupt anytime' : 'AutoBot is speaking...';
+    let hint = '';
+    if (vs === 'listening') hint = auto ? 'Auto-detects when you stop' : 'Tap to stop';
+    else if (vs === 'processing') hint = hf ? 'Transcribing...' : 'Processing...';
+    else if (vs === 'speaking') hint = 'Tap or speak to interrupt';
+    else hint = auto ? 'Listening will start automatically' : 'Tap to speak';
+    const micStop = vs === 'speaking' || (vs === 'listening' && !auto);
+    const micSpin = vs === 'processing';
+    const next = { idle: 'listening', listening: 'processing', processing: 'processing', speaking: 'idle' };
+    const stDefs = [['idle', 'Idle'], ['listening', 'Listening'], ['processing', 'Processing'], ['speaking', 'Speaking']];
+    const flagDefs = [['vBlocked', 'Mic blocked', blockedOn], ['vError', 'Error', errOn], ['vDisc', 'Disconnected', discOn]];
+    const connected = !discOn;
+    const voiceVals = {
+      voiceOpen: open,
+      voicePressed: open ? 'true' : 'false',
+      toggleVoice: () => this.setState({ panel: open ? null : 'voice' }),
+      closeVoice: () => this.setState({ panel: null }),
+      onVoiceKey: (e) => { if (e && e.key === 'Escape') this.setState({ panel: null }); },
+      filesOpen: filesOn,
+      filesPressed: filesOn ? 'true' : 'false',
+      toggleFiles: () => this.setState({ panel: filesOn ? null : 'files' }),
+      closeFiles: () => this.setState({ panel: null }),
+      mode: mode,
+      setMode: (e) => this.setState({ vmode: e.target.value }),
+      state: vs,
+      stateLabel: label,
+      hint: hint,
+      stIdle: vs === 'idle',
+      stListening: vs === 'listening',
+      stProcessing: vs === 'processing',
+      stSpeaking: vs === 'speaking',
+      showTranscript: vs === 'listening',
+      showConn: fd || rtc,
+      connCls: connected ? 'd-ok' : 'd-idle',
+      connText: connected ? 'Connected' : 'Disconnected',
+      showErr: errOn,
+      showWarn: auto && blockedOn,
+      isHf: hf,
+      levelPct: vs === 'listening' ? 62 : 0,
+      silence: silence,
+      silenceText: silence.toFixed(1) + ' s',
+      onSilence: (e) => this.setState({ vSilence: +e.target.value }),
+      showPulse: vs === 'listening',
+      micCls: vs === 'listening' ? 'listening' : '',
+      micLabel: label,
+      micDisabled: vs === 'processing',
+      micMic: !micStop && !micSpin,
+      micStop: micStop,
+      micSpin: micSpin,
+      onMic: () => this.setState({ vstate: next[vs] }),
+      states: stDefs.map(([id, text]) => ({
+        label: text,
+        cls: id === vs ? 'on' : '',
+        pressed: id === vs ? 'true' : 'false',
+        pick: () => this.setState({ vstate: id })
+      })),
+      flags: flagDefs.map(([key, text, on]) => ({
+        label: text,
+        pressed: on ? 'true' : 'false',
+        pick: () => this.setState({ [key]: !on })
+      }))
+    };
+    Object.assign(voiceVals, this.extraVals(st, ui));
+    return Object.assign(voiceVals, {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      uiModes: uiDefs.map(([id, label]) => ({
+        label: label,
+        cls: id === ui ? 'on' : '',
+        pressed: id === ui ? 'true' : 'false',
+        pick: () => this.setUi(id)
+      })),
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    });
+  }
+}
+</script>
+</body>
+</html>

@@ -43,9 +43,11 @@ from api.schemas_workflows import (
     HTTPPutRequest,
 )
 from auth_middleware import check_admin_permission
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
 from services.mcp_bridge_manifest import MCPBridgeManifest
@@ -115,9 +117,11 @@ BLOCKED_HEADERS = [
 ]
 
 # Rate limiting
-MAX_REQUESTS_PER_MINUTE = 120
-request_counter = {"count": 0, "reset_time": now_utc()}
-_rate_limit_lock = asyncio.Lock()
+MAX_REQUESTS_PER_MINUTE = env_int_clamped("AUTOBOT_MCP_HTTP_CLIENT_RATE_LIMIT", 120, min_v=1, max_v=1_000_000)
+RATE_LIMIT_WINDOW_SECONDS = 60
+# One global Redis-backed count shared by every worker (#18087); fails open when Redis is down.
+_rate_limiter = RateLimiter("mcp:http_client", log_label="mcp:http_client")
+_RATE_LIMIT_KEY = "global"
 
 # Request limits
 MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -293,32 +297,6 @@ def validate_headers(headers: Dict[str, str]) -> bool:
             return False
 
     return True
-
-
-async def check_rate_limit() -> bool:
-    """
-    Enforce rate limiting for HTTP requests
-
-    Returns True if request is allowed, False if rate limit exceeded
-
-    Uses asyncio.Lock for thread safety in concurrent async environments
-    """
-
-    async with _rate_limit_lock:
-        now = now_utc()
-        elapsed = (now - request_counter["reset_time"]).total_seconds()
-
-        # Reset counter every minute (in-place modification for thread safety)
-        if elapsed >= 60:
-            request_counter["count"] = 0
-            request_counter["reset_time"] = now
-
-        if request_counter["count"] >= MAX_REQUESTS_PER_MINUTE:
-            logger.warning(f"Rate limit exceeded: {request_counter['count']} requests/min")
-            return False
-
-        request_counter["count"] += 1
-        return True
 
 
 # Pydantic Models
@@ -659,7 +637,7 @@ async def http_get_mcp(request: HTTPGetRequest) -> JSONObject:
     - Timeout enforcement
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_REQUESTS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
@@ -700,7 +678,7 @@ async def http_post_mcp(request: HTTPPostRequest) -> JSONObject:
     - Rate limiting
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_REQUESTS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
@@ -758,7 +736,7 @@ async def http_put_mcp(request: HTTPPutRequest) -> JSONObject:
     - Rate limiting
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_REQUESTS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
@@ -808,7 +786,7 @@ async def http_patch_mcp(request: HTTPPatchRequest) -> JSONObject:
     - Rate limiting
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_REQUESTS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
@@ -858,7 +836,7 @@ async def http_delete_mcp(request: HTTPDeleteRequest) -> JSONObject:
     - Warning log for destructive operation
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_REQUESTS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
@@ -897,7 +875,7 @@ async def http_head_mcp(request: HTTPHeadRequest) -> JSONObject:
     - Retrieving metadata
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_REQUESTS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_domain_allowed(request.url):
@@ -936,12 +914,12 @@ async def get_http_client_mcp_status() -> Metadata:
     - Configuration info
     """
 
-    async with _rate_limit_lock:
-        current_rate = request_counter["count"]
-        time_until_reset = max(
-            0,
-            60 - (now_utc() - request_counter["reset_time"]).total_seconds(),
-        )
+    remaining = await _rate_limiter.get_remaining_in_window(
+        _RATE_LIMIT_KEY, MAX_REQUESTS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS
+    )
+    current_rate = MAX_REQUESTS_PER_MINUTE - remaining
+    # A sliding window has no single reset instant; the window length bounds it.
+    time_until_reset = RATE_LIMIT_WINDOW_SECONDS if current_rate else 0
 
     return {
         "status": "operational",

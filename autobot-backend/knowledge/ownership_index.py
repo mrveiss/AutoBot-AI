@@ -49,6 +49,27 @@ def requests_platform_wide(metadata: Optional[Dict[str, Any]]) -> bool:
     )
 
 
+#: Metadata fields that tie a fact to principals other than its owner (#19296).
+_PRINCIPAL_KEYS = ("shared_with", "organization_id", "group_ids")
+
+
+def is_ownerless_platform_fact(metadata: Optional[Dict[str, Any]]) -> bool:
+    """Whether *metadata* belongs to no principal: no owner, no org/group/share, and no visibility
+    narrower than platform-wide (absent, SYSTEM or PUBLIC). Only such a fact may be written by a
+    system job acting for no user (#19296); anything else is someone's data.
+    """
+    meta = metadata or {}
+    if any(meta.get(key) for key in _OWNER_KEYS + _PRINCIPAL_KEYS):
+        return False
+    visibility = _norm(meta.get("visibility"))
+    if visibility and visibility not in PLATFORM_WIDE_VISIBILITY:
+        return False
+    # An explicit access level narrower than platform-wide is someone's restriction too
+    # (CodeRabbit on #19309): {"access_level": "private"} with no visibility is NOT ownerless.
+    access = _norm(meta.get("access_level"))
+    return not access or access in PLATFORM_WIDE_ACCESS
+
+
 def _norm(value: Any) -> Any:
     """``" PUBLIC "`` asks for ``public`` too: compare the value the way a lenient reader would."""
     return value.strip().lower() if isinstance(value, str) else value

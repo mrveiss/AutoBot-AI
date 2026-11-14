@@ -17,24 +17,46 @@ Issue #554: Enhanced with semantic analysis support:
 
 import asyncio
 import threading
-from pathlib import Path
+import time
 
-from celery.result import AsyncResult
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
+from api.codebase_analytics.task_routes import add_clear_stuck_route
+from api.source_scope import (
+    SourceIdQuery,
+    cached_task_result,
+    require_source_id,
+    source_scoped_prefix,
+)
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import AnalyticsConfig
 from tasks.analytics_tasks import run_duplicate_analysis
 from utils.cancel_tokens import new_cancel_token, signal_cancel_token, submit_cancellable
-from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
-from utils.chromadb_client import get_all_paginated
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 from utils.io_executor import get_analytics_executor
 
 from ..duplicate_detector import DuplicateCodeDetector, detect_duplicates_async
-from ..storage import get_code_collection
-from .shared import resolve_project_root
+from .duplicate_results import (  # noqa: F401  (re-exported: the Celery task and tests import them from here)
+    _build_detection_error_response,
+    _convert_analysis_to_result,
+    _convert_config_duplicates_to_array,
+    _get_chromadb_fallback,
+    _run_semantic_config_detection,
+    _run_standard_config_detection,
+)
+from .scan_responses import (
+    BACKGROUND_SCAN_TIMEOUT_SECONDS,
+    ORPHAN_LEASE_SECONDS,
+    ScanBusy,
+    ScanHolder,
+    ScanTimedOut,
+    ScanUnavailable,
+    response_for,
+)
+from .shared import resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -53,6 +75,7 @@ logger = get_logger(__name__)
 # set so the orphaned thread stops cooperatively rather than running to
 # completion for a result nobody will read.
 _duplicate_scan_lock = threading.Lock()
+_scan_holder: ScanHolder | None = None
 _duplicate_scan_cancel: threading.Event | None = None
 
 router = APIRouter()
@@ -60,13 +83,8 @@ router = APIRouter()
 _REDIS_PREFIX = "dup_task:"
 
 # Cache for duplicate analysis (in-memory, refreshed on demand)
-# Keyed by source_id (or "" for unscoped) to prevent cross-project leakage (#3685)
+# Keyed by source_id (no unscoped slot, #20513) to prevent cross-project leakage (#3685)
 _duplicate_cache: dict[str, dict] = {}
-
-
-def _get_project_root() -> str:
-    """Get project root path — delegates to shared resolver (#10730)."""
-    return resolve_project_root()
 
 
 async def _run_semantic_analysis(project_root: str, min_similarity: float):
@@ -93,42 +111,68 @@ async def _run_semantic_analysis(project_root: str, min_similarity: float):
         return None
 
 
-async def _run_standard_analysis(project_root: str, min_similarity: float):
+def _take_scan_lock() -> threading.Lock:
+    """Take the single-flight lock, or raise ``ScanBusy`` saying how long it has been held.
+
+    #18013: a lock whose holder was told to stop but never exited is reclaimed
+    once ``ORPHAN_LEASE_SECONDS`` has passed. Release is deliberately deferred to
+    the executor thread's done-callback (#13602), so a thread that never exits
+    would otherwise decline every later call for the life of the process. The old
+    lock object is abandoned, not released: the late callback releases the
+    object it captured, so it can never free a lock a newer scan owns.
     """
-    Run standard duplicate analysis in thread pool with timeout.
+    global _duplicate_scan_lock, _scan_holder
+    now = time.monotonic()
+    lock = _duplicate_scan_lock
+    if not lock.acquire(blocking=False):
+        holder = _scan_holder
+        leaked = (
+            holder is not None and holder.orphaned_at is not None and now - holder.orphaned_at > ORPHAN_LEASE_SECONDS
+        )
+        if not leaked:
+            raise ScanBusy(None if holder is None else now - holder.started)
+        logger.error(
+            "Duplicate scan lock reclaimed: the abandoned scan has not exited %.0fs after it was told to stop",
+            now - holder.orphaned_at,
+        )
+        lock = _duplicate_scan_lock = threading.Lock()
+        lock.acquire()
+    _scan_holder = ScanHolder(started=now)
+    return lock
 
-    Args:
-        project_root: Root directory to analyze
-        min_similarity: Minimum similarity threshold
 
-    Returns:
-        Analysis result or None if timed out
+def _abandon_scan(lock: threading.Lock, future, cancel_token, reason: str) -> None:
+    """Tell the orphaned scan to stop; the lock stays held until its thread exits (#13602)."""
+    signal_cancel_token("duplicate_detection", cancel_token, reason)
+    if _scan_holder is not None:
+        _scan_holder.orphaned_at = time.monotonic()
+    future.add_done_callback(lambda _f: lock.release())
 
-    Issue #14256: the submit-and-register step now goes through
-    ``utils.cancel_tokens.submit_cancellable`` -- the same shape this function
-    hand-rolled for #12779/#13602, hoisted so ``bounded()`` can also signal
-    this token (e.g. if the route's own deadline is tighter than
-    ``DUPLICATE_DETECTION_TIMEOUT``), not only this function's own timeout
-    handler. The single-flight lock stays call-site-specific: releasing it
-    only once the orphaned thread actually exits is this endpoint's own
-    bookkeeping, not part of the general cancellation mechanism.
+
+async def _run_standard_analysis(project_root: str, min_similarity: float, background: bool = False):
+    """
+    Run standard duplicate analysis in the analytics executor.
+
+    Returns the analysis, or raises ``ScanBusy`` (a scan is already in flight)
+    or ``ScanTimedOut`` (it ran and exceeded its deadline). Two conditions that
+    used to share one ``None`` (#18013).
+
+    ``background`` is the Celery task: it is bounded by
+    ``BACKGROUND_SCAN_TIMEOUT_SECONDS`` instead of the request deadline, which
+    the queued path exists to escape (#18067).
+
+    Issue #14256: submission goes through ``utils.cancel_tokens.submit_cancellable``
+    so ``bounded()`` can also signal the token. The single-flight lock stays
+    call-site-specific: releasing it only once the orphaned thread exits is this
+    endpoint's own bookkeeping.
     """
     global _duplicate_scan_cancel
 
-    # #12779: refuse to queue a second full walk while one is already running.
-    if not _duplicate_scan_lock.acquire(blocking=False):
-        logger.info("Duplicate detection already in flight — not queuing another scan")
-        return None
-
+    lock = _take_scan_lock()
+    deadline = BACKGROUND_SCAN_TIMEOUT_SECONDS if background else AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT
     released = False
     cancel_token = new_cancel_token()
-    # Issue #1233: Use dedicated analytics executor to prevent
-    # default thread pool starvation
-    #
-    # submit_cancellable() registers `cancel_token` in bounded()'s active scope
-    # and hands back the SAME token object (since one is passed in here) --
-    # the lambda below closes over it directly, so signalling either the
-    # returned token or this one stops the same detector.
+    # Issue #1233: dedicated analytics executor, so a scan cannot starve the default pool.
     future, _ = submit_cancellable(
         get_analytics_executor(),
         lambda: DuplicateCodeDetector(
@@ -141,177 +185,26 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
     )
     _duplicate_scan_cancel = cancel_token
     try:
-        analysis = await asyncio.wait_for(asyncio.shield(future), timeout=AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT)
-        _duplicate_scan_lock.release()
+        analysis = await asyncio.wait_for(asyncio.shield(future), timeout=deadline)
+        lock.release()
         released = True
         return analysis
     except asyncio.TimeoutError:
-        # The executor thread survives this cancellation — signal it to stop, or
-        # it keeps scanning for a result that is already discarded (#12779).
-        signal_cancel_token(
-            "duplicate_detection",
-            cancel_token,
-            f"exceeded its {AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT}s deadline",
-        )
-        # #13602: hold the lock until that thread actually exits. Releasing it
-        # here let the next poll queue a second full scan while the first was
-        # still running, so abandoned scans stacked up — the accumulation #12779
-        # set out to stop. The token above is what makes this bounded rather
-        # than a permanent block: the thread now checks it in its long phases.
-        future.add_done_callback(lambda _f: _duplicate_scan_lock.release())
+        _abandon_scan(lock, future, cancel_token, f"exceeded its {deadline}s deadline")
         released = True
-        logger.warning(
-            "Duplicate detection timed out after %d seconds — signalled the "
-            "orphaned scan to stop and holding the single-flight lock until it does",
-            AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT,
-        )
-        return None
+        logger.warning("Duplicate detection timed out after %ss; holding the lock until the orphan exits", deadline)
+        raise ScanTimedOut(deadline) from None
     except asyncio.CancelledError:
-        # #13602: CancelledError is NOT TimeoutError, so it skipped the handler
-        # above and fell to `finally`, releasing the lock with the token never
-        # set — and the shield guarantees the orphan keeps burning an executor
-        # thread. That is the accumulation both #12779 and this change exist to
-        # close, reachable via uvicorn graceful shutdown and via any outer
-        # deadline tighter than this one. Same treatment as a timeout.
-        signal_cancel_token("duplicate_detection", cancel_token, "cancelled before its own deadline")
-        future.add_done_callback(lambda _f: _duplicate_scan_lock.release())
+        # #13602: CancelledError is not TimeoutError, so without this the lock
+        # was released with the token never set and the shielded orphan kept
+        # burning an executor thread.
+        _abandon_scan(lock, future, cancel_token, "cancelled before its own deadline")
         released = True
         logger.warning("Duplicate detection cancelled — signalled the orphaned scan to stop")
         raise
     finally:
         if not released:
-            _duplicate_scan_lock.release()
-
-
-def _convert_analysis_to_result(analysis, project_root: str) -> dict:
-    """
-    Convert analysis result to frontend-compatible format.
-
-    Args:
-        analysis: DuplicateAnalysis result
-        project_root: Project root for relative paths
-
-    Returns:
-        Frontend-compatible result dict
-    """
-    duplicates_for_frontend = []
-    for dup in analysis.duplicates:
-        duplicates_for_frontend.append(
-            {
-                "file1": _make_relative_path(dup.file1, project_root),
-                "file2": _make_relative_path(dup.file2, project_root),
-                "start_line1": dup.start_line1,
-                "end_line1": dup.end_line1,
-                "start_line2": dup.start_line2,
-                "end_line2": dup.end_line2,
-                "similarity": round(dup.similarity * 100, 1),
-                "lines": dup.line_count,
-                "code_snippet": dup.code_snippet[:200] if dup.code_snippet else "",
-            }
-        )
-
-    return {
-        "status": "success",
-        "duplicates": duplicates_for_frontend,
-        "total_count": analysis.total_duplicates,
-        "high_similarity_count": analysis.high_similarity_count,
-        "medium_similarity_count": analysis.medium_similarity_count,
-        "low_similarity_count": analysis.low_similarity_count,
-        "total_duplicate_lines": analysis.total_duplicate_lines,
-        "files_analyzed": analysis.files_analyzed,
-        "scan_timestamp": analysis.scan_timestamp,
-        "storage_type": "live_analysis",
-    }
-
-
-def _get_chromadb_fallback(error_msg: str, source_id: str | None = None) -> dict | None:
-    """
-    Get cached duplicates from ChromaDB as fallback.
-
-    Issue #1772: source_id filters to per-project data.
-
-    Args:
-        error_msg: Error message to include in warning
-        source_id: Optional source ID for per-project scoping
-
-    Returns:
-        Fallback result dict or None if unavailable
-    """
-    code_collection = get_code_collection()
-    if not code_collection:
-        return None
-
-    try:
-        if source_id:
-            where_filter = {
-                "$and": [
-                    {"type": "duplicate"},
-                    {"source_id": source_id},
-                ]
-            }
-        else:
-            where_filter = {"type": "duplicate"}
-        results = get_all_paginated(code_collection, where=where_filter, include=["metadatas"])
-
-        all_duplicates = []
-        for metadata in results.get("metadatas", []):
-            all_duplicates.append(
-                {
-                    "file1": metadata.get("file1", ""),
-                    "file2": metadata.get("file2", ""),
-                    "similarity": float(metadata.get("similarity", 0)),
-                    "lines": int(metadata.get("lines", 0)),
-                    "code_snippet": metadata.get("code_snippet", ""),
-                }
-            )
-
-        return {
-            "status": "success",
-            "duplicates": all_duplicates,
-            "total_count": len(all_duplicates),
-            "storage_type": "chromadb_fallback",
-            "warning": f"Live analysis failed, showing cached results: {error_msg}",
-        }
-    except Exception:
-        return None
-
-
-def _build_timeout_response() -> dict:
-    """
-    Build response for analysis timeout case.
-
-    Issue #620: Extracted from get_duplicate_code to reduce function length.
-
-    Returns:
-        JSONResponse-compatible dict for timeout scenario
-    """
-    return {
-        "status": "partial",
-        "message": (
-            f"Analysis timed out after {AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT}s. "
-            "Try a higher min_similarity threshold."
-        ),
-        "duplicates": [],
-        "total_count": 0,
-        "storage_type": "timeout",
-    }
-
-
-def _build_detection_error_response() -> dict:
-    """
-    Build error response for duplicate detection failure.
-
-    Issue #620: Extracted from get_duplicate_code to reduce function length.
-
-    Returns:
-        JSONResponse-compatible dict for error scenario
-    """
-    return {
-        "status": "error",
-        "message": "Duplicate detection failed",
-        "duplicates": [],
-        "total_count": 0,
-    }
+            lock.release()
 
 
 def _process_and_cache_analysis(analysis, project_root: str, source_id: str | None = None) -> dict:
@@ -324,13 +217,19 @@ def _process_and_cache_analysis(analysis, project_root: str, source_id: str | No
     Args:
         analysis: Analysis result object
         project_root: Project root path
-        source_id: Optional source ID for per-project cache scoping
+        source_id: the source whose cache entry is read
 
     Returns:
         Result dict suitable for JSONResponse
     """
     result = _convert_analysis_to_result(analysis, project_root)
-    _duplicate_cache[source_id or ""] = result
+    if source_id:
+        _duplicate_cache[require_source_id(source_id, "duplicate-analysis cache key")] = result
+    else:
+        # #20513: no shared "" slot. Every route now requires a source, so nothing
+        # would read it; a source-less background run (the scheduler, deferred from
+        # #20513) still returns its result, it just is not cached under a sentinel.
+        logger.debug("duplicate analysis finished without a source_id; result not cached (#20513)")
 
     logger.info(
         "Duplicate analysis complete: %d duplicates (%d high, %d medium, %d low)",
@@ -343,7 +242,9 @@ def _process_and_cache_analysis(analysis, project_root: str, source_id: str | No
     return result
 
 
-async def _run_duplicate_analysis(project_root: str, min_similarity: float, use_semantic: bool):
+async def _run_duplicate_analysis(
+    project_root: str, min_similarity: float, use_semantic: bool, background: bool = False
+):
     """
     Run duplicate analysis with semantic or standard detection.
 
@@ -353,9 +254,10 @@ async def _run_duplicate_analysis(project_root: str, min_similarity: float, use_
         project_root: Root directory to analyze
         min_similarity: Minimum similarity threshold
         use_semantic: Whether to use semantic analysis
+        background: run as the Celery task (no request deadline), see ``_run_standard_analysis``
 
     Returns:
-        Analysis result or None if timeout/failure
+        The analysis. Raises ``ScanBusy`` / ``ScanTimedOut`` when there is none (#18013).
     """
     analysis = None
 
@@ -363,12 +265,12 @@ async def _run_duplicate_analysis(project_root: str, min_similarity: float, use_
         analysis = await _run_semantic_analysis(project_root, min_similarity)
 
     if analysis is None:
-        analysis = await _run_standard_analysis(project_root, min_similarity)
+        analysis = await _run_standard_analysis(project_root, min_similarity, background=background)
 
     return analysis
 
 
-def _check_duplicate_cache(refresh: bool, source_id: str | None = None) -> JSONResponse | None:
+def _check_duplicate_cache(refresh: bool, source_id: str) -> JSONResponse | None:
     """
     Check if cached results are available and return them.
 
@@ -377,22 +279,22 @@ def _check_duplicate_cache(refresh: bool, source_id: str | None = None) -> JSONR
 
     Args:
         refresh: Whether to force fresh analysis
-        source_id: Optional source ID for per-project cache scoping
+        source_id: the source whose cache entry is read
 
     Returns:
         JSONResponse with cached data, or None if cache miss/refresh requested
     """
-    cached = _duplicate_cache.get(source_id or "")
+    cached = _duplicate_cache.get(require_source_id(source_id, "duplicate-analysis cache key"))
     if cached and not refresh:
         logger.info(
             "Returning cached duplicate analysis (%d duplicates)",
             cached.get("total_count", 0),
         )
-        return JSONResponse(cached)
+        return JSONResponse({**cached, "source_id": source_id})
     return None
 
 
-async def _handle_detection_failure(error: Exception, source_id: str | None = None) -> JSONResponse:
+async def _handle_detection_failure(error: Exception, source_id: str) -> JSONResponse:
     """
     Handle duplicate detection failure with fallback.
 
@@ -401,7 +303,7 @@ async def _handle_detection_failure(error: Exception, source_id: str | None = No
 
     Args:
         error: Exception that occurred
-        source_id: Optional source ID for per-project scoping
+        source_id: the source whose fallback data is read
 
     Returns:
         JSONResponse with fallback data or error response
@@ -424,10 +326,10 @@ async def _handle_detection_failure(error: Exception, source_id: str | None = No
     error_code_prefix="CODEBASE",
 )
 async def get_duplicate_code(
+    source_id: SourceIdQuery,
     refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
     min_similarity: float = Query(0.5, description="Minimum similarity threshold (0.0-1.0)"),
     use_semantic: bool = Query(False, description="Enable LLM-based semantic analysis (Issue #554)"),
-    source_id: str | None = Query(None, description="#1772: source_id for per-project scoping"),
 ):
     """
     Get duplicate code detected in the codebase (Issue #528).
@@ -445,122 +347,33 @@ async def get_duplicate_code(
     Returns:
         JSON with duplicates, statistics, and analysis metadata
     """
-    # Check cache first - Issue #620, #3685: Scoped by source_id
+    # Was a FOURTH private copy of the block `shared.resolve_source_root` was
+    # extracted for (#2760, which missed this file); the copy then missed
+    # #17758's fix and swallowed every failure into logger.debug, scanning
+    # AutoBot's own tree under the caller's key. `strict` follows what the
+    # CALLER supplied: naming nothing is not the same as naming a ghost.
+    project_root = str(await resolve_scan_root(source_id))
+
+    # Cache read AFTER resolution: keyed by source_id, so reading it first
+    # serves a stale result for a source that no longer resolves (CodeRabbit).
     cached = _check_duplicate_cache(refresh, source_id=source_id)
     if cached:
         return cached
-
-    # Issue #3685: Resolve clone_path from source registry so live analysis
-    # runs against the correct project, not always the AutoBot repo.
-    project_root = _get_project_root()
-    if source_id:
-        try:
-            from api.codebase_analytics.source_storage import get_source
-
-            source = await get_source(source_id)
-            if source and source.clone_path:
-                project_root = source.clone_path
-        except Exception:
-            logger.debug("Could not resolve clone_path for %s, using default", source_id)
 
     try:
         # Run analysis (semantic or standard) - Issue #620: Use helper
         analysis = await _run_duplicate_analysis(project_root, min_similarity, use_semantic)
 
-        # Handle timeout case - Issue #620: Use helper
-        if analysis is None:
-            return JSONResponse(_build_timeout_response())
-
         # Convert, cache, and return results - Issue #620, #3685: Scoped by source_id
         result = _process_and_cache_analysis(analysis, project_root, source_id=source_id)
-        return JSONResponse(result)
+        return JSONResponse({**result, "source_id": source_id})
 
+    except ScanUnavailable as exc:
+        # #18013: busy and timed-out are different answers; neither is cached.
+        return JSONResponse(response_for(exc))
     except Exception as e:
         # Issue #620: Use helper for error handling
         return await _handle_detection_failure(e, source_id=source_id)
-
-
-def _make_relative_path(path: str, project_root: str) -> str:
-    """Convert absolute path to relative path for cleaner display."""
-    try:
-        return str(Path(path).relative_to(project_root))
-    except ValueError:
-        return path
-
-
-async def _run_semantic_config_detection(project_root: Path) -> dict | None:
-    """
-    Run semantic config duplicate detection.
-
-    Issue #620: Extracted from detect_config_duplicates_endpoint.
-
-    Args:
-        project_root: Project root path
-
-    Returns:
-        Detection result dict or None if failed
-    """
-    from ..config_duplication_detector import ConfigDuplicationDetector
-
-    try:
-        detector = ConfigDuplicationDetector(
-            str(project_root),
-            use_semantic_analysis=True,
-        )
-        await asyncio.to_thread(detector.scan_directory)
-        result = {
-            "duplicates_found": 0,
-            "duplicates": await detector.find_duplicates_async(),
-            "report": await asyncio.to_thread(detector.generate_report),
-        }
-        result["duplicates_found"] = len(result["duplicates"])
-        logger.info("Semantic config duplicate analysis complete")
-        return result
-    except Exception as e:
-        logger.warning("Semantic analysis failed, falling back to standard: %s", e)
-        return None
-
-
-async def _run_standard_config_detection(project_root: Path) -> dict:
-    """
-    Run standard config duplicate detection.
-
-    Issue #620: Extracted from detect_config_duplicates_endpoint.
-
-    Args:
-        project_root: Project root path
-
-    Returns:
-        Detection result dict
-    """
-    from ..config_duplication_detector import detect_config_duplicates
-
-    return await asyncio.to_thread(detect_config_duplicates, str(project_root))
-
-
-def _convert_config_duplicates_to_array(duplicates_dict: dict) -> list:
-    """
-    Convert duplicates dict to frontend-compatible array format.
-
-    Issue #620: Extracted from detect_config_duplicates_endpoint.
-
-    Args:
-        duplicates_dict: Backend format {value: {value, count, sources, duplicates}}
-
-    Returns:
-        Frontend format [{value, count, locations: [{file, line}]}]
-    """
-    duplicates_array = []
-    for value, details in duplicates_dict.items():
-        all_locations = details.get("sources", []) + details.get("duplicates", [])
-        duplicates_array.append(
-            {
-                "value": value,
-                "count": details.get("count", len(all_locations)),
-                "locations": [{"file": loc["file"], "line": loc["line"]} for loc in all_locations],
-            }
-        )
-    return duplicates_array
 
 
 @router.get("/config-duplicates")
@@ -571,8 +384,8 @@ def _convert_config_duplicates_to_array(duplicates_dict: dict) -> list:
     error_code_prefix="CODEBASE",
 )
 async def detect_config_duplicates_endpoint(
+    source_id: SourceIdQuery,
     use_semantic: bool = Query(False, description="Enable LLM-based semantic analysis (Issue #554)"),
-    source_id: str | None = Query(None, description="#3685: source_id for per-project scoping"),
 ):
     """
     Detect configuration value duplicates across codebase (Issue #341).
@@ -588,16 +401,10 @@ async def detect_config_duplicates_endpoint(
     Returns:
         JSONResponse with duplicate detection results
     """
-    project_root = Path(resolve_project_root())
-    if source_id:
-        try:
-            from api.codebase_analytics.source_storage import get_source
-
-            source = await get_source(source_id)
-            if source and source.clone_path:
-                project_root = Path(source.clone_path)
-        except Exception:
-            logger.debug("Could not resolve clone_path for %s, using default", source_id)
+    # #17982: the second copy of the same block. Same reasoning as the scan
+    # above -- a named source that does not resolve is an error, not a cue to
+    # substitute AutoBot's own tree.
+    project_root = await resolve_scan_root(source_id)
 
     # Issue #620: Use helpers for detection
     result = None
@@ -607,15 +414,29 @@ async def detect_config_duplicates_endpoint(
     if result is None:
         result = await _run_standard_config_detection(project_root)
 
+    if result.get("files_scanned", 0) == 0:
+        # #18067: "scanned nothing" is not "found nothing". This answered a
+        # clean 200 "No configuration duplicates found!" in 0.7s for a tree it
+        # had not read a single file of.
+        logger.warning("config-duplicates scanned 0 files under %s", project_root)
+        return JSONResponse(
+            status_code=422,
+            content={"status": "error", "message": "no Python files were scanned; nothing to report"},
+        )
+
     # Issue #620: Use helper for array conversion
     duplicates_array = _convert_config_duplicates_to_array(result["duplicates"])
 
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "duplicates_found": result["duplicates_found"],
             "duplicates": duplicates_array,
             "report": result["report"],
+            "files_scanned": result["files_scanned"],
+            "files_failed": result.get("files_failed", 0),
+            "scope": result.get("scope", ""),
         }
     )
 
@@ -627,42 +448,25 @@ async def detect_config_duplicates_endpoint(
 
 @router.get("/duplicates/cached")
 @bounded(180.0)
-async def get_cached_duplicate_result(source_id: str = ""):
+async def get_cached_duplicate_result(source_id: SourceIdQuery):
     """Return the latest completed duplicate analysis result (#1540)."""
-    cached = await get_latest_task_result(_REDIS_PREFIX)
-    if cached and cached.get("result"):
-        return {
-            "status": "success",
-            "from_cache": True,
-            "completed_at": cached.get("completed_at"),
-            **cached["result"],
-        }
-    return {"status": "no_data"}
+    return await cached_task_result(_REDIS_PREFIX, source_id)
 
 
 @router.post("/duplicates/analyze")
 @bounded(180.0)
-async def start_duplicate_analysis():
+async def start_duplicate_analysis(source_id: SourceIdQuery):
     """Enqueue duplicate analysis as a Celery task (GH#6505)."""
-    result = run_duplicate_analysis.delay()
-    await store_latest_task_id(_REDIS_PREFIX, result.id)
+    result = run_duplicate_analysis.delay(source_id)
+    await store_latest_task_id(source_scoped_prefix(_REDIS_PREFIX, source_id), result.id)
     return {"task_id": result.id, "status": "pending"}
 
 
-@router.get("/duplicates/status/{task_id}")
+@router.get("/duplicates/status/{task_id}", dependencies=[Depends(get_current_user)])
 @bounded(180.0)
 async def get_duplicate_status(task_id: str):
     """Get duplicate analysis task status."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
-@router.post("/duplicates/tasks/clear-stuck")
-@bounded(180.0)
-async def clear_stuck_dup_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-):
-    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
+add_clear_stuck_route(router, "/duplicates/tasks/clear-stuck", name="clear_stuck_dup_tasks", bounded_s=180.0)

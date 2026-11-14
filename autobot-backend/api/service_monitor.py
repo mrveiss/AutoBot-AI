@@ -21,8 +21,10 @@ from api.schemas_system import (
     ServiceMonitorServicesResponse,
     ServiceMonitorVMsResponse,
 )
+from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot
 
@@ -47,7 +49,7 @@ async def _check_http_health(url: str) -> Tuple[str, str]:
     """
     try:
         async with get_http_client().tracked_request(
-            "GET", url, timeout=_HEALTH_TIMEOUT, ssl=False, suppress_error_log=True
+            "GET", url, timeout=_HEALTH_TIMEOUT, ssl=False, suppress_error_log=True, guard_egress=EGRESS_POLICY
         ) as resp:
             if resp.status < 300:
                 return "online", "Healthy"
@@ -91,8 +93,8 @@ async def get_service_statuses() -> Dict[str, Any]:
     """
     npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
     browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
-    ollama_url = f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}/api/version"
-    chromadb_url = f"http://{_ssot.vm.aistack}:{_ssot.port.aistack}/health"  # Issue #3461: ChromaDB
+    ollama_url = f"{_ssot.ollama_url}/api/version"
+    chromadb_url = f"http://{_ssot.vm.chromadb}:{_ssot.port.chromadb}{CHROMADB_HEARTBEAT_PATH}"  # #3461, #19321
 
     (
         (redis_status, redis_msg),
@@ -140,7 +142,7 @@ async def get_vm_statuses() -> Dict[str, Any]:
     """
     npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
     browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
-    chromadb_url = f"http://{_ssot.vm.aistack}:{_ssot.port.aistack}/health"  # Issue #3461: ChromaDB
+    chromadb_url = f"http://{_ssot.vm.chromadb}:{_ssot.port.chromadb}{CHROMADB_HEARTBEAT_PATH}"  # #3461, #19321
 
     (
         (redis_status, redis_msg),

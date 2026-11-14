@@ -288,3 +288,13 @@ server-side VAD), #16814 (scenario/persona eval framework, adoption #4), #16815
 (duplicated per-provider message/tool-schema formatting, adoption #5). The
 speculative eager-end-of-turn adoption (#3) was not filed — it is gated on #16807
 landing first.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #16805 — Wire interrupt-on-new-message into main chat streaming
+- #16806 — Add a typed error-category taxonomy for LLM provider failures
+- #16807 — Server-side VAD in speech_recognition.py is a placeholder, not real detection
+- #16814 — Add a multi-turn scenario/persona eval framework with LLM-judge verdict caching
+- #16815 — Consolidate duplicated per-provider LLM message/tool-schema formatting

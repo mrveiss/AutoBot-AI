@@ -16,7 +16,7 @@ from typing import Dict, List, Set, Tuple
 from .types import IntentCategory, ResponseType
 
 
-class IntentClassifier:
+class ConversationIntentClassifier:
     """Classifies user intents based on message content."""
 
     # Intent keyword mappings

@@ -2,7 +2,7 @@
 
 # Runbook: Deploy a Code Update
 
-**Issue #926 Phase 8** | Last updated: 2026-02-18
+**Issue #926 Phase 8** | Last updated: 2026-10-31
 
 ---
 
@@ -12,187 +12,117 @@ This runbook describes how to deploy a code update to the AutoBot fleet after co
 
 ---
 
-## Prerequisites
+## The rule
 
-- SLM server (`.19`) is running and healthy
-- SSH access from dev machine to all target nodes
-- `autobot-slm-backend/ansible/` is the working directory
-- Post-commit hook is configured (see Quick Reference below)
-
----
-
-## Quick Reference
-
-```bash
-# Standard workflow (hook fires automatically on commit)
-git add autobot-backend/some_file.py
-git commit -m "feat(backend): description (#issue)"
-git push
-# → hook detects changed role, notifies SLM, SLM marks nodes OUTDATED
-
-# Trigger update from SLM GUI
-# https://<slm-manager-ip> → Code Sync → "Update All Nodes"
-
-# Manual trigger via Ansible
-cd autobot-slm-backend/ansible
-ansible-playbook playbooks/update-all-nodes.yml -i inventory/slm-nodes.yml
-
-# Single node only
-ansible-playbook playbooks/update-all-nodes.yml \
-  -i inventory/slm-nodes.yml \
-  --limit 01-Backend
-```
+Updates go through the builtin updater only, on test and production alike. Do not update a system
+with a hand-run `ansible-playbook`, `git pull` or `rsync`. If the updater cannot do something, that
+is a gap to fix in the updater.
 
 ---
 
 ## Standard Code Update Flow
 
-### 1. Commit and Push
+### 1. Land the change
 
-```bash
-# Stage only changed files (avoid accidental large commits)
-git add autobot-backend/api/some_endpoint.py
-git add autobot_shared/utils/helper.py
+Changes reach `main` through a pull request. The updater takes its code from GitHub.
 
-git commit -m "feat(backend): add new API endpoint (#926)"
-git push origin main
-```
+### 2. Review what is outdated
 
-### 2. Post-Commit Hook Auto-Fires
+In the SLM web UI (`https://<slm-manager-ip>/slm/`), open **Maintenance > Updates**, then the
+**Code Sync** tab. It shows the nodes that are behind and the commit each one is on.
 
-The hook at `scripts/hooks/slm-post-commit` runs automatically:
+### 3. Run the update
 
-- Detects changed role directories via `git diff`
-- `rsync`s changed roles to `/opt/autobot/cache/` on SLM (`.19`)
-- Calls `POST /api/code-source/notify` with changed roles and commit hash
+- **Update Everything** runs the full pipeline: fetch from GitHub, update the code source, update
+  this SLM server, then the fleet.
+- **Sync All**, or a single node's action, updates only the fleet nodes.
 
-Expected: SLM marks nodes with the changed role(s) as `OUTDATED`.
+The frontend and `autobot_shared` are part of these updates. They need no separate step.
 
-**If the hook is not installed:**
+### 4. Monitor progress
 
-```bash
-# Install hook
-cp scripts/hooks/slm-post-commit .git/hooks/post-commit
-chmod +x .git/hooks/post-commit
-
-# Or trigger manually
-scripts/hooks/slm-post-commit
-```
-
-### 3. Trigger Fleet Update
-
-Via SLM GUI (recommended):
-1. Navigate to `https://<slm-manager-ip>` → **Code Sync**
-2. Review which nodes are `OUTDATED` and which commit they're on
-3. Click **"Update All"** or select individual nodes
-
-Via CLI:
-
-```bash
-cd autobot-slm-backend/ansible
-ansible-playbook playbooks/update-all-nodes.yml -i inventory/slm-nodes.yml
-```
-
-### 4. Monitor Progress
-
-SLM GUI: **Code Sync** page shows real-time Ansible output via WebSocket.
-
-CLI:
-
-```bash
-# Watch node status
-watch -n 5 "curl -sk https://<slm-manager-ip>/api/nodes \
-  -H 'Authorization: Bearer ${SLM_TOKEN}' \
-  | jq '.[] | {node_id, code_status}'"
-```
+The Code Sync tab shows the progress of the running update.
 
 ### 5. Verify
 
 ```bash
-# Check all nodes are UP_TO_DATE
+# Every node should be UP_TO_DATE: this prints the ones that are not
 curl -sk https://<slm-manager-ip>/api/nodes \
   -H "Authorization: Bearer ${SLM_TOKEN}" \
   | jq '.[] | select(.code_status != "UP_TO_DATE") | {node_id, code_status}'
-# Expected: empty array
 
-# Check backend health
+# Backend health
 ssh autobot@<slm-manager-ip> 'curl --insecure https://<backend-ip>:8443/api/health'
 
-# Check frontend
+# Frontend
 curl -sk https://<frontend-ip>/api/health
 ```
 
----
-
-## Updating Only autobot_shared
-
-`autobot_shared` is deployed to all backend nodes. When you change shared code:
-
-```bash
-# Push the change
-git add autobot_shared/
-git commit -m "fix(shared): fix redis client (#issue)"
-git push
-
-# Hook detects autobot_shared change → marks ALL backend nodes OUTDATED
-# Then trigger update normally
-cd autobot-slm-backend/ansible
-ansible-playbook playbooks/update-all-nodes.yml -i inventory/slm-nodes.yml
-```
+The update also refreshes the install's `docs/` and core `plugins/` directories from the
+code-source checkout and fails if the recorded docs commit differs from the code-source
+commit. The install has no maintained `autobot-infrastructure/` copy: run infrastructure
+scripts from the code-source checkout, never from an install-level copy.
 
 ---
 
-## Updating the Frontend
+## Going back to an earlier commit
 
-The frontend requires a build step before deployment.
+> **Off by default, pending a host test.** Rollback is switched by `SLM_ROLLBACK_ENABLED` (default
+> off). While it is off the page shows no rollback panel and the rollback routes answer 403 "not
+> enabled". Turn it on only for the host test: roll back to a supported earlier commit, then run
+> Update Everything and confirm the nodes are on the latest again.
 
-```bash
-# After committing frontend changes and pushing
-cd autobot-slm-backend/ansible
-ansible-playbook playbooks/deploy-full.yml \
-  -i inventory/slm-nodes.yml \
-  --tags frontend
-```
+The updater can deploy an earlier commit of `main`. Use it to undo a bad change quickly; the
+lasting fix is still a revert merged through a pull request.
 
-This:
-1. Rsyncs `autobot-frontend/` source to `.21`
-2. Runs `npm ci && npm run build` on `.21`
-3. Copies `dist/` to `/var/www/html/`
-4. Nginx serves the new build (no restart needed)
+1. In the SLM web UI open **Maintenance > Updates > Code Sync**. In **Roll back to an earlier
+   version**, pick a version from the list. Each line is a date and a subject; you never type a
+   commit id. Only commits that are part of `main`'s history are offered, and only those new enough to carry
+   rollback support: a version that predates it cannot finish a rollback (it would restart, ignore
+   the target and update the fleet to `main`), so it is not listed and is refused if asked for.
+2. Choose **Review rollback**. The SLM checks the choice again on the server and checks both
+   databases (the SLM database and the backend database) for a migration in the way. A migration
+   is in the way when the database has applied one that the chosen commit does not have. In that
+   case the rollback is **refused** and the message names the database and the migration. If the
+   SLM cannot read a database or the commit's migrations it also refuses: not knowing is not a
+   pass. The updater never runs a migration downgrade, because a downgrade loses data.
+   **Checked: two databases.** **Not checked:** SQLite stores, Redis, ChromaDB, file formats and
+   the tables the application creates on startup. If the chosen version reads any of those
+   differently, the rollback does not detect it.
+3. Read what the rollback will do and choose **Roll back**. It needs the same permission as
+   Update Everything and a named person (the internal service key is refused), is refused while any update is running, and is recorded in the audit trail
+   (`code.rollback`) before it starts.
 
----
+A rollback runs as the same job as Update Everything and shows in the same progress view: it
+fetches, updates this SLM server to the chosen commit (the service restarts, and the job resumes
+after the restart exactly as Update Everything does), then updates every fleet node that is on a
+different commit. The update pull stage is skipped.
 
-## Emergency: Deploy Specific Commit
+**What the page shows afterwards.** The SLM keeps recording the latest commit of `main`, so every
+node that was rolled back reads **outdated** against it and appears under the nodes that are
+behind. That is the truth, not a fault. Nothing re-applies the latest by itself: the next code sync
+of a node deploys `main` again.
 
-If you need to roll back to a specific commit:
+**Returning to the latest.** Run **Update Everything**. It moves forward from the rolled-back
+commit as it does from any other.
 
-```bash
-# 1. Check out old commit on dev machine
-git stash
-git checkout <old-commit-hash>
+**Known limit.** While a rollback is between the SLM's restart and the end of the job, a
+`update-all-nodes.yml` run started by anything else (for example syncing one node by hand) is
+also held to the rollback's commit, because the restarted service reads the target from the saved
+resume plan, which cannot tell the runs apart. The plan is deleted when the job ends and ignored
+after two hours. Start no other sync while a rollback runs.
 
-# 2. Rsync to SLM cache manually
-rsync -av --exclude='node_modules' --exclude='venv' \
-  autobot-backend/ \
-  autobot@<slm-manager-ip>:/opt/autobot/cache/autobot-backend/
+**After the run.** When the job finishes in the process that started it, the SLM checks that every
+node is on the chosen commit and fails the job if one is not. A run that spans the SLM's restart is
+not re-checked; read the node list on the Code Sync tab.
 
-# 3. Trigger update
-cd autobot-slm-backend/ansible
-ansible-playbook playbooks/update-all-nodes.yml \
-  -i inventory/slm-nodes.yml \
-  --limit 01-Backend
-
-# 4. Return to development branch
-git checkout main
-git stash pop
-```
-
----
+**Not covered.** A rollback does not undo database changes (see above), and it does not restore
+data. It is refused when this SLM already runs the chosen commit.
 
 ## Recovery when the SLM dashboard itself is unreachable (#15462)
 
 A failed SLM frontend build can leave `/slm/` serving 403 for the whole
-dashboard — including the "Update All Nodes" button and the code-sync UI you
+dashboard — including the "Update Everything" button and the code-sync UI you
 would normally use to fix it — while every `autobot-*` service still reports
 `active (running)`. The backend API stays reachable throughout; only its UI
 is gone.
@@ -206,7 +136,7 @@ https://<slm-manager-ip>/slm/api/recovery
 
 It shows the backend's own `/api/health` (including the frontend-bundle
 probe below), and lets you sign in and trigger the same self-update the
-dashboard's "Update All Nodes" button runs — with no build step of its own,
+dashboard's "Update Everything" button runs — with no build step of its own,
 so a broken frontend build cannot take it down too.
 
 A degraded `frontend` field in `/api/health` (`unhealthy: build output has
@@ -266,11 +196,9 @@ the other.
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Hook doesn't fire | Not installed | `cp scripts/hooks/slm-post-commit .git/hooks/post-commit && chmod +x .git/hooks/post-commit` |
-| Nodes stay OUTDATED after push | SLM not notified | Run hook manually: `scripts/hooks/slm-post-commit` |
-| Ansible `UNREACHABLE` | SSH key issue | Test: `ssh -i ~/.ssh/autobot_ed25519 autobot@<node-ip> echo ok` |
+| Nodes stay OUTDATED after an update | The update failed for that node | Read the failure in the Code Sync tab, fix it, run the update again |
+| Ansible `UNREACHABLE` | SSH key issue | Test: `ssh -i /etc/autobot/ssh/autobot_key autobot@<node-ip> echo ok` |
 | Backend takes 6 min after restart | Normal startup (GPUSemanticChunker + ChromaDB) | Wait; check `/var/log/autobot/backend.log` |
-| `rsync` wipes `/opt/autobot/data/` | Missing `--exclude` | Never use `--delete` without excludes in sync scripts |
 | Node shows wrong commit | Heartbeat overwrote mark-synced | Issue fixed in #918; check `code_version` in DB |
 | `/slm/` returns 403, all services green | Frontend build failed/incomplete (#15462) | Use `https://<slm-manager-ip>/slm/api/recovery` — see section above |
 
@@ -288,8 +216,8 @@ the other.
 ## Related
 
 - `docs/architecture/UPDATE_FLOWS.md` — flow diagrams for all update channels
-- `update-all-nodes.yml` — code update playbook
-- `scripts/hooks/slm-post-commit` — post-commit hook
+- `update-all-nodes.yml` — the playbook the updater runs; not for running by hand. A rollback passes it `deploy_ref` (the chosen commit) and `deploy_is_rollback` (#20214)
+- `autobot-slm-backend/services/code_rollback.py` — the rollback path (#20214)
 - `docs/runbooks/SYSTEM_UPDATE.md` — OS package updates (separate from code)
 - `autobot-slm-backend/static/recovery.html` — backend-served recovery page (#15462)
 - `autobot-slm-backend/services/local_admin_socket.py` — credential-free local self-update socket (#15728)

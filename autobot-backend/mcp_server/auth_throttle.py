@@ -114,8 +114,8 @@ class PreAuthThrottle:
     """Counts failed MCP authentications before any validation work runs.
 
     Not thread-safe by design: the FastAPI route is async and single-threaded
-    per event loop, matching the existing ``_TokenBucket`` in
-    ``mcp/autobot_server.py``.
+    per event loop, matching the canonical ``RateLimiter`` used by
+    ``mcp_server/autobot_server.py`` for post-auth limits.
     """
 
     def __init__(self) -> None:

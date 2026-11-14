@@ -50,7 +50,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "autobot-backend"))
 sys.path.insert(0, str(REPO_ROOT))
 
-from autobot_shared.logging_manager import get_logger  # noqa: E402
+from autobot_shared.logging_manager import get_logger, setup_logging  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -219,4 +219,5 @@ def main(argv: List[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     sys.exit(main())

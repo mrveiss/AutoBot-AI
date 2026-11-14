@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from autobot_shared.singleton_factory import lazy_singleton
 from protocols.agent_communication import AgentIdentity
 from protocols.agent_kind import AgentKind
-from protocols.agent_presence import AgentPresenceRegistry, get_presence_registry
+from protocols.agent_presence import UNKNOWN_TENANT, AgentPresenceRegistry, get_presence_registry
 
 
 @dataclass
@@ -79,6 +79,10 @@ class PeerInbox:
 
     def deliver(self, entry: PeerMessageEntry) -> None:
         self._entries.append(entry)
+
+    def pending(self) -> list[PeerMessageEntry]:
+        """The queued messages without draining them -- for a read-only view (#18391)."""
+        return list(self._entries)
 
     def drain(self) -> list[PeerMessageEntry]:
         """Every pending message, oldest first; the inbox is empty afterwards."""
@@ -129,6 +133,31 @@ class PeerInboxDirectory:
         if key not in self._inboxes:
             self._inboxes[key] = PeerInbox()
         return self._inboxes[key]
+
+    def pending_for(self, tenant_id: str) -> list[tuple[AgentKind, str, list[PeerMessageEntry]]]:
+        """Non-empty inboxes owned by exactly *tenant_id*, as ``(kind, name, queued)`` (#18391).
+
+        Never drains and never includes shared (``None``) or another tenant's
+        inboxes: a ledger view must not consume the messages it shows, and a
+        company has no claim on infrastructure it shares.
+        """
+        return [
+            (kind, name, inbox.pending())
+            for (kind, owner, name), inbox in self._inboxes.items()
+            if owner == tenant_id and inbox.pending()
+        ]
+
+    def pending_for_projection(self) -> list[tuple[AgentKind, str | None, str, list[PeerMessageEntry]]]:
+        """Every non-empty inbox of every owner, as ``(kind, tenant_id, name, queued)`` (#18632).
+
+        For the install-wide SLM projection only -- callers turn it into counts and
+        sender names; content never leaves this process. Never drains.
+        """
+        return [
+            (kind, owner, name, inbox.pending())
+            for (kind, owner, name), inbox in self._inboxes.items()
+            if inbox.pending() and owner != UNKNOWN_TENANT
+        ]
 
     def send(
         self,

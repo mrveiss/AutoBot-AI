@@ -30,7 +30,7 @@
     <div v-if="activeTab === 'cost'" class="tab-content">
       <div class="metrics-grid">
         <!-- Total Cost Card -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="dollar-sign" /> {{ $t('analytics.advanced.totalCost30d') }}</h4>
           </template>
@@ -41,31 +41,31 @@
             <Icon :name="trendIcon" />
             {{ costTrends?.growth_rate_percent?.toFixed(1) || 0 }}% {{ $t('analytics.advanced.vsPreviousPeriod') }}
           </div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Daily Average Card -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="calendar" /> {{ $t('analytics.advanced.dailyAverage') }}</h4>
           </template>
           <div class="metric-value">
             ${{ costSummary?.avg_daily_cost?.toFixed(2) || '0.00' }}
           </div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Trend Card -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="arrow-trend-up" /> {{ $t('analytics.advanced.costTrend') }}</h4>
           </template>
           <div class="metric-value" :class="costTrend">
             {{ costTrends?.trend || 'stable' }}
           </div>
-        </BasePanel>
+        </BaseCard>
       </div>
 
       <!-- Cost by Model Table -->
-      <BasePanel variant="elevated" class="mt-4">
+      <BaseCard scrollable variant="elevated" class="mt-4">
         <template #header>
           <h4><Icon name="robot" /> {{ $t('analytics.advanced.costByModel') }}</h4>
         </template>
@@ -90,43 +90,43 @@
           </tbody>
         </table>
         <EmptyState v-else icon="chart-bar" :message="$t('analytics.advanced.noCostData')" />
-      </BasePanel>
+      </BaseCard>
     </div>
 
     <!-- Agent Performance Tab -->
     <div v-if="activeTab === 'agents'" class="tab-content">
       <div class="metrics-grid">
         <!-- Total Agents -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="users-cog" /> {{ $t('analytics.advanced.totalAgents') }}</h4>
           </template>
           <div class="metric-value large">{{ agentMetrics?.total_agents || 0 }}</div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Total Tasks -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="tasks" /> {{ $t('analytics.advanced.totalTasks') }}</h4>
           </template>
           <div class="metric-value">
             {{ formatNumber(agentMetrics?.summary?.total_tasks || 0) }}
           </div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Avg Success Rate -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="check-circle" /> {{ $t('analytics.advanced.avgSuccessRate') }}</h4>
           </template>
           <div class="metric-value success">
             {{ agentMetrics?.summary?.avg_success_rate?.toFixed(1) || 0 }}%
           </div>
-        </BasePanel>
+        </BaseCard>
       </div>
 
       <!-- Agent Performance Table -->
-      <BasePanel variant="elevated" class="mt-4">
+      <BaseCard scrollable variant="elevated" class="mt-4">
         <template #header>
           <h4><Icon name="chart-line" /> {{ $t('analytics.advanced.agentPerformance') }}</h4>
         </template>
@@ -157,10 +157,10 @@
           </tbody>
         </table>
         <EmptyState v-else icon="robot" :message="$t('analytics.advanced.noAgentData')" />
-      </BasePanel>
+      </BaseCard>
 
       <!-- Recommendations -->
-      <BasePanel variant="bordered" class="mt-4" v-if="recommendations?.recommendations?.length">
+      <BaseCard scrollable variant="bordered" class="mt-4" v-if="recommendations?.recommendations?.length">
         <template #header>
           <h4><Icon name="lightbulb" /> {{ $t('analytics.advanced.recommendations') }}</h4>
         </template>
@@ -183,55 +183,55 @@
             </ul>
           </div>
         </div>
-      </BasePanel>
+      </BaseCard>
     </div>
 
     <!-- User Behavior Tab -->
     <div v-if="activeTab === 'behavior'" class="tab-content">
       <div class="metrics-grid">
         <!-- Total Sessions -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="users" /> {{ $t('analytics.advanced.totalSessions') }}</h4>
           </template>
           <div class="metric-value large">
             {{ formatNumber(engagementMetrics?.metrics?.total_sessions || 0) }}
           </div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Page Views -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="eye" /> {{ $t('analytics.advanced.pageViews') }}</h4>
           </template>
           <div class="metric-value">
             {{ formatNumber(engagementMetrics?.metrics?.total_page_views || 0) }}
           </div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Avg Session Duration -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="clock" /> {{ $t('analytics.advanced.avgSessionDuration') }}</h4>
           </template>
           <div class="metric-value">
             {{ formatDuration(engagementMetrics?.metrics?.avg_session_duration_ms || 0, { style: 'msSeconds2dp', nullText: '0ms' }) }}
           </div>
-        </BasePanel>
+        </BaseCard>
 
         <!-- Pages Per Session -->
-        <BasePanel variant="bordered" size="sm">
+        <BaseCard scrollable variant="bordered" size="sm">
           <template #header>
             <h4><Icon name="file-alt" /> {{ $t('analytics.advanced.pagesPerSession') }}</h4>
           </template>
           <div class="metric-value">
             {{ engagementMetrics?.metrics?.pages_per_session?.toFixed(1) || '0.0' }}
           </div>
-        </BasePanel>
+        </BaseCard>
       </div>
 
       <!-- Feature Popularity -->
-      <BasePanel variant="elevated" class="mt-4">
+      <BaseCard scrollable variant="elevated" class="mt-4">
         <template #header>
           <h4><Icon name="star" /> {{ $t('analytics.advanced.featurePopularity') }}</h4>
         </template>
@@ -262,10 +262,10 @@
           </tbody>
         </table>
         <EmptyState v-else icon="chart-bar" :message="$t('analytics.advanced.noFeatureData')" />
-      </BasePanel>
+      </BaseCard>
 
       <!-- Usage Heatmap -->
-      <BasePanel variant="bordered" class="mt-4" v-if="usageHeatmap?.peak_hours?.length">
+      <BaseCard scrollable variant="bordered" class="mt-4" v-if="usageHeatmap?.peak_hours?.length">
         <template #header>
           <h4><Icon name="bolt" /> {{ $t('analytics.advanced.peakUsageHours') }}</h4>
         </template>
@@ -280,13 +280,13 @@
             <span class="peak-events">{{ formatNumber(peak.total_events) }} {{ $t('analytics.advanced.events') }}</span>
           </div>
         </div>
-      </BasePanel>
+      </BaseCard>
     </div>
 
     <!-- Export Tab -->
     <div v-if="activeTab === 'export'" class="tab-content">
       <div class="export-grid">
-        <BasePanel
+        <BaseCard scrollable
           v-for="format in exportFormats"
           :key="format.format"
           variant="bordered"
@@ -300,14 +300,14 @@
             <BaseButton
               v-for="endpoint in format.endpoints"
               :key="endpoint.path"
-              variant="outline-solid"
+              variant="outline"
               size="sm"
               @click="downloadExport(endpoint.path)"
             >
               {{ endpoint.description }}
             </BaseButton>
           </div>
-        </BasePanel>
+        </BaseCard>
       </div>
     </div>
 
@@ -320,27 +320,24 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton, BaseCard, httpErrorFrom, saveBlob } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import { formatDuration } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import BasePanel from '@/components/base/BasePanel.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import api from '@/services/api'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
 
 const { t } = useI18n()
 
 const logger = createLogger('AdvancedAnalytics')
 
-// Issue #701: Type for API response with data property
-interface ApiDataResponse {
-  data?: unknown
-  [key: string]: unknown
-}
+// #21066: every analytics route above answers its model at the top level (no `data` envelope; verified
+// against the response models in api/schemas_analytics.py and the producers in analytics_cost,
+// analytics_agents, analytics_export and user_behavior_analytics), so the replies are read directly.
+// The /behavior/* models are opaque (`extra=allow`); #21066 owns typing them.
 
 // Domain shapes for analytics responses (fields consumed by the template)
 interface CostSummary {
@@ -507,13 +504,13 @@ const fetchCostData = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertions for Promise.all results
     const [summaryRes, trendsRes, modelsRes] = await Promise.all([
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/summary`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/trends`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/by-model`)
+      apiClient.call('get', '/api/analytics/cost/summary'),
+      apiClient.call('get', '/api/analytics/cost/trends'),
+      apiClient.call('get', '/api/analytics/cost/by-model')
     ])
-    costSummary.value = (summaryRes as ApiDataResponse).data as CostSummary | null
-    costTrends.value = (trendsRes as ApiDataResponse).data as CostTrends | null
-    modelCosts.value = ((modelsRes as ApiDataResponse).data as ModelCostsData | undefined)?.models || []
+    costSummary.value = summaryRes as CostSummary | null
+    costTrends.value = trendsRes as CostTrends | null
+    modelCosts.value = (modelsRes as ModelCostsData | undefined)?.models || []
   } catch (error) {
     logger.error('Failed to fetch cost data:', error)
   }
@@ -524,11 +521,11 @@ const fetchAgentData = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertions for Promise.all results
     const [metricsRes, recsRes] = await Promise.all([
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/agents/performance`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/agents/recommendations`)
+      apiClient.call('get', '/api/analytics/agents/performance'),
+      apiClient.call('get', '/api/analytics/agents/recommendations')
     ])
-    agentMetrics.value = (metricsRes as ApiDataResponse).data as AgentMetrics | null
-    recommendations.value = (recsRes as ApiDataResponse).data as Recommendations | null
+    agentMetrics.value = metricsRes as AgentMetrics | null
+    recommendations.value = recsRes as Recommendations | null
   } catch (error) {
     logger.error('Failed to fetch agent data:', error)
   }
@@ -538,8 +535,8 @@ const fetchExportFormats = async () => {
   try {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertion for response
-    const res = await api.get<ApiDataResponse>(`${getApiBase()}/analytics/export/formats`)
-    exportFormats.value = ((res as ApiDataResponse).data as ExportFormatsData | undefined)?.formats || []
+    const res = await apiClient.call('get', '/api/analytics/export/formats')
+    exportFormats.value = (res as ExportFormatsData | undefined)?.formats || []
     // Add icons
     exportFormats.value.forEach((f: ExportFormat) => {
       if (f.format === 'CSV') f.icon = 'file-csv'
@@ -558,13 +555,13 @@ const fetchBehaviorData = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertions for Promise.all results
     const [engagementRes, featuresRes, heatmapRes] = await Promise.all([
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/engagement`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/features`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/stats/heatmap`)
+      apiClient.call('get', '/api/analytics/behavior/engagement'),
+      apiClient.call('get', '/api/analytics/behavior/features'),
+      apiClient.call('get', '/api/analytics/behavior/stats/heatmap')
     ])
-    engagementMetrics.value = (engagementRes as ApiDataResponse).data as EngagementMetricsData | null
-    behaviorMetrics.value = (featuresRes as ApiDataResponse).data
-    usageHeatmap.value = (heatmapRes as ApiDataResponse).data as UsageHeatmap | null
+    engagementMetrics.value = engagementRes as EngagementMetricsData | null
+    behaviorMetrics.value = featuresRes
+    usageHeatmap.value = heatmapRes as UsageHeatmap | null
   } catch (error) {
     logger.error('Failed to fetch behavior data:', error)
   }
@@ -583,17 +580,12 @@ const getPopularityWidth = (views: number): string => {
 
 const downloadExport = async (path: string) => {
   try {
-    // Issue #701: Fixed api.get call - use responseType option properly
-    const response = await api.get<Blob>(path, { responseType: 'blob' })
-    const url = window.URL.createObjectURL(new Blob([response as unknown as BlobPart]))
-    const link = document.createElement('a')
-    link.href = url
+    // The server names the export route (from /analytics/export/formats), so the path is dynamic: a raw request.
+    const response = await apiClient.rawRequest(path)
+    if (!response.ok) throw await httpErrorFrom(response)
     // Extract filename from path
     const filename = path.split('/').pop() + (path.includes('csv') ? '.csv' : '.json')
-    link.setAttribute('download', filename)
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
+    saveBlob(await response.blob(), filename)
   } catch (error) {
     logger.error('Failed to download export:', error)
   }
@@ -669,7 +661,7 @@ onMounted(() => {
   color: var(--text-on-primary);
 }
 
-.tab-btn i {
+.tab-btn .icon {
   margin-right: var(--spacing-2);
 }
 
@@ -814,7 +806,7 @@ onMounted(() => {
   justify-content: center;
   gap: var(--spacing-4);
   color: var(--text-on-primary);
-  z-index: 100;
+  z-index: var(--z-dropdown);
 }
 
 /* User Behavior Tab Styles */
@@ -843,7 +835,7 @@ onMounted(() => {
 }
 
 .rank-3 {
-  background: var(--chart-orange, #f97316);
+  background: var(--chart-orange);
   color: var(--text-on-primary);
 }
 

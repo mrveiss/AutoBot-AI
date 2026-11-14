@@ -24,7 +24,7 @@ async def test_none_on_non_200_response():
     session.get.return_value = response
     client = MagicMock()
     client._get_session = AsyncMock(return_value=session)
-    client.slm_url = "http://slm"
+    client._rest_url = MagicMock(return_value="http://127.0.0.1:8000/api/settings/some.key")
     with patch("llc.services.slm_policy.get_slm_client", return_value=client):
         assert await fetch_slm_policy_json("some.key") is None
 
@@ -39,7 +39,7 @@ async def test_parses_escaped_json_value():
     session.get.return_value = response
     client = MagicMock()
     client._get_session = AsyncMock(return_value=session)
-    client.slm_url = "http://slm"
+    client._rest_url = MagicMock(return_value="http://127.0.0.1:8000/api/settings/some.key")
     with patch("llc.services.slm_policy.get_slm_client", return_value=client):
         assert await fetch_slm_policy_json("some.key") == {"enabled": True}
 

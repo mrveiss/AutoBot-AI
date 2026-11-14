@@ -17,7 +17,7 @@
               <div class="error-info">
                 <strong>Component:</strong> {{ componentName }}<br>
                 <strong>Retry Attempts:</strong> {{ retryCount }}/{{ maxRetries }}<br>
-                <strong>Time:</strong> {{ new Date().toLocaleString() }}
+                <strong>Time:</strong> {{ formatISOString(new Date()) }}
               </div>
             </div>
           </details>
@@ -42,7 +42,7 @@
           </BaseButton>
 
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             @click="goHome"
           >
             <Icon name="home" />
@@ -62,9 +62,10 @@
 </template>
 
 <script setup lang="ts">
+import { formatISOString } from '@/utils/formatHelpers'
+import { RETRY_BACKOFF, backoffDelay, BaseButton } from '@autobot/ui'
 import { ref, computed, inject } from 'vue'
 import { useRouter } from 'vue-router'
-import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { isChunkLoadError, isCssChunkLoadError } from '@/utils/chunkLoadError'
 import Icon from '@/components/ui/Icon.vue'
@@ -147,7 +148,7 @@ const retry = async () => {
 
   try {
     // Wait a moment before retrying (exponential backoff)
-    const delay = Math.min(1000 * Math.pow(2, props.retryCount), 5000)
+    const delay = backoffDelay(props.retryCount, RETRY_BACKOFF)
     await new Promise(resolve => setTimeout(resolve, delay))
 
     // Emit retry event to parent

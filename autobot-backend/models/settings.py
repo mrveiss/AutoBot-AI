@@ -83,7 +83,7 @@ telemetry_settings = config.telemetry
 # --------------------------------------------------------------------------
 CONSOLIDATED_INTO = {
     "llm.default_llm": "autobot_shared.ssot_config.LLMConfig.provider",
-    "llm.orchestrator_llm": "autobot_shared.ssot_config.LLMConfig.orchestrator_model",
+    "llm.orchestrator_llm": "autobot_shared.ssot_config.LLMConfig.planning_model",
     "llm.task_llm": "autobot_shared.ssot_config.LLMConfig.provider",
     "llm.ollama_host": "autobot_shared.ssot_config.VMConfig.ollama",
     "llm.ollama_port": "autobot_shared.ssot_config.PortConfig.ollama",
@@ -96,7 +96,7 @@ CONSOLIDATED_INTO = {
     "redis.enabled": "autobot_shared.ssot_config.RedisConfig.enabled",
     "redis.host": "autobot_shared.ssot_config.VMConfig.redis",
     "redis.port": "autobot_shared.ssot_config.PortConfig.redis",
-    "redis.db": "autobot_shared.ssot_config.RedisConfig.db_main",
+    "redis.db": "autobot_shared.redis_management.types.DATABASE_MAPPING['main']",
     "redis.password": "autobot_shared.ssot_config.RedisConfig.password",
     "data.base_directory": "autobot_shared.ssot_config.PathConfig.data_dir",
     "data.chat_history_file": "autobot_shared.ssot_config.MiscConfig.chat_history_file",

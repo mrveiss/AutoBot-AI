@@ -13,7 +13,7 @@ This implementation adds seven new API endpoints and supporting infrastructure t
 ### 1. Database Models (`models/database.py`)
 
 **New Enumerations:**
-- `EventType`: Enumeration for lifecycle event types (13 types)
+- `NodeEventType`: Enumeration for lifecycle event types (13 types)
 - `EventSeverity`: Enumeration for event severity levels (info, warning, error, critical)
 
 **New Tables:**

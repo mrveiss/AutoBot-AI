@@ -489,10 +489,10 @@ class FactExtractionService:
             # Store as a knowledge base fact
             content = json.dumps(facts_summary, indent=2)
             kb_metadata = {
+                **(metadata or {}),  # first: the code-set keys below win (#19517)
                 "type": "atomic_facts",
                 "content_type": "structured_facts",
                 "facts_count": len(facts),
-                **(metadata or {}),
             }
 
             await self.knowledge_base.store_fact(content, kb_metadata)
@@ -706,7 +706,7 @@ class FactExtractionService:
             fact_type: Filter by fact type
             temporal_type: Filter by temporal type
             min_confidence: Minimum confidence threshold
-            active_only: Only return active facts
+            active_only: Stored is_active flag only: invalidation bookkeeping, not a serving decision (#18820)
             limit: Maximum number of facts to return
 
         Returns:

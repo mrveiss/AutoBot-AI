@@ -24,12 +24,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
-from autobot_shared.doc_chunking import chunk_large_content as _chunk_large_content
-from autobot_shared.doc_chunking import create_chunk as _create_chunk
-from autobot_shared.doc_chunking import estimate_tokens as _estimate_tokens
-from autobot_shared.doc_chunking import process_h2_sections as _process_h2_sections
+from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.kb_doc_set import in_doc_set
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.paths import shared_cache_path
+from services.knowledge.index_cache_paths import doc_index_hashes
 
 if TYPE_CHECKING:
     from services.knowledge.sync_queue import SyncQueueEntry, SyncReason  # noqa: F401
@@ -37,7 +35,17 @@ if TYPE_CHECKING:
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
 from constants.threshold_constants import CategoryDefaults
+from knowledge.chunk_identity import carry_store_id, stamp_chunk_id
+from knowledge.platform_docs import PLATFORM_DOCS_GRANT, PLATFORM_DOCS_GRANT_VERSION
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
+from services.knowledge import doc_index_store_guard as store_guard
+from services.knowledge.doc_index_orphans import chunk_base_id, drop_collection, reindex_file
+from services.knowledge.doc_markdown_chunks import (
+    _chunk_markdown,
+    _extract_tags,
+    _parse_frontmatter,
+)
+from services.knowledge.doc_taxonomy import category_of
 from services.knowledge.synthesis_schema_loader import SynthesisSchema, load_synthesis_schema
 
 logger = get_logger(__name__)
@@ -72,12 +80,11 @@ def _auto_reindex_on_dim_mismatch() -> bool:
 
 
 # ============================================================================
-# TIER DEFINITIONS (from CLI tool)
+# TIER DEFINITIONS: a priority order over kb_doc_set, and a curated subset of it (#20063)
 # ============================================================================
 
 TIER_1_FILES = [
     "CLAUDE.md",
-    "docs/system-state.md",
     "docs/api/COMPREHENSIVE_API_DOCUMENTATION.md",
     "docs/architecture/DISTRIBUTED_ARCHITECTURE.md",
     "docs/architecture/README.md",
@@ -143,192 +150,6 @@ class IndexResult:
 
 
 # ============================================================================
-# MARKDOWN PARSING (extracted from CLI tool)
-# ============================================================================
-
-
-def _extract_title(content: str) -> str:
-    """Extract title from first H1 header or first line."""
-    match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
-    if match:
-        return match.group(1).strip()
-    for line in content.split("\n"):
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#"):
-            return stripped[:100]
-    return "Untitled Document"
-
-
-def _infer_doc_type(file_path: str) -> str:
-    """Infer document type from file path."""
-    path_lower = file_path.lower()
-    type_keywords = [
-        (["api"], "api"),
-        (["architecture"], "architecture"),
-        (["developer", "setup"], "developer"),
-        (["security"], "security"),
-        (["troubleshoot"], "troubleshooting"),
-        (["deploy", "docker"], "deployment"),
-        (["test"], "testing"),
-        (["feature"], "feature"),
-        (["workflow"], "workflow"),
-        (["agent"], "agent_system"),
-        (["claude.md"], "project_rules"),
-        (["user-guide", "install"], "user_guide"),
-    ]
-    for keywords, doc_type in type_keywords:
-        if any(kw in path_lower for kw in keywords):
-            return doc_type
-    return "documentation"
-
-
-def _infer_category(file_path: str) -> str:
-    """Infer category from file path."""
-    parts = Path(file_path).parts
-    try:
-        docs_idx = parts.index("docs")
-        if len(parts) > docs_idx + 1:
-            return parts[docs_idx + 1]
-    except ValueError:
-        pass
-    if file_path.endswith("CLAUDE.md"):
-        return "project_rules"
-    return "general"
-
-
-def _extract_tags(content: str, file_path: str) -> List[str]:
-    """Extract relevant tags from content and path."""
-    tags = set()
-    for part in Path(file_path).parts:
-        if part not in [
-            ".",
-            "..",
-            "docs",
-            "home",
-            "kali",
-            "Desktop",
-            "AutoBot",
-            "opt",
-            "autobot",
-        ]:
-            tag = re.sub(r"[^a-zA-Z0-9-_]", "", part.lower())
-            if tag and len(tag) > 2:
-                tags.add(tag)
-
-    keywords = [
-        "api",
-        "deployment",
-        "docker",
-        "kubernetes",
-        "redis",
-        "chromadb",
-        "websocket",
-        "authentication",
-        "security",
-        "multimodal",
-        "llm",
-        "agent",
-        "workflow",
-        "terminal",
-        "frontend",
-        "backend",
-        "npm",
-        "vue",
-        "fastapi",
-        "python",
-        "typescript",
-        "install",
-        "setup",
-    ]
-    content_lower = content.lower()
-    for keyword in keywords:
-        if keyword in content_lower:
-            tags.add(keyword)
-
-    return list(tags)[:15]
-
-
-def _parse_frontmatter(content: str) -> Tuple[str, List[str], List[str]]:
-    """Strip Obsidian YAML frontmatter and return (body, tags, aliases).
-
-    Recognises a leading ``---`` block. Returns the content after the closing
-    ``---`` together with any ``tags`` and ``aliases`` values found inside it.
-    If no frontmatter is present the original content is returned unchanged
-    with empty tag and alias lists.
-    """
-    if not content.startswith("---"):
-        return content, [], []
-
-    end = content.find("\n---", 3)
-    if end == -1:
-        return content, [], []
-
-    fm_block = content[3:end]
-    body = content[end + 4 :].lstrip("\n")
-
-    fm_tags: List[str] = []
-    fm_aliases: List[str] = []
-
-    # Parse simple YAML list values for 'tags' and 'aliases' keys.
-    current_key: str | None = None
-    for line in fm_block.splitlines():
-        key_match = re.match(r"^(\w+)\s*:", line)
-        if key_match:
-            current_key = key_match.group(1)
-            inline = line[key_match.end() :].strip()
-            if inline and current_key in ("tags", "aliases"):
-                target = fm_tags if current_key == "tags" else fm_aliases
-                target.append(inline.lstrip("- ").strip())
-        elif line.strip().startswith("-") and current_key in ("tags", "aliases"):
-            target = fm_tags if current_key == "tags" else fm_aliases
-            target.append(line.strip().lstrip("- ").strip())
-
-    return body, fm_tags, fm_aliases
-
-
-def _chunk_markdown(content: str, file_path: str) -> List[Dict[str, Any]]:
-    """Chunk markdown content by H2/H3 sections preserving semantic boundaries."""
-    chunks: List[Dict[str, Any]] = []
-    doc_title = _extract_title(content)
-    doc_type = _infer_doc_type(file_path)
-    category = _infer_category(file_path)
-
-    h2_splits = re.split(r"^(##\s+.+)$", content, flags=re.MULTILINE)
-
-    # Intro content before first H2
-    intro = h2_splits[0].strip() if h2_splits else ""
-    if intro and _estimate_tokens(intro) > 50:
-        chunks.append(
-            _create_chunk(
-                intro,
-                "Introduction",
-                None,
-                file_path,
-                doc_type,
-                category,
-                doc_title,
-            )
-        )
-
-    _process_h2_sections(h2_splits, file_path, doc_type, category, doc_title, chunks)
-
-    # Fallback: no headers found
-    if not chunks and content.strip():
-        _chunk_large_content(
-            content,
-            "Content",
-            None,
-            file_path,
-            doc_type,
-            category,
-            doc_title,
-            chunks,
-        )
-
-    return chunks
-
-
-# ============================================================================
 # FILE DISCOVERY
 # ============================================================================
 
@@ -342,50 +163,38 @@ def _should_exclude(file_path: str) -> bool:
 
 
 def _discover_files(root_dir: Path, tier: int | None = None) -> List[Tuple[str, int]]:
-    """Discover markdown files to index by tier."""
-    files: List[Tuple[str, int]] = []
+    """Discover markdown files to index by tier; only files in the canonical doc set qualify (#20063)."""
+    found: dict[str, int] = {}
+
+    def add(path: Path, number: int) -> None:
+        if in_doc_set(path.relative_to(root_dir).as_posix()):
+            found.setdefault(str(path), number)
 
     if tier is None or tier == 1:
         for file_rel in TIER_1_FILES:
-            file_path = root_dir / file_rel
-            if file_path.exists():
-                files.append((str(file_path), 1))
+            if (root_dir / file_rel).exists():
+                add(root_dir / file_rel, 1)
 
-    if tier is None or tier == 2:
-        for dir_rel in TIER_2_DIRS:
-            dir_path = root_dir / dir_rel
-            if dir_path.exists():
-                for md_file in dir_path.rglob("*.md"):
-                    file_str = str(md_file)
-                    if not _should_exclude(file_str):
-                        if not any(f[0] == file_str for f in files):
-                            files.append((file_str, 2))
+    for number, dirs in ((2, TIER_2_DIRS), (3, TIER_3_DIRS + TIER_3_DIRS_EXTRA)):
+        if tier is None or tier == number:
+            for dir_rel in dirs:
+                for md_file in (root_dir / dir_rel).rglob("*.md"):
+                    if not _should_exclude(str(md_file)):
+                        add(md_file, number)
 
-    if tier is None or tier == 3:
-        all_tier3 = TIER_3_DIRS + TIER_3_DIRS_EXTRA
-        for dir_rel in all_tier3:
-            dir_path = root_dir / dir_rel
-            if dir_path.exists():
-                for md_file in dir_path.rglob("*.md"):
-                    file_str = str(md_file)
-                    if not _should_exclude(file_str):
-                        if not any(f[0] == file_str for f in files):
-                            files.append((file_str, 3))
-
-    return files
+    return list(found.items())
 
 
 # ============================================================================
 # HASH CACHE for incremental indexing
 # ============================================================================
 
-# #16934: shared git-common-dir, not per-checkout PATH.DATA_DIR -- one shared collection.
-_HASH_CACHE_FALLBACK = PATH.DATA_DIR / ".doc_index_hashes.json"
-HASH_CACHE_FILE = shared_cache_path("autobot-doc-index", ".doc_index_hashes.json", fallback=_HASH_CACHE_FALLBACK)
+# None: the shared user cache, resolved on use, never at import (index_cache_paths, #19553); tests pin a path.
+HASH_CACHE_FILE: Path | None = None
 
 
 def _compute_file_hash(file_path: str) -> str:
-    """Compute SHA-256 hash of file content.
+    """Compute SHA-256 hash of the grant version plus file content.
 
     Resolves symlinks so the hash reflects the target file's content (#4382).
     Returns empty string on PermissionError, OSError, or RuntimeError (e.g.
@@ -395,7 +204,7 @@ def _compute_file_hash(file_path: str) -> str:
     try:
         resolved = str(Path(file_path).resolve())
         with open(resolved, "rb") as f:
-            return hashlib.sha256(f.read()).hexdigest()
+            return hashlib.sha256(PLATFORM_DOCS_GRANT_VERSION + f.read()).hexdigest()  # #16664
     except (PermissionError, OSError, RuntimeError) as e:
         logger.warning("Cannot hash %s: %s", file_path, e)
         return ""
@@ -403,9 +212,9 @@ def _compute_file_hash(file_path: str) -> str:
 
 def _load_hash_cache() -> Dict[str, str]:
     """Load cached file hashes from disk."""
-    if HASH_CACHE_FILE.exists():
+    if doc_index_hashes(HASH_CACHE_FILE).exists():
         try:
-            with open(HASH_CACHE_FILE, "r", encoding="utf-8") as f:
+            with open(doc_index_hashes(HASH_CACHE_FILE), "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             logger.warning("Could not load hash cache: %s", e)
@@ -415,8 +224,8 @@ def _load_hash_cache() -> Dict[str, str]:
 def _save_hash_cache(hashes: Dict[str, str]) -> None:
     """Save file hashes to disk."""
     try:
-        HASH_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(HASH_CACHE_FILE, "w", encoding="utf-8") as f:
+        doc_index_hashes(HASH_CACHE_FILE).parent.mkdir(parents=True, exist_ok=True)
+        with open(doc_index_hashes(HASH_CACHE_FILE), "w", encoding="utf-8") as f:
             json.dump(hashes, f, indent=2)
     except Exception as e:
         logger.warning("Could not save hash cache: %s", e)
@@ -483,6 +292,14 @@ def _filter_changed_files(
     return changed, new_hashes
 
 
+def _select_files(root_dir: Path, tier: int | None = None, category: str | None = None) -> List[Tuple[str, int]]:
+    """Discover files for ``tier`` (None = all), keeping only those in ``category`` when given (#18129)."""
+    files = _discover_files(root_dir, tier)
+    if category:
+        files = [(p, t) for p, t in files if category_of(p, root_dir) == category]
+    return files
+
+
 # ============================================================================
 # DocIndexerService
 # ============================================================================
@@ -546,12 +363,14 @@ class DocIndexerService:
             from llama_index.embeddings.ollama import OllamaEmbedding
 
             from knowledge.backends import get_default_client
+            from utils.chromadb_client import chromadb_endpoint
 
             chromadb_path = self._root_dir / "data" / "chromadb"
             # get_default_client takes only **kwargs (#6613) — pass db_path
             # explicitly. Positional call raised TypeError at init, falling
             # the indexer back to slow SCAN paths.
             self._client = await asyncio.to_thread(get_default_client, db_path=str(chromadb_path))
+            self._store = chromadb_endpoint(str(chromadb_path))
 
             ollama_url = get_ollama_url()
 
@@ -563,22 +382,25 @@ class DocIndexerService:
             )
 
             effective = await get_org_knowledge_config_service().get_effective(self._org_id)
-            embed_model_name = effective.embedding_model or "nomic-embed-text"
+            embed_model_name = effective.embedding_model  # org override, else ssot; empty fails init (#18143)
             self.embedding_model_name = embed_model_name
 
             # Embed model is created first so the collection guard can probe the
             # model's true dimension when it is not in _KNOWN_DIMS (#10420).
-            self._embed_model = OllamaEmbedding(model_name=embed_model_name, base_url=ollama_url)
+            self._embed_model = OllamaEmbedding(
+                model_name=embed_model_name, base_url=ollama_url, client_kwargs={"headers": store_guard.caller_tag()}
+            )
 
             embed_dim = await asyncio.to_thread(
                 self._resolve_embed_dim, embed_model_name, effective.embedding_dimension
             )
             self._collection = await asyncio.to_thread(self._resolve_collection, embed_model_name, embed_dim)
 
-            doc_count = self._collection.count()
+            doc_count = store_guard.read_count(self._collection)
             logger.info(
-                "DocIndexerService initialized: collection='%s', "
+                "DocIndexerService initialized: store='%s', collection='%s', "
                 "existing_vectors=%d, ollama=%s, embed_model=%s, org_id=%s",
+                self._store,
                 self.COLLECTION_NAME,
                 doc_count,
                 ollama_url,
@@ -713,7 +535,19 @@ class DocIndexerService:
         # getattr guard keeps __new__-built fixtures (which skip __init__) safe.
         if getattr(self, "_needs_reindex", False):
             return True
-        return self._collection.count() == 0
+        return store_guard.read_count(self._collection) == 0
+
+    def _full_reindex_reason(self) -> str | None:
+        """Why this run must re-embed everything (None: it need not); refuses on an unknown or moved store (#20886)."""
+        if not self._initialized or not self._collection:
+            return "indexer not initialized"
+        return store_guard.reindex_reason(
+            count=store_guard.read_count(self._collection),
+            needs_reindex=getattr(self, "_needs_reindex", False),
+            cache_entries=len(_load_hash_cache()),
+            hash_override=HASH_CACHE_FILE,
+            current=self._store,
+        )
 
     async def get_stats(self) -> dict:
         """Get collection statistics."""
@@ -765,20 +599,20 @@ class DocIndexerService:
         )
         return any(kw in msg for kw in _OVERSIZED_KEYWORDS)
 
-    def _embed_and_upsert(
-        self,
-        content: str,
-        chunk_id: str,
-        metadata: Dict[str, Any],
-    ) -> None:
+    _embed_progress = store_guard.EmbedProgress()  # reset per index_all run (#20886)
+    _store = ""  # where initialize() opened the vector store; set per instance (#20886)
+    embedding_model_name: str | None = None  # set by initialize(); class default keeps __new__-built fixtures safe
+
+    def _embed_and_upsert(self, content: str, chunk_id: str, metadata: Dict[str, Any]) -> None:
         """Embed *content* and upsert into ChromaDB. Raises on failure."""
         embedding = self._embed_model.get_text_embedding(content)
         self._collection.upsert(
             ids=[chunk_id],
             embeddings=[embedding],
             documents=[content],
-            metadatas=[metadata],
+            metadatas=[stamp_chunk_id(metadata, chunk_id)],  # #18142: the Chroma id is also the stored chunk_id
         )
+        self._embed_progress.tick()
 
     def _split_and_embed(
         self,
@@ -848,6 +682,7 @@ class DocIndexerService:
         rel_path: str,
         file_tags: List[str],
         tier: int,
+        index_run: str = "",
     ) -> bool:
         """Index a single chunk into ChromaDB.
 
@@ -860,12 +695,11 @@ class DocIndexerService:
         Returns True when at least one (sub-)chunk was stored successfully.
         """
         priority_map = {1: "critical", 2: "high", 3: "medium"}
-        chunk_id = hashlib.md5(
-            f"{rel_path}:{chunk['section']}:{chunk_index}".encode(), usedforsecurity=False
-        ).hexdigest()[:12]
+        chunk_id = chunk_base_id(rel_path, chunk["section"], chunk_index)
 
         metadata: Dict[str, Any] = {
             "source": "autobot_documentation",
+            **PLATFORM_DOCS_GRANT,  # #16664: stamped at write so reads need no special case
             "doc_type": chunk["doc_type"],
             "category": chunk["category"],
             "priority": priority_map.get(tier, "low"),
@@ -876,6 +710,7 @@ class DocIndexerService:
             "title": chunk["title"],
             "tags": ",".join(str(t) for t in file_tags),
             "indexed_at": datetime.now(tz=timezone.utc).isoformat(),
+            "index_run": index_run,
             "chunk_index": chunk_index,
             "total_chunks": total_chunks,
             # Issue #4681: evolutionary lineage fields.
@@ -909,12 +744,11 @@ class DocIndexerService:
             return True
         cache[rel_path] = current_hash
         _save_hash_cache(cache)
+        store_guard.save_recorded_store(self._store, HASH_CACHE_FILE)
         return False
 
     async def _index_file_chunks(self, file_str: str, content: str, rel_path: str, tier: int) -> tuple[int, int]:
         """Chunk content and index all chunks; return (success_count, chunk_count). Issue #2735."""
-        import asyncio
-
         body, fm_tags, fm_aliases = _parse_frontmatter(content)
         # Issue #5064: sanitize ingested content before chunking / embedding.
         body = _sanitize_document(body, source="doc_indexer").sanitized_text
@@ -924,53 +758,45 @@ class DocIndexerService:
 
         file_tags = _extract_tags(body, file_str)
         file_tags = list(dict.fromkeys(fm_tags + fm_aliases + file_tags))[:20]
-        indexed = 0
-        for i, chunk in enumerate(chunks):
-            ok = await asyncio.to_thread(self._index_chunk, chunk, i, len(chunks), rel_path, file_tags, tier)
-            if ok:
-                indexed += 1
+        # Ids hash the section name: a renamed section leaves an orphan, dropped only once the new chunks are stored.
+        indexed = await reindex_file(self._collection, self._index_chunk, chunks, rel_path, file_tags, tier)
         return indexed, len(chunks)
 
     async def index_file(self, file_path: Path, tier: int = 3, force: bool = False) -> IndexResult:
-        """Index a single markdown file at the given priority tier; force skips the hash check."""
+        """Index one markdown file at a priority tier; force skips the hash check, never the store guard (#20886)."""
         if not self._initialized:
             await self.initialize()
 
-        result = IndexResult(total_files=1)
         file_str = str(file_path)
-
         if not file_path.exists():
-            result.failed = 1
-            result.errors.append(f"File not found: {file_str}")
-            return result
-
+            return IndexResult(total_files=1, failed=1, errors=[f"File not found: {file_str}"])
+        try:
+            # Unconditional, so force cannot bypass it; before the cache or store record is touched (#20886).
+            reason = self._full_reindex_reason()
+            force = force or bool(reason)
+        except (store_guard.CollectionCountUnknown, store_guard.StoreLocationChanged) as e:
+            logger.error("Doc indexer refusing to index %s: %s", file_str, e)
+            return IndexResult(total_files=1, failed=1, errors=[str(e)])
         if self._check_hash_and_update_cache(file_str, force):
-            result.skipped = 1
-            return result
+            return IndexResult(total_files=1, skipped=1)
+        return await self._embed_one_file(file_path, tier)
 
+    async def _embed_one_file(self, file_path: Path, tier: int) -> IndexResult:
+        """Read, chunk and embed one file; a failure is returned as a failed result."""
+        file_str = str(file_path)
         try:
             # #7467: was sync `file_path.read_text` blocking the event loop.
             content = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
             if not content.strip():
-                result.skipped = 1
-                return result
-
+                return IndexResult(total_files=1, skipped=1)
             rel_path = os.path.relpath(file_str, self._root_dir)
             indexed, total_chunks = await self._index_file_chunks(file_str, content, rel_path, tier)
-
             if total_chunks == 0:
-                result.skipped = 1
-                return result
-
-            result.success = 1 if indexed > 0 else 0
-            result.failed = 0 if indexed > 0 else 1
-            return result
-
+                return IndexResult(total_files=1, skipped=1)
+            return IndexResult(total_files=1, success=int(indexed > 0), failed=int(indexed == 0))
         except Exception as e:
             logger.error("Error indexing %s: %s", file_str, e)
-            result.failed = 1
-            result.errors.append(f"{file_str}: {e}")
-            return result
+            return IndexResult(total_files=1, failed=1, errors=[f"{file_str}: {e}"])
 
     async def _index_single_file_content(self, file_path: str, tier: int, result: IndexResult) -> None:
         """Read, chunk, and index a single file. Helper for index_all (#1385)."""
@@ -982,29 +808,10 @@ class DocIndexerService:
                 result.skipped += 1
                 return
 
-            body, fm_tags, fm_aliases = _parse_frontmatter(content)
-            # Issue #5064: sanitize ingested content before chunking / embedding.
-            body = _sanitize_document(body, source="doc_indexer").sanitized_text
-            chunks = _chunk_markdown(body, file_path)
-            if not chunks:
+            indexed, total_chunks = await self._index_file_chunks(file_path, content, rel_path, tier)
+            if total_chunks == 0:
                 result.skipped += 1
                 return
-
-            file_tags = _extract_tags(body, file_path)
-            file_tags = list(dict.fromkeys(fm_tags + fm_aliases + file_tags))[:20]
-            indexed = 0
-            for i, chunk in enumerate(chunks):
-                ok = await asyncio.to_thread(
-                    self._index_chunk,
-                    chunk,
-                    i,
-                    len(chunks),
-                    rel_path,
-                    file_tags,
-                    tier,
-                )
-                if ok:
-                    indexed += 1
 
             if indexed > 0:
                 result.success += 1
@@ -1078,72 +885,91 @@ class DocIndexerService:
         except Exception:
             logger.exception("DocIndexerService: KB synthesis failed (non-fatal)")
 
-    async def index_all(self, force: bool = False) -> IndexResult:
-        """Index every documentation file; force ignores the hash cache and re-indexes all of them."""
+    def plan(self, force: bool = False, tier: int | None = None, category: str | None = None) -> List[Tuple[str, int]]:
+        """Files index_all would embed (the dry-run view, #18129); touches no store."""
+        files = _select_files(self._root_dir, tier, category)
+        return files if force else _filter_changed_files(files, _load_hash_cache(), self._root_dir)[0]
+
+    def resolve_tier(self, file_path: Path) -> int:
+        """Tier of a discovered file; 3 when it is outside the discovery set (#18129)."""
+        return dict(_discover_files(self._root_dir)).get(str(file_path), 3)
+
+    async def index_all(self, force: bool = False, tier: int | None = None, category: str | None = None) -> IndexResult:
+        """Index every documentation file (or one ``tier`` / ``category``); force ignores the hash cache."""
         start_time = time.time()
 
         if not self._initialized:
             if not await self.initialize():
                 return IndexResult(errors=["Failed to initialize"])
 
-        files = _discover_files(self._root_dir)
+        files = _select_files(self._root_dir, tier, category)
         total_result = IndexResult(total_files=len(files))
 
         if not files:
             logger.warning("No documentation files discovered in %s", self._root_dir)
             return total_result
-
-        # If collection is empty, force full indexing regardless of cache (#4350)
-        if not force and self.needs_indexing():
-            logger.info(
-                "Collection empty — forcing full indexing despite cache to ensure " "documentation is available"
-            )
-            force = True
-        # Issue #10420: a dim-mismatch recreate has now been honoured by forcing
-        # a full re-embed; clear the flag so a later init is idempotent.
-        self._needs_reindex = False
-
-        # Incremental mode: filter to changed files
-        new_hashes: Dict[str, str] = {}
-        if not force:
-            files, new_hashes, early = self._apply_incremental_filter(files, total_result, start_time)
-            if early:
-                return total_result
-        else:
-            # In force mode, compute hashes for all files to update cache
-            hash_cache = {}  # Empty cache treats all as changed
-            files, new_hashes = _filter_changed_files(files, hash_cache, self._root_dir)
+        force, refused = self._begin_run(force, len(files))
+        if refused:
+            return refused
+        planned = self._plan_run(force, files, total_result, start_time)
+        if planned is None:
+            return total_result
+        files, new_hashes = planned
 
         logger.info("Indexing %d documentation files...", len(files))
-        indexed_paths: List[str] = []
-        for file_path, tier in files:
-            before = total_result.success
-            await self._index_single_file_content(file_path, tier, total_result)
-            if total_result.success > before:
-                indexed_paths.append(file_path)
-
-        # Issue #4564: trigger KBSynthesizer after ingest (best-effort, non-blocking)
-        if indexed_paths:
-            asyncio.ensure_future(self._run_kb_synthesis(indexed_paths))
-
-        if new_hashes:
-            existing_cache = _load_hash_cache()
-            existing_cache.update(new_hashes)
-            _save_hash_cache(existing_cache)
-
+        indexed_paths = await self._index_listed_files(files, total_result, start_time)
+        if indexed_paths:  # Issue #4564: KBSynthesizer after ingest (best-effort)
+            fire_and_forget(self._run_kb_synthesis(indexed_paths), name="doc-indexer-kb-synthesis")
+        self._record_run(new_hashes)
         total_result.elapsed_seconds = round(time.time() - start_time, 2)
+        store_guard.log_run_summary(total_result, self._collection)
+        return total_result
 
-        logger.info(
-            "Documentation indexing complete: %d success, %d failed, "
-            "%d skipped in %.1fs (collection now has %d vectors)",
-            total_result.success,
-            total_result.failed,
-            total_result.skipped,
-            total_result.elapsed_seconds,
-            self._collection.count() if self._collection else 0,
+    def _begin_run(self, force: bool, file_count: int) -> tuple[bool, IndexResult | None]:
+        """Log the run start and decide force; a refusal comes back as a failed result (#20886)."""
+        store_guard.log_run_start(self.embedding_model_name, get_ollama_url())
+        self._embed_progress = store_guard.EmbedProgress()
+        try:
+            return self._resolve_force(force), None
+        except (store_guard.CollectionCountUnknown, store_guard.StoreLocationChanged) as e:
+            logger.error("Doc indexer refusing to re-embed: %s", e)
+            return force, IndexResult(total_files=file_count, errors=[str(e)])
+
+    def _plan_run(self, force, files, total_result, start_time):
+        """(files to embed, new hashes), or None when nothing changed. Force hashes every file."""
+        if force:
+            return _filter_changed_files(files, {}, self._root_dir)
+        files, new_hashes, early = self._apply_incremental_filter(files, total_result, start_time)
+        return None if early else (files, new_hashes)
+
+    def _resolve_force(self, force: bool) -> bool:
+        """Whether this run re-embeds everything; raises on an unknown count or a moved store (#20886)."""
+        reason = None if force else self._full_reindex_reason()  # empty collection forces a full index (#4350)
+        if reason or force:
+            logger.info("Full reindex: %s", reason or "force requested")
+        self._needs_reindex = False  # #10420: the dim-mismatch recreate is honoured by this run
+        return force or bool(reason)
+
+    async def _index_listed_files(
+        self, files: List[Tuple[str, int]], total_result: IndexResult, start_time: float
+    ) -> List[str]:
+        """Index each file in turn with per-file progress; return the paths that stored chunks."""
+        return await store_guard.index_listed_files(
+            self._index_single_file_content, files, total_result, start_time, self._embed_progress, self._root_dir
         )
 
-        return total_result
+    def _record_run(self, new_hashes: Dict[str, str]) -> None:
+        """Persist the hash cache (a failed document gets no hash) and the store this run embedded into."""
+        if new_hashes:
+            failed = [_normalize_path(p, self._root_dir)[1] for p in self._embed_progress.failed]
+            recorded = store_guard.load_recorded_store(HASH_CACHE_FILE)
+            same_store = recorded in (None, self._store)
+            _save_hash_cache(store_guard.surviving_hashes(_load_hash_cache(), new_hashes, failed, same_store))
+            store_guard.save_recorded_store(self._store, HASH_CACHE_FILE)
+
+    async def open_store_for_adoption(self) -> tuple[str, Any]:
+        """The configured store and its existing collection, without initialising or recreating it (#20886)."""
+        return await store_guard.open_store_for_adoption(self._root_dir, self.COLLECTION_NAME)
 
     async def rebuild_from_scratch(self) -> IndexResult:
         """Delete the collection and re-index only what the current tree contains (#16934).
@@ -1156,7 +982,7 @@ class DocIndexerService:
         if not self._initialized:
             if not await self.initialize():
                 return IndexResult(errors=["Failed to initialize"])
-        self._client.delete_collection(self.COLLECTION_NAME)
+        await drop_collection(self._client, self.COLLECTION_NAME)
         self._initialized = False
         self._collection = None
         return await self.index_all(force=True)
@@ -1190,13 +1016,11 @@ class DocIndexerService:
         Issue #4953: expose doc search so RAGService can merge results with
         the main KB, giving the agent access to AutoBot's own documentation.
 
-        Returns SearchResult objects (from advanced_rag_optimizer).
+        Returns RankedResult objects (from advanced_rag_optimizer).
         Returns an empty list if not initialised, collection is empty, or on
         any error — callers always receive a safe (possibly empty) list.
         """
-        import asyncio
-
-        from advanced_rag_optimizer import SearchResult
+        from advanced_rag_optimizer import RankedResult
 
         if not self._initialized or self._collection is None or self._embed_model is None:
             return []
@@ -1221,15 +1045,15 @@ class DocIndexerService:
         documents = raw.get("documents", [[]])[0]
         metadatas = raw.get("metadatas", [[]])[0]
         distances = raw.get("distances", [[]])[0]
+        row_ids = (raw.get("ids") or [[""] * len(documents)])[0]
 
         results = []
         for i, (doc, meta, dist) in enumerate(zip(documents, metadatas, distances)):
-            # ChromaDB cosine distance → similarity score
-            score = max(0.0, 1.0 - dist)
+            score = max(0.0, 1.0 - dist)  # ChromaDB cosine distance → similarity score
             results.append(
-                SearchResult(
+                RankedResult(
                     content=doc or "",
-                    metadata={**meta, "source": "autobot_docs"},
+                    metadata={**carry_store_id(meta, row_ids[i] if i < len(row_ids) else ""), "source": "autobot_docs"},
                     semantic_score=score,
                     keyword_score=0.0,
                     hybrid_score=score,

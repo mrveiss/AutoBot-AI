@@ -102,7 +102,7 @@ def _make_redis(*, minute_count: int = 0, hour_count: int = 0) -> AsyncMock:
 
     redis.zcount = _zcount  # type: ignore[assignment]
 
-    async def _eval(script, numkeys, hour_key, now, rpm, rph):
+    async def _eval(script, numkeys, hour_key, seq_key, now, rpm, rph):
         return 0 if (minute_count >= rpm or hour_count >= rph) else 1
 
     redis.eval = AsyncMock(side_effect=_eval)
@@ -490,7 +490,7 @@ def _make_window_redis(*, count: int, oldest_ts_offset: float = 10.0) -> AsyncMo
     now = time.time()
     oldest_ts = now - oldest_ts_offset
 
-    async def _eval(script, numkeys, win_key, now_arg, window, max_requests):
+    async def _eval(script, numkeys, win_key, seq_key, now_arg, window, max_requests):
         if count >= max_requests:
             retry_after = window - (now_arg - oldest_ts)
             return [0, str(retry_after)]

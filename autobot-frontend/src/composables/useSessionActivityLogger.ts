@@ -29,6 +29,7 @@ import { inject } from 'vue'
 import { useChatStore, type SessionActivity } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
 import type { ApiClientType } from '@/plugins/api'
+import type { SecretType } from '@/types/secretKind'
 
 // Create scoped logger
 const logger = createLogger('SessionActivityLogger')
@@ -84,7 +85,8 @@ export type SecretUsageAction =
 /**
  * Secret type matching backend enum
  */
-export type SecretType = 'ssh_key' | 'password' | 'api_key' | 'token' | 'certificate' | 'database_url' | 'other'
+// #15008: the canonical kinds from the generated API types, not a hand-kept subset
+export type { SecretType } from '@/types/secretKind'
 
 /**
  * Options for activity logging
@@ -394,17 +396,10 @@ export function useSessionActivityLogger(): UseSessionActivityLoggerReturn {
 
     const userId = getCurrentUserId()
 
-    // Map SecretType to SessionSecret type
-    const sessionSecretType = secretType === 'ssh_key' ? 'ssh_key' :
-                              secretType === 'api_key' ? 'api_key' :
-                              secretType === 'token' ? 'token' :
-                              secretType === 'password' ? 'password' :
-                              secretType === 'certificate' ? 'certificate' : 'api_key'
-
     return chatStore.addSessionSecret(sessionId, {
       id: secretId,
       name: secretName,
-      type: sessionSecretType,
+      type: secretType,
       scope,
       ownerId: userId
     })

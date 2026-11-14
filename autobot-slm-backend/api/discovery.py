@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
-from models.database import Node, Service, ServiceStatus
+from models.database import Node, Service, SystemdState
 from models.schemas import ServiceDiscoveryListResponse, ServiceDiscoveryResponse
 from services.auth import get_current_user
 from services.database import get_db
@@ -63,7 +63,7 @@ async def discover_service(
 
     if prefer_healthy:
         query = query.order_by(
-            (Service.status == ServiceStatus.RUNNING.value).desc(),
+            (Service.status == SystemdState.RUNNING.value).desc(),
             Node.hostname,
         )
 
@@ -77,7 +77,7 @@ async def discover_service(
         )
 
     service, node = row
-    is_healthy = service.status == ServiceStatus.RUNNING.value
+    is_healthy = service.status == SystemdState.RUNNING.value
 
     return ServiceDiscoveryResponse(
         service_name=service.service_name,
@@ -123,7 +123,7 @@ async def discover_service_all(
 
     instances = []
     for service, node in rows:
-        is_healthy = service.status == ServiceStatus.RUNNING.value
+        is_healthy = service.status == SystemdState.RUNNING.value
         instances.append(
             ServiceDiscoveryResponse(
                 service_name=service.service_name,
@@ -154,7 +154,7 @@ async def discover_all_services(
     query = select(Service, Node).join(Node, Service.node_id == Node.node_id).where(Service.is_discoverable.is_(True))
 
     if healthy_only:
-        query = query.where(Service.status == ServiceStatus.RUNNING.value)
+        query = query.where(Service.status == SystemdState.RUNNING.value)
 
     query = query.order_by(Service.service_name, Node.hostname)
 
@@ -166,7 +166,7 @@ async def discover_all_services(
         if service.service_name not in services_map:
             services_map[service.service_name] = []
 
-        is_healthy = service.status == ServiceStatus.RUNNING.value
+        is_healthy = service.status == SystemdState.RUNNING.value
         services_map[service.service_name].append(
             ServiceDiscoveryResponse(
                 service_name=service.service_name,

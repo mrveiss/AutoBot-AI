@@ -9,20 +9,22 @@ Loaded by explicit path (review of #14047): ``pytest.ini`` sets
 ``--import-mode=importlib``, which does NOT add a test's own directory to
 ``sys.path`` (documented at pytest.ini lines 10-13 for the same trap in
 ``pipeline-scripts``), so a bare ``from start_monitoring import ...`` fails
-under real pytest invocation. ``autobot-infrastructure`` is also not in
-``pytest.ini`` testpaths, so this file does not run in CI yet (tracking
-issue: wiring gap, filed alongside #14047) -- explicit-path loading makes it
-individually correct so it starts passing the moment that gap closes, with
-no further changes needed here.
+under real pytest invocation. This directory is a ``pytest.ini`` testpath
+and is named by the CI invocations (#17906 AC4), so it runs.
+
+Loading the launcher runs its ``sys.path`` bootstrap, so the fixture hands it
+a copy of ``sys.path`` that is restored afterwards: in a shared CI session the
+repository root at index 0 would otherwise shadow later tests' imports.
 """
 
 import importlib.util
 import logging
+import sys
 from pathlib import Path
 
 import pytest
 
-from constants.threshold_constants import CategoryDefaults
+from autobot_shared.ssot_constants import CategoryDefaults
 
 _MODULE_PATH = Path(__file__).parent / "start_monitoring.py"
 
@@ -35,7 +37,8 @@ def _load_start_monitoring():
 
 
 @pytest.fixture()
-def PerformanceMonitoringManager():
+def PerformanceMonitoringManager(monkeypatch):
+    monkeypatch.setattr(sys, "path", list(sys.path))
     return _load_start_monitoring().PerformanceMonitoringManager
 
 

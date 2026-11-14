@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
+from constants.rag_graph_constants import RAG_GRAPH_TIMEOUT_SECONDS, RAG_GRAPH_TRAVERSAL_DEPTH, RAG_GRAPH_WEIGHT
 from knowledge.search_components.reranking import RerankWeights
 from type_defs.common import Metadata
 
@@ -44,7 +45,6 @@ class RAGConfig:
 
     # Reranking
     enable_reranking: bool = True
-    reranking_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     # Issue #2004: Configurable blend weights; defaults preserve legacy 0.8/0.2 behaviour.
     rerank_weights: RerankWeights = field(default_factory=RerankWeights)
     # Issue #2090: MMR diversity pass lambda (0.0 = disabled, backward-compatible).
@@ -57,6 +57,14 @@ class RAGConfig:
     # Issue #10600: relevance floor for the optimizer hybrid path.
     # 0.0 = no floor (default, no behaviour change).
     min_score: float = model_config.RAG_MIN_SCORE
+
+    # Issue #18141: weight of the graph signal in the one pre-rerank blend
+    # (knowledge.rag.graph_weight); read by graph-RAG and the Neural Mesh retriever.
+    graph_weight: float = RAG_GRAPH_WEIGHT
+    # Issue #18141: graph expansion depth when a caller passes none (graph_aware_search, KAG).
+    graph_traversal_depth: int = RAG_GRAPH_TRAVERSAL_DEPTH
+    # Issue #18141: graph-RAG search deadline; the one named override of timeout_seconds.
+    graph_timeout_seconds: float = RAG_GRAPH_TIMEOUT_SECONDS
 
     # Performance (from model_config)
     cache_ttl_seconds: int = model_config.DEFAULT_CACHE_TTL
@@ -180,6 +188,15 @@ class RAGConfig:
         if not 0.0 <= self.mmr_lambda <= 1.0:
             raise ValueError(f"mmr_lambda must be in [0, 1], got {self.mmr_lambda}")
 
+        if not 0.0 <= self.graph_weight <= 1.0:
+            raise ValueError(f"graph_weight must be in [0, 1], got {self.graph_weight}")
+
+        if self.graph_timeout_seconds <= 0:
+            raise ValueError(f"graph_timeout_seconds must be > 0, got {self.graph_timeout_seconds}")
+
+        if self.graph_traversal_depth < 1:
+            raise ValueError(f"graph_traversal_depth must be >= 1, got {self.graph_traversal_depth}")
+
         # Issue #10600: relevance floor must be non-negative.
         if self.min_score < 0.0:
             raise ValueError(f"min_score must be >= 0, got {self.min_score}")
@@ -228,7 +245,6 @@ class RAGConfig:
             "default_context_length": self.default_context_length,
             "max_context_length": self.max_context_length,
             "enable_reranking": self.enable_reranking,
-            "reranking_model": self.reranking_model,
             # Issue #2004: serialise as a plain dict for YAML round-trips.
             # Issue #2111: staleness weight added.
             "rerank_weights": {
@@ -244,6 +260,9 @@ class RAGConfig:
             # Issue #10600: BM25 hybrid + relevance floor flags.
             "bm25_hybrid_enabled": self.bm25_hybrid_enabled,
             "min_score": self.min_score,
+            "graph_weight": self.graph_weight,
+            "graph_traversal_depth": self.graph_traversal_depth,
+            "graph_timeout_seconds": self.graph_timeout_seconds,
             "cache_ttl_seconds": self.cache_ttl_seconds,
             "timeout_seconds": self.timeout_seconds,
             "enable_advanced_rag": self.enable_advanced_rag,

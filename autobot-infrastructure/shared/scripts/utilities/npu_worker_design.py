@@ -18,14 +18,12 @@ tool prints what it would write, and ``--apply`` is required to write it.
 
 import argparse
 import json
-import os
-import tempfile
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict
 
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.generated_file_output import report_output, write_atomically
+from autobot_shared.logging_manager import get_logger, setup_logging
 from autobot_shared.paths import project_root
 
 logger = get_logger(__name__)
@@ -336,48 +334,9 @@ class NPUWorkerArchitecture:
         print(f"   Availability: {perf['availability']}")
 
 
-def write_atomically(file_path: Path, content: str) -> None:
-    """Replace ``file_path``'s contents with ``content`` via temp-then-rename.
-
-    A write that fails or is interrupted partway through would otherwise
-    leave a truncated architecture file on disk (#14563, following #14546).
-    Writing to a sibling temp file first and renaming it into place means
-    ``file_path`` is only ever replaced once the new content is fully
-    written -- the rename is atomic on the same filesystem, and a crash
-    before it leaves any pre-existing file untouched.
-    """
-    original_mode = file_path.stat().st_mode if file_path.exists() else 0o644
-    fd, tmp_name = tempfile.mkstemp(dir=file_path.parent, prefix=f".{file_path.name}.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
-            tmp_file.write(content)
-        os.chmod(tmp_name, original_mode)
-        os.replace(tmp_name, file_path)
-    except BaseException:
-        Path(tmp_name).unlink(missing_ok=True)
-        raise
-
-
-def report_output(target: Path, content: str, apply_changes: bool) -> None:
-    """Print what generating ``target`` would change (or just changed)."""
-    verb = "Wrote" if apply_changes else "Would write"
-    if not target.exists():
-        print(f"  {verb} {target} ({len(content)} bytes, new file)")
-        return
-
-    existing = target.read_text(encoding="utf-8")
-    if existing == content:
-        print(f"  (unchanged) {target}: content already up to date")
-        return
-
-    print(f"  {verb} {target} ({len(existing)} -> {len(content)} bytes, existing file would be replaced)")
-
-
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the CLI parser. Dry-run is the default; --apply opts into writing."""
-    parser = argparse.ArgumentParser(
-        description="Generate NPU_WORKER_ARCHITECTURE.json (safe by default: dry-run)."
-    )
+    parser = argparse.ArgumentParser(description="Generate NPU_WORKER_ARCHITECTURE.json (safe by default: dry-run).")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--dry-run",
@@ -422,4 +381,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     exit(main())

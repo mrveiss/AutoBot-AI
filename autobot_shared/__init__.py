@@ -5,12 +5,18 @@
 """AutoBot shared utilities - deployed with each backend component.
 
 Issue #1196: Lazy imports via __getattr__ to break circular import:
-  autobot_shared.__init__ → redis_client → utils.redis_management
+  autobot_shared.__init__ → redis_client → autobot_shared.redis_management
   → monitoring.prometheus_metrics → autobot_shared (CIRCULAR)
 """
 
 import sys
 from pathlib import Path
+
+from autobot_shared.python_floor import require_supported_python
+
+# Refuse an interpreter below the .python-version floor before anything else
+# imports, so the failure names the cause instead of a 3.11+ construct (#20903).
+require_supported_python()
 
 # Add backend directory to Python path for imports (Issue #781 folder reorganization)
 _backend_path = Path(__file__).parent.parent / "backend"

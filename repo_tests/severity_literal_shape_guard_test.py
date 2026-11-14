@@ -60,6 +60,7 @@ from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.status_enums import Severity
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import TRACKED_PY_FLOOR
 
 REPO_ROOT = repo_root()
@@ -378,13 +379,15 @@ def test_the_scanned_population_still_dwarfs_the_guarded_shape():
 # `Severity` — but nothing asserted that, so a re-declaration would have been
 # invisible. These two tests pin the collapse and the reason it was safe.
 _CAUSAL_ENGINE = "autobot-backend/services/causal_inference_engine.py"
+# #13422: the report dataclass (and its to_dict) moved here from the engine.
+_CAUSAL_MODELS = "autobot-backend/services/causal_inference_models.py"
 _DIAGNOSTICS = "autobot-backend/api/diagnostics.py"
 
 
 def _module_ast(rel: str) -> ast.Module:
     path = REPO_ROOT / rel
     assert path.exists(), f"#14988: {rel} is gone — the guard has no target"
-    return ast.parse(path.read_text(encoding="utf-8"))
+    return parse_cache.parse(path.read_text(encoding="utf-8"))
 
 
 def test_causal_severity_is_still_an_alias_of_the_canonical_enum():
@@ -418,9 +421,9 @@ def test_the_causal_report_still_crosses_the_wire_as_a_value():
     halves of that path are pinned: the report emits `.value`, and the endpoint
     returns `to_dict()` rather than the dataclass.
     """
-    engine = (REPO_ROOT / _CAUSAL_ENGINE).read_text(encoding="utf-8")
+    engine = (REPO_ROOT / _CAUSAL_MODELS).read_text(encoding="utf-8")
     assert '"severity": self.severity.value' in engine, (
-        f"#14988: {_CAUSAL_ENGINE} no longer serialises severity via .value — "
+        f"#14988: {_CAUSAL_MODELS} no longer serialises severity via .value — "
         "a plain Enum does not stringify itself, so the wire value changed"
     )
     endpoint = (REPO_ROOT / _DIAGNOSTICS).read_text(encoding="utf-8")

@@ -127,7 +127,7 @@ def _real_dependency(flags, spy: _Spy):
             patch.object(
                 SessionOwnershipValidator,
                 "_get_authenticated_user",
-                MagicMock(return_value={"username": INTRUDER, "user_id": "bob-id", "auth_disabled": False}),
+                AsyncMock(return_value={"username": INTRUDER, "user_id": "bob-id", "auth_disabled": False}),
             )
         )
 

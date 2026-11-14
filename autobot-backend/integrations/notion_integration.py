@@ -34,6 +34,7 @@ from integrations.base import (
     IntegrationHealth,
     IntegrationStatus,
 )
+from knowledge.connectors.egress import VENDOR_API_EGRESS
 
 logger = get_logger(__name__)
 
@@ -322,7 +323,7 @@ class NotionIntegration(BaseIntegration):
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with get_http_client().tracked_request(
-                method, url, headers=headers, json=json_data, timeout=timeout
+                method, url, headers=headers, json=json_data, timeout=timeout, guard_egress=VENDOR_API_EGRESS
             ) as resp:
                 body = await resp.json(content_type=None)
                 return {"status_code": resp.status, "body": body}

@@ -16,9 +16,9 @@ Usage (CLI):
     python -m rlm.benchmark --queries 5 --output results.json
 
 Usage (programmatic):
-    from rlm.benchmark import run_benchmark
+    from rlm.benchmark import run_rlm_benchmark
 from autobot_shared.logging_manager import get_logger
-    results = await run_benchmark()
+    results = await run_rlm_benchmark()
 """
 
 import json
@@ -232,7 +232,7 @@ async def _run_rlm_pass(
 # -----------------------------------------------------------------------
 
 
-async def run_benchmark(
+async def run_rlm_benchmark(
     queries: List[Dict[str, Any]] | None = None,
     model: str = DEFAULT_LLM_MODEL,
     rlm_config: RLMConfig | None = None,
@@ -349,7 +349,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     async def _main():
-        results = await run_benchmark(max_queries=args.queries, model=args.model)
+        results = await run_rlm_benchmark(max_queries=args.queries, model=args.model)
         output = json.dumps(results, indent=2)
         if args.output:
             with open(args.output, "w", encoding="utf-8") as f:

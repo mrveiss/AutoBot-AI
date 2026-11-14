@@ -22,8 +22,8 @@
   become: true
   become_user: autobot
   vars:
-    autobot_base_dir: "/opt/autobot"
-    python_venv: "{{ autobot_base_dir }}/venv"
+    # autobot.base_dir comes from inventory/group_vars/all.yml, the one definition (#18880).
+    python_venv: "{{ autobot.base_dir }}/venv"
     create_admin: false
     admin_username: "admin"
     admin_email: "admin@autobot.local"
@@ -152,7 +152,7 @@
 
     - name: Create RBAC initialization script
       copy:
-        dest: "{{ autobot_base_dir }}/scripts/init_rbac.py"
+        dest: "{{ autobot.base_dir }}/scripts/init_rbac.py"
         mode: '0755'
         content: |
           #!/usr/bin/env python3
@@ -178,7 +178,7 @@
           import argparse
 
           # Add project root to path
-          sys.path.insert(0, '{{ autobot_base_dir }}')
+          sys.path.insert(0, '{{ autobot.base_dir }}')
 
           from src.user_management.models.role import (
               Permission, Role, RolePermission,
@@ -385,7 +385,7 @@
 
     - name: Run RBAC initialization script
       command: >
-        {{ python_venv }}/bin/python {{ autobot_base_dir }}/scripts/init_rbac.py
+        {{ python_venv }}/bin/python {{ autobot.base_dir }}/scripts/init_rbac.py
         {% if create_admin %}
         --create-admin
         --admin-username "{{ admin_username }}"
@@ -395,10 +395,18 @@
         {% endif %}
         {% endif %}
       args:
-        chdir: "{{ autobot_base_dir }}"
+        chdir: "{{ autobot.base_dir }}"
       environment:
-        PYTHONPATH: "{{ autobot_base_dir }}"
+        PYTHONPATH: "{{ autobot.base_dir }}"
       register: rbac_init_result
+      # #19846: the command line carries the admin password hash; the check below keeps a failure readable
+      no_log: true
+      failed_when: false
+
+    - name: Check RBAC initialization succeeded
+      assert:
+        that: rbac_init_result.rc == 0
+        fail_msg: "init_rbac.py exited {{ rbac_init_result.rc }}: {{ rbac_init_result.stderr_lines | default([]) | last | default('') }}"
 
     - name: Display RBAC initialization results
       debug:
@@ -444,8 +452,8 @@
   become: true
   become_user: autobot
   vars:
-    autobot_base_dir: "/opt/autobot"
-    python_venv: "{{ autobot_base_dir }}/venv"
+    # autobot.base_dir comes from inventory/group_vars/all.yml, the one definition (#18880).
+    python_venv: "{{ autobot.base_dir }}/venv"
 
   tasks:
     - name: Verify permissions count in database
@@ -453,7 +461,7 @@
         {{ python_venv }}/bin/python -c "
         import asyncio
         import sys
-        sys.path.insert(0, '{{ autobot_base_dir }}')
+        sys.path.insert(0, '{{ autobot.base_dir }}')
         from src.user_management.models.role import Permission
         from src.user_management.models.base import get_session
         from sqlalchemy import select, func
@@ -466,9 +474,9 @@
         print(asyncio.run(count()))
         "
       args:
-        chdir: "{{ autobot_base_dir }}"
+        chdir: "{{ autobot.base_dir }}"
       environment:
-        PYTHONPATH: "{{ autobot_base_dir }}"
+        PYTHONPATH: "{{ autobot.base_dir }}"
       register: perm_count
       changed_when: false
 
@@ -477,7 +485,7 @@
         {{ python_venv }}/bin/python -c "
         import asyncio
         import sys
-        sys.path.insert(0, '{{ autobot_base_dir }}')
+        sys.path.insert(0, '{{ autobot.base_dir }}')
         from src.user_management.models.role import Role
         from src.user_management.models.base import get_session
         from sqlalchemy import select, func
@@ -490,9 +498,9 @@
         print(asyncio.run(count()))
         "
       args:
-        chdir: "{{ autobot_base_dir }}"
+        chdir: "{{ autobot.base_dir }}"
       environment:
-        PYTHONPATH: "{{ autobot_base_dir }}"
+        PYTHONPATH: "{{ autobot.base_dir }}"
       register: role_count
       changed_when: false
 

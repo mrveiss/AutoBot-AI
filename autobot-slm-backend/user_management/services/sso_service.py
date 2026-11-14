@@ -21,6 +21,7 @@ from sqlalchemy import or_, select
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_constants import TTL_10_MINUTES
+from autobot_shared.user_management import sso_account_policy as account_policy
 from user_management.models.role import Role
 from user_management.models.sso import SSOProvider, SSOProviderType, UserSSOLink
 from user_management.models.user import User
@@ -400,6 +401,7 @@ class SSOService(BaseService):
             "username": username,
             "avatar_url": userinfo.get("picture"),
             "groups": self._normalize_groups(userinfo.get("groups")),
+            "email_verified": account_policy.asserted_email_verified(userinfo),
         }
 
     def _build_ldap_connection(self, provider: SSOProvider, username: str, password: str) -> Any:
@@ -738,41 +740,36 @@ class SSOService(BaseService):
                 await user_svc.revoke_role(user.id, role.id)
 
     async def _find_or_provision_user(self, provider: SSOProvider, external_id: str, user_data: dict[str, Any]) -> User:
-        """Find existing user or provision new one via JIT.
-
-        Group→role reconciliation runs in both paths so roles re-sync on every
-        login, not only at first JIT provisioning.
-        """
+        """The linked, linked-by-policy or JIT user; never an ineligible one (#18338). Groups re-sync each login."""
         link = await self._find_existing_sso_link(provider.id, external_id)
         if link:
             link.record_login()
             await self.session.flush()
-            result = await self.session.execute(select(User).where(User.id == link.user_id))
-            user = result.scalar_one()
-            try:
-                await self._sync_idp_groups_to_roles(user, provider, user_data.get("groups"))
-            except Exception:
-                logger.warning(
-                    "IdP group->role sync failed for user %s; proceeding with login",
-                    user.id,
-                    exc_info=True,
-                )
-            return user
+            user = (await self.session.execute(select(User).where(User.id == link.user_id))).scalar_one()
+        else:
+            user = await self._link_or_create_user(provider, external_id, user_data)
+        _refuse_if(account_policy.account_refusal(user))
+        try:
+            await self._sync_idp_groups_to_roles(user, provider, user_data.get("groups"))
+        except Exception:
+            logger.warning("IdP group->role sync failed for user %s; proceeding with login", user.id, exc_info=True)
+        return user
+
+    async def _link_or_create_user(self, provider: SSOProvider, external_id: str, user_data: dict[str, Any]) -> User:
+        """Link an existing account by email only under the policy; otherwise JIT-provision."""
         if not provider.allow_user_creation:
             raise SSOAuthenticationError("User not found and auto-provisioning is disabled")
         email = user_data.get("email")
         if not email:
             raise SSOAuthenticationError("Email not provided by SSO provider")
         user = await self._find_user_by_email(email)
-        if not user:
-            user = await self._create_sso_user(provider, user_data)
+        _refuse_if(account_policy.email_link_refusal(provider, user_data, user) if user else None)
+        user = user or await self._create_sso_user(provider, user_data)
         await self._create_sso_link(user, provider, external_id, user_data)
-        try:
-            await self._sync_idp_groups_to_roles(user, provider, user_data.get("groups"))
-        except Exception:
-            logger.warning(
-                "IdP group->role sync failed for user %s; proceeding with login",
-                user.id,
-                exc_info=True,
-            )
         return user
+
+
+def _refuse_if(reason: str | None) -> None:
+    """Raise the SSO refusal for *reason*, if there is one."""
+    if reason:
+        raise SSOAuthenticationError(f"SSO login refused: {reason}")

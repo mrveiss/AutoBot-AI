@@ -361,12 +361,7 @@ get_container = lazy_singleton(AsyncServiceContainer)
 
 
 # Convenience functions for common services
-async def get_config() -> ConfigManager:
-    """Get config manager"""
-    return await get_container().get_service("config")
-
-
-async def get_llm() -> LLMService:
+async def get_llm_from_container() -> LLMService:
     """Get LLM service (#3185)"""
     return await get_container().get_service("llm")
 

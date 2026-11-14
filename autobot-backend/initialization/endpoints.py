@@ -14,10 +14,10 @@ from typing import Any, Dict
 
 from fastapi import FastAPI, Request
 
+from autobot_shared.circuit_breaker import get_circuit_breaker_manager
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import ConnectionStatus
-from circuit_breaker import get_circuit_breaker_manager
 
 logger = get_logger(__name__)
 

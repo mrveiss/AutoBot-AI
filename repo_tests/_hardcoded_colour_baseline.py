@@ -59,7 +59,6 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#10b981": 2,
     "#1a1b26": 1,
     "#1e1e1e": 2,
-    "#1f2937": 1,
     "#264f78": 1,
     "#2ecc71": 1,
     "#313244": 1,
@@ -86,13 +85,24 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#fecaca": 1,
     "#fef2f2": 1,
     "#ffeaa7": 1,
-    "#fff": 5,
+    "#fff": 3,
     "#fff3cd": 1,
-    "#ffffff": 4,
+    "#ffffff": 3,
 }
 
-#: Frozen total, asserted separately so a per-literal edit cannot drift it unseen.
-TOTAL_OCCURRENCES = 55
+#: ``lowercased hex literal -> times written instead of resolved`` in `autobot-slm-frontend/src`
+#: (#17567). Its own table, because the two apps move independently and one combined number hides
+#: that. Measured at ZERO with the same detector: the control plane's script/template colours are
+#: all resolved or absent. Measured with this detector: 0 outside `<style>`, and 14 `<style>` hex in
+#: 2 files (`OrgTreeNode.vue` 12, `UpdateNotification.vue` 2), which `color-no-hex` owns. #17567's
+#: table counted 19 there; the gap between 14 and 19 is unreconciled and unknown. An empty table is not
+#: "unscanned": the reach floor and a control fixture in the ratchet prove
+#: the tree is read. Shrink-only is trivially strict here: any entry is growth.
+SLM_HARDCODED_COLOUR_LITERALS: dict[str, int] = {}
+
+# No hand-maintained totals here (#19283): each entry is compared with this table at the base
+# commit (repo_tests/_ratchet_base.py), so a raised entry still fails and PRs lowering different
+# entries never edit a shared line.
 
 
 #: ``path under autobot-frontend/src -> `!important` declarations in its <style>``.
@@ -111,27 +121,35 @@ TOTAL_OCCURRENCES = 55
 #: them and the trade recorded against `MAX_UNCOVERED_READS` in
 #: `python_filter_uncovered_reads.py` is untouched.
 #:
-#: Shrink-only. Note the top three are chart components, where `!important` is
-#: usually fighting a third-party library's injected styles rather than
-#: overriding the design system -- so these want per-file reasoning at the time
-#: that component is opened, not a sweep. The ratchet stops growth; it does not
-#: claim each one is a defect.
+#: Shrink-only. Rules whose selector targets a vendor-injected class
+#: (`VENDOR_SELECTORS` in `_hardcoded_colour_detect.py`, each with its reason:
+#: `.apexcharts-*`, `.xterm*`) are not counted, so `BaseChart.vue` (19) and
+#: `SSHTerminal.vue` (1) left this table. What remains is not claimed to be all
+#: defects; the ratchet stops growth and the top entries want per-file reasoning
+#: at the time the component is opened.
 IMPORTANT_DECLARATIONS: dict[str, int] = {
     "components/audit/AuditLogTable.vue": 1,
-    "components/charts/BaseChart.vue": 19,
     "components/charts/FunctionCallGraph.vue": 12,
     "components/chat/ChatInterface.vue": 5,
     "components/knowledge/KnowledgeGraph.vue": 10,
-    "components/knowledge/panels/SourcePreviewPanel.vue": 1,
     "components/knowledge/pipeline/PipelineRunner.vue": 1,
     "components/operations/OperationsList.vue": 1,
     "components/security/SecretsManager.vue": 2,
-    "components/terminal/SSHTerminal.vue": 1,
     "components/ui/ProgressBar.vue": 2,
     "components/visualizations/ServiceMessageTimeline.vue": 1,
     "views/AdminUsersView.vue": 1,
-    "views/CustomDashboard.vue": 1,
+    # The control plane (#17567). Prefixed so its paths cannot collide with the
+    # user frontend's. Keyed like the rest; no per-file reason is claimed.
+    "slm:components/agents/OrgChartTab.vue": 1,
+    "slm:components/monitoring/GrafanaDashboard.vue": 1,
+    "slm:views/AgentsView.vue": 2,
 }
 
-#: Frozen total, asserted separately.
-TOTAL_IMPORTANT = 58
+#: ``path -> rules that fill with the primary token and write a literal white label`` (#20425).
+#:
+#: ``--color-primary`` is white in High Contrast Dark and pale in Dark, so a literal white label
+#: on it vanishes there; ``--text-on-primary`` follows the fill. Keyed like IMPORTANT_DECLARATIONS
+#: (the `slm:` prefix marks the control plane). Shrink-only: convert the label, then delete the
+#: entry. Every label now reads the token, so the table is empty and a new literal white label on a
+#: primary fill is a measured entry the pin does not hold.
+WHITE_ON_PRIMARY_LABELS: dict[str, int] = {}

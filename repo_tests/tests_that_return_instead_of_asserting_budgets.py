@@ -147,7 +147,9 @@ _KNOWN_OFFENDERS = {
     # sitting exactly on the 600-line cap and the paragraph would not fit; that
     # is the defect #15590 splits this module out to fix, so the note is restored
     # to its proper form here.
-    "autobot-infrastructure": (118, 250),
+    # 118 -> 110 with #19247 (redis slice 2): operator scripts moved onto the canonical client,
+    # measured by the guard (actual 110). A shrink, not a re-measurement.
+    "autobot-infrastructure": (110, 250),
     "autobot-npu-worker": (7, 150),
 }
 

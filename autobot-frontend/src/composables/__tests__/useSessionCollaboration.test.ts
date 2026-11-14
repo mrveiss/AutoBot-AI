@@ -41,6 +41,7 @@ vi.mock('@/utils/buildAuthenticatedWsUrl', () => ({
 const inviteToSession = vi.fn()
 const shareSecretWithSession = vi.fn()
 const getSessionEvents = vi.fn()
+const getSessionPresence = vi.fn()
 const getMyInvitations = vi.fn()
 const respondToInvitation = vi.fn()
 
@@ -49,6 +50,7 @@ vi.mock('@/services/api', () => ({
     inviteToSession: (...args: unknown[]) => inviteToSession(...args),
     shareSecretWithSession: (...args: unknown[]) => shareSecretWithSession(...args),
     getSessionEvents: (...args: unknown[]) => getSessionEvents(...args),
+    getSessionPresence: (...args: unknown[]) => getSessionPresence(...args),
     getMyInvitations: (...args: unknown[]) => getMyInvitations(...args),
     respondToInvitation: (...args: unknown[]) => respondToInvitation(...args)
   }
@@ -65,6 +67,7 @@ describe('useSessionCollaboration (#16443)', () => {
     inviteToSession.mockReset().mockResolvedValue({ success: true })
     shareSecretWithSession.mockReset().mockResolvedValue({ success: true })
     getSessionEvents.mockReset().mockResolvedValue({ session_id: 'session-1', events: [], has_more: false })
+    getSessionPresence.mockReset().mockResolvedValue({ session_id: 'session-1', online_users: [], count: 0 })
     getMyInvitations.mockReset().mockResolvedValue({ invitations: [] })
     respondToInvitation.mockReset().mockResolvedValue({ success: true, session_id: 'session-1', accepted: true, permission: 'viewer' })
   })
@@ -133,6 +136,41 @@ describe('useSessionCollaboration (#16443)', () => {
     })
 
     expect(sessionPresence.value.map(p => p.userId).sort()).toEqual(['user-a', 'user-b'])
+  })
+
+  it('seeds sessionPresence from GET .../presence on connect: one user, then several (#16754)', async () => {
+    getSessionPresence.mockResolvedValue({ session_id: 'session-1', online_users: ['user-a'], count: 1 })
+    const { joinSession, sessionPresence } = useSessionCollaboration()
+    joinSession('session-1')
+    await vi.advanceTimersByTimeAsync(20)
+    expect(getSessionPresence).toHaveBeenCalledWith('session-1')
+    expect(sessionPresence.value.map(p => p.userId)).toEqual(['user-a'])
+
+    getSessionPresence.mockResolvedValue({ session_id: 'session-1', online_users: ['user-a', 'user-b', 'user-c'], count: 3 })
+    MockWebSocket.getLatestInstance()!.simulateMessage({ type: 'user_joined', user_id: 'user-c', timestamp: new Date().toISOString() })
+    await vi.advanceTimersByTimeAsync(20)
+    expect(sessionPresence.value.map(p => p.userId).sort()).toEqual(['user-a', 'user-b', 'user-c'])
+  })
+
+  it('drops a participant the snapshot no longer lists and ignores non-string entries (#16754)', async () => {
+    getSessionPresence.mockResolvedValue({ session_id: 'session-1', online_users: ['user-a', 'user-b'], count: 2 })
+    const { joinSession, sessionPresence } = useSessionCollaboration()
+    joinSession('session-1')
+    await vi.advanceTimersByTimeAsync(20)
+
+    getSessionPresence.mockResolvedValue({ session_id: 'session-1', online_users: ['user-a', { id: 'x' }, 7], count: 3 })
+    MockWebSocket.getLatestInstance()!.simulateMessage({ type: 'user_left', user_id: 'user-z', timestamp: new Date().toISOString() })
+    await vi.advanceTimersByTimeAsync(20)
+    expect(sessionPresence.value.map(p => p.userId)).toEqual(['user-a'])
+  })
+
+  it('keeps the socket-fed presence when the presence request fails (#16754)', async () => {
+    getSessionPresence.mockRejectedValue(new Error('boom'))
+    const { joinSession, sessionPresence } = useSessionCollaboration()
+    joinSession('session-1')
+    await vi.advanceTimersByTimeAsync(20)
+    MockWebSocket.getLatestInstance()!.simulateMessage({ type: 'presence_sync', online_users: ['user-a'], timestamp: new Date().toISOString() })
+    expect(sessionPresence.value.map(p => p.userId)).toEqual(['user-a'])
   })
 
   it('adds and removes participants on user_joined / user_left', async () => {

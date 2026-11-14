@@ -12,11 +12,13 @@
  */
 
 import { ref, watch, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
+import { BaseAlert, createLogger } from '@autobot/ui'
+import UpdateNodesOfflineAlert from './UpdateNodesOfflineAlert.vue'
+import { useI18n } from 'vue-i18n'
 import {
   useCodeSync,
-  isSelfUpdateReconnecting,
-  classifyUpdateAllPollError,
   SLM_SELF_UPDATE_STAGE,
+  UPDATE_ALL_UNAUTHENTICATED,
   type PendingNode,
   type SyncOptions,
   type UpdateSchedule,
@@ -27,15 +29,20 @@ import {
   type ComponentSyncJobStatus,
   type FleetSyncJobStatus,
 } from '@/composables/useCodeSync'
-import { createLogger } from '@/utils/debugUtils'
-import { formatDateTime } from '@/composables/useTimezone'
+import { buildLoginUrl } from '@/utils/loginRedirect'
+import { useUpdateAllPoll } from '@/composables/useUpdateAllPoll'
+import UpdateAllPollBanner from '@/components/UpdateAllPollBanner.vue'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { getCommitHashDisplay, getCommitUrl } from '@/utils/commitHashUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'
 import CodeSourceModal from '@/components/CodeSourceModal.vue'
 import FullTreeDriftPanel from '@/components/FullTreeDriftPanel.vue' // #16310
+import CodeRollbackPanel from '@/components/CodeRollbackPanel.vue' // #20214
+import UpdateProgressPanel from '@/components/UpdateProgressPanel.vue' // #20254
 import { useCodeSource } from '@/composables/useCodeSource'
 
 const logger = createLogger('CodeSyncView')
+const { t } = useI18n()
 const codeSync = useCodeSync()
 
 // =============================================================================
@@ -139,13 +146,25 @@ let fleetSyncPollTimer: ReturnType<typeof setTimeout> | null = null
 // One-click update-all state (#9971)
 // =============================================================================
 const updateAllJob = ref<UpdateAllJob | null>(null)
-const updateAllPolling = ref(false)
-// F1: track consecutive transient errors to bound backoff
-const updateAllTransientErrors = ref(0)
-const UPDATE_ALL_MAX_TRANSIENT_ERRORS = 90  // ~3 min at 2s intervals
-const UPDATE_ALL_LOST_CONTACT_ERRORS = 30   // ~1 min before "lost contact" banner
-const updateAllLostContact = ref(false)
-let updateAllPollTimer: ReturnType<typeof setTimeout> | null = null
+// Polling state, its give-up/auth end states and the banner flags live in the composable (#20201).
+const {
+  polling: updateAllPolling, transientErrors: updateAllTransientErrors,
+  lostContact: updateAllLostContact,
+  gaveUp: updateAllGaveUp,
+  authFailed: updateAllAuthFailed,
+  reconnecting: updateAllReconnecting,
+  schedule: _scheduleUpdateAllPoll,
+  stop: _stopUpdateAllPoll,
+  recheck: handleRecheckUpdateAll,
+  clearFlags: _clearUpdateAllFlags,
+} = useUpdateAllPoll(
+  updateAllJob,
+  () => codeSync.getUpdateAllStatus(),
+  async () => {
+    // Refresh status / pending nodes once the pipeline finishes
+    await Promise.all([codeSync.fetchStatus(), codeSync.fetchPendingNodes()])
+  },
+)
 const showAdvanced = ref(false)
 const expandedStageLogs = ref<Set<string>>(new Set())
 
@@ -239,14 +258,6 @@ const updateAllIsRunning = computed(() => {
   return s === 'pending' || s === 'running'
 })
 
-// #12593: reconnecting affordance during the stage-3 (slm_self_update) window,
-// when the SLM control plane restarts itself and polling fails transiently.
-// Derives from the last-known running stage + transient-error count, so it
-// resets to false automatically as soon as a poll succeeds again.
-const updateAllReconnecting = computed(() =>
-  isSelfUpdateReconnecting(updateAllJob.value, updateAllTransientErrors.value),
-)
-
 // #12593: auto-expand stage-3 logs while reconnecting so the backend
 // "service will restart" message is visible during the restart window.
 watch(updateAllReconnecting, (reconnecting) => {
@@ -308,10 +319,6 @@ function toggleNode(nodeId: string): void {
 function formatVersion(version: string | null | undefined): string {
   // Use 12-character format for consistency (Issue #866)
   return getCommitHashDisplay(version).display
-}
-
-function formatDate(dateStr: string | null): string {
-  return formatDateTime(dateStr)
 }
 
 async function handleRefresh(): Promise<void> {
@@ -380,7 +387,7 @@ async function handleSyncSelected(): Promise<void> {
     // per-node failure and its `failure_reason` still reach the operator.
     trackFleetSyncJob(result.job_id)
     const count = nodeIds.length
-    successMessage.value = `Successfully synced ${count} node${count > 1 ? 's' : ''}`
+    successMessage.value = t('codeSyncView.syncedNodes', { count }, count)
 
     // Auto-dismiss after 5 seconds
     setTimeout(() => {
@@ -390,7 +397,7 @@ async function handleSyncSelected(): Promise<void> {
     selectedNodes.value.clear()
     await handleRefresh()
   } else {
-    codeSync.setError(result.message || 'Fleet sync failed')
+    codeSync.setError(result.message || t('codeSyncView.fleetSyncFailed'))
   }
 }
 
@@ -409,7 +416,7 @@ async function handleSyncAll(): Promise<void> {
     // #13157: same asynchronous rollout as handleSyncSelected.
     trackFleetSyncJob(result.job_id)
     const count = result.nodes_queued || codeSync.pendingNodes.value.length
-    successMessage.value = `Successfully queued sync for ${count} node${count > 1 ? 's' : ''}`
+    successMessage.value = t('codeSyncView.queuedSyncNodes', { count }, count)
 
     // Auto-dismiss after 5 seconds
     setTimeout(() => {
@@ -419,7 +426,7 @@ async function handleSyncAll(): Promise<void> {
     selectedNodes.value.clear()
     await handleRefresh()
   } else {
-    codeSync.setError(result.message || 'Fleet sync failed')
+    codeSync.setError(result.message || t('codeSyncView.fleetSyncFailed'))
   }
 }
 
@@ -445,7 +452,7 @@ async function handleSelfUpdate(): Promise<void> {
       await handleRefresh()
     }, 65000)
   } else {
-    codeSync.setError(result.message || 'Self-update failed')
+    codeSync.setError(result.message || t('codeSyncView.selfUpdateFailed'))
   }
 }
 
@@ -463,8 +470,8 @@ async function handlePullFromSource(): Promise<void> {
 
   if (result.success) {
     logger.info('Pulled from source:', result.commit)
-    const shortCommit = result.commit?.substring(0, 12) || 'unknown'
-    successMessage.value = `Successfully pulled latest changes (${shortCommit})`
+    const shortCommit = result.commit?.substring(0, 12) || t('codeSyncView.unknownCommit')
+    successMessage.value = t('codeSyncView.pulledLatestChanges', { commit: shortCommit })
 
     // Auto-dismiss success message after 5 seconds
     setTimeout(() => {
@@ -475,7 +482,7 @@ async function handlePullFromSource(): Promise<void> {
     await handleRefresh()
   } else {
     logger.error('Pull failed:', result.message)
-    codeSync.setError(result.message || 'Failed to pull from source')
+    codeSync.setError(result.message || t('codeSyncView.failedToPullFromSource'))
   }
 }
 
@@ -501,7 +508,7 @@ async function handleCodeSourceSaved(): Promise<void> {
 }
 
 async function handleRemoveCodeSource(): Promise<void> {
-  if (!confirm('Remove code source assignment?')) return
+  if (!confirm(t('codeSyncView.removeCodeSourceAssignment'))) return
   await codeSourceComposable.removeCodeSource()
 }
 
@@ -538,7 +545,7 @@ async function handleSaveSchedule(scheduleData: ScheduleCreateRequest): Promise<
 }
 
 async function handleDeleteSchedule(schedule: DeepReadonly<UpdateSchedule>): Promise<void> {
-  if (!confirm(`Delete schedule "${schedule.name}"?`)) return
+  if (!confirm(t('codeSyncView.deleteSchedule', { name: schedule.name }))) return
 
   const success = await codeSync.deleteSchedule(schedule.id)
   if (success) {
@@ -563,7 +570,7 @@ async function handleRunSchedule(schedule: DeepReadonly<UpdateSchedule>): Promis
 
 function formatNextRun(dateStr: string | null): string {
   if (!dateStr) return 'Not scheduled'
-  return formatDateTime(dateStr)
+  return formatFleetDateTime(dateStr)
 }
 
 function describeCron(expression: string): string {
@@ -629,7 +636,7 @@ async function _handleResolveDriftTerminal(result: ComponentSyncJobStatus): Prom
   _stopResolveDriftPoll()
   isResolvingDrift.value = false
   if (result.status === 'completed' && result.success) {
-    successMessage.value = result.message || `Resynced ${result.component} from code_source`
+    successMessage.value = result.message || t('codeSyncView.componentResynced', { component: result.component })
     await handleCheckDrift()
     return
   }
@@ -640,7 +647,7 @@ async function _handleResolveDriftTerminal(result: ComponentSyncJobStatus): Prom
   // the only sanctioned updater.
   resolveDriftBlocked.value = result.status === RESOLVE_STATUS_BLOCKED
   blockedDeletions.value = resolveDriftBlocked.value ? result.post_steps || [] : []
-  codeSync.setError(result.message || 'Drift resolve job failed')
+  codeSync.setError(result.message || t('codeSyncView.driftResolveJobFailed'))
 }
 
 /**
@@ -795,80 +802,13 @@ watch(showAdvanced, (open) => {
 // One-click update-all methods (#9971)
 // =============================================================================
 
-function _stopUpdateAllPoll(): void {
-  if (updateAllPollTimer) {
-    clearTimeout(updateAllPollTimer)
-    updateAllPollTimer = null
-  }
-  updateAllPolling.value = false
-}
-
-/**
- * F1: Resilient polling loop.
- *   - null   = 404, no job → stop
- *   - undefined = transient error (network/5xx) → keep polling with bounded backoff
- *   - UpdateAllJob = update UI, decide whether to continue
- */
-function _scheduleUpdateAllPoll(): void {
-  if (updateAllPolling.value) return
-  updateAllPolling.value = true
-  updateAllTransientErrors.value = 0
-
-  const poll = async () => {
-    const result = await codeSync.getUpdateAllStatus()
-
-    if (result === undefined) {
-      // Transient error (SLM restart in progress)
-      updateAllTransientErrors.value += 1
-      const decision = classifyUpdateAllPollError(
-        updateAllTransientErrors.value,
-        UPDATE_ALL_LOST_CONTACT_ERRORS,
-        UPDATE_ALL_MAX_TRANSIENT_ERRORS,
-      )
-      if (decision === 'giveup') {
-        // Gave up — show "lost contact" banner, re-enable CTA
-        updateAllLostContact.value = true
-        updateAllPolling.value = false
-        updateAllPollTimer = null
-        return
-      }
-      if (decision === 'lost-contact') {
-        updateAllLostContact.value = true
-      }
-      // Keep polling (backoff: 2s). During stage-3, updateAllReconnecting is
-      // already true (transient errors >= 1) so the reconnecting affordance
-      // shows immediately without waiting for the lost-contact threshold.
-      updateAllPollTimer = setTimeout(poll, 2000)
-      return
-    }
-
-    // Successful contact — clear lost-contact banner if it was showing
-    updateAllLostContact.value = false
-    updateAllTransientErrors.value = 0
-
-    if (result === null) {
-      // True 404: no job ever started → stop polling
-      _stopUpdateAllPoll()
-      return
-    }
-
-    updateAllJob.value = result
-    if (result.status === 'running' || result.status === 'pending') {
-      updateAllPollTimer = setTimeout(poll, 2000)
-    } else {
-      updateAllPolling.value = false
-      updateAllPollTimer = null
-      // Refresh status / pending nodes once pipeline finishes
-      await Promise.all([codeSync.fetchStatus(), codeSync.fetchPendingNodes()])
-    }
-  }
-
-  updateAllPollTimer = setTimeout(poll, 1000)
+function goToLogin(): void {
+  window.location.href = buildLoginUrl(window.location)
 }
 
 async function handleUpdateAll(): Promise<void> {
   codeSync.clearError()
-  updateAllLostContact.value = false
+  _clearUpdateAllFlags()
   const job = await codeSync.startUpdateAll()
   if (job) {
     updateAllJob.value = job
@@ -876,10 +816,10 @@ async function handleUpdateAll(): Promise<void> {
   }
 }
 
-// Resume polling if a job is already running when the view mounts
-async function _checkExistingUpdateAllJob(): Promise<void> {
-  const result = await codeSync.getUpdateAllStatus()
-  if (result === undefined || result === null) {
+// Follow the update-all job: the running one on mount, or the one a rollback just started (#20214, no re-fetch)
+async function adoptRunningUpdateAllJob(started?: UpdateAllJob): Promise<void> {
+  const result = started ?? (await codeSync.getUpdateAllStatus())
+  if (result === undefined || result === null || result === UPDATE_ALL_UNAUTHENTICATED) {
     return
   }
   updateAllJob.value = result
@@ -900,7 +840,7 @@ onMounted(async () => {
     codeSync.fetchSchedules(),
     codeSync.fetchRoles(),
     codeSourceComposable.fetchCodeSource(),
-    _checkExistingUpdateAllJob(),
+    adoptRunningUpdateAllJob(),
   ])
 })
 
@@ -914,7 +854,7 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <!-- Header -->
+    <UpdateNodesOfflineAlert :updating="updateAllPolling" />
     <div class="flex items-center justify-between mb-6">
       <div>
         <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.codeSync') }}</h2>
@@ -954,7 +894,6 @@ onUnmounted(() => {
           <p class="text-sm text-gray-500">{{ $t('codeSyncView.updatePipelineDesc') }}</p>
         </div>
         <div class="shrink-0">
-          <!-- Already current state -->
           <button
             v-if="!codeSync.hasUpdate.value && codeSync.outdatedCount.value === 0 && !updateAllIsRunning"
             disabled
@@ -1072,7 +1011,6 @@ onUnmounted(() => {
           </template>
         </div>
 
-        <!-- Expanded stage logs -->
         <template v-for="stage in updateAllJob.stages" :key="`log-${stage.name}`">
           <div
             v-if="expandedStageLogs.has(stage.name) && stage.log_lines.length > 0"
@@ -1083,12 +1021,12 @@ onUnmounted(() => {
         </template>
 
         <!-- Failure reason -->
-        <div
+        <BaseAlert
           v-if="updateAllJob.status === 'failed' && updateAllJob.failure_reason"
-          class="mt-3 bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700"
-        >
-          {{ updateAllJob.failure_reason }}
-        </div>
+          variant="error"
+          class="mt-3"
+          :message="updateAllJob.failure_reason"
+        />
 
         <!-- Partial: fleet stage skipped one or more non-operational nodes
              (#11511). The backend reports this as its own terminal status, so
@@ -1132,43 +1070,18 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-
-    <!-- #12593: reconnecting / lost-contact banner. Shows IMMEDIATELY (spinner)
-         during the stage-3 self-restart window; escalates to a static warning
-         with a retry CTA only once polling has lost contact / given up. -->
-    <div
-      v-if="updateAllLostContact || updateAllReconnecting"
-      class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-center justify-between"
-    >
-      <div class="flex items-center gap-3">
-        <svg
-          v-if="updateAllReconnecting && !updateAllLostContact"
-          class="w-5 h-5 text-amber-600 animate-spin"
-          fill="none" stroke="currentColor" viewBox="0 0 24 24"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-        <svg v-else class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <div class="flex-1">
-          <div class="font-medium text-amber-900">{{ $t('codeSyncView.sLMManagerRestarting') }}</div>
-          <div class="text-sm text-amber-700">
-            <span v-if="updateAllReconnecting && !updateAllLostContact">
-              {{ $t('codeSyncView.pipelineReconnectingAttempt', { attempt: updateAllTransientErrors }) }}
-            </span>
-            <span v-else>{{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}</span>
-          </div>
-        </div>
-      </div>
-      <button
-        v-if="updateAllLostContact"
-        @click="updateAllLostContact = false; handleUpdateAll()"
-        class="btn btn-secondary text-sm shrink-0 ml-4"
-      >
-        {{ $t('codeSyncView.updateAll') }}
-      </button>
-    </div>
+    <UpdateProgressPanel :active="updateAllIsRunning" :since="updateAllJob?.created_at" class="mb-6" />
+    <!-- #12593/#20201: reconnecting / lost-contact / gave-up / session-expired banner -->
+    <UpdateAllPollBanner
+      :reconnecting="updateAllReconnecting"
+      :lost-contact="updateAllLostContact"
+      :gave-up="updateAllGaveUp"
+      :auth-failed="updateAllAuthFailed"
+      :attempt="updateAllTransientErrors"
+      @login="goToLogin"
+      @recheck="handleRecheckUpdateAll"
+      @update="_clearUpdateAllFlags(); handleUpdateAll()"
+    />
 
     <!-- Status Banner -->
     <div class="card p-5 mb-6">
@@ -1181,7 +1094,7 @@ onUnmounted(() => {
             target="_blank"
             rel="noopener noreferrer"
             class="text-lg font-semibold font-mono text-primary-600 hover:text-primary-800 hover:underline cursor-pointer"
-            :title="codeSync.latestVersion.value || 'View commit on GitHub'"
+            :title="codeSync.latestVersion.value || $t('codeSyncView.viewCommitOnGithub')"
           >
             {{ formatVersion(codeSync.latestVersion.value) }}
           </a>
@@ -1195,7 +1108,7 @@ onUnmounted(() => {
         <div>
           <span class="text-sm text-gray-500 block mb-1">{{ $t('codeSyncView.lastFetch') }}</span>
           <span class="text-lg font-semibold text-gray-900">
-            {{ formatDate(codeSync.status.value?.last_fetch ?? null) }}
+            {{ formatFleetDateTime(codeSync.status.value?.last_fetch ?? null) }}
           </span>
         </div>
         <div>
@@ -1231,40 +1144,31 @@ onUnmounted(() => {
     </div>
 
     <!-- Sync Progress Banner (Issue #880) -->
-    <div
-      v-if="syncingNodeId && syncProgress.size > 0"
-      class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6"
-    >
-      <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <BaseAlert v-if="syncingNodeId && syncProgress.size > 0" variant="info" class="mb-6" :icon="false">
+      <template #title>
+        <svg class="w-4 h-4 animate-spin inline-block mr-1.5 align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        <div class="flex-1">
-          <div class="font-medium text-blue-900">{{ $t('codeSyncView.syncInProgress') }}</div>
-          <div class="text-sm text-blue-700">
-            {{ Array.from(syncProgress.values())[0] }}
-          </div>
-        </div>
-      </div>
-    </div>
+        {{ $t('codeSyncView.syncInProgress') }}
+      </template>
+      {{ Array.from(syncProgress.values())[0] }}
+    </BaseAlert>
 
     <!-- SLM Self-Sync Restart Banner (Issue #1231) -->
-    <div
+    <BaseAlert
       v-if="slmRestartPending"
-      class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6"
+      variant="warning"
+      class="mb-6"
+      :icon="false"
     >
-      <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-amber-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <template #title>
+        <svg class="w-4 h-4 animate-spin inline-block mr-1.5 align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        <div class="flex-1">
-          <div class="font-medium text-amber-900">{{ $t('codeSyncView.sLMManagerRestarting') }}</div>
-          <div class="text-sm text-amber-700">
-            {{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}
-          </div>
-        </div>
-      </div>
-    </div>
+        {{ $t('codeSyncView.sLMManagerRestarting') }}
+      </template>
+      {{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}
+    </BaseAlert>
 
     <!-- Advanced / Diagnostics accordion (#9971 — demoted from primary) -->
     <div class="mb-6">
@@ -1283,9 +1187,7 @@ onUnmounted(() => {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      <div v-if="showAdvanced" class="mt-1 p-3 bg-amber-50 border border-amber-200 rounded-b-lg text-xs text-amber-700 leading-5">
-        {{ $t('codeSyncView.advancedWarning') }}
-      </div>
+      <BaseAlert v-if="showAdvanced" variant="warning" size="compact" class="mt-1" :message="$t('codeSyncView.advancedWarning')" />
     </div>
 
     <div v-if="showAdvanced">
@@ -1359,20 +1261,20 @@ onUnmounted(() => {
               target="_blank"
               rel="noopener noreferrer"
               class="font-mono text-primary-600 hover:text-primary-800 hover:underline"
-              :title="codeSourceCommit.full || 'View commit on GitHub'"
+              :title="codeSourceCommit.full || $t('codeSyncView.viewCommitOnGithub')"
             >
               {{ codeSourceCommit.display }}
             </a>
             <span
               v-else
               class="font-mono cursor-help"
-              :title="codeSourceCommit.full || 'Full commit hash unavailable'"
+              :title="codeSourceCommit.full || $t('codeSyncView.fullCommitHashUnavailable')"
             >
               {{ codeSourceCommit.display }}
             </span>
           </p>
         </div>
-        <button @click="handleRemoveCodeSource" class="btn btn-danger text-sm">
+        <button @click="handleRemoveCodeSource" class="btn btn-error text-sm">
           {{ $t('codeSyncView.remove') }}
         </button>
       </div>
@@ -1435,7 +1337,7 @@ onUnmounted(() => {
           >
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>{{ $t('codeSyncView.countDriftedFilePluralDetected', { count: driftReport.drifted_files.length, plural: driftReport.drifted_files.length !== 1 ? 's' : '' }) }}</span>
+            </svg>{{ $t('codeSyncView.countDriftedFilePluralDetected', { count: driftReport.drifted_files.length }, driftReport.drifted_files.length) }}</span>
           <span
             v-else
             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800"
@@ -1443,7 +1345,7 @@ onUnmounted(() => {
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>{{ $t('codeSyncView.noDriftDetectedValue0FilesCompared', { value0: driftReport.total_compared }) }}</span>
-          <span class="text-sm text-gray-400">{{ $t('codeSyncView.checkedValue0', { value0: formatDate(driftReport.checked_at) }) }}</span>
+          <span class="text-sm text-gray-400">{{ $t('codeSyncView.checkedValue0', { value0: formatFleetDateTime(driftReport.checked_at) }) }}</span>
         </div>
 
         <div class="text-xs text-gray-400 mb-3">
@@ -1498,47 +1400,36 @@ onUnmounted(() => {
           the paths; this offers the documented override so the operator is not
           stuck — the builtin updater is the only sanctioned path.
         -->
-        <div
+        <BaseAlert
           v-if="resolveDriftBlocked"
-          class="bg-red-50 border border-red-200 rounded-lg p-3 mb-3"
+          variant="error"
+          class="mb-3"
+          :title="$t('codeSyncView.resolveWouldDelete')"
         >
-          <div class="flex items-start gap-3">
-            <svg class="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <div>
-              <div class="font-medium text-red-900 text-sm">{{ $t('codeSyncView.resolveWouldDelete') }}</div>
-              <div class="text-sm text-red-700">{{ $t('codeSyncView.resolveWouldDeleteExplainer') }}</div>
-              <ul
-                v-if="blockedDeletions.length"
-                class="mt-2 text-xs font-mono text-red-800 space-y-0.5 max-h-40 overflow-y-auto"
-              >
-                <li v-for="path in blockedDeletions" :key="path">{{ path }}</li>
-              </ul>
-              <button
-                @click="handleResolveDrift(true)"
-                :disabled="isResolvingDrift"
-                class="mt-2 text-sm font-medium text-red-800 underline hover:text-red-900"
-              >
-                {{ $t('codeSyncView.resyncAndDeleteAnyway') }}
-              </button>
-            </div>
-          </div>
-        </div>
+          <p>{{ $t('codeSyncView.resolveWouldDeleteExplainer') }}</p>
+          <ul
+            v-if="blockedDeletions.length"
+            class="mt-2 text-xs font-mono space-y-0.5 max-h-40 overflow-y-auto"
+          >
+            <li v-for="path in blockedDeletions" :key="path">{{ path }}</li>
+          </ul>
+          <button
+            @click="handleResolveDrift(true)"
+            :disabled="isResolvingDrift"
+            class="mt-2 text-sm font-medium underline"
+          >
+            {{ $t('codeSyncView.resyncAndDeleteAnyway') }}
+          </button>
+        </BaseAlert>
 
         <!-- #11303: Lost contact banner — component's own service restart drops the connection -->
-        <div
+        <BaseAlert
           v-if="resolveDriftLostContact"
-          class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-center gap-3"
-        >
-          <svg class="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div>
-            <div class="font-medium text-amber-900 text-sm">{{ $t('codeSyncView.sLMManagerRestarting') }}</div>
-            <div class="text-sm text-amber-700">{{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}</div>
-          </div>
-        </div>
+          variant="warning"
+          class="mb-3"
+          :title="$t('codeSyncView.sLMManagerRestarting')"
+          :message="$t('codeSyncView.codeSyncedSuccessfullyBackend')"
+        />
 
         <!-- Drifted files table -->
         <div v-if="showDriftDetails && driftReport.drifted_files.length > 0" class="overflow-x-auto">
@@ -1594,7 +1485,7 @@ onUnmounted(() => {
             <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            {{ $t('codeSyncView.countUntrackedFilePlural', { count: untrackedFiles.length, plural: untrackedFiles.length !== 1 ? 's' : '' }) }}
+            {{ $t('codeSyncView.countUntrackedFilePlural', { count: untrackedFiles.length }, untrackedFiles.length) }}
           </button>
           <div v-if="showUntrackedDetails" class="mt-2">
             <p class="text-xs text-gray-500 mb-2">{{ $t('codeSyncView.untrackedExplainer') }}</p>
@@ -1611,49 +1502,32 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Full-Tree Drift Check (#16310 owner requirement) — additive to the
-         per-component card above; independent state, independent endpoint. -->
-    <div class="mb-6">
+    <div class="mb-6 space-y-6">
+      <CodeRollbackPanel :disabled="updateAllIsRunning" @started="adoptRunningUpdateAllJob" />
       <FullTreeDriftPanel />
     </div>
 
     <!-- Error Display -->
-    <div
+    <BaseAlert
       v-if="codeSync.error.value"
-      class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-center justify-between"
-    >
-      <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span class="text-red-700">{{ codeSync.error.value }}</span>
-      </div>
-      <button
-        @click="codeSync.clearError()"
-        class="text-red-600 hover:text-red-800 font-medium text-sm"
-      >
-        {{ $t('codeSyncView.dismiss') }}
-      </button>
-    </div>
+      variant="error"
+      class="mb-6"
+      :message="codeSync.error.value"
+      dismissible
+      :dismiss-label="$t('codeSyncView.dismiss')"
+      @dismiss="codeSync.clearError()"
+    />
 
     <!-- Success Display -->
-    <div
+    <BaseAlert
       v-if="successMessage"
-      class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-center justify-between"
-    >
-      <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span class="text-green-700">{{ successMessage }}</span>
-      </div>
-      <button
-        @click="successMessage = null"
-        class="text-green-600 hover:text-green-800 font-medium text-sm"
-      >
-        {{ $t('codeSyncView.dismiss') }}
-      </button>
-    </div>
+      variant="success"
+      class="mb-6"
+      :message="successMessage"
+      dismissible
+      :dismiss-label="$t('codeSyncView.dismiss')"
+      @dismiss="successMessage = null"
+    />
 
     <!-- Sync Options -->
     <div class="card p-5 mb-6">
@@ -1724,14 +1598,16 @@ onUnmounted(() => {
           }}</span>
         </div>
         <!-- #13157: the reason the backend recorded (code_sync.py:402) -->
-        <div
+        <BaseAlert
           v-if="fleetSyncJob.failure_reason"
           data-testid="fleet-job-failure-reason"
-          class="mt-2 bg-red-50 border border-red-200 rounded-md p-2 text-sm text-red-700"
+          variant="error"
+          size="compact"
+          class="mt-2"
         >
           <span class="font-medium">{{ $t('codeSyncView.fleetJobFailureReason') }}</span>
           {{ fleetSyncJob.failure_reason }}
-        </div>
+        </BaseAlert>
         <!-- Per-node outcome; `message` carries the ansible fatal on failure -->
         <ul v-if="fleetSyncJob.nodes.length > 0" class="mt-2 space-y-1">
           <li
@@ -1761,7 +1637,7 @@ onUnmounted(() => {
               :class="['px-2 py-0.5 rounded-sm text-xs font-medium', fleetJobStatusClass(job.status)]"
             >{{ $t(fleetJobStatusI18nKey(job.status)) }}</span>
             <span class="font-mono text-xs text-gray-500">{{ job.job_id }}</span>
-            <span class="text-xs text-gray-500">{{ formatDateTime(job.created_at) }}</span>
+            <span class="text-xs text-gray-500">{{ formatFleetDateTime(job.created_at) }}</span>
             <span class="text-xs text-gray-700">{{
               $t('codeSyncView.fleetJobProgress', {
                 completed: job.completed_nodes,
@@ -1869,11 +1745,11 @@ onUnmounted(() => {
                 target="_blank"
                 rel="noopener noreferrer"
                 class="text-primary-600 hover:text-primary-800 hover:underline"
-                :title="node.current_version || 'View commit on GitHub'"
+                :title="node.current_version || $t('codeSyncView.viewCommitOnGithub')"
               >
                 {{ formatVersion(node.current_version) }}
               </a>
-              <span v-else :title="node.current_version || 'Full commit hash unavailable'">
+              <span v-else :title="node.current_version || $t('codeSyncView.fullCommitHashUnavailable')">
                 {{ formatVersion(node.current_version) }}
               </span>
             </td>

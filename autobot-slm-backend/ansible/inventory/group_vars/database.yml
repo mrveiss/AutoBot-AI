@@ -202,13 +202,18 @@ database_schema:
 # MODEL STORAGE CONFIGURATION
 # ==========================================
 
+# #21343: the directories sit outside `model_storage` so its categories can read `base_dir`
+# without reading `model_storage` back -- Ansible templates a variable whole, so a dict whose
+# own values name that dict recurses until it fails. `model_storage.directories` reuses them.
+model_storage_directories: &model_storage_directories
+  base_dir: "/var/lib/autobot/models"
+  cache_dir: "/var/lib/autobot/models/cache"
+  versions_dir: "/var/lib/autobot/models/versions"
+  temp_dir: "/tmp/autobot/models"
+
 model_storage:
   # Storage directories
-  directories:
-    base_dir: "/var/lib/autobot/models"
-    cache_dir: "/var/lib/autobot/models/cache"
-    versions_dir: "/var/lib/autobot/models/versions"
-    temp_dir: "/tmp/autobot/models"
+  directories: *model_storage_directories
 
   # Storage limits
   limits:
@@ -219,19 +224,19 @@ model_storage:
   # Model categories
   categories:
     embeddings:
-      path: "{{ model_storage.directories.base_dir }}/embeddings"
+      path: "{{ model_storage_directories.base_dir }}/embeddings"
       formats: ["bin", "safetensors", "onnx"]
 
     language_models:
-      path: "{{ model_storage.directories.base_dir }}/llm"
+      path: "{{ model_storage_directories.base_dir }}/llm"
       formats: ["gguf", "bin", "safetensors"]
 
     vision_models:
-      path: "{{ model_storage.directories.base_dir }}/vision"
+      path: "{{ model_storage_directories.base_dir }}/vision"
       formats: ["onnx", "pb", "tflite"]
 
     audio_models:
-      path: "{{ model_storage.directories.base_dir }}/audio"
+      path: "{{ model_storage_directories.base_dir }}/audio"
       formats: ["onnx", "pb", "wav2vec2"]
 
 # ==========================================
@@ -280,7 +285,7 @@ backup:
   # Backup destinations
   destinations:
     local:
-      path: "/opt/autobot/backups/database"
+      path: "{{ autobot.base_dir }}/backups/database"
       enabled: true
 
     network:
@@ -321,8 +326,8 @@ systemd_services:
     type: "simple"
     user: "{{ autobot.user }}"
     group: "{{ autobot.group }}"
-    working_directory: "{{ model_storage.directories.base_dir }}"
-    exec_start: "/opt/autobot/scripts/model-manager.py"
+    working_directory: "{{ model_storage_directories.base_dir }}"
+    exec_start: "{{ autobot.base_dir }}/scripts/model-manager.py"
     restart: "always"
     restart_sec: 30
 
@@ -340,7 +345,7 @@ systemd_services:
     type: "oneshot"
     user: "{{ autobot.user }}"
     group: "{{ autobot.group }}"
-    exec_start: "/opt/autobot/scripts/backup-database.sh"
+    exec_start: "{{ autobot.base_dir }}/scripts/backup-database.sh"
 
     # Timer configuration (runs via systemd timer)
     timer:
@@ -422,8 +427,8 @@ monitoring:
       interval: 60
 
     - name: "model-storage"
-      command: "df -h {{ model_storage.directories.base_dir }}"
-      check_pattern: "{{ model_storage.directories.base_dir }}"
+      command: "df -h {{ model_storage_directories.base_dir }}"
+      check_pattern: "{{ model_storage_directories.base_dir }}"
       interval: 300
 
 # ==========================================
@@ -483,7 +488,7 @@ cleanup:
     # Model cache cleanup
     - name: "cleanup-model-cache"
       schedule: "0 3 * * *"  # daily at 3 AM
-      command: "/opt/autobot/scripts/cleanup-model-cache.sh"
+      command: "{{ autobot.base_dir }}/scripts/cleanup-model-cache.sh"
 
   # Retention policies
   retention:

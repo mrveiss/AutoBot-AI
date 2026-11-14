@@ -26,6 +26,7 @@ from typing import Any, Dict, List
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.status_enums import Priority
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from code_intelligence.shared.scoring import get_grade_from_score
 from constants.model_constants import (
@@ -42,13 +43,9 @@ from services.user_behavior_analytics import (
 logger = get_logger(__name__)
 
 
-class MaintenancePriority(str, Enum):
-    """Priority levels for maintenance recommendations."""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
+#: A subset of the canonical urgency vocabulary, so an alias rather than a class (#18098).
+#: Every consumer reads `.value` or compares members, so the lost `str` mixin changes nothing.
+MaintenancePriority = Priority
 
 
 class ResourceType(str, Enum):

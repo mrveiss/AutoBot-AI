@@ -125,6 +125,17 @@
         - reload systemd
         - restart slm backend
 
+- name: "Ensure the application log directory exists (#20894)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/ensure_app_log_dir.yml
+    apply:
+      tags: ['slm', 'backend', 'systemd']
+  vars:
+    app_log_dir: "{{ slm_app_log_dir }}"
+    app_log_dir_owner: "{{ slm_user }}"
+    app_log_dir_group: "{{ slm_group }}"
+  tags: ['slm', 'backend', 'systemd']
+
 - name: "SLM | Deploy backend systemd service"
   ansible.builtin.template:
     src: autobot-slm-backend.service.j2
@@ -140,6 +151,37 @@
   ansible.builtin.systemd:
     name: "{{ slm_backend_service }}"
     enabled: true
+    daemon_reload: true
+  become: true
+  tags: ['slm', 'backend', 'systemd']
+
+# #20620: here, not in main.yml, so the builtin update installs it too (see #14624 above).
+- name: "SLM | Install the watchdog script (#20620)"
+  ansible.builtin.template:
+    src: autobot-slm-watchdog.sh.j2
+    dest: /usr/local/sbin/autobot-slm-watchdog
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  tags: ['slm', 'backend', 'systemd']
+
+- name: "SLM | Install the watchdog units (#20620)"
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - autobot-slm-watchdog.service
+    - autobot-slm-watchdog.timer
+  become: true
+  tags: ['slm', 'backend', 'systemd']
+
+- name: "SLM | Enable and start the watchdog timer (#20620)"
+  ansible.builtin.systemd:
+    name: autobot-slm-watchdog.timer
+    enabled: true
+    state: started
     daemon_reload: true
   become: true
   tags: ['slm', 'backend', 'systemd']

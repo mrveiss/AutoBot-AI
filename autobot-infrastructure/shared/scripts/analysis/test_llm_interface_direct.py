@@ -66,7 +66,7 @@ async def test_with_retry_mechanism():
     logger.info("\n🔄 Testing with retry mechanism...")
 
     # Import the retry mechanism
-    from retry_mechanism import retry_network_operation
+    from autobot_shared.retry_mechanism import retry_network_operation
 
     async def make_llm_request():
         url = "http://127.0.0.1:11434/api/chat"

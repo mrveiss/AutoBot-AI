@@ -2,16 +2,23 @@
 Description=AutoBot SLM Backend Service
 After=network.target
 Wants=network-online.target
+# #20620, #4090: a restarting unit must be able to reach `failed`. The window has to exceed
+# RestartSec * StartLimitBurst, or the limit is never hit and the unit loops forever while
+# showing `activating`. Same values as the role-rendered units.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
 User=autobot
 Group=autobot
 WorkingDirectory=/opt/autobot/autobot-slm-backend
+# #20894: the log directory, as before the resolver (the working directory's logs/)
+Environment=AUTOBOT_LOGS_DIR=/opt/autobot/autobot-slm-backend/logs
 Environment="PATH=/opt/autobot/autobot-slm-backend/venv/bin:/usr/local/bin:/usr/bin:/bin"
 ExecStart=/opt/autobot/autobot-slm-backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
 ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
+Restart=always
 RestartSec=5
 # Issue #4309: Use LogsDirectory= for proper ownership instead of StandardOutput=append
 LogsDirectory=autobot

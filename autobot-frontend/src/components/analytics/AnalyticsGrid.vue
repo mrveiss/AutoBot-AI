@@ -1,7 +1,7 @@
 <template>
   <div class="analytics-grid">
     <!-- System Overview -->
-    <BasePanel variant="dark" size="md">
+    <BaseCard scrollable variant="dark" size="md">
       <template #header>
         <div class="card-header-content">
           <h3><Icon name="tachometer-alt" /> {{ $t('analytics.grid.systemOverview') }}</h3>
@@ -40,10 +40,10 @@
           <button @click="$emit('load-system-overview')" class="btn-link">{{ $t('analytics.grid.loadMetrics') }}</button>
         </template>
       </EmptyState>
-    </BasePanel>
+    </BaseCard>
 
     <!-- Communication Patterns -->
-    <BasePanel variant="dark" size="md">
+    <BaseCard scrollable variant="dark" size="md">
       <template #header>
         <div class="card-header-content">
           <h3><Icon name="network-wired" /> {{ $t('analytics.grid.communicationPatterns') }}</h3>
@@ -71,10 +71,10 @@
         icon="wifi"
         :message="$t('analytics.grid.noCommunicationData')"
       />
-    </BasePanel>
+    </BaseCard>
 
     <!-- Code Quality -->
-    <BasePanel variant="dark" size="md">
+    <BaseCard scrollable variant="dark" size="md">
       <template #header>
         <div class="card-header-content">
           <h3><Icon name="code-branch" /> {{ $t('analytics.grid.codeQuality') }}</h3>
@@ -85,21 +85,21 @@
       </template>
       <div v-if="codeQuality" class="quality-metrics">
         <div class="quality-score" :class="getQualityClass(codeQuality.overall_score)">
-          <div class="score-value">{{ codeQuality.overall_score || 0 }}</div>
+          <div class="score-value">{{ codeQuality.overall_score ?? $t('analytics.grid.notAvailable') }}</div>
           <div class="score-label">{{ $t('analytics.grid.overallScore') }}</div>
         </div>
         <div class="quality-details">
           <div class="quality-item">
             <span class="quality-label">{{ $t('analytics.grid.testCoverage') }}</span>
-            <span class="quality-value">{{ codeQuality.test_coverage || 0 }}%</span>
+            <span class="quality-value"><template v-if="codeQuality.test_coverage !== null">{{ codeQuality.test_coverage }}%</template><template v-else>{{ $t('analytics.grid.notAvailable') }}</template></span>
           </div>
           <div class="quality-item">
             <span class="quality-label">{{ $t('analytics.grid.codeDuplicates') }}</span>
-            <span class="quality-value">{{ codeQuality.code_duplicates || 0 }}</span>
+            <span class="quality-value">{{ codeQuality.code_duplicates ?? $t('analytics.grid.notAvailable') }}</span>
           </div>
           <div class="quality-item">
             <span class="quality-label">{{ $t('analytics.grid.technicalDebt') }}</span>
-            <span class="quality-value">{{ codeQuality.technical_debt || 0 }}h</span>
+            <span class="quality-value"><template v-if="codeQuality.technical_debt !== null">{{ codeQuality.technical_debt }}h</template><template v-else>{{ $t('analytics.grid.notAvailable') }}</template></span>
           </div>
         </div>
       </div>
@@ -108,10 +108,10 @@
         icon="star"
         :message="$t('analytics.grid.noQualityMetrics')"
       />
-    </BasePanel>
+    </BaseCard>
 
     <!-- Performance Metrics -->
-    <BasePanel variant="dark" size="md">
+    <BaseCard scrollable variant="dark" size="md">
       <template #header>
         <div class="card-header-content">
           <h3><Icon name="bolt" /> {{ $t('analytics.grid.performanceMetrics') }}</h3>
@@ -145,11 +145,12 @@
         icon="rocket"
         :message="$t('analytics.grid.noPerformanceData')"
       />
-    </BasePanel>
+    </BaseCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { BaseCard } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -163,7 +164,6 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
 interface SystemOverview {
@@ -180,10 +180,10 @@ interface CommunicationPatterns {
 }
 
 interface CodeQuality {
-  overall_score: number
-  test_coverage: number
-  code_duplicates: number
-  technical_debt: number
+  overall_score: number | null
+  test_coverage: number | null
+  code_duplicates: number | null
+  technical_debt: number | null
 }
 
 interface PerformanceMetrics {
@@ -219,7 +219,8 @@ const getHealthClass = (health: string): string => {
   return 'health-critical'
 }
 
-const getQualityClass = (score: number): string => {
+const getQualityClass = (score: number | null): string => {
+  if (score === null) return '' // not available: the element keeps its base styling
   if (score >= 80) return 'quality-excellent'
   if (score >= 60) return 'quality-good'
   if (score >= 40) return 'quality-fair'
@@ -270,8 +271,9 @@ const getEfficiencyClass = (score: number): string => {
   color: var(--color-success);
 }
 
-.refresh-indicator i {
-  font-size: 8px;
+.refresh-indicator .icon {
+  width: 8px;
+  height: 8px;
 }
 
 .refresh-btn {

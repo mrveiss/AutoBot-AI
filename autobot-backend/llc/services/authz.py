@@ -29,13 +29,18 @@ identical to one that does.
 from __future__ import annotations
 
 import uuid
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.approval_four_eyes import FourEyesError, four_eyes_self_approval, requester_id
+
 from ..models.enums import MembershipRole
 from ..models.membership import LLCCompanyMembership
+
+if TYPE_CHECKING:
+    from models.approval import Approval
 
 #: Membership roles permitted to change a company's roles, occupancy,
 #: permissions and workflow attachments.
@@ -48,43 +53,147 @@ class NotAuthorisedError(Exception):
     Distinct from ``ValueError`` on purpose: "you may not do this" and "what you
     asked for makes no sense" map to different HTTP statuses, and collapsing
     them would make a 403 indistinguishable from a 400 at the route layer.
+
+    ``public_detail`` is the only text a route may show; the message itself can
+    carry ids and roles and is for logs. Subclasses override it with a fixed text.
     """
+
+    public_detail = "Forbidden"
 
 
 async def require_company_admin(
-    session: AsyncSession, company_id: uuid.UUID, actor_user_id: Optional[uuid.UUID]
-) -> None:
-    """Raise :class:`NotAuthorisedError` unless the actor is owner/admin **here**.
+    session: AsyncSession, company_id: uuid.UUID, actor_user_id: Optional[uuid.UUID], *, for_update: bool = False
+) -> str:
+    """Raise :class:`NotAuthorisedError` unless the actor is owner/admin **here**; return the role.
 
     Membership is per ``(company, user)``, so being an admin of another company
-    grants nothing — the "not all users have access to all Company OS
-    companies" requirement, applied to every mutating path.
-
-    A missing actor is refused rather than treated as a trusted system call.
-    An implicit "no actor means internal" would be a fail-open bypass reachable
-    by any caller that simply omits the argument.
+    grants nothing. A missing actor is refused rather than treated as a trusted
+    system call: "no actor means internal" would be a fail-open bypass reachable by
+    any caller that omits the argument. *for_update* locks the membership row, so
+    the role cannot be revoked or changed before the caller's transaction ends.
     """
     if actor_user_id is None:
         raise NotAuthorisedError("an actor is required for this change")
-
-    result = await session.execute(
-        select(LLCCompanyMembership.role).where(
-            LLCCompanyMembership.company_id == company_id,
-            LLCCompanyMembership.user_id == actor_user_id,
-        )
-    )
-    role = result.scalar_one_or_none()
-    if role is None:
+    name = await membership_role(session, company_id, actor_user_id, for_update=for_update)
+    if name is None:
         raise NotAuthorisedError(f"user {actor_user_id} is not a member of company {company_id}")
+    if name not in GRANTING_ROLES:
+        raise NotAuthorisedError(
+            f"membership role {name!r} may not perform this change; " f"one of {sorted(GRANTING_ROLES)} is required"
+        )
+    return name
 
+
+async def membership_role(
+    session: AsyncSession, company_id: uuid.UUID, actor_user_id: uuid.UUID, *, for_update: bool
+) -> Optional[str]:
+    stmt = select(LLCCompanyMembership.role).where(
+        LLCCompanyMembership.company_id == company_id,
+        LLCCompanyMembership.user_id == actor_user_id,
+    )
+    if for_update:
+        stmt = stmt.with_for_update()
+    role = (await session.execute(stmt)).scalar_one_or_none()
     # ``.value`` explicitly, never ``str()``. The column maps to a
     # ``MembershipRole`` member and ``MembershipRole`` is a str-mixin enum, so
     # ``str(member)`` is "MembershipRole.OWNER" while ``member.value`` is
     # "owner". A defensive ``str()`` here previously denied every owner and
     # admin. ``getattr`` covers a driver that returns a raw string, and an
-    # unrecognised value falls through to the refusal below — failing closed.
-    name = getattr(role, "value", role)
-    if name not in GRANTING_ROLES:
-        raise NotAuthorisedError(
-            f"membership role {name!r} may not perform this change; " f"one of {sorted(GRANTING_ROLES)} is required"
+    # unrecognised value falls through to the caller's refusal -- failing closed.
+    return None if role is None else getattr(role, "value", role)
+
+
+async def may_attach_under(
+    session: AsyncSession,
+    parent_id: uuid.UUID,
+    actor_user_id: Optional[uuid.UUID],
+    *,
+    platform_admin: bool,
+    for_update: bool = False,
+) -> bool:
+    """Whether the actor may place a company under *parent_id* (#12233, #19634).
+
+    The one rule for both ways a company gains a parent: ``create_company`` with a
+    ``parent_org_id`` and ``CompanyService.move``. A platform admin may; anyone
+    else must be owner/admin of the parent -- the :func:`require_company_admin`
+    level, because a child inherits the parent's knowledge base and ancestor-chain
+    visibility, so a plain member must not graft an org under it (maintainer
+    decision, 2026-10-26). Callers answer ``False`` with a 404, never a 403, so a
+    parent the actor cannot administer is indistinguishable from a missing one.
+    *for_update* locks the deciding membership row (the move's under-lock re-check).
+    """
+    try:
+        await require_company_admin_unless_platform(
+            session, parent_id, actor_user_id, platform_admin=platform_admin, for_update=for_update
         )
+    except NotAuthorisedError:
+        return False
+    return True
+
+
+async def require_company_admin_unless_platform(
+    session: AsyncSession,
+    company_id: uuid.UUID,
+    actor_user_id: Optional[uuid.UUID],
+    *,
+    platform_admin: bool,
+    for_update: bool = False,
+) -> None:
+    """:func:`require_company_admin`, except that a platform admin passes without a membership.
+
+    For the paths a platform admin must be able to operate on companies it does not
+    belong to -- re-parenting (#19634). *platform_admin* comes from the caller's
+    verified tenant context, never from request data.
+    """
+    if platform_admin:
+        return
+    await require_company_admin(session, company_id, actor_user_id, for_update=for_update)
+
+
+async def active_admin_ids(session: AsyncSession, company_id: uuid.UUID) -> set[uuid.UUID]:
+    """The company's current owners/admins, leaving out anyone deactivated, deleted or hard-deleted, who cannot act.
+
+    Takes the lock the membership routes take first, then reads: a member added while this waited for it is
+    committed by then, and a statement that started before the insert would not see them. Held until the
+    decision commits, so a second admin cannot leave after this check, and two concurrent decisions on one
+    company take turns. A platform admin is not counted:
+    a company's sole owner or admin may self-approve even while a platform admin exists.
+    """
+    from .member_standing import member_people  # noqa: PLC0415 -- it imports this module
+    from .membership_policy import lock_company_members  # noqa: PLC0415 -- it imports this module
+
+    await lock_company_members(session, company_id)
+    rows = await session.execute(
+        select(LLCCompanyMembership.user_id)
+        .where(
+            LLCCompanyMembership.company_id == company_id,
+            LLCCompanyMembership.role.in_(GRANTING_ROLES),
+        )
+        .with_for_update(of=LLCCompanyMembership)
+    )
+    _names, may_act = await member_people(session, list(rows.scalars().all()))
+    return {user_id for user_id, active in may_act.items() if active}
+
+
+async def require_four_eyes(
+    approval: "Approval",
+    session: AsyncSession,
+    decider: Optional[uuid.UUID],
+    *,
+    what: str,
+    unidentified_requester_ok: bool = False,
+) -> bool:
+    """The four-eyes rule (#18430, #8214): True for a flagged self-approval; raises when refused.
+
+    The one who asked may approve their own request only when they are the company's single active owner/admin.
+    A requester that names no person (an agent, or a row written before requesters were pinned to the
+    verified caller) cannot be the decider: with *unidentified_requester_ok* that passes unflagged,
+    otherwise it is refused. Call it inside the decision's transaction so the count is the current one.
+    """
+    requester = requester_id(approval.requested_by_agent)
+    if decider is None or (requester is None and not unidentified_requester_ok):
+        raise FourEyesError(f"{what} needs a verified decider and a requester that can be identified")
+    if requester is None:
+        return False
+    eligible = await active_admin_ids(session, approval.company_id)
+    return four_eyes_self_approval(decider, requester, eligible, what=what)

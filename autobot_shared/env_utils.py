@@ -4,6 +4,7 @@
 """Environment variable helpers shared across AutoBot services."""
 
 import logging
+import math
 import os
 
 logger = logging.getLogger(__name__)
@@ -58,20 +59,27 @@ def env_str(name: str, default: str) -> str:
     return env_raw(name) or default
 
 
-def env_float(name: str, default: float) -> float:
+def env_float(name: str, default: float, *, reject_nan: bool = False) -> float:
     """Read a float environment variable, falling back to *default* on absence or bad value.
 
     Returns *default* silently when the var is absent.
     Logs a warning and returns *default* when the var is set but not a valid float.
+    ``reject_nan=True`` also treats ``nan`` (which ``float()`` accepts) as invalid;
+    callers feeding the value into comparisons or decay maths need that, since a
+    NaN compares false against everything. Default False keeps prior behaviour.
     """
     raw = env_raw(name)
     if raw is None:
         return default
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError:
         logger.warning("Invalid %s=%r; using default %s", name, raw, default)
         return default
+    if reject_nan and value != value:
+        logger.warning("Invalid %s=%r (NaN); using default %s", name, raw, default)
+        return default
+    return value
 
 
 def env_int(name: str, default: int) -> int:
@@ -80,11 +88,24 @@ def env_int(name: str, default: int) -> int:
     Returns *default* silently when the var is absent.
     Logs a warning and returns *default* when the var is set but not a valid integer.
     """
-    raw = env_raw(name)
-    if raw is None:
+    return parse_int_or_default(name, env_raw(name), default)
+
+
+def parse_int_or_default(name: str, raw: object, default: int) -> int:
+    """Parse *raw* as an int, returning *default* (with a warning) when absent, blank or unparseable (#20683).
+
+    The single definition of "tolerant int parse" for both routes: :func:`env_int` feeds it
+    ``os.environ``; pydantic ``mode="before"`` field validators feed it the value settings
+    loading hands them, so a bad value falls back instead of raising ``ValidationError``.
+    """
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return raw
+    if isinstance(raw, float) and raw.is_integer():
+        return int(raw)
+    if blank_to_none(raw) is None:
         return default
     try:
-        return int(raw)
+        return int(str(raw).strip())
     except ValueError:
         logger.warning("Invalid %s=%r; using default %d", name, raw, default)
         return default
@@ -102,16 +123,7 @@ def env_int_clamped(
     valid integer.  Returns *default* silently when the var is absent.
     Clamps to [min_v, max_v] when either bound is provided.
     """
-    raw = env_raw(name)
-    if raw is None:
-        value = default
-    else:
-        try:
-            value = int(raw)
-        except ValueError:
-            logger.warning("Invalid %s=%r; using %d", name, raw, default)
-            value = default
-    return _clamped(name, value, min_v, max_v)
+    return _clamped(name, parse_int_or_default(name, env_raw(name), default), min_v, max_v)
 
 
 def _clamped(name: str, value, min_v, max_v):
@@ -134,13 +146,37 @@ def _clamped(name: str, value, min_v, max_v):
     return clamped
 
 
+def within_range(name: str, value, bounds: tuple | None) -> bool:
+    """True when numeric *value* lies in inclusive ``(min, max)`` *bounds* (``None`` = open end).
+
+    Out of range warns naming the variable and the range only; the value is
+    omitted because a registry spec carries no secret marker (#20722).
+    Non-numeric values and ``bounds=None`` are never checked.
+    """
+    if bounds is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return True
+    min_v, max_v = bounds
+    if (min_v is None or value >= min_v) and (max_v is None or value <= max_v):
+        return True
+    logger.warning("%s is outside [%s, %s]; using the default", name, min_v, max_v)
+    return False
+
+
 def env_float_clamped(
     name: str,
     default: float,
     min_v: float | None = None,
     max_v: float | None = None,
+    *,
+    positive_finite: bool = False,
 ) -> float:
     """Read a float environment variable with optional min/max clamping.
+
+    ``positive_finite=True`` rejects a value that is NaN, infinite or <= 0 and
+    falls back to *default* with a warning, rather than clamping it. Clamping is
+    wrong for a timeout: ``float("nan")`` and ``"inf"`` parse cleanly and slip
+    past min/max comparisons, and aiohttp treats 0 and NaN as "no timer" and a
+    negative as "already expired" (#12979).
 
     Mirrors :func:`env_int_clamped` for the float case (#14524): a bare
     :func:`env_float` accepts 0 and negatives, and for a value used as a
@@ -156,7 +192,26 @@ def env_float_clamped(
         except ValueError:
             logger.warning("Invalid %s=%r; using %s", name, raw, default)
             value = default
+        if positive_finite and not (math.isfinite(value) and value > 0):
+            logger.warning("%s=%r must be a positive finite number; using %s", name, raw, default)
+            value = default
     return _clamped(name, value, min_v, max_v)
+
+
+def env_registered(name: str, *, positive_finite: bool = False):
+    """A registered numeric env var, read within the range its registry entry declares.
+
+    The default and the ``(min, max)`` come from ``REGISTRY``, so the registered range is the one enforced; a
+    malformed value falls back to the default and an out-of-range one is clamped, each with a warning.
+    ``positive_finite`` (floats only) also rejects NaN, infinity and non-positive values.
+    """
+    from autobot_shared.env_registry import REGISTRY
+
+    spec = REGISTRY[name]
+    low, high = spec.range or (None, None)
+    if spec.type is int:
+        return env_int_clamped(name, spec.default, low, high)
+    return env_float_clamped(name, spec.default, low, high, positive_finite=positive_finite)
 
 
 # Canonical truthy set for boolean env flags. Single source of truth so guards
@@ -174,14 +229,35 @@ def truthy(raw: str | None) -> bool:
     return raw is not None and raw.strip().lower() in _TRUTHY_VALUES
 
 
-def env_flag(name: str, default: bool = False) -> bool:
-    """Read a boolean environment variable via the canonical truthy set.
+_FALSY_VALUES: frozenset[str] = frozenset({"0", "false", "no", "off"})
 
-    Returns *default* when the var is absent; otherwise ``truthy(value)``. Using
-    this everywhere guarantees ``on``/``yes``/``true``/``1`` behave identically
-    across all flags.
+#: What :func:`env_flag` does with a value that is neither truthy nor falsy (``ture``, ``enabled``).
+ON_INVALID_MODES = ("default", "false", "raise")
+
+
+def env_flag(name: str, default: bool = False, *, on_invalid: str = "default") -> bool:
+    """Read a boolean environment variable via the canonical truthy/falsy sets.
+
+    Absent or blank -> *default* (#12782). A recognised truthy value -> True; a recognised
+    falsy value (``0/false/no/off``) -> False. Anything else is a typo, and a typo must not
+    silently decide a flag, so *on_invalid* says what happens (a warning is always logged):
+
+    * ``"default"`` (the default) -- keep *default*. A protection that defaults on stays on.
+    * ``"false"`` -- read it as False. For a flag whose SAFE value is False although it
+      defaults True (an auto-approve switch): a typo must not widen what it permits.
+    * ``"raise"`` -- ``ValueError``, for flags where guessing is worse than refusing to start.
     """
-    # #12782: a blank export must yield the default, not truthy("") -> False.
-    # A flag defaulting to True would otherwise silently flip off.
+    if on_invalid not in ON_INVALID_MODES:
+        raise ValueError(f"on_invalid must be one of {ON_INVALID_MODES}, got {on_invalid!r}")
     raw = env_raw(name)
-    return default if raw is None else truthy(raw)
+    if raw is None:
+        return default
+    if truthy(raw):
+        return True
+    if raw.strip().lower() in _FALSY_VALUES:
+        return False
+    if on_invalid == "raise":
+        raise ValueError(f"{name}={raw!r} is not a boolean (use 1/true/yes/on or 0/false/no/off)")
+    fallback = default if on_invalid == "default" else False
+    logger.warning("Invalid %s=%r; using %s", name, raw, fallback)
+    return fallback

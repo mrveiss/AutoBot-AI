@@ -13,8 +13,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List
 
+from autobot_shared.status_enums import Severity
 
-class PatternType(Enum):
+
+class CodePatternType(Enum):
     """Types of code patterns that can be detected."""
 
     DUPLICATE_CODE = "duplicate_code"
@@ -29,14 +31,10 @@ class PatternType(Enum):
     DATA_TRANSFORMATION = "data_transformation"
 
 
-class PatternSeverity(Enum):
-    """Severity levels for pattern analysis findings."""
-
-    INFO = "info"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+#: An exact subset of the canonical ladder (#18098). The second of two unrelated modules
+#: declaring `PatternSeverity`; both were the same five rungs, which is why the name
+#: collision was harmless and why both collapse to the same alias.
+PatternSeverity = Severity
 
 
 @dataclass
@@ -74,10 +72,10 @@ class CodeLocation:
 
 
 @dataclass
-class CodePattern:
+class DetectedCodePattern:
     """Base class for detected code patterns."""
 
-    pattern_type: PatternType
+    pattern_type: CodePatternType
     severity: PatternSeverity
     description: str
     locations: List[CodeLocation]
@@ -113,7 +111,7 @@ class CodePattern:
 
 
 @dataclass
-class DuplicatePattern(CodePattern):
+class DuplicatePattern(DetectedCodePattern):
     """Represents duplicated code pattern."""
 
     similarity_score: float = 1.0
@@ -122,7 +120,7 @@ class DuplicatePattern(CodePattern):
 
     def __post_init__(self):
         """Set pattern type after initialization."""
-        self.pattern_type = PatternType.DUPLICATE_CODE
+        self.pattern_type = CodePatternType.DUPLICATE_CODE
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary with duplicate-specific fields."""
@@ -138,7 +136,7 @@ class DuplicatePattern(CodePattern):
 
 
 @dataclass
-class RegexOpportunity(CodePattern):
+class RegexOpportunity(DetectedCodePattern):
     """Represents an opportunity to replace string operations with regex."""
 
     current_code: str = ""
@@ -148,7 +146,7 @@ class RegexOpportunity(CodePattern):
 
     def __post_init__(self):
         """Set pattern type after initialization."""
-        self.pattern_type = PatternType.REGEX_OPPORTUNITY
+        self.pattern_type = CodePatternType.REGEX_OPPORTUNITY
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary with regex-specific fields."""
@@ -165,7 +163,7 @@ class RegexOpportunity(CodePattern):
 
 
 @dataclass
-class ModularizationSuggestion(CodePattern):
+class ModularizationSuggestion(DetectedCodePattern):
     """Represents an opportunity to modularize repeated patterns."""
 
     pattern_name: str = ""
@@ -176,7 +174,7 @@ class ModularizationSuggestion(CodePattern):
 
     def __post_init__(self):
         """Set pattern type after initialization."""
-        self.pattern_type = PatternType.MODULARIZATION
+        self.pattern_type = CodePatternType.MODULARIZATION
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary with modularization-specific fields."""
@@ -194,7 +192,7 @@ class ModularizationSuggestion(CodePattern):
 
 
 @dataclass
-class ComplexityHotspot(CodePattern):
+class ComplexityHotspot(DetectedCodePattern):
     """Represents a complexity hotspot that needs simplification."""
 
     cyclomatic_complexity: int = 0
@@ -206,7 +204,7 @@ class ComplexityHotspot(CodePattern):
 
     def __post_init__(self):
         """Set pattern type after initialization."""
-        self.pattern_type = PatternType.COMPLEXITY_HOTSPOT
+        self.pattern_type = CodePatternType.COMPLEXITY_HOTSPOT
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary with complexity-specific fields."""
@@ -229,8 +227,8 @@ class PatternCluster:
     """Group of related patterns for analysis."""
 
     cluster_id: str
-    pattern_type: PatternType
-    patterns: List[CodePattern]
+    pattern_type: CodePatternType
+    patterns: List[DetectedCodePattern]
     representative_code: str = ""
     embedding_centroid: List[float] | None = None
 
@@ -265,7 +263,7 @@ class PatternAnalysisReport:
     regex_opportunities: List[RegexOpportunity] = field(default_factory=list)
     modularization_suggestions: List[ModularizationSuggestion] = field(default_factory=list)
     complexity_hotspots: List[ComplexityHotspot] = field(default_factory=list)
-    other_patterns: List[CodePattern] = field(default_factory=list)
+    other_patterns: List[DetectedCodePattern] = field(default_factory=list)
 
     # Metrics
     pattern_counts: Dict[str, int] = field(default_factory=dict)

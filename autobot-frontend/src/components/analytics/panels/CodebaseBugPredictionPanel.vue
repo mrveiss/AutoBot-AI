@@ -8,7 +8,7 @@
     <h3>
       <Icon name="bug" /> {{ $t('analytics.codebase.bugPrediction.title') }}
       <span v-if="analysis" class="total-count">
-        ({{ atRiskCount }} files need attention)
+        ({{ $t('analytics.codebase.shared.filesNeedAttention', { count: atRiskCount }, atRiskCount) }})
       </span>
       <button
         @click="emit('refresh')"
@@ -106,7 +106,7 @@
             </div>
             <div class="factor-details">
               <div class="factor-name">{{ formatFactorName(factor.name) }}</div>
-              <div class="factor-count">{{ factor.count }} files affected</div>
+              <div class="factor-count">{{ $t('analytics.codebase.shared.filesAffected', { count: factor.count }, factor.count) }}</div>
               <div class="factor-description">{{ getRiskFactorDescription(factor.name) }}</div>
             </div>
           </div>
@@ -117,28 +117,28 @@
       <div class="risk-filter-tabs">
         <button
           :class="{ active: activeFilter === 'all' }"
-          @click="activeFilter = 'all'; visibleCount = PAGE_SIZE"
+          @click="activeFilter = 'all'"
         >
-          All ({{ analysis.files.length }})
+          {{ $t('analytics.codebase.shared.filterAll', { count: analysis.files.length }) }}
         </button>
         <button
           :class="{ active: activeFilter === 'high' }"
-          @click="activeFilter = 'high'; visibleCount = PAGE_SIZE"
+          @click="activeFilter = 'high'"
           :disabled="analysis.high_risk_count === 0"
         >
-          High ({{ analysis.high_risk_count }})
+          {{ $t('analytics.codebase.shared.filterHigh', { count: analysis.high_risk_count }) }}
         </button>
         <button
           :class="{ active: activeFilter === 'medium' }"
-          @click="activeFilter = 'medium'; visibleCount = PAGE_SIZE"
+          @click="activeFilter = 'medium'"
         >
-          Medium ({{ mediumRiskCount }})
+          {{ $t('analytics.codebase.shared.filterMedium', { count: mediumRiskCount }) }}
         </button>
         <button
           :class="{ active: activeFilter === 'low' }"
-          @click="activeFilter = 'low'; visibleCount = PAGE_SIZE"
+          @click="activeFilter = 'low'"
         >
-          Low ({{ lowRiskCount }})
+          {{ $t('analytics.codebase.shared.filterLow', { count: lowRiskCount }) }}
         </button>
       </div>
 
@@ -148,10 +148,10 @@
           <Icon name="file-code" />
           {{
             activeFilter === 'all'
-              ? 'Analyzed Files'
-              : `${activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)} Risk Files`
+              ? $t('analytics.codebase.shared.analyzedFiles')
+              : $t('analytics.codebase.shared.riskFiles', { risk: $t('analytics.codebase.shared.' + activeFilter) })
           }}
-          <span class="file-count">({{ filteredFiles.length }} files)</span>
+          <span class="file-count">({{ $t('analytics.codebase.shared.files', { count: filteredFiles.length }, filteredFiles.length) }})</span>
         </h4>
 
         <div v-if="filteredFiles.length === 0" class="no-files-message">
@@ -160,7 +160,7 @@
         </div>
 
         <div
-          v-for="(file, index) in filteredFiles.slice(0, visibleCount)"
+          v-for="(file, index) in visible('files', filteredFiles)"
           :key="'risk-file-' + index"
           class="risk-file-item"
           :class="[getRiskClass(file.risk_score), { expanded: expandedFiles.has(file.file_path) }]"
@@ -281,14 +281,7 @@
           </div>
         </div>
 
-        <div v-if="filteredFiles.length > visibleCount" class="show-more-container">
-          <button @click="visibleCount += PAGE_SIZE" class="show-more-btn">
-            <Icon name="chevron-down" />
-            Show More
-            ({{ Math.min(PAGE_SIZE, filteredFiles.length - visibleCount) }} of
-            {{ filteredFiles.length - visibleCount }} remaining)
-          </button>
-        </div>
+        <TruncationNotice :shown="shown('files', filteredFiles.length)" :total="filteredFiles.length" :step="PAGE_SIZE" @show-more="showMore('files')" />
       </div>
 
       <div v-if="analysis.timestamp" class="scan-timestamp">
@@ -321,6 +314,9 @@ import { ref, computed } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import { useShowMore } from '@autobot/ui'
+import TruncationNotice from '../TruncationNotice.vue'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 
@@ -357,7 +353,9 @@ const emit = defineEmits<{
 
 const PAGE_SIZE = 50
 const activeFilter = ref<'all' | 'high' | 'medium' | 'low'>('all')
-const visibleCount = ref(PAGE_SIZE)
+// #12741: the shared show-more mechanism; the visible count returns to the first page when the
+// risk filter or the analysis changes.
+const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => [activeFilter.value, props.analysis])
 const fileExpansion = useExpansion<string>()
 const expandedFiles = fileExpansion.expanded
 
@@ -432,7 +430,6 @@ const topRiskFactors = computed((): TopRiskFactor[] => {
 
 function setFilter(filter: 'high' | 'medium' | 'low'): void {
   activeFilter.value = activeFilter.value === filter ? 'all' : filter
-  visibleCount.value = PAGE_SIZE
 }
 
 function toggleFileExpand(filePath: string): void {
@@ -490,14 +487,7 @@ function formatFactorName(factor: string): string {
   return factor.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
-function formatTimestamp(timestamp: string | undefined): string {
-  if (!timestamp) return 'Unknown'
-  try {
-    return new Date(timestamp).toLocaleString()
-  } catch {
-    return String(timestamp)
-  }
-}
+const formatTimestamp = createDateFormatter({ emptyText: 'Unknown' })
 </script>
 
 <style scoped>
@@ -703,16 +693,6 @@ function formatTimestamp(timestamp: string | undefined): string {
   line-height: 1.4;
 }
 
-.bug-prediction-section .show-more {
-  text-align: center;
-  padding: var(--spacing-2-5);
-}
-
-.bug-prediction-section .show-more .muted {
-  color: var(--text-tertiary);
-  font-size: 0.85em;
-}
-
 /* Enhanced Bug Prediction Styles */
 .summary-card.clickable { cursor: pointer; transition: transform 0.2s; }
 .summary-card.clickable:hover { transform: translateY(-2px); }
@@ -793,9 +773,6 @@ function formatTimestamp(timestamp: string | undefined): string {
 .tips-list li { color: var(--text-secondary); border-left: 3px solid var(--color-warning-light); }
 .tests-list li i { color: var(--chart-purple-light); margin-top: var(--spacing-0-5); }
 .tests-list li { color: var(--chart-purple-light); border-left: 3px solid var(--chart-purple-light); }
-.show-more-container { text-align: center; margin-top: var(--spacing-4); }
-.show-more-btn { padding: var(--spacing-2-5) var(--spacing-6); background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: var(--color-info-light); border-radius: var(--radius-md); cursor: pointer; font-size: 0.9em; display: inline-flex; align-items: center; gap: var(--spacing-2); transition: all 0.2s; }
-.show-more-btn:hover { background: rgba(59, 130, 246, 0.3); }
 
 /* Issue #538: Code Intelligence Scores Section */
 

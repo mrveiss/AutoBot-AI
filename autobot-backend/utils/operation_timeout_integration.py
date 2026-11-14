@@ -19,13 +19,13 @@ framework and existing AutoBot components, including:
 import asyncio
 from typing import Any, Callable, Dict, List
 
-import redis.asyncio as redis
-from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, BackgroundTasks, WebSocket
 from pydantic import BaseModel
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.logging_manager import get_logger
-from constants.network_constants import ServiceURLs
+from autobot_shared.redis_client import get_async_redis_client
 from constants.threshold_constants import TimingConstants
 from utils.catalog_http_exceptions import (
     raise_catalog_error_simple,
@@ -104,10 +104,9 @@ class ProgressUpdateRequest(BaseModel):
 class OperationIntegrationManager:
     """Integration manager for long-running operations with AutoBot"""
 
-    def __init__(self, redis_url: str = f"{ServiceURLs.REDIS_VM}/9"):
-        """Initialize operation integration manager with Redis URL."""
+    def __init__(self):
+        """Initialize operation integration manager (Redis is the ``temp`` database)."""
         self.redis_client = None
-        self.redis_url = redis_url
         self.operation_manager = None
         self.websocket_connections: Dict[str, List[WebSocket]] = {}
         self.router = APIRouter(prefix="/operations", tags=["long-running-operations"])
@@ -122,8 +121,10 @@ class OperationIntegrationManager:
         if self.operation_manager is not None:
             return
         try:
-            self.redis_client = redis.from_url(self.redis_url)
-            await self.redis_client.ping()
+            # bytes (#18553, #14187): a decoding client fails on a legacy pickled entry inside pipe.execute()
+            self.redis_client = await get_async_redis_client("temp", decode_responses=False)
+            if self.redis_client is None:
+                raise ConnectionError("Redis 'temp' database unavailable")
             logger.info("Connected to Redis for operations management")
         except Exception as e:
             logger.warning("Failed to connect to Redis: %s, using in-memory storage", e)
@@ -237,9 +238,7 @@ class OperationIntegrationManager:
         """Handle WebSocket connection for progress updates."""
         await websocket.accept()
         async with self._ws_lock:
-            if operation_id not in self.websocket_connections:
-                self.websocket_connections[operation_id] = []
-            self.websocket_connections[operation_id].append(websocket)
+            self.websocket_connections.setdefault(operation_id, []).append(websocket)
         try:
             operation = self.operation_manager.get_operation(operation_id)
             if operation:
@@ -250,8 +249,8 @@ class OperationIntegrationManager:
                     await asyncio.wait_for(websocket.receive_text(), timeout=TimingConstants.SHORT_TIMEOUT)
                 except asyncio.TimeoutError:
                     await websocket.send_json({"type": "ping"})
-        except WebSocketDisconnect:
-            logger.debug("WebSocket client disconnected from operation %s", operation_id)
+        except PEER_CLOSED_ERRORS as disconnect:
+            log_client_disconnect(logger, disconnect, "_handle_websocket_connection")
         finally:
             async with self._ws_lock:
                 if operation_id in self.websocket_connections and websocket in self.websocket_connections[operation_id]:
@@ -425,8 +424,7 @@ class OperationIntegrationManager:
             from pathlib import Path
 
             from constants.path_constants import PATH
-
-            from ..knowledge_base import KnowledgeBase
+            from knowledge import get_knowledge_base
 
             codebase_path = context.get("codebase_path", str(PATH.PROJECT_ROOT))
             file_patterns = context.get("file_patterns", ["*.py", "*.js", "*.vue", "*.ts"])
@@ -441,7 +439,7 @@ class OperationIntegrationManager:
             await exec_context.update_progress("Initializing indexing", 0, 1)
 
             # Simulate actual indexing work
-            kb = KnowledgeBase()
+            kb = await get_knowledge_base()  # raises RuntimeError when unavailable (D2)
             result = await kb.populate_from_codebase(
                 codebase_path,
                 patterns=file_patterns,

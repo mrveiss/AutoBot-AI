@@ -37,6 +37,7 @@ from constants.threshold_constants import (
 )
 from knowledge.search import map_kb_result_to_dict  # Issue #10740 shared mapper
 from llm_shared.torch_loader import lazy_torch
+from services.npu_worker_routing import npu_worker_urls, post_inference_with_failover
 
 if TYPE_CHECKING:
     import torch as _torch_type  # noqa: F401
@@ -167,7 +168,7 @@ class ProcessingTask:
 
 
 @dataclass
-class ProcessingResult:
+class AcceleratorProcessingResult:
     """AI processing result."""
 
     task_id: str
@@ -264,13 +265,20 @@ class AIHardwareAccelerator:
         self.device_status[HardwareDevice.CPU]["last_check"] = datetime.now(tz=timezone.utc)
 
     async def _check_npu_availability(self):
-        """Check NPU Worker availability."""
+        """The NPU is available if any worker is: one down must not send every task to the CPU (#19706)."""
+        for url in await npu_worker_urls(self.npu_worker_url):
+            await self._probe_npu_worker(url)
+            if self.device_status[HardwareDevice.NPU]["available"]:
+                return
+
+    async def _probe_npu_worker(self, url: str) -> None:
+        """Record one worker's availability."""
         try:
             # Use singleton HTTP client for connection pooling
             http_client = get_http_client()
             # NPU worker may be absent — keep probe failures at DEBUG (#9767).
             async with await http_client.get(
-                f"{self.npu_worker_url}/health",
+                f"{url}/health",
                 timeout=aiohttp.ClientTimeout(total=5),
                 suppress_error_log=True,
             ) as response:
@@ -477,7 +485,7 @@ class AIHardwareAccelerator:
         else:  # HEAVY tasks
             return self._route_heavy_task()
 
-    async def process_task(self, task: ProcessingTask) -> ProcessingResult:
+    async def process_task(self, task: ProcessingTask) -> AcceleratorProcessingResult:
         """Process an AI task using optimal hardware (Issue #315 - refactored)."""
         start_time = time.time()
         selected_device = self._select_optimal_device(task)
@@ -504,10 +512,10 @@ class AIHardwareAccelerator:
         device: HardwareDevice,
         result: Any,
         start_time: float,
-    ) -> ProcessingResult:
+    ) -> AcceleratorProcessingResult:
         """Create successful processing result (Issue #315 - extracted)."""
         processing_time = (time.time() - start_time) * 1000
-        return ProcessingResult(
+        return AcceleratorProcessingResult(
             task_id=task.task_id,
             success=True,
             result=result,
@@ -522,7 +530,7 @@ class AIHardwareAccelerator:
         selected_device: HardwareDevice,
         error: Exception,
         start_time: float,
-    ) -> ProcessingResult:
+    ) -> AcceleratorProcessingResult:
         """Handle task failure with fallback (Issue #315 - extracted)."""
         fallback_device = self._get_fallback_device(selected_device)
 
@@ -535,7 +543,7 @@ class AIHardwareAccelerator:
                 return self._create_success_result(task, fallback_device, fallback_result, start_time)
 
         processing_time = (time.time() - start_time) * 1000
-        return ProcessingResult(
+        return AcceleratorProcessingResult(
             task_id=task.task_id,
             success=False,
             error=str(error),
@@ -564,30 +572,16 @@ class AIHardwareAccelerator:
             "timeout_seconds": task.timeout_seconds,
         }
 
-        # Use singleton HTTP client for connection pooling
-        http_client = get_http_client()
-        async with await http_client.post(
-            f"{self.npu_worker_url}/inference",
-            json=request_data,
-            timeout=aiohttp.ClientTimeout(total=task.timeout_seconds),
-        ) as response:
-            if response.status == 200:
-                result_data = await response.json()
-                if result_data.get("status") == "completed":
-                    return result_data.get("result", {})
-                else:
-                    raise Exception(f"NPU processing failed: {result_data.get('error')}")
-            else:
-                raise Exception(f"NPU Worker HTTP error: {response.status}")
+        return await post_inference_with_failover(self.npu_worker_url, request_data, task.timeout_seconds)
 
     def _get_optimal_npu_model(self, task: ProcessingTask) -> str:
         """Get optimal NPU model for task."""
         task_type = task.task_type
 
         if task_type == "embedding_generation":
-            return "nomic-embed-text"
-        elif task_type == "chat_inference":
-            return cfg.get_default_llm_model()
+            from autobot_shared.embedding_model import active_npu_worker_model
+
+            return active_npu_worker_model()  # no stored index here (#18143)
         elif task_type == "text_classification":
             return "text-classification-model"
         else:
@@ -685,10 +679,10 @@ class AIHardwareAccelerator:
         from utils.semantic_chunker import get_semantic_chunker
 
         chunker = get_semantic_chunker()
-        await chunker._initialize_model()
+        await chunker.load_embedding_model()
 
         sentences = [content] if isinstance(content, str) else content
-        embeddings = await chunker._compute_sentence_embeddings_async(sentences)
+        embeddings = await chunker.embed_sentences(sentences)
         raw_embedding = embeddings[0] if len(embeddings) > 0 else np.zeros(HardwareAcceleratorConfig.MINILM_OUTPUT_DIM)
 
         if self.text_projection:
@@ -817,9 +811,9 @@ class AIHardwareAccelerator:
         top_k: int = input_data.get("top_k", _DEFAULT_SEMANTIC_SEARCH_TOP_K)
 
         try:
-            from knowledge_base_factory import get_knowledge_base
+            from knowledge_base_factory import get_knowledge_base_or_none
 
-            kb = await get_knowledge_base()
+            kb = await get_knowledge_base_or_none()
             if kb is None:
                 logger.warning("Knowledge base unavailable; returning empty semantic search result")
                 return _EMPTY

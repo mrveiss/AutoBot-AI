@@ -8,6 +8,8 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
+import { useCompanyMembers } from '@/composables/llc/useCompanyMembers'
+import { shareInFlight } from '@/composables/llc/shareInFlight'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
 import HireAgentModal from '@/components/llc/HireAgentModal.vue'
@@ -24,6 +26,7 @@ import {
   orgLayoutKey,
   orgUnitRoots,
   teamMemberOrgNodeId,
+  isProcessNodeSource,
   workflowIdFromProcessNode,
   ORG_GROUP_PREFIX,
 } from '@/composables/llc/orgCanvasGraph'
@@ -31,6 +34,10 @@ import type { ProcessNodeSource, ToolNodeSource } from '@/composables/llc/orgCan
 import { WORKFLOW_QUERY_KEY } from '@/composables/workflow/workflowDeepLink'
 import { canvasNodeIdFromQuery } from '@/composables/workflow/canvasNodeDeepLink'
 import OrgPeopleList from '@/components/llc/OrgPeopleList.vue'
+import OrgProcessAttachForm from '@/components/llc/OrgProcessAttachForm.vue'
+import OrgProcessBanners from '@/components/llc/OrgProcessBanners.vue'
+import OrgToolAttachForm from '@/components/llc/OrgToolAttachForm.vue'
+import WorkflowPlannerPanel from '@/components/llc/workflowPlanner/WorkflowPlannerPanel.vue'
 import CanvasNodeSidebar from '@/components/llc/CanvasNodeSidebar.vue'
 import {
   buildOrgPeople,
@@ -38,7 +45,7 @@ import {
   groupPeopleByTeam,
   UNGROUPED_TEAM_ID,
 } from '@/composables/llc/orgPeople'
-import type { CompanyTeam, ContactEditPatch, ContactSource } from '@/composables/llc/orgPeople'
+import type { ContactEditPatch } from '@/composables/llc/orgPeople'
 import ExecutorRollupPanel from '@/components/llc/ExecutorRollupPanel.vue'
 import { buildExecutorRollupMatrix } from '@/composables/llc/executorRollup'
 import type { ExecutorRollupCell, ExecutorRollupMatrix } from '@/composables/llc/executorRollup'
@@ -55,7 +62,10 @@ import {
   toolFilterCounts,
 } from '@/composables/llc/orgCanvasFilters'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { useCompanyWorkflows } from '@/composables/llc/useCompanyWorkflows'
+import { useOrgPeopleSources } from '@/composables/llc/useOrgPeopleSources'
+import { useOrgProcessAttachment } from '@/composables/llc/useOrgProcessAttachment'
+import { BaseDrawer } from '@autobot/ui'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
@@ -67,12 +77,20 @@ const router = useRouter()
 // below must tolerate that exactly the same way.
 const route = useRoute() as ReturnType<typeof useRoute> | undefined
 const { companyId, resolveCompanyId } = useLlcCompanyContext()
+// #20682/#21001: attach/detach, contact delete and agent pause/terminate 403 for anyone the server does not
+// let manage the company; the members response says who (`viewer_can_manage`), so they stay hidden until it loads.
+const { viewerCanManage: canManageCompany, errorMessage: standingError, load: loadViewerStanding } = useCompanyMembers(api, () => companyId.value ?? '')
 
 const tree = ref<OrgNode[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
+// #14556: the company id did not resolve. Not an empty company: we could not tell whose chart
+// to load, so the view says so and offers a retry instead of an empty chart.
+const companyUnresolved = ref(false)
 const selectedNode = ref<OrgNode | null>(null)
 const drawerOpen = ref(false)
+// The last node shown: the drawer's title holds through its leave transition (#19198).
+const drawerNode = ref<OrgNode | null>(null)
 const showHire = ref(false) // GH#10219
 const terminating = ref(false) // in-flight guard — terminate is irreversible
 
@@ -81,36 +99,26 @@ const ALL_UNITS_TAB = 'all'
 // GH#13938: the People list is a third render of the company — the only one
 // that shows contacts, which are not hierarchy members and so appear in
 // neither the tree nor the canvas.
-type OrgViewMode = 'tree' | 'canvas' | 'people'
-const VIEW_MODES: readonly OrgViewMode[] = ['tree', 'canvas', 'people'] as const
-const VIEW_MODE_LABEL_KEY: Record<OrgViewMode, string> = {
-  tree: 'llc.orgChart.viewTree',
-  canvas: 'llc.orgChart.viewCanvas',
-  people: 'llc.orgChart.viewPeople',
-}
-const viewMode = ref<OrgViewMode>('tree')
+// #19938: the Workflow Planner is a fourth mode — no new nav entry.
+type OrgViewMode = 'tree' | 'canvas' | 'people' | 'planner'
+const VIEW_MODES: readonly OrgViewMode[] = ['tree', 'canvas', 'people', 'planner'] as const
+const VIEW_MODE_LABEL_KEY: Record<OrgViewMode, string> = { tree: 'llc.orgChart.viewTree', canvas: 'llc.orgChart.viewCanvas', people: 'llc.orgChart.viewPeople', planner: 'llc.orgChart.viewPlanner' }
+const viewMode = ref<OrgViewMode>(route?.query?.view === 'planner' ? 'planner' : 'tree')
 const activeTabId = ref<string>(ALL_UNITS_TAB)
 
-// GH#13938: contacts and teams are fetched only when the People list is first
-// opened. The org chart's own mount stays a single request, and a terminate
-// reload keeps reloading exactly the hierarchy it changed.
-const contacts = ref<ContactSource[]>([])
-// #13998: ids of contacts this department carries with no role to explain them.
-// Kept separate from `contacts` so the list the org chart builds stays one
-// list, while the People view can still label the difference honestly.
-const unassignedContactIds = ref<Set<string>>(new Set())
-const teams = ref<CompanyTeam[]>([])
-const peopleLoaded = ref(false)
-// A source that did not answer — kept apart from a source that answered
-// "nothing", so the list never states a fact it does not know (#14064).
-const contactsFailed = ref(false)
-const teamsFailed = ref(false)
-// #14596: distinguishes "the teams request has not answered yet" from "it
-// answered with zero teams" — `teams.value` is `[]` in both cases, and the
-// canvas must never say "this company has no teams" before the request that
-// would prove it has actually completed (#14064's failure shape).
-const teamsAttempted = ref(false)
-const peopleLoading = ref(false)
+// GH#13938/#21469: contacts and teams are fetched only when the People list is first opened; the
+// sources, their failed-vs-empty flags and the retry live in `useOrgPeopleSources`.
+const {
+  contacts,
+  unassignedContactIds,
+  teams,
+  contactsFailed,
+  teamsFailed,
+  teamsAttempted,
+  loading: peopleLoading,
+  load: loadPeopleSources,
+  reload: reloadPeopleSources,
+} = useOrgPeopleSources({ api, resolveCompanyId: () => resolveCompanyIdOnce(), companyId: () => companyId.value ?? '' })
 // #14603: contact editing, from the People list. `savingContactId` is the
 // contact id a PATCH is in flight for — never a plain boolean, so the row
 // the People list is not saving stays interactive. Single-flight per the
@@ -160,6 +168,9 @@ const canvasNodes = ref<CanvasNode[]>([])
 // render as "this company has no org chart".
 const processNodes = ref<ProcessNodeSource[]>([])
 const processNodesLoaded = ref(false)
+/** The process-nodes request did not answer, and whether it was tried (#21242): "failed" is not "none attached". */
+const processNodesFailed = ref(false)
+const processNodesAttempted = ref(false)
 
 // #14597: the tools this company's roles carry — the sibling of
 // `processNodes` above, same reasoning: its own ref so a failed fetch cannot
@@ -187,12 +198,27 @@ const attachableRoles = ref<AttachableRole[]>([])
 /** The roles request did not answer — distinct from answering "none" (#14064). */
 const attachRolesFailed = ref(false)
 const rolesLoaded = ref(false)
-const attachRoleId = ref('')
-const attachWorkflowId = ref('')
+// #21242: the company's workflows (attach select, create modal, attach/detach), loaded with the canvas.
+const workflowsSvc = useCompanyWorkflows(() => companyId.value ?? '', {
+  autoLoad: () => viewMode.value === 'canvas',
+})
 // One flag for both mutations, mirroring RolesView.vue's `isMutating`: a
 // second attach/detach cannot fire while the first is still in flight.
-const processMutationInFlight = ref(false)
-const processMutationError = ref<string | null>(null)
+const {
+  roleId: attachRoleId,
+  workflowId: attachWorkflowId,
+  inFlight: processMutationInFlight,
+  error: processMutationError,
+  attachedIds: attachedToRole,
+  attach: onProcessAttach,
+  detach: onProcessDetached,
+} = useOrgProcessAttachment({
+  companyId: () => companyId.value ?? '',
+  workflows: workflowsSvc,
+  processNodes,
+  reload: reloadProcessNodes,
+  describe: describeError,
+})
 
 // #14597: the tool attach form's own state, mirroring the process attach
 // form above exactly (same `attachableRoles` picker, a name field instead of
@@ -360,73 +386,6 @@ const teamFilterName = computed(
 )
 
 /**
- * Load the two sources the People list needs beyond the org chart.
- *
- * Each is independent: a company with no contacts must still get its teams,
- * and a teams endpoint failure must not blank the people. `Promise.allSettled`
- * keeps a partial answer partial instead of turning it into an empty list.
- */
-async function loadPeopleSources(): Promise<void> {
-  if (peopleLoaded.value || peopleLoading.value) return
-  // Claim the guard BEFORE the first await: two clicks in one tick would both
-  // pass the check above and double-fire every request.
-  peopleLoading.value = true
-  const cid = await resolveCompanyIdOnce()
-  if (!cid) {
-    peopleLoading.value = false
-    return
-  }
-  const [contactsResult, teamsResult] = await Promise.allSettled([
-    api.get<{ with_role: ContactSource[]; unassigned: ContactSource[] }>(
-      `/api/llc/contacts/${cid}/involved`,
-    ),
-    api.get<{ teams: CompanyTeam[] }>(`/api/llc/companies/${cid}/teams`),
-  ])
-  if (contactsResult.status === 'fulfilled') {
-    // Two groups, one list to draw: people whose presence a role explains, and
-    // people the department carries from before the directory was shared.
-    // Merging them here would assert an involvement nobody recorded, so the
-    // second group is tracked by id and labelled rather than blended in.
-    const withRole = Array.isArray(contactsResult.value?.with_role)
-      ? contactsResult.value.with_role
-      : []
-    const unassigned = Array.isArray(contactsResult.value?.unassigned)
-      ? contactsResult.value.unassigned
-      : []
-    contacts.value = [...withRole, ...unassigned]
-    unassignedContactIds.value = new Set(unassigned.map((c) => c.id))
-    contactsFailed.value = false
-  } else {
-    // A failed fetch must never be reported as "this company has no people".
-    // Absence of data and absence of an answer are different claims (#14064).
-    contactsFailed.value = true
-    logger.error('Failed to fetch contacts:', contactsResult.reason)
-  }
-  if (teamsResult.status === 'fulfilled') {
-    teams.value = Array.isArray(teamsResult.value?.teams) ? teamsResult.value.teams : []
-    teamsFailed.value = false
-  } else {
-    teamsFailed.value = true
-    logger.error('Failed to fetch company teams:', teamsResult.reason)
-  }
-  teamsAttempted.value = true
-  // Only a complete answer is cached; a partial one retries on re-entry.
-  peopleLoaded.value = !contactsFailed.value && !teamsFailed.value
-  peopleLoading.value = false
-}
-
-/**
- * Force the People sources to actually re-fetch (#14603) — mirrors
- * `reloadProcessNodes`/`reloadToolNodes`. `peopleLoaded` guards the lazy
- * fetch above, so a contact save has to clear it first or the "refetch"
- * would hit the guard and silently keep showing the pre-edit row.
- */
-async function reloadPeopleSources(): Promise<void> {
-  peopleLoaded.value = false
-  await loadPeopleSources()
-}
-
-/**
  * Save an edited contact from the People list (#14603).
  *
  * Only a contact ever reaches this handler — `OrgPeopleList` renders the
@@ -518,6 +477,7 @@ function setViewMode(mode: OrgViewMode) {
   // reader who stays in tree mode should not pay for a request they never see.
   if (mode === 'canvas') {
     void fetchProcessNodes()
+    void workflowsSvc.load()
     // #14549: the attach picker needs the role list, same lazy trigger.
     void fetchRolesForAttach()
     // #14596: teams render on the canvas too, sharing the same lazy fetch
@@ -557,43 +517,25 @@ function onCanvasNodeSelected(nodeId: string | null) {
   if (node) openDrawer(node)
 }
 
-/**
- * De-duplicate the in-flight company resolution (#13942 review).
- *
- * `fetchTree` and `loadExecutorRollup` both start with `await resolveCompanyIdOnce()`
- * and `onMounted` fires them together. The composable has no in-flight
- * de-duplication, so on the path it exists for — reached from a top-level nav
- * entry carrying no company id — both raced into their own
- * `GET /api/llc/companies/` fallback, doubling that request on the view most
- * users land on. Harmless but wasteful, and invisible to CI: every test that
- * mounts this view stubs the composable with a static resolver, so the real
- * resolution path is never exercised.
- *
- * Only the *pending* promise is shared; it is released on settle, so a later
- * call still re-resolves.
- */
-let pendingCompanyId: Promise<string | null> | null = null
-function resolveCompanyIdOnce(): Promise<string | null> {
-  if (!pendingCompanyId) {
-    pendingCompanyId = Promise.resolve(resolveCompanyId()).finally(() => {
-      pendingCompanyId = null
-    })
-  }
-  return pendingCompanyId
-}
+// #13942 review: fetchTree and loadExecutorRollup resolve the company together on mount;
+// one shared in-flight resolution instead of two racing GET /api/llc/companies/ fallbacks.
+const resolveCompanyIdOnce = shareInFlight(() => resolveCompanyId())
 
 /**
  * Load the workflows this company's roles run (#13963).
  *
- * Failures are logged and left as an empty list rather than surfaced as a page
- * error: the org chart is still correct without the process nodes, and blocking
- * the whole view on a secondary panel is the #14104 `peopleUnavailable`
- * precedent in reverse.
+ * A failure is not a page error (the org chart is still correct without the
+ * process nodes, the #14104 `peopleUnavailable` precedent in reverse), but it is
+ * recorded in `processNodesFailed`: "failed to load" must not read as "none
+ * attached" (#21242), as `fetchToolNodes` already keeps apart.
  */
 async function fetchProcessNodes() {
   if (processNodesLoaded.value) return
+  let cid = ''
+  // A switched company owns the flags now; an unresolved one (cid '') never does (#21242).
+  const stale = () => cid !== '' && !!companyId.value && cid !== companyId.value
   try {
-    const cid = await resolveCompanyIdOnce()
+    cid = await resolveCompanyIdOnce()
     if (!cid) {
       processNodes.value = []
       return
@@ -601,22 +543,23 @@ async function fetchProcessNodes() {
     const resp = await api.get<{ nodes: ProcessNodeSource[] }>(
       `/api/llc/companies/${cid}/process-nodes`,
     )
-    // Accept only rows that actually carry the three strings a process node is
-    // made of. A response of another shape — a misrouted mock, a changed
-    // contract — would otherwise be rendered as nonsense nodes on the canvas
-    // rather than as nothing.
+    if (stale()) return
     const rows = Array.isArray(resp?.nodes) ? resp.nodes : []
-    processNodes.value = rows.filter(
-      (row): row is ProcessNodeSource =>
-        typeof row?.role_id === 'string' &&
-        typeof row?.role_name === 'string' &&
-        typeof row?.workflow_id === 'string',
-    )
-    processNodesLoaded.value = true
+    processNodes.value = rows.filter(isProcessNodeSource)
+    settleProcessNodes(true)
   } catch (err: unknown) {
     logger.error('Failed to fetch process nodes:', err instanceof Error ? err.message : String(err))
+    if (stale()) return
     processNodes.value = []
+    settleProcessNodes(false)
   }
+}
+
+/** Record how the process-nodes request ended; only an answer is cached as loaded. */
+function settleProcessNodes(answered: boolean) {
+  processNodesFailed.value = !answered
+  processNodesLoaded.value = answered
+  processNodesAttempted.value = true
 }
 
 /**
@@ -669,51 +612,6 @@ async function reloadProcessNodes(): Promise<void> {
 
 function describeError(error: unknown, fallbackKey: string): string {
   return describeApiError(error, t(fallbackKey))
-}
-
-/** Attach a workflow to a role from the canvas (#14549). */
-async function onProcessAttach(): Promise<void> {
-  const roleId = attachRoleId.value
-  const workflowId = attachWorkflowId.value.trim()
-  if (!companyId.value || !roleId || !workflowId || processMutationInFlight.value) return
-  processMutationInFlight.value = true
-  processMutationError.value = null
-  try {
-    await api.post(`/api/llc/roles/${companyId.value}/${roleId}/workflows`, {
-      workflow_id: workflowId,
-    })
-    attachWorkflowId.value = ''
-    // The canvas is the confirmation (#14549 issue body): a successful attach
-    // must be visible on it, not just accepted by the server.
-    await reloadProcessNodes()
-  } catch (err: unknown) {
-    logger.error('Failed to attach workflow:', err)
-    processMutationError.value = describeError(err, 'llc.orgChart.attachError')
-  } finally {
-    processMutationInFlight.value = false
-  }
-}
-
-/**
- * Detach a workflow from a role, reached from the process node's own control
- * on the canvas (#14549). No optimistic update: a failed call leaves
- * `processNodes` — and so the graph — exactly as it was.
- */
-async function onProcessDetached(roleId: string, workflowId: string): Promise<void> {
-  if (!companyId.value || processMutationInFlight.value) return
-  processMutationInFlight.value = true
-  processMutationError.value = null
-  try {
-    await api.delete(
-      `/api/llc/roles/${companyId.value}/${roleId}/workflows/${encodeURIComponent(workflowId)}`,
-    )
-    await reloadProcessNodes()
-  } catch (err: unknown) {
-    logger.error('Failed to detach workflow:', err)
-    processMutationError.value = describeError(err, 'llc.orgChart.detachError')
-  } finally {
-    processMutationInFlight.value = false
-  }
 }
 
 /**
@@ -813,10 +711,12 @@ async function onToolDetached(roleId: string, toolName: string): Promise<void> {
 async function fetchTree() {
   isLoading.value = true
   error.value = null
+  companyUnresolved.value = false
   try {
     const cid = await resolveCompanyIdOnce()
     if (!cid) {
       tree.value = []
+      companyUnresolved.value = true
       return
     }
     const resp = await api.get<{ nodes: OrgNode[] }>(`/api/llc/companies/${cid}/org-chart`)
@@ -871,9 +771,8 @@ async function toggleAgentPause(node: OrgNode) {
     } else {
       await api.post(`/api/llc/companies/${cid}/controls/agents/${node.id}/resume`, {})
     }
-    // #13996: mutate the tree node itself — the drawer reads through
-    // `selectedNode`, so replacing it with a detached copy left a second
-    // toggle updating the copy while the canvas kept the stale status.
+    // #13996: mutate the tree node itself — the drawer reads through `selectedNode`, so a detached
+    // copy left a second toggle updating the copy while the canvas kept the stale status.
     node.status = willPause ? 'paused' : 'idle'
     if (selectedNode.value?.id === node.id) selectedNode.value = node
   } catch (err: unknown) {
@@ -902,14 +801,11 @@ async function terminateAgent(node: OrgNode) {
 }
 
 function openDrawer(node: OrgNode) {
-  selectedNode.value = node
+  selectedNode.value = drawerNode.value = node
   drawerOpen.value = true
 }
 
-function closeDrawer() {
-  drawerOpen.value = false
-  selectedNode.value = null
-}
+function closeDrawer() { drawerOpen.value = false; selectedNode.value = null }
 
 function onCanvasNodeMoved(nodeId: string, position: { x: number; y: number }) {
   // Containers stay anchored to the subtree they enclose.
@@ -997,6 +893,7 @@ watch(deepLinkSourcesReady, (ready) => {
 
 onMounted(() => {
   void fetchTree()
+  void loadViewerStanding()
   // #13942: company-wide, independent of tree/view-mode — loads once, like fetchTree.
   void loadExecutorRollup()
   // #14611: a deep link opens straight onto the canvas, triggering the same
@@ -1142,12 +1039,25 @@ onMounted(() => {
       />
     </div>
 
-    <div v-if="error" class="rounded-lg bg-autobot-error-bg border border-autobot-error p-4 text-autobot-error text-sm mb-4">
+    <p v-if="standingError" class="mb-2 text-xs text-autobot-text-muted" data-testid="org-standing-unavailable">{{ t('llc.orgChart.standingUnavailable') }}</p>
+    <div v-if="error && viewMode !== 'planner'" class="rounded-lg bg-autobot-error-bg border border-autobot-error p-4 text-autobot-error text-sm mb-4">
       {{ error }}
       <button class="ml-4 underline" @click="fetchTree">{{ t('llc.orgChart.retry') }}</button>
     </div>
 
-    <div v-if="isLoading" class="text-center py-12 text-autobot-text-muted">{{ t('llc.orgChart.loading') }}</div>
+    <WorkflowPlannerPanel v-if="viewMode === 'planner'" />
+
+    <div v-else-if="isLoading" class="text-center py-12 text-autobot-text-muted">{{ t('llc.orgChart.loading') }}</div>
+
+    <div
+      v-else-if="companyUnresolved"
+      class="text-center py-12 text-autobot-text-muted"
+      role="status"
+      data-testid="org-chart-company-unresolved"
+    >
+      {{ t('llc.orgChart.companyUnresolved') }}
+      <button class="ml-4 underline" @click="fetchTree">{{ t('llc.orgChart.retry') }}</button>
+    </div>
 
     <!-- GH#13938: the People list carries its own empty state. An empty
          hierarchy does not mean an empty company — a company can have contacts
@@ -1187,6 +1097,7 @@ onMounted(() => {
         :contacts-failed="contactsFailed"
         :saving-contact-id="savingContactId"
         :contact-save-error="contactSaveError"
+        :can-delete-contacts="canManageCompany"
         @select="onPersonSelected"
         @save-contact="onSaveContact"
         @create-contact="onCreateContact"
@@ -1205,59 +1116,18 @@ onMounted(() => {
            here, detach reaches from the node itself (below). Always shown in
            canvas mode, independent of the role lens: it is a mutation
            control, not a view filter. -->
-      <div
-        class="flex flex-wrap items-end gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
-        data-testid="process-attach-form"
-      >
-        <div class="flex flex-col gap-1">
-          <label for="process-attach-role" class="text-xs text-autobot-text-secondary">
-            {{ t('llc.orgChart.attachRoleLabel') }}
-          </label>
-          <select
-            id="process-attach-role"
-            v-model="attachRoleId"
-            :disabled="processMutationInFlight"
-            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
-            data-testid="process-attach-role-select"
-          >
-            <option value="">{{ t('llc.orgChart.attachRolePlaceholder') }}</option>
-            <option v-for="role in attachableRoles" :key="role.id" :value="role.id">
-              {{ role.name }}
-            </option>
-          </select>
-          <!-- Stated, not implied: an empty dropdown alone would read as "this
-               company has no roles" when the request simply did not answer. -->
-          <p
-            v-if="attachRolesFailed"
-            class="text-xs text-autobot-text-muted"
-            data-testid="process-attach-roles-unavailable"
-          >
-            {{ t('llc.orgChart.attachRolesUnavailable') }}
-          </p>
-        </div>
-        <div class="flex flex-col gap-1">
-          <label for="process-attach-workflow" class="text-xs text-autobot-text-secondary">
-            {{ t('llc.orgChart.attachWorkflowLabel') }}
-          </label>
-          <input
-            id="process-attach-workflow"
-            v-model="attachWorkflowId"
-            type="text"
-            :disabled="processMutationInFlight"
-            :placeholder="t('llc.orgChart.attachWorkflowPlaceholder')"
-            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
-            data-testid="process-attach-workflow-input"
-          />
-        </div>
-        <BaseButton
-          variant="primary"
-          data-testid="process-attach-submit"
-          :disabled="!attachRoleId || !attachWorkflowId.trim() || processMutationInFlight"
-          @click="onProcessAttach"
-        >
-          {{ t('llc.orgChart.attach') }}
-        </BaseButton>
-      </div>
+      <OrgProcessAttachForm
+        v-if="canManageCompany"
+        v-model:role-id="attachRoleId"
+        v-model:workflow-id="attachWorkflowId"
+        :roles="attachableRoles"
+        :roles-failed="attachRolesFailed"
+        :busy="processMutationInFlight"
+        :company-id="companyId ?? ''"
+        :service="workflowsSvc"
+        :attached-ids="attachedToRole"
+        @attach="onProcessAttach"
+      />
       <div
         v-if="processMutationError"
         class="border-b border-autobot-border bg-autobot-error-bg text-autobot-error px-3 py-2 text-sm"
@@ -1266,6 +1136,14 @@ onMounted(() => {
       >
         {{ processMutationError }}
       </div>
+      <!-- #21242: failed / company has no workflows / none attached — three different empty canvases. -->
+      <OrgProcessBanners
+        :failed="processNodesFailed"
+        :attempted="processNodesAttempted"
+        :node-count="processNodes.length"
+        :workflows-state="workflowsSvc.state.value"
+        :workflow-count="workflowsSvc.workflows.value.length"
+      />
 
       <!-- #14597: the tool sibling of the process-attach form above — a role
            picker (reusing `attachableRoles`) plus a tool-name field. Attach
@@ -1273,57 +1151,15 @@ onMounted(() => {
            node itself (WorkflowCanvas.vue). Always shown in canvas mode,
            independent of the role lens, for the same reason the process form
            is: it is a mutation control, not a view filter. -->
-      <div
-        class="flex flex-wrap items-end gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
-        data-testid="tool-attach-form"
-      >
-        <div class="flex flex-col gap-1">
-          <label for="tool-attach-role" class="text-xs text-autobot-text-secondary">
-            {{ t('llc.orgChart.attachRoleLabel') }}
-          </label>
-          <select
-            id="tool-attach-role"
-            v-model="attachToolRoleId"
-            :disabled="toolMutationInFlight"
-            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
-            data-testid="tool-attach-role-select"
-          >
-            <option value="">{{ t('llc.orgChart.attachRolePlaceholder') }}</option>
-            <option v-for="role in attachableRoles" :key="role.id" :value="role.id">
-              {{ role.name }}
-            </option>
-          </select>
-          <p
-            v-if="attachRolesFailed"
-            class="text-xs text-autobot-text-muted"
-            data-testid="tool-attach-roles-unavailable"
-          >
-            {{ t('llc.orgChart.attachRolesUnavailable') }}
-          </p>
-        </div>
-        <div class="flex flex-col gap-1">
-          <label for="tool-attach-name" class="text-xs text-autobot-text-secondary">
-            {{ t('llc.orgChart.attachToolNameLabel') }}
-          </label>
-          <input
-            id="tool-attach-name"
-            v-model="attachToolName"
-            type="text"
-            :disabled="toolMutationInFlight"
-            :placeholder="t('llc.orgChart.attachToolNamePlaceholder')"
-            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
-            data-testid="tool-attach-name-input"
-          />
-        </div>
-        <BaseButton
-          variant="primary"
-          data-testid="tool-attach-submit"
-          :disabled="!attachToolRoleId || !attachToolName.trim() || toolMutationInFlight"
-          @click="onToolAttach"
-        >
-          {{ t('llc.orgChart.attach') }}
-        </BaseButton>
-      </div>
+      <OrgToolAttachForm
+        v-if="canManageCompany"
+        v-model:role-id="attachToolRoleId"
+        v-model:tool-name="attachToolName"
+        :roles="attachableRoles"
+        :roles-failed="attachRolesFailed"
+        :busy="toolMutationInFlight"
+        @attach="onToolAttach"
+      />
       <div
         v-if="toolMutationError"
         class="border-b border-autobot-border bg-autobot-error-bg text-autobot-error px-3 py-2 text-sm"
@@ -1483,6 +1319,7 @@ onMounted(() => {
       <WorkflowCanvas
         v-else
         readonly
+        :detachable="canManageCompany"
         :nodes="lensedCanvasNodes"
         :selected-node-id="selectedNode?.id ?? null"
         :tabs="canvasTabs"
@@ -1499,29 +1336,27 @@ onMounted(() => {
       {{ t('llc.orgChart.canvasHint') }}
     </p>
 
-    <!-- Node sidebar (#13940): fixed slot order + icon rail, extracted to
-         CanvasNodeSidebar.vue so it is one component for tree/canvas/People
-         selections rather than a template block duplicated per surface. -->
-    <transition name="slide">
-      <div
-        v-if="drawerOpen && selectedNode"
-        class="fixed inset-y-0 right-0 w-96 bg-autobot-bg-card shadow-2xl border-l border-autobot-border z-50"
-      >
-        <CanvasNodeSidebar
-          :node="selectedNode"
-          :company-id="companyId ?? ''"
-          :terminating="terminating"
-          @close="closeDrawer"
-          @pause="toggleAgentPause"
-          @terminate="terminateAgent"
-        />
-      </div>
-    </transition>
-    <div v-if="drawerOpen" class="fixed inset-0 bg-black/20 z-40" @click="closeDrawer" />
+    <!-- Node sidebar (#13940) in the kit drawer, keyed by node: switching nodes never carries the
+         previous node's items, costs, activity or in-flight reads (#19198). -->
+    <BaseDrawer
+      :model-value="drawerOpen && !!selectedNode"
+      :title="drawerNode?.is_human ? t('llc.orgChart.personDetail') : t('llc.orgChart.agentDetail')"
+      width="24rem"
+      flush
+      :close-label="t('common.close')"
+      @close="closeDrawer"
+    >
+      <CanvasNodeSidebar
+        v-if="selectedNode"
+        :key="selectedNode.id"
+        :node="selectedNode"
+        :company-id="companyId ?? ''"
+        :terminating="terminating"
+        :can-control="canManageCompany"
+        @pause="toggleAgentPause"
+        @terminate="terminateAgent"
+        @heartbeat="(n: OrgNode, on: boolean) => { n.heartbeat_enabled = on }"
+      />
+    </BaseDrawer>
   </div>
 </template>
-
-<style scoped>
-.slide-enter-active, .slide-leave-active { transition: transform 0.25s ease; }
-.slide-enter-from, .slide-leave-to { transform: translateX(100%); }
-</style>

@@ -13,6 +13,9 @@ reasoning).
 
 Registration contract (import side effect, ordering): see ``env_registry`` (#16415).
 
+The ``AUTOBOT_EVAL_*`` entries (#20843) are the live-eval harness's: a harness that tests the product, so they
+live with the testing registrations rather than costing ``env_registry.py`` an import line it has no room for.
+
 Closes GH#7081.
 """
 
@@ -40,14 +43,33 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_LIVE_TESTS",
+        type=bool,
+        default=False,
+        description=(
+            "Opt a test run into driving live AutoBot services (#19479). Without it, every "
+            "test that calls require_live_endpoint (autobot_shared/live_service_probe.py) "
+            "skips, even when a service is listening: on a machine that also runs an "
+            "install, the configured URL is the user's live system, and some of these tests "
+            "write to it (knowledge-base decisions). Set it only for a run whose target is a "
+            "stack you mean to test."
+        ),
+        component="testing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE",
         type=bool,
         default=False,
         description=(
-            "Set to 1 to let `git push` proceed when the pre-push pytest gate COULD NOT RUN on the "
-            "local interpreter -- llc/scheduler/base.py refuses to import below Python 3.11, which "
-            "takes whole pytest groups down at collect time on a sub-floor machine (the platform "
-            "floor and CI are 3.14). Distinct from AUTOBOT_PREPUSH_ALLOW_TIMEOUT, which covers a "
+            "Set to 1 to let `git push` proceed when any pre-push gate COULD NOT RUN, i.e. cannot "
+            "produce a verdict here. Examples: pytest on a sub-floor interpreter "
+            "(llc/scheduler/base.py refuses to import below Python 3.11, taking whole pytest groups "
+            "down at collect time; the platform floor and CI are 3.14), or vitest handed a file it "
+            "does not collect, such as a Playwright spec under tests/ before #18694's root filter "
+            "is installed. Distinct from AUTOBOT_PREPUSH_ALLOW_TIMEOUT, which covers a "
             "check that started and ran out of time. Neither is a substitute for --no-verify: both "
             "switch off exactly the one check that could not produce a verdict and leave every "
             "other hook blocking (#16230)."
@@ -68,5 +90,171 @@ register_env_var(
             "alongside it rather than left as the next reviewer's finding (#7081, #16230)."
         ),
         component="testing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PREPUSH_TYPE_CHECK_TIMEOUT",
+        type=int,
+        default=450,
+        description=(
+            "Seconds the pre-push gate allows vue-tsc per frontend project. vue-tsc checks the "
+            "whole project whatever the changeset (111 s idle, ~294 s under load measured), so "
+            "the budget is project-sized, not changeset-scaled. A non-integer or zero value falls "
+            "back to 450 with a warning; capped at the hook's MAX_BUDGET (#18578)."
+        ),
+        component="testing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PREPUSH_PYTEST_WORKERS",
+        type=int,
+        default=4,
+        description=(
+            "Number of pytest-xdist workers the pre-push gate runs the selected tests with "
+            "(`-n N --dist loadscope`). 0 runs serially. A non-integer or negative value falls "
+            "back to 4 with a warning. Capped (never `-n auto`) because the dev box runs many "
+            "parallel sessions at load 20-30; the budget uses the per-file cost of the mode "
+            "actually chosen (#17451)."
+        ),
+        component="testing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPSERT_COMMENT_TIMEOUT",
+        type=float,
+        default=30.0,
+        description=(
+            "Seconds each GitHub API call made by the shared sticky-PR-comment action waits before "
+            "giving up (.github/actions/upsert-pr-comment/upsert_pr_comment.py, #12984). A value "
+            "that is not a finite number above zero is rejected with a warning and the default is "
+            "used, since 0, NaN and a negative would mean no timer or an expired one."
+        ),
+        component="tooling",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REQUIRE_REAL_TORCH",
+        type=bool,
+        default=False,
+        description=(
+            "Set to 1 to make the real-torch oracle tests under "
+            "autobot-backend/llm_shared/optimization fail, instead of skip, when torch is "
+            "a stub (meta_eviction_equivalence_test.py, #13049). Set by the "
+            "llm-optimization-real-torch CI job so a broken torch install cannot pass silently."
+        ),
+        component="testing",
+    )
+)
+
+# --- machine-wide queue for heavy local work (#20518, repo_tests/machine_slot.py) ---
+for _name, _type, _default, _description in (
+    ("AUTOBOT_MACHINE_SLOTS", int, 2, "How many heavy local runs (hooks, floor checks, big pytest runs) go at once."),
+    (
+        "AUTOBOT_MACHINE_SLOT_MAX_LOAD",
+        float,
+        14.0,
+        "The pre-push queue takes no slot while the 1-minute load average is at or above this (#21098).",
+    ),
+    (
+        "AUTOBOT_MACHINE_SLOT_LOADAVG",
+        str,
+        "/proc/loadavg",
+        "File the pre-push queue reads the 1-minute load average from; tests point it at a fake (#21098).",
+    ),
+    (
+        "AUTOBOT_MACHINE_SLOT_REPORT",
+        float,
+        60.0,
+        "Seconds between 'still queued' lines while waiting for a machine slot.",
+    ),
+    ("AUTOBOT_MACHINE_SLOT_POLL", float, 5.0, "Seconds between attempts while queued for a machine slot."),
+    (
+        "AUTOBOT_MACHINE_SLOT_DIR",
+        str,
+        "",
+        "Directory of the slot lock files; empty means the user's runtime directory.",
+    ),
+    ("AUTOBOT_MACHINE_SLOT_HELD", str, "", "Set by a holder so its child processes do not queue for a second slot."),
+    ("AUTOBOT_MACHINE_SLOT_BIG_RUN", int, 100, "Tests in a non-xdist pytest run at which it queues for a slot."),
+):
+    register_env_var(
+        EnvVarSpec(name=_name, type=_type, default=_default, description=_description, component="testing")
+    )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EVAL_ALLOW_REMOTE_PROVIDER",
+        type=bool,
+        default=False,
+        description=(
+            "Let the live eval (`python -m eval.run --live`) run against a provider or endpoint that is not "
+            "local-only (#20843). Off by default: the run is refused (exit 2) before any prompt leaves, and the "
+            "report stamps `local_only` so a remote run can never pass for a local one."
+        ),
+        component="eval",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EVAL_LIVE_TIMEOUT_S",
+        type=float,
+        default=300.0,
+        description=(
+            "Seconds one live-eval turn (one golden, one repeat) may run before it is recorded as a "
+            "`loop_stall` failure (#20843). Stamped in the report, because two runs with different "
+            "timeouts are not comparable."
+        ),
+        component="eval",
+        range=(10.0, 3600.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EVAL_JUDGE_MODEL",
+        type=str,
+        default="",
+        description=(
+            "Model pinned for the optional response judge that backs the `unsupported_claim` category of the "
+            "live eval (#20843). Empty means no judge: the category then rests on the grounding signal alone."
+        ),
+        component="eval",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EVAL_WORKSPACE_ROOT",
+        type=str,
+        default="",
+        description=(
+            "Directory under which each live-eval run gets its own throwaway workspace (#20843). Empty means "
+            "the system temporary directory. The workspace is removed when the run ends."
+        ),
+        component="eval",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EVAL_SUBSTANTIVE_MIN_WORDS",
+        type=int,
+        default=12,
+        description=(
+            "Words an answer needs before the live eval treats it as a claim that must be grounded (#20843). "
+            "A shorter answer (a refusal, an acknowledgement) is not an unsupported claim, and fails its "
+            "golden's content criteria instead."
+        ),
+        component="eval",
+        range=(1, 500),
     )
 )

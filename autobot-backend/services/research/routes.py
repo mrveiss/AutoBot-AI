@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
+from knowledge.search_filters import scoped_reader
 
 from .models import ResearchRequest, ResearchResponse
 from .orchestrator import ResearchOrchestrator
@@ -51,7 +52,7 @@ async def run_research(
     """
     orchestrator = _get_orchestrator(request)
     try:
-        return await orchestrator.research(body.question, body.options)
+        return await orchestrator.research(body.question, body.options, user_id=scoped_reader(_user))
     except Exception as exc:  # noqa: BLE001 — user-facing 500, never a bare stack trace
         logger.error("POST /research failed for question %.80s: %s", body.question, exc)
         raise HTTPException(status_code=500, detail="Research request failed") from exc

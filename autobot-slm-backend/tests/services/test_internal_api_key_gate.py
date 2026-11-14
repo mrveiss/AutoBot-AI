@@ -23,7 +23,7 @@ import secrets
 import pytest
 
 
-# --- verbatim mirror of services.auth.verify_internal_api_key -------------
+# --- verbatim mirror of autobot_shared.auth.internal_api_key.verify_internal_api_key
 def _verify_internal_api_key(provided: str | None, expected: str) -> bool:
     if not expected or not provided:
         return False

@@ -1,0 +1,28 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# postgresql_fleet_address reads network facts. The updater's plays gather none, and under smart
+# gathering a cache left by a narrow setup call skips "Gathering Facts" too (#19944).
+---
+
+- name: Gather the network facts the fleet address reads
+  ansible.builtin.setup:
+    gather_subset: ['network']
+  when: >-
+    ansible_facts['all_ipv4_addresses'] is not defined
+    or ansible_facts['default_ipv4'] is not defined
+
+- name: A host serving the fleet has a non-loopback address
+  ansible.builtin.assert:
+    that:
+      - postgresql_fleet_address | length > 0
+    fail_msg: >-
+      {{ inventory_hostname }} serves PostgreSQL to the fleet (groups {{ group_names | intersect(postgresql_fleet_groups) }})
+      but no non-loopback address of its own was found. Evaluated: slm_host={{ slm_host | default('unset') }},
+      ansible_host={{ ansible_host | default('unset') }}, own addresses={{ _postgresql_own_addresses }},
+      default route address={{ (ansible_facts['default_ipv4'] | default({}))['address'] | default('none') }}.
+      Listening on loopback only would cut every remote client --
+      set SLM_HOST in the SLM secrets file or ansible_host in the inventory.
+    quiet: true

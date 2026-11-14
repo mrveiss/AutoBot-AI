@@ -76,7 +76,7 @@ def _make_work_item(
     wi.cancelled_at = None
     wi.started_at = None
     wi.version = 1
-    wi.title = "Bug: crash on startup"
+    wi.title, wi.identifier = "Bug: crash on startup", "WI-1"
     return wi
 
 
@@ -336,15 +336,12 @@ class TestTransitionToDone:
         """Agent actor with review gate triggers handoff, returns IN_REVIEW item."""
         wi = _make_work_item(status=WorkItemStatus.IN_PROGRESS)
         session = self._make_wi_session(wi)
-        company_id = str(uuid.uuid4())
-        agent_id = str(uuid.uuid4())
+        company_id, agent_id, reviewer = (str(uuid.uuid4()) for _ in range(3))
 
-        gate_svc = AsyncMock(spec=ReviewGatePolicyService)
-        gate_svc.requires_review = AsyncMock(return_value=(True, "admin"))
+        gate_svc = AsyncMock(spec=ReviewGatePolicyService, requires_review=AsyncMock(return_value=(True, "admin")))
 
         in_review_wi = _make_work_item(status=WorkItemStatus.IN_REVIEW)
-        handoff_svc = AsyncMock(spec=HandoffService)
-        handoff_svc.agent_to_human = AsyncMock(return_value=in_review_wi)
+        handoff_svc = AsyncMock(spec=HandoffService, agent_to_human=AsyncMock(return_value=in_review_wi))
 
         svc = WorkItemService()
         result = await svc.transition_to_done(
@@ -354,9 +351,12 @@ class TestTransitionToDone:
             actor_agent_id=agent_id,
             review_gate_svc=gate_svc,
             handoff_svc=handoff_svc,
+            reviewer_user_id=reviewer,
         )
 
-        handoff_svc.agent_to_human.assert_awaited_once()
+        handoff_svc.agent_to_human.assert_awaited_once_with(
+            session, str(wi.id), agent_id=agent_id, reviewer_user_id=reviewer, company_id=company_id
+        )
         assert result.status == WorkItemStatus.IN_REVIEW
 
     @pytest.mark.asyncio
@@ -459,14 +459,14 @@ class TestHandoffService:
         wi = _make_work_item(status=WorkItemStatus.IN_PROGRESS)
         wi.assignee_agent_id = uuid.UUID(agent_id)  # the agent holds the checkout
         session = AsyncMock()
-        execute_result = MagicMock()
-        execute_result.scalar_one_or_none.return_value = wi
+        execute_result = MagicMock(**{"scalar_one_or_none.return_value": wi})
         session.execute = AsyncMock(return_value=execute_result)
-        session.flush = AsyncMock()
 
-        with patch("llc.services.handoff.get_async_redis_client", new_callable=AsyncMock, return_value=None):
-            svc = HandoffService()
-            result = await svc.agent_to_human(
+        with (
+            patch("llc.services.handoff.get_async_redis_client", new_callable=AsyncMock, return_value=None),
+            patch("llc.services.commit_publish.get_async_redis_client", new_callable=AsyncMock, return_value=None),
+        ):
+            result = await HandoffService().agent_to_human(
                 session,
                 str(wi.id),
                 agent_id,

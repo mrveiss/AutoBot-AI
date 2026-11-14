@@ -20,8 +20,8 @@ from repo_tests._hardcoded_colour_baseline import (
     EXEMPT_BASENAMES,
     HARDCODED_COLOUR_LITERALS,
     IMPORTANT_DECLARATIONS,
-    TOTAL_IMPORTANT,
-    TOTAL_OCCURRENCES,
+    SLM_HARDCODED_COLOUR_LITERALS,
+    WHITE_ON_PRIMARY_LABELS,
 )
 from repo_tests._hardcoded_colour_detect import (
     _FRONTEND,
@@ -29,27 +29,73 @@ from repo_tests._hardcoded_colour_detect import (
     REACH_COLOUR_FILES,
     REACH_IMPORTANT_FILES,
     REACH_STYLE_BLOCKS,
+    SLM_KEY_PREFIX,
+    VENDOR_SELECTORS,
     _colour_scanned_files,
     _important_scanned_files,
     _is_colour,
     _owned_token_names,
     _scan,
     _scan_important,
+    _scan_important_all,
+    _scan_slm,
+    _scan_white_on_primary,
     _token_redefinitions,
+    _white_on_primary_files,
+    white_on_primary_in,
 )
 from repo_tests._paths import repo_root
+from repo_tests._ratchet_base import BaseUnavailable, base_table, raised_entries
 
 
 @pytest.fixture(scope="module")
 def measured() -> dict[str, int]:
     root = repo_root() / _FRONTEND
-    assert root.is_dir(), f"{_FRONTEND} has moved; this guard reads it by path"
+    assert root.is_dir(), _why(f"{_FRONTEND} has moved; this guard reads it by path.", _REACH_SHORT)
     return _scan(root)
 
 
 @pytest.fixture(scope="module")
+def measured_slm() -> dict[str, int]:
+    return _scan_slm(repo_root())
+
+
+@pytest.fixture(scope="module")
 def measured_important() -> dict[str, int]:
-    return _scan_important(repo_root() / _FRONTEND)
+    return _scan_important_all(repo_root())
+
+
+_ISSUE = "https://github.com/mrveiss/AutoBot-AI/issues/17567"
+#: Appended to every failure: the replacement to reach for and the issue that owns the rule (#17567).
+_USE_TOKEN = (
+    " Use a design token instead: var(--color-error) in CSS, or getCssVar('--color-error', '#ef4444') "
+    f"in script, where the literal is only the no-document fallback. See {_ISSUE}."
+)
+_USE_CASCADE = (
+    " Use the component's own specificity or the kit primitive's props/slots instead of !important "
+    "(a library's injected markup is exempt only under a VENDOR_SELECTORS entry with a stated reason). "
+    f"See {_ISSUE}."
+)
+_REACH_SHORT = (
+    f" The scan reached too few files: a scanner or path problem (a moved tree, a broken glob), not a "
+    f"colour finding, so fix the scan rather than any colour. See {_ISSUE}."
+)
+
+
+def _why(found: str, remedy: str = _USE_TOKEN) -> str:
+    """One message for every real-tree failure: what was found, then the replacement and the issue (#17567).
+
+    Detector self-tests assert on a synthetic tmp_path tree and stay bare: they are controls, not rules.
+    """
+    return found + remedy
+
+
+_USE_ON_PRIMARY = f" Use var(--text-on-primary) for a label on a --color-primary fill. See {_ISSUE}."
+
+
+def _base_table(name: str) -> dict:
+    """*name* from the colour baseline at the base commit and the anchor (see base_table)."""
+    return base_table(repo_root(), ("repo_tests/_hardcoded_colour_baseline.py",), name)
 
 
 class TestTheDetectorWorksBeforeItsOutputIsRead:
@@ -130,25 +176,36 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
 
 
 class TestTheBaselineIsInternallyConsistent:
-    def test_the_total_matches_the_entries(self):
-        assert TOTAL_OCCURRENCES == sum(HARDCODED_COLOUR_LITERALS.values())
+    def test_no_entry_rose_against_the_base(self):
+        """#19283: a raised or added entry fails against the base table, not a hand total."""
+        rose = raised_entries(HARDCODED_COLOUR_LITERALS, _base_table("HARDCODED_COLOUR_LITERALS"))
+        assert not rose, f"colour entries raised or added against the base (base, now): {rose}." + _USE_TOKEN
 
     def test_no_entry_is_zero(self):
-        assert [f for f, n in HARDCODED_COLOUR_LITERALS.items() if n <= 0] == []
+        zero = [f for f, n in HARDCODED_COLOUR_LITERALS.items() if n <= 0]
+        assert zero == [], f"an entry at zero is a deleted entry: {zero}. See {_ISSUE}."
 
     def test_every_entry_is_a_colour_literal(self):
         malformed = [k for k in HARDCODED_COLOUR_LITERALS if not _HEX.fullmatch(k) or not _is_colour(k)]
-        assert not malformed, f"baseline keys must be colour literals: {malformed}"
+        assert not malformed, f"baseline keys must be colour literals: {malformed}. See {_ISSUE}."
 
     def test_every_entry_is_lowercased(self):
         # Case-folded, so #FFF and #fff are one entry rather than two.
-        assert [k for k in HARDCODED_COLOUR_LITERALS if k != k.lower()] == []
+        upper = [k for k in HARDCODED_COLOUR_LITERALS if k != k.lower()]
+        assert upper == [], f"baseline keys are lowercased so #FFF and #fff are one entry: {upper}. See {_ISSUE}."
 
     def test_each_exempt_basename_is_unique_in_the_tree(self):
-        root = repo_root() / _FRONTEND
-        for name in EXEMPT_BASENAMES:
-            found = list(root.rglob(name))
-            assert len(found) == 1, f"{name} matches {len(found)} files; a basename exemption needs exactly one"
+        for app in (_FRONTEND, "autobot-slm-frontend"):
+            root = repo_root() / app
+            for name in EXEMPT_BASENAMES:
+                found = len(list(root.rglob(name)))
+                # The filter is shared by both trees: a basename must never match two files in either.
+                # The main tree must hold each one; the control plane may hold none.
+                ok = found <= 1 and (found == 1 or app != _FRONTEND)
+                assert ok, _why(
+                    f"{name} matches {found} files in {app}; a basename exemption needs exactly one.",
+                    f" Rename one file or exempt by path. See {_ISSUE}.",
+                )
 
 
 class TestThePopulationOnlyShrinks:
@@ -157,7 +214,7 @@ class TestThePopulationOnlyShrinks:
         floor = REACH_COLOUR_FILES.floor
         assert read >= floor, (
             f"opened only {read} files, floor {floor} -- an empty result would mean "
-            "'nothing was read', not 'nothing was written'"
+            "'nothing was read', not 'nothing was written'." + _REACH_SHORT
         )
 
     def test_every_pinned_colour_matches_its_measured_count(self, measured):
@@ -177,21 +234,16 @@ class TestThePopulationOnlyShrinks:
             f"pinned count does not match the tree (pinned, now): {drifted}. Growing is the "
             "defect; shrinking is welcome and still requires lowering the entry, because an "
             "unlowered pin is headroom for the occurrence to come back. Resolve colours from "
-            "the theme -- getCssVar('--color-error', '#ef4444') -- so they follow [data-theme]."
+            "the theme so they follow [data-theme]." + _USE_TOKEN
         )
 
     def test_no_new_colour_literal_appears(self, measured):
         new = sorted(set(measured) - set(HARDCODED_COLOUR_LITERALS))
-        assert not new, f"these colours are written but never resolved from a token: {new}"
-
-    def test_the_total_never_rises(self, measured):
-        assert sum(measured.values()) <= TOTAL_OCCURRENCES
+        assert not new, f"these colours are written but never resolved from a token: {new}." + _USE_TOKEN
 
     def test_a_tokenised_colour_is_removed_from_the_baseline(self, measured):
         stale = sorted(f for f in HARDCODED_COLOUR_LITERALS if f not in measured)
-        assert (
-            not stale
-        ), f"these colours are fully tokenised now -- delete their entries and lower TOTAL_OCCURRENCES: {stale}"
+        assert not stale, f"these colours are fully tokenised now -- delete their entries: {stale}. See {_ISSUE}."
 
 
 class TestTheSharedNotificationSourceStaysShared:
@@ -201,19 +253,19 @@ class TestTheSharedNotificationSourceStaysShared:
         source = (repo_root() / "autobot-frontend/src/utils/cacheManagement.ts").read_text(encoding="utf-8")
         assert "getNotificationColors" in source, (
             "cacheManagement.ts stopped using the shared notification colours; it previously "
-            "held three disagreeing severity maps"
+            "held three disagreeing severity maps." + _USE_TOKEN
         )
 
     def test_it_holds_no_severity_palette_of_its_own(self):
         source = (repo_root() / "autobot-frontend/src/utils/cacheManagement.ts").read_text(encoding="utf-8")
         for gone in ("#2196f3", "#ff9800", "#f44336", "#e3f2fd"):
-            assert gone not in source, f"a Material-palette literal is back: {gone}"
+            assert gone not in source, _why(f"a Material-palette literal is back: {gone}.")
 
     def test_the_shared_source_resolves_rather_than_restates(self):
         source = (repo_root() / "autobot-frontend/src/composables/useCssVars.ts").read_text(encoding="utf-8")
-        assert "getNotificationColors" in source
+        assert "getNotificationColors" in source, _why("useCssVars.ts no longer exports the shared source.")
         # Every literal in the mapping must be a getCssVar fallback, never a direct return.
-        assert "return '#" not in source, "the shared source returns a literal instead of resolving one"
+        assert "return '#" not in source, _why("the shared source returns a literal instead of resolving one.")
 
 
 class TestTheImportantDetectorWorks:
@@ -235,17 +287,76 @@ class TestTheImportantDetectorWorks:
         assert _scan_important(tmp_path) == {"a.vue": 1}
 
 
+class TestTheVendorExemptionIsNarrow:
+    """#17567: the vendor exemption excuses vendor selectors and nothing else."""
+
+    def _count(self, tmp_path, css):
+        (tmp_path / "a.vue").write_text(f"<style>{css}</style>", encoding="utf-8")
+        return _scan_important(tmp_path).get("a.vue", 0)
+
+    def test_a_vendor_selector_is_not_counted(self, tmp_path):
+        assert self._count(tmp_path, ":deep(.apexcharts-tooltip) { color: red !important; }") == 0
+        assert self._count(tmp_path, ".t :deep(.xterm-viewport) { overflow: auto !important; }") == 0
+
+    def test_a_non_vendor_selector_is_still_counted(self, tmp_path):
+        css = (
+            ".apexcharts-tooltip { color: red !important; }\n"
+            ".apexcharts { color: red !important; }\n"
+            ".my-xtermish { color: red !important; }\n"
+            ".card { color: red !important; }"
+        )
+        assert self._count(tmp_path, css) == 3
+
+    def test_a_mixed_selector_list_is_counted(self, tmp_path):
+        assert self._count(tmp_path, ".apexcharts-tooltip, .card { color: red !important; }") == 1
+        assert self._count(tmp_path, ".card, .xterm-viewport { color: red !important; }") == 1
+
+    def test_a_list_of_only_vendor_selectors_is_not_counted(self, tmp_path):
+        assert self._count(tmp_path, ".apexcharts-tooltip, :deep(.xterm-rows) { color: red !important; }") == 0
+        assert self._count(tmp_path, ":is(.apexcharts-a, .apexcharts-b) { color: red !important; }") == 0
+
+    def test_a_new_non_vendor_important_trips_the_ratchet(self, tmp_path):
+        d = tmp_path / "autobot-frontend" / "src" / "views"
+        d.mkdir(parents=True)
+        (d / "New.vue").write_text("<style>.x { top: 0 !important; }</style>", encoding="utf-8")
+        measured = _scan_important_all(tmp_path)
+        assert set(measured) - set(IMPORTANT_DECLARATIONS) == {"views/New.vue"}
+
+    def test_every_vendor_exemption_states_its_reason(self):
+        for _pattern, reason in VENDOR_SELECTORS:
+            assert len(reason) > 10
+
+
 class TestTheImportantPopulationOnlyShrinks:
     def test_the_important_sweep_reaches_the_components(self):
         read = len(_important_scanned_files(repo_root()))
         floor = REACH_IMPORTANT_FILES.floor
         assert read >= floor, (
             f"opened only {read} components, floor {floor} -- an empty result would mean "
-            "'nothing was read', not 'nothing was found'"
+            "'nothing was read', not 'nothing was found'." + _REACH_SHORT
         )
 
-    def test_the_total_matches_the_entries(self):
-        assert TOTAL_IMPORTANT == sum(IMPORTANT_DECLARATIONS.values())
+    def test_no_entry_rose_against_the_base(self):
+        """#19283: a raised or added entry fails against the base table, not a hand total."""
+        rose = raised_entries(IMPORTANT_DECLARATIONS, _base_table("IMPORTANT_DECLARATIONS"))
+        assert not rose, f"!important entries raised or added against the base (base, now): {rose}." + _USE_CASCADE
+
+    def test_the_sweep_covers_the_control_plane_too(self, measured_important):
+        # #17567: the AC is both frontends. The control plane's keys carry a
+        # prefix; seeing none would mean the second tree was never read.
+        assert any(k.startswith(SLM_KEY_PREFIX) for k in measured_important), _why(
+            "no control-plane key was measured.", _REACH_SHORT
+        )
+        assert any(f.startswith(SLM_KEY_PREFIX) for f in _important_scanned_files(repo_root())), _why(
+            "no control-plane file was read.", _REACH_SHORT
+        )
+
+    def test_a_prefixed_key_cannot_collide_with_the_user_frontend(self, tmp_path):
+        for name in ("autobot-frontend", "autobot-slm-frontend"):
+            d = tmp_path / name / "src" / "views"
+            d.mkdir(parents=True)
+            (d / "A.vue").write_text("<style>.x { top: 0 !important; }</style>", encoding="utf-8")
+        assert _scan_important_all(tmp_path) == {"views/A.vue": 1, f"{SLM_KEY_PREFIX}views/A.vue": 1}
 
     def test_every_pinned_important_matches_its_measured_count(self, measured_important):
         grew = {
@@ -256,20 +367,16 @@ class TestTheImportantPopulationOnlyShrinks:
         assert not grew, (
             f"pinned count does not match the tree (pinned, now): {grew}. Equality, not a "
             "ceiling -- an unlowered pin leaves headroom for a removed !important to return. "
-            "Raise specificity or fix the cascade; !important overrides the design system "
-            "rather than using it."
+            "!important overrides the design system rather than using it." + _USE_CASCADE
         )
 
     def test_no_new_file_joins_the_population(self, measured_important):
         new = sorted(set(measured_important) - set(IMPORTANT_DECLARATIONS))
-        assert not new, f"new files using !important: {new}"
-
-    def test_the_total_never_rises(self, measured_important):
-        assert sum(measured_important.values()) <= TOTAL_IMPORTANT
+        assert not new, f"new files using !important: {new}." + _USE_CASCADE
 
     def test_a_cleared_file_is_removed_from_the_baseline(self, measured_important):
         stale = sorted(f for f in IMPORTANT_DECLARATIONS if f not in measured_important)
-        assert not stale, f"clean now -- delete their entries and lower TOTAL_IMPORTANT: {stale}"
+        assert not stale, f"clean now -- delete their entries: {stale}. See {_ISSUE}."
 
 
 class TestFormTwoStaysAbsent:
@@ -326,15 +433,136 @@ class TestFormTwoStaysAbsent:
         floor = REACH_STYLE_BLOCKS.floor
         assert blocks >= floor, (
             f"parsed only {blocks} component style blocks, floor {floor} -- "
-            "the zero below would mean 'nothing was read', not 'nothing was found'"
+            f"the zero below would mean 'nothing was read', not 'nothing was found'." + _REACH_SHORT
         )
 
     def test_no_component_redefines_a_design_system_token(self):
         root = repo_root() / _FRONTEND
         owned = _owned_token_names(root)
-        assert len(owned) > 500, f"only {len(owned)} theme names parsed; the check would be vacuous"
+        assert len(owned) > 500, f"only {len(owned)} theme names parsed; the check would be vacuous. See {_ISSUE}."
         offenders, _ = _token_redefinitions(root, owned)
         assert not offenders, (
             "these components redefine a design-system token locally, which is the override "
-            f"form #17567 records as absent: {offenders}"
+            f"form #17567 records as absent: {offenders}. A component-local alias assigned FROM a token "
+            f"is the correct pattern; do not assign a theme-owned name. See {_ISSUE}."
+        )
+
+
+class TestTheWhiteOnPrimaryDetectorWorks:
+    """#20425: positive and negative fixtures, so a zero is a finding and not a blind detector."""
+
+    @pytest.mark.parametrize(
+        "css",
+        [
+            ".a { background: var(--color-primary); color: white; }",
+            ".a { color: #FFF; background-color: var(--color-primary); }",
+            ".a { background: var(--primary, #123); color: #ffffff !important; }",
+            ".a { background: var(--color-primary); color: var(--color-white); }",
+            ".a { background: var(--color-primary); color: rgb(255, 255, 255); }",
+        ],
+    )
+    def test_it_flags_a_white_label_on_a_primary_fill(self, css):
+        assert white_on_primary_in(css) == 1
+
+    @pytest.mark.parametrize(
+        "css",
+        [
+            ".a { background: var(--color-primary); color: var(--text-on-primary); }",
+            ".a { background: var(--color-info-solid); color: white; }",
+            ".a { background: var(--color-primary-bg); color: white; }",
+            ".a { background: var(--color-primary); } .b { color: white; }",
+            ".a { /* background: var(--color-primary); */ color: white; }",
+            ".a { background: var(--color-primary); border-color: white; }",
+        ],
+    )
+    def test_it_ignores_what_is_not_one(self, css):
+        assert white_on_primary_in(css) == 0
+
+    def test_a_vue_file_is_read_by_its_style_block_only(self, tmp_path):
+        d = tmp_path / "autobot-slm-frontend" / "src"
+        d.mkdir(parents=True)
+        (d / "A.vue").write_text(
+            '<template><p style="color: white"></p></template>'
+            "<style>.x { background: var(--color-primary); color: white; }</style>",
+            encoding="utf-8",
+        )
+        assert _scan_white_on_primary(tmp_path) == {f"{SLM_KEY_PREFIX}A.vue": 1}
+
+
+class TestWhiteOnPrimaryLabelsOnlyShrink:
+    def test_the_sweep_reaches_both_frontends(self):
+        files = _white_on_primary_files(repo_root())
+        assert len(files) >= REACH_IMPORTANT_FILES.floor, _why(
+            "the sweep read fewer files than the !important sweep.", _REACH_SHORT
+        )
+        assert any("autobot-slm-frontend" in p.parts for p in files), _why(
+            "no control-plane file was read.", _REACH_SHORT
+        )
+
+    def test_no_entry_rose_against_the_base(self):
+        try:
+            base = _base_table("WHITE_ON_PRIMARY_LABELS")
+        except BaseUnavailable as err:
+            if "no literal WHITE_ON_PRIMARY_LABELS" not in str(err):
+                raise
+            pytest.skip("the table is introduced by #20425, so the base has none; this arms once it lands")
+        rose = raised_entries(WHITE_ON_PRIMARY_LABELS, base)
+        assert not rose, (
+            f"white-on-primary entries raised or added against the base (base, now): {rose}." + _USE_ON_PRIMARY
+        )
+
+    def test_every_pinned_count_matches_the_tree(self):
+        measured = _scan_white_on_primary(repo_root())
+        assert measured == WHITE_ON_PRIMARY_LABELS, (
+            f"measured {measured}, pinned {WHITE_ON_PRIMARY_LABELS}. A literal white label is invisible in High "
+            "Contrast Dark (#20425). Equality, so a converted file's entry is deleted rather than left "
+            "as headroom." + _USE_ON_PRIMARY
+        )
+
+
+class TestTheControlPlaneColourSweep:
+    """#17567: the bare-colour check reads `autobot-slm-frontend/src` too, against its own baseline."""
+
+    def test_the_detector_finds_a_literal_in_the_control_plane(self, tmp_path):
+        """Control: a known literal in the SLM tree is detected, so an empty baseline is a finding."""
+        d = tmp_path / "autobot-slm-frontend" / "src"
+        d.mkdir(parents=True)
+        (d / "A.vue").write_text("<script>const o = { color: '#ef4444' }</script>", encoding="utf-8")
+        assert _scan_slm(tmp_path) == {"#ef4444": 1}
+
+    def test_a_style_block_hex_is_left_to_stylelint(self, tmp_path):
+        d = tmp_path / "autobot-slm-frontend" / "src"
+        d.mkdir(parents=True)
+        (d / "A.vue").write_text("<style>.x { color: #ef4444; }</style>", encoding="utf-8")
+        assert _scan_slm(tmp_path) == {}
+
+    def test_the_reach_names_both_apps(self, tmp_path):
+        for app in ("autobot-frontend", "autobot-slm-frontend"):
+            d = tmp_path / app / "src"
+            d.mkdir(parents=True)
+            (d / "A.vue").write_text("<template/>", encoding="utf-8")
+        assert _colour_scanned_files(tmp_path) == ["A.vue", f"{SLM_KEY_PREFIX}A.vue"]
+
+    def test_the_sweep_reads_the_control_plane_tree(self):
+        assert any(f.startswith(SLM_KEY_PREFIX) for f in _colour_scanned_files(repo_root())), _why(
+            "no control-plane file was read.", _REACH_SHORT
+        )
+
+    def test_no_entry_rose_against_the_base(self):
+        try:
+            base = _base_table("SLM_HARDCODED_COLOUR_LITERALS")
+        except BaseUnavailable as err:
+            if "no literal SLM_HARDCODED_COLOUR_LITERALS" not in str(err):
+                raise
+            pytest.skip("the table is introduced by #17567, so the base has none; this arms once it lands")
+        rose = raised_entries(SLM_HARDCODED_COLOUR_LITERALS, base)
+        assert not rose, (
+            f"control-plane colour entries raised or added against the base (base, now): {rose}." + _USE_TOKEN
+        )
+
+    def test_the_tree_matches_its_baseline(self, measured_slm):
+        assert measured_slm == SLM_HARDCODED_COLOUR_LITERALS, (
+            f"control-plane colour literals now {measured_slm}, pinned {SLM_HARDCODED_COLOUR_LITERALS}. "
+            "Equality, so growth fails and a removed literal's entry is deleted rather than left as headroom."
+            + _USE_TOKEN
         )

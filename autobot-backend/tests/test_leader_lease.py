@@ -11,9 +11,11 @@ compare-and-extend that exists so a GC pause cannot produce two leaders.
 
 from unittest.mock import AsyncMock, patch
 
+import fakeredis
 import pytest
 
 from autobot_shared.leader_lease import LeaderLease
+from autobot_shared.redis_utils import COMPARE_AND_PEXPIRE_LUA
 
 
 def _lease(**kw) -> LeaderLease:
@@ -63,8 +65,9 @@ async def test_refresh_uses_atomic_lua_when_already_leader():
     redis.eval.assert_awaited_once()
     redis.set.assert_not_called()  # no non-atomic GET->PEXPIRE fallback
     script, numkeys, key, worker, ttl = redis.eval.call_args.args
+    assert script == COMPARE_AND_PEXPIRE_LUA
     assert numkeys == 1 and key == "test:leader" and worker == "worker-1"
-    assert ttl == str(lease.ttl_ms)
+    assert ttl == lease.ttl_ms and isinstance(ttl, int)  # the shared helper sends milliseconds as an int
 
 
 @pytest.mark.asyncio
@@ -123,27 +126,28 @@ async def test_redis_error_does_not_grant_leadership():
         assert await _lease().try_acquire_or_refresh() is False
 
 
-@pytest.mark.asyncio
-async def test_release_only_deletes_a_lease_we_still_hold():
-    redis = _redis(set=True, get=b"worker-1")
+async def _release_with_holder(holder: str) -> tuple[LeaderLease, str | None]:
+    """Lead, let *holder* own the key, release; return the lease and the key after."""
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
     with patch("autobot_shared.leader_lease.get_async_redis_client", return_value=redis):
         lease = _lease()
         await lease.update_leadership()
+        await redis.set("test:leader", holder)
         await lease.release()
+    return lease, await redis.get("test:leader")
 
-    redis.delete.assert_awaited_once_with("test:leader")
+
+@pytest.mark.asyncio
+async def test_release_only_deletes_a_lease_we_still_hold():
+    _, after = await _release_with_holder("worker-1")
+    assert after is None
 
 
 @pytest.mark.asyncio
 async def test_release_does_not_delete_a_lease_another_worker_took():
     """Our lease expired and worker-2 took it — deleting would evict a live leader."""
-    redis = _redis(set=True, get=b"worker-2")
-    with patch("autobot_shared.leader_lease.get_async_redis_client", return_value=redis):
-        lease = _lease()
-        await lease.update_leadership()
-        await lease.release()
-
-    redis.delete.assert_not_called()
+    lease, after = await _release_with_holder("worker-2")
+    assert after == "worker-2"
     assert lease.is_leader is False
 
 

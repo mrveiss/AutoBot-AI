@@ -11,11 +11,12 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createDateFormatter, createRecencyFormatter } from '@autobot/ui'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('PendingInvitations')
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { pendingInvitations, refreshPendingInvitations, respondToInvitation } = useSessionCollaboration()
 
 const isLoading = ref(false)
@@ -32,16 +33,14 @@ const getPermissionLabel = (permission: string): string => {
   }
 }
 
-// Matches SecretNotifications.vue's own ad-hoc relative-time formatting.
-const formatInvitedAt = (iso: string): string => {
-  const invited = new Date(iso)
-  if (Number.isNaN(invited.getTime())) return ''
-  const seconds = Math.floor((Date.now() - invited.getTime()) / 1000)
-  const minutes = Math.floor(seconds / 60)
-  if (seconds < 60) return t('collaboration.invitations.justNow')
-  if (minutes < 60) return t('collaboration.invitations.minutesAgo', { count: minutes })
-  return invited.toLocaleString()
-}
+// Under an hour: relative time; older: the browser's date and time (#19606).
+const formatInvitedAt = createRecencyFormatter({
+  justNow: () => t('collaboration.invitations.justNow'),
+  locale: () => locale.value,
+  style: 'narrow',
+  olderThanMs: 3_600_000,
+  older: createDateFormatter({ locale: () => locale.value }),
+})
 
 const respond = async (sessionId: string, accept: boolean): Promise<void> => {
   if (respondingSessionIds.value.has(sessionId)) return

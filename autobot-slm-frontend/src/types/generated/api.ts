@@ -105,7 +105,21 @@ export interface paths {
         };
         /**
          * Get Agent Llm Config
-         * @description Get LLM configuration for an agent with decrypted API key.
+         * @description Get an agent's LLM configuration. The API key is NEVER included.
+         *
+         *     This previously returned the decrypted provider key as a response-model
+         *     field, to any authenticated caller. The key is omitted rather than masked:
+         *     a value the client never receives cannot be written back, so a
+         *     GET-then-PUT round-trip is a no-op for the stored key -- the same reasoning
+         *     `public_provider_view` records on the settings path.
+         *
+         *     **This endpoint is still not ownership-scoped, and cannot be here.** The
+         *     `agents` table has no company, tenant or owner column -- only a nullable
+         *     `created_by` -- so there is no predicate to scope by. Adding one against
+         *     `created_by` would be an authorization check that passes for every row
+         *     where it is NULL, which is worse than none because it reads as enforcement.
+         *     The missing tenancy boundary is tracked separately; removing the secret is
+         *     what closes the disclosure, and it does not depend on that work.
          */
         get: operations["get_agent_llm_config_api_agents__agent_id__llm_get"];
         put?: never;
@@ -230,7 +244,7 @@ export interface paths {
          * Logout
          * @description Revoke the presented token and return IdP logout URL if applicable.
          *
-         *     - Denylists the token's ``jti`` in Redis (HS256 tokens only).
+         *     - Denylists the token's ``jti`` in the SLM's PostgreSQL (HS256 tokens only, #18663).
          *     - Queries the user's SSO link for an ``end_session_endpoint``.
          *     - Returns ``{"logout_url": "<url>"}`` (url may be null when not SSO-linked).
          */
@@ -280,9 +294,8 @@ export interface paths {
          *     as full admin. This answers "does this session hold the role the key
          *     actually confers?": 204 for a session whose role grants
          *     ``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it
-         *     -- including SUPERADMIN, which holds no granular permissions (#13854)
-         *     and is refused here as on every other permission-gated SLM admin route
-         *     -- and an unknown role resolves to USER, so it also fails closed. 401
+         *     -- SUPERADMIN is admitted, since it holds admin's permissions (#19125),
+         *     including ``ADMIN_SYSTEM`` -- and an unknown role resolves to USER, so it also fails closed. 401
          *     covers a missing Authorization header (the upstream ``HTTPBearer``'s
          *     ``auto_error=True`` raises it before this dependency runs) or an
          *     invalid/expired token (``get_current_user`` raises it). Returns no body
@@ -332,6 +345,26 @@ export interface paths {
         get: operations["oauth_callback_api_auth_sso_callback_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sso/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange Sso Code
+         * @description Exchange a single-use SSO code for the session token (#18394).
+         */
+        post: operations["exchange_sso_code_api_auth_sso_exchange_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1354,6 +1387,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/code-sync/post-sync-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Post Sync Run
+         * @description The rows a sync run recorded, in execution order; 404 when no row carries *run_id*.
+         */
+        get: operations["get_post_sync_run_api_code_sync_post_sync_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/code-sync/pull": {
         parameters: {
             query?: never;
@@ -1419,6 +1472,66 @@ export interface paths {
          *         restart: Whether to restart services after sync
          */
         post: operations["sync_role_api_code_sync_roles__role_name__sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Rollback
+         * @description Deploy the chosen earlier commit. Refused while an update runs or when a migration is in the way.
+         */
+        post: operations["start_rollback_api_code_sync_rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/rollback/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rollback Candidates
+         * @description The newest commits of the tracked branch, with dates and subjects, for the picker.
+         */
+        get: operations["rollback_candidates_api_code_sync_rollback_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/rollback/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rollback Preview
+         * @description Validate one commit and say whether a database migration is in the way.
+         */
+        get: operations["rollback_preview_api_code_sync_rollback_preview_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1575,6 +1688,66 @@ export interface paths {
          *     Returns 202 Accepted with the initial job state (polling via GET /update-all/status).
          */
         post: operations["start_update_all_api_code_sync_update_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/update-all/nodes-offline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Nodes Offline After Update
+         * @description Nodes the last self-update left offline and still are (#20250), with when that update ran.
+         */
+        get: operations["get_nodes_offline_after_update_api_code_sync_update_all_nodes_offline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/update-all/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Update Progress
+         * @description What the running self-update is doing, from its own log, across the SLM's restart (#20254).
+         */
+        get: operations["get_update_progress_api_code_sync_update_all_progress_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/update-all/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Update Report
+         * @description The last update's target, stage, result, failed task, error and role deploys.
+         */
+        get: operations["get_update_report_api_code_sync_update_all_report_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2255,13 +2428,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Fleet Services
-         * @description Get aggregated service status across all nodes.
+         * Legacy Fleet Services
+         * @description Deprecated alias of ``GET /orchestration/fleet/services`` (#17856).
          *
-         *     This is the canonical endpoint for fleet-wide service status.
-         *     Consolidated from Issue #850 orchestration unification.
+         *     One implementation lives in ``api.orchestration``; this route only delegates so the SLM
+         *     frontend keeps working until it calls the public path, after which this returns 410.
          */
-        get: operations["get_fleet_services_api_fleet_services_get"];
+        get: operations["legacy_fleet_services_api_fleet_services_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2285,12 +2458,7 @@ export interface paths {
         head?: never;
         /**
          * Update Service Category
-         * @description Update the category for a service across all nodes.
-         *
-         *     This is an admin override - manually categorize a service as
-         *     'autobot' or 'system' across all nodes that have it.
-         *
-         *     Canonical endpoint for fleet-wide category updates (Issue #850).
+         * @description Deprecated alias of ``PATCH /orchestration/fleet/services/{name}/category`` (#17856).
          */
         patch: operations["update_service_category_api_fleet_services__service_name__category_patch"];
         trace?: never;
@@ -2489,6 +2657,70 @@ export interface paths {
         get: operations["get_playbook_api_infrastructure_playbooks__playbook_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/first-admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get First Admin
+         * @description The earliest active admin. 404 until the SLM has one.
+         */
+        get: operations["get_first_admin_api_internal_first_admin_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/nodes/{node_id}/ssh-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Node Ssh Password
+         * @description Delete the node's stored SSH password under a human's approval; ``deleted`` is False when it held none.
+         */
+        delete: operations["delete_node_ssh_password_api_internal_nodes__node_id__ssh_password_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/person-copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Update Person Copy
+         * @description Write only what differs, so the periodic pass changes nothing when the two agree.
+         *
+         *     The person's issued SLM sessions are revoked on a deactivation or a password change (#21154): the
+         *     SLM's request gate reads the epoch store, never ``is_active`` or the hash. The deactivation epoch is
+         *     recorded on every push of an inactive person, and both epochs are written before the change is committed.
+         */
+        post: operations["update_person_copy_api_internal_person_copy_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2781,6 +3013,253 @@ export interface paths {
          * @description Verify MFA setup with initial TOTP code.
          */
         post: operations["verify_mfa_setup_api_mfa_verify_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Activity
+         * @description Recent coordination activity across the install, newest first.
+         */
+        get: operations["ledger_activity_api_monitoring_agent_ledger_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Claims
+         * @description Every held claim across the install: scope, mode, intent, expiry, renewals.
+         */
+        get: operations["ledger_claims_api_monitoring_agent_ledger_claims_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/claims/yield-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ledger Yield Request
+         * @description Ask the holder of any claim to release it. Publishes a request; releases nothing.
+         *
+         *     The asker is the token's ``sub``; a token without one is a 401, never the shared
+         *     identity ``"None"`` (#18607). The per-person rate limit (``RateLimiter.acquire_window``)
+         *     fails OPEN if ITS store is unreachable -- the limiter's class policy. With Redis down the
+         *     ask never gets that far: the claim lookup before the limiter answers the typed 503. Only
+         *     a limiter store failing on its own lets an ask through unlimited; it is still published
+         *     once per request, never as a release.
+         */
+        post: operations["ledger_yield_request_api_monitoring_agent_ledger_claims_yield_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Conflicts
+         * @description Refused releases, claims expired while held, unanswered yields, lapsed dev-loop actions.
+         */
+        get: operations["ledger_conflicts_api_monitoring_agent_ledger_conflicts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/contention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Contention
+         * @description Shared-resource scopes (provider, cpu, queue): holders and who waits.
+         */
+        get: operations["ledger_contention_api_monitoring_agent_ledger_contention_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/dev-loop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Dev Loop Issues
+         * @description Issues the dev loop has a recorded action history for.
+         */
+        get: operations["ledger_dev_loop_issues_api_monitoring_agent_ledger_dev_loop_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/dev-loop/{issue}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Dev Loop History
+         * @description One issue's dev-loop action history, newest first, including refused and skipped attempts.
+         */
+        get: operations["ledger_dev_loop_history_api_monitoring_agent_ledger_dev_loop__issue__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/idle-subscribers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Idle Subscribers
+         * @description Every agent waiting to be told a peer next goes idle.
+         */
+        get: operations["ledger_idle_subscribers_api_monitoring_agent_ledger_idle_subscribers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/peer-messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Peer Messages
+         * @description Messages waiting for any agent's next turn. Counts and senders, never content.
+         */
+        get: operations["ledger_peer_messages_api_monitoring_agent_ledger_peer_messages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/presence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Presence
+         * @description Every company's live agents, AI-stack agents and live sessions, from the user backend's snapshot.
+         */
+        get: operations["ledger_presence_api_monitoring_agent_ledger_presence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Sources
+         * @description Which coordination stores and live-state snapshots this view can read right now.
+         */
+        get: operations["ledger_sources_api_monitoring_agent_ledger_sources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/agent-ledger/waitlists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger Waitlists
+         * @description Every queued agent behind a held scope, in position order.
+         */
+        get: operations["ledger_waitlists_api_monitoring_agent_ledger_waitlists_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3970,6 +4449,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/nodes/{node_id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Node Post Sync Plan
+         * @description Sync every ACTIVE role on a node and run ONE ordered post-sync plan (#17455).
+         *
+         *     A failed install/schema/build aborts the plan (no restarts, no role marked synced); a
+         *     failed restart is recorded and reported in ``actions[*].success`` without failing the sync.
+         */
+        post: operations["sync_node_post_sync_plan_api_nodes__node_id__sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/nodes/{node_id}/tls-credentials": {
         parameters: {
             query?: never;
@@ -4376,12 +4878,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Restart Fleet Service
-         * @description Restart a service on all nodes that have it.
-         *
-         *     Issue #850: Moved from /fleet/services/{name}/restart to /orchestration/fleet/services/{name}/restart.
+         * Orchestration Restart Fleet Service
+         * @description Restart a service on all nodes that have it: delegates to ``api.services`` (#18714).
          */
-        post: operations["restart_fleet_service_api_orchestration_fleet_services__service_name__restart_post"];
+        post: operations["orchestration_restart_fleet_service_api_orchestration_fleet_services__service_name__restart_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4398,12 +4898,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Start Fleet Service
-         * @description Start a service on all nodes that have it.
+         * Orchestration Start Fleet Service
+         * @description Start a service on all nodes that have it: delegates to ``api.services`` (#18714).
          *
-         *     Issue #850: Moved from /fleet/services/{name}/start to /orchestration/fleet/services/{name}/start.
+         *     The route dependencies (``FLEET_SERVICE_ACTION_ROUTE``) are the ones the canonical route
+         *     carries, so the unit-name validation (422) and the service-management gate come with it.
          */
-        post: operations["start_fleet_service_api_orchestration_fleet_services__service_name__start_post"];
+        post: operations["orchestration_start_fleet_service_api_orchestration_fleet_services__service_name__start_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4420,12 +4921,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Stop Fleet Service
-         * @description Stop a service on all nodes.
-         *
-         *     Issue #850: Moved from /fleet/services/{name}/stop to /orchestration/fleet/services/{name}/stop.
+         * Orchestration Stop Fleet Service
+         * @description Stop a service on all nodes: delegates to ``api.services`` (#18714).
          */
-        post: operations["stop_fleet_service_api_orchestration_fleet_services__service_name__stop_post"];
+        post: operations["orchestration_stop_fleet_service_api_orchestration_fleet_services__service_name__stop_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5106,9 +5605,7 @@ export interface paths {
         };
         /**
          * Get Role Owners Endpoint
-         * @description Return role -> node_id mapping for all assigned service roles (#1389).
-         *
-         *     Used by deployment/migration UIs to show which node owns each role.
+         * @description Return role -> node ids, and which roles may hold several (#1389, #19706).
          */
         get: operations["get_role_owners_endpoint_api_roles_owners_get"];
         put?: never;
@@ -5646,14 +6143,18 @@ export interface paths {
          * Get Llm Config
          * @description Get current LLM configuration (admin only).
          *
-         *     API keys are masked in the response for security.
+         *     API keys are omitted from the response, never masked. Before #17826 a mask
+         *     round-tripped back as a value and overwrote every stored key on save; a
+         *     submitted mask is now refused with 422.
          */
         get: operations["get_llm_config_api_settings_admin_llm_get"];
         /**
          * Save Llm Config
          * @description Save LLM configuration (admin only).
          *
-         *     API keys are encrypted before storage via services.encryption.
+         *     A provider's ``api_key`` is write-only: send one to set or rotate it, send
+         *     none to leave the stored key untouched. Keys go to the unified-secrets vault
+         *     (#10503), or inline-encrypted while the vault is not configured.
          */
         put: operations["save_llm_config_api_settings_admin_llm_put"];
         post?: never;
@@ -6341,6 +6842,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stateful/secrets-backups/{backup_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Secrets Backup Status
+         * @description Facts about one backup: its status, type, completion time and on-disk integrity.
+         */
+        get: operations["get_secrets_backup_status_api_stateful_secrets_backups__backup_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stateful/verify": {
         parameters: {
             query?: never;
@@ -7002,6 +7523,8 @@ export interface paths {
         /**
          * Scim Delete User
          * @description DELETE /scim/v2/Users/{id} — deactivate/soft-delete a user.
+         *
+         *     A soft-deleted user is found again, so a delete answered 503 can be repeated (#20443).
          */
         delete: operations["scim_delete_user_scim_v2_Users__user_id__delete"];
         options?: never;
@@ -7166,6 +7689,35 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ActivityResponse */
+        ActivityResponse: {
+            /** Activity */
+            activity: components["schemas"]["ActivityRow"][];
+            /** Count */
+            count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ActivityRow */
+        ActivityRow: {
+            /** Agent Id */
+            agent_id?: string | null;
+            /** At */
+            at: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /** Scope */
+            scope?: string | null;
+            /** Task Id */
+            task_id?: string | null;
+            /** Type */
+            type: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * AgentCreateRequest
          * @description Request to create an agent.
@@ -7211,12 +7763,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * AgentLLMConfigWithKey
-         * @description LLM config including decrypted API key (for backend only).
+         * AgentLLMConfig
+         * @description LLM configuration for an agent (excludes API key).
          */
-        AgentLLMConfigWithKey: {
-            /** Llm Api Key */
-            llm_api_key?: string | null;
+        AgentLLMConfig: {
             /** Llm Endpoint */
             llm_endpoint?: string | null;
             /** Llm Max Tokens */
@@ -7252,7 +7802,7 @@ export interface components {
         };
         /**
          * AgentResponse
-         * @description Agent response with LLM config.
+         * @description Agent response with LLM config (the LLM fields are AgentLLMConfig's, #19730).
          */
         AgentResponse: {
             /** Agent Id */
@@ -7662,6 +8212,71 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AutobotTeamCreate
+         * @description Schema for creating a team.
+         */
+        AutobotTeamCreate: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name: string;
+            /** Organization Id */
+            organization_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AutobotTeamListResponse
+         * @description Schema for paginated team list response.
+         */
+        AutobotTeamListResponse: {
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Teams */
+            teams: components["schemas"]["AutobotTeamResponse"][];
+            /** Total */
+            total: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AutobotTeamResponse
+         * @description Schema for team response.
+         */
+        AutobotTeamResponse: {
+            /** Created At */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Organization Id */
+            organization_id: string | null;
+            /** Updated At */
+            updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AutobotTeamUpdate
+         * @description Schema for updating a team.
+         */
+        AutobotTeamUpdate: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * BackupCodesResponse
          * @description Response containing backup codes.
          */
@@ -7701,7 +8316,7 @@ export interface components {
         };
         /**
          * BackupResponse
-         * @description Backup response.
+         * @description Backup response; ``restorable`` tells the GUI where to offer Restore (#19455).
          */
         BackupResponse: {
             /** Backup Id */
@@ -7723,6 +8338,8 @@ export interface components {
             id: number;
             /** Node Id */
             node_id: string;
+            /** Restorable */
+            readonly restorable: boolean;
             /** Service Type */
             service_type: string;
             /** Size Bytes */
@@ -7765,7 +8382,7 @@ export interface components {
          *     this enum is the boundary that decides what may enter.
          * @enum {string}
          */
-        BackupServiceType: "redis" | "postgres";
+        BackupServiceType: "redis" | "postgres" | "secrets";
         /**
          * BlueGreenActionResponse
          * @description Blue-green action response.
@@ -7933,6 +8550,13 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** Body_exchange_sso_code_api_auth_sso_exchange_post */
+        Body_exchange_sso_code_api_auth_sso_exchange_post: {
+            /** Code */
+            code: string;
         } & {
             [key: string]: unknown;
         };
@@ -8129,6 +8753,47 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ClaimRow */
+        ClaimRow: {
+            /** Acquired At */
+            acquired_at: string;
+            /** Agent Id */
+            agent_id: string;
+            /**
+             * Company Id
+             * @description Stamped at write time; null = install-wide or legacy
+             */
+            company_id?: string | null;
+            /** Expires At */
+            expires_at: string;
+            /** Intent */
+            intent: string;
+            /** Kind */
+            kind: string;
+            /** Mode */
+            mode: string;
+            /**
+             * Renewals
+             * @description Explicit renewals since the claim was acquired
+             * @default 0
+             */
+            renewals: number;
+            /** Scope */
+            scope: string;
+            /** Task Id */
+            task_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ClaimsResponse */
+        ClaimsResponse: {
+            /** Claims */
+            claims: components["schemas"]["ClaimRow"][];
+            /** Count */
+            count: number;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * CleanupResponse
          * @description Cleanup operation response.
@@ -8307,6 +8972,11 @@ export interface components {
              */
             stale_components: string[];
             /**
+             * Stale Scan Unknown
+             * @default false
+             */
+            stale_scan_unknown: boolean;
+            /**
              * Total Nodes
              * @default 0
              */
@@ -8446,6 +9116,43 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ConflictRow */
+        ConflictRow: {
+            /** Agent Id */
+            agent_id?: string | null;
+            /** At */
+            at: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "release_refused" | "claim_expired" | "yield_unanswered" | "claim_lapsed_during_action";
+            /**
+             * Other Agent Id
+             * @description The holder, for a refused release
+             */
+            other_agent_id?: string | null;
+            /** Scope */
+            scope?: string | null;
+            /** Task Id */
+            task_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ConflictsResponse */
+        ConflictsResponse: {
+            /** Conflicts */
+            conflicts: components["schemas"]["ConflictRow"][];
+            /** Count */
+            count: number;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * ConnectionTestRequest
          * @description SSH connection test request.
@@ -8488,6 +9195,36 @@ export interface components {
             os_info?: string | null;
             /** Success */
             success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContentionResponse */
+        ContentionResponse: {
+            /** Count */
+            count: number;
+            /** Resources */
+            resources: components["schemas"]["ContentionRow"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContentionRow */
+        ContentionRow: {
+            /**
+             * Contended
+             * @description True when anyone is queued behind this resource
+             */
+            contended: boolean;
+            /** Holders */
+            holders: components["schemas"]["ClaimRow"][];
+            /**
+             * Kind
+             * @description provider, cpu or queue
+             */
+            kind: string;
+            /** Scope */
+            scope: string;
+            /** Waiters */
+            waiters: components["schemas"]["WaiterRow"][];
         } & {
             [key: string]: unknown;
         };
@@ -8669,6 +9406,43 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DevLoopActionRow */
+        DevLoopActionRow: {
+            /** At */
+            at: string;
+            /** Estimated Tokens */
+            estimated_tokens: number;
+            /** Intent */
+            intent: string;
+            /** Issue */
+            issue: number;
+            /** Outcome */
+            outcome: string;
+            /** Reason */
+            reason: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DevLoopHistoryResponse */
+        DevLoopHistoryResponse: {
+            /** Actions */
+            actions: components["schemas"]["DevLoopActionRow"][];
+            /** Count */
+            count: number;
+            /** Issue */
+            issue: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DevLoopIssuesResponse */
+        DevLoopIssuesResponse: {
+            /** Count */
+            count: number;
+            /** Issues */
+            issues: number[];
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * DriftResolveJobResponse
          * @description Accepted async component-resolve job (#11303).
@@ -8794,6 +9568,18 @@ export interface components {
         EnrollRequest: {
             /** Ssh Password */
             ssh_password?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EnrollmentSkip
+         * @description One skipped node and why (the reason names the state).
+         */
+        EnrollmentSkip: {
+            /** Node Id */
+            node_id: string;
+            /** Reason */
+            reason: string;
         } & {
             [key: string]: unknown;
         };
@@ -8993,6 +9779,27 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * FirstAdminResponse
+         * @description What the main app needs to create and link this person.
+         */
+        FirstAdminResponse: {
+            /** Display Name */
+            display_name: string | null;
+            /** Email */
+            email: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Password Hash */
+            password_hash: string | null;
+            /** Username */
+            username: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * FleetHealthResponse
          * @description Fleet health status response.
          */
@@ -9005,6 +9812,11 @@ export interface components {
             optional_down: string[];
             /** Required Down */
             required_down: string[];
+            /**
+             * Roles With Nodes Down
+             * @default []
+             */
+            roles_with_nodes_down: components["schemas"]["RoleNodeHealth"][];
         } & {
             [key: string]: unknown;
         };
@@ -9044,6 +9856,30 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * FleetServiceActionResponse
+         * @description ``ServiceActionResponse`` for an action applied across the fleet.
+         */
+        FleetServiceActionResponse: {
+            /** Action */
+            action: string;
+            /** Diagnostics */
+            diagnostics?: {
+                [key: string]: string;
+            } | null;
+            /** Job Id */
+            job_id?: string | null;
+            /** Message */
+            message: string;
+            /** Node Id */
+            node_id: string;
+            /** Service Name */
+            service_name: string;
+            /** Success */
+            success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * FleetServiceNodeStatus
          * @description Per-node status for a fleet service.
          */
@@ -9058,6 +9894,40 @@ export interface components {
             port?: number | null;
             /** Status */
             status: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FleetServiceStatus
+         * @description Aggregated fleet service status.
+         */
+        FleetServiceStatus: {
+            /** Category */
+            category: string;
+            /** Failed Count */
+            failed_count: number;
+            /** Nodes */
+            nodes: components["schemas"]["FleetServiceNodeStatus"][];
+            /** Running Count */
+            running_count: number;
+            /** Service Name */
+            service_name: string;
+            /** Stopped Count */
+            stopped_count: number;
+            /** Total Nodes */
+            total_nodes: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FleetServicesResponse
+         * @description Response for fleet services listing.
+         */
+        FleetServicesResponse: {
+            /** Services */
+            services: components["schemas"]["FleetServiceStatus"][];
+            /** Total Services */
+            total_services: number;
         } & {
             [key: string]: unknown;
         };
@@ -9375,6 +10245,35 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** IdleSubscriberRow */
+        IdleSubscriberRow: {
+            /** Expires At */
+            expires_at: number;
+            /** Since */
+            since: number;
+            /** Subscriber */
+            subscriber: string;
+            /** Target Kind */
+            target_kind: string;
+            /** Target Name */
+            target_name: string;
+            /**
+             * Tenant Id
+             * @description The owning company; set in the install-wide (SLM) view, null in a company's own
+             */
+            tenant_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** IdleSubscribersResponse */
+        IdleSubscribersResponse: {
+            /** Count */
+            count: number;
+            /** Subscribers */
+            subscribers: components["schemas"]["IdleSubscriberRow"][];
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * LDAPLoginRequest
          * @description Request model for LDAP login.
@@ -9422,83 +10321,6 @@ export interface components {
             output?: string | null;
             /** Success */
             success: boolean;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * LLMConfig
-         * @description Full LLM configuration stored in SLM settings.
-         */
-        LLMConfig: {
-            /**
-             * Active Provider
-             * @default ollama
-             */
-            active_provider: string;
-            /**
-             * Cpu Models
-             * @default []
-             */
-            cpu_models: string[];
-            /**
-             * Flash Attention
-             * @default true
-             */
-            flash_attention: boolean;
-            /**
-             * Gpu Models
-             * @default []
-             */
-            gpu_models: string[];
-            /**
-             * Keep Alive
-             * @default 10m
-             */
-            keep_alive: string;
-            /**
-             * Kv Cache Type
-             * @default q8_0
-             */
-            kv_cache_type: string;
-            /**
-             * Max Loaded Models
-             * @default 5
-             */
-            max_loaded_models: number;
-            /**
-             * Num Parallel
-             * @default 4
-             */
-            num_parallel: number;
-            /**
-             * Ollama Host
-             * @default 0.0.0.0
-             */
-            ollama_host: string;
-            /**
-             * Ollama Port
-             * @default 11434
-             */
-            ollama_port: number;
-            /**
-             * Providers
-             * @default []
-             */
-            providers: components["schemas"]["LLMProviderConfig"][];
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * LLMConfigResponse
-         * @description Response wrapper for LLM config.
-         */
-        LLMConfigResponse: {
-            config: components["schemas"]["LLMConfig"];
-            /**
-             * Message
-             * @default OK
-             */
-            message: string;
         } & {
             [key: string]: unknown;
         };
@@ -9580,6 +10402,51 @@ export interface components {
             provider: string;
             /** Success */
             success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LedgerSourceStatus
+         * @description What the SLM can and cannot read, so a screen never shows a gap as 'none'.
+         */
+        LedgerSourceStatus: {
+            /** Reachable */
+            reachable: boolean;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Source */
+            source: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** LedgerSourcesResponse */
+        LedgerSourcesResponse: {
+            /** Sources */
+            sources: components["schemas"]["LedgerSourceStatus"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LedgerUnavailable
+         * @description The typed 503 body: the source could not be read, which is not 'nothing there'.
+         */
+        LedgerUnavailable: {
+            /** Detail */
+            detail: string;
+            /**
+             * Error
+             * @default ledger_unavailable
+             * @constant
+             */
+            error: "ledger_unavailable";
+            /**
+             * Source
+             * @description Which store could not be read (claims, waitlists, dev_loop, events)
+             */
+            source: string;
         } & {
             [key: string]: unknown;
         };
@@ -10174,8 +11041,8 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** NavigateRequest */
-        NavigateRequest: {
+        /** NavigateBrowserRequest */
+        NavigateBrowserRequest: {
             /** Url */
             url: string;
         } & {
@@ -10562,6 +11429,44 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * NodePostSyncResponse
+         * @description Result of syncing every ACTIVE role on a node as one ordered plan.
+         */
+        NodePostSyncResponse: {
+            /**
+             * Aborted
+             * @default false
+             */
+            aborted: boolean;
+            /**
+             * Actions
+             * @default []
+             */
+            actions: components["schemas"]["PostSyncActionRunResponse"][];
+            /** Commit */
+            commit?: string | null;
+            /** Message */
+            message: string;
+            /** Node Id */
+            node_id: string;
+            /**
+             * Roles
+             * @default []
+             */
+            roles: components["schemas"]["NodeRoleSyncResult"][];
+            /** Run Id */
+            run_id: string;
+            /**
+             * Skipped
+             * @default []
+             */
+            skipped: string[];
+            /** Success */
+            success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * NodeResponse
          * @description Node response.
          */
@@ -10683,6 +11588,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * NodeRoleSyncResult
+         * @description File-sync outcome for one role on the node.
+         */
+        NodeRoleSyncResult: {
+            /** Message */
+            message: string;
+            /** Role Name */
+            role_name: string;
+            /** Success */
+            success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * NodeRolesResponse
          * @description All roles for a node (Issue #779).
          */
@@ -10711,6 +11630,18 @@ export interface components {
             node_id: string;
             /** Services */
             services: components["schemas"]["ServiceOrderEntry"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * NodeSshPasswordDeleteResponse
+         * @description What a deletion removed. Carries the node and a flag, never a value.
+         */
+        NodeSshPasswordDeleteResponse: {
+            /** Deleted */
+            deleted: boolean;
+            /** Node Id */
+            node_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -10804,6 +11735,26 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * OrchestrationServiceActionResponse
+         * @description Response for a service action.
+         */
+        OrchestrationServiceActionResponse: {
+            /** Action */
+            action: string;
+            /** Host */
+            host?: string | null;
+            /** Message */
+            message: string;
+            /** Node Id */
+            node_id?: string | null;
+            /** Service Name */
+            service_name: string;
+            /** Success */
+            success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * PackageUploadResponse
          * @description Response after uploading a role package.
          */
@@ -10836,6 +11787,38 @@ export interface components {
              * @description New password
              */
             new_password: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PeerMessageRow
+         * @description Pending peer messages for one recipient. Metadata only -- never the content.
+         */
+        PeerMessageRow: {
+            /** Oldest At */
+            oldest_at: number;
+            /** Pending */
+            pending: number;
+            /** Recipient Kind */
+            recipient_kind: string;
+            /** Recipient Name */
+            recipient_name: string;
+            /** Senders */
+            senders: string[];
+            /**
+             * Tenant Id
+             * @description The owning company; set in the install-wide (SLM) view, null in a company's own
+             */
+            tenant_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** PeerMessagesResponse */
+        PeerMessagesResponse: {
+            /** Count */
+            count: number;
+            /** Recipients */
+            recipients: components["schemas"]["PeerMessageRow"][];
         } & {
             [key: string]: unknown;
         };
@@ -10927,6 +11910,23 @@ export interface components {
             status: string;
             /** Trace Id */
             trace_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PersonCopyRequest
+         * @description The main app's record of a linked person (#10200). It is the record after the link.
+         */
+        PersonCopyRequest: {
+            /** Is Active */
+            is_active: boolean;
+            /** Password Hash */
+            password_hash: string | null;
+            /**
+             * Slm User Id
+             * Format: uuid
+             */
+            slm_user_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -11047,6 +12047,61 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * PostSyncActionRunResponse
+         * @description One recorded post-sync action. `success` is None when the action was only issued.
+         */
+        PostSyncActionRunResponse: {
+            /** Category */
+            category: string;
+            /** Command */
+            command?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Exit Code */
+            exit_code?: number | null;
+            /**
+             * Finished At
+             * Format: date-time
+             */
+            finished_at: string;
+            /** Label */
+            label: string;
+            /** Node Id */
+            node_id: string;
+            /**
+             * Output Tail
+             * @default
+             */
+            output_tail: string;
+            /** Role Name */
+            role_name: string;
+            /** Run Id */
+            run_id: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Success */
+            success?: boolean | null;
+            /** Units */
+            units?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PostSyncRunResponse
+         * @description Every recorded action of one run, in execution order.
+         */
+        PostSyncRunResponse: {
+            /** Actions */
+            actions: components["schemas"]["PostSyncActionRunResponse"][];
+            /** Run Id */
+            run_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * PreflightConflict
          * @description A single conflict found during role assignment pre-flight.
          */
@@ -11080,6 +12135,46 @@ export interface components {
             role_name: string;
             /** Warnings */
             warnings?: components["schemas"]["PreflightConflict"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /** PresenceResponse */
+        PresenceResponse: {
+            /** Agents */
+            agents: components["schemas"]["PresenceRow"][];
+            /** Count */
+            count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** PresenceRow */
+        PresenceRow: {
+            /** Busy */
+            busy: boolean;
+            /** @description Null when idle, or when the agent's kind has no notion of a task */
+            current_task?: components["schemas"]["PresenceTaskRow"] | null;
+            /** Detail */
+            detail?: string | null;
+            /** Kind */
+            kind: string;
+            /** Last Seen */
+            last_seen: number;
+            /** Name */
+            name: string;
+            /** Tenant Id */
+            tenant_id: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PresenceTaskRow
+         * @description What a busy agent is working on (#18391): for a Company OS agent, its running run's work item.
+         */
+        PresenceTaskRow: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
         } & {
             [key: string]: unknown;
         };
@@ -11430,10 +12525,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * RoleCreate
+         * RoleDefinitionCreate
          * @description Role creation schema.
          */
-        RoleCreate: {
+        RoleDefinitionCreate: {
             /** Ansible Playbook */
             ansible_playbook?: string | null;
             /**
@@ -11471,6 +12566,79 @@ export interface components {
             systemd_service?: string[] | null;
             /** Target Path */
             target_path: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RoleDefinitionResponse
+         * @description Role response schema.
+         */
+        RoleDefinitionResponse: {
+            /** Ansible Playbook */
+            ansible_playbook?: string | null;
+            /** Auto Restart */
+            auto_restart: boolean;
+            /** Degraded Without */
+            degraded_without?: unknown[];
+            /** Display Name */
+            display_name?: string | null;
+            /** Health Check Path */
+            health_check_path?: string | null;
+            /** Health Check Port */
+            health_check_port?: number | null;
+            /** Name */
+            name: string;
+            /** Post Sync Cmd */
+            post_sync_cmd?: string | null;
+            /** Pre Sync Cmd */
+            pre_sync_cmd?: string | null;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /** Source Paths */
+            source_paths: unknown[];
+            /** Sync Type */
+            sync_type?: string | null;
+            /** Systemd Service */
+            systemd_service?: string[] | null;
+            /** Target Path */
+            target_path: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RoleDefinitionUpdate
+         * @description Role update schema.
+         */
+        RoleDefinitionUpdate: {
+            /** Ansible Playbook */
+            ansible_playbook?: string | null;
+            /** Auto Restart */
+            auto_restart?: boolean | null;
+            /** Degraded Without */
+            degraded_without?: unknown[] | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Health Check Path */
+            health_check_path?: string | null;
+            /** Health Check Port */
+            health_check_port?: number | null;
+            /** Post Sync Cmd */
+            post_sync_cmd?: string | null;
+            /** Pre Sync Cmd */
+            pre_sync_cmd?: string | null;
+            /** Required */
+            required?: boolean | null;
+            /** Source Paths */
+            source_paths?: unknown[] | null;
+            /** Sync Type */
+            sync_type?: string | null;
+            /** Systemd Service */
+            systemd_service?: string[] | null;
+            /** Target Path */
+            target_path?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -11515,6 +12683,20 @@ export interface components {
         RoleListResponse: {
             /** Roles */
             roles: components["schemas"]["RoleInfo"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RoleNodeHealth
+         * @description A multi-node role with at least one of its nodes down.
+         */
+        RoleNodeHealth: {
+            /** Nodes Down */
+            nodes_down: string[];
+            /** Nodes Up */
+            nodes_up: string[];
+            /** Role */
+            role: string;
         } & {
             [key: string]: unknown;
         };
@@ -11585,36 +12767,24 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * RoleUpdate
-         * @description Role update schema.
+         * RoleResponse
+         * @description Role information in responses.
          */
-        RoleUpdate: {
-            /** Ansible Playbook */
-            ansible_playbook?: string | null;
-            /** Auto Restart */
-            auto_restart?: boolean | null;
-            /** Degraded Without */
-            degraded_without?: unknown[] | null;
-            /** Display Name */
-            display_name?: string | null;
-            /** Health Check Path */
-            health_check_path?: string | null;
-            /** Health Check Port */
-            health_check_port?: number | null;
-            /** Post Sync Cmd */
-            post_sync_cmd?: string | null;
-            /** Pre Sync Cmd */
-            pre_sync_cmd?: string | null;
-            /** Required */
-            required?: boolean | null;
-            /** Source Paths */
-            source_paths?: unknown[] | null;
-            /** Sync Type */
-            sync_type?: string | null;
-            /** Systemd Service */
-            systemd_service?: string[] | null;
-            /** Target Path */
-            target_path?: string | null;
+        RoleResponse: {
+            /** Description */
+            description?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Is System
+             * @default false
+             */
+            is_system: boolean;
+            /** Name */
+            name: string;
         } & {
             [key: string]: unknown;
         };
@@ -11625,6 +12795,91 @@ export interface components {
         RolesUpdateRequest: {
             /** Roles */
             roles: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackCandidates
+         * @description The picker's contents: ancestors of the branch head, newest first.
+         */
+        RollbackCandidates: {
+            /** Branch */
+            branch: string;
+            /** Commits */
+            commits: components["schemas"]["RollbackCommit"][];
+            /** Deployed Commit */
+            deployed_commit?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackCommit
+         * @description One commit the operator may roll back to.
+         */
+        RollbackCommit: {
+            /** Commit */
+            commit: string;
+            /** Date */
+            date: string;
+            /**
+             * Is Deployed
+             * @default false
+             */
+            is_deployed: boolean;
+            /** Short */
+            short: string;
+            /** Subject */
+            subject: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackDatabaseCheck
+         * @description Whether a database migration is in the way, for one database.
+         */
+        RollbackDatabaseCheck: {
+            /** Database */
+            database: string;
+            /**
+             * In The Way
+             * @default []
+             */
+            in_the_way: string[];
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackPreview
+         * @description What the confirmation step shows before anything runs.
+         */
+        RollbackPreview: {
+            /** Allowed */
+            allowed: boolean;
+            /** Checks */
+            checks: components["schemas"]["RollbackDatabaseCheck"][];
+            commit: components["schemas"]["RollbackCommit"];
+            /** Refusal */
+            refusal?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackRequest
+         * @description The commit the operator picked from the list; validated again server-side.
+         */
+        RollbackRequest: {
+            /**
+             * Commit
+             * @description Full commit id from the candidates list
+             */
+            commit: string;
         } & {
             [key: string]: unknown;
         };
@@ -12138,6 +13393,22 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SecretsBackupStatus
+         * @description What the verifier needs to decide, and nothing else (no path, no checksum).
+         */
+        SecretsBackupStatus: {
+            /** Completed At */
+            completed_at: string | null;
+            /** Integrity Ok */
+            integrity_ok: boolean;
+            /** Service Type */
+            service_type: string | null;
+            /** Status */
+            status: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SecurityEventAcknowledge
          * @description Acknowledge security event.
          */
@@ -12533,6 +13804,26 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ServiceActionResponse
+         * @description Service action response.
+         */
+        ServiceActionResponse: {
+            /** Action */
+            action: string;
+            /** Job Id */
+            job_id?: string | null;
+            /** Message */
+            message: string;
+            /** Node Id */
+            node_id: string;
+            /** Service Name */
+            service_name: string;
+            /** Success */
+            success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * ServiceCategoryUpdate
          * @description Request to update service category.
          */
@@ -12844,6 +14135,126 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SlmAdminUserCreate
+         * @description User creation request.
+         */
+        SlmAdminUserCreate: {
+            /**
+             * Is Admin
+             * @default false
+             */
+            is_admin: boolean;
+            /** Password */
+            password: string;
+            /** Username */
+            username: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SlmAdminUserResponse
+         * @description User response (excludes password).
+         */
+        SlmAdminUserResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: unknown;
+            /** Is Active */
+            is_active: boolean;
+            /**
+             * Is Admin
+             * @default false
+             */
+            is_admin: boolean;
+            /** Last Login */
+            last_login?: string | null;
+            /** Username */
+            username: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SlmLLMConfig
+         * @description Full LLM configuration stored in SLM settings.
+         */
+        SlmLLMConfig: {
+            /**
+             * Active Provider
+             * @default ollama
+             */
+            active_provider: string;
+            /**
+             * Cpu Models
+             * @default []
+             */
+            cpu_models: string[];
+            /**
+             * Flash Attention
+             * @default true
+             */
+            flash_attention: boolean;
+            /**
+             * Gpu Models
+             * @default []
+             */
+            gpu_models: string[];
+            /**
+             * Keep Alive
+             * @default 10m
+             */
+            keep_alive: string;
+            /**
+             * Kv Cache Type
+             * @default q8_0
+             */
+            kv_cache_type: string;
+            /**
+             * Max Loaded Models
+             * @default 5
+             */
+            max_loaded_models: number;
+            /**
+             * Num Parallel
+             * @default 4
+             */
+            num_parallel: number;
+            /**
+             * Ollama Host
+             * @default 0.0.0.0
+             */
+            ollama_host: string;
+            /**
+             * Ollama Port
+             * @default 11434
+             */
+            ollama_port: number;
+            /**
+             * Providers
+             * @default []
+             */
+            providers: components["schemas"]["LLMProviderConfig"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SlmLLMConfigResponse
+         * @description Response wrapper for LLM config.
+         */
+        SlmLLMConfigResponse: {
+            config: components["schemas"]["SlmLLMConfig"];
+            /**
+             * Message
+             * @default OK
+             */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * StepCompleteRequest
          * @description Request to mark a wizard step as completed.
          */
@@ -13064,36 +14475,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * TeamCreate
-         * @description Schema for creating a team.
-         */
-        TeamCreate: {
-            /** Description */
-            description?: string | null;
-            /** Name */
-            name: string;
-            /** Organization Id */
-            organization_id?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * TeamListResponse
-         * @description Schema for paginated team list response.
-         */
-        TeamListResponse: {
-            /** Limit */
-            limit: number;
-            /** Offset */
-            offset: number;
-            /** Teams */
-            teams: components["schemas"]["TeamResponse"][];
-            /** Total */
-            total: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * TeamMemberAdd
          * @description Schema for adding a member to a team.
          */
@@ -13108,41 +14489,6 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * TeamResponse
-         * @description Schema for team response.
-         */
-        TeamResponse: {
-            /** Created At */
-            created_at: string;
-            /** Description */
-            description: string | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /** Organization Id */
-            organization_id: string | null;
-            /** Updated At */
-            updated_at: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * TeamUpdate
-         * @description Schema for updating a team.
-         */
-        TeamUpdate: {
-            /** Description */
-            description?: string | null;
-            /** Name */
-            name?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -13456,6 +14802,11 @@ export interface components {
              * @default
              */
             created_at: string;
+            /**
+             * Enrollment Skipped Nodes
+             * @default []
+             */
+            enrollment_skipped_nodes: components["schemas"]["EnrollmentSkip"][];
             /**
              * Failed Fleet Nodes
              * @default 0
@@ -13790,6 +15141,27 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * UpdateProgress
+         * @description A running self-update's position in its own log (#20254).
+         */
+        UpdateProgress: {
+            /** Elapsed Seconds */
+            elapsed_seconds?: number | null;
+            /** Last Line At */
+            last_line_at?: string | null;
+            /** Play */
+            play?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "waiting" | "running" | "quiet" | "exited_without_recap" | "finished" | "unknown";
+            /** Task */
+            task?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * UpdateSummaryResponse
          * @description Lightweight summary for sidebar badge polling.
          */
@@ -13815,6 +15187,45 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * UserCreate
+         * @description Request model for creating a user.
+         */
+        UserCreate: {
+            /**
+             * Display Name
+             * @description Display name
+             */
+            display_name?: string | null;
+            /**
+             * Email
+             * Format: email
+             * @description User email address
+             */
+            email: string;
+            /**
+             * Org Id
+             * @description Organization ID (uses current context if not provided)
+             */
+            org_id?: string | null;
+            /**
+             * Password
+             * @description Password (8-128 characters, optional for SSO users)
+             */
+            password?: string | null;
+            /**
+             * Role Ids
+             * @description List of role IDs to assign
+             */
+            role_ids?: string[] | null;
+            /**
+             * Username
+             * @description Username (3-100 characters, alphanumeric and underscores)
+             */
+            username: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * UserListResponse
          * @description Response model for paginated user list.
          */
@@ -13826,7 +15237,70 @@ export interface components {
             /** Total */
             total: number;
             /** Users */
-            users: components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"][];
+            users: components["schemas"]["UserResponse"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * UserResponse
+         * @description Response model for a single user.
+         */
+        UserResponse: {
+            /** Avatar Url */
+            avatar_url?: string | null;
+            /** Bio */
+            bio?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Display Name */
+            display_name?: string | null;
+            /** Email */
+            email: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+            /**
+             * Is Platform Admin
+             * @default false
+             */
+            is_platform_admin: boolean;
+            /**
+             * Is Verified
+             * @default false
+             */
+            is_verified: boolean;
+            /** Last Login At */
+            last_login_at?: string | null;
+            /**
+             * Mfa Enabled
+             * @default false
+             */
+            mfa_enabled: boolean;
+            /** Org Id */
+            org_id?: string | null;
+            /** Preferences */
+            preferences?: {
+                [key: string]: unknown;
+            };
+            /** Roles */
+            roles?: components["schemas"]["RoleResponse"][];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Username */
+            username: string;
         } & {
             [key: string]: unknown;
         };
@@ -14084,6 +15558,46 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** WaiterRow */
+        WaiterRow: {
+            /** Agent Id */
+            agent_id: string;
+            /**
+             * Company Id
+             * @description Stamped at write time; null = install-wide or legacy
+             */
+            company_id?: string | null;
+            /** Expires At */
+            expires_at: string;
+            /** Intent */
+            intent: string;
+            /** Joined At */
+            joined_at: string;
+            /** Mode */
+            mode: string;
+            /**
+             * Position
+             * @description 1-based position in the scope's queue
+             */
+            position: number;
+            /** Priority */
+            priority: number;
+            /** Scope */
+            scope: string;
+            /** Task Id */
+            task_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** WaitlistsResponse */
+        WaitlistsResponse: {
+            /** Count */
+            count: number;
+            /** Waiters */
+            waiters: components["schemas"]["WaiterRow"][];
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * WizardStatus
          * @description Current state of the setup wizard.
@@ -14105,321 +15619,36 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * FleetServiceStatus
-         * @description Aggregated fleet service status.
+         * YieldRequestBody
+         * @description A person asks the holder of a claim to release it (#18599). Asking never releases anything.
          */
-        api__orchestration__FleetServiceStatus: {
-            /** Category */
-            category: string;
-            /** Failed Count */
-            failed_count: number;
-            /** Nodes */
-            nodes: components["schemas"]["FleetServiceNodeStatus"][];
-            /** Running Count */
-            running_count: number;
-            /** Service Name */
-            service_name: string;
-            /** Stopped Count */
-            stopped_count: number;
-            /** Total Nodes */
-            total_nodes: number;
+        YieldRequestBody: {
+            /**
+             * Holder Task Id
+             * @description The task that holds the claim, as the claims screen shows it
+             */
+            holder_task_id: string;
+            /**
+             * Reason
+             * @description Why; at most the ledger's free-text cap
+             * @default
+             */
+            reason: string;
+            /**
+             * Scope
+             * @description The claimed scope, e.g. `path:src/app.py`
+             */
+            scope: string;
         } & {
             [key: string]: unknown;
         };
-        /**
-         * FleetServicesResponse
-         * @description Response for fleet services listing.
-         */
-        api__orchestration__FleetServicesResponse: {
-            /** Services */
-            services: components["schemas"]["api__orchestration__FleetServiceStatus"][];
-            /** Total Services */
-            total_services: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * ServiceActionResponse
-         * @description Response for a service action.
-         */
-        api__orchestration__ServiceActionResponse: {
-            /** Action */
-            action: string;
-            /** Host */
-            host?: string | null;
-            /** Message */
-            message: string;
-            /** Node Id */
-            node_id?: string | null;
-            /** Service Name */
-            service_name: string;
-            /** Success */
-            success: boolean;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * RoleResponse
-         * @description Role response schema.
-         */
-        api__roles__RoleResponse: {
-            /** Ansible Playbook */
-            ansible_playbook?: string | null;
-            /** Auto Restart */
-            auto_restart: boolean;
-            /** Degraded Without */
-            degraded_without?: unknown[];
-            /** Display Name */
-            display_name?: string | null;
-            /** Health Check Path */
-            health_check_path?: string | null;
-            /** Health Check Port */
-            health_check_port?: number | null;
-            /** Name */
-            name: string;
-            /** Post Sync Cmd */
-            post_sync_cmd?: string | null;
-            /** Pre Sync Cmd */
-            pre_sync_cmd?: string | null;
+        /** YieldRequestResponse */
+        YieldRequestResponse: {
             /**
-             * Required
-             * @default false
+             * Token
+             * @description Identifies the request; the holder's answer is recorded under it
              */
-            required: boolean;
-            /** Source Paths */
-            source_paths: unknown[];
-            /** Sync Type */
-            sync_type?: string | null;
-            /** Systemd Service */
-            systemd_service?: string[] | null;
-            /** Target Path */
-            target_path: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * RoleResponse
-         * @description Role information in responses.
-         */
-        autobot_shared__user_management__schemas__user__RoleResponse: {
-            /** Description */
-            description?: string | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Is System
-             * @default false
-             */
-            is_system: boolean;
-            /** Name */
-            name: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * UserCreate
-         * @description Request model for creating a user.
-         */
-        autobot_shared__user_management__schemas__user__UserCreate: {
-            /**
-             * Display Name
-             * @description Display name
-             */
-            display_name?: string | null;
-            /**
-             * Email
-             * Format: email
-             * @description User email address
-             */
-            email: string;
-            /**
-             * Org Id
-             * @description Organization ID (uses current context if not provided)
-             */
-            org_id?: string | null;
-            /**
-             * Password
-             * @description Password (8-128 characters, optional for SSO users)
-             */
-            password?: string | null;
-            /**
-             * Role Ids
-             * @description List of role IDs to assign
-             */
-            role_ids?: string[] | null;
-            /**
-             * Username
-             * @description Username (3-100 characters, alphanumeric and underscores)
-             */
-            username: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * UserResponse
-         * @description Response model for a single user.
-         */
-        autobot_shared__user_management__schemas__user__UserResponse: {
-            /** Avatar Url */
-            avatar_url?: string | null;
-            /** Bio */
-            bio?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Display Name */
-            display_name?: string | null;
-            /** Email */
-            email: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Is Active
-             * @default true
-             */
-            is_active: boolean;
-            /**
-             * Is Platform Admin
-             * @default false
-             */
-            is_platform_admin: boolean;
-            /**
-             * Is Verified
-             * @default false
-             */
-            is_verified: boolean;
-            /** Last Login At */
-            last_login_at?: string | null;
-            /**
-             * Mfa Enabled
-             * @default false
-             */
-            mfa_enabled: boolean;
-            /** Org Id */
-            org_id?: string | null;
-            /** Preferences */
-            preferences?: {
-                [key: string]: unknown;
-            };
-            /** Roles */
-            roles?: components["schemas"]["autobot_shared__user_management__schemas__user__RoleResponse"][];
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Username */
-            username: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * FleetServiceStatus
-         * @description Service status across the fleet.
-         */
-        models__schemas__FleetServiceStatus: {
-            /**
-             * Category
-             * @default system
-             */
-            category: string;
-            /** Failed Count */
-            failed_count: number;
-            /** Nodes */
-            nodes: {
-                [key: string]: unknown;
-            }[];
-            /** Running Count */
-            running_count: number;
-            /** Service Name */
-            service_name: string;
-            /** Stopped Count */
-            stopped_count: number;
-            /** Total Nodes */
-            total_nodes: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * FleetServicesResponse
-         * @description Aggregated service status across fleet.
-         */
-        models__schemas__FleetServicesResponse: {
-            /** Services */
-            services: components["schemas"]["models__schemas__FleetServiceStatus"][];
-            /** Total Services */
-            total_services: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * ServiceActionResponse
-         * @description Service action response.
-         */
-        models__schemas__ServiceActionResponse: {
-            /** Action */
-            action: string;
-            /** Job Id */
-            job_id?: string | null;
-            /** Message */
-            message: string;
-            /** Node Id */
-            node_id: string;
-            /** Service Name */
-            service_name: string;
-            /** Success */
-            success: boolean;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * UserCreate
-         * @description User creation request.
-         */
-        models__schemas__UserCreate: {
-            /**
-             * Is Admin
-             * @default false
-             */
-            is_admin: boolean;
-            /** Password */
-            password: string;
-            /** Username */
-            username: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * UserResponse
-         * @description User response (excludes password).
-         */
-        models__schemas__UserResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Id */
-            id: unknown;
-            /** Is Active */
-            is_active: boolean;
-            /**
-             * Is Admin
-             * @default false
-             */
-            is_admin: boolean;
-            /** Last Login */
-            last_login?: string | null;
-            /** Username */
-            username: string;
+            token: string;
         } & {
             [key: string]: unknown;
         };
@@ -14651,7 +15880,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentLLMConfigWithKey"];
+                    "application/json": components["schemas"]["AgentLLMConfig"];
                 };
             };
             /** @description Validation Error */
@@ -14980,6 +16209,39 @@ export interface operations {
             };
         };
     };
+    exchange_sso_code_api_auth_sso_exchange_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_exchange_sso_code_api_auth_sso_exchange_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     ldap_login_api_auth_sso_ldap_login_post: {
         parameters: {
             query?: never;
@@ -15178,7 +16440,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["models__schemas__UserCreate"];
+                "application/json": components["schemas"]["SlmAdminUserCreate"];
             };
         };
         responses: {
@@ -15188,7 +16450,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["models__schemas__UserResponse"];
+                    "application/json": components["schemas"]["SlmAdminUserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15221,7 +16483,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeamListResponse"];
+                    "application/json": components["schemas"]["AutobotTeamListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15244,7 +16506,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TeamCreate"];
+                "application/json": components["schemas"]["AutobotTeamCreate"];
             };
         };
         responses: {
@@ -15254,7 +16516,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeamResponse"];
+                    "application/json": components["schemas"]["AutobotTeamResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15285,7 +16547,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeamResponse"];
+                    "application/json": components["schemas"]["AutobotTeamResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15339,7 +16601,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TeamUpdate"];
+                "application/json": components["schemas"]["AutobotTeamUpdate"];
             };
         };
         responses: {
@@ -15349,7 +16611,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeamResponse"];
+                    "application/json": components["schemas"]["AutobotTeamResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15472,7 +16734,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserCreate"];
+                "application/json": components["schemas"]["UserCreate"];
             };
         };
         responses: {
@@ -15482,7 +16744,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"];
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15513,7 +16775,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"];
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15577,7 +16839,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"];
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15960,7 +17222,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NavigateRequest"];
+                "application/json": components["schemas"]["NavigateBrowserRequest"];
             };
         };
         responses: {
@@ -16644,6 +17906,39 @@ export interface operations {
             };
         };
     };
+    get_post_sync_run_api_code_sync_post_sync_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostSyncRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     pull_from_source_api_code_sync_pull_post: {
         parameters: {
             query?: never;
@@ -16736,6 +18031,105 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_rollback_api_code_sync_rollback_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateAllJob"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_candidates_api_code_sync_rollback_candidates_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollbackCandidates"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_preview_api_code_sync_rollback_preview_get: {
+        parameters: {
+            query: {
+                commit: string;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollbackPreview"];
                 };
             };
             /** @description Validation Error */
@@ -17033,6 +18427,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UpdateAllJob"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_nodes_offline_after_update_api_code_sync_update_all_nodes_offline_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number | string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_update_progress_api_code_sync_update_all_progress_get: {
+        parameters: {
+            query?: {
+                since?: string | null;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateProgress"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_update_report_api_code_sync_update_all_report_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -18177,7 +19670,7 @@ export interface operations {
             };
         };
     };
-    get_fleet_services_api_fleet_services_get: {
+    legacy_fleet_services_api_fleet_services_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -18192,7 +19685,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["models__schemas__FleetServicesResponse"];
+                    "application/json": components["schemas"]["FleetServicesResponse"];
                 };
             };
         };
@@ -18251,7 +19744,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["models__schemas__ServiceActionResponse"];
+                    "application/json": components["schemas"]["FleetServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -18282,7 +19775,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["models__schemas__ServiceActionResponse"];
+                    "application/json": components["schemas"]["FleetServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -18313,7 +19806,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["models__schemas__ServiceActionResponse"];
+                    "application/json": components["schemas"]["FleetServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -18514,6 +20007,105 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PlaybookInfo"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_first_admin_api_internal_first_admin_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-internal-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirstAdminResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_node_ssh_password_api_internal_nodes__node_id__ssh_password_delete: {
+        parameters: {
+            query: {
+                approval_id: string;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeSshPasswordDeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_person_copy_api_internal_person_copy_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-internal-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonCopyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -19029,6 +20621,417 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ledger_activity_api_monitoring_agent_ledger_activity_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_claims_api_monitoring_agent_ledger_claims_get: {
+        parameters: {
+            query?: {
+                /** @description Only claims of this scope kind */
+                kind?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_yield_request_api_monitoring_agent_ledger_claims_yield_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YieldRequestBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YieldRequestResponse"];
+                };
+            };
+            /** @description No such claim */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Asked too recently */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_conflicts_api_monitoring_agent_ledger_conflicts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictsResponse"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_contention_api_monitoring_agent_ledger_contention_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentionResponse"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_dev_loop_issues_api_monitoring_agent_ledger_dev_loop_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevLoopIssuesResponse"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_dev_loop_history_api_monitoring_agent_ledger_dev_loop__issue__get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                issue: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevLoopHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_idle_subscribers_api_monitoring_agent_ledger_idle_subscribers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdleSubscribersResponse"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_peer_messages_api_monitoring_agent_ledger_peer_messages_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeerMessagesResponse"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_presence_api_monitoring_agent_ledger_presence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PresenceResponse"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_sources_api_monitoring_agent_ledger_sources_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerSourcesResponse"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
+                };
+            };
+        };
+    };
+    ledger_waitlists_api_monitoring_agent_ledger_waitlists_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistsResponse"];
+                };
+            };
+            /** @description The ledger could not be read (not the same as empty) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerUnavailable"];
                 };
             };
         };
@@ -20983,7 +22986,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["models__schemas__ServiceActionResponse"];
+                    "application/json": components["schemas"]["ServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -21015,7 +23018,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["models__schemas__ServiceActionResponse"];
+                    "application/json": components["schemas"]["ServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -21047,7 +23050,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["models__schemas__ServiceActionResponse"];
+                    "application/json": components["schemas"]["ServiceActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_node_post_sync_plan_api_nodes__node_id__sync_post: {
+        parameters: {
+            query?: {
+                restart?: boolean;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodePostSyncResponse"];
                 };
             };
             /** @description Validation Error */
@@ -21666,7 +23704,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__orchestration__FleetServicesResponse"];
+                    "application/json": components["schemas"]["FleetServicesResponse"];
                 };
             };
         };
@@ -21708,7 +23746,7 @@ export interface operations {
             };
         };
     };
-    restart_fleet_service_api_orchestration_fleet_services__service_name__restart_post: {
+    orchestration_restart_fleet_service_api_orchestration_fleet_services__service_name__restart_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -21725,7 +23763,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__orchestration__ServiceActionResponse"];
+                    "application/json": components["schemas"]["FleetServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -21739,7 +23777,7 @@ export interface operations {
             };
         };
     };
-    start_fleet_service_api_orchestration_fleet_services__service_name__start_post: {
+    orchestration_start_fleet_service_api_orchestration_fleet_services__service_name__start_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -21756,7 +23794,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__orchestration__ServiceActionResponse"];
+                    "application/json": components["schemas"]["FleetServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -21770,7 +23808,7 @@ export interface operations {
             };
         };
     };
-    stop_fleet_service_api_orchestration_fleet_services__service_name__stop_post: {
+    orchestration_stop_fleet_service_api_orchestration_fleet_services__service_name__stop_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -21787,7 +23825,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__orchestration__ServiceActionResponse"];
+                    "application/json": components["schemas"]["FleetServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -21906,7 +23944,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__orchestration__ServiceActionResponse"];
+                    "application/json": components["schemas"]["OrchestrationServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -21941,7 +23979,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__orchestration__ServiceActionResponse"];
+                    "application/json": components["schemas"]["OrchestrationServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -21976,7 +24014,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__orchestration__ServiceActionResponse"];
+                    "application/json": components["schemas"]["OrchestrationServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -22011,7 +24049,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__orchestration__ServiceActionResponse"];
+                    "application/json": components["schemas"]["OrchestrationServiceActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -22680,7 +24718,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__roles__RoleResponse"][];
+                    "application/json": components["schemas"]["RoleDefinitionResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -22705,7 +24743,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RoleCreate"];
+                "application/json": components["schemas"]["RoleDefinitionCreate"];
             };
         };
         responses: {
@@ -22715,7 +24753,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__roles__RoleResponse"];
+                    "application/json": components["schemas"]["RoleDefinitionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -22917,7 +24955,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__roles__RoleResponse"];
+                    "application/json": components["schemas"]["RoleDefinitionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -22944,7 +24982,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RoleUpdate"];
+                "application/json": components["schemas"]["RoleDefinitionUpdate"];
             };
         };
         responses: {
@@ -22954,7 +24992,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__roles__RoleResponse"];
+                    "application/json": components["schemas"]["RoleDefinitionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -23941,7 +25979,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LLMConfigResponse"];
+                    "application/json": components["schemas"]["SlmLLMConfigResponse"];
                 };
             };
         };
@@ -23955,7 +25993,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LLMConfig"];
+                "application/json": components["schemas"]["SlmLLMConfig"];
             };
         };
         responses: {
@@ -23965,7 +26003,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LLMConfigResponse"];
+                    "application/json": components["schemas"]["SlmLLMConfigResponse"];
                 };
             };
             /** @description Validation Error */
@@ -24480,7 +26518,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserCreate"];
+                "application/json": components["schemas"]["UserCreate"];
             };
         };
         responses: {
@@ -24490,7 +26528,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"];
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -24521,7 +26559,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"];
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -24585,7 +26623,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"];
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -25291,6 +27329,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataVerifyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_secrets_backup_status_api_stateful_secrets_backups__backup_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                backup_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretsBackupStatus"];
                 };
             };
             /** @description Validation Error */

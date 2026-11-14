@@ -6,6 +6,11 @@ Application Configuration - GUI Application Settings
 
 from pathlib import Path
 
+# The GUI's ONE home for the worker's listen port. The GUI runs without app/ on sys.path, so it
+# cannot import app/utils/config_bootstrap; repo_tests/service_port_homes_test.py holds this equal to
+# that copy and to ssot_config PortConfig.npu_windows (#19325).
+DEFAULT_WORKER_PORT = 8082
+
 
 class AppConfig:
     """Application configuration and paths"""

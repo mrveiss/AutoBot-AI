@@ -12,7 +12,7 @@ import asyncio
 import time
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
 
 from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from api.ws_security import enforce_ws_origin
@@ -24,11 +24,12 @@ if TYPE_CHECKING:
     from intelligence.intelligent_agent import IntelligentAgent
 
 from api.schemas_agent import (
+    AgentGoalResponse,
     AgentReloadResponse,
     AgentSystemCapabilitiesResponse,
     GoalRequest,
-    GoalResponse,
 )
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from monitoring.prometheus_metrics import get_metrics_manager
 
@@ -47,14 +48,14 @@ def get_lazy_dependencies():
     """Lazy import of heavy dependencies to prevent startup blocking"""
     try:
         from intelligence.intelligent_agent import IntelligentAgent
-        from knowledge_base import KnowledgeBase
+        from knowledge_factory import get_knowledge_base_async
         from services.llm_service import get_llm_service
         from utils.command_validator import CommandValidator
         from worker_node import WorkerNode
 
         return (
             IntelligentAgent,
-            KnowledgeBase,
+            get_knowledge_base_async,
             get_llm_service,
             CommandValidator,
             WorkerNode,
@@ -83,14 +84,17 @@ async def get_agent() -> "IntelligentAgent":
             logger.info("Lazy loading intelligent agent dependencies...")
             (
                 IntelligentAgent,
-                KnowledgeBase,
+                get_knowledge_base_async,
                 get_llm_service,
                 CommandValidator,
                 WorkerNode,
             ) = get_lazy_dependencies()
 
             logger.info("Initializing intelligent agent with lazy-loaded dependencies..."),
-            _agent_instance = IntelligentAgent(get_llm_service(), KnowledgeBase(), WorkerNode(), CommandValidator())
+            kb = await get_knowledge_base_async()
+            if kb is None:
+                raise RuntimeError("Knowledge base unavailable (init failed or cooling down)")
+            _agent_instance = IntelligentAgent(get_llm_service(), kb, WorkerNode(), CommandValidator())
             await _agent_instance.initialize()
             logger.info("✅ Intelligent agent initialized successfully with lazy loading")
             return _agent_instance
@@ -107,7 +111,7 @@ async def get_agent() -> "IntelligentAgent":
 router = APIRouter(tags=["intelligent-agent"])
 
 
-@router.post("/process", response_model=GoalResponse)
+@router.post("/process", response_model=AgentGoalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="process_natural_language_goal",
@@ -155,7 +159,7 @@ async def process_natural_language_goal(
         duration=execution_time,
     )
 
-    return GoalResponse(
+    return AgentGoalResponse(
         success=True,
         result=result,
         execution_time=execution_time,
@@ -310,8 +314,8 @@ async def websocket_stream(websocket: WebSocket):
             except Exception as e:
                 logger.error("Error processing WebSocket goal: %s", e)
                 await websocket.send_json({"type": "error", "content": "Error processing goal"})
-    except WebSocketDisconnect:
-        logger.info("WebSocket connection closed")
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "websocket_stream")
     except Exception as e:
         logger.error("WebSocket error: %s", e)
         try:

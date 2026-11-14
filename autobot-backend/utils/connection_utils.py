@@ -24,7 +24,7 @@ from autobot_shared.ssot_config import get_ollama_url
 # autobot_shared/ssot_config.py, attribute-access only). The `.get()`/
 # `.get_nested()` lookups below require `config_manager`. Using `config` here
 # previously raised AttributeError (#12069, same root cause as #11971).
-from config import config_manager as global_config_manager
+from config import config_manager
 from constants.api_constants import PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS
 from constants.model_constants import ModelConstants
 from type_defs.common import Metadata
@@ -136,7 +136,7 @@ class ConnectionTester:
         """Get Ollama config from new structure (Issue #336 - extracted helper)."""
         endpoint = None
         model = None
-        llm_config = global_config_manager.get("backend", {}).get("llm", {})
+        llm_config = config_manager.get("backend", {}).get("llm", {})
         is_local_ollama = (
             llm_config.get("provider_type") == "local" and llm_config.get("local", {}).get("provider") == "ollama"
         )
@@ -151,12 +151,12 @@ class ConnectionTester:
     def _get_ollama_config_fallback(endpoint: str, model: str) -> tuple:
         """Get Ollama config from legacy/env (Issue #336 - extracted helper)."""
         if not endpoint:
-            endpoint = global_config_manager.get_nested(
+            endpoint = config_manager.get_nested(
                 "backend.ollama_endpoint",
                 f"{get_ollama_url()}/api/generate",
             )
         if not model:
-            model = global_config_manager.get_nested(
+            model = config_manager.get_nested(
                 "backend.ollama_model",
                 _ssot_config.misc.default_llm_model or ModelConstants.DEFAULT_OLLAMA_MODEL,
             )
@@ -252,7 +252,7 @@ class ConnectionTester:
             Tuple of (redis_host, redis_port, error_response or None)
         """
         # Check task_transport config (backwards compatibility)
-        task_transport_config = global_config_manager.get("task_transport", {})
+        task_transport_config = config_manager.get("task_transport", {})
 
         if task_transport_config.get("type") == "redis":
             redis_config = task_transport_config.get("redis", {})
@@ -261,7 +261,7 @@ class ConnectionTester:
             return host, port, None
 
         # Check memory.redis config (current structure)
-        memory_config = global_config_manager.get("memory", {})
+        memory_config = config_manager.get("memory", {})
         redis_config = memory_config.get("redis", {})
 
         if not redis_config.get("enabled", False):
@@ -354,7 +354,7 @@ class ConnectionTester:
         """Get current embedding model status"""
         try:
             # Get embedding configuration from unified config
-            llm_config = global_config_manager.get_llm_config()
+            llm_config = config_manager.get_llm_config()
             embedding_config = llm_config.get("unified", {}).get("embedding", {})
 
             if not embedding_config:
@@ -462,7 +462,7 @@ class ModelManager:
             models.extend(ollama_models)
 
             # Add configured models from config
-            llm_config = global_config_manager.get("llm_config", {})
+            llm_config = config_manager.get("llm_config", {})
             ollama_config_models = llm_config.get("ollama", {}).get("models", {})
             for key, model_name in ollama_config_models.items():
                 if not any(m["name"] == model_name for m in models):
@@ -509,7 +509,7 @@ class ModelManager:
     async def _get_ollama_models() -> list:
         """Get models from Ollama service"""
         try:
-            ollama_config = global_config_manager.get_nested("llm_config.ollama", {})
+            ollama_config = config_manager.get_nested("llm_config.ollama", {})
             ollama_host = ollama_config.get("host", get_ollama_url())
             ollama_url = f"{ollama_host}/api/tags"
 

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files
 
 from .types import CodeLocation, ComplexityHotspot, PatternSeverity
 
@@ -254,18 +255,6 @@ class ComplexityAnalyzer:
     NESTING_THRESHOLD = 4  # Deep nesting is problematic
     LINE_THRESHOLD = 50  # Long functions need review
 
-    EXCLUDE_DIRS = frozenset(
-        {
-            ".venv",
-            "venv",
-            "node_modules",
-            "__pycache__",
-            ".git",
-            "archives",
-            ".mypy_cache",
-        }
-    )
-
     def __init__(
         self,
         cc_threshold: int = 10,
@@ -286,7 +275,7 @@ class ComplexityAnalyzer:
         self.cc_threshold = cc_threshold
         self.mi_threshold = mi_threshold
         self.nesting_threshold = nesting_threshold
-        self.exclude_dirs = exclude_dirs or self.EXCLUDE_DIRS
+        self.exclude_dirs = exclude_dirs or ANALYSIS_EXCLUDE_DIRS
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
     def analyze_file(self, file_path: str) -> ModuleComplexity:
@@ -557,10 +546,7 @@ class ComplexityAnalyzer:
         results = []
         dir_path = Path(directory)
 
-        for py_file in dir_path.rglob("*.py"):
-            if any(exc in py_file.parts for exc in self.exclude_dirs):
-                continue
-
+        for py_file in discover_files(dir_path, ("*.py",), self.exclude_dirs):
             module = self.analyze_file(str(py_file))
             results.append(module)
 

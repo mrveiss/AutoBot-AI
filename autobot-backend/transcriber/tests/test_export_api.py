@@ -19,7 +19,7 @@ from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 
 from transcriber.database import Database
-from transcriber.deps import authenticate, get_db
+from transcriber.deps import authenticate, get_transcriber_db_from_request
 from transcriber.routes.export import router as export_router
 from transcriber.routes.projects import router as projects_router
 from transcriber.routes.recordings import router as recordings_router
@@ -48,7 +48,7 @@ async def seeded(tmp_path):
         return await call_next(request)
 
     await db.connect()
-    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_transcriber_db_from_request] = override_db
     app.dependency_overrides[authenticate] = lambda: None
     app.state.transcriber_db = db
     app.state.transcriber_upload_dir = str(upload_dir)

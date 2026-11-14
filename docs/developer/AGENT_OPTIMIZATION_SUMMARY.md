@@ -33,45 +33,44 @@ Average Reduction:      39.3%
 
 ## Implementation Components
 
-### 1. Core Optimizer (`scripts/utilities/optimize_agents.py`)
+### 1. Core Optimizer (`scripts/optimize_agents.py`, the only optimizer module, #14873)
 
 **Features:**
 - Intelligent code block stripping with preservation markers
 - YAML frontmatter preservation (required for agent routing)
-- MD5-based caching for incremental updates
+- SHA-256 content-hash cache (`--cache`, `file_hash`) for incremental runs; a cache written under other options is not trusted
 - Comprehensive statistics tracking
-- Thread-safe operations
 
 **Safety Guarantees:**
-- Original agent files NEVER modified
-- All changes go to separate `.claude/agents-optimized/` directory
-- Fully reversible (delete directory to revert)
+- Dry run by default: the Python tool writes only with `--apply` (the `agent-optimize.sh` wrapper passes it); writes are atomic and keep the file mode (#15580)
+- With `--apply` the agent files in `.claude/agents/` are rewritten **in place**; there is no separate output directory
+- With `--git-backup` (the wrapper passes it) the pre-write state is tagged `agents-pre-optimization-<timestamp>` and the rewrite is committed, scoped to the agent files only
+- Reversible through git: `--restore [TAG]` restores the agent files from a backup tag (latest by default)
 
 ### 2. CLI Wrapper (`scripts/utilities/agent-optimize.sh`)
 
 **Commands:**
 ```bash
-# Run optimization
+# Run optimization (in place, with a backup tag and a commit)
 ./scripts/utilities/agent-optimize.sh
 
-# Enable optimized agents
-./scripts/utilities/agent-optimize.sh --enable
-
-# Check status
+# Check status (agent count, git status, backup tags, cache)
 ./scripts/utilities/agent-optimize.sh --status
 
-# Disable (revert to originals)
-./scripts/utilities/agent-optimize.sh --disable
+# List backup tags
+./scripts/utilities/agent-optimize.sh --list-backups
+
+# Restore from the latest (or a named) backup tag
+./scripts/utilities/agent-optimize.sh --restore [TAG]
 ```
 
-### 3. Comprehensive Testing (`tests/unit/test_agent_optimizer.py`)
+### 3. Comprehensive Testing (`autobot-infrastructure/shared/scripts/optimize_agents_test.py`)
 
 **Test Coverage:**
-- 16 unit tests covering all functionality
-- 100% test pass rate
-- Edge case handling verified
-- Cache invalidation tested
-- Statistics accuracy validated
+- Dry run writes nothing; `--apply` writes atomically and matches the dry-run preview
+- Front matter, code-block, verbose-section and policy-collapse transforms
+- Cache hits, invalidation on change and on changed options
+- Git backup tag, scoped commit, restore, and failure reporting when git refuses
 
 ## Quick Start
 
@@ -96,25 +95,14 @@ Total savings:          138,065 bytes (39.3%)
 ========================================
 ```
 
-### Step 2: Enable Optimized Agents (Optional)
-
-```bash
-./scripts/utilities/agent-optimize.sh --enable
-```
-
-This creates a symlink for Claude CLI to use optimized agents.
-
-### Step 3: Verify
+### Step 2: Verify
 
 ```bash
 # Check optimization status
 ./scripts/utilities/agent-optimize.sh --status
 
-# Verify optimized files exist
-ls -lh .claude/agents-optimized/
-
-# Compare original vs optimized
-diff .claude/agents/code-reviewer.md .claude/agents-optimized/code-reviewer.md
+# Compare the rewrite with the pre-write backup tag
+git diff "$(git tag --list 'agents-pre-optimization-*' --sort=-creatordate | head -1)" -- .claude/agents/
 ```
 
 ## Technical Details
@@ -131,9 +119,8 @@ diff .claude/agents/code-reviewer.md .claude/agents-optimized/code-reviewer.md
    ```
    ```
 5. **Preserve Structure** (all headers, sections, descriptions intact)
-6. **Add Optimization Notice** at end of file
-7. **Write to Separate Directory** `.claude/agents-optimized/`
-8. **Cache File Hash** for incremental updates
+6. **Write Back In Place** (atomic, file mode kept) with `--apply`
+7. **Cache File Hash** for incremental updates (`--cache`)
 
 ### Caching Strategy
 
@@ -153,39 +140,27 @@ diff .claude/agents/code-reviewer.md .claude/agents-optimized/code-reviewer.md
 ./scripts/utilities/agent-optimize.sh --force
 
 # Manual cache clear
-rm .claude/agents-optimized/.optimization_cache.json
+rm .claude/agents/.optimization_cache.json
 ```
 
 ## Safety and Reversibility
 
-### Zero-Risk Design
+### Reversibility
 
-✅ **Original files protected:** Read-only access, never modified
-✅ **Separate output directory:** All changes in `.claude/agents-optimized/`
-✅ **Feature flag controlled:** Easy enable/disable
-✅ **Fully reversible:** Delete optimized directory to revert
-✅ **Comprehensive testing:** 16 unit tests, 100% pass rate
+✅ **Dry run by default:** nothing is written without `--apply`
+✅ **Backup before writing:** `--git-backup` tags the agent files before the rewrite
+✅ **Scoped commit:** the commit contains only the agent files, never other staged work or the cache
+✅ **Fully reversible:** `--restore [TAG]` brings the agent files back from a backup tag
 
 ### Rollback Procedure
 
-**Immediate Rollback:**
 ```bash
-./scripts/utilities/agent-optimize.sh --disable
-```
+# Latest backup tag
+./scripts/utilities/agent-optimize.sh --restore
 
-**Complete Removal:**
-```bash
-rm -rf .claude/agents-optimized
-rm -f .claude/agents-active
-```
-
-**Verification:**
-```bash
-# Verify originals intact
-ls -lh .claude/agents/
-
-# Verify no optimized references
-echo $CLAUDE_AGENT_DIR  # Should be empty
+# A specific one
+./scripts/utilities/agent-optimize.sh --list-backups
+./scripts/utilities/agent-optimize.sh --restore agents-pre-optimization-<timestamp>
 ```
 
 ## Performance Impact
@@ -244,32 +219,11 @@ Add to GitHub Actions:
 ### Unit Test Summary
 
 ```bash
-python -m pytest tests/unit/test_agent_optimizer.py -v
+python -m pytest autobot-infrastructure/shared/scripts/optimize_agents_test.py -v
 ```
 
-**Results:**
-```
-✓ test_extract_frontmatter                    PASSED
-✓ test_extract_frontmatter_no_frontmatter     PASSED
-✓ test_strip_code_blocks_single_block         PASSED
-✓ test_strip_code_blocks_multiple_blocks      PASSED
-✓ test_strip_code_blocks_preserves_language   PASSED
-✓ test_strip_code_blocks_disabled             PASSED
-✓ test_optimize_agent_file_complete           PASSED
-✓ test_caching_mechanism                      PASSED
-✓ test_cache_invalidation_on_change           PASSED
-✓ test_statistics_tracking                    PASSED
-✓ test_file_hash_calculation                  PASSED
-✓ test_optimize_all_with_force                PASSED
-✓ test_token_savings_calculation              PASSED
-✓ test_empty_code_blocks                      PASSED
-✓ test_malformed_agent_file                   PASSED
-✓ test_nested_code_blocks                     PASSED
-
-================================
-16 passed in 0.13s
-================================
-```
+The suite's own output is the result; no pass count is recorded here, since a
+count copied into a document goes stale as soon as the test file changes.
 
 ### Integration Testing
 
@@ -281,7 +235,7 @@ Real-world optimization test:
 **Results:** ✅ All 23 agent files optimized successfully
 **Performance:** ✅ Achieved 39.3% average reduction
 **Quality:** ✅ All agent functionality preserved
-**Safety:** ✅ Zero modifications to original files
+**Safety:** ✅ Pre-write state kept as a backup tag
 
 ## Documentation
 
@@ -327,9 +281,9 @@ Real-world optimization test:
 ## Success Criteria
 
 ✅ **20-30% Token Reduction Target:** EXCEEDED (achieved 39.3%)
-✅ **Zero Risk Implementation:** ACHIEVED (no original file modifications)
+✅ **Reversible Implementation:** ACHIEVED (backup tag before every in-place rewrite)
 ✅ **Backward Compatible:** ACHIEVED (fully reversible)
-✅ **Comprehensive Testing:** ACHIEVED (16/16 tests passing)
+✅ **Comprehensive Testing:** ACHIEVED (`optimize_agents_test.py`)
 ✅ **Production Ready:** ACHIEVED (tested on real agents)
 ✅ **Documentation Complete:** ACHIEVED (comprehensive guides)
 
@@ -338,7 +292,7 @@ Real-world optimization test:
 The Agent Optimization system successfully delivers:
 
 - **39.3% token reduction** (exceeded 20-30% target)
-- **Zero-risk design** with complete reversibility
+- **Reversible design** through git backup tags
 - **Production-ready implementation** with comprehensive testing
 - **Easy integration** with existing workflows
 - **Excellent performance** with caching for incremental updates
@@ -349,5 +303,5 @@ The Agent Optimization system successfully delivers:
 
 **Implementation Date:** 2025-10-10
 **Version:** 1.0.0
-**Test Coverage:** 100% (16/16 tests passing)
+**Tests:** `autobot-infrastructure/shared/scripts/optimize_agents_test.py`
 **Token Savings:** 39.3% average across 23 agent files

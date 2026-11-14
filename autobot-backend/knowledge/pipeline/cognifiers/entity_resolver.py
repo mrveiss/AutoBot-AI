@@ -41,7 +41,7 @@ SIMILARITY_THRESHOLD = 0.85
 
 
 @TaskRegistry.register_cognifier("resolve_entities")
-class EntityResolver(BaseCognifier):
+class EntityResolverCognifier(BaseCognifier):
     """Resolve and deduplicate entities across documents using multiple strategies."""
 
     def __init__(

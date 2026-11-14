@@ -37,7 +37,7 @@
           v-if="shouldShowDateMarker(index)"
           class="date-marker"
         >
-          <span>{{ formatDateMarker(event) }}</span>
+          <span>{{ dateMarkerText(event) }}</span>
         </div>
 
         <!-- Event Card -->
@@ -66,7 +66,7 @@
               {{ event.event_type }}
             </span>
             <span class="event-time">
-              {{ formatTimestamp(event) }}
+              {{ eventTimeText(event) }}
             </span>
           </div>
 
@@ -134,6 +134,7 @@ import {
   getEventTypeIcon as getEventIcon,
 } from '../constants'
 import CausalChainViewer from './CausalChainViewer.vue'
+import { createDateFormatter, formatDate, formatISOString } from '@/utils/formatHelpers'
 
 const props = defineProps<{
   events: TemporalEvent[]
@@ -143,29 +144,29 @@ const props = defineProps<{
 const { t } = useI18n()
 const { isExpanded: isEventExpanded, expand: expandEvent, collapseAll: collapseAllEvents } = useExpansion<string>()
 
-function formatTimestamp(event: TemporalEvent): string {
-  if (event.timestamp) {
-    const date = new Date(event.timestamp)
-    return date.toLocaleString()
-  }
-  return event.temporal_expression ?? t('knowledge.temporal.events.unknownTime')
+const formatMarkerDate = createDateFormatter({ kind: 'date', intl: { year: 'numeric', month: 'long', day: 'numeric' }, invalidText: '' })
+
+/** The event's moment, else its temporal expression, else the unknown-time text. */
+function eventTimeText(event: TemporalEvent): string {
+  return (
+    formatISOString(event.timestamp) ||
+    event.temporal_expression ||
+    t('knowledge.temporal.events.unknownTime')
+  )
 }
 
-function formatDateMarker(event: TemporalEvent): string {
-  if (event.timestamp) {
-    const date = new Date(event.timestamp)
-    return date.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
-  }
-  return event.temporal_expression ?? ''
+/** The day heading for an event: its date, else its temporal expression, else the same unknown-time label `eventTimeText` uses. */
+function dateMarkerText(event: TemporalEvent): string {
+  return (
+    formatMarkerDate(event.timestamp) ||
+    event.temporal_expression ||
+    t('knowledge.temporal.events.unknownTime')
+  )
 }
 
+/** Undated events key to '' so they ride the preceding day's group instead of opening a heading. */
 function getDateKey(event: TemporalEvent): string {
-  if (!event.timestamp) return ''
-  return new Date(event.timestamp).toLocaleDateString()
+  return formatDate(event.timestamp)
 }
 
 function shouldShowDateMarker(index: number): boolean {
@@ -205,7 +206,7 @@ function toggleExpand(eventId: string): void {
   margin: var(--spacing-0);
 }
 
-.timeline-header h4 i {
+.timeline-header h4 .icon {
   color: var(--color-primary);
 }
 
@@ -229,9 +230,10 @@ function toggleExpand(eventId: string): void {
   gap: var(--spacing-sm);
 }
 
-.loading-state i,
-.empty-state i {
-  font-size: var(--text-2xl);
+.loading-state .icon,
+.empty-state .icon {
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 .empty-hint {
@@ -288,12 +290,13 @@ function toggleExpand(eventId: string): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
-.timeline-dot i {
+.timeline-dot .icon {
   color: white;
-  font-size: var(--text-xs);
+  width: var(--text-xs);
+  height: var(--text-xs);
 }
 
 /* Event Card */
@@ -419,8 +422,9 @@ function toggleExpand(eventId: string): void {
     height: 22px;
   }
 
-  .timeline-dot i {
-    font-size: 8px;
+  .timeline-dot .icon {
+    width: var(--text-xs);
+    height: var(--text-xs);
   }
 }
 </style>

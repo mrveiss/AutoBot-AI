@@ -39,7 +39,7 @@ wiring, not as a live execution path.
 Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
 Contains workflow execution, step coordination, and agent interaction handling.
 
-Executor scope (#6826): WorkflowExecutor is the **main linear/parallel workflow
+Executor scope (#6826): LegacyWorkflowExecutor is the **main linear/parallel workflow
 engine**.  It handles step dependency grouping, variable resolution, sub-workflow
 delegation, error handlers, and notifications.  For DAG/condition workflows it
 delegates to DAGExecutor; checkpoint logic delegates to CheckpointResumer (#6827).
@@ -64,8 +64,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List
 
+from autobot_shared.circuit_breaker import circuit_breaker_async
 from autobot_shared.logging_manager import get_logger
-from circuit_breaker import circuit_breaker_async
 from constants.status_enums import TaskStatus
 from constants.threshold_constants import (
     CircuitBreakerDefaults,
@@ -112,7 +112,7 @@ def _get_notification_service():
     return _notification_service
 
 
-class WorkflowExecutor:
+class LegacyWorkflowExecutor:
     """
     Executes workflows with coordinated agent management.
 

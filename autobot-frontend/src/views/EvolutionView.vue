@@ -355,13 +355,14 @@ import PatternEvolutionChart from '@/components/charts/PatternEvolutionChart.vue
 import CodeEvolutionTimeline from '@/components/analytics/CodeEvolutionTimeline.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { BaseModal } from '@autobot/ui'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 // Issue #3436: read sourceId from route param set by codebase/:sourceId parent
 const route = useRoute()
 const sourceId = computed(() => route.params.sourceId as string | undefined)
 
 const evolution = useEvolution(sourceId)
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const showAnalysisModal = ref(false)
 
 // Filter state (Issue #247)
@@ -443,18 +444,7 @@ function formatMetricName(metric: string): string {
     .join(' ')
 }
 
-function formatDate(dateString: string): string {
-  if (!dateString) return 'N/A'
-  try {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  } catch {
-    return dateString
-  }
-}
+const formatDate = createDateFormatter({ kind: 'date', locale: () => locale.value, intl: { year: 'numeric', month: 'short', day: 'numeric' }, emptyText: 'N/A' })
 
 // Load all data on mount
 onMounted(async () => {
@@ -524,7 +514,7 @@ onMounted(async () => {
 
 .summary-icon.refactor {
   background: var(--color-purple-bg, rgba(139, 92, 246, 0.1));
-  color: var(--color-purple, #8b5cf6);
+  color: var(--color-purple);
 }
 
 .summary-value {

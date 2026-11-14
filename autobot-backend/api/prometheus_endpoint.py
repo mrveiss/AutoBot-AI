@@ -7,15 +7,20 @@ Prometheus Metrics HTTP Endpoint
 
 Issue #1288: Exposes Prometheus-format metrics for scraping at /api/metrics/prometheus.
 Moved from shared /metrics prefix to avoid collision with JSON metrics endpoints.
+
+#16375: gated by the dedicated scrape token (``monitoring.prometheus_scrape_auth``).
+Prometheus presents it from ``bearer_token_file``; a request without it, or with
+a wrong one, is refused with 401 before any metric is rendered.
 """
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Depends, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from monitoring.prometheus_metrics import get_metrics_manager
+from monitoring.prometheus_scrape_auth import require_scrape_token
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_scrape_token)])
 
 
 @router.get("", response_model=None)
@@ -29,7 +34,8 @@ async def metrics_endpoint():
     Expose Prometheus metrics in text/plain format for scraping
 
     This endpoint is scraped by Prometheus at regular intervals
-    configured in prometheus.yml (default: 15s)
+    configured in prometheus.yml (default: 15s), with the scrape token
+    as a bearer credential.
     """
     metrics_manager = get_metrics_manager()
 

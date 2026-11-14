@@ -22,6 +22,8 @@ or the bounded timeout, whichever comes first, and tells the caller which.
 from __future__ import annotations
 
 import asyncio
+import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from autobot_shared.async_compat import fire_and_forget
@@ -42,6 +44,28 @@ DEFAULT_IDLE_NOTICE_TIMEOUT_SECONDS = 300.0
 
 def idle_notice_timeout_seconds() -> float:
     return env_float(IDLE_NOTICE_TIMEOUT_ENV, DEFAULT_IDLE_NOTICE_TIMEOUT_SECONDS)
+
+
+@dataclass(frozen=True)
+class IdleSubscription:
+    """One live `wait_for_idle()` -- who is waiting on which peer, until when (#18391)."""
+
+    subscriber: str
+    kind: AgentKind
+    tenant_id: str | None
+    name: str
+    since: float
+    expires_at: float
+
+
+#: Live subscriptions, keyed by object identity so two waits on one peer stay distinct.
+#: Process-local, like the presence registry the waits are about (#16947 section 6).
+_ACTIVE: dict[int, IdleSubscription] = {}
+
+
+def active_subscriptions() -> list[IdleSubscription]:
+    """Every wait currently blocked on a peer going idle, oldest first. A read-only view."""
+    return sorted(_ACTIVE.values(), key=lambda s: s.since)
 
 
 def notify_agent_idle(*, kind: AgentKind, tenant_id: str | None, name: str) -> None:
@@ -77,6 +101,7 @@ async def wait_for_idle(
     name: str,
     bus: EventBus | None = None,
     timeout_seconds: float | None = None,
+    subscriber: str = "unnamed",
 ) -> None:
     """Return once, the moment *name* is idle; raise `IdleWaitExpiredError` on timeout.
 
@@ -104,9 +129,12 @@ async def wait_for_idle(
                 resolved.set_result(None)
 
     bus.subscribe(EVT_AGENT_IDLE, _listener)
+    now = time.time()
+    _ACTIVE[id(resolved)] = IdleSubscription(subscriber, kind, tenant_id, name, now, now + timeout)
     try:
         await asyncio.wait_for(resolved, timeout=timeout)
     except asyncio.TimeoutError:
         raise IdleWaitExpiredError(f"{name!r} ({kind.value}) did not go idle within {timeout}s") from None
     finally:
+        _ACTIVE.pop(id(resolved), None)
         bus.unsubscribe(EVT_AGENT_IDLE, _listener)

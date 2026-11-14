@@ -25,7 +25,7 @@ from typing import Any, Dict, List
 from autobot_shared.status_enums import AgentStatus  # #7504 consolidation
 
 
-class DeploymentMode(Enum):
+class AgentDeploymentMode(Enum):
     """Agent deployment modes"""
 
     LOCAL = "local"
@@ -56,7 +56,7 @@ class AgentRequest:
 
 
 @dataclass
-class AgentResponse:
+class StandardizedAgentResponse:
     """Standardized agent response format"""
 
     request_id: str
@@ -86,7 +86,7 @@ class AgentHealth:
 
     agent_type: str
     status: AgentStatus
-    deployment_mode: DeploymentMode
+    deployment_mode: AgentDeploymentMode
     last_heartbeat: datetime
     response_time_ms: float
     success_rate: float
@@ -160,12 +160,12 @@ def deserialize_agent_request(data: str) -> AgentRequest:
     return AgentRequest(**parsed)
 
 
-def serialize_agent_response(response: AgentResponse) -> str:
+def serialize_agent_response(response: StandardizedAgentResponse) -> str:
     """Serialize agent response for transmission"""
     return json.dumps(response.to_dict())
 
 
-def deserialize_agent_response(data: str) -> AgentResponse:
+def deserialize_agent_response(data: str) -> StandardizedAgentResponse:
     """Deserialize agent response from transmission"""
     parsed = json.loads(data)
-    return AgentResponse(**parsed)
+    return StandardizedAgentResponse(**parsed)

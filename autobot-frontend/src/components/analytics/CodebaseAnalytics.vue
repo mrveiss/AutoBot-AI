@@ -6,6 +6,7 @@
       :root-path="rootPath"
       :selected-source="selectedSource"
       :scan-runner-running="scanRunner.running.value"
+      :stop-disabled="analyzing && !currentJobId && !scanRunner.running.value"
       :loading-api-endpoints="loadingApiEndpoints"
       :analyzing-code-smells="analyzingCodeSmells"
       :exporting-report="exportingReport"
@@ -78,10 +79,10 @@
         :message="$t('analytics.codebase.empty.description')"
       >
         <template #actions>
-          <button @click="indexCodebase" class="btn-primary btn-lg">
+          <BaseButton variant="success" @click="indexCodebase">
             <Icon name="database" />
             {{ $t('analytics.codebase.buttons.indexNow') }}
-          </button>
+          </BaseButton>
         </template>
       </EmptyState>
     </div>
@@ -152,14 +153,14 @@
 
       <!-- Issue #1579: Problems Report extracted to ProblemsReportSection -->
       <ProblemsReportSection
-        :problems="problemsReport"
+        :problems="problemsReport" :error="problemsError"
         @export="(fmt: string) => exportSection('problems', fmt as 'md' | 'json')"
       />
 
       <!-- Code Intelligence: Anti-Pattern / Code Smells Report (#1469, #184) -->
       <CodeSmellsSection
-        :smells="codeSmellsForPanel"
-        :code-health-score="codeHealthScore"
+        :smells="smellsForPanel" :error="smellsError" :loading="smellsLoading" :code-health-score="codeHealthScore"
+        :category="smellCategory" @update:category="selectSmellCategory"
         @export="(fmt: string) => exportSection('code-smells', fmt as 'md' | 'json')"
       />
 
@@ -182,20 +183,20 @@
       <!-- Duplicate Code Analysis (#1469, #184) -->
       <DuplicatesSection
         :duplicates="duplicateAnalysis"
+        :scan-state="duplicateScanState"
         :loading="loadingProgress.duplicates"
         @export="(fmt: string) => exportSection('duplicates', fmt as 'md' | 'json')"
       />
 
       <!-- Function Declarations (#1469, #184) -->
       <DeclarationsSection
-        :declarations="declarationsForPanel"
-        :loading="loadingProgress.declarations"
+        :declarations="declarationsForPanel" :error="declarationsError" :loading="loadingProgress.declarations"
         @export="(fmt: string) => exportSection('declarations', fmt as 'md' | 'json')"
       />
 
       <!-- Hardcoded Values (#5277: wire orphan data flow) -->
       <HardcodesSection
-        :hardcodes="hardcodeAnalysis"
+        :hardcodes="hardcodeAnalysis" :error="hardcodesError"
         :loading="loadingProgress.hardcodes"
         @export="(fmt: string) => exportSection('hardcodes', fmt as 'md' | 'json')"
       />
@@ -224,6 +225,7 @@
         ref="patternAnalysisRef"
         :root-path="rootPath"
         :auto-load="true"
+        :with-source-id="withSourceId"
         @analysis-complete="onPatternAnalysisComplete"
         @error="onPatternAnalysisError"
       />
@@ -279,7 +281,7 @@
         @load-performance-findings="loadPerformanceFindings"
         @load-redis-optimizations="loadRedisOptimizations"
         @load-health-score="codeIntelGetHealthScore"
-        @load-quality-score="() => codeIntelGetQualityScore(rootPath, 'python')"
+        @load-quality-score="() => codeIntelGetQualityScore()"
         @load-analysis-history="codeIntelGetAnalysisHistory"
       />
 
@@ -289,7 +291,7 @@
         :loading="loadingEnvAnalysis"
         :error="envAnalysisError"
         :use-ai-filtering="useAiFiltering"
-        :ai-filtering-model="aiFilteringModel"
+        :ai-filtering-model-state="aiFilteringModelState"
         :ai-filtering-priority="aiFilteringPriority"
         :llm-filtering-result="llmFilteringResult"
         @refresh="loadEnvironmentAnalysis"
@@ -308,27 +310,14 @@
       />
     </div>
 
-    <!-- Issue #1133: Knowledge Base Opt-in Banner -->
-    <div v-if="showKnowledgeBaseOptIn" class="kb-optin-banner">
-      <div class="kb-optin-content">
-        <Icon name="book" />
-        <div class="kb-optin-text">
-          <strong>{{ $t('analytics.codebase.knowledgeBase.indexingComplete') }}</strong>
-          {{ $t('analytics.codebase.knowledgeBase.addDescription') }}
-        </div>
-        <button
-          class="kb-optin-btn"
-          @click="addToKnowledgeBase"
-          :disabled="knowledgeBaseAdding"
-        >
-          <i :class="knowledgeBaseAdding ? 'fas fa-spinner fa-spin' : 'plus'"></i>
-          {{ knowledgeBaseAdding ? $t('analytics.codebase.knowledgeBase.adding') : $t('analytics.codebase.knowledgeBase.addToKnowledgeBase') }}
-        </button>
-        <button class="kb-optin-dismiss" @click="showKnowledgeBaseOptIn = false" :aria-label="$t('analytics.codebase.actions.dismiss')">
-          <Icon name="times" />
-        </button>
-      </div>
-    </div>
+    <!-- Issue #1133: Knowledge Base Opt-in Banner (#20513: needs a selected source) -->
+    <KnowledgeBaseOptIn
+      v-if="showKnowledgeBaseOptIn"
+      :adding="knowledgeBaseAdding"
+      :has-source="!!selectedSource"
+      @add="addToKnowledgeBase"
+      @dismiss="showKnowledgeBaseOptIn = false"
+    />
 
     <!-- Issue #1133: Source Manager Panel -->
     <SourceManager
@@ -429,6 +418,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 /**
  * CodebaseAnalytics.vue - Orchestration Layer
  *
@@ -451,6 +441,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
+import KnowledgeBaseOptIn from '@/components/analytics/KnowledgeBaseOptIn.vue'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useCodebaseExport, type SectionType } from '@/composables/analytics/useCodebaseExport'
 import type { ScanDefinition } from '@/composables/useAnalyticsScanRunner'
@@ -461,6 +452,7 @@ import { useSourceRegistry } from '@/composables/analytics/useSourceRegistry'
 import { useAnalyticsDataFetchers } from '@/composables/analytics/useAnalyticsDataFetchers'
 import { useCodeIntelAnalysis } from '@/composables/analytics/useCodeIntelAnalysis'
 import { useAnalyticsDebug } from '@/composables/analytics/useAnalyticsDebug'
+import { useProjectSubTabs } from '@/composables/analytics/useProjectSubTabs'
 import { createLogger } from '@/utils/debugUtils'
 import { useApiClient } from '@/plugins/api'
 // Issue #1133: Code Source Registry Components
@@ -519,15 +511,7 @@ const route = useRoute()
 const analyticsRouter = useRouter()
 
 // Issue #3436: Sub-tab active-state computed properties
-const isOverviewTabActive = computed(() => {
-  const path = route.path
-  // Active when on the exact project path (no child segment)
-  return /^\/analytics\/codebase\/[^/]+\/?$/.test(path)
-})
-const isCodeQualityTabActive = computed(() => route.path.includes('/code-quality'))
-const isCodeReviewTabActive = computed(() => route.path.includes('/code-review'))
-const isEvolutionTabActive = computed(() => route.path.endsWith('/evolution'))
-const isCodeGenerationTabActive = computed(() => route.path.includes('/code-generation'))
+const { isOverviewTabActive, isCodeQualityTabActive, isCodeReviewTabActive, isEvolutionTabActive, isCodeGenerationTabActive } = useProjectSubTabs(route)
 
 // Toast notifications
 const { showToast } = useNotificationBus()
@@ -574,8 +558,11 @@ const {
   codebaseStats,
   problemsReport,
   duplicateAnalysis,
+  duplicateScanState,
   declarationAnalysis,
   hardcodeAnalysis,
+  runState,
+  problemsError, declarationsError, hardcodesError,
   loadingProgress,
   chartData,
   chartDataLoading,
@@ -598,7 +585,7 @@ const {
   progressStatus,
   hasAnyResults,
   availableCategories,
-  codeSmellsForPanel,
+  smellsForPanel, smellsExport, smellsError, smellsLoading, smellCategory, selectSmellCategory, loadSmellProblems, resetSmells,
   declarationsForPanel,
   loadChartData,
   loadUnifiedReport,
@@ -645,7 +632,6 @@ const {
   codeIntelGetAnalysisHistory,
   runCodeIntelligenceAnalysis,
   handleFileScan,
-  codeSmellsReport,
   codeHealthScore,
   analyzingCodeSmells,
   codeSmellsProgressTitle,
@@ -695,7 +681,7 @@ const {
   loadingEnvAnalysis,
   envAnalysisError,
   useAiFiltering,
-  aiFilteringModel,
+  aiFilteringModelState,
   aiFilteringPriority,
   llmFilteringResult,
   loadEnvironmentAnalysis,
@@ -740,7 +726,7 @@ const {
   additionalRefreshCallbacks: () => [
     getCodebaseStats(),
     getProblemsReport(),
-    loadDeclarations(),
+    loadDeclarations(), loadSmellProblems(),
   ],
 })
 
@@ -765,6 +751,7 @@ const {
   progressStatus,
   selectedSource,
   withSourceId,
+  sourceKey: () => sourceIdParam.value,
   notify,
   t,
   problemsReport,
@@ -773,6 +760,7 @@ const {
   duplicateAnalysis,
   hardcodeAnalysis,
   chartData,
+  runState,
   showKnowledgeBaseOptIn,
   onIndexComplete: () => runAllAnalysisScans(codeIntelFullScans()),
   storageKeyPath: STORAGE_KEY_PATH,
@@ -799,6 +787,7 @@ const {
   declarationAnalysis,
   duplicateAnalysis,
   stopJobPolling,
+  withSourceId,
   t,
   notify,
 })
@@ -809,7 +798,7 @@ const {
 const { exportReport, exportSection } = useCodebaseExport({
   sectionData: {
     'bug-prediction': bugPredictionAnalysis as Ref<unknown>,
-    'code-smells': codeSmellsReport as Ref<unknown>,
+    'code-smells': smellsExport as Ref<unknown>,
     'problems': problemsReport as Ref<unknown>,
     'duplicates': duplicateAnalysis as Ref<unknown>,
     'declarations': declarationAnalysis as Ref<unknown>,
@@ -840,18 +829,11 @@ const handleExportSection = (section: string, fmt: 'md' | 'json') =>
 // #2258: Bridge code-intel scans into the data-fetcher scan orchestrator.
 // loadCachedAnalyticsData uses lighter cached loaders; runAllAnalysisScans
 // uses full re-fetch triggers after indexing completes.
-// #2390: Include all code-intel scans so every panel populates on page visit
+// #20491: opening the page starts no scan, so only loaders that read stored results run here.
 const codeIntelExtraScans = (): ScanDefinition[] => [
-  { id: 'configDuplicates', label: t('analytics.codebase.scans.configDuplicates'), run: async () => { await loadConfigDuplicates() } },
-  { id: 'apiEndpoints', label: t('analytics.codebase.scans.apiEndpoints'), run: async () => { await loadApiEndpointAnalysis() } },
   { id: 'bugPrediction', label: t('analytics.codebase.scans.bugPrediction'), run: async () => { await loadCachedBugPrediction() } },
   { id: 'security', label: t('analytics.codebase.scans.security'), run: async () => { await loadCachedSecurityScore() } },
-  { id: 'performance', label: t('analytics.codebase.scans.performance'), run: async () => { await loadPerformanceScore() } },
-  { id: 'redis', label: t('analytics.codebase.scans.redis'), run: async () => { await loadRedisHealth() } },
-  { id: 'environment', label: t('analytics.codebase.scans.environment'), run: async () => { await loadEnvironmentAnalysis() } },
-  { id: 'ownership', label: t('analytics.codebase.scans.ownership'), run: async () => { await loadOwnershipAnalysis() } },
   { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: async () => { await getCrossLanguageAnalysis() } },
-  { id: 'codeIntelligence', label: t('analytics.codebase.scans.codeIntelligence'), run: async () => { await runCodeIntelligenceAnalysis() } },
 ]
 
 const codeIntelFullScans = (): ScanDefinition[] => [
@@ -892,7 +874,7 @@ const clearCache = () =>
     declarationAnalysis.value = []
     duplicateAnalysis.value = []
     hardcodeAnalysis.value = []
-    chartData.value = null
+    chartData.value = null; resetSmells()
     progressStatus.value = t('analytics.codebase.status.cacheCleared')
   })
 
@@ -1039,41 +1021,10 @@ onUnmounted(() => {
   border-radius: 999px;
 }
 
-.btn-primary {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  transition: var(--transition-all);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  background: var(--chart-green);
-  color: var(--text-on-success);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-success-dark);
-  transform: translateY(-1px);
-}
-
-.btn-primary:disabled {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  cursor: not-allowed;
-  transform: none;
-}
-
 .empty-state-container {
   padding: var(--spacing-8) var(--spacing-4);
   display: flex;
   justify-content: center;
-}
-
-.btn-lg {
-  padding: var(--spacing-3) var(--spacing-6);
-  font-size: var(--text-base);
 }
 
 /* Traditional Analytics Section */
@@ -1150,90 +1101,6 @@ onUnmounted(() => {
 
 .refresh-all-btn:hover {
   background: var(--chart-indigo-dark);
-}
-
-/* Knowledge Base Opt-in Banner */
-.kb-optin-banner {
-  position: fixed;
-  bottom: var(--spacing-6);
-  right: var(--spacing-6);
-  z-index: var(--z-modal-backdrop);
-  max-width: 480px;
-  width: 100%;
-}
-
-.kb-optin-content {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
-  background: var(--bg-card);
-  border: 1px solid var(--color-success);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-4) var(--spacing-5);
-  box-shadow: var(--shadow-lg);
-}
-
-.kb-optin-content > i {
-  font-size: var(--text-xl);
-  color: var(--color-success);
-  flex-shrink: 0;
-}
-
-.kb-optin-text {
-  flex: 1;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  min-width: 0;
-}
-
-.kb-optin-text strong {
-  display: block;
-  color: var(--text-primary);
-  margin-bottom: var(--spacing-0-5);
-}
-
-.kb-optin-btn {
-  padding: var(--spacing-2) var(--spacing-3-5);
-  background: var(--color-success);
-  border: none;
-  border-radius: var(--radius-lg);
-  color: white;
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: opacity var(--duration-200);
-}
-
-.kb-optin-btn:hover:not(:disabled) {
-  opacity: 0.85;
-}
-
-.kb-optin-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.kb-optin-dismiss {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: var(--spacing-1);
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  font-size: var(--text-xs);
-  flex-shrink: 0;
-  transition: color var(--duration-200);
-}
-
-.kb-optin-dismiss:hover {
-  color: var(--text-primary);
 }
 
 /* Issue #3436: Per-project sub-tab bar */

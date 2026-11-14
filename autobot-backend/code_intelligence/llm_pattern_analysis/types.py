@@ -14,6 +14,8 @@ import re
 from enum import Enum
 from typing import FrozenSet, List, Pattern
 
+from autobot_shared.status_enums import Severity
+
 # =============================================================================
 # Module-level Constants
 # =============================================================================
@@ -99,14 +101,10 @@ class OptimizationCategory(Enum):
     FALLBACK_STRATEGY = "fallback_strategy"
 
 
-class OptimizationPriority(Enum):
-    """Priority levels for optimization recommendations."""
-
-    CRITICAL = "critical"  # Immediate action needed
-    HIGH = "high"  # Significant cost savings
-    MEDIUM = "medium"  # Moderate improvements
-    LOW = "low"  # Minor enhancements
-    INFO = "info"  # Informational only
+#: Recommendation urgency is graded on the canonical finding ladder (#18098): critical, high,
+#: medium, low, info are exactly `Severity.finding_ladder()`. The emitted order is
+#: CRITICAL-first, so callers that list it iterate `reversed(Severity.finding_ladder())`.
+OptimizationPriority = Severity
 
 
 # Performance optimization: O(1) lookup for priority levels (Issue #326)

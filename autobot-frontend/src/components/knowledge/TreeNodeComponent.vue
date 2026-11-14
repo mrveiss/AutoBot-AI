@@ -34,21 +34,21 @@
         class="node-icon-btn"
         @click.stop="$emit('select', node)"
         type="button"
-        :aria-label="node.name"
-        :title="node.name"
+        :aria-label="displayName"
+        :title="displayName"
       >
         <i :class="['node-icon', nodeIcon]"></i>
       </button>
 
       <!-- Node name -->
-      <button class="node-name-btn" @click.stop="$emit('select', node)" type="button">{{ node.name }}</button>
+      <button class="node-name-btn" @click.stop="$emit('select', node)" type="button">{{ displayName }}</button>
 
       <!-- Folder count or file size -->
       <span v-if="node.type === 'folder' && node.children" class="folder-count">
         {{ $t('knowledge.treeNode.itemsCount', { count: node.children.length }) }}
       </span>
       <span v-else-if="node.type === 'file' && node.size !== undefined" class="node-size">
-        {{ formatSize(node.size) }}
+        {{ formatFileSize(node.size, sizeOptions) }}
       </span>
 
       <!-- Unvectorized count badge for folders -->
@@ -107,6 +107,8 @@
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { formatFileSize, formatManPageTitle, knowledgeNodeFactType } from '@/utils/formatHelpers'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
 import type { DocumentVectorizationState } from '@/composables/useKnowledgeVectorization'
 
@@ -206,12 +208,21 @@ const unvectorizedCount = computed(() => {
   return countUnvectorized(props.node)
 })
 
-// Helper function
-const formatSize = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
-}
+const { t } = useI18n()
+
+// #21037: display-only man-page label; node.name stays raw for search/icons.
+const displayName = computed(() =>
+  formatManPageTitle(props.node.name, knowledgeNodeFactType(props.node.metadata), t),
+)
+
+const sizeOptions = computed(() => ({
+  decimals: [0, 0, 1],
+  units: ['B', 'KB', 'MB'],
+  integerBase: true,
+  keepTrailingZeros: true,
+  separator: '',
+  zeroText: t('knowledge.treeNode.zeroSize'),
+}))
 </script>
 
 <style scoped>

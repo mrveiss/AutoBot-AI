@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET, resolve_claude_model
 
 logger = get_logger(__name__)
 
@@ -53,20 +54,21 @@ _MODEL_PREFIX_TO_PROVIDER: list[tuple[str, str]] = [
 @lru_cache(maxsize=1)
 def _load_platform_defaults() -> Dict[str, Dict[str, str]]:
     """Load model-tiers.yml once; returns provider→{senior, assistant} dict."""
+    # Built before the read, so a YAML failure still leaves the anthropic defaults (SSOT, #20884).
+    tiers: Dict[str, Dict[str, str]] = {"anthropic": {"senior": CLAUDE_SONNET, "assistant": CLAUDE_HAIKU}}
     try:
         import yaml  # PyYAML — available in autobot-backend
 
         with open(_TIERS_YAML_PATH, encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
         # Keep only entries that have both senior and assistant keys.
-        tiers = {}
         for provider, entry in data.items():
             if isinstance(entry, dict) and "senior" in entry and "assistant" in entry:
                 tiers[provider] = {"senior": entry["senior"], "assistant": entry["assistant"]}
         return tiers
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not load model-tiers.yml, using empty defaults: %s", exc)
-        return {}
+        logger.warning("Could not load model-tiers.yml, using the SSOT anthropic defaults only: %s", exc)
+        return tiers
 
 
 class ModelTierService:
@@ -80,7 +82,8 @@ class ModelTierService:
         """
         if not model:
             return None
-        model_lower = model.lower()
+        # A Claude tier alias (``sonnet``) is the same model the resolver pins, so it has the same provider.
+        model_lower = (resolve_claude_model(model) or model).lower()
         for prefix, provider in _MODEL_PREFIX_TO_PROVIDER:
             if model_lower.startswith(prefix.lower()):
                 return provider

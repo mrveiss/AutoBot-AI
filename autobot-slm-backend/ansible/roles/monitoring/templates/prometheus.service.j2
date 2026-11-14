@@ -35,7 +35,7 @@ ExecStart={{ prometheus_install_dir }}/prometheus \
   --storage.tsdb.retention.size={{ prometheus_retention_size }} \
   --web.console.templates={{ prometheus_install_dir }}/consoles \
   --web.console.libraries={{ prometheus_install_dir }}/console_libraries \
-  --web.listen-address=0.0.0.0:{{ prometheus_port }} \
+  --web.listen-address={{ monitoring_listen_address }}:{{ prometheus_port }} \
   --web.enable-lifecycle
 
 SyslogIdentifier=prometheus

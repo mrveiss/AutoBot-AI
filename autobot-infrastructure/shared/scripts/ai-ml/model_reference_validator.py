@@ -18,10 +18,16 @@ import logging
 import os
 import re
 import sys
+from pathlib import Path
+
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 # Add project root to path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, PROJECT_ROOT)
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +102,7 @@ def verify_model_constants_usage():
     logger.info("Verifying ModelConstants usage...")
 
     try:
-        from constants.model_constants import FALLBACK_MODEL, ModelConstants
+        from autobot_shared.ssot_constants import FALLBACK_MODEL, ModelConstants
 
         logger.info(f"  FALLBACK_MODEL: {FALLBACK_MODEL}")
         logger.info(f"  DEFAULT_OLLAMA_MODEL: {ModelConstants.DEFAULT_OLLAMA_MODEL}")
@@ -167,7 +173,7 @@ def main():
     logger.info("=" * 60)
 
     logger.info("\nCorrect usage pattern:")
-    logger.info("  from constants.model_constants import ModelConstants")
+    logger.info("  from autobot_shared.ssot_constants import ModelConstants")
     logger.info("  model = ModelConstants.DEFAULT_OLLAMA_MODEL")
     logger.info("\nEnvironment variable:")
     logger.info("  AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b")

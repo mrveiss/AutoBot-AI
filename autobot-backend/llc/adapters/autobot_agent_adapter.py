@@ -40,6 +40,7 @@ from .base import AdapterRunStatus
 from .subprocess_support import is_rate_limit_output as _is_rate_limit_output
 
 logger = logging.getLogger(__name__)
+_CANCEL_WAIT_S = 5.0  # one value for the wait and its timeout message (#18056)
 
 # ── Rate-limit detection helpers (GH#8502, GH#9773) ──────────────────────────
 # _RL_KEYWORDS is now canonical in subprocess_support (shared with subprocess
@@ -175,9 +176,12 @@ class AutoBotAgentAdapter:
         Args:
             agent_config: Config dict with ``agent_class`` (required) and
                 ``agent_kwargs`` (optional, default ``{}``).
-            budget_session_factory: Zero-argument async callable that returns
-                an ``AsyncSession`` for ``BudgetService``.  When ``None``,
-                cost forwarding is skipped.
+            budget_session_factory: Zero-argument callable returning an async
+                context manager that yields an ``AsyncSession`` for
+                ``BudgetService`` and COMMITS on clean exit (#20883): the
+                service itself commits only on its hard-stop path.  The
+                heartbeat scheduler always passes one; when ``None`` (tests,
+                ad-hoc use) cost forwarding is skipped.
             run_log_store: Object with an ``async write(run_id, text)`` method.
                 When ``None``, captured log output is discarded after logging.
         """
@@ -279,11 +283,12 @@ class AutoBotAgentAdapter:
             return
         self._cancel_requested.add(run_id)
         task.cancel()
-        done, _ = await asyncio.wait({task}, timeout=5.0)
+        done, _ = await asyncio.wait({task}, timeout=_CANCEL_WAIT_S)
         if task not in done:
             logger.warning(
-                "AutoBotAgentAdapter: cancel() timed out after 5 s for run_id=%s"
+                "AutoBotAgentAdapter: cancel() timed out after %.0f s for run_id=%s"
                 " (task still running — will be discarded when it finishes)",
+                _CANCEL_WAIT_S,
                 run_id,
             )
 
@@ -372,8 +377,10 @@ class AutoBotAgentAdapter:
         """Forward token-usage from *response.metadata* to BudgetService.
 
         ``BudgetExhausted`` is re-raised so the GH#8215 hard-stop propagates
-        to ``_run_agent`` and the run is recorded as FAILED.  All other errors
-        are best-effort: logged as warnings and never re-raised.
+        to ``_run_agent`` and the run is recorded as FAILED.  Any other error
+        never fails the finished run, but the charge is lost, so it is logged at
+        error level with its traceback -- as ``_ingest_adapter_usage`` does for a
+        registry run (#20883).
         """
         if self._budget_session_factory is None:
             return
@@ -407,15 +414,17 @@ class AutoBotAgentAdapter:
             return
 
         try:
-            from llc.services.budget import BudgetService
+            from llc.services.accessors import get_budget_service
 
             async with self._budget_session_factory() as session:
-                await BudgetService().ingest_cost_event(session, agent_id, company_id, tokens_in, tokens_out, model)
+                await get_budget_service().ingest_cost_event(
+                    session, agent_id, company_id, tokens_in, tokens_out, model
+                )
         except BudgetExhausted:
             raise  # Hard-stop from GH#8215: propagate so run is marked FAILED
         except Exception:
-            logger.warning(
-                "AutoBotAgentAdapter: cost forwarding failed for run_id=%s agent=%s",
+            logger.error(
+                "AutoBotAgentAdapter: cost forwarding failed for run_id=%s agent=%s: this run's charge is lost",
                 run_id,
                 agent_id,
                 exc_info=True,

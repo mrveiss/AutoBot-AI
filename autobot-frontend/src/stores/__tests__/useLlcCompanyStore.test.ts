@@ -6,6 +6,7 @@
 // GH#9627: tests for the LLC company selector store.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { HttpError } from '@autobot/ui'
 import { setActivePinia, createPinia } from 'pinia'
 import { useLlcCompanyStore, type LlcCompany } from '../useLlcCompanyStore'
 
@@ -77,7 +78,7 @@ describe('useLlcCompanyStore (GH#9627)', () => {
 
   it('fetchCompanies flags unavailable (not error) on HTTP 503', async () => {
     getMock.mockRejectedValue(
-      new Error('HTTP 503: This feature requires PostgreSQL (single_company or multi_company mode).'),
+      new HttpError(503, 'This feature requires PostgreSQL (single_company or multi_company mode).'),
     )
     const store = useLlcCompanyStore()
     await store.fetchCompanies()
@@ -100,11 +101,309 @@ describe('useLlcCompanyStore (GH#9627)', () => {
     expect(store.selectedCompany).toBeNull()
   })
 
-  it('fetchCompanies drops a persisted selection that no longer exists', async () => {
-    const store = useLlcCompanyStore()
-    store.selectCompany('deleted-company')
-    await store.fetchCompanies()
-    expect(store.selectedCompanyId).toBe('')
+  // #21531: the list holds ROOT companies and hides ARCHIVED ones, so absence from it is not
+  // proof the company is gone. The store probes the company by id and clears only when the backend refuses it (404/403/422).
+  describe('a selection the list omits (#21531)', () => {
+    const LIST_URL = '/api/llc/companies/'
+    const PROBE_URL = '/api/llc/companies/archived-1'
+    const probeCalls = () => getMock.mock.calls.filter(([url]) => url === PROBE_URL)
+
+    /** Answer the list with one company and the by-id probe with whatever `probe` returns. */
+    const routeGet = (probe: () => Promise<unknown>) =>
+      getMock.mockImplementation((url: string) =>
+        url === LIST_URL ? Promise.resolve([mockCompany()]) : probe(),
+      )
+
+    it('keeps it, and does not list it, when the probe finds the company', async () => {
+      routeGet(() => Promise.resolve(mockCompany({ id: 'archived-1', llc_status: 'archived' })))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(probeCalls()).toEqual([
+        [PROBE_URL, { headers: { 'X-Organization-Id': 'archived-1' } }],
+      ])
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(store.companies.map((c) => c.id)).toEqual(['company-1'])
+    })
+
+    it.each([
+      [404, 'Company not found'],
+      [403, 'You are not a member of the requested organization'],
+      [422, 'Unprocessable Entity'],
+    ])('clears it when the backend refuses the company (HTTP %i)', async (status, message) => {
+      routeGet(() => Promise.reject(new HttpError(status, message)))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(probeCalls()).toHaveLength(1)
+      expect(store.selectedCompanyId).toBe('')
+      expect(store.error).toBeNull()
+    })
+
+    it.each([
+      [500, 'Internal server error'],
+      [401, 'Unauthorized'],
+    ])('keeps it when the probe fails with HTTP %i', async (status, message) => {
+      routeGet(() => Promise.reject(new HttpError(status, message)))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(probeCalls()).toHaveLength(1)
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(store.error).toBeNull()
+    })
+
+    it('keeps it when the probe fails with a non-HTTP error', async () => {
+      routeGet(() => Promise.reject(new Error('network down')))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(probeCalls()).toHaveLength(1)
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(store.error).toBeNull()
+    })
+
+    it('does not clear a selection made while the probe was in flight', async () => {
+      let rejectProbe: (err: unknown) => void = () => undefined
+      routeGet(() => new Promise((_resolve, reject) => { rejectProbe = reject }))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      const pending = store.fetchCompanies()
+      await vi.waitFor(() => expect(probeCalls()).toHaveLength(1))
+      store.selectCompany('company-1')
+      rejectProbe(new HttpError(404, 'Company not found'))
+      await pending
+      expect(store.selectedCompanyId).toBe('company-1')
+    })
+
+    it('does not clear a selection a newer list confirmed while the probe was in flight', async () => {
+      let rejectProbe: (err: unknown) => void = () => undefined
+      let listCalls = 0
+      getMock.mockImplementation((url: string) => {
+        if (url === LIST_URL) {
+          listCalls += 1
+          return Promise.resolve(
+            listCalls === 1 ? [mockCompany()] : [mockCompany(), mockCompany({ id: 'archived-1' })],
+          )
+        }
+        return new Promise((_resolve, reject) => { rejectProbe = reject })
+      })
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(probeCalls()).toHaveLength(1))
+      await store.fetchCompanies()
+      expect(store.companies.map((c) => c.id)).toContain('archived-1')
+      rejectProbe(new HttpError(404, 'Company not found'))
+      await first
+      expect(store.selectedCompanyId).toBe('archived-1')
+    })
+
+    it.each([
+      ['HTTP 500', () => Promise.reject(new HttpError(500, 'Internal server error'))],
+      ['a non-HTTP error', () => Promise.reject(new Error('network down'))],
+    ])('flags the kept selection unverified when the probe fails with %s', async (_label, probe) => {
+      routeGet(probe)
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(store.selectionUnverified).toBe(true)
+      expect(store.error).toBeNull()
+    })
+
+    it('leaves the flag false when the probe succeeds', async () => {
+      routeGet(() => Promise.resolve(mockCompany({ id: 'archived-1' })))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(store.selectionUnverified).toBe(false)
+    })
+
+    it('leaves the flag false when the probe refuses and the selection is cleared', async () => {
+      routeGet(() => Promise.reject(new HttpError(404, 'Company not found')))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(store.selectedCompanyId).toBe('')
+      expect(store.selectionUnverified).toBe(false)
+    })
+
+    it('resets the flag when a later fetch runs without a failed probe', async () => {
+      routeGet(() => Promise.reject(new HttpError(500, 'Internal server error')))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(store.selectionUnverified).toBe(true)
+      store.selectCompany('company-1')
+      await store.fetchCompanies()
+      expect(store.selectionUnverified).toBe(false)
+    })
+
+    /** Deferred probes: list N answers lists[N-1]; each probe call is held until settled. */
+    const holdProbes = (lists: LlcCompany[][]) => {
+      const probes: Array<{ url: string; resolve: () => void; reject: (e: unknown) => void }> = []
+      let listCalls = 0
+      getMock.mockImplementation((url: string) => {
+        if (url === LIST_URL) return Promise.resolve(lists[listCalls++])
+        return new Promise((resolve, reject) => {
+          probes.push({ url, resolve: () => resolve(mockCompany()), reject })
+        })
+      })
+      return probes
+    }
+
+    it('a superseded probe failing 500 does not flag a selection the newer list confirmed', async () => {
+      const probes = holdProbes([[mockCompany()], [mockCompany(), mockCompany({ id: 'archived-1' })]])
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(probes).toHaveLength(1))
+      await store.fetchCompanies()
+      probes[0].reject(new HttpError(500, 'Internal server error'))
+      await first
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(store.selectionUnverified).toBe(false)
+    })
+
+    it('a superseded probe failing 500 leaves the newer run flag on the new selection', async () => {
+      const probes = holdProbes([[mockCompany()], [mockCompany()]])
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(probes).toHaveLength(1))
+      store.selectCompany('archived-2')
+      const second = store.fetchCompanies()
+      await vi.waitFor(() => expect(probes).toHaveLength(2))
+      probes[1].reject(new HttpError(500, 'Internal server error'))
+      await second
+      expect(store.selectionUnverified).toBe(true)
+      probes[0].reject(new HttpError(500, 'Internal server error'))
+      await first
+      expect(store.selectedCompanyId).toBe('archived-2')
+      expect(store.selectionUnverified).toBe(true)
+    })
+
+    it('a superseded 404 changes neither the selection nor the flag', async () => {
+      const probes = holdProbes([[mockCompany()], [mockCompany()]])
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(probes).toHaveLength(1))
+      const second = store.fetchCompanies()
+      await vi.waitFor(() => expect(probes).toHaveLength(2))
+      probes[1].reject(new HttpError(500, 'Internal server error'))
+      await second
+      expect(store.selectionUnverified).toBe(true)
+      probes[0].reject(new HttpError(404, 'Company not found'))
+      await first
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(store.selectionUnverified).toBe(true)
+    })
+
+    it('selectCompany and clearSelection each reset the flag', async () => {
+      routeGet(() => Promise.reject(new HttpError(500, 'Internal server error')))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(store.selectionUnverified).toBe(true)
+      store.selectCompany('company-1')
+      expect(store.selectionUnverified).toBe(false)
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(store.selectionUnverified).toBe(true)
+      store.clearSelection()
+      expect(store.selectionUnverified).toBe(false)
+    })
+
+    /** Hold every list request on its own deferred promise; probes answer 404. */
+    const holdLists = () => {
+      const lists: Array<{ resolve: (v: LlcCompany[]) => void; reject: (e: unknown) => void }> = []
+      getMock.mockImplementation((url: string) =>
+        url === LIST_URL
+          ? new Promise((resolve, reject) => { lists.push({ resolve, reject }) })
+          : Promise.reject(new HttpError(404, 'Company not found')),
+      )
+      return lists
+    }
+    const withX = () => [mockCompany(), mockCompany({ id: 'archived-1' })]
+
+    it('a superseded list response never overwrites the newer list', async () => {
+      const lists = holdLists()
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(1))
+      const second = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(2))
+      lists[1].resolve(withX())
+      await second
+      lists[0].resolve([mockCompany()])
+      await first
+      expect(store.companies.map((c) => c.id)).toEqual(['company-1', 'archived-1'])
+      expect(store.selectedCompany?.id).toBe('archived-1')
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(probeCalls()).toHaveLength(0)
+      expect(store.isLoading).toBe(false)
+    })
+
+    it.each([
+      ['HTTP 500', new HttpError(500, 'Internal server error')],
+      ['HTTP 503', new HttpError(503, 'requires PostgreSQL')],
+    ])('a superseded list failing with %s changes neither error nor unavailable', async (_l, failure) => {
+      const lists = holdLists()
+      const store = useLlcCompanyStore()
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(1))
+      const second = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(2))
+      lists[1].resolve([mockCompany()])
+      await second
+      lists[0].reject(failure)
+      await first
+      expect(store.error).toBeNull()
+      expect(store.unavailable).toBe(false)
+      expect(store.isLoading).toBe(false)
+    })
+
+    it('isLoading stays true until the newest run settles, older run first', async () => {
+      const lists = holdLists()
+      const store = useLlcCompanyStore()
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(1))
+      const second = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(2))
+      lists[0].resolve([mockCompany()])
+      await first
+      expect(store.isLoading).toBe(true)
+      lists[1].resolve([mockCompany()])
+      await second
+      expect(store.isLoading).toBe(false)
+    })
+
+    it('isLoading is false once the newest run settles, and a later older run keeps it false', async () => {
+      const lists = holdLists()
+      const store = useLlcCompanyStore()
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(1))
+      const second = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(2))
+      lists[1].resolve([mockCompany()])
+      await second
+      expect(store.isLoading).toBe(false)
+      lists[0].resolve([mockCompany()])
+      await first
+      expect(store.isLoading).toBe(false)
+    })
+
+    it('sends no probe when the list already holds the selection', async () => {
+      routeGet(() => Promise.reject(new HttpError(404, 'Company not found')))
+      const store = useLlcCompanyStore()
+      store.selectCompany('company-1')
+      await store.fetchCompanies()
+      expect(getMock.mock.calls.map(([url]) => url)).toEqual([LIST_URL])
+      expect(store.selectedCompanyId).toBe('company-1')
+    })
   })
 
   it('fetchCompanies keeps a selection that still exists', async () => {
@@ -148,7 +447,7 @@ describe('useLlcCompanyStore (GH#9627)', () => {
   })
 
   it('deleteCompany re-throws and keeps the company on failure', async () => {
-    deleteMock.mockRejectedValue(new Error('HTTP 409: has children'))
+    deleteMock.mockRejectedValue(new HttpError(409, 'has children'))
     const store = useLlcCompanyStore()
     await store.fetchCompanies()
     await expect(store.deleteCompany('company-1')).rejects.toThrow('409')

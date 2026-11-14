@@ -45,12 +45,15 @@ from typing import Any, Dict, List
 
 import httpx
 
+from agent_loop.search.base import SearchResult
+from autobot_shared.http_egress_guard import EgressBlockedError, assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.ttl_constants import TTL_7_DAYS, TTL_24_HOURS
 from services.plateau_detector import plateau_reached
 
 from .config import AutoResearchConfig
+from .hypothesis_helpers import _extract_themes, _summarise_prior_results, _themes_to_hyperparams
 from .models import Experiment, ExperimentResult, HyperParams
 from .runner import ExperimentRunner
 from .store import ExperimentStore
@@ -85,19 +88,6 @@ class SessionStatus(str, Enum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     FAILED = "failed"
-
-
-@dataclass
-class SearchResult:
-    """A single result returned by the web-search step."""
-
-    title: str
-    url: str
-    summary: str
-    source: str  # "arxiv" | "github"
-
-    def to_dict(self) -> Dict[str, Any]:
-        return dataclasses.asdict(self)
 
 
 @dataclass
@@ -461,10 +451,13 @@ async def _search_arxiv(client: httpx.AsyncClient, query: str, max_results: int)
         "sortOrder": "descending",
     }
     try:
-        response = await client.get(_ARXIV_SEARCH_URL, params=params, timeout=_DEFAULT_HTTP_TIMEOUT)
+        await assert_egress_policy(_ARXIV_SEARCH_URL)
+        response = await client.get(
+            _ARXIV_SEARCH_URL, params=params, timeout=_DEFAULT_HTTP_TIMEOUT, follow_redirects=False
+        )
         response.raise_for_status()
         return _parse_arxiv_atom(response.text)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, EgressBlockedError) as exc:
         logger.warning("arXiv search failed for query %r: %s", query, exc)
         return []
 
@@ -485,7 +478,7 @@ def _parse_arxiv_atom(xml_text: str) -> List[SearchResult]:
             SearchResult(
                 title=title_match.group(1).strip(),
                 url=id_match.group(1).strip(),
-                summary=(summary_match.group(1).strip() if summary_match else ""),
+                snippet=(summary_match.group(1).strip() if summary_match else ""),
                 source="arxiv",
             )
         )
@@ -511,11 +504,13 @@ async def _search_github(client: httpx.AsyncClient, query: str, max_results: int
     }
     headers = {"Accept": "application/vnd.github+json"}
     try:
+        await assert_egress_policy(_GITHUB_SEARCH_URL)
         response = await client.get(
             _GITHUB_SEARCH_URL,
             params=params,
             headers=headers,
             timeout=_DEFAULT_HTTP_TIMEOUT,
+            follow_redirects=False,
         )
         response.raise_for_status()
         data = response.json()
@@ -533,7 +528,7 @@ def _parse_github_results(data: Dict[str, Any]) -> List[SearchResult]:
             SearchResult(
                 title=item.get("full_name", ""),
                 url=item.get("html_url", ""),
-                summary=item.get("description") or "",
+                snippet=item.get("description") or "",
                 source="github",
             )
         )
@@ -1190,85 +1185,3 @@ class _NullContextClient:
 
     async def __aexit__(self, *_) -> None:
         pass  # do not close — caller owns the client
-
-
-# ---------------------------------------------------------------------------
-# Hypothesis helpers (pure functions, testable in isolation)
-# ---------------------------------------------------------------------------
-
-_THEME_KEYWORDS: Dict[str, List[str]] = {
-    "attention": ["attention", "transformer", "self-attention", "multi-head"],
-    "regularisation": ["dropout", "regularization", "weight decay", "l2"],
-    "learning_rate": ["learning rate", "lr schedule", "warmup", "cosine annealing"],
-    "architecture": ["layer", "depth", "width", "embedding", "hidden"],
-    "data": ["data augmentation", "tokenization", "dataset", "preprocessing"],
-    "batch": ["batch size", "gradient accumulation", "micro-batch"],
-}
-
-_THEME_TO_HP_ADJUSTMENTS: Dict[str, Dict[str, Any]] = {
-    "attention": {"n_head": 8, "n_embd": 512},
-    "regularisation": {"dropout": 0.1, "weight_decay": 0.05},
-    "learning_rate": {"learning_rate": 1e-4, "warmup_steps": 200},
-    "architecture": {"n_layer": 8, "block_size": 512},
-    "data": {"batch_size": 128},
-    "batch": {"batch_size": 32},
-}
-
-
-def _extract_themes(search_results: List[SearchResult]) -> List[str]:
-    """Identify high-level research themes from a list of search results.
-
-    Args:
-        search_results: Web search results for the current iteration.
-
-    Returns:
-        Deduplicated list of theme names found in titles/summaries.
-    """
-    found: List[str] = []
-    combined_text = " ".join(f"{r.title} {r.summary}" for r in search_results).lower()
-    for theme, keywords in _THEME_KEYWORDS.items():
-        if any(kw in combined_text for kw in keywords):
-            found.append(theme)
-    return found
-
-
-def _themes_to_hyperparams(themes: List[str], iteration: int) -> Dict[str, Any]:
-    """Map detected themes to concrete hyperparameter adjustments.
-
-    Uses modular iteration cycling so successive iterations with the same themes
-    still explore a varied parameter space.
-
-    Args:
-        themes: Theme names from _extract_themes().
-        iteration: Current iteration index (1-based, used for cycling).
-
-    Returns:
-        Dict of hyperparameter overrides to apply for the next experiment.
-    """
-    if not themes:
-        # Fallback: cycle through all theme adjustments based on iteration
-        all_themes = list(_THEME_TO_HP_ADJUSTMENTS.keys())
-        selected_theme = all_themes[(iteration - 1) % len(all_themes)]
-        return dict(_THEME_TO_HP_ADJUSTMENTS[selected_theme])
-
-    # Pick the theme that appears earliest (most prominent in search results)
-    # and rotate through themes across iterations to avoid repetition
-    selected_theme = themes[(iteration - 1) % len(themes)]
-    return dict(_THEME_TO_HP_ADJUSTMENTS.get(selected_theme, {}))
-
-
-def _summarise_prior_results(prior_results: List[ImprovementMetrics]) -> str:
-    """Build a short text summary of prior iteration results.
-
-    Args:
-        prior_results: List of ImprovementMetrics from previous iterations.
-
-    Returns:
-        Human-readable summary string, empty if no prior results.
-    """
-    if not prior_results:
-        return ""
-    last = prior_results[-1]
-    if last.improved and last.improvement_pct is not None:
-        return f"Last iteration improved by {last.improvement_pct:.2f}%."
-    return "Last iteration did not improve over baseline."

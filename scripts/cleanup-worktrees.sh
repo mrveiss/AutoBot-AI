@@ -21,8 +21,6 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORKTREES_DIR="${REPO_ROOT}/.worktrees"
 DRY_RUN=false
 BRANCHES_ONLY=false
-# Dev_new_gui: excluded from every deletion filter below -- temporary mirror
-# of main for the live updater; remove the exclusion with #16461.
 BASE_BRANCH="main"
 
 for arg in "$@"; do
@@ -68,6 +66,60 @@ source "${REPO_ROOT}/scripts/lib/session-handoffs.sh"
 
 wt_removed=0
 wt_skipped=0
+
+# Print why `git worktree remove` (no --force) would refuse a tree; empty if it would not.
+# Mirrors the refusal conditions so dry-run does not count a tree the real run keeps.
+worktree_removal_blocker() {
+    local path="$1"
+    if git -C "$REPO_ROOT" worktree list --porcelain | awk -v p="${path%/}" \
+        '$1=="worktree"{cur=($2==p)} cur&&$1=="locked"{f=1} END{exit !f}'; then
+        echo "locked"
+    elif [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]; then
+        echo "uncommitted changes"
+    elif [ -f "$path/.gitmodules" ]; then
+        echo "contains submodules"
+    fi
+}
+# True when the branch's work is provably in base: its tip is an ancestor of
+# origin/<base>, or equals the head of a merged PR for that branch. Closed issue
+# alone proves nothing -- commits pushed after the merge would be lost.
+branch_is_landed() {
+    local branch="$1" tip merged_head
+    git -C "$REPO_ROOT" merge-base --is-ancestor "$branch" "origin/${BASE_BRANCH}" 2>/dev/null && return 0
+    tip=$(git -C "$REPO_ROOT" rev-parse "$branch" 2>/dev/null) || return 1
+    merged_head=$(gh pr list --head "$branch" --state merged --json headRefOid \
+        --jq '.[].headRefOid' 2>/dev/null) || return 1
+    printf '%s\n' "$merged_head" | grep -qxF "$tip"
+}
+
+# Delete a local branch: -D only when landed, otherwise -d (git refuses an unmerged
+# branch) and report the refusal. Returns 0 only when the branch was deleted.
+delete_local_branch() {
+    local branch="$1" flag="-d" delete_error
+    branch_is_landed "$branch" && flag="-D"
+    if delete_error=$(git -C "$REPO_ROOT" branch "$flag" "$branch" 2>&1); then
+        return 0
+    fi
+    echo "    KEPT local branch ${branch} -- not deleted (${flag}): ${delete_error}"
+    return 1
+}
+
+# Print why a worktree must be KEPT, or nothing when the ledger positively says it
+# is unclaimed. Fails CLOSED: a missing ledger binary or a failed lookup is
+# reported as a reason to keep, never read as "unclaimed".
+worktree_claim() {
+    local name="$1" ledger="${LEDGER_BIN:-$HOME/.claude/scripts/ledger}" out
+    if [ ! -x "$ledger" ]; then
+        printf 'claim unverifiable: ledger binary %s missing or not executable' "$ledger"
+        return 0
+    fi
+    if ! out=$("$ledger" who worktree "$name" 2>&1); then
+        printf 'claim unverifiable: ledger who failed: %s' "$out"
+        return 0
+    fi
+    case "$out" in *unclaimed*) return 0 ;; esac
+    printf 'claimed by a session: %s' "$out"
+}
 br_local_removed=0
 br_remote_removed=0
 errors=0
@@ -109,19 +161,33 @@ if ! $BRANCHES_ONLY; then
                 continue
             fi
 
+            claim=$(worktree_claim "$dir_name")
+            if [ -n "$claim" ]; then
+                echo "  KEEP          ${dir_name}  (${claim})"
+                wt_skipped=$((wt_skipped + 1))
+                continue
+            fi
+
             if [ "$issue_state" = "CLOSED" ]; then
                 # Read actual branch name from worktree (not hardcoded prefix)
                 branch_name=$(git -C "$worktree_path" branch --show-current 2>/dev/null) || true
 
                 if $DRY_RUN; then
-                    echo "  WOULD REMOVE  ${dir_name}  (issue #${issue_number} is closed, branch: ${branch_name:-unknown})"
+                    blocker=$(worktree_removal_blocker "$worktree_path")
+                    if [ -n "$blocker" ]; then
+                        echo "  WOULD KEEP    ${dir_name}  (issue #${issue_number} is closed, but git would refuse removal: ${blocker})"
+                        wt_skipped=$((wt_skipped + 1))
+                    else
+                        echo "  WOULD REMOVE  ${dir_name}  (issue #${issue_number} is closed, branch: ${branch_name:-unknown})"
+                        wt_removed=$((wt_removed + 1))
+                    fi
                 else
                     echo "  REMOVING      ${dir_name}  (issue #${issue_number} is closed)"
-                    if git -C "$REPO_ROOT" worktree remove --force "$worktree_path" 2>/dev/null; then
+                    if removal_error=$(git -C "$REPO_ROOT" worktree remove "$worktree_path" 2>&1); then
                         # Delete local branch if it exists
                         if [ -n "$branch_name" ]; then
-                            git -C "$REPO_ROOT" branch -D "$branch_name" 2>/dev/null && \
-                                echo "    Deleted local branch: ${branch_name}" || true
+                            delete_local_branch "$branch_name" && \
+                                echo "    Deleted local branch: ${branch_name}"
                             # Delete remote branch only when it is safe to do so
                             # (#10035): not pushed in the last day and no open PR.
                             if branch_recently_pushed "origin/${branch_name}"; then
@@ -129,17 +195,24 @@ if ! $BRANCHES_ONLY; then
                             elif branch_has_open_pr "$branch_name"; then
                                 echo "    SKIP remote ${branch_name} -- has an open PR"
                             else
-                                git -C "$REPO_ROOT" push origin --delete "$branch_name" 2>/dev/null && \
-                                    echo "    Deleted remote branch: ${branch_name}" || true
+                                if remote_error=$(git -C "$REPO_ROOT" push origin --delete "$branch_name" 2>&1); then
+                                    echo "    Deleted remote branch: ${branch_name}"
+                                else
+                                    echo "    ERROR deleting remote ${branch_name}: ${remote_error}"
+                                    errors=$((errors + 1))
+                                fi
                             fi
                         fi
+                        wt_removed=$((wt_removed + 1))
                     else
-                        echo "    WARNING: git worktree remove failed; attempting manual cleanup"
-                        rm -rf "$worktree_path"
-                        git -C "$REPO_ROOT" worktree prune
+                        # No --force and no rm -rf (owner rule 9): a tree git refuses to
+                        # remove (dirty, locked) is unfinished work. Report it and leave it.
+                        echo "    KEPT ${dir_name} -- git worktree remove refused; left in place"
+                        echo "    git said: ${removal_error}"
+                        wt_skipped=$((wt_skipped + 1))
+                        errors=$((errors + 1))
                     fi
                 fi
-                wt_removed=$((wt_removed + 1))
             else
                 echo "  KEEP          ${dir_name}  (issue #${issue_number} is ${issue_state})"
                 wt_skipped=$((wt_skipped + 1))
@@ -158,20 +231,21 @@ fi
 
 # Delete local branches already merged into base branch
 merged_local=$(git -C "$REPO_ROOT" branch --merged "$BASE_BRANCH" \
-    | grep -v "${BASE_BRANCH}\|release\|master\|Dev_new_gui" \
-    | sed 's/^[* +]*//' || true)
+    | sed 's/^[* +]*//' \
+    | grep -vxE "${BASE_BRANCH}|release|master" || true)
 
 if [ -n "$merged_local" ]; then
     while IFS= read -r branch; do
         [ -z "$branch" ] && continue
         if $DRY_RUN; then
             echo "  WOULD DELETE local merged: ${branch}"
+            br_local_removed=$((br_local_removed + 1))
+        elif delete_error=$(git -C "$REPO_ROOT" branch -d "$branch" 2>&1); then
+            echo "  Deleted local merged: ${branch}"
+            br_local_removed=$((br_local_removed + 1))
         else
-            git -C "$REPO_ROOT" branch -d "$branch" 2>/dev/null && \
-                echo "  Deleted local merged: ${branch}" || \
-                echo "  SKIP (in use by worktree): ${branch}"
+            echo "  SKIP (not deleted): ${branch}: ${delete_error}"
         fi
-        br_local_removed=$((br_local_removed + 1))
     done <<< "$merged_local"
 else
     echo "  No merged local branches found."
@@ -199,7 +273,7 @@ if ! git -C "$REPO_ROOT" fetch --prune 2>/dev/null; then
 fi
 
 # Check local branches with issue numbers for closed issues
-local_branches=$(git -C "$REPO_ROOT" branch | sed 's/^[* +]*//' | grep -v "${BASE_BRANCH}\|release\|master\|Dev_new_gui" || true)
+local_branches=$(git -C "$REPO_ROOT" branch | sed 's/^[* +]*//' | grep -vxE "${BASE_BRANCH}|release|master" || true)
 
 if [ -n "$local_branches" ]; then
     while IFS= read -r branch; do
@@ -218,13 +292,16 @@ if [ -n "$local_branches" ]; then
             merged_pr=$(merged_pr_for_issue "$issue_number")
             if [ -n "$merged_pr" ]; then
                 if $DRY_RUN; then
-                    echo "  WOULD DELETE local: ${branch}  (#${issue_number} closed, PR #${merged_pr} merged)"
-                else
-                    git -C "$REPO_ROOT" branch -D "$branch" 2>/dev/null && \
-                        echo "  Deleted local: ${branch}  (#${issue_number} closed, PR #${merged_pr} merged)" || \
-                        echo "  SKIP (in use by worktree): ${branch}"
+                    if branch_is_landed "$branch"; then
+                        echo "  WOULD DELETE local: ${branch}  (#${issue_number} closed, PR #${merged_pr} merged)"
+                        br_local_removed=$((br_local_removed + 1))
+                    else
+                        echo "  WOULD KEEP local: ${branch}  (#${issue_number} closed, PR #${merged_pr} merged, but the branch tip is not provably landed; git -d would refuse)"
+                    fi
+                elif delete_local_branch "$branch"; then
+                    echo "  Deleted local: ${branch}  (#${issue_number} closed, PR #${merged_pr} merged)"
+                    br_local_removed=$((br_local_removed + 1))
                 fi
-                br_local_removed=$((br_local_removed + 1))
             else
                 echo "  KEEP  ${branch}  (#${issue_number} closed but no merged PR found -- verify manually)"
             fi
@@ -234,7 +311,7 @@ fi
 
 # Check remote branches with issue numbers for closed issues
 remote_branches=$(git -C "$REPO_ROOT" branch -r | sed 's|^ *origin/||' \
-    | grep -v "HEAD\|${BASE_BRANCH}\|release\|master\|Dev_new_gui" || true)
+    | grep -vE '^HEAD( |$)' | grep -vxE "${BASE_BRANCH}|release|master" || true)
 
 if [ -n "$remote_branches" ]; then
     while IFS= read -r branch; do
@@ -258,11 +335,15 @@ if [ -n "$remote_branches" ]; then
                 if $DRY_RUN; then
                     echo "  WOULD DELETE remote: origin/${branch}  (#${issue_number} closed, PR #${merged_pr} merged)"
                 else
-                    git -C "$REPO_ROOT" push origin --delete "$branch" 2>/dev/null && \
-                        echo "  Deleted remote: origin/${branch}  (#${issue_number} closed, PR #${merged_pr} merged)" || \
-                        echo "  ERROR deleting remote: origin/${branch}"
+                    if remote_error=$(git -C "$REPO_ROOT" push origin --delete "$branch" 2>&1); then
+                        echo "  Deleted remote: origin/${branch}  (#${issue_number} closed, PR #${merged_pr} merged)"
+                        br_remote_removed=$((br_remote_removed + 1))
+                    else
+                        echo "  ERROR deleting remote origin/${branch}: ${remote_error}"
+                        errors=$((errors + 1))
+                    fi
                 fi
-                br_remote_removed=$((br_remote_removed + 1))
+                if $DRY_RUN; then br_remote_removed=$((br_remote_removed + 1)); fi
             else
                 echo "  KEEP  origin/${branch}  (#${issue_number} closed but no merged PR found -- verify manually)"
             fi

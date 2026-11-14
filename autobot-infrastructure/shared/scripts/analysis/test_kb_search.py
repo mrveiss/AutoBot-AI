@@ -10,14 +10,18 @@ Test Knowledge Base Documentation Search
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
-from autobot_shared.paths import project_root
+# A backend tool (#18289): it deliberately drives backend internals. It puts the backend and the
+# repository root (for `autobot_shared`) on its own path, so it runs from any directory with no
+# PYTHONPATH; the backend's Python dependencies must be installed.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
-# Add the project root to the Python path
-sys.path.insert(0, str(project_root()))
-
-from chat_workflow import ChatWorkflowManager
-from knowledge_base import KnowledgeBase
+from chat_workflow import ChatWorkflowManager  # noqa: E402
+from knowledge_base import KnowledgeBase  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

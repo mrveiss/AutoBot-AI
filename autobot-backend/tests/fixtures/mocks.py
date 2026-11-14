@@ -8,7 +8,7 @@ Mock fixtures for AutoBot backend testing (canonical location for #6994).
 Provides mock implementations of core components for tests and the
 `__main__` demo blocks under `intelligence/`:
 
-- MockLLMInterface  - Mock for LLMInterface (llm_multi_provider); covers
+- MockLLMInterface  - Mock for the retired LLMInterface (#18552); covers
                       both chat_completion() and legacy generate_response().
 - MockLLMService    - Mock matching the LLMService surface that replaced
                       LLMInterface in #3185. Returns LLMResponse-shaped
@@ -73,7 +73,7 @@ class ModuleStubRegistry:
 
 
 class MockLLMInterface:
-    """Mock for ``LLMInterface`` (``llm_multi_provider.LLMInterface``).
+    """Mock for the retired ``LLMInterface`` (formerly ``llm_multi_provider``, #18552).
 
     Covers the full surface of ``LLMInterface``: both the primary
     ``chat_completion()`` method and the legacy ``generate_response()`` shim.

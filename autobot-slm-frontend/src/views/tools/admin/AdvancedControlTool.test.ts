@@ -3,8 +3,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import axios from 'axios'
 import AdvancedControlTool from './AdvancedControlTool.vue'
+import { HttpError } from '@autobot/ui'
+import { backendClient } from '@/testing/mockAutobotBackendClient'
 import en from '@/locales/en.json'
 
 vi.mock('@/stores/auth', () => ({
@@ -13,37 +14,15 @@ vi.mock('@/stores/auth', () => ({
 
 // #12653: the tool now reaches the autobot backend through `useAutobotApi`,
 // the SLM app's single client for that backend, instead of a private `fetch`.
-// Stubbing `axios.create` keeps the assertions on the exact endpoint paths and
+// Mocking the shared backend client (`mockAutobotBackendClient`) keeps the assertions on the exact endpoint paths and
 // HTTP verbs — the transport changed, the wire contract did not.
-vi.mock('axios', () => {
-  const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    interceptors: {
-      request: { use: vi.fn() },
-      response: { use: vi.fn() },
-    },
-  }
-  return { default: { create: vi.fn(() => instance) } }
-})
+vi.mock('@/utils/ApiClient', async (importOriginal) =>
+  (await import('@/testing/mockAutobotBackendClient')).withMockedBackendClient(importOriginal),
+)
 
 // vue-i18n 11 requires app.use(); install a real i18n plugin since the
 // template uses the global $t and the script uses useI18n().
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
-
-type MockedClient = {
-  get: ReturnType<typeof vi.fn>
-  post: ReturnType<typeof vi.fn>
-  delete: ReturnType<typeof vi.fn>
-}
-
-/** The single axios instance every `useAutobotApi()` call receives. */
-function client(): MockedClient {
-  return (axios.create as unknown as () => MockedClient)()
-}
 
 /** Route each advanced-control endpoint to a canned payload. */
 function payloadFor(url: string): unknown {
@@ -69,19 +48,18 @@ function mountTool() {
 
 describe('AdvancedControlTool', () => {
   beforeEach(() => {
-    const c = client()
-    c.get.mockReset()
-    c.post.mockReset()
-    c.delete.mockReset()
-    c.get.mockImplementation(async (url: string) => ({ data: payloadFor(url) }))
-    c.post.mockImplementation(async (url: string) => ({ data: payloadFor(url) }))
-    c.delete.mockImplementation(async (url: string) => ({ data: payloadFor(url) }))
+    backendClient.get.mockReset()
+    backendClient.post.mockReset()
+    backendClient.delete.mockReset()
+    backendClient.get.mockImplementation(async (url: string) => payloadFor(url))
+    backendClient.post.mockImplementation(async (url: string) => payloadFor(url))
+    backendClient.delete.mockImplementation(async (url: string) => payloadFor(url))
   })
 
   it('loads all advanced-control endpoints on mount via useAutobotApi', async () => {
     const wrapper = mountTool()
     await flushPromises()
-    const calls = client().get.mock.calls.map((c) => c[0] as string)
+    const calls = backendClient.get.mock.calls.map((c) => c[0] as string)
     for (const suffix of ['/streaming/capabilities', '/streaming/sessions', '/takeover/status', '/takeover/pending', '/takeover/active']) {
       expect(calls).toContain(`/advanced-control${suffix}`)
     }
@@ -92,7 +70,7 @@ describe('AdvancedControlTool', () => {
   })
 
   it('shows an error banner when a request fails', async () => {
-    client().get.mockRejectedValue({ response: { status: 500 } })
+    backendClient.get.mockRejectedValue(new HttpError(500, 'Internal Server Error'))
     const wrapper = mountTool()
     await flushPromises()
     expect(wrapper.find('[data-test="error"]').exists()).toBe(true)
@@ -107,7 +85,7 @@ describe('AdvancedControlTool', () => {
     // jsdom does not auto-submit a form on submit-button click; trigger submit directly.
     await wrapper.findAll('form')[0].trigger('submit')
     await flushPromises()
-    const post = client().post.mock.calls.find((c) => c[0] === '/advanced-control/streaming/create')
+    const post = backendClient.post.mock.calls.find((c) => c[0] === '/advanced-control/streaming/create')
     expect(post).toBeTruthy()
     expect(post![1]).toMatchObject({ user_id: 'alice' })
   })
@@ -117,7 +95,7 @@ describe('AdvancedControlTool', () => {
     await flushPromises()
     await wrapper.find('[data-test="terminate-s1"]').trigger('click')
     await flushPromises()
-    const del = client().delete.mock.calls.find((c) => c[0] === '/advanced-control/streaming/s1')
+    const del = backendClient.delete.mock.calls.find((c) => c[0] === '/advanced-control/streaming/s1')
     expect(del).toBeTruthy()
   })
 
@@ -128,7 +106,7 @@ describe('AdvancedControlTool', () => {
     await operatorInput!.setValue('op-1')
     await wrapper.find('[data-test="approve-r1"]').trigger('click')
     await flushPromises()
-    const approve = client().post.mock.calls.find((c) => c[0] === '/advanced-control/takeover/r1/approve')
+    const approve = backendClient.post.mock.calls.find((c) => c[0] === '/advanced-control/takeover/r1/approve')
     expect(approve).toBeTruthy()
     expect(approve![1]).toMatchObject({ human_operator: 'op-1' })
   })

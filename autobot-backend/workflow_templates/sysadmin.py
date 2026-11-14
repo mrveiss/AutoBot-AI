@@ -13,7 +13,7 @@ from typing import List
 
 from autobot_types import TaskComplexity
 
-from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
+from .types import WorkflowStep, WorkflowTemplate, WorkflowTemplateCategory
 
 
 def _create_health_check_collection_steps() -> List[WorkflowStep]:
@@ -109,8 +109,8 @@ def create_system_health_check_template() -> WorkflowTemplate:
         id="system_health_check",
         name="System Health Check",
         description="Comprehensive system health and performance assessment",
-        category=TemplateCategory.SYSTEM_ADMIN,
-        complexity=TaskComplexity.INSTALL,
+        category=WorkflowTemplateCategory.SYSTEM_ADMIN,
+        complexity=TaskComplexity.COMPLEX,  # was an alias of COMPLEX (#13806); the kind is on `category`
         estimated_duration_minutes=20,
         agents_involved=["system_commands", "orchestrator", "knowledge_manager"],
         tags=["system", "health", "monitoring", "performance"],
@@ -217,7 +217,7 @@ def create_performance_optimization_template() -> WorkflowTemplate:
         id="performance_optimization",
         name="Performance Optimization",
         description="System performance analysis and optimization recommendations",
-        category=TemplateCategory.SYSTEM_ADMIN,
+        category=WorkflowTemplateCategory.SYSTEM_ADMIN,
         complexity=TaskComplexity.COMPLEX,
         estimated_duration_minutes=40,
         agents_involved=[
@@ -322,8 +322,8 @@ def create_backup_and_recovery_template() -> WorkflowTemplate:
         id="backup_and_recovery",
         name="Backup and Recovery",
         description="Comprehensive backup strategy and recovery testing",
-        category=TemplateCategory.SYSTEM_ADMIN,
-        complexity=TaskComplexity.INSTALL,
+        category=WorkflowTemplateCategory.SYSTEM_ADMIN,
+        complexity=TaskComplexity.COMPLEX,  # was an alias of COMPLEX (#13806); the kind is on `category`
         estimated_duration_minutes=35,
         agents_involved=[
             "system_commands",

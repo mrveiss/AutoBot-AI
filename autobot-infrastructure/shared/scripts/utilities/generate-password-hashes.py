@@ -5,28 +5,31 @@
 # Author: mrveiss
 """
 Generate password hashes for AutoBot authentication system
-Usage: python generate-password-hashes.py
+Usage: python generate-password-hashes.py [username ...]
+
+With no username the configured admin account name (SSOT) is used.
 """
 
 import getpass
 import sys
+from pathlib import Path
 
-import bcrypt
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.auth import hash_password  # noqa: E402
+from autobot_shared.ssot_config import config  # noqa: E402
 
 
-def hash_password(password: str) -> str:
-    """Hash password using bcrypt"""
-    salt = bcrypt.gensalt(rounds=12)
-    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
-
-
-def main():
+def main(argv=None):
     """Entry point for interactive password hash generation."""
     print("AutoBot Password Hash Generator")
     print("=" * 40)
 
-    # Default users
-    users = ["admin", "user"]
+    users = list(sys.argv[1:] if argv is None else argv) or [config.auth.admin_username]
 
     for username in users:
         print(f"\n🔐 Setting password for user '{username}':")

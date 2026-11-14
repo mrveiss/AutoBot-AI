@@ -84,9 +84,9 @@ async def execute_orphan_storage_delete(approval: "Approval", session: "AsyncSes
 PROPOSED_BY = "api.admin_orphan_storage"
 
 
-def register() -> None:
+def register_cleanup_action() -> None:
     """Idempotent: re-registering just replaces the same key with an equal handler."""
     register_post_approval_action(ACTION, execute_orphan_storage_delete, proposed_by=PROPOSED_BY)
 
 
-__all__ = ["ACTION", "PROPOSED_BY", "execute_orphan_storage_delete", "register"]
+__all__ = ["ACTION", "PROPOSED_BY", "execute_orphan_storage_delete", "register_cleanup_action"]

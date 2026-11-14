@@ -37,6 +37,7 @@ from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
+from .subprocess_base import SIGTERM_GRACE_SECONDS
 from .subprocess_support import (
     inject_agent_credentials,
     probe_pid_identity,
@@ -48,7 +49,6 @@ from .subprocess_support import (
 logger = get_logger(__name__)
 
 _LOG_NAME = "ProcessAdapter"
-_SIGTERM_GRACE_SECONDS = 5
 
 # GH#11059 (P0 RCE): ProcessAdapter executes a tenant-writable command on the
 # backend host. It is DISABLED unless an operator explicitly enables it via this
@@ -98,7 +98,7 @@ def _build_minimal_env(env_extra: dict, context: dict) -> dict:
     return env
 
 
-class ProcessAdapter:
+class LLCProcessAdapter:
     """Adapter that manages agent runs as OS subprocesses."""
 
     async def invoke(self, agent_config: dict, context: dict) -> str:
@@ -139,6 +139,6 @@ class ProcessAdapter:
         # anything (PR#16284 review) and returns True when no signal was sent
         # (already gone, or unverifiable) — match the original early-return
         # behavior: no further action needed either way.
-        already_gone = await terminate_pid(pid, _SIGTERM_GRACE_SECONDS, _LOG_NAME, create_time)
+        already_gone = await terminate_pid(pid, SIGTERM_GRACE_SECONDS, _LOG_NAME, create_time)
         if already_gone:
             return

@@ -1,15 +1,17 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-import { useChatStore } from '@/stores/useChatStore'
+import { useChatStore, type ChatSession } from '@/stores/useChatStore'
 import { useAppStore } from '@/stores/useAppStore'
 import { chatRepository } from '@/models/repositories'
 import apiClient from '@/utils/ApiClient'
-import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
-import { extractErrorMessage } from '@/utils/errorExtract'
+import { extractErrorMessage, streamErrorText } from '@/utils/errorExtract'
 import i18n from '@/i18n'
 import type { ChatMessage, ChatMessageDisplayType } from '@/types/api'
 import { requestQueue } from '@/composables/useRequestQueue'
+import { stripBracketTags, stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
+import { showAttachmentNotice } from '@/utils/attachmentNotice'
+import { keepUnansweredQuestions } from './stallQuestions'
 
 const logger = createLogger('ChatController')
 
@@ -324,7 +326,9 @@ export class ChatController {
     }, ChatController.PREVIEW_THROTTLE_MS)
   }
 
-  private async handleStreamingResponse(response: Response): Promise<void> {
+  /** Consume an SSE reply; resolves true when it carried an `error` event (HTTP 200 is not success, #21022). */
+  async handleStreamingResponse(response: Response): Promise<boolean> {
+    const streamState = { reportedError: false } // per stream: overlapping streams must not share it
     const reader = response.body?.getReader()
     if (!reader) {
       throw new Error('No response stream available')
@@ -358,7 +362,7 @@ export class ChatController {
         for (const line of lines) {
           if (!line.trim()) continue
           if (line.startsWith('data: ')) {
-            fallbackMessageId = this._processStreamLine(line, messageIdMap, fallbackMessageId)
+            fallbackMessageId = this._processStreamLine(line, messageIdMap, fallbackMessageId, streamState)
           }
         }
       }
@@ -377,12 +381,14 @@ export class ChatController {
     } finally {
       reader.releaseLock()
     }
+    return streamState.reportedError
   }
 
   private _processStreamLine(
     line: string,
     messageIdMap: Map<string, string>,
-    fallbackMessageId: string | null
+    fallbackMessageId: string | null,
+    streamState: { reportedError: boolean } = { reportedError: false }
   ): string | null {
     try {
       const jsonStr = line.slice(6).trim()
@@ -395,10 +401,11 @@ export class ChatController {
         logger.debug('Stream started:', data.session_id)
         return fallbackMessageId
       }
-      if (data.type === 'end') {
-        logger.debug('Stream ended')
+      if (data.type === 'end' || data.type === 'cancelled') { // #17829: a stopped turn keeps its shown text
+        logger.debug('Stream ended:', data.type)
         return fallbackMessageId
       }
+      if (data.type === 'attachment_notice') { showAttachmentNotice(data.metadata); return fallbackMessageId } // #20195
       if (data.type === 'segment_complete') {
         logger.debug(`Segment complete: ${data.metadata?.completed_type}`)
         const backendId = data.metadata?.message_id
@@ -410,13 +417,14 @@ export class ChatController {
 
       if (data.type === 'error') {
         logger.error('Stream error:', data.content)
+        streamState.reportedError = true
         const errorMsgId = fallbackMessageId || this.chatStore.addMessage({
           content: '',
           sender: 'assistant'
         })
         if (!errorMsgId) return fallbackMessageId
         this.chatStore.updateMessage(errorMsgId, {
-          content: `Error: ${data.content || data.message || 'Unknown error'}`,
+          content: streamErrorText(data),
           status: 'error'
         })
         return fallbackMessageId
@@ -519,10 +527,10 @@ export class ChatController {
       const msg = this.chatStore.currentSession?.messages.find(m => m.id === frontendId)
       if (!msg) continue
 
-      const displayContent = (msg.content || '')
-        .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
-        .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?/gi, '')
-        .trim()
+      // `true` = strip a truncated marker ANYWHERE, not only at end-of-string.
+      // This site was unanchored while the other two were anchored; the option
+      // keeps that difference explicit instead of silently resolving it (#18065).
+      const displayContent = stripBracketTags(msg.content || '', true).trim()
 
       if (displayContent) {
         if (msg.status !== 'error') {
@@ -547,12 +555,9 @@ export class ChatController {
 
     // Strip internal tags that shouldn't be shown to users
     // Handles complete tags and partial/truncated tags from streaming (e.g. [/THO)
-    const preview = content
-      .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
-      .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?$/gi, '')
-      .replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
-      .replace(/<TOOL_CALL[^>]*>.*?<\/TOOL_CALL>/gs, '')
-      .trim()
+    // The two adjacent case-variant replaces this line replaced were the fork
+    // made visible: one defect, patched here and nowhere else (#18065).
+    const preview = stripProtocolTagsForDisplay(content)
 
     if (!preview) return ''
 
@@ -591,11 +596,11 @@ export class ChatController {
   private mapMessageType(
     backendType?: string,
     metadataType?: string
-  ): 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | undefined {
+  ): 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | 'human_question' | undefined {
     const type = backendType || metadataType
     if (!type) return 'response'
 
-    // Map backend types to frontend types
+    if (type === 'human_question') return type // #21022
     if (type === 'thought' || type.includes('thought')) return 'thought'
     if (type.includes('planning')) return 'planning'
     if (type.includes('debug')) return 'debug'
@@ -690,15 +695,15 @@ export class ChatController {
       // Update store with loaded sessions
       if (Array.isArray(sessions)) {
         sessions.forEach(session => {
-          // #9724: normalize the repository session (snake_case ISO strings)
-          // to the store shape — pushing it raw left createdAt/updatedAt/
-          // isActive undefined on every imported session.
+          // #9724: the store needs isActive. Dates are taken as the repository
+          // mapped them (#20865) — re-deriving them from snake_case fields the
+          // repository does not return produced Invalid Date.
           this.chatStore.importSession({
             id: session.id,
             title: session.title ?? '',
             messages: session.messages,
-            createdAt: new Date(session.created_at),
-            updatedAt: new Date(session.updated_at),
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
             isActive: false,
           })
         })
@@ -711,15 +716,12 @@ export class ChatController {
       logger.error('Failed to load chat sessions:', error)
       // Don't throw error, allow app to continue with local sessions
       this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.loadSessionsFailed', { error: extractErrorMessage(error, 'Unknown error') }))
-    } finally {
     }
   }
 
   async loadChatMessages(sessionId: string): Promise<void> {
     try {
-      // Issue #680: Skip loading while streaming or pending approval to prevent race conditions
-      // During SSE streaming, messages are added in real-time and should not be overwritten
-      // by polling which may have stale data from backend
+      // Issue #680: skip while streaming or pending approval (polling data may be stale)
       if (this.chatStore.isTyping) {
         logger.debug(`Skipping message load - streaming in progress (isTyping=true)`)
         return
@@ -731,11 +733,11 @@ export class ChatController {
 
       logger.debug(`Loading messages for session: ${sessionId}`)
 
-      const messages = await chatRepository.getChatMessages(sessionId)
-      logger.debug(`Received ${messages.length} messages from repository`)
-
       // Update session with loaded messages
       const session = this.chatStore.sessions.find(s => s.id === sessionId)
+      const loaded = await chatRepository.getChatMessages(sessionId)
+      // #21022: a poll never replaces a question the person has not answered yet
+      const messages = session ? keepUnansweredQuestions(session.messages, loaded) : loaded
       if (session) {
         // Issue #1371: Never replace local messages with empty/fewer backend
         // messages. The poller can get [] on transient API errors or stale
@@ -774,7 +776,6 @@ export class ChatController {
     } catch (error: unknown) {
       logger.error('Failed to load messages:', error)
       this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.loadMessagesFailed', { error: extractErrorMessage(error, 'Unknown error') }))
-    } finally {
     }
   }
 
@@ -974,14 +975,12 @@ export class ChatController {
     } catch (error: unknown) {
       this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.clearFailed', { error: extractErrorMessage(error, 'Unknown error') }))
       throw error
-    } finally {
     }
   }
 
   async resetCurrentChat(): Promise<void> {
     return this.resetChat()
   }
-
 
   // Enhanced validation helpers
   validateMessage(content: string): { valid: boolean; error?: string } {
@@ -1058,7 +1057,6 @@ export class ChatController {
     } catch (error) {
       logger.error('Connection test failed:', error)
       return false
-    } finally {
     }
   }
 

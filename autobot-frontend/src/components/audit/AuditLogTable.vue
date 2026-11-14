@@ -49,7 +49,7 @@
             <th
               class="col-timestamp"
               @click="sortBy('timestamp')"
-             
+
               tabindex="0"
               :aria-sort="sortField === 'timestamp' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"
               :aria-label="$t('audit.logTable.sortByTimestamp')"
@@ -62,7 +62,7 @@
             <th
               class="col-operation"
               @click="sortBy('operation')"
-             
+
               tabindex="0"
               :aria-sort="sortField === 'operation' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"
               :aria-label="$t('audit.logTable.sortByOperation')"
@@ -87,8 +87,8 @@
             @click="selectEntry(entry)"
           >
             <td class="col-timestamp">
-              <span class="timestamp-full mono-timestamp">{{ formatTimestamp(entry.timestamp) }}</span>
-              <span class="timestamp-relative">{{ formatRelativeTime(entry.timestamp) }}</span>
+              <span class="timestamp-full mono-timestamp">{{ formatDateTime(auditTimestampToDate(entry.timestamp)) }}</span>
+              <span class="timestamp-relative">{{ formatTimeAgo(auditTimestampToDate(entry.timestamp)) }}</span>
             </td>
             <td class="col-operation">
               <span class="operation-name">{{ formatOperationName(entry.operation) }}</span>
@@ -143,26 +143,17 @@
       </table>
     </div>
 
-    <!-- Pagination -->
-    <div class="table-pagination">
-      <button
-        class="btn btn-secondary"
-        :disabled="currentPage <= 1"
-        @click="$emit('prev-page')"
-      >
-        <Icon name="chevron-left" />
-        {{ $t('audit.logTable.previous') }}
-      </button>
-      <span class="page-info">{{ $t('audit.logTable.pageOf', { page: currentPage }) }}</span>
-      <button
-        class="btn btn-secondary"
-        :disabled="!hasMore"
-        @click="$emit('next-page')"
-      >
-        {{ $t('audit.logTable.next') }}
-        <Icon name="chevron-right" />
-      </button>
-    </div>
+    <!-- Pagination: kit BasePagination; the parent pages by cursor, so Next follows hasMore (#14780) -->
+    <BasePagination
+      class="table-pagination"
+      :page="currentPage"
+      :has-next="hasMore"
+      :labels="{ previous: $t('audit.logTable.previous'), next: $t('audit.logTable.next') }"
+      :label="$t('audit.logTable.paginationAria')"
+      @update:page="(p) => (p < currentPage ? emit('prev-page') : emit('next-page'))"
+    >
+      <template #summary>{{ $t('audit.logTable.pageOf', { page: currentPage }) }}</template>
+    </BasePagination>
 
     <!-- Detail Modal -->
     <BaseModal
@@ -180,7 +171,7 @@
             </div>
             <div class="detail-item">
               <label>{{ $t('audit.logTable.timestamp') }}</label>
-              <span>{{ formatTimestamp(selectedEntry.timestamp) }}</span>
+              <span>{{ formatDateTime(auditTimestampToDate(selectedEntry.timestamp)) }}</span>
             </div>
             <div class="detail-item">
               <label>{{ $t('audit.logTable.operation') }}</label>
@@ -213,10 +204,6 @@
               <label>{{ $t('audit.logTable.ipAddress') }}</label>
               <span class="mono">{{ selectedEntry.ip_address || '-' }}</span>
             </div>
-            <div v-if="selectedEntry.error_message" class="detail-item detail-full">
-              <label>{{ $t('audit.logTable.errorMessage') }}</label>
-              <span class="error-message">{{ selectedEntry.error_message }}</span>
-            </div>
             <div v-if="hasDetails" class="detail-item detail-full">
               <label>{{ $t('audit.logTable.details') }}</label>
               <pre class="details-json">{{ formatDetails(selectedEntry.details) }}</pre>
@@ -236,12 +223,12 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BasePagination, createRecencyFormatter } from '@autobot/ui'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AuditEntry } from '@/types/audit'
-import { AUDIT_RESULT_CONFIG } from '@/types/audit'
-import { formatDateTime, formatTimeAgo } from '@/utils/formatHelpers'
+import { AUDIT_RESULT_CONFIG, auditTimestampToDate } from '@/types/audit'
+import { formatDateTime } from '@/utils/formatHelpers'
 
 interface Props {
   entries: AuditEntry[]
@@ -267,8 +254,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<Emits>()
-const { t } = useI18n()
-
+const { t, locale } = useI18n()
+const formatTimeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
 const selectedEntry = ref<AuditEntry | null>(null)
 const showExportMenu = ref(false)
 const sortField = ref<'timestamp' | 'operation'>('timestamp')
@@ -283,7 +270,7 @@ const sortedEntries = computed(() => {
   entries.sort((a, b) => {
     let comparison = 0
     if (sortField.value === 'timestamp') {
-      comparison = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      comparison = a.timestamp - b.timestamp
     } else if (sortField.value === 'operation') {
       comparison = a.operation.localeCompare(b.operation)
     }
@@ -296,14 +283,6 @@ const hasDetails = computed(() => {
   if (!selectedEntry.value?.details) return false
   return Object.keys(selectedEntry.value.details).length > 0
 })
-
-function formatTimestamp(timestamp: string): string {
-  return formatDateTime(timestamp)
-}
-
-function formatRelativeTime(timestamp: string): string {
-  return formatTimeAgo(timestamp)
-}
 
 function formatOperationName(operation: string): string {
   return operation
@@ -402,7 +381,7 @@ function exportLogs(format: 'json' | 'csv') {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-default);
   box-shadow: var(--shadow-lg);
-  z-index: 10;
+  z-index: var(--z-10);
   min-width: 150px;
 }
 
@@ -643,19 +622,11 @@ th span {
   display: block;
 }
 
+/* The frame around the kit BasePagination; its own layout comes from the kit (#14780). */
 .table-pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: var(--spacing-4);
   padding: var(--spacing-3) var(--spacing-4);
   border-top: 1px solid var(--border-default);
   background: var(--bg-secondary);
-}
-
-.page-info {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
 }
 
 /* Modal Styles */
@@ -694,15 +665,6 @@ th span {
   font-size: var(--text-xs);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
-}
-
-.error-message {
-  color: var(--color-error);
-  background: var(--color-error-bg);
-  padding: var(--spacing-2);
-  border-radius: var(--radius-xs);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
 }
 
 .details-json {

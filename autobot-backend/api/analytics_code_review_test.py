@@ -82,13 +82,13 @@ class TestCalculateReviewScore:
     def test_critical_comment_reduces_score(self):
         """A critical comment should reduce the score significantly."""
         from api.analytics_code_review import (
+            CodeReviewComment,
             ReviewCategory,
-            ReviewComment,
             ReviewSeverity,
             calculate_review_score,
         )
 
-        comment = ReviewComment(
+        comment = CodeReviewComment(
             id="SEC001-1",
             file_path="test.py",
             line_number=1,
@@ -103,14 +103,14 @@ class TestCalculateReviewScore:
     def test_score_clamped_to_zero(self):
         """Score should not go below 0."""
         from api.analytics_code_review import (
+            CodeReviewComment,
             ReviewCategory,
-            ReviewComment,
             ReviewSeverity,
             calculate_review_score,
         )
 
         comments = [
-            ReviewComment(
+            CodeReviewComment(
                 id=f"SEC001-{i}",
                 file_path="test.py",
                 line_number=i,
