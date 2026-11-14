@@ -142,5 +142,6 @@ UNSCOPED = frozenset(
         "websocket-subprotocol-echo",
         "workflow-job-parse-sweep",
         "workflow-rc-capture",
+        "worker-identity-one-home-21518",  # every tracked non-test .py: an identity can live anywhere (#21518)
     }
 )
