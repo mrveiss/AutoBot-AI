@@ -297,11 +297,7 @@ def violations(workflows: dict[str, dict], cheap=CHEAP, exempt=EXEMPT_JOBS) -> l
     problems = []
     for name, doc in workflows.items():
         jobs = doc.get("jobs") or {}
-        expensive = [
-            j
-            for j, spec in jobs.items()
-            if _in_scope(name, j, spec) and (name, j) not in exempt
-        ]
+        expensive = [j for j, spec in jobs.items() if _in_scope(name, j, spec) and (name, j) not in exempt]
         if name in cheap:
             if len(jobs) != cheap[name]:
                 problems.append(
@@ -399,7 +395,9 @@ def test_control_one_held_job_does_not_excuse_an_unheld_sibling_in_a_workflow():
     problems = violations({"x.yml": {"jobs": {"big": held, "audit": plain}}}, cheap={})
     assert len(problems) == 1 and "'audit'" in problems[0], problems
     assert violations({"x.yml": {"jobs": {"big": held, "audit": held}}}, cheap={}) == []
-    assert violations({"x.yml": {"jobs": {"big": held, "audit": plain}}}, cheap={}, exempt={("x.yml", "audit"): "r"}) == []
+    assert (
+        violations({"x.yml": {"jobs": {"big": held, "audit": plain}}}, cheap={}, exempt={("x.yml", "audit"): "r"}) == []
+    )
 
 
 def test_control_a_cheap_workflow_that_grew_a_job_is_flagged():
