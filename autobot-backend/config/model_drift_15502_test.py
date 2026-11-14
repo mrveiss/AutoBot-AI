@@ -7,11 +7,34 @@
 import copy
 import logging
 
+import pytest
+
+import autobot_shared.embedding_model as em
 from autobot_shared.ssot_config import config
 from config.model_drift import selected_model_drift, warn_on_selected_model_drift
 from config.validation import ValidationMixin
 
 _LOGGER = "config.model_drift"
+
+
+class _Store:
+    """The knowledge store as the override reader sees it: holds no override, or is down."""
+
+    def __init__(self, down: bool = False) -> None:
+        self.down = down
+
+    def get(self, key):
+        if self.down:
+            raise ConnectionError("down")
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _override_store(monkeypatch):
+    """No test here reads the live store or a cache another test warmed (#21523); same convention as #19377."""
+    monkeypatch.setattr(em, "_redis", lambda: _Store())
+    monkeypatch.setattr(em, "_override_cache", None)
+    monkeypatch.setattr(em, "EMBEDDING_OVERRIDE_CACHE_S", 0.0)
 
 
 def _raw(local: str, embedding: str | None = None) -> dict:
@@ -64,3 +87,14 @@ def test_startup_validation_runs_the_drift_check(caplog) -> None:
     with caplog.at_level(logging.WARNING, logger=_LOGGER):
         _Manager().validate_startup()
     assert [r for r in caplog.records if r.name == _LOGGER and "phi3:mini" in r.getMessage()]
+
+
+def test_an_unreadable_override_store_adds_nothing_to_the_drift_log(monkeypatch, caplog) -> None:
+    """The unreadable-store warning belongs to the embedding-model module (pinned in its own test, #19377);
+    the drift check logs only on its own logger, so an agreeing config stays silent there (#21523)."""
+    monkeypatch.setattr(em, "_redis", lambda: _Store(down=True))
+    raw = _raw(config.llm.default_model, config.llm.embedding_model)
+    with caplog.at_level(logging.WARNING):
+        assert warn_on_selected_model_drift(raw) == []
+    assert [r for r in caplog.records if r.name == _LOGGER] == []
+    assert any("override unreadable" in r.getMessage() for r in caplog.records), "the store really was read"
