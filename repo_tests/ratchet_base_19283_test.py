@@ -23,6 +23,7 @@ from repo_tests._ratchet_base import (
     base_text,
     literal_in,
     raised_entries,
+    raised_known_entries,
 )
 
 from autobot_shared.isolated_git import git, make_repo
@@ -227,3 +228,12 @@ def test_the_base_file_being_absent_is_told_from_its_table_being_empty(tmp_path,
     assert base_file_present(repo, ("table.py",)) and base_table(repo, ("table.py",), "E") == {}
     assert base_table(repo, ("table.py",), "T") == {"x.py": 1}
     assert raised_entries({"x.py": 1}, base_table(repo, ("table.py",), "E")) == {"x.py": (None, 1)}
+
+
+def test_a_key_the_base_lacks_is_ignored_and_only_a_known_key_that_rose_is_reported() -> None:
+    base = {"rose": 1, "fell": 5, "same": 3}
+    now = {"rose": 2, "fell": 4, "same": 3, "new": 9}
+    assert raised_known_entries(now, base) == {"rose": (1, 2)}
+    assert raised_known_entries({"new": 9}, base) == {}
+    assert raised_known_entries(now, {}) == {}, "an empty base has no key that could have risen"
+    assert raised_entries({"new": 9}, base) == {"new": (None, 9)}, "the strict comparison still refuses it"

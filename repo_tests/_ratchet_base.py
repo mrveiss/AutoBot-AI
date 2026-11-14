@@ -183,6 +183,17 @@ def added_entries(current: frozenset[str], base: Any) -> list[str]:
     return sorted(current - set(base))
 
 
+def raised_known_entries(now: dict[str, int], base: dict[str, int]) -> dict[str, tuple[int, int]]:
+    """Entries the base already had that rose, ``{key: (base value, now)}``; a key the base lacks is ignored.
+
+    The convention for pins kept in a test file: "a measure the base did not have starts at its first
+    measurement" (#20004). A separate test pins every key to the real measurement, so a new key is already
+    tied to reality; this comparison only guards the keys that existed. Where an added entry must be refused,
+    use :func:`raised_entries`.
+    """
+    return {k: (base[k], v) for k, v in now.items() if k in base and v > base[k]}
+
+
 def raised_entries(now: dict[str, int], base: dict[str, int]) -> dict[str, tuple[int | None, int]]:
     """Entries that rose against the base, ``{key: (base value or None if new, now)}``."""
     return {k: (base.get(k), v) for k, v in now.items() if k not in base or v > base[k]}

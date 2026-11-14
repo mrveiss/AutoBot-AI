@@ -28,7 +28,7 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_file_present, base_table, raised_entries
+from repo_tests._ratchet_base import base_file_present, base_table, raised_known_entries
 from repo_tests._reach import declare
 
 _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src", "autobot-plugins")
@@ -144,5 +144,5 @@ def test_the_pin_was_not_raised_against_the_base() -> None:
     this = ("repo_tests/kit_loading_ratchet_19906_test.py",)
     if not base_file_present(repo_root(), this):
         return  # the guard is new at this base; nothing to compare against yet
-    raised = raised_entries(PINS, base_table(repo_root(), this, "PINS"))
-    assert not raised, f"PINS rose or were added against the base (#19906): {raised}; the pin only goes down."
+    raised = raised_known_entries(PINS, base_table(repo_root(), this, "PINS"))
+    assert not raised, f"PINS rose against the base (#19906): {raised}; the pin only goes down."

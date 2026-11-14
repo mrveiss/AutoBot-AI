@@ -95,11 +95,14 @@ def _why(found: str, remedy: str = _USE_TOKEN) -> str:
 _USE_ON_PRIMARY = f" Use var(--text-on-primary) for a label on a --color-primary fill. See {_ISSUE}."
 
 
-def _base_table(name: str, *, absent_as_empty: bool = False, root: Path | None = None) -> dict:
+def _base_table(name: str, *, root: Path | None = None) -> dict:
     """*name* from the colour baseline at the base commit and the anchor (see base_table)."""
-    return base_table(
-        root or repo_root(), ("repo_tests/_hardcoded_colour_baseline.py",), name, absent_as_empty=absent_as_empty
-    )
+    return base_table(root or repo_root(), ("repo_tests/_hardcoded_colour_baseline.py",), name)
+
+
+def _base_table_or_new(name: str, root: Path | None = None) -> dict:
+    """As `_base_table`, but a table the base does not have yet reads as empty (#21573)."""
+    return base_table(root or repo_root(), ("repo_tests/_hardcoded_colour_baseline.py",), name, absent_as_empty=True)
 
 
 def _base_without_the_table(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -120,7 +123,7 @@ def _site_reading_is_empty_and_a_head_entry_rises(tmp_path: Path, monkeypatch: p
     repo = _base_without_the_table(tmp_path, monkeypatch)
     with pytest.raises(BaseHasNoTable):
         _base_table(name, root=repo)
-    base = _base_table(name, absent_as_empty=True, root=repo)
+    base = _base_table_or_new(name, repo)
     assert base == {}
     assert raised_entries({"a.vue": 1}, base) == {"a.vue": (None, 1)}
 
@@ -527,14 +530,14 @@ class TestWhiteOnPrimaryLabelsOnlyShrink:
         )
 
     def test_no_entry_rose_against_the_base(self):
-        base = _base_table("WHITE_ON_PRIMARY_LABELS", absent_as_empty=True)
+        base = _base_table_or_new("WHITE_ON_PRIMARY_LABELS")
         rose = raised_entries(WHITE_ON_PRIMARY_LABELS, base)
         assert not rose, (
             f"white-on-primary entries raised or added against the base (base, now): {rose}." + _USE_ON_PRIMARY
         )
 
     def test_a_base_without_the_table_reads_empty_and_a_head_entry_rises(self, tmp_path, monkeypatch):
-        """#21573: dropping absent_as_empty at the site above turns this reading into BaseHasNoTable."""
+        """#21573: the site and this control read through `_base_table_or_new`; the strict reading raises."""
         _site_reading_is_empty_and_a_head_entry_rises(tmp_path, monkeypatch, "WHITE_ON_PRIMARY_LABELS")
 
     def test_every_pinned_count_matches_the_tree(self):
@@ -575,14 +578,14 @@ class TestTheControlPlaneColourSweep:
         )
 
     def test_no_entry_rose_against_the_base(self):
-        base = _base_table("SLM_HARDCODED_COLOUR_LITERALS", absent_as_empty=True)
+        base = _base_table_or_new("SLM_HARDCODED_COLOUR_LITERALS")
         rose = raised_entries(SLM_HARDCODED_COLOUR_LITERALS, base)
         assert not rose, (
             f"control-plane colour entries raised or added against the base (base, now): {rose}." + _USE_TOKEN
         )
 
     def test_a_base_without_the_table_reads_empty_and_a_head_entry_rises(self, tmp_path, monkeypatch):
-        """#21573: dropping absent_as_empty at the site above turns this reading into BaseHasNoTable."""
+        """#21573: the site and this control read through `_base_table_or_new`; the strict reading raises."""
         _site_reading_is_empty_and_a_head_entry_rises(tmp_path, monkeypatch, "SLM_HARDCODED_COLOUR_LITERALS")
 
     def test_the_tree_matches_its_baseline(self, measured_slm):

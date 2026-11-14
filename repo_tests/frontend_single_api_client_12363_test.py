@@ -31,7 +31,7 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_file_present, base_table, raised_entries
+from repo_tests._ratchet_base import base_file_present, base_table, raised_known_entries
 from repo_tests._reach import declare
 
 _THIS = "repo_tests/frontend_single_api_client_12363_test.py"
@@ -255,7 +255,7 @@ def test_no_pin_was_raised_against_the_base() -> None:
     assert set(base) <= set(
         PINS
     ), f"apps dropped from PINS: {sorted(set(base) - set(PINS))}; an app's pin only goes down"
-    raised = raised_entries(PINS, base)
+    raised = raised_known_entries(PINS, base)
     assert not raised, f"pins rose against the base (base, now): {raised}; a pin only goes down (#12363)."
 
 
