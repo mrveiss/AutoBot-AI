@@ -418,11 +418,6 @@ python:
   - '.github/workflows/dispatch-generated-types.yml'
   # #21359: `preboard_guard_lane_21359_test.py` reads the pre-board guard lane workflow by concrete literal.
   - '.github/workflows/dispatch-preboard-guards.yml'
-  # #21509: `preboard_own_specs_21509_test.py` reads each frontend package's Vitest config, from which the lane
-  # selects a head's own specs; an edit confined to one must run it.
-  - 'autobot-frontend/vitest.config.ts'
-  - 'autobot-slm-frontend/vitest.config.ts'
-  - 'libs/autobot-ui/vitest.config.ts'
   # #21359: the lane's guard reads `pytest.ini` (testpaths must equal the lane's roots plus the roots it
   # leaves to the suite) and `.test_durations` (covered below); a change confined to either must run it.
   - 'pytest.ini'
