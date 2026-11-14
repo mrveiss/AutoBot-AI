@@ -22,7 +22,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.secrets_audit import audit_secret_op
-from api.secrets_delete_outcome import outcome_for
+from api.secrets_delete_outcome import error_for, outcome_for
 from api.secrets_guarded_delete import guarded_delete
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secrets_vault import VaultRef
@@ -105,6 +105,8 @@ async def delete_as_user(
         )
     except (SecretAccessError, SecretNotFoundError) as exc:
         raise mapped(exc)
+    except PermissionError as exc:  # not a SecretAccessError: the status its audit record implies (#21539)
+        raise error_for(exc) or exc
 
 
 async def delete_as_service(
@@ -130,3 +132,5 @@ async def delete_as_service(
         await audited_delete(request, session, secret_id, dependents=dependents, delete=delete, service=service_id)
     except (SecretAccessError, SecretNotFoundError) as exc:
         raise mapped(exc)
+    except PermissionError as exc:  # not a SecretAccessError: the status its audit record implies (#21539)
+        raise error_for(exc) or exc

@@ -26,8 +26,6 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
-import os
-import socket
 import uuid
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any, AsyncIterator, Dict
@@ -35,7 +33,7 @@ from typing import Any, AsyncIterator, Dict
 from autobot_shared.env_registry import REGISTRY, env
 from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.error_boundaries.types import PassThroughError
-from autobot_shared.leader_lease import LeaderLease
+from autobot_shared.leader_lease import LeaderLease, worker_identity
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value
@@ -177,7 +175,7 @@ class SessionLease:
         self.generation_key = CHAT_LEASE_GENERATION_PREFIX + session_id
         self.owner: asyncio.Task | None = asyncio.current_task()
         self.generation = 0
-        holder = "%s-%d:%s:%s" % (socket.gethostname(), os.getpid(), operation, uuid.uuid4().hex[:8])
+        holder = "%s:%s:%s" % (worker_identity(), operation, uuid.uuid4().hex[:8])
         self._lease = LeaderLease(
             self.key,
             database=CHAT_LEASE_DATABASE,
