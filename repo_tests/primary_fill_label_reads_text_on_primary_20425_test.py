@@ -17,9 +17,9 @@ rule sets ``color`` to a literal white. Not counted: a fill that is another toke
 (``--faildash-on-accent`` and the other per-view on-accent tokens sit on those other fills). The
 other frontend and the kit are out of scope here.
 
-**The pin.** Rules in files held by open pull requests (#20388, #20405, #20401) when this landed, so
-they could not be edited here. Pinned per file and selector, down-only (a pin below the live count is
-stale and fails). Delete an entry when its file is converted.
+**The pin.** The table is empty: every rule is converted. An entry may only ever be added by a
+deliberate, reviewed pin, and entries only shrink. Pinned per file and selector, down-only (a pin
+below the live count is stale and fails). Delete an entry when its file is converted.
 """
 
 from __future__ import annotations
@@ -43,10 +43,9 @@ _WHITE = re.compile(
     re.I,
 )
 
-# Rules in files still held by an open PR (#20478: BacklogView.vue). Delete an entry when its file is converted.
-PINS = {
-    "views/llc/BacklogView.vue :: .btn-primary": 1,
-}
+# Rules not yet converted, shrink-only. Every label now reads the token, so the table is empty and any
+# literal white label on a primary fill fails as new.
+PINS: dict[str, int] = {}
 
 
 def frontend_files(root: Path) -> list[Path]:

@@ -89,6 +89,15 @@ def run_git(
     )
 
 
+def committed_text(commit: str, path: str, *, cwd: str | Path | None = None) -> str:
+    """The text of *path* as committed at *commit* (``git show``), never the working tree (#21535).
+
+    The one reader of committed text for the header checks (the train content gate, the pre-board lane), so they
+    decode alike: invalid UTF-8 becomes U+FFFD instead of raising, which a check on the ASCII top of a file survives.
+    """
+    return run_git(["show", f"{commit}:{path}"], cwd=cwd, check=True, errors="replace").stdout
+
+
 async def start_git(*argv: str, strict: bool = True, **kwargs: Any) -> asyncio.subprocess.Process:
     """Start ``git <argv>`` asynchronously with the git environment scrubbed.
 

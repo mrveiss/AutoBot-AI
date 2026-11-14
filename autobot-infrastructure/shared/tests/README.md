@@ -86,7 +86,7 @@ pytest -m "integration and api"
 
 ## 🔧 Configuration
 
-All tests use **unified_config_manager** - no hardcoded values:
+All tests use **config_manager** - no hardcoded values:
 
 ### conftest.py Fixtures
 

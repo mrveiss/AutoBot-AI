@@ -127,7 +127,7 @@ NARROWLY_COLLECTED = {
         "backend-run: named by pytest.ini's testpaths (line 147) and by "
         "marker-tests.yml's 'marked tests -- infrastructure, libs and frontend' "
         "step (line 341). #15161 repointed this tree's conftest shim, so its "
-        "`from config import unified_config_manager` resolves through "
+        "`from config import config_manager` resolves through "
         "autobot-backend/config/__init__.py's lazy `__getattr__` (line 242) and "
         "the tree collects on its own terms"
     ),

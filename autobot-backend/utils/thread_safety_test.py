@@ -215,9 +215,9 @@ class TestConfigServiceFileLocking:
         """Test that concurrent config saves don't corrupt the real config.yaml.
 
         Issue #13083: the previous version patched ``base_config_file`` on the
-        object returned by ``from config import unified_config_manager``. That
+        object returned by ``from config import config_manager``. That
         works in isolation, but ``ConfigService._save_config_to_file`` reads a
-        module-global name (``services.config_service.unified_config_manager``)
+        module-global name (``services.config_service.config_manager``)
         bound once, at import time, to whatever ``config.__getattr__`` returned
         *then*. If anything ever replaces ``sys.modules["config"]`` later in the
         same process — confirmed here: ``autobot-slm-backend``'s own, unrelated
@@ -227,7 +227,7 @@ class TestConfigServiceFileLocking:
         ``autobot-slm-backend/tests/services/test_token_denylist.py`` with no
         guard and no restore (the cross-backend namespace-collision class
         tracked by #13084) — then a *later* ``from config import
-        unified_config_manager`` resolves to a throwaway MagicMock instead of
+        config_manager`` resolves to a throwaway MagicMock instead of
         the real singleton ``ConfigService`` actually uses. Patching that
         MagicMock's ``base_config_file`` is then silently inert: the redirect
         never takes effect and every concurrent save lands on the developer's
@@ -255,11 +255,11 @@ class TestConfigServiceFileLocking:
         # Patch the real consumer, not a name reachable only via `config`'s
         # module-level __getattr__ (which is exactly what a same-named module
         # elsewhere in the process can silently hijack — see #13084).
-        monkeypatch.setattr(config_service_module, "unified_config_manager", fake_manager)
+        monkeypatch.setattr(config_service_module, "config_manager", fake_manager)
 
         # Fail loudly, before any write, if this seam is ever broken.
-        assert config_service_module.unified_config_manager is fake_manager
-        assert config_service_module.unified_config_manager.base_config_file == test_file
+        assert config_service_module.config_manager is fake_manager
+        assert config_service_module.config_manager.base_config_file == test_file
 
         errors = []
         save_count = {"count": 0}

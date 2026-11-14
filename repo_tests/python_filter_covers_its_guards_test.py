@@ -143,6 +143,30 @@ def _filter_patterns() -> list[str]:
     return [str(pattern) for pattern in document["python"]]
 
 
+def _double_star_covers(path: str, pattern: str) -> bool:
+    """Whether a `<head>/**...` pattern covers *path*.
+
+    A trailing `/**` covers the whole subtree. A remainder after it (`<head>/**/*.json`) covers a
+    path under `<head>` only if the path's trailing segments match the remainder; `**` spans zero or
+    more directories, as in the standard glob reading (agreement with the CI action's matcher on
+    dot-files is not established from the repository).
+    """
+    head, sep, tail = pattern.partition("/**")
+    if not sep or not (path == head or path.startswith(f"{head}/")):
+        return False
+    if tail in ("", "/"):
+        return True
+    if not tail.startswith("/"):
+        return False
+    remainder = tail[1:]
+    rest = path[len(head) + 1 :]
+    if "**" in remainder:
+        return fnmatch.fnmatch(rest, remainder.replace("**/", "*/").replace("**", "*"))
+    count = remainder.count("/") + 1
+    segments = rest.split("/")
+    return len(segments) >= count and fnmatch.fnmatch("/".join(segments[-count:]), remainder)
+
+
 def _is_covered(path: str, patterns: list[str]) -> bool:
     """Whether the filter runs the suite for a change to *path*.
 
@@ -157,8 +181,7 @@ def _is_covered(path: str, patterns: list[str]) -> bool:
     for pattern in patterns:
         if pattern == path:
             return True
-        head, sep, tail = pattern.partition("/**")
-        if sep and (path == head or path.startswith(f"{head}/")):
+        if _double_star_covers(path, pattern):
             return True
         # A pattern with no `**` is single-segment per `*`, as in the real filter: `docs/*.md`
         # must not "cover" `docs/a/b.md` just because fnmatch's `*` crosses `/` (#17930).
@@ -175,6 +198,17 @@ def test_a_leading_double_star_covers_the_repository_root_too() -> None:
     assert _is_covered("Dockerfile.x", ["**/Dockerfile*"])
     assert _is_covered("docker/slm/Dockerfile", ["**/Dockerfile*"])
     assert not _is_covered("notes/Dockerfile.md", ["**/*.Dockerfile"])
+
+
+def test_a_remainder_after_a_double_star_is_matched_not_skipped() -> None:
+    suffixed = ["repo_tests/**/*.json"]
+    assert _is_covered("repo_tests/fixtures/a.json", suffixed)
+    assert _is_covered("repo_tests/a.json", suffixed)
+    assert not _is_covered("repo_tests/fixtures/a.txt", suffixed)
+    assert not _is_covered("repo_tests/a.txt", suffixed)
+    assert not _is_covered("repo_tests/dir.json/a.txt", suffixed)
+    assert _is_covered("repo_tests/fixtures/a.txt", ["repo_tests/**"])
+    assert _is_covered("repo_tests/a.json", ["repo_tests/**"])
 
 
 def _record(candidate: str, guard: str, patterns: list[str], reads: dict[str, set[str]]) -> None:

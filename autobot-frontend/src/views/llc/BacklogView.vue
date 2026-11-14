@@ -472,7 +472,7 @@ onMounted(() => {
   gap: 0.375rem;
   padding: 0.5rem 1rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: 0.375rem;
   font-size: var(--text-sm);
