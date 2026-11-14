@@ -33,7 +33,11 @@ _JOB = "precommit-config"
 _FIXER_HOOK = "insert-license"
 _SPDX_STEP = "Enforce SPDX"
 _RUNS_PRECOMMIT = re.compile(r"\bpre-commit run\b")
-_RESTORES = re.compile(r"\bgit restore\b(?=.*--source=HEAD)(?=.*--staged)(?=.*--worktree)")
+#: Flags in any order, then a pathspec that means the whole tree from the root: `.` (the workflow's form) or `:/`.
+#: A narrower pathspec, or none, restores less than every file a fixer may have rewritten.
+_RESTORES = re.compile(
+    r"^\s*git restore\b(?=.*--source=HEAD)(?=.*--staged)(?=.*--worktree).*\s--\s+(?:\.|:/)\s*$", re.MULTILINE
+)
 
 
 def _code(step: dict[str, Any]) -> str:
@@ -46,7 +50,8 @@ def runs_precommit(step: dict[str, Any]) -> bool:
 
 
 def restores_tree(step: dict[str, Any]) -> bool:
-    return bool(_RESTORES.search(_code(step)))
+    """A whole-tree restore that runs from the repository root: a `working-directory` would shrink `-- .`."""
+    return not step.get("working-directory") and bool(_RESTORES.search(_code(step)))
 
 
 def _restored_after(steps: list[dict[str, Any]], index: int) -> bool:
@@ -131,3 +136,29 @@ def test_contrast_a_restore_with_a_different_condition_is_refused() -> None:
     assert unrestored([run, same]) == []
     assert unrestored([run, {**same, "if": "success()"}]) == ["run"]
     assert unrestored([run, {k: v for k, v in same.items() if k != "if"}]) == ["run"]
+
+
+_RESTORE = "git restore --source=HEAD --staged --worktree"
+
+
+@pytest.mark.parametrize("pathspec", ["-- .", "-- :/"])
+def test_contrast_a_whole_tree_pathspec_passes(pathspec) -> None:
+    assert restores_tree(_step("r", f"{_RESTORE} {pathspec}"))
+
+
+@pytest.mark.parametrize("pathspec", ["-- README.md", "-- autobot-backend/", "-- ./docs", "", "-- . README.md"])
+def test_contrast_a_narrower_or_missing_pathspec_is_refused(pathspec) -> None:
+    assert not restores_tree(_step("r", f"{_RESTORE} {pathspec}".rstrip()))
+
+
+def test_contrast_a_restore_that_sets_a_working_directory_is_refused() -> None:
+    step = {**_step("r", f"{_RESTORE} -- ."), "working-directory": "autobot-backend"}
+    assert not restores_tree(step)
+    assert restores_tree({**step, "working-directory": ""})
+
+
+def test_the_job_runs_from_the_repository_root(steps) -> None:
+    job = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))["jobs"][_JOB]
+    assert "working-directory" not in job
+    assert "working-directory" not in job.get("defaults", {}).get("run", {})
+    assert all(not step.get("working-directory") for step in steps if runs_precommit(step) or restores_tree(step))
