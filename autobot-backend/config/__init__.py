@@ -174,11 +174,11 @@ def __getattr__(name: str):
     if name in ("ConfigManager", "get_config_manager"):
         return _lazy_import_manager()[name]
 
-    if name in ("config_manager", "unified_config_manager"):
+    if name == "config_manager":
         return _get_cached_config_manager()
 
     # Backward compatibility aliases
-    if name in ("global_config_manager", "config", "cfg"):
+    if name in ("config", "cfg"):
         return _get_cached_config_manager()
 
     # Settings
@@ -257,12 +257,9 @@ __all__ = [
     "ConfigManager",
     "config_manager",
     "get_config_manager",
-    # Deprecated alias (remove after one release cycle)
-    "unified_config_manager",
     # Settings
     "ConfigSettings",
     # Backward compatibility aliases
-    "global_config_manager",
     "config",
     "cfg",
     # Convenience functions

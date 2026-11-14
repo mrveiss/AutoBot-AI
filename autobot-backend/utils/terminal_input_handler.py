@@ -43,7 +43,7 @@ _ENUMERATED_RANGE = re.compile(r"\(\s*(\d+)\s*(?:-\s*\d+\s*)?\)")
 
 # Import configuration for fallback defaults
 try:
-    from config import unified_config_manager
+    from config import config_manager
 
     _config_available = True
 except ImportError:
@@ -54,7 +54,7 @@ def _get_config_default(key: str, fallback: str) -> str:
     """Get configuration value with fallback."""
     if _config_available:
         try:
-            return str(unified_config_manager.get_config_section("terminal_input", {}).get(key, fallback))
+            return str(config_manager.get_config_section("terminal_input", {}).get(key, fallback))
         except Exception:
             return fallback
     return fallback
