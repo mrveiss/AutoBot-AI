@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests._ratchet_base import (
+    BaseHasNoTable,
     BaseUnavailable,
     added_entries,
     base_commit,
@@ -178,3 +179,39 @@ def test_an_emptied_frozenset_table_reads_as_the_empty_set() -> None:
 def test_added_entries_reports_only_additions_and_treats_a_missing_table_as_all_added() -> None:
     assert added_entries(frozenset({"a", "b"}), frozenset({"a", "c"})) == ["b"]
     assert added_entries(frozenset({"a"}), {}) == ["a"]
+
+
+def test_a_base_without_the_table_is_its_own_error_and_reads_empty_only_on_request(tmp_path, monkeypatch) -> None:
+    """#21573: 'the base has no such table' is a typed signal; callers never match its text."""
+    repo, _ = _history(tmp_path, "OTHER = {'x.py': 1}\n", "OTHER = {'x.py': 1}\nT = {'x.py': 5}\n")
+    _ci(monkeypatch)
+    with pytest.raises(BaseHasNoTable, match="no literal T = "):
+        base_table(repo, ("table.py",), "T")
+    assert issubclass(BaseHasNoTable, BaseUnavailable), "a caller catching BaseUnavailable keeps working"
+    assert base_table(repo, ("table.py",), "T", absent_as_empty=True) == {}
+    assert raised_entries({"x.py": 5}, base_table(repo, ("table.py",), "T", absent_as_empty=True)) == {
+        "x.py": (None, 5)
+    }
+
+
+def test_an_unresolvable_base_is_not_the_no_table_signal_even_when_empty_is_requested(tmp_path, monkeypatch) -> None:
+    repo, _ = _history(tmp_path, "T = {'x.py': 1}\n")
+    _ci(monkeypatch, base_sha="1" * 40)
+    with pytest.raises(BaseUnavailable, match="AUTOBOT_RATCHET_BASE_SHA") as caught:
+        base_table(repo, ("table.py",), "T", absent_as_empty=True)
+    assert not isinstance(caught.value, BaseHasNoTable)
+
+
+def test_a_base_without_the_file_still_reads_empty_and_a_present_table_is_unchanged(tmp_path, monkeypatch) -> None:
+    repo, _ = _history(tmp_path, "T = {'x.py': 700}\n", "T = {'x.py': 700}\n")
+    _ci(monkeypatch)
+    assert base_table(repo, ("absent.py",), "T") == {}
+    assert base_table(repo, ("absent.py",), "T", absent_as_empty=True) == {}
+    assert base_table(repo, ("table.py",), "T", absent_as_empty=True) == {"x.py": 700}
+
+
+def test_a_base_file_that_does_not_parse_still_raises_with_empty_requested(tmp_path, monkeypatch) -> None:
+    repo, _ = _history(tmp_path, "T = {\n", "T = {\n")
+    _ci(monkeypatch)
+    with pytest.raises(SyntaxError):
+        base_table(repo, ("table.py",), "T", absent_as_empty=True)

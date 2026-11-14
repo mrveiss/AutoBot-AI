@@ -54,6 +54,14 @@ class BaseUnavailable(RuntimeError):
     """The base commit (or a file at it) could not be read; the ratchet refuses to judge."""
 
 
+class BaseHasNoTable(BaseUnavailable):
+    """The base file was read, but holds no ``NAME = ...`` table: the table is new at this head (#21573).
+
+    Only this case reads as an empty table (``base_table(..., absent_as_empty=True)``); an unreadable
+    base is the parent error and is never an empty table.
+    """
+
+
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-C", str(root), *args], capture_output=True, text=True, timeout=60, env=scrubbed_git_env()
@@ -136,18 +144,29 @@ def literal_in(source: str, name: str) -> object:
             if isinstance(value, ast.Call) and getattr(value.func, "id", "") == "frozenset" and len(value.args) <= 1:
                 return frozenset(ast.literal_eval(value.args[0]) if value.args else ())
             return ast.literal_eval(value)
-    raise BaseUnavailable(f"no literal {name} = ... in the base source")
+    raise BaseHasNoTable(f"no literal {name} = ... in the base source")
 
 
-def base_table(root: Path, rels: tuple[str, ...], name: str) -> Any:
+def base_table(root: Path, rels: tuple[str, ...], name: str, *, absent_as_empty: bool = False) -> Any:
     """The literal *name* at the base: the ratchet's reference.
 
     *rels* is the table's path, then any path it had before a move; the first one the base has
     is read. A base with none of them gives ``{}``, so every entry reads as an addition.
+
+    A base file that exists but has no *name* table raises :class:`BaseHasNoTable`; with
+    *absent_as_empty* it gives ``{}`` instead, so a table introduced by this change is compared
+    against nothing and every entry reads as a rise. Every other failure still raises.
     """
     sha = base_commit(root)
     src = next((s for s in (base_text(root, rel, sha) for rel in rels) if s is not None), None)
-    return literal_in(src, name) if src is not None else {}
+    if src is None:
+        return {}
+    try:
+        return literal_in(src, name)
+    except BaseHasNoTable:
+        if absent_as_empty:
+            return {}
+        raise
 
 
 def added_entries(current: frozenset[str], base: Any) -> list[str]:

@@ -45,7 +45,7 @@ from repo_tests._hardcoded_colour_detect import (
     white_on_primary_in,
 )
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import BaseUnavailable, base_table, raised_entries
+from repo_tests._ratchet_base import base_table, raised_entries
 
 
 @pytest.fixture(scope="module")
@@ -93,9 +93,9 @@ def _why(found: str, remedy: str = _USE_TOKEN) -> str:
 _USE_ON_PRIMARY = f" Use var(--text-on-primary) for a label on a --color-primary fill. See {_ISSUE}."
 
 
-def _base_table(name: str) -> dict:
+def _base_table(name: str, *, absent_as_empty: bool = False) -> dict:
     """*name* from the colour baseline at the base commit and the anchor (see base_table)."""
-    return base_table(repo_root(), ("repo_tests/_hardcoded_colour_baseline.py",), name)
+    return base_table(repo_root(), ("repo_tests/_hardcoded_colour_baseline.py",), name, absent_as_empty=absent_as_empty)
 
 
 class TestTheDetectorWorksBeforeItsOutputIsRead:
@@ -500,16 +500,16 @@ class TestWhiteOnPrimaryLabelsOnlyShrink:
         )
 
     def test_no_entry_rose_against_the_base(self):
-        try:
-            base = _base_table("WHITE_ON_PRIMARY_LABELS")
-        except BaseUnavailable as err:
-            if "no literal WHITE_ON_PRIMARY_LABELS" not in str(err):
-                raise
-            pytest.skip("the table is introduced by #20425, so the base has none; this arms once it lands")
+        base = _base_table("WHITE_ON_PRIMARY_LABELS", absent_as_empty=True)
         rose = raised_entries(WHITE_ON_PRIMARY_LABELS, base)
         assert not rose, (
             f"white-on-primary entries raised or added against the base (base, now): {rose}." + _USE_ON_PRIMARY
         )
+
+    def test_a_head_entry_over_an_empty_base_is_a_rise(self):
+        """#21573: a base with no table reads as empty, so the comparison runs and every entry is a rise."""
+        assert raised_entries({"a.vue": 1}, {}) == {"a.vue": (None, 1)}
+        assert set(raised_entries(WHITE_ON_PRIMARY_LABELS, {})) == set(WHITE_ON_PRIMARY_LABELS)
 
     def test_every_pinned_count_matches_the_tree(self):
         measured = _scan_white_on_primary(repo_root())
@@ -549,16 +549,16 @@ class TestTheControlPlaneColourSweep:
         )
 
     def test_no_entry_rose_against_the_base(self):
-        try:
-            base = _base_table("SLM_HARDCODED_COLOUR_LITERALS")
-        except BaseUnavailable as err:
-            if "no literal SLM_HARDCODED_COLOUR_LITERALS" not in str(err):
-                raise
-            pytest.skip("the table is introduced by #17567, so the base has none; this arms once it lands")
+        base = _base_table("SLM_HARDCODED_COLOUR_LITERALS", absent_as_empty=True)
         rose = raised_entries(SLM_HARDCODED_COLOUR_LITERALS, base)
         assert not rose, (
             f"control-plane colour entries raised or added against the base (base, now): {rose}." + _USE_TOKEN
         )
+
+    def test_a_head_entry_over_an_empty_base_is_a_rise(self):
+        """#21573: a base with no table reads as empty, so the comparison runs and every entry is a rise."""
+        assert raised_entries({"a.vue": 1}, {}) == {"a.vue": (None, 1)}
+        assert set(raised_entries(SLM_HARDCODED_COLOUR_LITERALS, {})) == set(SLM_HARDCODED_COLOUR_LITERALS)
 
     def test_the_tree_matches_its_baseline(self, measured_slm):
         assert measured_slm == SLM_HARDCODED_COLOUR_LITERALS, (

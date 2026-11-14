@@ -31,7 +31,7 @@ from repo_tests._hardcoded_colour_detect import (
     white_class_on_primary_in,
 )
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import BaseUnavailable, base_table, raised_entries
+from repo_tests._ratchet_base import base_table, raised_entries
 
 _ISSUE = "https://github.com/mrveiss/AutoBot-AI/issues/21543"
 _USE_TOKEN = f" Use text-autobot-text-on-primary for a label on bg-autobot-primary. See {_ISSUE}."
@@ -42,12 +42,7 @@ _TABLE = "WHITE_ON_PRIMARY_CLASS_LABELS"
 
 def _base_class_table() -> dict[str, int]:
     """The table at the base; ``{}`` when the base has no such table yet. An unreadable base still raises."""
-    try:
-        return base_table(repo_root(), ("repo_tests/_hardcoded_colour_baseline.py",), _TABLE)
-    except BaseUnavailable as err:
-        if f"no literal {_TABLE}" not in str(err):
-            raise
-        return {}
+    return base_table(repo_root(), ("repo_tests/_hardcoded_colour_baseline.py",), _TABLE, absent_as_empty=True)
 
 
 def _rose_against_base(now: dict[str, int], base: dict[str, int]) -> dict[str, tuple[int | None, int]]:
