@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
+from autobot_shared.after_commit import defer_until_commit
 from autobot_shared.git_probe import run_git
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
@@ -321,7 +322,8 @@ async def release_for_task(
     Steps:
       1. Locate the AgentRuntimeState row whose current_task_id matches task_id.
       2. Null out workspace_dir and flush within the caller's transaction.
-      3. Run the filesystem release (git worktree remove) in a thread-pool executor.
+      3. Run the filesystem release (git worktree remove) in a thread-pool executor, once the caller's
+         transaction commits: a rollback keeps the row naming the workspace, so the directory must still be there.
 
     Best-effort: any error is logged as a warning and swallowed so the caller's
     status transition is never blocked by workspace cleanup.
@@ -339,13 +341,18 @@ async def release_for_task(
         state.workspace_dir = None
         await session.flush()
 
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(
-            None,
-            lambda: release_workspace(task_id, repo_root=repo_root, keep_on_failure=True),
+        defer_until_commit(
+            session, lambda: _remove_worktree(task_id, repo_root), f"remove the worktree of task {task_id}"
         )
     except Exception:
         logger.warning("release_for_task failed for task=%s", task_id, exc_info=True)
+
+
+async def _remove_worktree(task_id: str, repo_root: Optional[Path]) -> None:
+    """The filesystem half of :func:`release_for_task`, off the event loop."""
+    await asyncio.get_running_loop().run_in_executor(
+        None, lambda: release_workspace(task_id, repo_root=repo_root, keep_on_failure=True)
+    )
 
 
 # ---------------------------------------------------------------------------
