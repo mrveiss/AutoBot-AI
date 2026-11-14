@@ -553,3 +553,23 @@ def test_main_human_stdout_is_the_literal_report(capsys: pytest.CaptureFixture[s
         "\n"  # print() added a second newline after the report's own; sys.stdout.write keeps it
     )
     assert capsys.readouterr().out == expected
+
+
+def test_main_file_issues_caps_dedupes_and_keeps_stdout_order(capsys: pytest.CaptureFixture[str]) -> None:
+    """Old path: dedupe against open issues, cap with --max-issues, then `filed #N` lines, then the report."""
+    findings = [
+        audit.Finding(file=f"autobot-backend/m{n}.py", tracker=n, tracker_state="CLOSED", production_callers=0)
+        for n in (1, 2, 3)
+    ]
+    filed = {2: 900, 3: 901}  # tracker 1 is already filed (deduped); cap=2 keeps trackers 2 and 3
+    with (
+        patch.object(audit, "scan", return_value=findings),
+        patch.object(audit, "existing_audit_issues_by_tracker", return_value={1}),
+        patch.object(audit, "file_discovery_issue", side_effect=lambda f: filed[f.tracker]),
+        patch.object(sys, "argv", ["audit", "--file-issues", "--json", "--max-issues", "2"]),
+    ):
+        assert audit.main() == 1
+    assert capsys.readouterr().out == (
+        "filed #900 for autobot-backend/m2.py (tracker #2)\n"
+        "filed #901 for autobot-backend/m3.py (tracker #3)\n" + audit.render_json(findings) + "\n"
+    )

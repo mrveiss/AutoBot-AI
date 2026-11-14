@@ -495,7 +495,8 @@ P2 — closure-verification process gap, blocks credibility of "closed" tracker 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=True)
     except subprocess.SubprocessError as e:
-        logger.warning("failed to file issue for %s: %s", finding.file, e)
+        # flood_exempt: one line per failed finding (up to --max-issues per run); the flood guard would drop the 6th+.
+        logger.warning("failed to file issue for %s: %s", finding.file, e, extra={"flood_exempt": True})
         return None
     # gh issue create prints the URL; extract the trailing issue number
     m = re.search(r"/issues/(\d+)", result.stdout)
@@ -524,8 +525,9 @@ def _file_new_issues(findings: list[Finding], max_issues: int) -> None:
     already_filed = existing_audit_issues_by_tracker()
     new = [f for f in findings if f.tracker not in already_filed]
     capped = new[:max_issues]
+    # WARNING, not INFO: INFO goes to stdout, which carries the report; WARNING goes to stderr.
     logger.warning(
-        "findings=%d  new=%d  filing=%d  deduped=%d  cap-deferred=%d",
+        "findings=%d new=%d  filing=%d  deduped=%d  cap-deferred=%d",
         len(findings),
         len(new),
         len(capped),
