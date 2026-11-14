@@ -13,6 +13,7 @@ Routes:
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from typing import Any, Dict, List, Optional, Union
 
@@ -27,7 +28,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET, current_claude_model
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
-from llc.deps import assert_company_access, service_dep
+from llc.deps import assert_company_access, log_unexpected, service_dep
 from llc.services.agent_hire_service import (
     AgentHirePending,
     HirePayload,
@@ -210,13 +211,10 @@ def _validated_default_cron() -> str:
         # prevent -- `get_next()` is what raises CroniterBadDateError.
         croniter(raw).get_next()
     except Exception as exc:
-        logger.error(
-            "AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON=%r is not a valid cron (%s); "
-            "falling back to %r so hired agents are schedulable",
-            raw,
-            safe_log_text(repr(exc)),
-            _FALLBACK_HEARTBEAT_CRON,
+        headline = (
+            "AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON is not a valid cron; falling back so hired agents are schedulable"
         )
+        log_unexpected(logger, "agent_hires.default_heartbeat_cron", exc, headline=headline, level=logging.ERROR)
         return _FALLBACK_HEARTBEAT_CRON
     return raw
 
@@ -287,7 +285,7 @@ async def _fetch_agent_config(
         if row and row[0]:
             return dict(row[0]) if isinstance(row[0], dict) else {}
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not fetch adapter_config for agent %r: %s", agent_id, safe_log_text(repr(exc)))
+        log_unexpected(logger, f"agent_hires.adapter_config {agent_id}", exc)
     return None
 
 
@@ -304,7 +302,7 @@ async def _fetch_company_model_overrides(
         if row and row[0]:
             return dict(row[0]) if isinstance(row[0], dict) else None
     except Exception as exc:  # noqa: BLE001
-        logger.debug("Could not fetch company model_tier_overrides for %r: %s", company_id, exc)
+        log_unexpected(logger, f"agent_hires.model_tier_overrides {company_id}", exc)
     return None
 
 
@@ -378,7 +376,7 @@ async def create_agent_hire(
         )
         await session.commit()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not persist hire record (table may not exist): %s", safe_log_text(repr(exc)))
+        log_unexpected(logger, "agent_hires.persist_hire_record", exc)
         await session.rollback()
 
     return AgentHireRead(
@@ -413,7 +411,7 @@ async def list_agent_hires(
         )
         rows = result.fetchall()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("llc_agent_hires table not available: %s", safe_log_text(repr(exc)))
+        log_unexpected(logger, "agent_hires.hire_table", exc)
         return []
 
     return [

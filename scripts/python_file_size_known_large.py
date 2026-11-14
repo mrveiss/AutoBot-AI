@@ -234,7 +234,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/tags.py": 834,
     "autobot-backend/knowledge_sync_incremental.py": 867,
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
-    "autobot-backend/llc/api/companies.py": 1595,
+    "autobot-backend/llc/api/companies.py": 1594,
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1211,
     "autobot-backend/llc/api/work_items.py": 1284,  # #18978: 1302 -> 1287; #19582: comment wake moved into the service

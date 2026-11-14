@@ -128,6 +128,14 @@ def http_refusal(status_code: int, exc: BaseException, *, scope: str) -> HTTPExc
     """
     public = getattr(exc, "public_detail", None)
     if isinstance(public, str):
+        if public != str(exc):  # a redacted class: the dropped detail (ids, remedy) still reaches the log
+            logger.info(
+                "Refused %s with %s: %s: %s",
+                status_code,
+                sanitize_log_value(scope),
+                type(exc).__name__,
+                safe_log_text(exc),
+            )
         return HTTPException(status_code=status_code, detail=public)
     logger.warning(
         "Refused %s with %s: %s: %s",

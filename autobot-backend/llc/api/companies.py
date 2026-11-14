@@ -41,12 +41,11 @@ from api.user_management.dependencies import (
     require_org_context,
 )
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
 from llc.api._common import http_refusal
 from llc.api.company_member_schemas import CompanyMembersResponse
-from llc.deps import assert_company_access, get_session, logged_server_error, service_dep
+from llc.deps import assert_company_access, get_session, log_unexpected, logged_server_error, service_dep
 from llc.kb.collections import KbCollectionManager, company_id_of
 from llc.models.company import CompanyAncestor, CompanyCreate, CompanyRead, CompanyTreeNode, CompanyUpdate
 from llc.models.enums import (
@@ -638,7 +637,7 @@ async def test_pm_config(
         health = await _test_pm_connectivity(pm_type, pm_config)
     except Exception as exc:
         # #17300: str(exc) to the caller leaked the decrypted pm_config URL and its credentials.
-        logger.warning("PM connectivity test failed for %s: %s", pm_type, safe_log_text(repr(exc)))
+        log_unexpected(logger, f"companies.test_pm_config {pm_type}", exc)
         return {"ok": False, "error": "Connectivity test failed; see server logs"}
     return {"ok": health.get("ok", False), "details": health}
 

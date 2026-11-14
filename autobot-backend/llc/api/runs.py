@@ -238,10 +238,12 @@ async def get_agent_diary(
 
         diary = AgentDiaryService()
         entries = await diary.read(agent_name=agent_id, last_n=limit + offset)
-    except Exception:
+    except Exception as exc:
         import logging
 
-        logging.getLogger(__name__).warning("get_agent_diary: KB read failed for agent_id=%s", agent_id, exc_info=True)
+        from llc.deps import log_unexpected
+
+        log_unexpected(logging.getLogger(__name__), f"runs.get_agent_diary {agent_id}", exc)
         return []
 
     if date_from or date_to:

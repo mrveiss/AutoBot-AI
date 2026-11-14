@@ -41,7 +41,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.user_management.models.user import resolve_display_name
-from llc.deps import assert_company_access, get_session, service_dep
+from llc.deps import assert_company_access, get_session, log_unexpected, service_dep
 from models.agent_org import AgentOrgNode
 from security.upload_filename_policy import require_safe_upload
 from user_management.models.user import User
@@ -519,8 +519,8 @@ async def _drop_kb_collection(work_item_id: str) -> None:
 
     try:
         await KbCollectionManager().drop_collection(KbCollectionManager.WORK_ITEM_PREFIX, work_item_id)
-    except Exception:  # noqa: BLE001 - defensive; drop_collection does not raise
-        logger.warning("Could not drop KB collection for work item %s", work_item_id, exc_info=True)
+    except Exception as exc:  # noqa: BLE001 - defensive; drop_collection does not raise
+        log_unexpected(logger, f"work_items.drop_kb_collection {work_item_id}", exc)
 
 
 @router.post("/{work_item_id}/checkout")

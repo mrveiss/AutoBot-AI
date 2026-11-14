@@ -79,3 +79,19 @@ def test_a_non_string_public_detail_is_ignored() -> None:
     exc = ValueError(_LEAKY)
     exc.public_detail = 5  # type: ignore[attr-defined]
     assert _common.http_refusal(400, exc, scope="test.scope").detail == "Invalid request"
+
+
+class _Redacted(ValueError):
+    @property
+    def public_detail(self) -> str:
+        return "Cannot run"
+
+
+def test_a_public_exception_whose_detail_differs_from_its_message_logs_the_message_at_info(caplog) -> None:
+    with caplog.at_level(logging.INFO):
+        got = _common.http_refusal(409, _Redacted(f"agent a-42 cannot run: {_LEAKY}"), scope="tests.redacted")
+    assert got.detail == "Cannot run"
+    assert "_Redacted" in caplog.text
+    assert "agent a-42 cannot run" in caplog.text
+    assert _MARKER not in caplog.text
+    assert [r.levelno for r in caplog.records] == [logging.INFO]

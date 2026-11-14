@@ -47,6 +47,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from llc.deps import get_session
 from llc.deps import load_owned_project as _load_owned_project
+from llc.deps import log_unexpected
 from user_management.services import TenantContext
 
 from ..models.enums import ApprovalType, SprintStatus, WorkItemRelationType, WorkItemStatus
@@ -907,8 +908,8 @@ async def delete_sprint(
         from llc.kb.collections import KbCollectionManager  # noqa: PLC0415
 
         await KbCollectionManager().drop_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
-    except Exception:  # noqa: BLE001 - defensive; drop_collection does not raise
-        logger.warning("Could not drop KB collection for sprint %s", sprint_id, exc_info=True)
+    except Exception as exc:  # noqa: BLE001 - defensive; drop_collection does not raise
+        log_unexpected(logger, f"sprints.drop_kb_collection {sprint_id}", exc)
 
 
 @router.post("/sprints/{sprint_id}/close", response_model=SprintResponse)
