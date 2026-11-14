@@ -18,6 +18,12 @@ import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlFor
 // Create scoped logger for useWebSocket
 const logger = createLogger('useWebSocket')
 
+/** Tells a close of the live socket from a close of a replaced one. */
+export interface WebSocketCloseInfo {
+  /** True when the closed socket is the one the composable currently holds. */
+  current: boolean
+}
+
 export interface UseWebSocketOptions {
   /**
    * Auto-connect on mount
@@ -103,9 +109,11 @@ export interface UseWebSocketOptions {
   onError?: (event: Event) => void
 
   /**
-   * Callback when connection closes
+   * Callback when connection closes. Also called for a socket that disconnect() or a newer
+   * connect() already replaced; `info.current` is false for that stale close, so a caller that
+   * keeps its own connection state must ignore it (#21548).
    */
-  onClose?: (event: CloseEvent) => void
+  onClose?: (event: CloseEvent, info: WebSocketCloseInfo) => void
 }
 
 // `protocols` stays optional: Required<> would strip the `undefined` its type
@@ -345,7 +353,7 @@ export function useWebSocket(
 
         logger.info('Closed:', { code: event.code, reason: event.reason })
         // Still delivered for a detached socket: callers use it to learn that their own disconnect() took effect.
-        opts.onClose(event)
+        opts.onClose(event, { current })
 
         if (current) reconnectAfterClose(event)
       }

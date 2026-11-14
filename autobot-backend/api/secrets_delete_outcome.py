@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, status
 
 from autobot_shared.logging_manager import get_logger
 from services.audit_logger import AuditResult
@@ -55,6 +55,29 @@ def outcome_for(exc: BaseException) -> tuple[AuditResult, str]:
     return "failed", type(exc).__name__
 
 
+#: The HTTP error each recorded reason implies: (status, fixed body). The texts are the main route's own and carry
+#: no exception message, secret name or value. Keyed by the reason ``outcome_for`` returns, so the record and the
+#: response are read from one classification and cannot drift (#21539).
+_ERROR_FOR_REASON: dict[str, tuple[int, str]] = {
+    "not_found": (status.HTTP_404_NOT_FOUND, "Secret not found"),
+    "permission_denied": (status.HTTP_403_FORBIDDEN, "Internal server error"),
+}
+
+
+def error_for(exc: BaseException) -> HTTPException | None:
+    """The HTTP error a non-HTTP delete failure is answered with, or None to keep the caller's behaviour.
+
+    Not found is 404 and permission denied is 403, the status the audit record of the same failure implies.
+    An ``HTTPException`` already carries its status, so it is never rewritten here.
+    """
+    if isinstance(exc, HTTPException):
+        return None
+    mapped = _ERROR_FOR_REASON.get(outcome_for(exc)[1])
+    if mapped is None:
+        return None
+    return HTTPException(status_code=mapped[0], detail=mapped[1])
+
+
 async def record_delete_failure(
     audit: Audit, secret_id: str, request: Request, exc: Exception, *, intent_recorded: bool
 ) -> HTTPException:
@@ -69,7 +92,8 @@ async def record_delete_failure(
     await audit("DELETE", secret_id, request, result, reason=reason)
     if isinstance(exc, HTTPException):
         return exc
-    if isinstance(exc, PermissionError):
-        return HTTPException(status_code=403, detail="Internal server error")
+    known = error_for(exc)
+    if known is not None:
+        return known
     logger.error("Failed to delete secret: %s", type(exc).__name__)
     return HTTPException(status_code=500, detail="Failed to delete secret")
