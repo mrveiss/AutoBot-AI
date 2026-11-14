@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { effectScope } from 'vue'
-import { AbsoluteEndpointError, HttpError } from '@autobot/ui'
+import { AbsoluteEndpointError, HttpError, RequestTimeoutError } from '@autobot/ui'
 import type { DashboardLayout } from '../dashboardLayoutModel'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), delete: vi.fn() }))
@@ -184,7 +184,7 @@ describe('useDashboardLayout load retry', () => {
 
   it.each([
     ['a fetch network failure', () => new TypeError('Failed to fetch')],
-    ['the client timeout, built as the client builds it', () => new Error('Request timeout after 30000ms')],
+    ['the client timeout, built as the client builds it', () => new RequestTimeoutError(30000)],
     ['a 5xx', () => new HttpError(504, 'Gateway Timeout')],
   ])('retries %s', async (_kind, makeError) => {
     api.get.mockRejectedValueOnce(makeError()).mockResolvedValueOnce(STORED_BODY)
@@ -199,6 +199,7 @@ describe('useDashboardLayout load retry', () => {
   it.each([
     ['a body that is not JSON (SyntaxError)', () => new SyntaxError('Unexpected token < in JSON')],
     ['an unknown error', () => new Error('boom')],
+    ['a plain Error with the timeout text (the class, not the text, decides)', () => new Error('Request timeout after 30000ms')],
     ['an error merely named like a circuit refusal', () => Object.assign(new Error('open'), { name: 'CircuitBreakerError' })],
   ])('does not retry %s', async (_kind, makeError) => {
     api.get.mockRejectedValue(makeError())
