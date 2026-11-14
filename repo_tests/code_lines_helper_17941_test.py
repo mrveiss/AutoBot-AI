@@ -212,3 +212,16 @@ def test_a_block_comment_marker_inside_a_string_is_data() -> None:
     text = code_text('const s = "not /* a comment */ really"\nconst c = 3\n', name="x.ts")
     assert "really" in text, "a block marker inside a string literal was treated as a comment"
     assert "const c = 3" in text
+
+
+def test_an_apostrophe_in_a_line_comment_does_not_open_a_string_that_hides_later_globs() -> None:
+    """The #21509 defect: `worker's` in a `//` comment swallowed the `/**/` of every later glob."""
+    source = (
+        "// the worker's stdout, and a stray /* opener\n"
+        "const g = ['src/**/*.spec.ts'] // don't\n"
+        "const after = 1 /* real */\n"
+    )
+    text = code_text(source, name="x.ts", strip_trailing=True)
+    assert "'src/**/*.spec.ts'" in text, f"the glob was eaten: {text!r}"
+    assert "const after = 1" in text and "real" not in text, text
+    assert "worker" not in text and "don't" not in text

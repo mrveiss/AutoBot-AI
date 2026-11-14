@@ -185,11 +185,11 @@ def guards_status(needs_result: str, problems: list[str], counts: dict[str, int]
     return "success_with_skips" if counts["allowed_skips"] else "success"
 
 
-def lane_verdict(guards: str, types: str, own_tests: str, added_headers: str) -> str:
+def lane_verdict(guards: str, types: str, own_tests: str, added_headers: str, own_specs: str) -> str:
     """``cancelled`` beats everything; ``green_with_skips`` is never reported as ``green``."""
-    if "cancelled" in (guards, types, own_tests, added_headers):
+    if "cancelled" in (guards, types, own_tests, added_headers, own_specs):
         return "cancelled"
-    other_jobs = (types, own_tests, added_headers)
+    other_jobs = (types, own_tests, added_headers, own_specs)
     if guards not in ("success", "success_with_skips") or any(result != "success" for result in other_jobs):
         return "red"
     return "green" if guards == "success" else "green_with_skips"
@@ -248,6 +248,7 @@ def build_result(env: dict[str, str], shard_dir: Path, types_dir: Path) -> dict[
     types = needs["types"]["result"]
     own_tests = needs.get("own-tests", {}).get("result", "missing")  # absent from the needs: never a green
     added_headers = needs.get("added-headers", {}).get("result", "missing")  # likewise
+    own_specs = needs.get("own-specs", {}).get("result", "missing")  # likewise
     return {
         "schema": SCHEMA_VERSION,
         "run_id": env.get("RUN_ID", ""),
@@ -257,13 +258,14 @@ def build_result(env: dict[str, str], shard_dir: Path, types_dir: Path) -> dict[
         "base_sha": pinned,
         "behind_base": facts["behind_base"],
         "merged": facts["merged"],
-        "overall": lane_verdict(guards["status"], types, own_tests, added_headers),
+        "overall": lane_verdict(guards["status"], types, own_tests, added_headers, own_specs),
         "roots": facts["roots"],
         "checks": {
             "guards": guards,
             "types": {"status": types},
             "own_tests": {"status": own_tests},
             "added_headers": {"status": added_headers},
+            "own_specs": {"status": own_specs},
         },
         "failed_tests": total["failed"],
         "skipped_tests": total["skipped"],
@@ -299,6 +301,8 @@ def render_lane_summary(result: dict[str, Any]) -> str:
         f"| types | {result['checks']['types']['status']} |",
         f"| own tests (the test files this head adds or changes) | {result['checks']['own_tests']['status']} |",
         f"| license header on every added file | {result['checks']['added_headers']['status']} |",
+        "| own specs (the frontend spec files this head adds or changes) | "
+        f"{result['checks']['own_specs']['status']} |",
         "",
         f"Skips by class: {classes}. `covered-by-suite-only` is still exercised by the train's suite; "
         "`equivalent-to-suite` is skipped there too.",
