@@ -21,8 +21,8 @@ def manager() -> KnowledgeOwnership:
     return KnowledgeOwnership(redis_client=object())
 
 
-def viewer(user_id: str = ALICE, company: str | None = TENANT_A, admin: bool = False, superadmin: bool = False):
-    return Viewer(user_id, company, (), superadmin, AdminReadLedger() if (admin or superadmin) else False)
+def viewer(user_id: str = ALICE, company: str | None = TENANT_A, admin: bool = False):
+    return Viewer(user_id, company, (), AdminReadLedger() if admin else False)
 
 
 async def client_with(records: Dict[str, List[tuple]]) -> AsyncInMemoryClient:

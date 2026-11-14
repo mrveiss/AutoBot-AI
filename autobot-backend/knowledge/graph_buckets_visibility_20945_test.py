@@ -91,7 +91,8 @@ def test_record_page_skips_a_non_admin_viewer():
 
 
 @pytest.mark.asyncio
-async def test_an_admin_of_one_tenant_sees_nothing_of_another_tenant():
+async def test_an_admin_reads_other_units_and_unit_less_records_in_every_bucket_kind_and_it_is_recorded():
+    """No graph-only unit rule: ``check_access`` lets an admin read everything, so the graph does too (#20945)."""
     records = {
         "company:tenant-a": [("a1", {})],
         "company:tenant-b": [("b1", {})],
@@ -99,30 +100,36 @@ async def test_an_admin_of_one_tenant_sees_nothing_of_another_tenant():
         "project:p-a": [("pa", {"company_id": TENANT_A})],
         "project:p-b": [("pb", {"company_id": TENANT_B})],
         "work_item:w-none": [("wn", {})],
+        "agent:x": [("ag", {"company_id": TENANT_B})],
         "trajectories": [
             ("ta", {"user_id": BOB, "tenant_id": TENANT_A}),
             ("tb", {"user_id": BOB, "tenant_id": TENANT_B}),
+            ("tn", {"user_id": BOB}),
         ],
     }
-    built = await _build(records, viewer("admin-a", TENANT_A, admin=True))
-    seen = repr(built)
-    for hidden in ("tenant-b", "p-b", "w-none", "'pb'", "'tb'", "b1", "b2"):
-        assert hidden not in seen, f"tenant A's admin must not see {hidden}"
-    assert _ids(built, "company") == ["a1"] and _ids(built, "project") == ["pa"] and _ids(built, "research") == ["ta"]
+    who = viewer("admin-a", TENANT_A, admin=True)
+    built = await _build(records, who, limit=10)
+    assert _ids(built, "company") == ["a1", "b1", "b2"]
+    assert (
+        _ids(built, "project") == ["pa", "pb"] and _ids(built, "work_item") == ["wn"] and _ids(built, "agent") == ["ag"]
+    )
+    assert _ids(built, "research") == ["ta", "tb", "tn"]
+    assert len(who.ledger.fact_ids) == 10, "every record of the returned page is in the admin-read ledger"
+    assert "bucket:company:tenant-b:b2" in who.ledger.fact_ids and "bucket:trajectories:tn" in who.ledger.fact_ids
 
 
 @pytest.mark.asyncio
-async def test_a_superadmin_crosses_tenants_and_is_audited():
-    who = viewer("root", TENANT_A, superadmin=True)
-    built = await _build({"company:tenant-b": [("b1", {})], "project:p-b": [("pb", {"company_id": TENANT_B})]}, who)
-    assert _totals(built) == {"company": (1, 1, False), "project": (1, 1, False)}
-    assert sorted(who.ledger.fact_ids) == ["bucket:company:tenant-b:b1", "bucket:project:p-b:pb"]
+async def test_an_admin_without_a_unit_sees_the_per_entity_buckets_too():
+    who = viewer("admin-x", None, admin=True)
+    built = await _build({"company:tenant-a": [("a1", {})], "project:p": [("p1", {})]}, who)
+    assert _ids(built, "company") == ["a1"] and _ids(built, "project") == ["p1"]
+    assert sorted(who.ledger.fact_ids) == ["bucket:company:tenant-a:a1", "bucket:project:p:p1"]
 
 
 @pytest.mark.asyncio
-async def test_an_admin_without_a_tenant_sees_no_per_entity_bucket():
-    built = await _build({"company:tenant-a": [("a1", {})]}, viewer("admin-x", None, admin=True))
-    assert built["sections"] == []
+async def test_a_non_admin_still_cannot_read_another_owners_record_of_the_same_unit_or_a_unit_less_one():
+    records = {"trajectories": [("mine", _MINE), ("theirs", _THEIRS), ("nobody", {"k": "v"})]}
+    assert _ids(await _build(records, viewer()), "research") == ["mine"]
 
 
 @pytest.mark.asyncio

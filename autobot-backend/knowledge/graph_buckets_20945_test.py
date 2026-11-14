@@ -101,7 +101,7 @@ async def test_caches_and_empty_collections_make_no_section():
 async def test_per_entity_buckets_are_admin_only():
     client = await _client_with({"company:c1": 2, "project:p1": 1, "work_item:w1": 1, "autobot_docs": 1})
     non_admin = {s["key"] for s in (await build_bucket_sections(client, viewer(), manager()))["sections"]}
-    admin = {s["key"] for s in (await build_bucket_sections(client, viewer(superadmin=True), manager()))["sections"]}
+    admin = {s["key"] for s in (await build_bucket_sections(client, viewer(admin=True), manager()))["sections"]}
     assert non_admin == {"docs"}
     assert admin == {"docs", "company", "project", "work_item"}
 

@@ -26,7 +26,6 @@ from knowledge.graph_bucket_visibility import (
     PUBLIC,
     TENANT_ADMIN,
     Viewer,
-    collection_in_scope,
     record_page,
     visible_records,
 )
@@ -211,9 +210,6 @@ async def _section_rows(
     rows: List[Tuple[str, str, Dict[str, Any]]] = []
     truncated = exhausted = failed = False
     for name in names:
-        if not collection_in_scope(section.access, name, viewer):
-            continue
-
         decided: Dict[str, bool] = {}  # code-source decisions of this scan, shared by its windows
 
         async def readable(window: list, name: str = name, decided: Dict[str, bool] = decided) -> list:

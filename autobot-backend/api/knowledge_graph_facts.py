@@ -17,7 +17,6 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List
 
 from constants.threshold_constants import CategoryDefaults
-from knowledge.graph_bucket_visibility import within_admin_tenant
 from knowledge.graph_limits import GRAPH_RAW_SCAN_BUDGET, GRAPH_SCAN_LIMIT, SCAN_BATCH
 from knowledge.root_read import AdminReadLedger
 from knowledge.search_filters import filter_search_results_by_permission
@@ -50,14 +49,9 @@ def decode_fact_metadata(raw_fact: Dict[str, Any]) -> Dict[str, Any]:
     return decoded if isinstance(decoded, dict) else {}
 
 
-def _fact_in_tenant(fact: Dict[str, Any], user_org_id: str | None, is_admin: Any, is_superadmin: bool) -> bool:
-    """An admin bypass is bound to the caller's tenant; only a superadmin crosses tenants (#20945)."""
-    return within_admin_tenant(fact.get("metadata") or {}, bool(is_admin), is_superadmin, user_org_id)
-
-
 async def _readable_batch(kb: Any, category_filter: str | None, offset: int, size: int, who: tuple) -> tuple:
     """One raw batch of facts: ``(scan advance, more listing remains, readable facts)``."""
-    user_id, user_org_id, user_group_ids, is_admin, is_superadmin = who
+    user_id, user_org_id, user_group_ids, is_admin = who
     if category_filter:
         # get_facts_in_category's facts carry metadata JSON-encoded, unlike kb.search()'s decoded results (#16665)
         result = await kb.get_facts_in_category(
@@ -74,7 +68,6 @@ async def _readable_batch(kb: Any, category_filter: str | None, offset: int, siz
         category_of = lambda fact: (fact.get("metadata") or {}).get("category", CategoryDefaults.GENERAL)  # noqa: E731
         facts = [{**fact, "id": fact.get("fact_id"), "category": category_of(fact)} for fact in raw]
         advance, more = len(raw), len(raw) >= size
-    facts = [f for f in facts if _fact_in_tenant(f, user_org_id, is_admin, is_superadmin)]
     readable = await filter_search_results_by_permission(
         facts,
         user_id=user_id,
@@ -171,7 +164,6 @@ async def visible_facts_page(
     user_org_id: str | None,
     user_group_ids: List[str],
     is_admin: Any,
-    is_superadmin: bool = False,
     cursor: str | None = None,
 ) -> FactsPage:
     """The page of facts *user_id* may read, with the visible total (#16665: filtered before counted).
@@ -180,7 +172,7 @@ async def visible_facts_page(
     Without one, the first ``GRAPH_SCAN_LIMIT`` records are scanned and, when the cap cut the listing short,
     the returned ``cursor`` continues after them.
     """
-    who = (user_id, user_org_id, user_group_ids, is_admin, is_superadmin)
+    who = (user_id, user_org_id, user_group_ids, is_admin)
     if cursor:
         page = await _page_from_cursor(kb, category_filter, max_facts, who, cursor)
     else:

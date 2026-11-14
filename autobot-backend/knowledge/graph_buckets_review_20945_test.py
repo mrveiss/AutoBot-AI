@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Review findings of the knowledge-graph buckets: tenant, quarantine, stored names, sources, scan edges (#20945)."""
+"""Review findings of the knowledge-graph buckets: admin facts, quarantine, stored names, sources, scan edges (#20945)."""
 
 from unittest.mock import AsyncMock, patch
 
@@ -10,7 +10,6 @@ import pytest
 from fastapi import HTTPException
 
 from api.knowledge_graph_facts import visible_facts_page
-from knowledge.graph_bucket_visibility import collection_in_scope
 from knowledge.graph_buckets import build_bucket_sections, section_for
 from knowledge.graph_limits import SCAN_BATCH
 from knowledge.root_read import AdminReadLedger
@@ -33,12 +32,15 @@ def _tenant_fact(fact_id, owner, tenant):
 
 
 @pytest.mark.asyncio
-async def test_a_tenant_admin_does_not_read_another_tenants_facts_but_a_superadmin_does():
-    kb = ListingKB([_tenant_fact("mine", "bob", TENANT_A), _tenant_fact("theirs", "bob", TENANT_B)])
-    admin = await visible_facts_page(kb, None, 10, 0, "adm", TENANT_A, [], AdminReadLedger())
-    root = await visible_facts_page(kb, None, 10, 0, "root", TENANT_A, [], AdminReadLedger(), True)
-    assert [f["fact_id"] for f in admin.facts] == ["mine"] and admin.total == 1
-    assert root.total == 2
+async def test_an_admin_reads_facts_of_every_unit_and_unit_less_ones_and_a_non_admin_none_of_another_owners():
+    unit_less = fact("none", "bob")
+    kb = ListingKB([_tenant_fact("mine", "bob", TENANT_A), _tenant_fact("theirs", "bob", TENANT_B), unit_less])
+    ledger = AdminReadLedger()
+    admin = await visible_facts_page(kb, None, 10, 0, "adm", TENANT_A, [], ledger)
+    plain = await visible_facts_page(kb, None, 10, 0, "alice", TENANT_A, [], False)
+    assert [f["fact_id"] for f in admin.facts] == ["mine", "theirs", "none"] and admin.total == 3
+    assert ledger.fact_ids == ["mine", "theirs", "none"], "every fact the admin was shown is in the admin-read ledger"
+    assert plain.facts == [] and plain.total == 0, "another owner's private facts stay hidden from a non-admin"
 
 
 @pytest.mark.asyncio
@@ -91,13 +93,6 @@ def test_the_stored_chromadb_names_match_their_sections():
     assert section_for("work_item_abc").key == "work_item"
     assert section_for("platform_template_kb").key == "memory"
     assert section_for("companyx") is None
-
-
-def test_a_stored_company_collection_of_another_tenant_is_out_of_scope():
-    admin = viewer(admin=True)
-    assert collection_in_scope("tenant_admin", f"company_{TENANT_A}", admin)
-    assert not collection_in_scope("tenant_admin", f"company_{TENANT_B}", admin)
-    assert not collection_in_scope("tenant_admin", f"company_{TENANT_B}_agents", admin)
 
 
 @pytest.mark.asyncio
