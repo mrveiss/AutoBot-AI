@@ -44,7 +44,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
 from llc.api.company_member_schemas import CompanyMembersResponse
-from llc.deps import assert_company_access, get_session, service_dep
+from llc.deps import assert_company_access, get_session, logged_server_error, service_dep
 from llc.kb.collections import KbCollectionManager, company_id_of
 from llc.models.company import (
     CompanyAncestor,
@@ -1546,11 +1546,7 @@ async def search_agents(
 
         return {"agents": agents, "count": len(agents), "query": q}
     except Exception as e:
-        logger.exception("Agent search failed for company %s: %s", company_id, str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Agent search failed: {str(e)}",
-        )
+        raise logged_server_error(logger, "Agent search failed", f"company {company_id}", e) from e
 
 
 # Export endpoints (GH#8245)

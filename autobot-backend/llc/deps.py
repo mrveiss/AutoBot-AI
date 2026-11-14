@@ -33,6 +33,7 @@ Usage::
 
 from __future__ import annotations
 
+import logging
 import threading
 import uuid
 from typing import Any, AsyncGenerator, Callable, Set, Type, TypeVar
@@ -41,12 +42,19 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.singleton_factory import lazy_singleton
 from llc.models.sprint import LLCProject
 from user_management.database import get_async_session_factory
 from user_management.services import TenantContext
 
+logger = get_logger(__name__)
+
 _T = TypeVar("_T")
+
+# Fixed caller-facing text for a failed membership lookup; the cause is logged, never returned.
+MEMBERSHIP_LOOKUP_FAILED_DETAIL = "Membership lookup failed"
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
@@ -121,6 +129,16 @@ def _build_dep(service_cls: Type[_T]) -> Callable[[], _T]:
     return _dep
 
 
+def logged_server_error(log: logging.Logger, detail: str, scope: str, exc: Exception) -> HTTPException:
+    """500 carrying only the fixed *detail*; the cause goes to *log* through ``safe_log_text`` (#21396).
+
+    Exception text can hold driver messages and connection targets, so it never
+    reaches the response body.
+    """
+    log.error("%s for %s: %s: %s", detail, scope, type(exc).__name__, safe_log_text(exc))
+    return HTTPException(status_code=500, detail=detail)
+
+
 async def require_board_role(
     company_id: uuid.UUID,
     current_user: dict,
@@ -145,7 +163,7 @@ async def require_board_role(
             None,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Membership lookup failed: {exc}") from exc
+        raise logged_server_error(logger, MEMBERSHIP_LOOKUP_FAILED_DETAIL, f"company {company_id}", exc) from exc
 
     if role not in allowed_roles:
         raise HTTPException(status_code=403, detail=detail)
