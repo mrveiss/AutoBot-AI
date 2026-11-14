@@ -28,6 +28,9 @@ UNSCOPED = frozenset(
         # #19982: every tracked non-changelog file, since the product name can be misspelled into an
         # edition in any component; the population is the whole tree, so no prefix describes it.
         "autobot-has-no-pro-name",
+        # #21526: every tracked .py and .md file outside changelogs and archives, since a removed alias name
+        # can be written in any component; the population is the whole tree by suffix, not a set of prefixes.
+        "unified-config-aliases-gone",
         # #21048: every tracked file, since an automatic caller of the KB setup script could live in any
         # component; the population is the whole tree, so no prefix describes it.
         "kb-wipe-never-invoked",
