@@ -33,6 +33,8 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests.branch_sync_19548_test import HEAD_SHA, REPO, Api, Runner, bs, core
 
+from tools.lint._comment_syntax import code_lines
+
 PR = 21578
 BRANCH = "issue-1-x"
 _WORKFLOW = repo_root() / ".github" / "workflows" / "sync-branches-with-main.yml"
@@ -62,6 +64,8 @@ def git(*, local: str = HEAD_SHA, behind: str = "0", parent: str = HEAD_SHA, pus
             (("rev-parse", "HEAD^"), (0, parent)),
             (("rev-parse", "--verify", "--quiet", f"origin/{BRANCH}"), (0, local)),
             (("rev-list", "--count"), (0, behind)),
+            # The real push argv starts with the `-c` token pair (push_auth), so "push" is not its prefix.
+            (("-c",), push),
             (("push",), push),
         ]
     )
@@ -309,11 +313,8 @@ def test_control_the_sync_merge_message_does_carry_a_skip_form_and_the_check_wou
 
 @pytest.mark.skipif(shutil.which("grep") is None, reason="grep -E is the rule's own matcher")
 def test_the_message_passes_the_repo_commit_subject_rule() -> None:
-    rule = [
-        line
-        for line in (repo_root() / "scripts" / "lib" / "commit-subject.ere").read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    ]
+    path = repo_root() / "scripts" / "lib" / "commit-subject.ere"
+    rule = [line.text for line in code_lines(path, name="rule.sh") if line.text.strip()]
     assert len(rule) == 1
     for pattern, text in ((rule[0], core.start_ci_message(PR)), ("#[0-9]{3,}", core.start_ci_message(PR))):
         assert subprocess.run(["grep", "-qE", pattern], input=text, text=True).returncode == 0, pattern
