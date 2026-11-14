@@ -10,7 +10,7 @@ SSOT Migration (Issue #602):
     This service now integrates with the SSOT configuration system.
     Network constants and other values are sourced from ssot_config.py.
 
-UPDATED: Now uses unified_config_manager for consistent model selection
+UPDATED: Now uses config_manager for consistent model selection
 """
 
 import fcntl
@@ -36,7 +36,7 @@ BACKEND_HOST_IP = _ssot.vm.main if _ssot else NetworkConstants.MAIN_MACHINE_IP
 BACKEND_PORT = _ssot.port.backend if _ssot else NetworkConstants.BACKEND_PORT
 HTTP_PROTOCOL = "http"
 REDIS_HOST_IP = _ssot.vm.redis if _ssot else NetworkConstants.REDIS_VM_IP
-from config import unified_config_manager
+from config import config_manager
 
 logger = get_logger(__name__)
 
@@ -318,8 +318,8 @@ class ConfigService:
         logger.debug("Refreshing configuration cache")
 
         try:
-            full_config = unified_config_manager.to_dict()
-            llm_config = unified_config_manager.get_llm_config()
+            full_config = config_manager.to_dict()
+            llm_config = config_manager.get_llm_config()
 
             def get(path, default=None):
                 return ConfigService._get_nested_from_dict(full_config, path, default)
@@ -343,7 +343,7 @@ class ConfigService:
         """Get current LLM configuration using unified config system"""
         try:
             logger.info("UNIFIED CONFIG SERVICE: Getting LLM configuration")
-            return unified_config_manager.get_llm_config()
+            return config_manager.get_llm_config()
         except Exception as e:
             logger.error("Error getting LLM config: %s", str(e))
             raise
@@ -366,7 +366,7 @@ class ConfigService:
         settings from the frontend. Intentionally left unconverged.
         """
         try:
-            task_transport_config = unified_config_manager.get("task_transport", {})
+            task_transport_config = config_manager.get("task_transport", {})
             redis_config = task_transport_config.get("redis", {})
 
             # Use SSOT for defaults
@@ -394,21 +394,21 @@ class ConfigService:
             if "ollama" in config_data and "model" in config_data["ollama"]:
                 model_name = config_data["ollama"]["model"]
                 logger.info(f"UNIFIED CONFIG SERVICE: Updating Ollama model to: {model_name}")
-                unified_config_manager.update_llm_model(model_name)
+                config_manager.update_llm_model(model_name)
 
             # Handle other LLM configuration updates
             if "local" in config_data and "selected_model" in config_data["local"]:
                 model_name = config_data["local"]["selected_model"]
                 logger.info(f"UNIFIED CONFIG SERVICE: Updating local model to: {model_name}")
-                unified_config_manager.update_llm_model(model_name)
+                config_manager.update_llm_model(model_name)
 
             # Handle legacy format updates (Issue #380: use module-level frozenset)
             for key, value in config_data.items():
                 if key not in _LLM_PROVIDER_KEYS:
-                    unified_config_manager.set_nested(f"llm_config.{key}", value)
+                    config_manager.set_nested(f"llm_config.{key}", value)
 
             # Save all changes
-            unified_config_manager.save_settings()
+            config_manager.save_settings()
 
             # Clear cache to force fresh load on next access
             ConfigService.clear_cache()
@@ -427,7 +427,7 @@ class ConfigService:
         """Update Redis configuration"""
         try:
             # Load current config
-            current_config = unified_config_manager.to_dict()
+            current_config = config_manager.to_dict()
 
             # Update task transport configuration
             if "task_transport" not in current_config:
@@ -466,7 +466,7 @@ class ConfigService:
             ConfigService._save_config_to_file(filtered_config)
 
             # Reload the global config manager
-            unified_config_manager.reload()
+            config_manager.reload()
 
             logger.info("Updated Redis configuration: %s", config_data)
             return {
@@ -516,7 +516,7 @@ class ConfigService:
             ConfigService._save_config_to_file(filtered_config)
 
             # Reload the global config manager to pick up changes
-            unified_config_manager.reload()
+            config_manager.reload()
 
             # Clear cache to force fresh load on next access
             ConfigService.clear_cache()
@@ -534,7 +534,7 @@ class ConfigService:
     def get_backend_settings() -> Metadata:
         """Get backend-specific settings from config.yaml"""
         try:
-            return unified_config_manager.get("backend", {})
+            return config_manager.get("backend", {})
         except Exception as e:
             logger.error("Error loading backend settings: %s", str(e))
             raise
@@ -544,7 +544,7 @@ class ConfigService:
         """Update backend-specific settings in config.yaml"""
         try:
             # Load current config
-            current_config = unified_config_manager.to_dict()
+            current_config = config_manager.to_dict()
 
             # Update backend settings
             current_config["backend"] = backend_settings
@@ -563,7 +563,7 @@ class ConfigService:
             ConfigService._save_config_to_file(filtered_config)
 
             # Reload the global config manager
-            unified_config_manager.reload()
+            config_manager.reload()
 
             # Clear cache to force fresh load on next access
             ConfigService.clear_cache()
@@ -591,7 +591,7 @@ class ConfigService:
             del filtered_config["prompts"]
 
         # Use the same dynamic path resolution as the config manager
-        config_file_path = unified_config_manager.base_config_file
+        config_file_path = config_manager.base_config_file
         config_file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Issue #481: Use thread lock + file lock for safe concurrent writes
