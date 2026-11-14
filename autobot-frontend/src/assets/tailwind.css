@@ -41,6 +41,7 @@
   --color-autobot-primary-light: var(--color-primary-light);
   --color-autobot-primary-dark: var(--color-primary-dark);
   --color-autobot-primary-bg: var(--color-primary-bg);
+  --color-autobot-text-on-primary: var(--text-on-primary);
   --color-autobot-secondary: var(--color-secondary);
   --color-autobot-secondary-hover: var(--color-secondary-hover);
   --color-autobot-secondary-light: var(--color-secondary-light);
