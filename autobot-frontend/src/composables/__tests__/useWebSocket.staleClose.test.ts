@@ -128,6 +128,17 @@ describe('useWebSocket when a detached socket reports back (#21530)', () => {
     expect(onClose.mock.calls[0][0].code).toBe(1000)
   })
 
+  it('tells the caller the replaced socket is no longer current (#21548)', () => {
+    const onClose = vi.fn()
+    const socket = setup({ autoReconnect: false, onClose })
+    const { stale } = replaceSocket(socket)
+
+    stale.simulateClose(1000)
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onClose.mock.calls[0][1]).toEqual({ current: false })
+  })
+
   describe('contrast: the CURRENT socket\'s close', () => {
     it('resets the flags and schedules a reconnect', async () => {
       const socket = setup()
@@ -143,6 +154,18 @@ describe('useWebSocket when a detached socket reports back (#21530)', () => {
       expect(MockWebSocket.getAllInstances()).toHaveLength(1)
       await vi.advanceTimersByTimeAsync(PAST_BACKOFF_MS)
       expect(MockWebSocket.getAllInstances()).toHaveLength(2)
+    })
+
+    it('tells the caller the closed socket is current (#21548)', () => {
+      const onClose = vi.fn()
+      const socket = setup({ autoReconnect: false, onClose })
+      socket.connect()
+      const first = MockWebSocket.getLatestInstance()!
+
+      first.simulateClose(1000)
+
+      expect(onClose).toHaveBeenCalledTimes(1)
+      expect(onClose.mock.calls[0][1]).toEqual({ current: true })
     })
 
     it('cancels its own connection timeout', async () => {

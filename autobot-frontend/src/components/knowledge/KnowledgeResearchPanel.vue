@@ -98,8 +98,8 @@ const {
     isResearching.value = false
     stopScreenshotPolling()
   },
-  onClose: () => {
-    if (isResearching.value) {
+  onClose: (_event, info) => {
+    if (info.current && isResearching.value) {
       isResearching.value = false
       stopScreenshotPolling()
       statusText.value = t('knowledge.research.statusDisconnected')
