@@ -331,6 +331,7 @@ DECLARED_SCOPES = {
     "pr-comment-upsert-sweep": (".github/workflows", "scripts", "tools", "pipeline-scripts", "autobot_shared"),
     "sync-command-result-mapping-scan": ("autobot-backend",),
     "one-claim-model-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "one-compare-and-delete-script": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "direct-secrets-service-callers": ("autobot-backend", "autobot_shared"),
     "data-db-path-production-python": ("autobot-backend", "autobot_shared"),
     "jekyll-processed-docs": ("docs",),

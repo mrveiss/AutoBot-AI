@@ -38,7 +38,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.human_decider import require_interactive_human
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.user_management.models.user import resolve_display_name
 from llc.deps import assert_company_access, get_session, service_dep
@@ -180,7 +179,7 @@ class CheckoutRequest(BaseModel):
 
 
 class ReleaseRequest(BaseModel):
-    agent_id: str
+    agent_id: FenceSafeAgentId
 
 
 class TransitionRequest(BaseModel):
@@ -568,6 +567,8 @@ async def release_work_item(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    """Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one. Not enforced: that
+    the caller IS that agent, nor that an item held by a person has no agent to match (open, #20521)."""
     # IDOR guard (M4/GH#9861).
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
@@ -575,9 +576,6 @@ async def release_work_item(
     try:
         item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id)
         await session.commit()
-        redis = await get_async_redis_client()
-        if redis is not None:
-            await redis.delete(f"llc:checkout:{work_item_id}")
         return await _item_to_dict(item, session)
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
