@@ -45,6 +45,31 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
   const hasCompanies = computed(() => companies.value.length > 0)
 
   /**
+   * Drop a persisted selection the backend reports gone (#21531).
+   *
+   * The list is narrower than "exists": it holds only ROOT companies and hides ARCHIVED ones, so
+   * a selected subsidiary or archived company is absent from it although the route names it.
+   * Absence is therefore probed by id, and the selection is cleared only on HTTP 404 (missing, or
+   * not the caller's: the backend answers both with 404). Any other failure (network, 5xx, 403)
+   * proves nothing about the company, so the selection stays. The probed company is not added to
+   * ``companies``: the selector must not start listing archived or subsidiary entries.
+   */
+  async function dropSelectionIfGone(): Promise<void> {
+    const id = selectedCompanyId.value
+    if (!id || companies.value.some((c) => c.id === id)) return
+    try {
+      await useApiClient().get(`${COMPANIES_ENDPOINT}${encodeURIComponent(id)}`, orgScope(id))
+    } catch (err) {
+      // A selection switched while the probe was in flight is someone else's; leave it.
+      if (isHttpError(err) && err.status === 404 && selectedCompanyId.value === id) {
+        selectedCompanyId.value = ''
+        return
+      }
+      logger.warn('company probe failed; keeping the selection:', err)
+    }
+  }
+
+  /**
    * Load the company list from the backend (parsed JSON, no envelope).
    *
    * #12212: ARCHIVED companies are hidden by default; pass
@@ -62,13 +87,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
         : COMPANIES_ENDPOINT
       const resp = await api.get<LlcCompany[]>(endpoint)
       companies.value = Array.isArray(resp) ? resp : []
-      // Drop a persisted selection that no longer exists on the backend.
-      if (
-        selectedCompanyId.value &&
-        !companies.value.some((c) => c.id === selectedCompanyId.value)
-      ) {
-        selectedCompanyId.value = ''
-      }
+      await dropSelectionIfGone()
     } catch (err) {
       const message = err instanceof Error ? err.message : ''
       // HTTP 503 = LLC data layer disabled in this deployment (no company mode).
