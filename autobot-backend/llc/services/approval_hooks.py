@@ -21,11 +21,14 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.approval_four_eyes import FourEyesError
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from models.approval import Approval
 from services.agent_org_service import AgentOrgService
 from services.approval_execution import review_decision
 
+from ..exceptions import PublicMessageMixin
 from ..models.activity import ActorType
 from ..models.budget import TOKEN_LIMIT_MAX, TOKEN_LIMIT_MIN, LLCAgentBudget
 from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType
@@ -38,8 +41,12 @@ logger = get_logger(__name__)
 _activity_log = LLCActivityLogService()
 
 
-class ApprovalHookError(Exception):
-    """The action behind an approval cannot be applied; the decision must not be recorded."""
+class ApprovalHookError(PublicMessageMixin, Exception):
+    """The action behind an approval cannot be applied; the decision must not be recorded.
+
+    Public: the messages are written here. A refusal wrapping another exception states a fixed text and
+    logs the cause where it is caught, so no wrapped message reaches the caller.
+    """
 
 
 class BudgetOverridePayload(BaseModel):
@@ -180,7 +187,8 @@ async def _sprint_close_approved(session: AsyncSession, approval: Approval, deci
             session, sprint_id=ask.sprint_id, approval_id=approval.id, decided_by=decided_by
         )
     except ValueError as exc:
-        raise ApprovalHookError(str(exc)) from exc
+        logger.warning("Sprint close refused for approval %s: %s", approval.id, safe_log_text(exc))
+        raise ApprovalHookError("the sprint cannot be closed in its current state") from exc
     return {"sprint_id": str(ask.sprint_id)}
 
 
@@ -221,8 +229,11 @@ async def review_decider(
         return await require_four_eyes(
             approval, session, decided_by, what=f"a {approval.approval_type}", unidentified_requester_ok=True
         )
-    except ValueError as exc:
+    except FourEyesError as exc:  # an author template: "<what> needs a different <who> than the one who asked"
         raise ApprovalHookError(str(exc)) from exc
+    except ValueError as exc:
+        logger.warning("Approval %s refused at review: %s", approval.id, safe_log_text(exc))
+        raise ApprovalHookError("this decision is not permitted on this approval") from exc
 
 
 async def run_post_decision_hook(

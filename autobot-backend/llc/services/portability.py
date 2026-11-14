@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.security.redaction import safe_log_text
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.models.enums import ActivityEventType, LLCCompanyStatus
 from llc.models.export import LLCExportArtifact
@@ -24,6 +25,7 @@ from llc.services.portability_export import PortabilityExportMixin, _scrub_adapt
 from llc.services.portability_import import _PLACEHOLDER_RE, PortabilityImportMixin
 from user_management.models.organization import Organization
 
+from ..exceptions import PublicMessageMixin
 from .activity_log import LLCActivityLogService
 from .actor import resolve_actor
 from .base import LLCServiceBase
@@ -40,12 +42,16 @@ _EXPORT_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 # ---------------------------------------------------------------------------
 
 
-class ImportNeedsApprovalError(Exception):
+class ImportNeedsApprovalError(PublicMessageMixin, Exception):
     """The template would add agents to an existing company that gates hires (#8214)."""
 
 
-class TemplateImportError(Exception):
-    """Raised when import cannot proceed (schema, collision, rollback)."""
+class TemplateImportError(PublicMessageMixin, Exception):
+    """Raised when import cannot proceed (schema, collision, rollback).
+
+    Public: every raise site is a fixed text or names a value the caller supplied. A rollback never carries
+    the wrapped cause's text; the cause is logged where it is caught.
+    """
 
 
 class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServiceBase):
@@ -277,7 +283,8 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
             await sp.commit()
         except Exception as exc:
             await sp.rollback()
-            raise TemplateImportError(f"Import rolled back: {exc}") from exc
+            logger.warning("Template import rolled back: %s: %s", type(exc).__name__, safe_log_text(exc))
+            raise TemplateImportError("Import rolled back") from exc
 
         return {
             "company_id": str(company_id),
