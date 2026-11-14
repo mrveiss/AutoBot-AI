@@ -42,7 +42,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from autobot_shared.git_probe import run_git  # noqa: E402
-from tools.lint.check_spdx_header import has_header, in_scope  # noqa: E402
+from tools.lint.check_spdx_header import lacks_header  # noqa: E402
 
 MEMBER_MERGE = re.compile(r"^Merge #(\d+) @ [0-9a-f]{7,40}\b")
 #: Bringing main into the train adds no member: "Merge main into ...", "Merge branch 'main' into ...".
@@ -113,7 +113,7 @@ def _added_lines(base: str, head: str, path: str) -> list[str]:
 
 def _lacks_header(commit: str, path: str) -> bool:
     """True when *path* is in the header check's scope and its committed text at *commit* has no header."""
-    return in_scope(Path(path)) and not has_header(_git("show", f"{commit}:{path}"))
+    return lacks_header(Path(path), lambda: _git("show", f"{commit}:{path}"))
 
 
 def _survival_loss(base: str, head: str, path: str, merge: str, report: ContentReport) -> str | None:
