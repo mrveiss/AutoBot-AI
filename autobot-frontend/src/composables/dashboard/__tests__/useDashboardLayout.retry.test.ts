@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { effectScope } from 'vue'
-import { HttpError } from '@autobot/ui'
+import { AbsoluteEndpointError, HttpError } from '@autobot/ui'
 import type { DashboardLayout } from '../dashboardLayoutModel'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), delete: vi.fn() }))
@@ -135,5 +135,50 @@ describe('useDashboardLayout load retry', () => {
     await Promise.all([first, second])
     expect(api.get).toHaveBeenCalledTimes(2)
     expect(d.loaded.value).toBe(true)
+  })
+
+  it('retrying is false before, true during the wait, false after success', async () => {
+    api.get.mockRejectedValueOnce(new HttpError(503, 'x')).mockResolvedValueOnce(STORED_BODY)
+    const d = useDashboardLayout('home', DEFAULTS, OPTS)
+    expect(d.retrying.value).toBe(false)
+    const done = d.load()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(d.retrying.value).toBe(true)
+    await vi.advanceTimersByTimeAsync(1000)
+    await done
+    expect(d.retrying.value).toBe(false)
+  })
+
+  it('retrying is false again once the retries are exhausted', async () => {
+    api.get.mockRejectedValue(new HttpError(503, 'x'))
+    const d = useDashboardLayout('home', DEFAULTS, OPTS)
+    const done = d.load()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(d.retrying.value).toBe(true)
+    await vi.advanceTimersByTimeAsync(3000)
+    await done
+    expect(d.retrying.value).toBe(false)
+    expect(d.loadError.value).not.toBeNull()
+  })
+
+  it('the time budget stops the loop: no attempt starts once the next wait would exceed it', async () => {
+    api.get.mockRejectedValue(new HttpError(503, 'x'))
+    // waits would be 1000, 2000, 4000...; a 2500 ms budget allows the 1000 wait, not the following 2000
+    const d = useDashboardLayout('home', DEFAULTS, { ...OPTS, retries: 10, budgetMs: 2500 })
+    const done = d.load()
+    await vi.advanceTimersByTimeAsync(1000)
+    await done
+    expect(api.get).toHaveBeenCalledTimes(2)
+    expect(d.loadError.value).not.toBeNull()
+    expect(d.retrying.value).toBe(false)
+  })
+
+  it('an endpoint refusal is final: one GET, no retry', async () => {
+    api.get.mockRejectedValue(new AbsoluteEndpointError('https://evil.example/x'))
+    const d = useDashboardLayout('home', DEFAULTS, OPTS)
+    await d.load()
+    expect(api.get).toHaveBeenCalledTimes(1)
+    expect(d.loadError.value).not.toBeNull()
+    expect(d.retrying.value).toBe(false)
   })
 })

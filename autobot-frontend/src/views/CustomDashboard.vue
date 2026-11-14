@@ -11,7 +11,8 @@
         <p class="header-description">{{ $t('views.customDashboard.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button v-if="loadError" @click="retryLoad" class="action-btn">
+        <span v-if="retrying" role="status" data-test="layout-retrying">{{ $t('common.errorBoundary.retrying') }}</span>
+        <button v-if="loadError" @click="loadLayout" class="action-btn">
           <Icon name="redo" />
           {{ $t('views.customDashboard.retryLoad') }}
         </button>
@@ -102,7 +103,7 @@
         </div>
         <h3>{{ $t('views.customDashboard.noWidgets') }}</h3>
         <p>{{ $t('views.customDashboard.noWidgetsHint') }}</p>
-        <button @click="toggleEditMode" class="action-btn primary">
+        <button v-if="loaded" @click="toggleEditMode" class="action-btn primary">
           <Icon name="plus" />
           {{ $t('views.customDashboard.addFirstWidget') }}
         </button>
@@ -250,7 +251,7 @@ const { t } = useI18n()
 const tr = (s: string) => displayText(s, t)
 const { showToast } = useToast()
 const { confirm } = useConfirmDialog()
-const { layout, loaded, loadError, load, save, reset } = useDashboardLayout('home', defaultHomeLayout)
+const { layout, loaded, loadError, retrying, load, save, reset } = useDashboardLayout('home', defaultHomeLayout)
 
 // ============================================================================
 // Types
@@ -383,14 +384,12 @@ function toggleEditMode() {
   isEditMode.value = !isEditMode.value
 }
 
+/** Shows the current layout (the defaults until a load succeeds) read-only at once, then the saved one. */
 async function loadLayout() {
+  loadDashboard()
   await load()
   if (loadError.value) showToast(t('views.customDashboard.loadFailed'), 'error')
   loadDashboard()
-}
-
-function retryLoad() {
-  void loadLayout()
 }
 
 function addWidget() {
@@ -486,9 +485,9 @@ const { start: startDashboardPolling, stop: stopDashboardPolling } = usePollingJ
 // Lifecycle
 // ============================================================================
 
-onMounted(async () => {
-  await loadLayout()
-  startDashboardPolling('')
+onMounted(() => {
+  startDashboardPolling('') // only ticks refreshKey on whatever widgets are shown; needs no saved layout
+  void loadLayout()
 })
 
 // expose stop for tests / external teardown

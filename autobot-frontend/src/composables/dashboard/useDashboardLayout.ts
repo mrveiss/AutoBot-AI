@@ -14,7 +14,7 @@
  * final. A `load()` while one is running joins it; disposing the scope stops the loop.
  */
 import { getCurrentScope, onScopeDispose, ref } from 'vue'
-import { backoffDelay, isHttpError } from '@autobot/ui'
+import { AbsoluteEndpointError, backoffDelay, isHttpError } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
@@ -30,32 +30,39 @@ const logger = createLogger('useDashboardLayout')
 
 const HTTP_SERVER_ERROR_MIN = 500
 /**
- * Retries after the first attempt. 2s,4s,8s,16s,20s,20s waits = 70s, plus the client's own GET
- * retries per attempt, covers a ~80s backend restart with ~7 requests, not a hammering loop.
+ * Retries after the first attempt: 2s,4s,8s,16s,20s,20s waits = 70s, so up to 7 attempts, each up
+ * to 3 client tries (the client's own GET retries), cover a ~80s backend restart without hammering.
  */
 export const LOAD_RETRIES = 6
 export const LOAD_RETRY_BASE_MS = 2000
 export const LOAD_RETRY_MAX_MS = 20000
+// Two minutes: above the ~91s a dead backend takes, and hung connections cannot stretch it further.
+export const LOAD_RETRY_BUDGET_MS = 120000
 
 export interface LoadRetryOptions {
   retries?: number
   baseMs?: number
   maxMs?: number
+  /** No new attempt starts once this much time has passed since `load()` began. */
+  budgetMs?: number
 }
 
-/** Network errors and 5xx may pass on their own; any other HTTP status is the request's fault. */
+/** Network errors, timeouts and 5xx may pass on their own; a 4xx or an endpoint refusal is final. */
 function isRetryable(e: unknown): boolean {
+  if (e instanceof AbsoluteEndpointError) return false
   return !isHttpError(e) || e.status >= HTTP_SERVER_ERROR_MIN
 }
 
 export function useDashboardLayout(
   page: DashboardPage,
   defaults: () => DashboardLayout,
-  { retries = LOAD_RETRIES, baseMs = LOAD_RETRY_BASE_MS, maxMs = LOAD_RETRY_MAX_MS }: LoadRetryOptions = {},
+  { retries = LOAD_RETRIES, baseMs = LOAD_RETRY_BASE_MS, maxMs = LOAD_RETRY_MAX_MS, budgetMs = LOAD_RETRY_BUDGET_MS }: LoadRetryOptions = {},
 ) {
   const layout = ref<DashboardLayout>(defaults())
   const loaded = ref(false)
   const loadError = ref<string | null>(null)
+  /** True from the first failed attempt until the retry loop ends (the page shows defaults, read-only). */
+  const retrying = ref(false)
   const saveError = ref<string | null>(null)
   const url = `${getApiBase()}/users/me/dashboard-layouts/${page}`
   let disposed = false
@@ -122,14 +129,17 @@ export function useDashboardLayout(
   }
 
   async function getLayout(): Promise<LayoutResponse> {
+    const startedAt = Date.now()
     for (let attempt = 0; ; attempt++) {
       try {
         const body: LayoutResponse = await apiClient.get(url) // typed by the generated contract
         return body
       } catch (e) {
-        if (disposed || attempt >= retries || !isRetryable(e)) throw e
+        const delay = backoffDelay(attempt, { base: baseMs, max: maxMs })
+        if (disposed || attempt >= retries || !isRetryable(e) || Date.now() - startedAt + delay > budgetMs) throw e
+        retrying.value = true
         logger.warn(`Loading dashboard layout failed (attempt ${attempt + 1}); retrying:`, e)
-        await sleep(backoffDelay(attempt, { base: baseMs, max: maxMs }))
+        await sleep(delay)
         if (disposed) throw e
       }
     }
@@ -141,11 +151,13 @@ export function useDashboardLayout(
     try {
       body = await getLayout()
     } catch (e) {
+      retrying.value = false
       if (disposed) return
       loadError.value = e instanceof Error ? e.message : String(e)
       logger.error('Loading dashboard layout failed; editing stays off until a load succeeds:', e)
       return
     }
+    retrying.value = false
     if (disposed) return
     const stored = body.data ? fromStoredLayout(body.data.layout) : null
     if (stored?.dashboards.length) layout.value = stored
@@ -177,5 +189,5 @@ export function useDashboardLayout(
     return true
   }
 
-  return { layout, loaded, loadError, saveError, load, save, reset }
+  return { layout, loaded, loadError, retrying, saveError, load, save, reset }
 }
