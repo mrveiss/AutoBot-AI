@@ -559,16 +559,26 @@ def test_main_file_issues_caps_dedupes_and_keeps_stdout_order(capsys: pytest.Cap
     """Old path: dedupe against open issues, cap with --max-issues, then `filed #N` lines, then the report."""
     findings = [
         audit.Finding(file=f"autobot-backend/m{n}.py", tracker=n, tracker_state="CLOSED", production_callers=0)
-        for n in (1, 2, 3)
+        for n in (1, 2, 3, 4)
     ]
-    filed = {2: 900, 3: 901}  # tracker 1 is already filed (deduped); cap=2 keeps trackers 2 and 3
+    # tracker 1 is already filed (deduped); --max-issues 2 files 2 and 3; tracker 4 is cap-deferred.
+    # Any other tracker reaching file_discovery_issue raises KeyError and fails the test.
+    filed = {2: 900, 3: 901}
+    calls: list[int] = []
+
+    def fake_file(finding: audit.Finding) -> int:
+        calls.append(finding.tracker)
+        return filed[finding.tracker]
+
     with (
         patch.object(audit, "scan", return_value=findings),
         patch.object(audit, "existing_audit_issues_by_tracker", return_value={1}),
-        patch.object(audit, "file_discovery_issue", side_effect=lambda f: filed[f.tracker]),
+        patch.object(audit, "file_discovery_issue", side_effect=fake_file),
         patch.object(sys, "argv", ["audit", "--file-issues", "--json", "--max-issues", "2"]),
     ):
         assert audit.main() == 1
+    assert calls == [2, 3]  # without the cap 4 is filed (KeyError); without dedupe 1 is filed (KeyError)
+    # The report still lists all four findings, as the old main() rendered the full list; filed lines come first.
     assert capsys.readouterr().out == (
         "filed #900 for autobot-backend/m2.py (tracker #2)\n"
         "filed #901 for autobot-backend/m3.py (tracker #3)\n" + audit.render_json(findings) + "\n"

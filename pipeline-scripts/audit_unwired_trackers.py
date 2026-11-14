@@ -527,7 +527,7 @@ def _file_new_issues(findings: list[Finding], max_issues: int) -> None:
     capped = new[:max_issues]
     # WARNING, not INFO: INFO goes to stdout, which carries the report; WARNING goes to stderr.
     logger.warning(
-        "findings=%d new=%d  filing=%d  deduped=%d  cap-deferred=%d",
+        "findings=%d  new=%d  filing=%d  deduped=%d  cap-deferred=%d",
         len(findings),
         len(new),
         len(capped),
