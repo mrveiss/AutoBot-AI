@@ -184,6 +184,23 @@ def test_the_rules_are_read_from_the_test_object_without_comments_or_nested_obje
     assert exclude == ["e2e/**", "**/*.playwright.spec.ts", *lane.specs.DEFAULT_EXCLUDE]
 
 
+def test_a_glob_survives_comments_that_hold_an_apostrophe_a_block_marker_or_trail_a_rule(lane, tmp_path) -> None:
+    config = tmp_path / "vitest.config.ts"
+    config.write_text(
+        "export default { test: {\n"
+        "  // the worker's stdout -- and a stray /* opener, which is prose here\n"
+        "  include: ['src/**/*.spec.ts'], /* a real block comment */\n"
+        "  exclude: ['e2e/**'], // trailing, with a don't\n"
+        "} }\n",
+        encoding="utf-8",
+    )
+    text = lane.specs.code_text(config.read_text(encoding="utf-8"), name=config.name, strip_trailing=True)
+    assert "'src/**/*.spec.ts'" in text and "'e2e/**'" in text, text
+    for gone in ("worker", "real block comment", "trailing", "don't"):
+        assert gone not in text, f"{gone!r} survived comment removal: {text}"
+    assert lane.specs.package_rules(config) == (["src/**/*.spec.ts"], ["e2e/**"])
+
+
 def test_a_config_without_include_or_exclude_gets_vitests_defaults(lane, tmp_path) -> None:
     config = tmp_path / "vitest.config.ts"
     config.write_text("export default defineConfig({ test: { globals: true } })\n", encoding="utf-8")

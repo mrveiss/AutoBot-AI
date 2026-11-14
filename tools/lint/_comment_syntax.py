@@ -126,8 +126,14 @@ def strip_trailing_comment(line: str, markers: Sequence[str], *, escapes: bool =
     return line
 
 
-def strip_block_comments(text: str) -> str:
+def strip_block_comments(text: str, *, line_comments: bool = False) -> str:
     """*text* with `/* ... */` runs removed, respecting string literals.
+
+    `line_comments` makes the scan step over a `//` comment (outside a string)
+    to the end of the line, keeping its text. Without it an apostrophe or `/*`
+    in prose after `//` is read as code -- a `worker's` opens a "string" that
+    swallows every later `/**/` glob in the file (#21509). Opt-in because CSS,
+    the other direct caller, has no `//` comments.
 
     Quote-aware for the reason above: the construct that broke the heuristic
     was a glob pattern inside quotes, and tracking quotes answers that exactly
@@ -167,6 +173,12 @@ def strip_block_comments(text: str) -> str:
             in_block = True
             i += 2
             continue
+        if line_comments and text.startswith("//", i):
+            end = text.find("\n", i)
+            end = len(text) if end < 0 else end
+            out.append(text[i:end])
+            i = end
+            continue
         out.append(char)
         i += 1
     return "".join(out)
@@ -199,7 +211,7 @@ def code_lines(
     suffix = Path(name).suffix if name is not None else ""
     escapes = suffix in _BACKSLASH_ESCAPES
     if suffix in _BLOCK_COMMENTS:
-        text = strip_block_comments(text)
+        text = strip_block_comments(text, line_comments=True)
 
     kept: list[CodeLine] = []
     for lineno, raw in enumerate(text.splitlines(), 1):
