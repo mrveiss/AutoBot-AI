@@ -54,6 +54,8 @@ export default mergeConfig(
         ...configDefaults.exclude,
         'e2e/**',
         'tests/**',
+        // ESLint rule fixtures named *.test.ts, not vitest specs; the include globs above never matched them (#21509)
+        'eslint-tests/**',
         'src/test/e2e/**',
         '**/*.e2e.test.ts',
         '**/*.playwright.spec.ts',

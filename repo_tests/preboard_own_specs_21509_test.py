@@ -35,6 +35,7 @@ from repo_tests._paths import repo_root
 
 from autobot_shared.isolated_git import git, make_repo
 from tools.lint._comment_syntax import code_lines
+from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
 _WORKFLOW = _ROOT / ".github" / "workflows" / "dispatch-preboard-guards.yml"
@@ -284,6 +285,25 @@ def test_the_frontend_config_excludes_what_the_suite_excludes(lane) -> None:
     assert not lane.specs.collected(rules, "src/a.playwright.spec.ts")
     assert lane.specs.collected(rules, "src/components/__tests__/a.spec.ts")
     assert lane.specs.collected(rules, "scripts/canonical/__tests__/runner.test.mjs")
+
+
+def test_every_tracked_spec_looking_file_in_a_frontend_package_is_collected_or_excluded(lane) -> None:
+    """The census behind the red-on-unrun rule: touching any tracked spec-looking file must not fail the lane falsely."""
+    seen = 0
+    neither: list[str] = []
+    for package in _PACKAGES:
+        rules = lane.specs.package_rules(_ROOT / package / "vitest.config.ts")
+        for path in tracked_paths(_ROOT, package):
+            if not lane.specs.SPEC_NAME.search(path):
+                continue
+            seen += 1
+            relative = path[len(package) + 1 :]
+            if not lane.specs.collected(rules, relative) and not lane.specs.glob_matches(relative, rules[1]):
+                neither.append(path)
+    assert seen > 50, f"the census saw {seen} spec-looking files; it scanned nothing like the tree"
+    assert (
+        not neither
+    ), f"{len(neither)} tracked spec file(s) no include rule collects and no exclude rule names: {neither}"
 
 
 def test_only_the_changed_specs_that_still_exist_in_the_tested_tree_are_selected(lane, tmp_path) -> None:
