@@ -40,7 +40,7 @@
         />
         <p v-if="passwordError" class="text-xs text-red-500">{{ passwordError }}</p>
         <button
-          class="w-full py-2 rounded-lg bg-autobot-primary text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+          class="w-full py-2 rounded-lg bg-autobot-primary text-autobot-text-on-primary text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
           :disabled="unlocking || !passwordInput.trim()"
           @click="submitPassword"
         >
@@ -61,7 +61,7 @@
           <div
             class="max-w-[85%] px-4 py-3 rounded-2xl text-sm whitespace-pre-wrap"
             :class="msg.role === 'user'
-              ? 'bg-autobot-primary text-white rounded-br-sm'
+              ? 'bg-autobot-primary text-autobot-text-on-primary rounded-br-sm'
               : 'bg-autobot-bg-card border border-autobot-border text-autobot-text-primary rounded-bl-sm'"
           >
             {{ msg.content }}

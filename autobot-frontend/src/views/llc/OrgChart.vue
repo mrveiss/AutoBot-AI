@@ -919,7 +919,7 @@ onMounted(() => {
             :key="mode"
             class="px-3 py-1.5 text-sm transition-colors"
             :class="viewMode === mode
-              ? 'bg-autobot-primary text-white'
+              ? 'bg-autobot-primary text-autobot-text-on-primary'
               : 'bg-autobot-bg-card text-autobot-text-secondary hover:text-autobot-text-primary'"
             :data-testid="`org-view-${mode}`"
             :aria-pressed="viewMode === mode"

@@ -108,7 +108,7 @@ onMounted(async () => {
         v-if="activeTab !== 'settings'"
         @click="fetchAllAgents"
         :disabled="isLoading"
-        class="px-4 py-2 text-sm font-medium text-white bg-autobot-primary rounded hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        class="px-4 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
       >
         <svg
           :class="['w-4 h-4', { 'animate-spin': isLoading }]"
@@ -273,7 +273,7 @@ onMounted(async () => {
             :class="[
               'px-3 py-1.5 text-xs font-medium rounded-sm border transition-colors',
               !categoryFilter
-                ? 'bg-autobot-primary text-white border-autobot-primary'
+                ? 'bg-autobot-primary text-autobot-text-on-primary border-autobot-primary'
                 : 'bg-card text-secondary border-default hover:border-autobot-info'
             ]"
           >
@@ -286,7 +286,7 @@ onMounted(async () => {
             :class="[
               'px-3 py-1.5 text-xs font-medium rounded-sm border transition-colors capitalize',
               categoryFilter === cat
-                ? 'bg-autobot-primary text-white border-autobot-primary'
+                ? 'bg-autobot-primary text-autobot-text-on-primary border-autobot-primary'
                 : 'bg-card text-secondary border-default hover:border-autobot-info'
             ]"
           >

@@ -13,14 +13,14 @@
         <div class="flex border border-autobot-border rounded-lg overflow-hidden">
           <button
             class="flex-1 py-2 text-sm font-medium transition-colors"
-            :class="mode === 'users' ? 'bg-autobot-primary text-white' : 'bg-autobot-bg-secondary text-autobot-text-secondary hover:bg-autobot-bg-tertiary'"
+            :class="mode === 'users' ? 'bg-autobot-primary text-autobot-text-on-primary' : 'bg-autobot-bg-secondary text-autobot-text-secondary hover:bg-autobot-bg-tertiary'"
             @click="mode = 'users'"
           >
             {{ $t('chat.share.shareWithUsers') }}
           </button>
           <button
             class="flex-1 py-2 text-sm font-medium transition-colors"
-            :class="mode === 'link' ? 'bg-autobot-primary text-white' : 'bg-autobot-bg-secondary text-autobot-text-secondary hover:bg-autobot-bg-tertiary'"
+            :class="mode === 'link' ? 'bg-autobot-primary text-autobot-text-on-primary' : 'bg-autobot-bg-secondary text-autobot-text-secondary hover:bg-autobot-bg-tertiary'"
             @click="mode = 'link'"
           >
             {{ $t('chat.share.publicLink') }}
@@ -123,7 +123,7 @@
                   class="flex-1 text-sm bg-transparent border-none outline-none text-autobot-text-primary font-mono truncate"
                 />
                 <button
-                  class="shrink-0 text-xs px-2 py-1 rounded bg-autobot-primary text-white hover:opacity-90 transition-opacity"
+                  class="shrink-0 text-xs px-2 py-1 rounded bg-autobot-primary text-autobot-text-on-primary hover:opacity-90 transition-opacity"
                   @click="copyLink"
                 >
                   {{ copied ? $t('common.copied') : $t('common.copy') }}

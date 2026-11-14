@@ -278,7 +278,7 @@
           ></textarea>
           <div class="flex justify-end gap-2">
             <button @click="showCreateDialog = false" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">{{ $t('common.cancel') }}</button>
-            <button @click="handleCreateFile" :disabled="!newFileName.trim()" class="px-3 py-1 text-xs text-white bg-autobot-primary hover:bg-autobot-primary-hover rounded disabled:opacity-50">{{ $t('common.create') }}</button>
+            <button @click="handleCreateFile" :disabled="!newFileName.trim()" class="px-3 py-1 text-xs text-autobot-text-on-primary bg-autobot-primary hover:bg-autobot-primary-hover rounded disabled:opacity-50">{{ $t('common.create') }}</button>
           </div>
         </div>
       </div>
@@ -298,7 +298,7 @@
           ></textarea>
           <div class="flex justify-end gap-2 mt-3">
             <button @click="editingFileId = null" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">{{ $t('common.cancel') }}</button>
-            <button @click="handleSaveEdit" class="px-3 py-1 text-xs text-white bg-autobot-primary hover:bg-autobot-primary-hover rounded">{{ $t('common.save') }}</button>
+            <button @click="handleSaveEdit" class="px-3 py-1 text-xs text-autobot-text-on-primary bg-autobot-primary hover:bg-autobot-primary-hover rounded">{{ $t('common.save') }}</button>
           </div>
         </div>
       </div>
