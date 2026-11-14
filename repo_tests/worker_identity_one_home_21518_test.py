@@ -10,8 +10,9 @@ four spellings. This sweep fails when a function reads a host name AND a process
 an identity of its own.
 
 THE RULE (AST, not text): within one function body (nested functions are their own scope; the module
-body is a scope too), a host-name read -- ``gethostname()`` on any receiver, ``platform.node()``, or an
-``.nodename`` attribute -- together with a ``getpid()`` call.
+body is a scope too), a host-name read -- ``gethostname()`` / ``getfqdn()`` on any receiver,
+``platform.node()``, ``.nodename``, ``uname()[1]`` or ``uname().node`` -- together with a ``getpid()`` call
+(``os.getpid()`` or a bare ``getpid()``).
 
 STATED LIMITATIONS: an identity assembled across scopes (a module constant holding the pid, the host
 read in a function) is not seen; a host name from an environment variable is not a host read here.
@@ -36,6 +37,7 @@ _ROOT = repo_root()
 HOME = "autobot_shared/leader_lease.py"
 
 _TEST_PARTS = ("/tests/", "repo_tests/")
+_HOST_CALLS = frozenset({"gethostname", "getfqdn"})
 _FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 
@@ -51,35 +53,47 @@ def _python_files(root: Path) -> list[str]:
         return []  # the declared fraction below raises the typed refusal for an empty tree
 
 
-def _all_python(root: Path) -> int:
-    """Every tracked Python file, tests included: the reference population."""
+def _non_test_python_count(root: Path) -> int:
+    """The same population counted INDEPENDENTLY: every tracked file, filtered by suffix in Python.
+
+    The sweep asks git for ``*.py``; this lists the whole tree and filters here, so a broken glob moves
+    only one of the two numbers. Numerator and denominator are the same population (RATCHET_BASELINES
+    rule 7), so adding tests moves neither.
+    """
     try:
-        return len(tracked_paths(root, "*.py"))
+        return sum(1 for rel in tracked_paths(root) if rel.endswith(".py") and not _is_test(rel))
     except EmptyEnumeration:
         return 0
 
 
-#: Relative to all tracked Python because non-test Python is a proper subset of it. The fraction is a
-#: tolerance, not a count: it fires once the sweep stops reading a large share of the production code.
+#: Every file in the reference must be read: the fraction is 1.0, not a tolerance, because the two counts
+#: enumerate one population (`_reach_policy`: SUBSET_DRIFTS applies only when the reference is a different,
+#: larger class).
 REACH = declare(
     "worker-identity-one-home-21518",
     discover=_python_files,
-    reference=_all_python,
-    min_fraction=0.4,
+    reference=_non_test_python_count,
+    min_fraction=1.0,
     what="tracked non-test python files swept for a hand-built host-and-process identity",
 )
 
 
+def _is_uname_call(node: ast.AST) -> bool:
+    return isinstance(node, ast.Call) and getattr(node.func, "attr", getattr(node.func, "id", "")) == "uname"
+
+
 def _is_host_read(node: ast.AST) -> bool:
-    if isinstance(node, ast.Attribute) and node.attr == "nodename":
-        return True
+    if isinstance(node, ast.Attribute):
+        return node.attr == "nodename" or (node.attr == "node" and _is_uname_call(node.value))
+    if isinstance(node, ast.Subscript):  # os.uname()[1]
+        return _is_uname_call(node.value) and isinstance(node.slice, ast.Constant) and node.slice.value == 1
     if not isinstance(node, ast.Call):
         return False
     func = node.func
     if isinstance(func, ast.Name):
-        return func.id == "gethostname"
+        return func.id in _HOST_CALLS
     if isinstance(func, ast.Attribute):
-        return func.attr == "gethostname" or (
+        return func.attr in _HOST_CALLS or (
             func.attr == "node" and isinstance(func.value, ast.Name) and func.value.id == "platform"
         )
     return False
@@ -173,8 +187,18 @@ def test_a_planted_identity_fails_the_sweep(tmp_path: Path) -> None:
         "import os, socket\n\ndef f():\n    return os.uname().nodename + str(os.getpid())\n",
         "from socket import gethostname\nfrom os import getpid\n\nasync def f():\n    return gethostname(), getpid()\n",
         "import os, platform\nx = (platform.node(), os.getpid())\n",
+        "import os\n\ndef f():\n    return os.uname()[1], os.getpid()\n",
+        "import os, platform\n\ndef f():\n    return platform.uname().node, os.getpid()\n",
+        "import os, socket\n\ndef f():\n    return socket.getfqdn(), os.getpid()\n",
     ],
-    ids=["uname-nodename", "bare-names-async", "platform-node-module-level"],
+    ids=[
+        "uname-nodename",
+        "bare-names-async",
+        "platform-node-module-level",
+        "uname-subscript",
+        "uname-node",
+        "getfqdn",
+    ],
 )
 def test_each_spelling_of_the_pair_is_caught(source: str) -> None:
     assert len(identity_sites(source)) == 1
