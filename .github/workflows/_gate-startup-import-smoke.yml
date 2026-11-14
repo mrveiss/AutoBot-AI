@@ -20,6 +20,12 @@ name: Backend Startup Import Smoke (reusable body)
 
 on:
   workflow_call:
+    inputs:
+      checkout_ref:
+        description: "A dispatched run (#21577): the pull request's test merge commit to check out, so the tree has the shape a pull_request run gets (HEAD^1 = base tip, HEAD^2 = head). Empty: the event's own checkout."
+        type: string
+        required: false
+        default: ''
     outputs:
       ok:
         description: "'true' only when every step of the smoke test passed"
@@ -37,6 +43,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout_ref }}
 
       - name: Set up Python 3.12
         uses: ./.github/actions/setup-python-ci

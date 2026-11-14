@@ -13,6 +13,12 @@ name: Code Quality (reusable body)
 
 on:
   workflow_call:
+    inputs:
+      checkout_ref:
+        description: "A dispatched run (#21577): the pull request's test merge commit to check out, so the tree has the shape a pull_request run gets (HEAD^1 = base tip, HEAD^2 = head). Empty: the event's own checkout."
+        type: string
+        required: false
+        default: ''
     secrets:
       CONVENTIONS_DENYLIST:
         description: "Org-internal convention denylist, read by the conventions step"
@@ -81,6 +87,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v7
       with:
+        ref: ${{ inputs.checkout_ref }}
         # Required, not cosmetic (#13880). The default fetch-depth: 1 leaves the
         # PR base commit out of the clone, so every changed-files step here
         # diffed against a missing object, treated the fatal as "no changes",
@@ -179,7 +186,9 @@ jobs:
     - name: Block datetime.utcnow().isoformat() regressions (#5178 #5238 #5268)
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-        HEAD_SHA: ${{ github.sha }}
+        # #21577: a dispatch's head for the scope is the test merge it checked out (parents: base tip, head);
+        # github.sha there is the branch head, which a sync made a merge whose first parent is the branch's own tip.
+        HEAD_SHA: ${{ inputs.checkout_ref || github.sha }}
       run: |
         set -euo pipefail
         # Pre-commit covers local dev — this CI step closes the bypass gap

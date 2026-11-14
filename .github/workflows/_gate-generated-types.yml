@@ -68,6 +68,11 @@ name: Verify Generated Types (reusable body)
 on:
   workflow_call:
     inputs:
+      checkout_ref:
+        description: "A dispatched run (#21577): the pull request's test merge commit to check out, so the tree has the shape a pull_request run gets (HEAD^1 = base tip, HEAD^2 = head). Empty: the event's own checkout."
+        type: string
+        required: false
+        default: ''
       run_types:
         description: "'false' skips the autobot-frontend freshness job; anything else runs it"
         type: string
@@ -104,6 +109,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout_ref }}
 
       - name: Set up Python 3.14
         uses: actions/setup-python@v7
@@ -214,6 +221,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout_ref }}
 
       - name: Set up Python 3.14
         uses: actions/setup-python@v7

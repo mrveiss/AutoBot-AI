@@ -74,6 +74,8 @@ on each push to main, and leaves a branch with no open PR alone (#20261), so "my
 over it discards the bot's merge: `git pull` (a fast-forward) first. A PR labelled
 `sync-conflict` or `sync-needs-workflow-token` was not synced; merge main yourself. A conflict on a PR not in a train, queued or not, is resolved by the author merging main (the one allowed push to a queued head), and the trainmaster checks what changed. In a train being built, the trainmaster fixes it in the train or asks the author. On a PR carried by a running train, it is left alone until landing. A PR with a conflict does not run CI until the conflict is solved.
 
+A synced head ends in `[skip ci]` and has no suite. To run the required checks on it with no new commit (a PR that lands on its own, not in a train), dispatch the three workflows that publish them on the PR branch (#21577): `gh workflow run ci.yml --ref <branch>`, then the same for `no-commit-trailers.yml` and `pr-blocking-findings.yml`. A draft, a non-`main` base, `main`/`release`/`train-*`, or a branch with no open PR is refused.
+
 ---
 
 ## Pre-Flight Checklist
