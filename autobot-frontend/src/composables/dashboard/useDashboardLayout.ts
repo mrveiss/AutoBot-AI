@@ -17,7 +17,6 @@ import { getCurrentScope, onScopeDispose, ref } from 'vue'
 import { backoffDelay, isHttpError } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { CircuitBreakerError } from '@/utils/apiCircuitBreaker'
 import { createLogger } from '@/utils/debugUtils'
 import type { components } from '@/types/generated/api'
 import { fromLegacyDashboards, fromStoredLayout, type DashboardLayout } from './dashboardLayoutModel'
@@ -53,13 +52,12 @@ const CLIENT_TIMEOUT_PREFIX = 'Request timeout after'
 
 /**
  * Allow list: only a failure that can pass on its own is retried -- a fetch network failure
- * (TypeError), the client's timeout, a 5xx, or an open circuit (it closes after its cool-down, so
- * waiting is the point). Anything else (a 4xx, a body that is not JSON, an endpoint refusal,
+ * (TypeError), the client's timeout, or a 5xx. Anything else (a 4xx, a body that is not JSON, an endpoint refusal,
  * an unknown error) is final.
  */
 function isRetryable(e: unknown): boolean {
   if (isHttpError(e)) return e.status >= HTTP_SERVER_ERROR_MIN
-  if (e instanceof CircuitBreakerError || e instanceof TypeError) return true
+  if (e instanceof TypeError) return true
   return e instanceof Error && e.message.startsWith(CLIENT_TIMEOUT_PREFIX)
 }
 

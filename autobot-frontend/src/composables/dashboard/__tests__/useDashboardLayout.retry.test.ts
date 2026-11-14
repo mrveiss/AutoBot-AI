@@ -15,7 +15,6 @@ vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api' }))
 vi.mock('@/utils/debugUtils', () => ({ createLogger: () => ({ error: vi.fn(), warn: vi.fn() }) }))
 
 const { useDashboardLayout } = await import('../useDashboardLayout')
-const { CircuitBreakerError } = await import('@/utils/apiCircuitBreaker')
 
 const DEFAULTS = (): DashboardLayout => ({
   dashboards: [{ id: 'default', name: 'n', widgets: [], createdAt: 0, updatedAt: 0 }],
@@ -187,7 +186,6 @@ describe('useDashboardLayout load retry', () => {
     ['a fetch network failure', () => new TypeError('Failed to fetch')],
     ['the client timeout, built as the client builds it', () => new Error('Request timeout after 30000ms')],
     ['a 5xx', () => new HttpError(504, 'Gateway Timeout')],
-    ['an open circuit', () => new CircuitBreakerError('dashboard', 'OPEN')],
   ])('retries %s', async (_kind, makeError) => {
     api.get.mockRejectedValueOnce(makeError()).mockResolvedValueOnce(STORED_BODY)
     const d = useDashboardLayout('home', DEFAULTS, OPTS)
@@ -201,6 +199,7 @@ describe('useDashboardLayout load retry', () => {
   it.each([
     ['a body that is not JSON (SyntaxError)', () => new SyntaxError('Unexpected token < in JSON')],
     ['an unknown error', () => new Error('boom')],
+    ['an error merely named like a circuit refusal', () => Object.assign(new Error('open'), { name: 'CircuitBreakerError' })],
   ])('does not retry %s', async (_kind, makeError) => {
     api.get.mockRejectedValue(makeError())
     const d = useDashboardLayout('home', DEFAULTS, OPTS)
