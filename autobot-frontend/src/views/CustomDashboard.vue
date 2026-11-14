@@ -42,7 +42,7 @@
               {{ tr(dash.name) }}
             </option>
           </select>
-          <button @click="createNewDashboard" class="icon-btn" :title="$t('views.customDashboard.createNewDashboard')" :aria-label="$t('views.customDashboard.createNewDashboard')">
+          <button @click="createNewDashboard" class="icon-btn" :disabled="!loaded" :title="$t('views.customDashboard.createNewDashboard')" :aria-label="$t('views.customDashboard.createNewDashboard')">
             <Icon name="plus" />
           </button>
         </div>
@@ -351,6 +351,7 @@ async function resetLayout() {
 }
 
 function createNewDashboard() {
+  if (!loaded.value) return // a new dashboard made before the saved layout loads would vanish when it does
   newDashboardName.value = ''
   newDashboardTemplate.value = 'blank'
   showNewDashboardModal.value = true

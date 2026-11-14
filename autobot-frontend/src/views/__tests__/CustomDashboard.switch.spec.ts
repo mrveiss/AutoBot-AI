@@ -90,6 +90,7 @@ describe('CustomDashboard dashboard switch', () => {
     const w = await mountView()
     expect((w.findComponent(Grid).props('widgets') as { id: string }[]).map((x) => x.id)).toEqual(['w1'])
     expect(w.find('[data-test="layout-retrying"]').exists()).toBe(true)
+    expect(w.find('.dashboard-selector .icon-btn').attributes('disabled')).toBeDefined()
     expect(w.find('.empty-dashboard').exists()).toBe(false)
     // saved layout arrives: the composable swaps `layout`, then load() resolves
     layout.value = { dashboards: [{ id: 'a', name: 'A', widgets: [{ ...widget, id: 'saved' }], createdAt: 0, updatedAt: 0 }], activeId: 'a' }
@@ -99,6 +100,7 @@ describe('CustomDashboard dashboard switch', () => {
     await flushPromises()
     expect((w.findComponent(Grid).props('widgets') as { id: string }[]).map((x) => x.id)).toEqual(['saved'])
     expect(w.find('[data-test="layout-retrying"]').exists()).toBe(false)
+    expect(w.find('.dashboard-selector .icon-btn').attributes('disabled')).toBeUndefined()
   })
 
   it('hides the add-first-widget button while the layout is not loaded', async () => {
