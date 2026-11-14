@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""A dependabot pull request must not start the full suite on its own (#21490).
+"""A dependabot or release promotion pull request must not start the full suite on its own (#21490, #21519).
 
 After a dependency-manifest change landed, dependabot rebased ~15 pull requests and opened 5
 more within minutes; each started every expensive workflow, 60+ runs were cancelled by hand and
@@ -13,11 +13,19 @@ cheap workflow that grows a job is looked at again) or each of its expensive job
 its `if:` names the dependabot author / `changes` outputs `ready` or `held`, or it `needs` a
 job that is. "Expensive" is a property of the job (a reusable-workflow call, a timeout of
 `_EXPENSIVE_MINUTES` or more, or an end-to-end / smoke / matrix / docker name), not a list.
+
+#21519: the same rule holds the release promotion pull request (head = this repository's default
+branch, base = `release`) unless it carries `ci:full`. A job must be held in BOTH scenarios in
+`SCENARIOS`; three running scenarios (labelled, fork branch of the same name, ordinary feature branch)
+pin that the promotion clause holds nothing else. Every inline copy of the clause is the same text.
 """
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import subprocess
 
 import pytest
 from repo_tests._paths import repo_root
@@ -31,18 +39,33 @@ WORKFLOW_DIR = repo_root() / ".github" / "workflows"
 _MIN_WORKFLOWS = 25
 _EXPENSIVE_MINUTES = 20
 _EXPENSIVE_NAME = re.compile(r"e2e|end-to-end|smoke|matrix|docker", re.IGNORECASE)
-#: How the held scenario (a pull request by dependabot, not a `train-*` head, no `ci:full` label) reads each
-#: atom of an `if:`. Anything not listed is UNKNOWN, so a job is
+#: Each atom of an `if:` the scenarios speak about. Anything not listed in a scenario is UNKNOWN, so a job is
 #: held only when its whole condition is definitely False with every unknown term left unknown (three-valued
 #: logic, so `!unknown` is unknown too). That rejects `a || hold` and a hold sitting in a branch that does not
-#: gate the job. `== 'dependabot[bot]'` is True here: such a job
-#: runs for dependabot.
-_ATOMS_FALSE = (
-    re.compile(r"github\.event\.pull_request\.user\.login\s*!=\s*'dependabot\[bot\]'"),
-    re.compile(r"startsWith\(github\.event\.pull_request\.head\.ref,\s*'train-'\)"),
-    re.compile(r"contains\(github\.event\.pull_request\.labels\.\*\.name,\s*'ci:full'\)"),
-    re.compile(r"github\.event_name\s*!=\s*'pull_request'"),
-)
+#: gate the job. `== 'dependabot[bot]'` is not an atom: such a job runs for dependabot.
+_ATOMS = {
+    "not_dependabot": re.compile(r"github\.event\.pull_request\.user\.login\s*!=\s*'dependabot\[bot\]'"),
+    "train": re.compile(r"startsWith\(github\.event\.pull_request\.head\.ref,\s*'train-'\)"),
+    "label": re.compile(r"contains\(github\.event\.pull_request\.labels\.\*\.name,\s*'ci:full'\)"),
+    "not_pr": re.compile(r"github\.event_name\s*!=\s*'pull_request'"),
+    "head_not_default": re.compile(
+        r"github\.event\.pull_request\.head\.ref\s*!=\s*github\.event\.repository\.default_branch"
+    ),
+    "fork_head": re.compile(r"github\.event\.pull_request\.head\.repo\.full_name\s*!=\s*github\.repository"),
+    "base_not_release": re.compile(r"github\.event\.pull_request\.base\.ref\s*!=\s*'release'"),
+}
+_PROMOTION = {"not_dependabot": True, "train": False, "label": False, "not_pr": False}
+_PROMOTION.update(head_not_default=False, fork_head=False, base_not_release=False)
+#: scenario -> value of each atom. `held` scenarios must skip every expensive job; `running` ones must not skip any.
+SCENARIOS: dict[str, dict[str, bool]] = {
+    "dependabot": {"not_dependabot": False, "train": False, "label": False, "not_pr": False},
+    "promotion": dict(_PROMOTION),
+    "promotion_labelled": {**_PROMOTION, "label": True},
+    "fork_branch_named_like_default": {**_PROMOTION, "fork_head": True},
+    "feature_branch": {**_PROMOTION, "head_not_default": True},
+}
+HELD_SCENARIOS = ("dependabot", "promotion")
+RUNNING_SCENARIOS = tuple(sorted(set(SCENARIOS) - set(HELD_SCENARIOS)))
 _CHANGES_ATOMS = {
     "held": re.compile(r"needs\.changes\.outputs\.held\s*!=\s*'true'"),
     "ready": re.compile(r"needs\.changes\.outputs\.ready\s*==\s*'true'"),
@@ -170,17 +193,18 @@ def _tokens(expr: str) -> list[str]:
     return out
 
 
-def _atom_value(atom: str, defined: frozenset) -> bool | None:
+def _atom_value(atom: str, defined: frozenset, scenario: str) -> bool | None:
     atom = " ".join(atom.split())
-    if any(p.fullmatch(atom) for p in _ATOMS_FALSE):
-        return False
-    if any(name in defined and p.fullmatch(atom) for name, p in _CHANGES_ATOMS.items()):
+    for name, pattern in _ATOMS.items():
+        if pattern.fullmatch(atom):
+            return SCENARIOS[scenario].get(name)
+    if scenario in HELD_SCENARIOS and any(n in defined and p.fullmatch(atom) for n, p in _CHANGES_ATOMS.items()):
         return False
     return True if atom == "true" else None
 
 
-def condition_value(condition: str, defined: frozenset = frozenset()) -> bool | None:
-    """The `if:` under the held scenario: False = skipped for it, True = runs, None = cannot tell."""
+def condition_value(condition: str, defined: frozenset = frozenset(), scenario: str = "dependabot") -> bool | None:
+    """The `if:` under a scenario: False = skipped for it, True = runs, None = cannot tell."""
     expr = condition.strip()
     if expr.startswith("${{") and expr.endswith("}}"):
         expr = expr[3:-2]
@@ -217,7 +241,7 @@ def condition_value(condition: str, defined: frozenset = frozenset()) -> bool | 
             value = p_or()
             take()  # ")"
             return value
-        return _atom_value(take(), defined)
+        return _atom_value(take(), defined, scenario)
 
     return p_or() if toks else True
 
@@ -226,11 +250,13 @@ def _changes_outputs(jobs: dict) -> frozenset:
     return frozenset((jobs.get("changes") or {}).get("outputs") or {})
 
 
-def classify(jobs: dict) -> dict[str, str]:
-    """job -> "direct" (its own condition skips it for a held run) or "inherited" (needs a held job and is skippable)."""
+def classify(jobs: dict, scenario: str = "dependabot") -> dict[str, str]:
+    """job -> "direct" (its own `if:` skips it in a held run) or "inherited" (needs a held job and is skippable)."""
     defined = _changes_outputs(jobs)
     kind = {
-        j: "direct" for j, spec in jobs.items() if "if" in spec and condition_value(str(spec["if"]), defined) is False
+        j: "direct"
+        for j, spec in jobs.items()
+        if "if" in spec and condition_value(str(spec["if"]), defined, scenario) is False
     }
     while True:
         more = {
@@ -244,7 +270,8 @@ def classify(jobs: dict) -> dict[str, str]:
 
 
 def _held_jobs(jobs: dict) -> set[str]:
-    return set(classify(jobs))
+    """Jobs skipped in EVERY held scenario."""
+    return set.intersection(*(set(classify(jobs, scenario)) for scenario in HELD_SCENARIOS))
 
 
 def _needs(spec: dict) -> list:
@@ -273,7 +300,7 @@ def violations(workflows: dict[str, dict], cheap=CHEAP, exempt=EXEMPT_JOBS) -> l
             problems.append(f"{name}: no expensive job -- add it to CHEAP with its job count")
         held = _held_jobs(jobs)
         problems.extend(
-            f"{name}: expensive job {j!r} is not held for dependabot pull requests (#21490)"
+            f"{name}: expensive job {j!r} is not held for dependabot or promotion pull requests (#21490, #21519)"
             for j in expensive
             if j not in held
         )
@@ -291,7 +318,7 @@ def test_every_allow_listed_workflow_still_exists_and_triggers_on_pull_request()
         assert job in found[wf]["jobs"], f"stale exemption {wf}:{job}"
 
 
-def test_every_pull_request_workflow_holds_its_expensive_jobs_for_dependabot():
+def test_every_pull_request_workflow_holds_its_expensive_jobs_for_dependabot_and_the_promotion():
     problems = violations(pull_request_workflows())
     assert not problems, "\n".join(problems)
 
@@ -310,6 +337,17 @@ def test_ci_defines_held_and_every_gate_passes_it_to_the_verdict():
     assert all("held" in w for w in gates), "a draft-gated verdict gate does not pass `held`"
 
 
+#: The one promotion clause every inline `if:` carries (whitespace-normalised); it is False exactly for a
+#: same-repository head on the default branch into `release` without `ci:full` (#21519).
+PROMOTION_CLAUSE = (
+    "(github.event.pull_request.head.ref != github.event.repository.default_branch"
+    " || github.event.pull_request.head.repo.full_name != github.repository"
+    " || github.event.pull_request.base.ref != 'release'"
+    " || contains(github.event.pull_request.labels.*.name, 'ci:full'))"
+)
+#: A condition that holds both kinds, for the fixtures below.
+_BOTH = f"github.event.pull_request.user.login != 'dependabot[bot]' && {PROMOTION_CLAUSE}"
+
 # --- controls: the detector must flag what it is meant to flag -------------------------------
 _UNGATED = {
     "x.yml": {
@@ -324,7 +362,7 @@ _GATED = {
         "jobs": {
             "changes": {"outputs": {"held": "x"}},
             "run-big": {"uses": "./a.yml", "if": "${{ needs.changes.outputs.held != 'true' }}"},
-            "slow": {"timeout-minutes": 45, "if": "${{ github.event.pull_request.user.login != 'dependabot[bot]' }}"},
+            "slow": {"timeout-minutes": 45, "if": "${{ " + _BOTH + " }}"},
             "after": {"uses": "./b.yml", "needs": ["slow"]},
         }
     }
@@ -376,10 +414,10 @@ def test_control_changes_outputs_count_only_where_changes_defines_them():
 
 @pytest.mark.parametrize("condition", ["always()", "${{ !cancelled() }}", "${{ failure() }}"])
 def test_control_an_always_running_dependent_does_not_inherit_the_hold(condition):
-    jobs = {"held": {"if": "${{ github.event.pull_request.user.login != 'dependabot[bot]' }}"}}
+    jobs = {"held": {"if": "${{ " + _BOTH + " }}"}}
     jobs["after"] = {"uses": "./a.yml", "needs": ["held"], "if": condition}
     assert violations({"x.yml": {"jobs": jobs}}, cheap={}) == [
-        "x.yml: expensive job 'after' is not held for dependabot pull requests (#21490)"
+        "x.yml: expensive job 'after' is not held for dependabot or promotion pull requests (#21490, #21519)"
     ]
     exempted = violations({"x.yml": {"jobs": jobs}}, cheap={}, exempt={("x.yml", "after"): "reports"})
     assert not any("not held" in problem for problem in exempted)
@@ -419,3 +457,98 @@ def test_control_a_changes_output_is_a_hold_only_where_changes_defines_that_outp
     assert condition_value(cond, frozenset({"held"})) is False
     assert condition_value(cond, frozenset({"ready"})) is not False, "reads `held`, but changes defines only `ready`"
     assert condition_value("${{ needs.changes.outputs.ready == 'true' }}", frozenset({"ready"})) is False
+
+
+# --- #21519: the release promotion pull request is held by the same rule ------------------------
+_MIN_HELD_COPIES = 10  # 12 inline copies today across 11 workflows; a glob that stops matching must not pass
+
+
+def _inline_hold_conditions() -> dict[tuple[str, str], str]:
+    """(workflow, job) -> normalised `if:` for every job outside ci.yml that holds itself in the dependabot scenario."""
+    found = {}
+    for name, doc in pull_request_workflows().items():
+        if name == "ci.yml":
+            continue
+        jobs = doc.get("jobs") or {}
+        direct = [job for job, kind in classify(jobs).items() if kind == "direct"]
+        found.update({(name, job): " ".join(str(jobs[job]["if"]).split()) for job in direct})
+    return found
+
+
+def test_every_inline_hold_carries_the_one_promotion_clause():
+    copies = _inline_hold_conditions()
+    assert len(copies) >= _MIN_HELD_COPIES
+    assert [k for k, text in copies.items() if PROMOTION_CLAUSE not in text] == []
+
+
+@pytest.mark.parametrize("scenario", HELD_SCENARIOS)
+def test_every_real_workflow_job_that_holds_itself_does_so_in_each_held_scenario(scenario):
+    for name, doc in pull_request_workflows().items():
+        jobs = doc.get("jobs") or {}
+        direct_somewhere = {j for s in HELD_SCENARIOS for j, k in classify(jobs, s).items() if k == "direct"}
+        assert direct_somewhere <= set(classify(jobs, scenario)), f"{name}: held in one scenario only"
+
+
+@pytest.mark.parametrize("scenario", RUNNING_SCENARIOS)
+def test_the_promotion_clause_holds_nothing_else(scenario):
+    """Labelled promotion, a fork branch named like the default branch, an ordinary branch: all still run."""
+    for (name, job), text in _inline_hold_conditions().items():
+        assert condition_value(text, scenario=scenario) is not False, f"{name}:{job} is held for {scenario}"
+
+
+def test_control_the_promotion_clause_alone_is_what_separates_the_scenarios():
+    cond = "${{ " + PROMOTION_CLAUSE + " }}"
+    assert condition_value(cond, scenario="promotion") is False
+    assert [condition_value(cond, scenario=s) for s in RUNNING_SCENARIOS] == [True] * len(RUNNING_SCENARIOS)
+
+
+def test_control_a_job_holding_only_dependabot_is_flagged_for_the_promotion():
+    only_dependabot = {"x.yml": {"jobs": {"big": {"timeout-minutes": 45, "if": "${{ " + _HOLD_DEP + " }}"}}}}
+    assert violations(only_dependabot, cheap={})
+
+
+_HOLD_DEP = "github.event.pull_request.user.login != 'dependabot[bot]'"
+_HOLD_BASE = {
+    "EVENT": "pull_request",
+    "AUTHOR": "maintainer",
+    "HEAD_REF": "issue-1-work",
+    "HEAD_REPO": "owner/repo",
+    "BASE_REF": "main",
+    "DEFAULT_BRANCH": "main",
+    "REPO": "owner/repo",
+    "LABELS": "[]",
+}
+_PROMOTION_ENV = {"HEAD_REF": "main", "BASE_REF": "release"}
+
+
+def _hold_step() -> dict:
+    steps = pull_request_workflows()["ci.yml"]["jobs"]["changes"]["steps"]
+    return next(step for step in steps if step.get("id") == "hold")
+
+
+def _run_hold(tmp_path, **override) -> str:
+    """The `held` output of the hold step's own script, run with exactly the step's environment names."""
+    assert set(_hold_step()["env"]) == set(_HOLD_BASE), "the step reads an input this driver does not provide"
+    out, summary = tmp_path / "output", tmp_path / "summary"
+    env = {**os.environ, **_HOLD_BASE, **override, "GITHUB_OUTPUT": str(out), "GITHUB_STEP_SUMMARY": str(summary)}
+    subprocess.run(["bash", "-c", _hold_step()["run"]], env=env, check=True, capture_output=True, text=True)
+    return out.read_text(encoding="utf-8").strip()
+
+
+@pytest.mark.skipif(shutil.which("jq") is None, reason="the hold step needs jq, as the hosted runner has")
+@pytest.mark.parametrize(
+    "override, held",
+    [
+        (_PROMOTION_ENV, "held=true"),
+        ({**_PROMOTION_ENV, "LABELS": '["ci:full"]'}, "held=false"),
+        ({**_PROMOTION_ENV, "HEAD_REPO": "fork/repo"}, "held=false"),
+        ({**_PROMOTION_ENV, "BASE_REF": "main"}, "held=false"),
+        ({"HEAD_REF": "issue-1-work", "BASE_REF": "release"}, "held=false"),
+        ({**_PROMOTION_ENV, "EVENT": "push"}, "held=false"),
+        ({**_PROMOTION_ENV, "LABELS": "not json"}, "held=false"),
+        ({"AUTHOR": "dependabot[bot]"}, "held=true"),
+        ({"AUTHOR": "dependabot[bot]", "HEAD_REF": "train-1"}, "held=false"),
+    ],
+)
+def test_the_hold_step_holds_the_promotion_and_dependabot_and_nothing_else(tmp_path, override, held):
+    assert _run_hold(tmp_path, **override) == held
