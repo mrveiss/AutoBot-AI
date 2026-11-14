@@ -83,12 +83,15 @@ def error_for(exc: BaseException) -> HTTPException | None:
 def fixed_secret_error_for(exc: BaseException) -> HTTPException | None:
     """The fixed-text 403 / 404 for a refused or missing secret on an envelope route, or None (#21559).
 
-    The answer is :func:`error_for`'s, never ``str(exc)``: the message carries the caller-supplied secret id or
-    the owner reference. The detail stays in the server log (the audit record is written by the route, unchanged).
+    The answer is :func:`error_for`'s, never ``str(exc)``: the message carries the caller-supplied secret id,
+    the owner reference and, on a dependency route, free text. The log line carries the exception CLASS and the
+    audit REASON only: the message text is not logged, because it holds an id that cannot be isolated to hash
+    with ``secret_log_ref`` and a CR/LF-bearing string (``REDACTION_BOUNDARY.md``). The audit record is written
+    by the route, unchanged.
     """
     known = error_for(exc)
     if known is not None:
-        logger.warning("envelope secret request refused: %s: %s", type(exc).__name__, exc)
+        logger.warning("envelope secret request refused: %s (%s)", type(exc).__name__, outcome_for(exc)[1])
     return known
 
 

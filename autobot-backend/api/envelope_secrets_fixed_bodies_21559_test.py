@@ -92,13 +92,26 @@ def test_a_refused_or_missing_secret_gets_the_fixed_body(op, kind, store, caplog
         assert leaked not in response.text
 
 
+_REASON = {SecretAccessError: "permission_denied", SecretNotFoundError: "not_found"}  # pragma: allowlist secret
+_FORGED = f"{_MARKER}\r\n2026-01-01 00:00:00 CRITICAL forged line {_SECRET} {_OWNER}"
+
+
+def _refusal_lines(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.name == "api.secrets_delete_outcome"]
+
+
+@pytest.mark.parametrize("message", [_MESSAGE, _FORGED], ids=["plain-message", "crlf-forged-line"])
 @pytest.mark.parametrize("kind", [SecretAccessError, SecretNotFoundError], ids=["access-error", "not-found-error"])
 @pytest.mark.parametrize("op", _OPERATIONS, ids=_IDS)
-def test_the_refused_detail_is_still_logged(op, kind, store, caplog) -> None:
+def test_the_refusal_is_logged_by_class_and_reason_without_the_message(op, kind, message, store, caplog) -> None:
     _, method, url, body = op
 
     with caplog.at_level(logging.WARNING, logger="api.secrets_delete_outcome"):
-        _send(kind(_MESSAGE), method, url, body)
+        _send(kind(message), method, url, body)
 
-    logged = [r.getMessage() for r in caplog.records if r.name == "api.secrets_delete_outcome"]
-    assert any(_MARKER in line and kind.__name__ in line for line in logged)
+    logged = _refusal_lines(caplog)
+    assert any(kind.__name__ in line and _REASON[kind] in line for line in logged)
+    for line in logged:
+        assert "\r" not in line and "\n" not in line
+        for leaked in (_MARKER, _SECRET, _OWNER, "forged"):
+            assert leaked not in line
