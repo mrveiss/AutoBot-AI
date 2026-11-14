@@ -8,8 +8,8 @@
  *
  * The writes go through the company workflows service. No optimistic update: the canvas is the
  * confirmation, so the process nodes are reloaded after a write and left alone when it fails. The
- * view is not remounted when the company changes, so the company is captured before each await and
- * nothing is written into state that now belongs to another company.
+ * layout remounts the view on a company switch (#21502), but a late answer can still arrive, so the
+ * company is captured before each await and nothing is written into another company's state.
  */
 import { computed, ref, type Ref } from 'vue'
 import type { ProcessNodeSource } from '@/composables/llc/orgCanvasGraph'
