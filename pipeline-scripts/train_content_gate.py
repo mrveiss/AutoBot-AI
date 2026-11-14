@@ -41,7 +41,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from autobot_shared.git_probe import run_git  # noqa: E402
+from autobot_shared.git_probe import committed_text, run_git  # noqa: E402
 from tools.lint.check_spdx_header import lacks_header  # noqa: E402
 
 MEMBER_MERGE = re.compile(r"^Merge #(\d+) @ [0-9a-f]{7,40}\b")
@@ -113,14 +113,14 @@ def _added_lines(base: str, head: str, path: str) -> list[str]:
 
 def _lacks_header(commit: str, path: str) -> bool:
     """True when *path* is in the header check's scope and its committed text at *commit* has no header."""
-    return lacks_header(Path(path), lambda: _git("show", f"{commit}:{path}"))
+    return lacks_header(Path(path), lambda: committed_text(commit, path))
 
 
 def _survival_loss(base: str, head: str, path: str, merge: str, report: ContentReport) -> str | None:
     added = _added_lines(base, head, path)
     if not added:
         return None
-    present = {line.strip() for line in _git("show", f"{merge}:{path}").splitlines()}
+    present = {line.strip() for line in committed_text(merge, path).splitlines()}
     kept = sum(line in present for line in added)
     report.lines += len(added)
     return f"only {kept}/{len(added)} added lines present" if kept < len(added) * MIN_SURVIVAL else None

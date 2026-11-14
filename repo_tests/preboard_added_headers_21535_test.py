@@ -168,7 +168,29 @@ def test_the_command_exits_one_and_names_the_file(lane, repo, monkeypatch, capsy
 def test_the_command_exits_zero_when_every_added_file_has_the_header(lane, repo, monkeypatch, capsys) -> None:
     repo.write("new/a.py", _HEADED)
     assert _main(lane, repo, repo.commit("add"), monkeypatch, []) == 0
-    assert "all" in capsys.readouterr().out
+    assert "added files: 1, in the header check's scope: 1, with the header: 1\n" in capsys.readouterr().out
+
+
+def test_the_command_says_what_it_examined_for_a_populated_and_an_empty_set(lane, repo, monkeypatch, capsys) -> None:
+    repo.write("new/a.py", _HEADED)
+    repo.write("new/b.sh", "# Copyright 2025-2026 mrveiss\n# SPDX-License-Identifier: Apache-2.0\n")
+    repo.write("notes.txt", "out of scope\n")
+    head = repo.commit("add")
+    assert _main(lane, repo, head, monkeypatch, []) == 0
+    assert capsys.readouterr().out == "added files: 3, in the header check's scope: 2, with the header: 2\n"
+    repo.write("existing.py", _HEADLESS + "other = 2\n")
+    assert _main(lane, repo, repo.commit("modify only"), monkeypatch, []) == 0
+    assert capsys.readouterr().out == "added files: 3, in the header check's scope: 2, with the header: 2\n"
+    repo.run("switch", "-q", "-c", "empty", repo.base)
+    assert _main(lane, repo, repo.run("rev-parse", "HEAD"), monkeypatch, []) == 0
+    assert capsys.readouterr().out == "no added files: nothing to examine\n"
+
+
+def test_a_non_utf8_added_file_is_judged_by_its_header_not_crashed_on(lane, repo) -> None:
+    (repo.path / "new").mkdir()
+    (repo.path / "new" / "ok.py").write_bytes(_HEADED.encode() + b"# caf\xe9\n")
+    (repo.path / "new" / "bad.py").write_bytes(b"value = '\xff\xfe'\n")
+    assert _flagged(lane, repo, repo.commit("add")) == ["new/bad.py"]
 
 
 @pytest.mark.parametrize("sha", ["main", "abc123", "", "g" * 40])
@@ -229,8 +251,11 @@ def _called(path: Path) -> set[str]:
     return calls | defined
 
 
-def test_the_gate_and_the_lane_share_one_definition_of_lacking_the_header() -> None:
+def test_the_gate_and_the_lane_share_one_definition_of_lacking_the_header_and_one_reader() -> None:
     for module in (_GATE, support.LANE_MODULE):
         names = _called(module)
-        assert "lacks_header" in names, f"{module.name} no longer asks the shared check"
-        assert not names & {"has_header", "in_scope"}, f"{module.name} restates the header test"
+        assert {"lacks_header", "committed_text"} <= names, f"{module.name} no longer asks the shared check/reader"
+        assert "has_header" not in names, f"{module.name} restates the header test"
+        tree = parse_cache.parse(module.read_text(encoding="utf-8"))
+        strings = {n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+        assert "show" not in strings, f"{module.name} reads committed text itself"

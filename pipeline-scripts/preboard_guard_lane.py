@@ -53,9 +53,10 @@ for _entry in (str(Path(__file__).resolve().parent.parent), str(Path(__file__).r
 
 import preboard_guard_lane_report as report  # noqa: E402
 
+from autobot_shared.git_probe import committed_text  # noqa: E402
 from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 from tools.lint._comment_syntax import code_lines  # noqa: E402
-from tools.lint.check_spdx_header import lacks_header  # noqa: E402
+from tools.lint.check_spdx_header import in_scope, lacks_header  # noqa: E402
 
 #: The guard and tooling trees, as named in pytest.ini's ``testpaths``. The only copy of this list.
 GUARD_ROOTS = (
@@ -272,28 +273,37 @@ def _changed_tests(root: Path, args: argparse.Namespace) -> None:
         sys.stderr.write(f"::notice::{counts['uncollected']} changed test file(s) the suite does not collect\n")
 
 
-def headerless_additions(base_sha: str, head_sha: str) -> list[str]:
-    """Files the head brings in that are in the header check's scope and whose COMMITTED text at it has no header.
+def examine_additions(base_sha: str, head_sha: str) -> tuple[int, int, list[str]]:
+    """``(added, in scope, header-less)``: the files the head brings in, those in the header check's scope, and
+    those whose COMMITTED text at the head has no header.
 
-    Read with ``git show <head>:<path>``, never from the working tree, which the lane has changed by merging the base.
-    A file the head only modifies is not judged: a header it already lacked is not this head's addition.
+    Read with ``committed_text`` (``git show``), never the working tree, which the lane has changed by merging the
+    base. A file the head only modifies is not judged: a header it already lacked is not this head's addition.
     """
-    return [
-        path
-        for path in changed_paths(base_sha, head_sha, ARRIVED_FILTER)
-        if lacks_header(Path(path), lambda path=path: _git("show", f"{head_sha}:{path}"))
-    ]
+    added = changed_paths(base_sha, head_sha, ARRIVED_FILTER)
+    scoped = [path for path in added if in_scope(Path(path))]
+    missing = [p for p in scoped if lacks_header(Path(p), lambda p=p: committed_text(head_sha, p))]
+    return len(added), len(scoped), missing
+
+
+def headerless_additions(base_sha: str, head_sha: str) -> list[str]:
+    """The files of :func:`examine_additions` that lack the header."""
+    return examine_additions(base_sha, head_sha)[2]
 
 
 def _added_headers(args: argparse.Namespace) -> int:
     pinned_base_commit(args.base_sha)  # the base may not be in the branch's history: fetch it by id first
-    missing = headerless_additions(args.base_sha, args.head_sha)
+    added, scoped, missing = examine_additions(args.base_sha, args.head_sha)
     for path in missing:
         sys.stderr.write(f"{path}: added without the SPDX/Apache-2.0 license header\n")
     if missing:
         sys.stderr.write(f"::error::{len(missing)} added file(s) lack the license header; add it and commit\n")
         return 1
-    sys.stdout.write("added files with the license header: all\n")
+    sys.stdout.write(
+        "no added files: nothing to examine\n"
+        if not added
+        else f"added files: {added}, in the header check's scope: {scoped}, with the header: {scoped - len(missing)}\n"
+    )
     return 0
 
 
