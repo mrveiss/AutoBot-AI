@@ -35,6 +35,14 @@ from repo_tests.python_filter_covers_its_guards_test import _is_covered
         pytest.param("a/**", "a/x/y", True, id="trailing-covers-subtree"),
         pytest.param("repo_tests/**", "other/baseline.txt", False, id="tree-misses-other-tree"),
         pytest.param("repo_tests/**", "repo_tests/baseline.txt", True, id="tree-covers-own-file"),
+        pytest.param("a/**", "a", True, id="trailing-covers-the-bare-directory"),
+        pytest.param("a/**/b?c", "a/q/bxc", True, id="question-mark-covers-one-character"),
+        pytest.param("a/**/b?c", "a/q/bxxc", False, id="question-mark-misses-two-characters"),
+        pytest.param("a/**/b?c", "a/q/b/c", False, id="question-mark-misses-a-slash"),
+        pytest.param("a**b", "axxb", True, id="in-segment-double-star-covers-a-name"),
+        pytest.param("a**b", "a/b", False, id="in-segment-double-star-misses-a-slash"),
+        pytest.param("**/*.env", "a/b.env", True, id="dot-covers-a-literal-dot"),
+        pytest.param("**/*.env", "a/benv", False, id="dot-misses-an-ordinary-character"),
     ],
 )
 def test_a_star_beside_a_double_star_stays_inside_one_segment(pattern: str, path: str, expected: bool) -> None:
