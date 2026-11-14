@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Mock NPU embeddings must not be returned to backend callers."""
 
 from contextlib import asynccontextmanager
