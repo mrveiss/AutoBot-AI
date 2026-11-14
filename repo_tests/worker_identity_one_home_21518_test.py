@@ -54,11 +54,16 @@ def _python_files(root: Path) -> list[str]:
 
 
 def _non_test_python_count(root: Path) -> int:
-    """The same population counted INDEPENDENTLY: every tracked file, filtered by suffix in Python.
+    """The same population, independent of the GLOB only: every tracked file, filtered by suffix in Python.
 
     The sweep asks git for ``*.py``; this lists the whole tree and filters here, so a broken glob moves
     only one of the two numbers. Numerator and denominator are the same population (RATCHET_BASELINES
     rule 7), so adding tests moves neither.
+
+    NOT proven here: the test-file predicate. Both counts call ``_is_test()``, so an over-broad predicate
+    that dropped production files would cancel out at ``min_fraction=1.0``. There is no second canonical
+    predicate to count with (a third copy of the rule would be a fork); the predicate itself is pinned by
+    ``autobot_shared/testfile_names_test.py`` and ``test_name_predicate_single_home_21078_test.py``.
     """
     try:
         return sum(1 for rel in tracked_paths(root) if rel.endswith(".py") and not _is_test(rel))
