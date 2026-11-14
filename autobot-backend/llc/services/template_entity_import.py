@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 
+from ..exceptions import refusal_text_keeping_public_reason
 from .portability import TemplateImportError
 from .work_item_import import KIND_LIBRARY, import_template_work
 
@@ -35,6 +36,8 @@ async def import_template_entities(
     except ValueError as exc:  # an invalid enum value in the template; a programming error propagates
         await sp.rollback()
         logger.warning("Template entity import rolled back: %s: %s", type(exc).__name__, safe_log_text(exc))
-        raise TemplateImportError("Import rolled back: the template holds an invalid value") from exc
+        raise TemplateImportError(
+            refusal_text_keeping_public_reason(exc, "Import rolled back: the template holds an invalid value")
+        ) from exc
     counts.update({key: len(ids) for key, ids in created.items()})
     return skipped_items

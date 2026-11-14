@@ -58,9 +58,15 @@ def test_an_exception_with_public_detail_gets_exactly_that_text(helper, code) ->
 def test_write_refusal_maps_a_hierarchy_violation_to_422(caplog) -> None:
     with caplog.at_level(logging.WARNING):
         got = _common.write_refusal(HierarchyViolation(_LEAKY))
-    assert (got.status_code, got.detail) == (422, "Unprocessable request")
+    assert (got.status_code, got.detail) == (422, _LEAKY)  # the exception carries PublicMessageMixin: its text is shown
+    assert "Refused" not in caplog.text
+
+
+def test_write_refusal_maps_a_non_public_value_error_to_the_fixed_400(caplog) -> None:
+    with caplog.at_level(logging.WARNING):
+        got = _common.write_refusal(ValueError(_LEAKY))
+    assert (got.status_code, got.detail) == (400, "Invalid request")
     assert _MARKER not in str(got.detail)
-    assert "HierarchyViolation" in caplog.text
     assert _MARKER not in caplog.text
 
 

@@ -28,7 +28,7 @@ from models.approval import Approval
 from services.agent_org_service import AgentOrgService
 from services.approval_execution import review_decision
 
-from ..exceptions import PublicMessageMixin
+from ..exceptions import PublicMessageMixin, refusal_text_keeping_public_reason
 from ..models.activity import ActorType
 from ..models.budget import TOKEN_LIMIT_MAX, TOKEN_LIMIT_MIN, LLCAgentBudget
 from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType
@@ -188,7 +188,9 @@ async def _sprint_close_approved(session: AsyncSession, approval: Approval, deci
         )
     except ValueError as exc:
         logger.warning("Sprint close refused for approval %s: %s", approval.id, safe_log_text(exc))
-        raise ApprovalHookError("the sprint cannot be closed in its current state") from exc
+        raise ApprovalHookError(
+            refusal_text_keeping_public_reason(exc, "the sprint cannot be closed in its current state")
+        ) from exc
     return {"sprint_id": str(ask.sprint_id)}
 
 
@@ -233,7 +235,9 @@ async def review_decider(
         raise ApprovalHookError(str(exc)) from exc
     except ValueError as exc:
         logger.warning("Approval %s refused at review: %s", approval.id, safe_log_text(exc))
-        raise ApprovalHookError("this decision is not permitted on this approval") from exc
+        raise ApprovalHookError(
+            refusal_text_keeping_public_reason(exc, "this decision is not permitted on this approval")
+        ) from exc
 
 
 async def run_post_decision_hook(

@@ -25,7 +25,7 @@ from llc.services.portability_export import PortabilityExportMixin, _scrub_adapt
 from llc.services.portability_import import _PLACEHOLDER_RE, PortabilityImportMixin
 from user_management.models.organization import Organization
 
-from ..exceptions import PublicMessageMixin
+from ..exceptions import PublicMessageMixin, refusal_text_keeping_public_reason
 from .activity_log import LLCActivityLogService
 from .actor import resolve_actor
 from .base import LLCServiceBase
@@ -284,7 +284,7 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
         except Exception as exc:
             await sp.rollback()
             logger.warning("Template import rolled back: %s: %s", type(exc).__name__, safe_log_text(exc))
-            raise TemplateImportError("Import rolled back") from exc
+            raise TemplateImportError(refusal_text_keeping_public_reason(exc, "Import rolled back")) from exc
 
         return {
             "company_id": str(company_id),

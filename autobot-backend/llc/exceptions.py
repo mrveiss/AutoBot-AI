@@ -20,6 +20,15 @@ class PublicMessageMixin:
         return str(self)
 
 
+def refusal_text_keeping_public_reason(exc: BaseException, fixed: str) -> str:
+    """``fixed`` alone, or ``fixed: reason`` when *exc* carries a non-empty str ``public_detail``.
+
+    A wrapper that re-raises a refusal under its own fixed text calls this so a public reason is not lost (#21579).
+    """
+    detail = getattr(exc, "public_detail", None)
+    return f"{fixed}: {detail}" if isinstance(detail, str) and detail else fixed
+
+
 class BudgetExhausted(PublicMessageMixin, Exception):
     """Raised when an agent's budget_spent exceeds budget_limit."""
 

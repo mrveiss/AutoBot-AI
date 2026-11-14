@@ -26,6 +26,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
+
 LLC_ROOT = "autobot-backend/llc"
 RESPONSE_CALLS = frozenset({"HTTPException", "JSONResponse", "Response"})
 PUBLIC_ATTRS = frozenset({"public_detail", "errors"})
@@ -184,7 +186,7 @@ def exc_text_scan_source(source: str, rel: str) -> list[str]:
 
 
 def _exc_text_is_test_file(path: Path) -> bool:
-    return "tests" in path.parts or path.name.startswith("test_") or path.name.endswith("_test.py")
+    return "tests" in path.parts or is_test_filename(path.name)
 
 
 def exc_text_scan_tree(root: Path) -> dict[str, int]:
