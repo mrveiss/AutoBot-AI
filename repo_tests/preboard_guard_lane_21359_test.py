@@ -181,7 +181,7 @@ def test_the_types_check_is_the_one_composite_action(workflow) -> None:
 
 def test_the_result_is_uploaded_whatever_the_outcome(workflow) -> None:
     result = workflow["jobs"]["result"]
-    assert result["needs"] == ["pin", "guards", "own-tests", "added-headers", "types"]
+    assert result["needs"] == ["pin", "guards", "own-tests", "own-specs", "added-headers", "types"]
     assert "always()" in result["if"]
     upload = next(s for s in result["steps"] if s.get("with", {}).get("name") == "preboard-guards-result")
     assert upload["uses"].startswith("actions/upload-artifact@") and upload["if"] == "always()"
@@ -218,7 +218,7 @@ def test_the_base_is_resolved_in_exactly_one_job_and_exposed_as_its_output(workf
     assert workflow["jobs"]["pin"]["steps"][-1]["id"] == "pin" and "needs" not in workflow["jobs"]["pin"]
 
 
-@pytest.mark.parametrize("job", ["guards", "own-tests", "types"])
+@pytest.mark.parametrize("job", ["guards", "own-tests", "own-specs", "types"])
 def test_guards_and_types_merge_the_pinned_commit_and_never_the_branch_tip(workflow, job) -> None:
     body = workflow["jobs"][job]
     assert body["needs"] == ["pin"] and body["env"]["PINNED_BASE_SHA"] == _PINNED

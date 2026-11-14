@@ -39,7 +39,16 @@
 #           pipeline-scripts/preboard_guard_lane.py: backend, tts-worker, libs and plugins run in the backend
 #           interpreter, SLM backend files in the SLM interpreter, in separate sessions as the suite does. Files
 #           under the guard roots (repo_tests included) are left to the guard shards. An empty selection is
-#           green ("no changed test files"). Not covered: frontend specs (#21509).
+#           green ("no changed test files"). Frontend specs are the `own-specs` job below.
+#   own-specs  The Vitest spec files the head adds or changes (same three-dot diff), run in the frontend package that
+#           collects them (#21509): so a member's new specs, and a spec that calls a function its subject does not export,
+#           fail here and not first inside the train. The selection is `changed-specs` in pipeline-scripts/preboard_guard_lane.py
+#           (rules in preboard_guard_lane_specs.py): the `include` and `exclude` of each package's own vitest.config.*, the
+#           package being the directory that holds the config. A spec-looking file no package collects is a notice, not a
+#           failure. An empty selection is green and installs nothing ("no changed frontend specs"). Otherwise Node is set up and
+#           each package installed as the frontend test job does (setup-node on .nvmrc, `npm ci`, or `npm install` where no lock is
+#           committed), and `vitest run` is given just the selected files, with no coverage gate. A failing spec, or a selected
+#           file Vitest collects nothing from, is red. Not covered: the rest of the frontend suite, lint, type-check, build.
 #   added-headers  Every file the head ADDS (or renames or copies into place) in the license-header check's scope must carry the
 #           header in its COMMITTED text at the dispatched head (#21535). The train content gate fails the same file, but
 #           only after the member has boarded; this fails it before. A small job of its own, with no suite environment and
@@ -53,7 +62,7 @@
 # Not covered (each is an inline step of a larger job; copying it would give it a second
 # definition). Follow-up #21360: move each into a composite action that its workflow and this one call.
 #   - the product test trees, except the test files the head changes (own-tests runs those) (autobot-backend, autobot-slm-backend, autobot-tts-worker, libs,
-#     plugins/core-plugins), the frontend tests, and the interaction of two members
+#     plugins/core-plugins), the frontend tests except the specs the head changes (own-specs runs those), and the interaction of two members
 #   - the dependency-floor check, the hardcoded-value baseline audit (ssot-coverage.yml), Semgrep
 #     at ERROR severity (security.yml)
 #   - promtool (AUTOBOT_REQUIRE_PROMTOOL, ci.yml): its tests skip here and are accepted only through
@@ -87,6 +96,7 @@
 #                 or the types job that merged a base other than `base_sha`, a missing types record)
 #   checks.own_tests  status (the own-tests job result; anything but "success", or a missing job, is red)
 #   checks.added_headers  status (the added-headers job result; anything but "success", or a missing job, is red)
+#   checks.own_specs  status (the own-specs job result; anything but "success", or a missing job, is red)
 #   checks.types  status (the types job result); the base it merged is recorded in types-meta.json
 #                 (artifact preboard-types-record) and compared with base_sha in checks.guards.problems
 #   failed_tests  [{nodeid, kind: "failure" | "error", message: first line}]
@@ -342,6 +352,79 @@ jobs:
           fi
           exit "$rc"
 
+  # The head's own Vitest specs, run in their packages. Nothing is installed when the head changes none.
+  own-specs:
+    name: own frontend specs
+    needs: [pin]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PINNED_BASE_SHA: ${{ needs.pin.outputs.base_sha }}
+      # The frontend test job's own settings: no Cypress download (no CI job runs Cypress), room for the compiler.
+      CYPRESS_INSTALL_BINARY: '0'
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Merge the pinned base into the head (local commit, never pushed)
+        id: base
+        run: python3 pipeline-scripts/preboard_guard_lane.py merge --base-sha "$PINNED_BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Stop on a head that conflicts with the base
+        if: steps.base.outputs.merged != 'true'
+        run: |
+          echo "::error::the head conflicts with the base; nothing was tested"
+          exit 1
+
+      # The dispatched ref's own head (not the merge commit) against the pinned base: three dots, from the merge base.
+      - name: Select the frontend specs this head adds or changes
+        id: select
+        env:
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          python3 pipeline-scripts/preboard_guard_lane.py changed-specs \
+            --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" --out-dir "$RUNNER_TEMP/own-specs" >> "$GITHUB_OUTPUT"
+
+      # The frontend test job's setup (ci.yml frontend-tests): the Node major from .nvmrc and the npm cache. Skipped for an empty selection.
+      - name: Setup Node.js
+        if: steps.select.outputs.total != '0'
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: |
+            autobot-frontend/package-lock.json
+            autobot-slm-frontend/package-lock.json
+
+      # Per package: install as its own CI job does (`npm ci` with a committed lock, `npm install` for the kit that has none),
+      # then `vitest run` on just the selected files (relative to the package) from the array: no word-splitting. Every package
+      # runs even after one fails, so the run lists every failing spec; the package list is not left on the installer's stdin.
+      - name: Run the changed specs
+        if: steps.select.outputs.total != '0'
+        env:
+          SPECS_DIR: ${{ runner.temp }}/own-specs
+        run: |
+          rc=0
+          while IFS= read -r pkg; do
+            mapfile -t FILES < "$SPECS_DIR/${pkg//\//__}.txt"
+            echo "::group::$pkg: ${#FILES[@]} spec file(s)"
+            (
+              cd "$pkg" || exit 1
+              if [ -f package-lock.json ]; then npm ci; else npm install; fi
+              npx --no-install vitest run "${FILES[@]}"
+            ) < /dev/null || { echo "::error::the changed specs of $pkg failed"; rc=1; }
+            echo "::endgroup::"
+          done < "$SPECS_DIR/packages.txt"
+          exit "$rc"
+
   # The committed text of the head's added files, not the merged tree: no merge step, no suite environment.
   added-headers:
     name: added files carry the license header
@@ -416,7 +499,7 @@ jobs:
 
   result:
     name: result
-    needs: [pin, guards, own-tests, added-headers, types]
+    needs: [pin, guards, own-tests, own-specs, added-headers, types]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
