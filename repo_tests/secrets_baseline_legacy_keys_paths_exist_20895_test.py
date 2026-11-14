@@ -20,6 +20,7 @@ Removing an entry changes ``FROZEN_LEGACY_KEYS_SHA256`` too (see
 
 from __future__ import annotations
 
+import pytest
 from repo_tests._paths import repo_root
 from repo_tests.secrets_baseline_reasons import load_legacy_keys
 
@@ -46,19 +47,24 @@ def _entry_paths() -> set[str]:
     return {key[0] for key in load_legacy_keys()}
 
 
-def _examined() -> tuple[set[str], set[str]]:
-    """``(entry paths, tracked paths)`` after proving both sides were really read.
+def check_reach(paths: set[str], tracked: set[str]) -> None:
+    """Fail unless BOTH sides were really read.
 
-    The tree side must list the anchors; the entry side must MATCH the tree for at least one path,
-    so a broken enumeration (everything "missing") or an emptied file (nothing to miss) cannot read as a result.
+    Tree side: the anchors are tracked. Entry side: the loader returned entries (*paths*), which is
+    measured on the entries READ, not on how many of them match the tree -- if every entry is stale
+    the match is empty, and that case must reach the missing-path check that lists them.
     """
-    tracked, paths = _tracked(), _entry_paths()
     reached = [anchor for anchor in _REACH_ANCHORS if anchor in tracked]
     assert len(reached) == len(
         _REACH_ANCHORS
     ), f"git ls-files lists {len(reached)} of {len(_REACH_ANCHORS)} anchors; a missing-path result would be vacuous"
-    matched = paths & tracked
-    assert len(matched) > 0, f"none of the {len(paths)} legacy-key paths is in the tree; the comparison read nothing"
+    assert len(paths) > 0, "the loader returned no legacy-key entries; the comparison read nothing"
+
+
+def _examined() -> tuple[set[str], set[str]]:
+    """``(entry paths, tracked paths)`` after proving both sides were really read."""
+    tracked, paths = _tracked(), _entry_paths()
+    check_reach(paths, tracked)
     return paths, tracked
 
 
@@ -82,3 +88,13 @@ def test_a_path_absent_from_the_tree_is_reported() -> None:
     tracked = {"live/file.py", "other/file.py"}
     assert missing_paths({"live/file.py", "retired/mirror/file.py"}, tracked) == ["retired/mirror/file.py"]
     assert missing_paths({"live/file.py"}, tracked) == []
+
+
+def test_an_all_stale_baseline_reaches_the_path_check_that_lists_them() -> None:
+    """Control: entries that are ALL stale pass the reach check and are named by the path check, not 'read nothing'."""
+    tracked = set(_REACH_ANCHORS)
+    stale = {"retired/a.py", "retired/b.py"}
+    check_reach(stale, tracked)
+    assert missing_paths(stale, tracked) == ["retired/a.py", "retired/b.py"]
+    with pytest.raises(AssertionError, match="read nothing"):
+        check_reach(set(), tracked)
