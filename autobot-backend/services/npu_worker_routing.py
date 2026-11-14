@@ -109,7 +109,10 @@ async def post_inference_with_failover(
     last_error: Exception = TimeoutError("NPU inference ran out of time")
     for url, left in worker_attempts(await npu_worker_urls(configured_url), timeout_seconds):
         try:
-            return await _post_inference(url, request_data, left)
+            result = await _post_inference(url, request_data, left)
+            if request_data.get("task_type") == "embedding_generation" and result.get("mock") is not False:
+                raise RuntimeError("NPU worker returned a mock embedding or did not confirm its origin")
+            return result
         except Exception as exc:
             logger.warning("NPU worker %s failed: %s", url, exc)
             last_error = exc

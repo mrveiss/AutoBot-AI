@@ -53040,8 +53040,8 @@ export interface paths {
         put?: never;
         /**
          * Release Work Item
-         * @description Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one. Not enforced: that
-         *     the caller IS that agent, nor that an item held by a person has no agent to match (open, #20521).
+         * @description Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one; an item held by a
+         *     person is refused (409). Not enforced: that the caller IS that agent (open, #20521).
          */
         post: operations["release_work_item_api_llc_work_items__work_item_id__release_post"];
         delete?: never;
@@ -95382,6 +95382,8 @@ export interface components {
         ReleaseRequest: {
             /** Agent Id */
             agent_id: string;
+            /** Run Id */
+            run_id?: string | null;
         } & {
             [key: string]: unknown;
         };

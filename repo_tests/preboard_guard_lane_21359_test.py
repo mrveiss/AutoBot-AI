@@ -136,7 +136,7 @@ def test_every_job_is_bounded(workflow) -> None:
 def test_it_reports_every_failure_and_never_stops_early(workflow) -> None:
     guards = workflow["jobs"]["guards"]
     assert guards["strategy"]["fail-fast"] is False
-    invocations = [tokens for tokens in map(_invocation, _scripts(workflow)) if tokens]
+    invocations = [tokens for tokens in map(_invocation, _runs(workflow, "guards")) if tokens]
     assert len(invocations) == 1, "the lane must run the test runner exactly once per shard"
     flags = [t for t in invocations[0] if t in _STOP_EARLY or t.startswith("--maxfail")]
     assert not flags, f"stop-on-first-failure options: {flags}"
@@ -181,7 +181,7 @@ def test_the_types_check_is_the_one_composite_action(workflow) -> None:
 
 def test_the_result_is_uploaded_whatever_the_outcome(workflow) -> None:
     result = workflow["jobs"]["result"]
-    assert result["needs"] == ["pin", "guards", "types"] and "always()" in result["if"]
+    assert result["needs"] == ["pin", "guards", "own-tests", "types"] and "always()" in result["if"]
     upload = next(s for s in result["steps"] if s.get("with", {}).get("name") == "preboard-guards-result")
     assert upload["uses"].startswith("actions/upload-artifact@") and upload["if"] == "always()"
     assert upload["with"]["if-no-files-found"] == "error"
@@ -217,7 +217,7 @@ def test_the_base_is_resolved_in_exactly_one_job_and_exposed_as_its_output(workf
     assert workflow["jobs"]["pin"]["steps"][-1]["id"] == "pin" and "needs" not in workflow["jobs"]["pin"]
 
 
-@pytest.mark.parametrize("job", ["guards", "types"])
+@pytest.mark.parametrize("job", ["guards", "own-tests", "types"])
 def test_guards_and_types_merge_the_pinned_commit_and_never_the_branch_tip(workflow, job) -> None:
     body = workflow["jobs"][job]
     assert body["needs"] == ["pin"] and body["env"]["PINNED_BASE_SHA"] == _PINNED
@@ -247,7 +247,7 @@ def test_workflow_inputs_reach_run_blocks_only_through_env(workflow) -> None:
 
 
 def test_the_tests_run_on_the_head_merged_with_the_base_before_the_environment_is_built(workflow) -> None:
-    for job in ("guards", "types"):
+    for job in ("guards", "own-tests", "types"):
         steps = workflow["jobs"][job]["steps"]
         merge = next(i for i, s in enumerate(steps) if "preboard_guard_lane.py merge" in s.get("run", ""))
         later = [i for i, s in enumerate(steps) if s.get("uses", "").startswith("./.github/actions/")]

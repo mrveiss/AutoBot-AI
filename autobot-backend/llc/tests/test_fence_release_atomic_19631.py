@@ -148,7 +148,13 @@ async def test_release_agent_fence_without_redis_is_a_no_op():
 async def _release(redis, fence: str):
     """Run ``WorkItemService.release`` on a row at generation run-1; return the fence after commit and the drop."""
     item_id = str(uuid.uuid4())
-    item = MagicMock(id=uuid.UUID(item_id), assignee_agent_id=uuid.UUID(_AGENT), checkout_run_id="run-1", version=1)
+    item = MagicMock(
+        id=uuid.UUID(item_id),
+        assignee_agent_id=uuid.UUID(_AGENT),
+        assignee_user_id=None,
+        checkout_run_id="run-1",
+        version=1,
+    )
     await redis.set(_key(item_id), fence)
     deferred: list = []
     service = wis.WorkItemService(activity_log=MagicMock(record=AsyncMock()))
