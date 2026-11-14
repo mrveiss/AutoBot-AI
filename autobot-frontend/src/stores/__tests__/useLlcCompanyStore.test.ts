@@ -176,6 +176,70 @@ describe('useLlcCompanyStore (GH#9627)', () => {
       expect(store.selectedCompanyId).toBe('company-1')
     })
 
+    it('does not clear a selection a newer list confirmed while the probe was in flight', async () => {
+      let rejectProbe: (err: unknown) => void = () => undefined
+      let listCalls = 0
+      getMock.mockImplementation((url: string) => {
+        if (url === LIST_URL) {
+          listCalls += 1
+          return Promise.resolve(
+            listCalls === 1 ? [mockCompany()] : [mockCompany(), mockCompany({ id: 'archived-1' })],
+          )
+        }
+        return new Promise((_resolve, reject) => { rejectProbe = reject })
+      })
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(probeCalls()).toHaveLength(1))
+      await store.fetchCompanies()
+      expect(store.companies.map((c) => c.id)).toContain('archived-1')
+      rejectProbe(new HttpError(404, 'Company not found'))
+      await first
+      expect(store.selectedCompanyId).toBe('archived-1')
+    })
+
+    it.each([
+      ['HTTP 500', () => Promise.reject(new HttpError(500, 'Internal server error'))],
+      ['a non-HTTP error', () => Promise.reject(new Error('network down'))],
+    ])('flags the kept selection unverified when the probe fails with %s', async (_label, probe) => {
+      routeGet(probe)
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(store.selectionUnverified).toBe(true)
+      expect(store.error).toBeNull()
+    })
+
+    it('leaves the flag false when the probe succeeds', async () => {
+      routeGet(() => Promise.resolve(mockCompany({ id: 'archived-1' })))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(store.selectionUnverified).toBe(false)
+    })
+
+    it('leaves the flag false when the probe refuses and the selection is cleared', async () => {
+      routeGet(() => Promise.reject(new HttpError(404, 'Company not found')))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(store.selectedCompanyId).toBe('')
+      expect(store.selectionUnverified).toBe(false)
+    })
+
+    it('resets the flag when a later fetch runs without a failed probe', async () => {
+      routeGet(() => Promise.reject(new HttpError(500, 'Internal server error')))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(store.selectionUnverified).toBe(true)
+      store.selectCompany('company-1')
+      await store.fetchCompanies()
+      expect(store.selectionUnverified).toBe(false)
+    })
+
     it('sends no probe when the list already holds the selection', async () => {
       routeGet(() => Promise.reject(new HttpError(404, 'Company not found')))
       const store = useLlcCompanyStore()

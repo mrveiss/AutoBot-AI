@@ -41,6 +41,9 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
   // (no PostgreSQL company mode → HTTP 503). This is an expected state, NOT an
   // error to surface to end users.
   const unavailable = ref(false)
+  // True only when the latest probe of the current selection failed without a refusal, so the
+  // selection is kept but unverified. Not an error: the list itself loaded.
+  const selectionUnverified = ref(false)
 
   const selectedCompany = computed(
     () => companies.value.find((c) => c.id === selectedCompanyId.value) ?? null,
@@ -56,7 +59,10 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
    * Absence is therefore probed by id. The selection is cleared only when the backend refuses the
    * company in a way retrying cannot change (``SELECTION_REFUSED_STATUSES``); success, 5xx, 401,
    * 408/429 and non-HTTP errors keep it. The probed company is not added to ``companies``: the
-   * selector must not start listing archived or subsidiary entries.
+   * selector must not start listing archived or subsidiary entries. A refusal is acted on only
+   * while the id is still selected and still absent from the CURRENT list, so a late probe never
+   * overrides a newer list that confirmed it. A failed probe that is not a refusal sets
+   * ``selectionUnverified``; ``fetchCompanies`` resets it on every run.
    */
   async function dropSelectionIfGone(): Promise<void> {
     const id = selectedCompanyId.value
@@ -68,10 +74,14 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
       if (
         isHttpError(err) &&
         SELECTION_REFUSED_STATUSES.includes(err.status) &&
-        selectedCompanyId.value === id
+        selectedCompanyId.value === id &&
+        !companies.value.some((c) => c.id === id)
       ) {
         selectedCompanyId.value = ''
         return
+      }
+      if (!(isHttpError(err) && SELECTION_REFUSED_STATUSES.includes(err.status))) {
+        selectionUnverified.value = selectedCompanyId.value === id
       }
       logger.warn('company probe failed; keeping the selection:', err)
     }
@@ -89,6 +99,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
     isLoading.value = true
     error.value = null
     unavailable.value = false
+    selectionUnverified.value = false
     try {
       const endpoint = includeArchived
         ? `${COMPANIES_ENDPOINT}?include_archived=true`
@@ -150,6 +161,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
     isLoading,
     error,
     unavailable,
+    selectionUnverified,
     selectedCompany,
     hasCompanies,
     fetchCompanies,
