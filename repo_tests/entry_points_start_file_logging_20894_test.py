@@ -159,7 +159,7 @@ OVERSIZE: dict[str, str] = {
 #: Entry points that use the manager and deliberately stay console-only.
 CONSOLE_ONLY: dict[str, str] = {
     "pipeline-scripts/pr_conflict_gate.py": "CI job script: the job log is its output, a file would be discarded",
-    "pipeline-scripts/audit_unwired_trackers.py": "CI job script: stdout is the report the workflow parses, a file would be discarded",
+    "pipeline-scripts/audit_unwired_trackers.py": "CI job script: the job log is its output, a file would be discarded",
 }
 
 
