@@ -420,9 +420,52 @@ def test_vitest_runs_once_in_run_mode_on_exactly_the_selection_array(jobs) -> No
 
 def test_every_package_runs_and_one_failure_fails_the_job(jobs) -> None:
     run = _step(jobs, "Run the changed specs")["run"]
-    assert "rc=0" in run and "rc=1" in run and 'exit "$rc"' in run
-    assert "< /dev/null" in run, "an installer must not read the package list"
+    lines = [line.strip() for line in run.splitlines() if line.strip()]
+    assert lines[0] == "rc=0" and lines[-1] == 'exit "$rc"', "the step must start clean and end on the accumulated code"
+    handler = [i for i, line in enumerate(lines) if line.startswith(") < /dev/null ||")]
+    assert len(handler) == 1, "exactly one failure handler, attached to the package subshell"
+    assert re.fullmatch(r'\) < /dev/null \|\| \{ echo "::error::[^"]*"; rc=1; \}', lines[handler[0]]), lines[handler[0]]
+    assert lines.index('done < "$SPECS_DIR/packages.txt"') > handler[0], "the handler sits inside the loop"
     assert "set +e" not in run and "|| true" not in run
+
+
+def test_the_result_job_waits_for_the_own_specs_job_whatever_its_outcome(jobs) -> None:
+    result = jobs["result"]
+    assert "own-specs" in result["needs"] and result["if"] == "${{ always() }}"
+    verdict = next(s for s in result["steps"] if "NEEDS_JSON" in s.get("env", {}))
+    assert verdict["env"]["NEEDS_JSON"] == "${{ toJSON(needs) }}", "the verdict must read every needed job's result"
+
+
+def test_an_unreadable_test_rule_is_refused_not_defaulted(lane, tmp_path) -> None:
+    config = tmp_path / "vitest.config.ts"
+    cases = {
+        "test is not an object": "export default defineConfig({ test: base })\n",
+        "include is a variable": "export default { test: { include: shared } }\n",
+        "include is a call": "export default { test: { include: pick(['a/**']) } }\n",
+        "exclude spreads another list": "export default { test: { exclude: [...other, 'a/**'] } }\n",
+        "include spreads the defaults": "export default { test: { include: [...configDefaults.include] } }\n",
+    }
+    for label, text in cases.items():
+        config.write_text(text, encoding="utf-8")
+        with pytest.raises(lane.specs.UnreadableConfig):
+            lane.specs.package_rules(config)
+        assert label
+
+
+def test_a_config_with_no_test_object_gets_the_defaults_like_vitest(lane, tmp_path) -> None:
+    config = tmp_path / "vitest.config.ts"
+    config.write_text("export default defineConfig({ plugins: [vue()] })\n", encoding="utf-8")
+    assert lane.specs.package_rules(config) == (list(lane.specs.DEFAULT_INCLUDE), list(lane.specs.DEFAULT_EXCLUDE))
+
+
+def test_changed_specs_turns_an_unreadable_config_into_an_error_and_a_non_zero_exit(lane, repo, capsys) -> None:
+    repo.write("web/vitest.config.ts", "export default { test: { include: shared } }\n")
+    repo.write("web/src/new.spec.ts")
+    head = repo.commit("add")
+    argv = ["changed-specs", "--base-sha", repo.base, "--head-sha", head, "--out-dir", str(repo.path.parent / "out")]
+    assert lane.main(argv) == 1
+    err = capsys.readouterr().err
+    assert "::error::cannot read the frontend spec rules: vitest.config.ts: test.include is not an array" in err
 
 
 def test_the_job_installs_with_npm_ci_where_a_lock_exists_and_npm_install_where_none_is_committed(jobs) -> None:

@@ -126,62 +126,82 @@ def strip_trailing_comment(line: str, markers: Sequence[str], *, escapes: bool =
     return line
 
 
+class _BlockScan:
+    """Position and string/comment state of one `strip_block_comments` pass; each method consumes one construct."""
+
+    def __init__(self, text: str, line_comments: bool) -> None:
+        self.text = text
+        self.line_comments = line_comments
+        self.out: list[str] = []
+        self.quote: str | None = None
+        self.in_block = False
+        self.i = 0
+
+    def run(self) -> str:
+        while self.i < len(self.text):
+            if self.in_block:
+                self._in_block()
+            elif self.quote is not None:
+                self._in_string()
+            else:
+                self._in_code()
+        return "".join(self.out)
+
+    def _in_block(self) -> None:
+        """Inside `/* ... */`: blank everything but newlines, leave at the closing `*/`."""
+        if self.text.startswith("*/", self.i):
+            self.in_block = False
+            self.i += 2
+            return
+        self.out.append("\n" if self.text[self.i] == "\n" else " ")
+        self.i += 1
+
+    def _in_string(self) -> None:
+        """Inside a string literal: keep it, honour a backslash escape, leave at the matching quote."""
+        char = self.text[self.i]
+        if char == "\\":
+            self.out.append(self.text[self.i : self.i + 2])
+            self.i += 2
+            return
+        if char == self.quote:
+            self.quote = None
+        self.out.append(char)
+        self.i += 1
+
+    def _in_code(self) -> None:
+        """Outside any string or block: open a string, a block, or step over a `//` comment; else keep the char."""
+        char = self.text[self.i]
+        if char in ("'", '"', "`"):
+            self.quote = char
+        elif self.text.startswith("/*", self.i):
+            self.in_block = True
+            self.i += 2
+            return
+        elif self.line_comments and self.text.startswith("//", self.i):
+            end = self.text.find("\n", self.i)
+            end = len(self.text) if end < 0 else end
+            self.out.append(self.text[self.i : end])
+            self.i = end
+            return
+        self.out.append(char)
+        self.i += 1
+
+
 def strip_block_comments(text: str, *, line_comments: bool = False) -> str:
     """*text* with `/* ... */` runs removed, respecting string literals.
+
+    Quote-aware for the reason above: the construct that broke the heuristic
+    was a glob pattern inside quotes, and tracking quotes answers that exactly
+    rather than approximately. Newlines inside a removed run are preserved, so
+    line numbers downstream still refer to the original file.
 
     `line_comments` makes the scan step over a `//` comment (outside a string)
     to the end of the line, keeping its text. Without it an apostrophe or `/*`
     in prose after `//` is read as code -- a `worker's` opens a "string" that
     swallows every later `/**/` glob in the file (#21509). Opt-in because CSS,
     the other direct caller, has no `//` comments.
-
-    Quote-aware for the reason above: the construct that broke the heuristic
-    was a glob pattern inside quotes, and tracking quotes answers that exactly
-    rather than approximately. Newlines inside a removed run are preserved, so
-    line numbers downstream still refer to the original file.
     """
-    out: list[str] = []
-    quote: str | None = None
-    in_block = False
-    i = 0
-    while i < len(text):
-        char = text[i]
-        if in_block:
-            if text.startswith("*/", i):
-                in_block = False
-                i += 2
-                continue
-            out.append("\n" if char == "\n" else " ")
-            i += 1
-            continue
-        if quote is not None:
-            if char == "\\":
-                out.append(text[i : i + 2])
-                i += 2
-                continue
-            if char == quote:
-                quote = None
-            out.append(char)
-            i += 1
-            continue
-        if char in ("'", '"', "`"):
-            quote = char
-            out.append(char)
-            i += 1
-            continue
-        if text.startswith("/*", i):
-            in_block = True
-            i += 2
-            continue
-        if line_comments and text.startswith("//", i):
-            end = text.find("\n", i)
-            end = len(text) if end < 0 else end
-            out.append(text[i:end])
-            i = end
-            continue
-        out.append(char)
-        i += 1
-    return "".join(out)
+    return _BlockScan(text, line_comments).run()
 
 
 def code_lines(

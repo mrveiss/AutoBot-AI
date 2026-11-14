@@ -278,7 +278,11 @@ def _changed_tests(root: Path, args: argparse.Namespace) -> None:
 
 
 def _changed_specs(root: Path, args: argparse.Namespace) -> int:
-    selected, notices, unrun = specs.select_specs(root, changed_paths(args.base_sha, args.head_sha))
+    try:
+        selected, notices, unrun = specs.select_specs(root, changed_paths(args.base_sha, args.head_sha))
+    except specs.UnreadableConfig as exc:
+        sys.stderr.write(f"::error::cannot read the frontend spec rules: {exc}\n")
+        return 1
     specs.write_selection(selected, Path(args.out_dir))
     total = sum(len(files) for files in selected.values())
     sys.stdout.write(f"total={total}\npackages={len(selected)}\n")

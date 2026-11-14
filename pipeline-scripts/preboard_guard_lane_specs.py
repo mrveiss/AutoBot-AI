@@ -111,19 +111,44 @@ def _strings_of(body: str) -> list[str]:
     return [a or b for a, b in _QUOTED.findall(body)]
 
 
+class UnreadableConfig(ValueError):
+    """A config declares its ``test`` rules in a shape this reader cannot evaluate (guessing runs the wrong specs)."""
+
+
+def _array_rule(config_path: Path, test: str, key: str) -> tuple[list[str], bool] | None:
+    """``(globs, spreads the default exclude)`` of the ``key`` array, ``None`` when the key is absent.
+
+    Raises :class:`UnreadableConfig` when the key is there but is not an array of string literals, optionally
+    led or followed by ``...configDefaults.exclude`` (``exclude`` only).
+    """
+    if re.search(rf"\b{key}\s*:", test) is None:
+        return None
+    found = re.search(_ARRAY.format(key=key), test)
+    if found is None:
+        raise UnreadableConfig(f"{config_path.name}: test.{key} is not an array literal")
+    spread = key == "exclude" and "...configDefaults.exclude" in found.group(1)
+    residue = _QUOTED.sub("", found.group(1)).replace("...configDefaults.exclude" if spread else "", "")
+    if residue.strip(" \t\r\n,"):
+        raise UnreadableConfig(f"{config_path.name}: test.{key} holds something other than string globs")
+    return _strings_of(found.group(1)), spread
+
+
 def package_rules(config_path: Path) -> tuple[list[str], list[str]]:
-    """``(include, exclude)`` globs the config at *config_path* declares in its ``test`` object."""
+    """``(include, exclude)`` globs the config at *config_path* declares in its ``test`` object.
+
+    A config with no ``test`` object, or none of the two keys, gets Vitest's defaults (its real behaviour). A ``test``
+    that is not an object literal, or a key that is not a readable array, raises :class:`UnreadableConfig`.
+    """
     text = code_text(config_path.read_text(encoding="utf-8"), name=config_path.name, strip_trailing=True)
+    if re.search(r"\btest\s*:", text) and not re.search(r"\btest\s*:\s*\{", text):
+        raise UnreadableConfig(f"{config_path.name}: test is not an object literal")
     test = _test_object(text)
-    arrays = {}
-    for key in ("include", "exclude"):
-        found = re.search(_ARRAY.format(key=key), test)
-        arrays[key] = None if found is None else (_strings_of(found.group(1)), "configDefaults." in found.group(1))
-    include = list(DEFAULT_INCLUDE) if arrays["include"] is None else arrays["include"][0]
-    if arrays["exclude"] is None:
-        return include, list(DEFAULT_EXCLUDE)
-    declared, spread = arrays["exclude"]
-    return include, declared + (list(DEFAULT_EXCLUDE) if spread else [])
+    include = _array_rule(config_path, test, "include")
+    exclude = _array_rule(config_path, test, "exclude")
+    include_globs = list(DEFAULT_INCLUDE) if include is None else include[0]
+    if exclude is None:
+        return include_globs, list(DEFAULT_EXCLUDE)
+    return include_globs, exclude[0] + (list(DEFAULT_EXCLUDE) if exclude[1] else [])
 
 
 def package_of(root: Path, path: str) -> str | None:
