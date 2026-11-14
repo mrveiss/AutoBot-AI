@@ -57,8 +57,10 @@ export function useOrgPeopleSources(deps: OrgPeopleSourcesDeps) {
   // would prove it has actually completed (#14064's failure shape).
   const teamsAttempted = ref(false)
   const loading = ref(false)
-  // The company the lists above belong to. `loaded` alone cannot say that: the view outlives a company
-  // switch (the sidebar re-targets the same route), so the cache is only valid for this id.
+  // The company the lists above belong to. `loaded` alone cannot say that. The company layout remounts
+  // its child views when the route's company changes (#21502), so a view normally starts fresh; this id
+  // stays as a second line of defence for a view that is kept across a switch (the CEO chat route opts
+  // out of the remount), so the cache is only valid for this id.
   let ownerCompanyId = ''
 
   function applyContacts(result: PromiseSettledResult<PlanResponse<typeof INVOLVED, 'get'>>): void {
@@ -125,9 +127,9 @@ export function useOrgPeopleSources(deps: OrgPeopleSourcesDeps) {
     // pass the check above and double-fire every request.
     loading.value = true
     try {
-      // The resolver is awaited directly, with no async wrapper around it: a wrapper adds a microtask
-      // hop, which moves the two requests past the point a caller that snapshots right after the
-      // fire-and-forget entry (the role lens spec) counts them from.
+      // The resolver is awaited directly, with no async wrapper around it: no caller depends on the
+      // requests starting in a particular microtask turn (specs flush before counting, #21501), but
+      // an extra hop here would delay every People and canvas entry for nothing.
       const cid = await deps.resolveCompanyId()
       if (!cid || (loaded.value && cid === ownerCompanyId)) return
       // Synchronous, straight after the first await: the requests below start in this same turn.
