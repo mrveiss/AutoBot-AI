@@ -16,21 +16,34 @@ and `docs/archives/` (history is allowed to say what it said). Markdown lines th
 the dated `> **Correction (<date>, #15206)` banners and quoted-verbatim lines (`_ALLOWED`, markdown or Python: a status-report transcript and a legacy migration table's rename key) are skipped. The matcher is a whole-word
 match on the three class/function names. The two instance names are lowercase identifiers that also occur as
 legitimate locals, parameters and module spellings, so they are hits only in the forms that name the config
-package's attribute: `from config import <name>` (single-line, including `import a, <name>`; an `as` alias is not
-the imported name), `config.<name>` / `config_pkg.<name>` attribute access (this covers a `"config.<name>"`
-patch target), and the exact quoted string `"<name>"` (a `setattr`/`getattr`/`patch` target). A local variable, a
-parameter, a `<name>.py` module path, `_fake_<name>` helpers and `TestUnifiedConfigTimeouts` are not hits. A
-multi-line parenthesised `from config import (...)` is not read.
+package's attribute or bind the old spelling as a name:
+
+* Python files are parsed through the shared parse cache: any `from config import <name>` (on one line or across a
+  parenthesised block, with or without `as`; also `from .config import`) and any `import ... as <name>` /
+  `from ... import ... as <name>` that BINDS an old spelling under that name, at any depth, are hits. A file that does
+  not parse falls back to the single-line `from config import <name>` regex and is not counted as read.
+* `config.<name>` / `config_pkg.<name>` attribute access (this covers a `"config.<name>"` patch target) and the exact
+  quoted string `"<name>"` (a `setattr`/`getattr`/`patch` target) are matched per line, in Python and Markdown.
+* Markdown keeps the per-line `from config import <name>` match (including `import a, <name>`).
+
+A local variable, a parameter, a `<name>.py` module path, `_fake_<name>` helpers and `TestUnifiedConfigTimeouts` are
+not hits. NOT seen: a bare relative `from . import <name>` inside the config package (no module name to resolve),
+`importlib` / `getattr(config, name)` with a computed name, and an allowance (`_ALLOWED`) never applies to a parsed
+import hit.
 """
 
 from __future__ import annotations
 
+import ast
+import functools
 import re
 from pathlib import Path
 
+import pytest
 from repo_tests._paths import repo_root
-from repo_tests._reach import declare
+from repo_tests._reach import ReachFloorError, declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -53,16 +66,36 @@ _ALLOWED: frozenset[str] = frozenset(
 REMOVED_NAME = re.compile(r"\b(?:UnifiedConfigManager|get_unified_config_manager|UnifiedConfigSettings)\b")
 
 
-_INSTANCE_ALT = "unified_config_manager|global_config_manager"
+_INSTANCE_NAMES = ("unified_config_manager", "global_config_manager")
+_INSTANCE_ALT = "|".join(_INSTANCE_NAMES)
 _FROM_IMPORT = re.compile(r"\bfrom config import\s+([^#]*)")
 _ATTR_USE = re.compile(rf"(?<![\w.])(?:config|config_pkg)\.({_INSTANCE_ALT})\b")
 _QUOTED = re.compile(rf"[\"']({_INSTANCE_ALT})[\"']")
 
 
-def _instance_hits(line: str) -> list[str]:
-    """Removed instance-alias names *line* imports from, reads off, or quotes as a target of, the config package."""
+def import_hits(text: str, filename: str) -> list[tuple[int, str]] | None:
+    """(line, name) of every import of a removed name from `config`, or bound under one; None if *text* won't parse."""
+    try:
+        tree = parse_cache.parse(text, filename)
+    except (SyntaxError, ValueError):
+        return None
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Import, ast.ImportFrom)):
+            continue
+        from_config = isinstance(node, ast.ImportFrom) and node.module == "config"
+        for alias in node.names:
+            if from_config and alias.name in _INSTANCE_NAMES:
+                found.append((alias.lineno, alias.name))
+            if alias.asname in _INSTANCE_NAMES:
+                found.append((alias.lineno, alias.asname))
+    return found
+
+
+def _instance_hits(line: str, imports: bool = True) -> list[str]:
+    """Removed instance-alias names *line* reads off, quotes as a target of, or (if *imports*) imports from `config`."""
     found = [m.group(1) for m in _ATTR_USE.finditer(line)] + [m.group(1) for m in _QUOTED.finditer(line)]
-    imp = _FROM_IMPORT.search(line)
+    imp = _FROM_IMPORT.search(line) if imports else None
     if imp:
         firsts = (re.match(r"\W*(\w+)", part) for part in imp.group(1).split(","))
         found += [m.group(1) for m in firsts if m and m.group(1) in _INSTANCE_ALT.split("|")]
@@ -93,6 +126,7 @@ def hits_in(
 
     Each allowed line met is added to *used*, so a caller can tell an entry that matched from one that went stale.
     """
+    parsed = None if rel.endswith(".md") else import_hits(text, rel)
     if rel.endswith(".md"):
         lines = [(n, ln) for n, ln in enumerate(text.splitlines(), 1) if not _BANNER.match(ln)]
     else:
@@ -101,17 +135,20 @@ def hits_in(
         used.update(ln.strip() for _, ln in lines if ln.strip() in allowed)
     lines = [(n, ln) for n, ln in lines if ln.strip() not in allowed]
     named = [(n, m.group(0)) for n, ln in lines for m in REMOVED_NAME.finditer(ln)]
-    return named + [(n, name) for n, ln in lines for name in _instance_hits(ln)]
+    line_imports = parsed is None  # Markdown, or a Python file that did not parse
+    return named + [(n, name) for n, ln in lines for name in _instance_hits(ln, line_imports)] + (parsed or [])
 
 
-def _sweep(root: Path) -> tuple[list[str], set[str]]:
-    """(offenders, allowed lines actually met) over the whole population."""
+def _sweep(root: Path, files=None) -> tuple[list[str], set[str], int]:
+    """(offenders, allowed lines actually met, files fully read: Markdown read, Python parsed)."""
     offenders: list[str] = []
     used: set[str] = set()
-    for rel in REACH.examined(root):
+    done = 0
+    for rel in REACH.examined(root) if files is None else files:
         text = (root / rel).read_text(encoding="utf-8", errors="replace")
         offenders.extend(f"{rel}:{n}: {name}" for n, name in hits_in(text, rel, used=used))
-    return offenders, used
+        done += rel.endswith(".md") or import_hits(text, rel) is not None
+    return offenders, used, done
 
 
 def stale_allowances(allowed: frozenset[str], used: set[str]) -> list[str]:
@@ -119,8 +156,13 @@ def stale_allowances(allowed: frozenset[str], used: set[str]) -> list[str]:
     return sorted(allowed - used)
 
 
+@functools.cache
+def _live() -> tuple[list[str], set[str], int]:
+    return _sweep(repo_root())
+
+
 def test_no_removed_unified_config_name_is_back() -> None:
-    offenders, _ = _sweep(repo_root())
+    offenders, _, _ = _live()
     assert (
         not offenders
     ), "Use ConfigManager / get_config_manager / ConfigSettings / config_manager (#21526, #21533):\n" + "\n".join(
@@ -130,7 +172,7 @@ def test_no_removed_unified_config_name_is_back() -> None:
 
 def test_no_allowed_line_is_stale() -> None:
     """A stale exemption fails as loudly as a stale baseline entry: delete it, do not leave it accepted."""
-    _, used = _sweep(repo_root())
+    _, used, _ = _live()
     assert not stale_allowances(
         _ALLOWED, used
     ), f"_ALLOWED lines found nowhere in the tree: {stale_allowances(_ALLOWED, used)}"
@@ -171,13 +213,54 @@ def test_the_instance_alias_detector_fires_on_each_form_and_not_on_look_alikes()
     for fine in (
         "unified_config_manager = build()",
         "def f(unified_config_manager): return unified_config_manager.get()",
-        "from config import config_manager as global_config_manager",
+        "from config import config_manager",
+        "from config import config_manager as cm",
+        "from utils.connection_utils import something",
         "from utils.connection_utils import global_config_manager",
         "import unified_config_manager as ucm",
         "x = _fake_unified_config_manager()",
         "self.config.global_config_manager",
     ):
         assert not hits_in(fine + "\n", "x.py"), fine
+
+
+_MULTI = "from config import (\n    config_manager,\n    {name}{alias},\n)\n"
+
+
+def test_a_multi_line_parenthesised_import_of_a_removed_name_is_caught() -> None:
+    """Control: the blind spot the single-line regex had. Fails if the import is read line by line only."""
+    for name in _INSTANCE_NAMES:
+        for alias in ("", " as x"):
+            assert hits_in(_MULTI.format(name=name, alias=alias), "x.py") == [(3, name)], (name, alias)
+        assert hits_in(f"from .config import (\n    {name},\n)\n", "x.py") == [(2, name)]
+    assert not hits_in(_MULTI.format(name="config_manager", alias=" as cm"), "x.py")
+    assert not hits_in("from utils.connection_utils import (\n    something,\n)\n", "x.py")
+
+
+def test_binding_an_old_spelling_by_import_as_is_refused() -> None:
+    """Control: the local re-binding class (`import ... as <old name>`), at module level and inside a function."""
+    for name in _INSTANCE_NAMES:
+        assert hits_in(f"from config import config_manager as {name}\n", "x.py") == [(1, name)]
+        assert hits_in(f"from config import config as {name}  # noqa\n", "x.py") == [(1, name)]
+        assert hits_in(f"import config as {name}\n", "x.py") == [(1, name)]
+        assert hits_in(f"def f():\n    from config import config as {name}\n", "x.py") == [(2, name)]
+    assert not hits_in("from config import config_manager as config_instance\n", "x.py")
+    assert not hits_in('"""from config import config as global_config_manager"""\n', "x.py")
+
+
+def test_an_unparsable_python_file_falls_back_to_the_line_regex_and_is_not_counted(tmp_path) -> None:
+    broken = "def broken(:\nfrom config import unified_config_manager\n"
+    assert import_hits(broken, "x.py") is None
+    assert hits_in(broken, "x.py") == [(2, "unified_config_manager")]
+    (tmp_path / "bad.py").write_text(broken, encoding="utf-8")
+    offenders, _, done = _sweep(tmp_path, ["bad.py"])
+    assert (offenders, done) == (["bad.py:2: unified_config_manager"], 0)
+    with pytest.raises(ReachFloorError):
+        REACH.completed(done, tmp_path)
+
+
+def test_the_sweep_finished_a_real_tree() -> None:
+    REACH.completed(_live()[2], repo_root())
 
 
 def test_comments_and_banners_are_not_hits() -> None:

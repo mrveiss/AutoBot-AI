@@ -50,7 +50,7 @@ from autobot_shared.redis_client import get_redis_client
 # attribute-style access (e.g. config.redis_host); `get_nested()` dotted-path
 # lookups below require `config_manager`. Using `config` here previously raised
 # AttributeError: 'AutoBotConfig' object has no attribute 'get_nested' (#11971).
-from config import config_manager as global_config_manager
+from config import config_manager
 from events.bus import PersistStrategy, publish_event
 from knowledge_factory import get_knowledge_base_async
 from security_layer import SecurityLayer
@@ -104,7 +104,7 @@ class WorkerNode:
         """
         self.worker_id = f"worker_{os.getpid()}"
 
-        self.task_transport_type = global_config_manager.get_nested("task_transport.type", "local")
+        self.task_transport_type = config_manager.get_nested("task_transport.type", "local")
         self.redis_client = None
         if self.task_transport_type == "redis":
             # Use centralized Redis client utility
@@ -275,9 +275,9 @@ class WorkerNode:
 
         # #6983: post-LLMService migration, openai_api_key is no longer exposed on the
         # service surface. Read from config directly — same effective check.
-        if global_config_manager.get_nested("llm_config.openai.api_key"):
+        if config_manager.get_nested("llm_config.openai.api_key"):
             backends.append("openai")
-        if global_config_manager.get_nested("llm_config.transformers.model_path"):
+        if config_manager.get_nested("llm_config.transformers.model_path"):
             backends.append("transformers")
 
         return {"llm_backends_supported": backends}
