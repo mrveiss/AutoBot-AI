@@ -10,8 +10,9 @@
  * admin-gated server-side: a 403 surfaces as a `WorkflowWriteError` with `forbidden` set, never as a
  * silent no-op. A failed load is `state='failed'`, never an empty list.
  *
- * The view is not remounted when the route moves to another company, so the company id is captured
- * at send time and a response for a company no longer shown is discarded.
+ * The layout remounts the view on a company switch (#21502) except on a route with
+ * `meta.keepOnCompanySwitch` (the workflow builder); the id is captured at send time and a late
+ * response for a company no longer shown is discarded.
  */
 import { computed, ref, watch } from 'vue'
 import { useApiClient } from '@/plugins/api'

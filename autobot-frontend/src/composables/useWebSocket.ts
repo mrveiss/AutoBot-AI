@@ -166,6 +166,29 @@ export function useWebSocket(
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
   let connectionTimeoutTimer: ReturnType<typeof setTimeout> | null = null
+  // The 100 ms restart of reconnect() and of the URL watcher. Kept apart from clearTimers():
+  // disconnect() detaches the old socket from `ws` but its onclose handler stays attached and
+  // calls clearTimers() when the close event arrives, which would cancel a pending restart.
+  let restartTimer: ReturnType<typeof setTimeout> | null = null
+  // Set once the owning scope is disposed. Not set by disconnect(): a manual
+  // disconnect() followed by connect() must keep working.
+  let disposed = false
+
+  const clearRestartTimer = () => {
+    if (restartTimer) {
+      clearTimeout(restartTimer)
+      restartTimer = null
+    }
+  }
+
+  /** Reconnect shortly after the current socket was closed (reconnect() and the URL watcher). */
+  const scheduleRestart = () => {
+    clearRestartTimer()
+    restartTimer = setTimeout(() => {
+      restartTimer = null
+      connect()
+    }, 100)
+  }
 
   /**
    * Clear all timers
@@ -202,6 +225,9 @@ export function useWebSocket(
    * Connect to WebSocket
    */
   const connect = () => {
+    if (disposed) {
+      return // The owner is gone: nothing may open a socket nobody will close
+    }
     if (isConnecting.value || (ws.value && ws.value.readyState === WebSocket.OPEN)) {
       return // Already connecting or connected
     }
@@ -286,6 +312,7 @@ export function useWebSocket(
         // Auto-reconnect logic
         if (
           opts.autoReconnect &&
+          !disposed &&
           event.code !== 1000 && // Normal closure
           (opts.maxReconnectAttempts === 0 || reconnectAttempts.value < opts.maxReconnectAttempts)
         ) {
@@ -322,6 +349,7 @@ export function useWebSocket(
    */
   const disconnect = (code: number = 1000, reason: string = 'Client disconnect') => {
     clearTimers()
+    clearRestartTimer()
 
     if (ws.value) {
       // Disable auto-reconnect for manual disconnect
@@ -365,7 +393,7 @@ export function useWebSocket(
   const reconnect = () => {
     disconnect()
     reconnectAttempts.value = 0
-    setTimeout(connect, 100)
+    scheduleRestart()
   }
 
   // Watch URL changes and reconnect
@@ -376,7 +404,7 @@ export function useWebSocket(
         // Disconnect old connection first to prevent accumulating connections (#820)
         disconnect()
         reconnectAttempts.value = 0
-        setTimeout(connect, 100)
+        scheduleRestart()
       }
     })
   }
@@ -389,6 +417,7 @@ export function useWebSocket(
   // Cleanup when effect scope disposes (component unmount or scope.stop())
   if (getCurrentScope()) {
     onScopeDispose(() => {
+      disposed = true
       disconnect()
     })
   }
