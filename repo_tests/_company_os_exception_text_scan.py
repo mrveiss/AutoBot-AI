@@ -27,6 +27,7 @@ import ast
 from pathlib import Path
 
 from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
 
 LLC_ROOT = "autobot-backend/llc"
 RESPONSE_CALLS = frozenset({"HTTPException", "JSONResponse", "Response"})
@@ -181,7 +182,7 @@ class _ExcTextScan(ast.NodeVisitor):
 def exc_text_scan_source(source: str, rel: str) -> list[str]:
     """The site identities in one source text, in source order."""
     scan = _ExcTextScan(rel)
-    scan.visit(ast.parse(source))
+    scan.visit(parse_cache.parse(source))
     return scan.sites
 
 
