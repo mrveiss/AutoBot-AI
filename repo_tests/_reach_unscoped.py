@@ -148,5 +148,6 @@ UNSCOPED = frozenset(
         # #21527: every tracked .py file, since a blocking sleep in a coroutine can be written in any
         # component; the population is the whole tree by suffix, so no prefix describes it.
         "no-sleep-in-async-21527",
+        "worker-identity-one-home-21518",  # every tracked non-test .py: an identity can live anywhere (#21518)
     }
 )
