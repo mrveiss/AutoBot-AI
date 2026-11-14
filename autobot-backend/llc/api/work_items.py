@@ -55,7 +55,7 @@ from ..models.enums import (
     WorkItemType,
 )
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
-from ..services.accessors import get_attachment_service, get_work_product_service
+from ..services.accessors import get_attachment_service, get_handoff_service, get_work_product_service
 from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.attachment_service import (
     AttachmentNotFound,
@@ -72,7 +72,7 @@ from ..services.work_item_service import (
 )
 from ._common import FenceSafeAgentId
 from ._common import actor_id as verified_user_id
-from ._common import own_task_actor, refused_transition, write_refusal
+from ._common import moving_as, refused_transition, write_refusal
 from ._handoff_identity import handing_off_agent, member_reviewer
 from ._release_request import ReleaseRequest
 from .activity import ActivityLogEntry, ActivityLogResponse
@@ -110,7 +110,7 @@ class CoworkerRequest(BaseModel):
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"], dependencies=[Depends(require_work_item_id)])
-_get_handoff_service = lazy_singleton(HandoffService)
+_get_handoff_service = get_handoff_service  # the instance the gated done path hands off through
 _kb_manager = KbCollectionManager()
 _get_activity_service = lazy_singleton(LLCActivityLogService)
 _get_ac_suggester = lazy_singleton(AcSuggester)
@@ -594,9 +594,7 @@ async def transition_work_item(
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     try:
-        item = await _service().transition_status(
-            session, work_item_id, body.status, acting_user=own_task_actor(_current_user)
-        )
+        item = await _service().transition_status(session, work_item_id, body.status, **moving_as(_current_user))
         await session.commit()
         if item.status == WorkItemStatus.DONE:
             await _kb_manager.archive_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)

@@ -179,18 +179,6 @@ _BY_DESIGN = (
         "the pending list is empty, so no stale-entry check applies",
     ),
     _by_design(
-        "repo_tests/meta_path_guards_are_not_precached_14913_test.py",
-        "autobot-backend/llc/scheduler/lazy_import_test.py: known, tracked by",
-        '"autobot-backend/llc/scheduler/lazy_import_test.py": "#14913"',
-        "a known finding tracked by #14913",
-    ),
-    _by_design(
-        "repo_tests/meta_path_guards_are_not_precached_14913_test.py",
-        "autobot-backend/llc/services/lazy_import_test.py: known, tracked by",
-        '"autobot-backend/llc/services/lazy_import_test.py": "#14913"',
-        "a known finding tracked by #14913",
-    ),
-    _by_design(
         "repo_tests/pytest_testpaths_cover_every_test_dir_15183_test.py",
         "#15476: testpaths does not reach",
         "#15476: testpaths does not reach",
@@ -213,7 +201,7 @@ _BY_DESIGN = (
     ),
 )
 
-#: The lane's reviewed skips, grouped by class above. 1 + 5 + 18 entries (24).
+#: The lane's reviewed skips, grouped by class above. 1 + 5 + 16 entries (22).
 SKIP_ALLOWLIST: tuple[AllowedSkip, ...] = (*_COVERED, *_SILENT_GUARDS, *_BY_DESIGN)
 
 
