@@ -36,14 +36,28 @@ def _public(base):
     return _P
 
 
+def _non_public(base):
+    class _NonPublic(base):
+        public_detail = None  # not a str: `http_refusal` treats the error as non-public
+
+    return _NonPublic
+
+
 @pytest.mark.parametrize(("cls", "code", "fixed"), _CASES[1:], ids=_IDS[1:])
 def test_a_service_error_without_public_detail_gets_the_fixed_text(cls, code, fixed, caplog) -> None:
+    sub = _non_public(cls)
     with caplog.at_level(logging.WARNING):
-        got = http_error(cls(_LEAKY))
+        got = http_error(sub(_LEAKY))
     assert (got.status_code, got.detail) == (code, fixed)
     assert _MARKER not in str(got.detail)
-    assert cls.__name__ in caplog.text
+    assert sub.__name__ in caplog.text
     assert _MARKER not in caplog.text
+
+
+@pytest.mark.parametrize(("cls", "code", "fixed"), _CASES[1:], ids=_IDS[1:])
+def test_the_real_service_errors_are_public_and_show_their_own_message(cls, code, fixed) -> None:
+    got = http_error(cls("Work item 7 not found"))
+    assert (got.status_code, got.detail) == (code, "Work item 7 not found")
 
 
 @pytest.mark.parametrize(("cls", "code", "fixed"), _CASES, ids=_IDS)
