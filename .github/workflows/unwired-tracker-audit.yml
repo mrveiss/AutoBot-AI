@@ -53,8 +53,11 @@ jobs:
             autobot-backend/requirements*.txt
             autobot-slm-backend/requirements*.txt
 
-      - name: Install pytest
-        run: pip install pytest
+      # #21582: pytest.ini's addopts carries --asyncio-mode=auto, which bare pytest rejects
+      # ("unrecognized arguments"), so the asyncio plugin is installed too. Both versions come
+      # from constraints/shared.txt, the one place the repo declares them -- not restated here.
+      - name: Install pytest and the plugin pytest.ini needs
+        run: pip install -c constraints/shared.txt pytest pytest-asyncio
 
       - name: Test audit script (#6929)
         run: pytest pipeline-scripts/test_audit_unwired_trackers.py -v
