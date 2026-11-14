@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.env_utils import env_str
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.redaction import safe_log_text
+from autobot_shared.security.redaction import safe_log_text, sanitize_log_value
 from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET, current_claude_model
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.deps import assert_company_access, log_unexpected, service_dep
@@ -212,7 +212,8 @@ def _validated_default_cron() -> str:
         croniter(raw).get_next()
     except Exception as exc:
         headline = (
-            "AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON is not a valid cron; falling back so hired agents are schedulable"
+            f"AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON={sanitize_log_value(raw, max_chars=64)} is not a valid cron; "
+            "falling back so hired agents are schedulable"
         )
         log_unexpected(logger, "agent_hires.default_heartbeat_cron", exc, headline=headline, level=logging.ERROR)
         return _FALLBACK_HEARTBEAT_CRON
@@ -302,7 +303,7 @@ async def _fetch_company_model_overrides(
         if row and row[0]:
             return dict(row[0]) if isinstance(row[0], dict) else None
     except Exception as exc:  # noqa: BLE001
-        log_unexpected(logger, f"agent_hires.model_tier_overrides {company_id}", exc)
+        log_unexpected(logger, f"agent_hires.model_tier_overrides {company_id}", exc, level=logging.DEBUG)
     return None
 
 
