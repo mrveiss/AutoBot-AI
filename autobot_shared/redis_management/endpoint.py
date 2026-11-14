@@ -87,7 +87,7 @@ def get_config_manager() -> Any:
             if _config_manager is None:
                 try:
                     # autobot-backend package; absent (ImportError) everywhere else
-                    from config import config as cm  # type: ignore[attr-defined]
+                    from config import config_manager as cm  # type: ignore[attr-defined]
 
                     _config_manager = cm
                 except ImportError:

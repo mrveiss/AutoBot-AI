@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 async def test_autobot_identity():
     """Test that AutoBot identity is properly indexed"""
     try:
-        from config import config as global_config
+        from config import config_manager as global_config
         from knowledge_base import KnowledgeBase
 
         # Initialize knowledge base

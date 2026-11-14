@@ -1418,7 +1418,7 @@ jobs:
 
         # Test configuration loading (PYTHONPATH includes backend for imports)
         PYTHONPATH="autobot-backend:autobot_shared:$PYTHONPATH" \
-          python3 -c 'from config import config; print("Configuration system working")'
+          python3 -c 'from config import config_manager; print("Configuration system working")'
 
         # Test core imports.
         # #14252: this named `security.secure_command_executor`, which has never

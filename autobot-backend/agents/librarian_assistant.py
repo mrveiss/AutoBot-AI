@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.url_safety import host_matches
-from config import config
+from config import config_manager as config
 from knowledge_base import get_knowledge_base
 from services.llm_service import get_llm_service
 
