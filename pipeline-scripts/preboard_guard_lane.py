@@ -25,6 +25,9 @@ verdict logic: it asks this module (and ``preboard_guard_lane_report`` for the v
 * ``changed-tests`` -- the test files the head adds or changes (#21509), split by who runs them: the
   guard shards already run the guard roots in full; the ``own-tests`` job runs the rest, so a member's
   own new tests execute before the train instead of first inside it.
+* ``changed-specs`` -- the Vitest spec files the head adds or changes (#21509), grouped by the frontend package that
+  collects them (rules read from its own ``vitest.config.*`` by ``preboard_guard_lane_specs``); the ``own-specs``
+  job runs just those, so a member's new specs execute before the train and not first inside it.
 * ``added-headers`` -- the files the head ADDS (or renames or copies into place) in the license-header check's
   scope, judged on the committed text at the dispatched head: one without the header fails the lane (#21535).
   The check is the shared ``lacks_header`` of ``tools/lint/check_spdx_header.py``, which the train content gate
@@ -52,6 +55,7 @@ for _entry in (str(Path(__file__).resolve().parent.parent), str(Path(__file__).r
         sys.path.insert(0, _entry)
 
 import preboard_guard_lane_report as report  # noqa: E402
+import preboard_guard_lane_specs as specs  # noqa: E402
 
 from autobot_shared.git_probe import committed_text  # noqa: E402
 from autobot_shared.paths import scrubbed_git_env  # noqa: E402
@@ -273,6 +277,28 @@ def _changed_tests(root: Path, args: argparse.Namespace) -> None:
         sys.stderr.write(f"::notice::{counts['uncollected']} changed test file(s) the suite does not collect\n")
 
 
+def _changed_specs(root: Path, args: argparse.Namespace) -> int:
+    try:
+        selected, notices, unrun = specs.select_specs(root, changed_paths(args.base_sha, args.head_sha))
+    except specs.UnreadableConfig as exc:
+        sys.stderr.write(f"::error::cannot read the frontend spec rules: {exc}\n")
+        return 1
+    specs.write_selection(selected, Path(args.out_dir))
+    total = sum(len(files) for files in selected.values())
+    sys.stdout.write(f"total={total}\npackages={len(selected)}\n")
+    if not total:
+        sys.stderr.write("no changed frontend specs\n")
+    for path in notices:
+        sys.stderr.write(
+            f"::notice::{path} looks like a spec but no frontend package runs it (outside all, or excluded)\n"
+        )
+    for path, package in unrun:
+        sys.stderr.write(
+            f"::error::{path} looks like a spec but package {package} does not collect it: no include rule matches\n"
+        )
+    return 1 if unrun else 0
+
+
 def examine_additions(base_sha: str, head_sha: str) -> tuple[int, int, list[str]]:
     """``(added, in scope, header-less)``: the files the head brings in, those in the header check's scope, and
     those whose COMMITTED text at the head has no header.
@@ -364,6 +390,9 @@ def _parser() -> argparse.ArgumentParser:
     own = sub.add_parser("changed-tests")
     for flag in ("--base-sha", "--head-sha", "--out-dir"):
         own.add_argument(flag, required=True)
+    changed_specs = sub.add_parser("changed-specs")
+    for flag in ("--base-sha", "--head-sha", "--out-dir"):
+        changed_specs.add_argument(flag, required=True)
     added = sub.add_parser("added-headers")
     for flag in ("--base-sha", "--head-sha"):
         added.add_argument(flag, required=True)
@@ -390,6 +419,8 @@ def main(argv: list[str] | None = None) -> int:
         _write_meta(args)
     elif args.command == "changed-tests":
         _changed_tests(root, args)
+    elif args.command == "changed-specs":
+        return _changed_specs(root, args)
     elif args.command == "added-headers":
         return _added_headers(args)
     else:
