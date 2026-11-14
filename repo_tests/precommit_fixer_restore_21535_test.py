@@ -49,12 +49,18 @@ def restores_tree(step: dict[str, Any]) -> bool:
     return bool(_RESTORES.search(_code(step)))
 
 
+def _restored_after(steps: list[dict[str, Any]], index: int) -> bool:
+    """The next step restores the tree and runs under exactly the condition the pre-commit step does."""
+    nxt = steps[index + 1] if index + 1 < len(steps) else {}
+    return restores_tree(nxt) and nxt.get("if") == steps[index].get("if")
+
+
 def unrestored(steps: list[dict[str, Any]]) -> list[str]:
-    """Names of steps that run pre-commit and are not directly followed by a restore."""
+    """Names of steps that run pre-commit and are not directly followed by a conditioned-alike restore."""
     return [
         str(step.get("name"))
         for index, step in enumerate(steps)
-        if runs_precommit(step) and not (index + 1 < len(steps) and restores_tree(steps[index + 1]))
+        if runs_precommit(step) and not _restored_after(steps, index)
     ]
 
 
@@ -116,3 +122,12 @@ def test_contrast_a_comment_naming_the_commands_is_not_the_commands() -> None:
     commented = _step("note", "# pre-commit run is described here\necho done")
     assert not runs_precommit(commented)
     assert not restores_tree(_step("r", "# git restore --source=HEAD --staged --worktree"))
+
+
+def test_contrast_a_restore_with_a_different_condition_is_refused() -> None:
+    """A restore that can be skipped while the fixer ran leaves the rewritten tree for the enforcing steps."""
+    run = {"name": "run", "if": "inputs.sweep == 'true'", "run": "pre-commit run -a"}
+    same = {"name": "r", "if": "inputs.sweep == 'true'", "run": "git restore --source=HEAD --staged --worktree -- ."}
+    assert unrestored([run, same]) == []
+    assert unrestored([run, {**same, "if": "success()"}]) == ["run"]
+    assert unrestored([run, {k: v for k, v in same.items() if k != "if"}]) == ["run"]

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import train_content_gate as gate
 
@@ -28,6 +30,7 @@ def run(*args: str) -> str:
 
 
 def write(path: str, text: str) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(text)
 
@@ -310,3 +313,12 @@ def test_a_modified_file_without_the_header_is_not_this_gates_finding(train):
     run("merge", "-q", "--no-ff", "main", "-m", "Merge main into train")
     board(1, member("one", {"old.py": LONG.format("old") + LONG.format(1)}))
     assert gate.check_range("main..train").findings == []
+
+
+def test_a_missing_header_and_lost_lines_on_one_file_are_reported_together(train):
+    head = member("one", {"pkg/new_test.py": LONG.format(1) + LONG.format(2)})
+    write("pkg/new_test.py", LONG.format(9))
+    commit("other content arrived at the same path first")
+    board(1, head, "-s", "ours")
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "license header; only 0/2 added lines present" in findings[0]

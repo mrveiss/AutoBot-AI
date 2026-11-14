@@ -116,14 +116,7 @@ def _lacks_header(commit: str, path: str) -> bool:
     return in_scope(Path(path)) and not has_header(_git("show", f"{commit}:{path}"))
 
 
-def _judge_file(status: str, path: str, base: str, head: str, merge: str, report: ContentReport) -> str | None:
-    """Why *path* did not take effect at *merge*, or None."""
-    if status == "D":
-        return "deleted by the member, still present" if _exists_at(merge, path) else None
-    if not _exists_at(merge, path):
-        return "missing"
-    if status == "A" and _lacks_header(merge, path):
-        return "added without the SPDX/Apache-2.0 license header"
+def _survival_loss(base: str, head: str, path: str, merge: str, report: ContentReport) -> str | None:
     added = _added_lines(base, head, path)
     if not added:
         return None
@@ -131,6 +124,19 @@ def _judge_file(status: str, path: str, base: str, head: str, merge: str, report
     kept = sum(line in present for line in added)
     report.lines += len(added)
     return f"only {kept}/{len(added)} added lines present" if kept < len(added) * MIN_SURVIVAL else None
+
+
+def _judge_file(status: str, path: str, base: str, head: str, merge: str, report: ContentReport) -> str | None:
+    """Why *path* did not take effect at *merge*, or None; a missing header and lost lines are both named."""
+    if status == "D":
+        return "deleted by the member, still present" if _exists_at(merge, path) else None
+    if not _exists_at(merge, path):
+        return "missing"
+    headerless = None
+    if status == "A" and _lacks_header(merge, path):
+        headerless = "added without the SPDX/Apache-2.0 license header"
+    reasons = [why for why in (headerless, _survival_loss(base, head, path, merge, report)) if why]
+    return "; ".join(reasons) or None
 
 
 def _check_member(pr: str, last: str, first: str, rng: str, drops: set[tuple[str, str]], report: ContentReport) -> None:
