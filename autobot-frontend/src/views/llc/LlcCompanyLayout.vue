@@ -9,21 +9,33 @@
   switcher is populated on deep links.
 -->
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import LlcSidebar from '@/components/llc/LlcSidebar.vue'
 import PlanFirstProcessCard from '@/components/llc/workflowPlanner/PlanFirstProcessCard.vue'
+import { companyIdFromParams } from '@/router/llcGuards'
 import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
 import { useLlcCompanyNotices } from '@/composables/useLlcCompanyNotices'
 
 const companyStore = useLlcCompanyStore()
 const route = useRoute()
-// The company the URL names (store selection when it names none): the notices subscribe to it (#21045)
-// and the routed view is keyed by it (#21502).
-const routeCompanyId = computed(() => {
-  const raw = route.params.companyId
-  return (Array.isArray(raw) ? raw[0] : raw) ?? companyStore.selectedCompanyId
-})
+// The company the URL names, or '' when it names none (same reading as the route guard).
+const paramCompanyId = computed(() => companyIdFromParams(route.params))
+// ... with the store selection as the fallback: the notices subscribe to it (#21045) and the routed
+// view is keyed by it (#21502).
+const routeCompanyId = computed(() => paramCompanyId.value || companyStore.selectedCompanyId)
+// The route guard runs when the company routes are entered, not when only :companyId changes, so
+// browser back/forward between two companies left the store (and with it the organisation header of
+// every request) on the other one (#21511). Only the URL's own id is written, never the fallback, so
+// the store is not fed back into itself. Default `pre` flush: it runs before this layout re-renders
+// and the keyed view below remounts, so that view's mount-time requests already read the new company.
+watch(
+  paramCompanyId,
+  (id) => {
+    if (id) companyStore.selectCompany(id)
+  },
+  { immediate: true },
+)
 useLlcCompanyNotices(routeCompanyId)
 // The sidebar's company switch re-targets the same route, so Vue reuses the routed view and its
 // load-on-mount data would stay the previous company's. The key sits on the <RouterView> vnode itself:
