@@ -316,6 +316,86 @@ describe('useLlcCompanyStore (GH#9627)', () => {
       expect(store.selectionUnverified).toBe(false)
     })
 
+    /** Hold every list request on its own deferred promise; probes answer 404. */
+    const holdLists = () => {
+      const lists: Array<{ resolve: (v: LlcCompany[]) => void; reject: (e: unknown) => void }> = []
+      getMock.mockImplementation((url: string) =>
+        url === LIST_URL
+          ? new Promise((resolve, reject) => { lists.push({ resolve, reject }) })
+          : Promise.reject(new HttpError(404, 'Company not found')),
+      )
+      return lists
+    }
+    const withX = () => [mockCompany(), mockCompany({ id: 'archived-1' })]
+
+    it('a superseded list response never overwrites the newer list', async () => {
+      const lists = holdLists()
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(1))
+      const second = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(2))
+      lists[1].resolve(withX())
+      await second
+      lists[0].resolve([mockCompany()])
+      await first
+      expect(store.companies.map((c) => c.id)).toEqual(['company-1', 'archived-1'])
+      expect(store.selectedCompany?.id).toBe('archived-1')
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(probeCalls()).toHaveLength(0)
+      expect(store.isLoading).toBe(false)
+    })
+
+    it.each([
+      ['HTTP 500', new HttpError(500, 'Internal server error')],
+      ['HTTP 503', new HttpError(503, 'requires PostgreSQL')],
+    ])('a superseded list failing with %s changes neither error nor unavailable', async (_l, failure) => {
+      const lists = holdLists()
+      const store = useLlcCompanyStore()
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(1))
+      const second = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(2))
+      lists[1].resolve([mockCompany()])
+      await second
+      lists[0].reject(failure)
+      await first
+      expect(store.error).toBeNull()
+      expect(store.unavailable).toBe(false)
+      expect(store.isLoading).toBe(false)
+    })
+
+    it('isLoading stays true until the newest run settles, older run first', async () => {
+      const lists = holdLists()
+      const store = useLlcCompanyStore()
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(1))
+      const second = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(2))
+      lists[0].resolve([mockCompany()])
+      await first
+      expect(store.isLoading).toBe(true)
+      lists[1].resolve([mockCompany()])
+      await second
+      expect(store.isLoading).toBe(false)
+    })
+
+    it('isLoading is false once the newest run settles, and a later older run keeps it false', async () => {
+      const lists = holdLists()
+      const store = useLlcCompanyStore()
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(1))
+      const second = store.fetchCompanies()
+      await vi.waitFor(() => expect(lists).toHaveLength(2))
+      lists[1].resolve([mockCompany()])
+      await second
+      expect(store.isLoading).toBe(false)
+      lists[0].resolve([mockCompany()])
+      await first
+      expect(store.isLoading).toBe(false)
+    })
+
     it('sends no probe when the list already holds the selection', async () => {
       routeGet(() => Promise.reject(new HttpError(404, 'Company not found')))
       const store = useLlcCompanyStore()
