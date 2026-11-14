@@ -1,0 +1,4 @@
+{"id": "facts-q1", "query": "which embedding model is the default", "bucket": "facts", "gold": ["facts-1"]}
+{"id": "facts-q2", "query": "where does the backend port come from", "bucket": "facts", "gold": ["facts-2"]}
+{"id": "facts-q3", "query": "how are duplicate chunks detected", "bucket": "facts", "gold": ["facts-3"]}
+{"id": "facts-q4", "query": "what controls cache expiry", "bucket": "facts", "gold": ["facts-4"]}
