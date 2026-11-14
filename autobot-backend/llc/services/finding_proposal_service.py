@@ -77,9 +77,9 @@ async def _get_clone_path(project) -> str:
 
 async def _requires_cross_vendor_review(session: AsyncSession, company_id, item_type: WorkItemType) -> bool:
     """Thin wrapper around ReviewGatePolicyService so tests can patch at module level (#12618)."""
-    from llc.services.review_gate import ReviewGatePolicyService  # noqa: PLC0415
+    from llc.services.accessors import get_review_gate_service  # noqa: PLC0415
 
-    return await ReviewGatePolicyService().requires_cross_vendor_review(session, str(company_id), item_type)
+    return await get_review_gate_service().requires_cross_vendor_review(session, str(company_id), item_type)
 
 
 # ---------------------------------------------------------------------------
