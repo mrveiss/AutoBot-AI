@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api._service_principal_refusal import validated_service
 from api.envelope_secrets_delete import delete_as_service, delete_as_user
+from api.secrets_delete_outcome import fixed_secret_error_for
 from auth_middleware import resolve_human_user, verify_internal_api_key
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from llc.deps import get_session
@@ -123,10 +124,9 @@ def _vault(value: str) -> VaultRef:
 
 
 def _mapped(exc: Exception) -> HTTPException:
-    if isinstance(exc, SecretNotFoundError):
-        return HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
-    if isinstance(exc, SecretAccessError):
-        return HTTPException(status.HTTP_403_FORBIDDEN, str(exc))
+    known = fixed_secret_error_for(exc)
+    if known is not None:
+        return known
     if isinstance(exc, ValueError):
         return HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     raise exc
