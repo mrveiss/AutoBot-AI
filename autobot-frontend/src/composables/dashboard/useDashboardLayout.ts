@@ -8,8 +8,13 @@
  * Nothing is written until a load has succeeded (`loaded`): after a failed GET the page
  * shows defaults, and saving or resetting those would overwrite or delete the user's real
  * server layout (#18896 review). `loadError` says why; `load()` retries.
+ *
+ * A network error or a 5xx answer (a backend restart) is retried with backoff before `loadError`
+ * is set (#21462); `loaded` stays false throughout, so nothing is saved between attempts. A 4xx is
+ * final. A `load()` while one is running joins it; disposing the scope stops the loop.
  */
-import { ref } from 'vue'
+import { getCurrentScope, onScopeDispose, ref } from 'vue'
+import { backoffDelay, isHttpError } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
@@ -23,12 +28,59 @@ export type DashboardPage = 'home' | 'company-os'
 const LEGACY_KEY = 'autobot_dashboards'
 const logger = createLogger('useDashboardLayout')
 
-export function useDashboardLayout(page: DashboardPage, defaults: () => DashboardLayout) {
+const HTTP_SERVER_ERROR_MIN = 500
+/**
+ * Retries after the first attempt. 2s,4s,8s,16s,20s,20s waits = 70s, plus the client's own GET
+ * retries per attempt, covers a ~80s backend restart with ~7 requests, not a hammering loop.
+ */
+export const LOAD_RETRIES = 6
+export const LOAD_RETRY_BASE_MS = 2000
+export const LOAD_RETRY_MAX_MS = 20000
+
+export interface LoadRetryOptions {
+  retries?: number
+  baseMs?: number
+  maxMs?: number
+}
+
+/** Network errors and 5xx may pass on their own; any other HTTP status is the request's fault. */
+function isRetryable(e: unknown): boolean {
+  return !isHttpError(e) || e.status >= HTTP_SERVER_ERROR_MIN
+}
+
+export function useDashboardLayout(
+  page: DashboardPage,
+  defaults: () => DashboardLayout,
+  { retries = LOAD_RETRIES, baseMs = LOAD_RETRY_BASE_MS, maxMs = LOAD_RETRY_MAX_MS }: LoadRetryOptions = {},
+) {
   const layout = ref<DashboardLayout>(defaults())
   const loaded = ref(false)
   const loadError = ref<string | null>(null)
   const saveError = ref<string | null>(null)
   const url = `${getApiBase()}/users/me/dashboard-layouts/${page}`
+  let disposed = false
+  let running: Promise<void> | null = null
+  let wake: (() => void) | null = null
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      disposed = true
+      wake?.()
+    })
+  }
+
+  // Resolves after `ms`, or at once when the scope is disposed.
+  function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(done, ms)
+      function done() {
+        clearTimeout(timer)
+        wake = null
+        resolve()
+      }
+      wake = done
+    })
+  }
 
   async function put(next: DashboardLayout): Promise<boolean> {
     try {
@@ -69,20 +121,44 @@ export function useDashboardLayout(page: DashboardPage, defaults: () => Dashboar
     if (await put(legacy)) clearLegacy()
   }
 
-  async function load(): Promise<void> {
+  async function getLayout(): Promise<LayoutResponse> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const body: LayoutResponse = await apiClient.get(url) // typed by the generated contract
+        return body
+      } catch (e) {
+        if (disposed || attempt >= retries || !isRetryable(e)) throw e
+        logger.warn(`Loading dashboard layout failed (attempt ${attempt + 1}); retrying:`, e)
+        await sleep(backoffDelay(attempt, { base: baseMs, max: maxMs }))
+        if (disposed) throw e
+      }
+    }
+  }
+
+  async function runLoad(): Promise<void> {
+    loadError.value = null
     let body: LayoutResponse
     try {
-      body = await apiClient.get(url) // typed by `body: LayoutResponse` (generated contract)
+      body = await getLayout()
     } catch (e) {
+      if (disposed) return
       loadError.value = e instanceof Error ? e.message : String(e)
       logger.error('Loading dashboard layout failed; editing stays off until a load succeeds:', e)
       return
     }
-    loadError.value = null
+    if (disposed) return
     const stored = body.data ? fromStoredLayout(body.data.layout) : null
     if (stored?.dashboards.length) layout.value = stored
     else await migrateLegacy()
     loaded.value = true
+  }
+
+  /** One loop at a time: a call while a load is running joins it. */
+  function load(): Promise<void> {
+    running ??= runLoad().finally(() => {
+      running = null
+    })
+    return running
   }
 
   /** Saves explicitly (the view's Save button); resolves false and sets saveError on failure. */
