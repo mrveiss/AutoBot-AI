@@ -41,7 +41,7 @@ def load_lane() -> Iterator[Any]:
 
 def env_needs() -> dict[str, dict[str, str]]:
     """The ``needs`` of the result job when every job it waits for succeeded."""
-    return {name: {"result": "success"} for name in ("guards", "own-tests", "added-headers", "types")}
+    return {name: {"result": "success"} for name in ("guards", "own-tests", "own-specs", "added-headers", "types")}
 
 
 def env(**over: str) -> dict[str, str]:
