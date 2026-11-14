@@ -3,8 +3,8 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 
-// #19960: the members view is not remounted when the route moves to another company, so what it
-// shows and what it sends are scoped to the company a request was made for.
+// #19960: the layout remounts the view on a company switch (#21502), but a late answer can still
+// arrive for another company, so what it shows and sends is scoped to the company a request was for.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
