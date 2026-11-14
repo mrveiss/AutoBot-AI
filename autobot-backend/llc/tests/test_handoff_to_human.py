@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.redis_utils import COMPARE_HOLDER_AND_DELETE_LUA
 from llc.models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem, LLCWorkItemComment
 from llc.services.handoff import HandoffNotAllowed, HandoffService
@@ -235,7 +236,10 @@ class TestAgentToHuman:
                 company_id=str(item.company_id),
             )
 
-        redis_mock.delete.assert_called_once_with(f"llc:checkout:{item.id}")
+        redis_mock.delete.assert_not_called()  # never an unconditional DEL (#19631)
+        redis_mock.eval.assert_called_once_with(
+            COMPARE_HOLDER_AND_DELETE_LUA, 1, f"llc:checkout:{item.id}", str(agent_id)
+        )
 
     async def test_publishes_notification(self, service, mock_session):
         agent_id = uuid.uuid4()

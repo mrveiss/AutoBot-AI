@@ -21,6 +21,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
+from autobot_shared.env_registry_mesh_reembed import REEMBED_INTERVAL_DEFAULT_S, reembed_lease_ttl_default_ms
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
@@ -36,12 +37,23 @@ DEAD_KEY = "mesh:reembed_dead"
 ATTEMPTS_KEY = "mesh:reembed_attempts"
 LEASE_KEY = "mesh:reembed:leader"
 
+
+def interval_s_from_env() -> int:
+    """Seconds between drain passes, read from the environment now."""
+    return env_int("AUTOBOT_MESH_REEMBED_INTERVAL_S", REEMBED_INTERVAL_DEFAULT_S)
+
+
+def lease_ttl_ms_from_env() -> int:
+    """Lease TTL read from the environment now; unset, it follows the interval as read now (#21102)."""
+    return env_int("AUTOBOT_MESH_REEMBED_LEASE_TTL_MS", reembed_lease_ttl_default_ms(interval_s_from_env()))
+
+
 ENABLED = env_flag("AUTOBOT_MESH_REEMBED_ENABLED", True)
-INTERVAL_S = env_int("AUTOBOT_MESH_REEMBED_INTERVAL_S", 30)
+INTERVAL_S = interval_s_from_env()
 BATCH = env_int("AUTOBOT_MESH_REEMBED_BATCH", 100)
 # The lease outlives the interval plus a worst-case drain (BATCH items), and drain() also refreshes it
 # as it goes, so a second worker never takes it mid-drain and re-queues this worker's in-flight items.
-LEASE_TTL_MS = env_int("AUTOBOT_MESH_REEMBED_LEASE_TTL_MS", (INTERVAL_S * 4) * 1000)
+LEASE_TTL_MS = lease_ttl_ms_from_env()
 MAX_ATTEMPTS = env_int("AUTOBOT_MESH_REEMBED_MAX_ATTEMPTS", 3)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
