@@ -22,8 +22,8 @@ from typing import Any
 import pytest
 from repo_tests._glob_declared_uncovered import GLOB_DECLARED_UNCOVERED
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table, literal_in
-from repo_tests._reach import declare
+from repo_tests._ratchet_base import BaseUnavailable, base_table, literal_in
+from repo_tests._reach import ReachFloorError, declare
 
 from autobot_shared.isolated_git import git, make_repo
 
@@ -31,22 +31,30 @@ _RECORD = "repo_tests/_glob_declared_uncovered.py"
 _NAME = "GLOB_DECLARED_UNCOVERED"
 
 
-def _glob_keys(root: Path) -> list[str]:
-    """The record's glob keys as read from *root*'s copy of the file; none if *root* has no record."""
+def _record_read(root: Path) -> list[str]:
+    """The record's own path when *root* holds it and its table parsed to a dict, else nothing.
+
+    The reach is what the guard READ, not how much debt remains (#21347): a paid-off record is an
+    empty dict, which is a successful read and must not fail a floor. A missing file, an
+    unparseable one, or one without the assignment reads nothing, so the floor still fires.
+    """
     record = root / _RECORD
     if not record.is_file():
         return []
-    return sorted(literal_in(record.read_text(encoding="utf-8"), _NAME))  # type: ignore[call-overload]
+    try:
+        table = literal_in(record.read_text(encoding="utf-8"), _NAME)
+    except (SyntaxError, ValueError, TypeError, BaseUnavailable):
+        return []
+    return [_RECORD] if isinstance(table, dict) else []
 
 
 REACH = declare(
     "glob-declared-uncovered-entries",
-    discover=_glob_keys,
-    # 29 keys when written. skips=19 is a SHRINK allowance on a set meant to reach zero as the debt is
-    # paid, so the floor may trail the population; it is not a count of items the guard cannot complete.
-    floor=10,
-    skips=19,
-    what="glob keys in the uncovered-debt record",
+    discover=_record_read,
+    # One item: the record, read and parsed. Pinned at 1 with no skips or growth because the population is
+    # exactly one by construction, so the floor sits at it and 0 (unread) is the only failure.
+    floor=1,
+    what="parsed copies of the uncovered-debt record",
 )
 
 _ROUTES = (
@@ -87,10 +95,15 @@ def grown_against_base(root: Path, now: dict[str, Any]) -> dict[str, list[str]]:
     return grown_entries(now, _base_record(root))
 
 
-def test_the_record_did_not_grow_against_the_base() -> None:
-    grown = grown_against_base(repo_root(), GLOB_DECLARED_UNCOVERED)
+def check_record(root: Path, now: dict[str, Any]) -> None:
+    """The live check: the record was read (reach), and *now* added nothing to it against the base."""
+    REACH.completed(REACH.examined(root))
+    grown = grown_against_base(root, now)
     assert not grown, _complaint(grown)
-    REACH.completed(REACH.examined(repo_root()))
+
+
+def test_the_record_did_not_grow_against_the_base() -> None:
+    check_record(repo_root(), GLOB_DECLARED_UNCOVERED)
 
 
 def _commit_record(repo: Path, body: str) -> str:
@@ -183,3 +196,25 @@ def test_an_absent_base_record_passes_an_empty_current_record(tmp_path: Path, mo
     _pin_base(tmp_path, monkeypatch, None)
     assert _base_record(tmp_path) == {}
     assert grown_against_base(tmp_path, {}) == {}
+
+
+def test_the_live_check_passes_on_a_paid_off_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reach included: an empty record and an empty base is the end state, and it must not fail a floor."""
+    _pin_base(tmp_path, monkeypatch, f"{_NAME} = {{}}\n")
+    assert REACH.examined(tmp_path) == [_RECORD]
+    check_record(tmp_path, {})
+
+
+@pytest.mark.parametrize(
+    "body",
+    [None, f"{_NAME} = {{\n", "OTHER = {}\n", f"{_NAME} = ['not', 'a', 'dict']\n"],
+    ids=["file-missing", "unparseable", "assignment-absent", "not-a-dict"],
+)
+def test_the_live_check_fails_when_the_record_was_not_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str | None
+) -> None:
+    """Non-vacuity: a record that cannot be read fails the reach even though nothing grew."""
+    _pin_base(tmp_path, monkeypatch, body)
+    assert REACH.population(tmp_path) == []
+    with pytest.raises(ReachFloorError, match="reached 0"):
+        check_record(tmp_path, {})
