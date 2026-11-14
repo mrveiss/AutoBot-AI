@@ -30,8 +30,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import socket
 import time
 import uuid
 from dataclasses import dataclass
@@ -42,6 +40,7 @@ from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.coordination.work_claims import ClaimUnavailable
 from autobot_shared.embedding_model import active_embedding_model, is_embedding_model_id, set_embedding_model_override
 from autobot_shared.env_utils import env_float_clamped, env_int_clamped
+from autobot_shared.leader_lease import worker_identity
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.slug import sanitize_token
 from knowledge import embedding_switch_lock as lock
@@ -186,7 +185,7 @@ async def start_switch(kb, model: str, actor: str = "unknown") -> Dict[str, Any]
         raise SwitchRefused("the knowledge base is not available")
     collection = target_collection(kb.chromadb_collection.split("__", 1)[0], model, uuid.uuid4().hex)
     client = await _redis()
-    owner = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
+    owner = worker_identity(unique=True)
     if client is None:
         raise SwitchRefused("the knowledge base state store is not available")
     try:
