@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.redis_utils import COMPARE_AND_DELETE_LUA
 from llc.models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem
 from llc.services.handoff import HandoffAttachment, HandoffNotAuthorized, HandoffService
@@ -351,7 +352,8 @@ class TestHumanToAgent:
                 human_notes="Notes",
             )
 
-        mock_redis.delete.assert_called_once_with(f"llc:checkout:{item.id}")
+        mock_redis.delete.assert_not_called()  # never an unconditional DEL (#19631)
+        mock_redis.eval.assert_called_once_with(COMPARE_AND_DELETE_LUA, 1, f"llc:checkout:{item.id}", f"user:{user_id}")
 
     async def test_activity_log_recorded_when_injected(self, service, mock_session, mock_redis):
         item, user_id = _make_item()

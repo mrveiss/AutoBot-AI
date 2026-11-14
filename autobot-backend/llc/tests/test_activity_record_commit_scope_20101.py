@@ -309,7 +309,7 @@ async def test_a_failed_audit_leaves_the_key_and_sends_nothing_on_agent_to_human
     with patch("llc.services.handoff.get_async_redis_client", AsyncMock(return_value=redis)):
         with pytest.raises(ActivityRecordError):
             await service.agent_to_human(_a2h_session(agent), str(uuid.uuid4()), agent, USER, COMPANY)
-    redis.delete.assert_not_called()
+    redis.eval.assert_not_called()  # the owner-checked release (delete_if_holder / delete_if_value)
     redis.publish.assert_not_called()
     assert not service._background_tasks
 
@@ -334,6 +334,6 @@ async def test_a_failed_audit_leaves_the_key_and_sends_nothing_on_human_to_agent
                 company_id=COMPANY,
                 human_notes="n",
             )
-    redis.delete.assert_not_called()
+    redis.eval.assert_not_called()  # the owner-checked release (delete_if_holder / delete_if_value)
     redis.publish.assert_not_called()
     assert item.status != WorkItemStatus.IN_REVIEW

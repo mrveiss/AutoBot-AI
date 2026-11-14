@@ -16,7 +16,7 @@ import services.task_claim as task_claim
 class _BrokenRedis:
     """Reachable, then fails on the first command -- the ``redis_error`` branch."""
 
-    def register_script(self, _script):
+    async def eval(self, *_args):
         raise ConnectionError("connection reset")
 
 

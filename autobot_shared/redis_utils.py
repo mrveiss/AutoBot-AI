@@ -77,6 +77,10 @@ return 0
 """
 
 
+#: ``expire_if_value`` takes milliseconds; a caller holding a TTL in seconds converts with this.
+MS_PER_SECOND = 1000
+
+
 async def expire_if_value(redis: Any, key: str, expected: str, ttl_ms: int) -> bool:
     """Reset *key*'s TTL to *ttl_ms* only while it still holds *expected*; True when it was extended.
 
