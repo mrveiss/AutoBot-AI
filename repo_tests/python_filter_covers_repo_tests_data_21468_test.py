@@ -51,8 +51,10 @@ def uncovered_data_files(paths: list[str], patterns: list[str]) -> list[str]:
 def test_the_sweep_reaches_the_data_files_it_claims_to() -> None:
     """Reach before findings: an empty or partial enumeration must fail."""
     found = set(_data_files())
-    missing = [anchor for anchor in _REACH_ANCHORS if anchor not in found]
-    assert not missing, f"the enumeration no longer finds {missing}; it is not reading {_TREE}"
+    reached = [anchor for anchor in _REACH_ANCHORS if anchor in found]
+    assert len(reached) == len(
+        _REACH_ANCHORS
+    ), f"the enumeration reached {len(reached)} of {len(_REACH_ANCHORS)} anchors, so it is not reading {_TREE}"
     assert not any(p.endswith(".py") for p in found), "the enumeration must exclude the Python files"
 
 
