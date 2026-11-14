@@ -106,7 +106,7 @@ async def delete_as_user(
     except (SecretAccessError, SecretNotFoundError) as exc:
         raise mapped(exc)
     except PermissionError as exc:  # not a SecretAccessError: the status its audit record implies (#21539)
-        raise error_for(exc)
+        raise error_for(exc) or exc
 
 
 async def delete_as_service(
@@ -133,4 +133,4 @@ async def delete_as_service(
     except (SecretAccessError, SecretNotFoundError) as exc:
         raise mapped(exc)
     except PermissionError as exc:  # not a SecretAccessError: the status its audit record implies (#21539)
-        raise error_for(exc)
+        raise error_for(exc) or exc
