@@ -379,7 +379,7 @@ logger.info(f"✅ [ 12%] Config: Validation complete ({validation_report.total_i
 ```python
 from fastapi import APIRouter, Depends
 from backend.dependencies import get_config
-from src.unified_config_manager import ConfigManager
+from src.unified_config_manager import UnifiedConfigManager
 
 router = APIRouter()
 
@@ -604,7 +604,7 @@ def sync_settings_to_base(self) -> Dict[str, Any]:
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from backend.dependencies import get_config
-from src.unified_config_manager import ConfigManager
+from src.unified_config_manager import UnifiedConfigManager
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta

@@ -12,7 +12,7 @@ repo rule is ONE canonical name, so a variant of it must not return.
 Scope, stated so an empty result is read correctly: every git-tracked `.py` file (comment lines
 excluded, via the shared comment helper) and every tracked `.md` file, minus this file, changelogs
 and `docs/archives/` (history is allowed to say what it said). Markdown lines that start with
-`> **Correction (` are #15206's historical banners and are skipped. The matcher is a whole-word
+the dated `> **Correction (<date>, #15206)` banners and three quoted-verbatim lines (`_ALLOWED`) are skipped. The matcher is a whole-word
 match on the three names; the lowercase module-level `unified_config_manager` instance and the
 `TestUnifiedConfigTimeouts` test class are different identifiers and are not hits.
 """
@@ -30,7 +30,23 @@ from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _THIS_FILE = "repo_tests/unified_config_aliases_gone_21526_test.py"
 _EXCLUDE = ("*CHANGELOG*", "*Changelog*", "*changelog*", "docs/archives")
-_BANNER = "> **Correction ("
+_BANNER = re.compile(r"^> \*\*Correction \(\d{4}-\d{2}-\d{2}, #15206\)")
+
+#: Verbatim historical text that quotes the old name on purpose -- a module path's import line from a
+#: planning snippet (that module never exported the new name) and a logged warning. Exact (path, line).
+_ALLOWED: frozenset[tuple[str, str]] = frozenset(
+    {
+        (
+            "docs/planning/CONFIGURATION_MANAGEMENT_IMPLEMENTATION_PLAN.md",
+            "from src.unified_config_manager import UnifiedConfigManager",
+        ),
+        ("docs/system-state.md", "**1. Missing UnifiedConfigManager Method**"),
+        (
+            "docs/system-state.md",
+            "- Warning: `'UnifiedConfigManager' object has no attribute 'get_distributed_services_config'`",
+        ),
+    }
+)
 
 REMOVED_NAME = re.compile(r"\b(?:UnifiedConfigManager|get_unified_config_manager|UnifiedConfigSettings)\b")
 
@@ -54,7 +70,11 @@ REACH = declare(
 def hits_in(text: str, rel: str) -> list[tuple[int, str]]:
     """Removed-name hits in *text*, as (line number, name); comments and banners excluded."""
     if rel.endswith(".md"):
-        lines = [(n, ln) for n, ln in enumerate(text.splitlines(), 1) if not ln.startswith(_BANNER)]
+        lines = [
+            (n, ln)
+            for n, ln in enumerate(text.splitlines(), 1)
+            if not _BANNER.match(ln) and (rel, ln.strip()) not in _ALLOWED
+        ]
     else:
         lines = [(c.lineno, c.text) for c in code_lines(text, name=rel)]
     return [(n, m.group(0)) for n, ln in lines for m in REMOVED_NAME.finditer(ln)]
@@ -81,6 +101,8 @@ def test_the_detector_fires_on_each_name_and_not_on_look_alikes() -> None:
 def test_comments_and_banners_are_not_hits() -> None:
     assert not hits_in("# was UnifiedConfigManager\n", "x.py")
     assert not hits_in("> **Correction (2026-08-30, #15206):** names `UnifiedConfigManager`\n", "x.md")
+    assert hits_in("> **Correction (2026-08-30):** names `UnifiedConfigManager`\n", "x.md")
+    assert hits_in("> **Correction (2026-08-30, #1):** names `UnifiedConfigManager`\n", "x.md")
 
 
 def test_the_sweep_reaches_python_and_markdown_and_skips_history() -> None:
