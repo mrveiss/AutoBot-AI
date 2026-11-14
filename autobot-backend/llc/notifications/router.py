@@ -30,7 +30,7 @@ from typing import Optional
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value, expire_if_value
+from autobot_shared.redis_utils import MS_PER_SECOND, delete_if_value, expire_if_value
 
 from .publisher import LLCEvent, LLCWebSocketPublisher
 
@@ -99,7 +99,7 @@ _ROUTER_LOCK_KEY = "llc:notification_router:leader"
 # Seconds the lock lives without a renewal (#21456). The running router renews it every
 # ``_RENEW_INTERVAL`` seconds, so it lapses only when its holder stops renewing.
 _ROUTER_LOCK_TTL = env_int_clamped("AUTOBOT_LLC_NOTIFICATION_ROUTER_LOCK_TTL_SECONDS", 30, min_v=3, max_v=3600)
-_ROUTER_LOCK_TTL_MS = _ROUTER_LOCK_TTL * 1000  # expire_if_value takes milliseconds
+_ROUTER_LOCK_TTL_MS = _ROUTER_LOCK_TTL * MS_PER_SECOND  # expire_if_value takes milliseconds
 _RENEWALS_PER_TTL = 3  # renew attempts that fit in one TTL, so one failed attempt leaves two retries
 _RENEW_INTERVAL = _ROUTER_LOCK_TTL / _RENEWALS_PER_TTL
 
