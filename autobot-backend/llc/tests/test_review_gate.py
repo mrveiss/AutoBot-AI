@@ -343,8 +343,7 @@ class TestTransitionToDone:
         gate_svc.requires_review = AsyncMock(return_value=(True, "admin"))
 
         in_review_wi = _make_work_item(status=WorkItemStatus.IN_REVIEW)
-        handoff_svc = AsyncMock(spec=HandoffService)
-        handoff_svc.agent_to_human = AsyncMock(return_value=in_review_wi)
+        handoff_svc = AsyncMock(spec=HandoffService, agent_to_human=AsyncMock(return_value=in_review_wi))
 
         svc = WorkItemService()
         result = await svc.transition_to_done(
@@ -354,6 +353,7 @@ class TestTransitionToDone:
             actor_agent_id=agent_id,
             review_gate_svc=gate_svc,
             handoff_svc=handoff_svc,
+            reviewer_user_id=str(uuid.uuid4()),
         )
 
         handoff_svc.agent_to_human.assert_awaited_once()

@@ -59,6 +59,7 @@ from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-ex
 )
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
 from .work_item_completion_effects import release_workspace_for_task
+from .work_item_gated_done import hand_off_for_review
 from .work_item_hierarchy import reparent, validate_create
 from .work_item_own_task import (
     InvalidTransition,
@@ -854,18 +855,8 @@ class WorkItemService(LLCServiceBase):
             item_type = WorkItemType(item.type)
             requires, reviewer_role = await review_gate_svc.requires_review(session, company_id, item_type)
             if requires:
-                if handoff_svc is not None:
-                    return await handoff_svc.agent_to_human(
-                        session,
-                        work_item_id,
-                        company_id,
-                        reviewer_user_id=reviewer_user_id,
-                        agent_notes=None,
-                        actor_agent_id=actor_agent_id,
-                    )
-                raise InvalidTransition(
-                    f"Work item {work_item_id} requires human review before it can be marked done. "
-                    "No HandoffService available to initiate handoff."
+                return await hand_off_for_review(
+                    handoff_svc, session, work_item_id, company_id, actor_agent_id, reviewer_user_id
                 )
 
         stamp_and_release(session, item, WorkItemStatus.DONE, datetime.now(timezone.utc))
