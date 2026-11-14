@@ -67,11 +67,21 @@ def git(*, local: str = HEAD_SHA, behind: str = "0", parent: str = HEAD_SHA, pus
     )
 
 
+def listing(runs: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
+    return {"workflow_runs": runs or [], "total_count": len(runs or [])}
+
+
+def runs_body_api(body: Any) -> Api:
+    return Api(
+        [("GET", f"/repos/{REPO}/pulls/{PR}", (200, pull())), ("GET", f"/repos/{REPO}/actions/runs", (200, body))]
+    )
+
+
 def api(pr: Dict[str, Any], runs: Optional[List[Dict[str, Any]]] = None) -> Api:
     return Api(
         [
             ("GET", f"/repos/{REPO}/pulls/{PR}", (200, pr)),
-            ("GET", f"/repos/{REPO}/actions/runs", (200, {"workflow_runs": runs or []})),
+            ("GET", f"/repos/{REPO}/actions/runs", (200, listing(runs))),
         ]
     )
 
@@ -241,6 +251,36 @@ def test_an_api_failure_exits_one_with_an_annotation(capsys) -> None:
     assert "::error::cannot start the suite" in capsys.readouterr().out
 
 
+def test_a_branch_name_that_is_not_a_safe_ref_is_refused_and_nothing_is_run() -> None:
+    for ref in ("-x", "a..b", "--upload-pack=x"):
+        runner = git()
+        head = {"ref": ref, "sha": HEAD_SHA, "repo": {"full_name": REPO}}
+        code, message = start(runner, api(pull(head=head)))
+        assert code == 1 and "never writes to" in message, ref
+        assert wrote_nothing(runner) and not runner.ran("rev-parse") and not runner.ran("rev-list")
+
+
+def test_a_runs_list_longer_than_what_was_read_or_with_no_total_cannot_tell_so_it_fails_closed() -> None:
+    many = [run(head_sha="d" * 40)] * 100
+    bodies = (
+        {"workflow_runs": many, "total_count": 150},
+        {"workflow_runs": [], "total_count": 3},
+        {"workflow_runs": []},
+    )
+    for body in bodies:
+        fake = runs_body_api(body)
+        runner = git()
+        with pytest.raises(bs.SyncApiError, match="cannot tell whether"):
+            start(runner, fake)
+        assert wrote_nothing(runner)
+
+
+def test_control_a_complete_runs_list_is_read_as_it_is() -> None:
+    runs = [run(head_sha="d" * 40)]
+    fake = Api([("GET", f"/repos/{REPO}/actions/runs", (200, {"workflow_runs": runs, "total_count": 1}))])
+    assert bs.SyncApi(fake, sleep=lambda _: None, upsert=fake.upsert).suite_runs(HEAD_SHA) == runs
+
+
 # ------------------------------------------------------------------ the message
 
 
@@ -251,8 +291,20 @@ def test_the_message_has_no_skip_marker_no_trailer_and_is_one_line() -> None:
     assert message == f"chore(ci): start the suite on the synced head (#{PR})"
 
 
-def test_control_the_sync_merge_message_does_carry_the_marker() -> None:
+#: Every form GitHub honours to skip workflow runs: five bracketed phrases and the `skip-checks: true` trailer.
+SKIP_FORMS = ["[skip ci]", "[ci skip]", "[no ci]", "[skip actions]", "[actions skip]"]
+SKIP_FORMS += ["skip-checks: true", "skip-checks:true"]
+
+
+@pytest.mark.parametrize("form", SKIP_FORMS)
+def test_the_message_carries_no_form_of_skip_github_recognises(form: str) -> None:
+    assert form not in core.start_ci_message(PR).lower()
+
+
+def test_control_the_sync_merge_message_does_carry_a_skip_form_and_the_check_would_see_it() -> None:
+    merged = core.merge_message("b").lower()
     assert core.merge_message("b").endswith(core.SKIP_MARKER)
+    assert [form for form in SKIP_FORMS if form in merged] == ["[skip ci]"]
 
 
 @pytest.mark.skipif(shutil.which("grep") is None, reason="grep -E is the rule's own matcher")
@@ -269,6 +321,18 @@ def test_the_message_passes_the_repo_commit_subject_rule() -> None:
 
 
 # ------------------------------------------------------------------ the workflow
+
+
+def group_for(start_ci_for_pr: Optional[str]) -> str:
+    """The workflow's concurrency group for a run, evaluating its one expression by hand.
+
+    Only the exact shape `PREFIX${{ I && format('-start-ci-{0}', I) || '' }}` with I the dispatch input is
+    understood; anything else fails here, so a changed expression is looked at, not silently trusted.
+    """
+    raw = _workflow()["concurrency"]["group"]
+    prefix, _, rest = raw.partition("${{")
+    assert rest.strip() == "inputs.start_ci_for_pr && format('-start-ci-{0}', inputs.start_ci_for_pr) || '' }}", raw
+    return prefix + (f"-start-ci-{start_ci_for_pr}" if start_ci_for_pr else "")
 
 
 def _workflow() -> Dict[str, Any]:
@@ -307,3 +371,16 @@ def test_actions_read_is_the_only_permission_added_and_the_token_use_is_unchange
         "actions": "read",
     }
     assert _sync_step(doc)["env"]["AUTOBOT_PUSH_TOKEN"] == "${{ secrets.AUTOBOT_PUSH_TOKEN }}"
+
+
+def test_the_group_is_untouched_for_every_trigger_without_the_input_and_per_pr_with_it() -> None:
+    for without in (None, ""):  # push and schedule carry no input; a dispatch without it is empty
+        assert group_for(without) == "sync-branches-with-main"
+    assert group_for("21578") == "sync-branches-with-main-start-ci-21578"
+    assert group_for("21578") != group_for("21579") != group_for(None)
+    assert _workflow()["concurrency"]["cancel-in-progress"] is False
+
+
+def test_control_main_s_literal_group_would_not_keep_a_request_apart() -> None:
+    group = _workflow()["concurrency"]["group"]
+    assert "start_ci_for_pr" in group, "a plain group lets a later run cancel a queued request"

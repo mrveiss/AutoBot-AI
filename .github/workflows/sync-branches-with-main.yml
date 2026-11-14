@@ -51,7 +51,9 @@
 #   (a branch behind is merged by the ordinary sync first; ask again) and whose head is the
 #   commit this run fetched; it is a notice and no commit when the head already has a
 #   non-cancelled `pull_request` run of ci.yml. The commit's parent is that head and the push
-#   is plain, so a branch that moved meanwhile is rejected, never overwritten.
+#   is plain, so a branch that moved meanwhile is rejected, never overwritten. If main moves
+#   before the PR lands, the next sync merge puts a `[skip ci]` head back on top and the request
+#   has to be repeated (a no-op if the suite already ran on that head).
 # #14022's one-per-push serialization and #12823's `approve-refreshed-runs` job
 # stay gone: there is no run to reset mid-flight and none to approve.
 #
@@ -93,8 +95,14 @@ on:
 # false` because a run that is mid-push must finish; cancelling it would leave
 # some branches merged and others not, with no record of which (#15306). A pushed
 # main queues behind the running sync, and the queued run syncs to the newer main.
+#
+# A start_ci_for_pr request (#21577) has its own group per PR number, so a queued request is not
+# cancelled unrun by the single pending slot of the sync's group when a push to main or the cron
+# arrives. For every other run the input is empty and the group is exactly `sync-branches-with-main`.
+# A request and a sync can then run at the same time on one branch: both push plainly with the head
+# they verified as parent, so whichever pushes second is rejected (head-moved) and nothing is overwritten.
 concurrency:
-  group: sync-branches-with-main
+  group: sync-branches-with-main${{ inputs.start_ci_for_pr && format('-start-ci-{0}', inputs.start_ci_for_pr) || '' }}
   cancel-in-progress: false
 
 permissions: {}

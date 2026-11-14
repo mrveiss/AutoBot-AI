@@ -198,7 +198,11 @@ class SyncApi:
         body = self._expect((200,), "GET", f"/repos/{self.repo}/actions/runs?{query}")
         if not isinstance(body, dict):
             raise SyncApiError(f"the runs list for {sha[:10]} is not an object; refusing to guess it is empty")
-        return list(body.get("workflow_runs") or [])
+        runs = list(body.get("workflow_runs") or [])
+        total = body.get("total_count")
+        if not isinstance(total, int) or total > len(runs):
+            raise SyncApiError(f"cannot tell whether {sha[:10]} has a suite: {total!r} runs reported, {len(runs)} read")
+        return runs
 
     def open_pulls(self) -> List[Dict[str, Any]]:
         return self.paginate(f"/repos/{self.repo}/pulls?state=open&sort=created&direction=asc")
