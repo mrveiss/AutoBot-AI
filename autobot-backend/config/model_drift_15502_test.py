@@ -22,8 +22,10 @@ class _Store:
 
     def __init__(self, down: bool = False) -> None:
         self.down = down
+        self.reads = 0
 
     def get(self, key):
+        self.reads += 1
         if self.down:
             raise ConnectionError("down")
         return None
@@ -92,9 +94,10 @@ def test_startup_validation_runs_the_drift_check(caplog) -> None:
 def test_an_unreadable_override_store_adds_nothing_to_the_drift_log(monkeypatch, caplog) -> None:
     """The unreadable-store warning belongs to the embedding-model module (pinned in its own test, #19377);
     the drift check logs only on its own logger, so an agreeing config stays silent there (#21523)."""
-    monkeypatch.setattr(em, "_redis", lambda: _Store(down=True))
+    store = _Store(down=True)
+    monkeypatch.setattr(em, "_redis", lambda: store)
     raw = _raw(config.llm.default_model, config.llm.embedding_model)
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.WARNING, logger=_LOGGER):
         assert warn_on_selected_model_drift(raw) == []
     assert [r for r in caplog.records if r.name == _LOGGER] == []
-    assert any("override unreadable" in r.getMessage() for r in caplog.records), "the store really was read"
+    assert store.reads == 1, "the failing store really was read"
