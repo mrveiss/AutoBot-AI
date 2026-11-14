@@ -649,12 +649,12 @@ async def search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
 
 **Status:** ✅ Complete (2025-10-23)
 
-**1. Missing UnifiedConfigManager Method**
+**1. Missing ConfigManager Method**
 
 **Problem:**
 - Multiple files calling non-existent `get_distributed_services_config()` method
 - Errors in: `backend/services/ai_stack_client.py`, `autobot-backend/api/services.py`
-- Warning: `'UnifiedConfigManager' object has no attribute 'get_distributed_services_config'`
+- Warning: `'ConfigManager' object has no attribute 'get_distributed_services_config'`
 
 **Fix Applied:** `src/unified_config_manager.py` (Lines 652-677)
 ```python

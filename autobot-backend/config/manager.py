@@ -110,8 +110,3 @@ class ConfigManager(
 
 
 get_config_manager = lazy_singleton(ConfigManager)
-
-
-# Deprecated: use ConfigManager and get_config_manager instead
-UnifiedConfigManager = ConfigManager
-get_unified_config_manager = get_config_manager

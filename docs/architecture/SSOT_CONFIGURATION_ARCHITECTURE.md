@@ -1,6 +1,6 @@
 # Single Source of Truth Configuration Architecture
 
-> **Freshness:** superseded — 2026-08-30. "Architecture Design" is stale: this shipped as `autobot_shared/ssot_config.py` (the actual SSOT) plus `autobot-backend/services/config_service.py`; `UnifiedConfigManager` referenced here is now a deprecated alias (`autobot-backend/config/__init__.py:148-157`), not the primary path.
+> **Freshness:** superseded — 2026-08-30. "Architecture Design" is stale: this shipped as `autobot_shared/ssot_config.py` (the actual SSOT) plus `autobot-backend/services/config_service.py`; `ConfigManager` referenced here is now a deprecated alias (`autobot-backend/config/__init__.py:148-157`), not the primary path.
 
 
 <!--
@@ -30,7 +30,7 @@ This document defines the Single Source of Truth (SSOT) configuration architectu
 | Category | File/Module | Lines | Purpose | Problems |
 |----------|-------------|-------|---------|----------|
 | **Backend - Config Package** | | | | |
-| | `src/config/manager.py` | ~96 | Core UnifiedConfigManager | Good architecture |
+| | `src/config/manager.py` | ~96 | Core ConfigManager | Good architecture |
 | | `src/config/settings.py` | ~35 | Pydantic settings | Separate from main |
 | | `src/config/defaults.py` | ~183 | Default config generation | Hardcoded fallbacks |
 | | `src/config/loader.py` | ~192 | Config loading/merging | Complex precedence |
@@ -776,7 +776,7 @@ All configuration-related documentation must be updated during SSOT migration:
 **Tasks**:
 1. Update `network_constants.py` to read from SSOT config
 2. Update `model_constants.py` to read from SSOT config
-3. Update `UnifiedConfigManager` to use SSOT as base
+3. Update `ConfigManager` to use SSOT as base
 4. Migrate `config_service.py` to wrap SSOT
 5. Add deprecation warnings to old accessors
 
