@@ -14,7 +14,7 @@
  * final. A `load()` while one is running joins it; disposing the scope stops the loop.
  */
 import { getCurrentScope, onScopeDispose, ref } from 'vue'
-import { backoffDelay, isHttpError } from '@autobot/ui'
+import { backoffDelay, isHttpError, RequestTimeoutError } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
@@ -47,18 +47,15 @@ export interface LoadRetryOptions {
   budgetMs?: number
 }
 
-// The kit client builds its timeout as a plain Error with this message prefix (ApiClientBase armAbort).
-const CLIENT_TIMEOUT_PREFIX = 'Request timeout after'
-
 /**
  * Allow list: only a failure that can pass on its own is retried -- a fetch network failure
- * (TypeError), the client's timeout, or a 5xx. Anything else (a 4xx, a body that is not JSON, an endpoint refusal,
+ * (TypeError), the kit client's `RequestTimeoutError` (recognised by class, never by message text), or a 5xx. Anything else (a 4xx, a body that is not JSON, an endpoint refusal,
  * an unknown error) is final.
  */
 function isRetryable(e: unknown): boolean {
   if (isHttpError(e)) return e.status >= HTTP_SERVER_ERROR_MIN
   if (e instanceof TypeError) return true
-  return e instanceof Error && e.message.startsWith(CLIENT_TIMEOUT_PREFIX)
+  return e instanceof RequestTimeoutError
 }
 
 export function useDashboardLayout(
