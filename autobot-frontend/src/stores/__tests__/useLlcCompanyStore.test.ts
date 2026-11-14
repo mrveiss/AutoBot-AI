@@ -240,6 +240,82 @@ describe('useLlcCompanyStore (GH#9627)', () => {
       expect(store.selectionUnverified).toBe(false)
     })
 
+    /** Deferred probes: list N answers lists[N-1]; each probe call is held until settled. */
+    const holdProbes = (lists: LlcCompany[][]) => {
+      const probes: Array<{ url: string; resolve: () => void; reject: (e: unknown) => void }> = []
+      let listCalls = 0
+      getMock.mockImplementation((url: string) => {
+        if (url === LIST_URL) return Promise.resolve(lists[listCalls++])
+        return new Promise((resolve, reject) => {
+          probes.push({ url, resolve: () => resolve(mockCompany()), reject })
+        })
+      })
+      return probes
+    }
+
+    it('a superseded probe failing 500 does not flag a selection the newer list confirmed', async () => {
+      const probes = holdProbes([[mockCompany()], [mockCompany(), mockCompany({ id: 'archived-1' })]])
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(probes).toHaveLength(1))
+      await store.fetchCompanies()
+      probes[0].reject(new HttpError(500, 'Internal server error'))
+      await first
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(store.selectionUnverified).toBe(false)
+    })
+
+    it('a superseded probe failing 500 leaves the newer run flag on the new selection', async () => {
+      const probes = holdProbes([[mockCompany()], [mockCompany()]])
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(probes).toHaveLength(1))
+      store.selectCompany('archived-2')
+      const second = store.fetchCompanies()
+      await vi.waitFor(() => expect(probes).toHaveLength(2))
+      probes[1].reject(new HttpError(500, 'Internal server error'))
+      await second
+      expect(store.selectionUnverified).toBe(true)
+      probes[0].reject(new HttpError(500, 'Internal server error'))
+      await first
+      expect(store.selectedCompanyId).toBe('archived-2')
+      expect(store.selectionUnverified).toBe(true)
+    })
+
+    it('a superseded 404 changes neither the selection nor the flag', async () => {
+      const probes = holdProbes([[mockCompany()], [mockCompany()]])
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      const first = store.fetchCompanies()
+      await vi.waitFor(() => expect(probes).toHaveLength(1))
+      const second = store.fetchCompanies()
+      await vi.waitFor(() => expect(probes).toHaveLength(2))
+      probes[1].reject(new HttpError(500, 'Internal server error'))
+      await second
+      expect(store.selectionUnverified).toBe(true)
+      probes[0].reject(new HttpError(404, 'Company not found'))
+      await first
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(store.selectionUnverified).toBe(true)
+    })
+
+    it('selectCompany and clearSelection each reset the flag', async () => {
+      routeGet(() => Promise.reject(new HttpError(500, 'Internal server error')))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(store.selectionUnverified).toBe(true)
+      store.selectCompany('company-1')
+      expect(store.selectionUnverified).toBe(false)
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(store.selectionUnverified).toBe(true)
+      store.clearSelection()
+      expect(store.selectionUnverified).toBe(false)
+    })
+
     it('sends no probe when the list already holds the selection', async () => {
       routeGet(() => Promise.reject(new HttpError(404, 'Company not found')))
       const store = useLlcCompanyStore()

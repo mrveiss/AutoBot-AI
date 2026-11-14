@@ -45,6 +45,9 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
   // selection is kept but unverified. Not an error: the list itself loaded.
   const selectionUnverified = ref(false)
 
+  // Newest fetchCompanies run; a probe from an older run may change nothing.
+  let fetchRun = 0
+
   const selectedCompany = computed(
     () => companies.value.find((c) => c.id === selectedCompanyId.value) ?? null,
   )
@@ -61,28 +64,25 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
    * 408/429 and non-HTTP errors keep it. The probed company is not added to ``companies``: the
    * selector must not start listing archived or subsidiary entries. A refusal is acted on only
    * while the id is still selected and still absent from the CURRENT list, so a late probe never
-   * overrides a newer list that confirmed it. A failed probe that is not a refusal sets
-   * ``selectionUnverified``; ``fetchCompanies`` resets it on every run.
+   * overrides a newer list that confirmed it. Only the newest run's probe may clear the selection
+   * or set ``selectionUnverified``; the flag describes the current selection and is reset
+   * whenever the selection changes and at the start of every ``fetchCompanies`` run.
    */
-  async function dropSelectionIfGone(): Promise<void> {
+  async function dropSelectionIfGone(run: number): Promise<void> {
     const id = selectedCompanyId.value
     if (!id || companies.value.some((c) => c.id === id)) return
     try {
       await useApiClient().get(`${COMPANIES_ENDPOINT}${encodeURIComponent(id)}`, orgScope(id))
     } catch (err) {
-      // A selection switched while the probe was in flight is someone else's; leave it.
-      if (
-        isHttpError(err) &&
-        SELECTION_REFUSED_STATUSES.includes(err.status) &&
-        selectedCompanyId.value === id &&
-        !companies.value.some((c) => c.id === id)
-      ) {
+      if (run !== fetchRun) return
+      const stillAbsent = selectedCompanyId.value === id && !companies.value.some((c) => c.id === id)
+      const refused = isHttpError(err) && SELECTION_REFUSED_STATUSES.includes(err.status)
+      if (refused && stillAbsent) {
         selectedCompanyId.value = ''
+        selectionUnverified.value = false
         return
       }
-      if (!(isHttpError(err) && SELECTION_REFUSED_STATUSES.includes(err.status))) {
-        selectionUnverified.value = selectedCompanyId.value === id
-      }
+      if (!refused && stillAbsent) selectionUnverified.value = true
       logger.warn('company probe failed; keeping the selection:', err)
     }
   }
@@ -96,6 +96,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
    */
   async function fetchCompanies(includeArchived = false): Promise<void> {
     const api = useApiClient()
+    const run = ++fetchRun
     isLoading.value = true
     error.value = null
     unavailable.value = false
@@ -106,7 +107,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
         : COMPANIES_ENDPOINT
       const resp = await api.get<LlcCompany[]>(endpoint)
       companies.value = Array.isArray(resp) ? resp : []
-      await dropSelectionIfGone()
+      await dropSelectionIfGone(run)
     } catch (err) {
       const message = err instanceof Error ? err.message : ''
       // HTTP 503 = LLC data layer disabled in this deployment (no company mode).
@@ -125,10 +126,12 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
   /** Set the active company id (route guards keep this in sync on URL nav). */
   function selectCompany(id: string): void {
     selectedCompanyId.value = id
+    selectionUnverified.value = false
   }
 
   function clearSelection(): void {
     selectedCompanyId.value = ''
+    selectionUnverified.value = false
   }
 
   /**
@@ -152,7 +155,10 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
     const api = useApiClient()
     await api.delete(`${COMPANIES_ENDPOINT}${id}`, orgScope(id))
     companies.value = companies.value.filter((c) => c.id !== id)
-    if (selectedCompanyId.value === id) selectedCompanyId.value = ''
+    if (selectedCompanyId.value === id) {
+      selectedCompanyId.value = ''
+      selectionUnverified.value = false
+    }
   }
 
   return {
