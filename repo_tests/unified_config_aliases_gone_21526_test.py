@@ -2,19 +2,25 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The three `Unified*` config aliases are gone and stay gone (#21526).
+"""The three `Unified*` config aliases and the two instance aliases are gone and stay gone (#21526, #21533).
 
 #959 renamed `UnifiedConfigManager` / `get_unified_config_manager` / `UnifiedConfigSettings`
 to `ConfigManager` / `get_config_manager` / `ConfigSettings` but left the old names behind as
 `# Deprecated` aliases with live users. #21526 migrated the users and removed the aliases; the
-repo rule is ONE canonical name, so a variant of it must not return.
+repo rule is ONE canonical name, so a variant of it must not return. #21533 did the same for the module-level
+INSTANCE aliases `unified_config_manager` and `global_config_manager`: both resolved to the one `config_manager` object.
 
 Scope, stated so an empty result is read correctly: every git-tracked `.py` file (comment lines
 excluded, via the shared comment helper) and every tracked `.md` file, minus this file, changelogs
 and `docs/archives/` (history is allowed to say what it said). Markdown lines that start with
-the dated `> **Correction (<date>, #15206)` banners and three quoted-verbatim lines (`_ALLOWED`) are skipped. The matcher is a whole-word
-match on the three names; the lowercase module-level `unified_config_manager` instance and the
-`TestUnifiedConfigTimeouts` test class are different identifiers and are not hits.
+the dated `> **Correction (<date>, #15206)` banners and quoted-verbatim lines (`_ALLOWED`, markdown or Python: a status-report transcript and a legacy migration table's rename key) are skipped. The matcher is a whole-word
+match on the three class/function names. The two instance names are lowercase identifiers that also occur as
+legitimate locals, parameters and module spellings, so they are hits only in the forms that name the config
+package's attribute: `from config import <name>` (single-line, including `import a, <name>`; an `as` alias is not
+the imported name), `config.<name>` / `config_pkg.<name>` attribute access (this covers a `"config.<name>"`
+patch target), and the exact quoted string `"<name>"` (a `setattr`/`getattr`/`patch` target). A local variable, a
+parameter, a `<name>.py` module path, `_fake_<name>` helpers and `TestUnifiedConfigTimeouts` are not hits. A
+multi-line parenthesised `from config import (...)` is not read.
 """
 
 from __future__ import annotations
@@ -32,17 +38,35 @@ _THIS_FILE = "repo_tests/unified_config_aliases_gone_21526_test.py"
 _EXCLUDE = ("*CHANGELOG*", "*Changelog*", "*changelog*", "docs/archives")
 _BANNER = re.compile(r"^> \*\*Correction \(\d{4}-\d{2}-\d{2}, #15206\)")
 
-#: Verbatim historical text that quotes the old name on purpose -- a section heading and a logged warning
-#: from a status report. Matched by exact line text, not path.
+#: Verbatim text that quotes an old name on purpose -- a heading, a logged warning and a command transcript from
+#: status reports, and the old-name key of a legacy rename table. Matched by exact line text, not path.
 #: An entry no sweep line matched is STALE and fails (``test_no_allowed_line_is_stale``).
 _ALLOWED: frozenset[str] = frozenset(
     {
         "**1. Missing UnifiedConfigManager Method**",
         "- Warning: `'UnifiedConfigManager' object has no attribute 'get_distributed_services_config'`",
+        '$ grep "unified_config_manager" src/utils/redis_helper.py',
+        '"global_config_manager": "config",  # main config -> consolidated config',
     }
 )
 
 REMOVED_NAME = re.compile(r"\b(?:UnifiedConfigManager|get_unified_config_manager|UnifiedConfigSettings)\b")
+
+
+_INSTANCE_ALT = "unified_config_manager|global_config_manager"
+_FROM_IMPORT = re.compile(r"\bfrom config import\s+([^#]*)")
+_ATTR_USE = re.compile(rf"(?<![\w.])(?:config|config_pkg)\.({_INSTANCE_ALT})\b")
+_QUOTED = re.compile(rf"[\"']({_INSTANCE_ALT})[\"']")
+
+
+def _instance_hits(line: str) -> list[str]:
+    """Removed instance-alias names *line* imports from, reads off, or quotes as a target of, the config package."""
+    found = [m.group(1) for m in _ATTR_USE.finditer(line)] + [m.group(1) for m in _QUOTED.finditer(line)]
+    imp = _FROM_IMPORT.search(line)
+    if imp:
+        firsts = (re.match(r"\W*(\w+)", part) for part in imp.group(1).split(","))
+        found += [m.group(1) for m in firsts if m and m.group(1) in _INSTANCE_ALT.split("|")]
+    return found
 
 
 def _population(root: Path) -> list[str]:
@@ -71,12 +95,13 @@ def hits_in(
     """
     if rel.endswith(".md"):
         lines = [(n, ln) for n, ln in enumerate(text.splitlines(), 1) if not _BANNER.match(ln)]
-        if used is not None:
-            used.update(ln.strip() for _, ln in lines if ln.strip() in allowed)
-        lines = [(n, ln) for n, ln in lines if ln.strip() not in allowed]
     else:
         lines = [(c.lineno, c.text) for c in code_lines(text, name=rel)]
-    return [(n, m.group(0)) for n, ln in lines for m in REMOVED_NAME.finditer(ln)]
+    if used is not None:
+        used.update(ln.strip() for _, ln in lines if ln.strip() in allowed)
+    lines = [(n, ln) for n, ln in lines if ln.strip() not in allowed]
+    named = [(n, m.group(0)) for n, ln in lines for m in REMOVED_NAME.finditer(ln)]
+    return named + [(n, name) for n, ln in lines for name in _instance_hits(ln)]
 
 
 def _sweep(root: Path) -> tuple[list[str], set[str]]:
@@ -96,7 +121,11 @@ def stale_allowances(allowed: frozenset[str], used: set[str]) -> list[str]:
 
 def test_no_removed_unified_config_name_is_back() -> None:
     offenders, _ = _sweep(repo_root())
-    assert not offenders, "Use ConfigManager / get_config_manager / ConfigSettings (#21526):\n" + "\n".join(offenders)
+    assert (
+        not offenders
+    ), "Use ConfigManager / get_config_manager / ConfigSettings / config_manager (#21526, #21533):\n" + "\n".join(
+        offenders
+    )
 
 
 def test_no_allowed_line_is_stale() -> None:
@@ -113,6 +142,9 @@ def test_an_unused_allowance_is_reported() -> None:
     used: set[str] = set()
     assert not hits_in("  - keep me UnifiedConfigManager\n", "x.md", allowed, used)
     assert stale_allowances(allowed, used) == ["- gone UnifiedConfigManager"]
+    py_allowed = frozenset({'"global_config_manager": "x",  # kept'})
+    assert not hits_in('    "global_config_manager": "x",  # kept\n', "x.py", py_allowed)
+    assert hits_in('    "global_config_manager": "y",\n', "x.py", py_allowed)
 
 
 def test_the_detector_fires_on_each_name_and_not_on_look_alikes() -> None:
@@ -120,7 +152,31 @@ def test_the_detector_fires_on_each_name_and_not_on_look_alikes() -> None:
     for name in ("UnifiedConfigManager", "get_unified_config_manager", "UnifiedConfigSettings"):
         assert hits_in(f"from config import {name}\n", "x.py"), name
         assert hits_in(f"uses `{name}` here\n", "x.md"), name
-    for fine in ("unified_config_manager.get()", "class TestUnifiedConfigTimeouts:", "ConfigManager"):
+    for fine in ("class TestUnifiedConfigTimeouts:", "ConfigManager"):
+        assert not hits_in(fine + "\n", "x.py"), fine
+
+
+def test_the_instance_alias_detector_fires_on_each_form_and_not_on_look_alikes() -> None:
+    """Control: each form that reaches the config package's attribute is caught, a same-spelled local is not."""
+    for name in ("unified_config_manager", "global_config_manager"):
+        for hit in (
+            f"from config import {name}",
+            f"from config import config_manager, {name}",
+            f"    patch('config.{name}', fake)",
+            f"config_pkg.{name}.get_redis_config()",
+            f'monkeypatch.setattr(module, "{name}", fake)',
+        ):
+            assert hits_in(hit + "\n", "x.py"), hit
+        assert hits_in(f"run `from config import {name}`\n", "x.md"), name
+    for fine in (
+        "unified_config_manager = build()",
+        "def f(unified_config_manager): return unified_config_manager.get()",
+        "from config import config_manager as global_config_manager",
+        "from utils.connection_utils import global_config_manager",
+        "import unified_config_manager as ucm",
+        "x = _fake_unified_config_manager()",
+        "self.config.global_config_manager",
+    ):
         assert not hits_in(fine + "\n", "x.py"), fine
 
 

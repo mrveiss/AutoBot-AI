@@ -110,9 +110,9 @@ def _build_default_services(redis_status_obj) -> list:
     Returns:
         List of default ServiceStatus objects
     """
-    from config import unified_config_manager
+    from config import config_manager
 
-    monitoring_config = unified_config_manager.get_config_section("monitoring") or {}
+    monitoring_config = config_manager.get_config_section("monitoring") or {}
     default_response_time = monitoring_config.get("default_response_time_ms", 10.0)
 
     redis_status, redis_message = _determine_redis_status(redis_status_obj)
@@ -337,10 +337,10 @@ async def get_version():
     """
     try:
         # Get configuration
-        from config import unified_config_manager
+        from config import config_manager
 
-        backend_config = unified_config_manager.get_backend_config()
-        system_config = unified_config_manager.get_config_section("system") or {}
+        backend_config = config_manager.get_backend_config()
+        system_config = config_manager.get_config_section("system") or {}
 
         # Get uptime from config or calculate (could be improved with actual start time)
         uptime_seconds = system_config.get("uptime_placeholder", 3600.0)
