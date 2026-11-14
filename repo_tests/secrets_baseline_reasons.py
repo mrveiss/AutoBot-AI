@@ -60,8 +60,10 @@ from pathlib import Path
 #: count alone is not enough). Computed once; never re-derive it FROM the live
 #: file to "fix" a mismatch -- a mismatch means the file changed and that
 #: change needs its own review, the same as any other ratchet-baseline edit.
+#: Re-pinned once, by #20895, for a shrink-only edit: 19 entries over 6 paths absent from the tree were
+#: removed; the digest is the old one (reproduced first) recomputed over the remaining keys.
 FROZEN_LEGACY_KEYS_SHA256 = (
-    "7ecbbf5a24a455625f68f40f297758173297fa673580c2e67ad9ae43ecf3d54e"  # pragma: allowlist secret
+    "898bc7dbf08652ee9ee701dc41b88d54843ed32db8c0844ba94124d5b92311fa"  # pragma: allowlist secret
 )
 
 
@@ -79,8 +81,7 @@ LEGACY_REASON = (
 )
 
 #: The reason table lives in its own module (#17134) -- it is the part that grows.
-from repo_tests.secrets_baseline_reason_entries import BaselineKey, SPECIFIC_REASONS  # noqa: E402,F401
-
+from repo_tests.secrets_baseline_reason_entries import SPECIFIC_REASONS, BaselineKey  # noqa: E402,F401
 
 _LEGACY_KEYS_PATH = Path(__file__).with_name("secrets_baseline_legacy_keys.json")
 
@@ -89,7 +90,7 @@ def load_legacy_keys() -> frozenset[BaselineKey]:
     """The frozen (filename, type, hashed_secret) triples exempted under LEGACY_REASON.
 
     Loaded from JSON, not inlined, so this module stays well under the
-    600-line file-size ratchet -- the set has 1,355 entries.
+    600-line file-size ratchet -- the set has 1,336 entries (1,355 before #20895 pruned the dead paths).
     """
     with _LEGACY_KEYS_PATH.open(encoding="utf-8") as fh:
         return frozenset(tuple(entry) for entry in json.load(fh))
