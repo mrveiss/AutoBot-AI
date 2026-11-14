@@ -287,6 +287,7 @@ REACH_ROOTS = {
         "scripts",
         "tools",
     ),
+    "repo_tests/one_done_path_21503_test.py": ("autobot-backend",),
     "repo_tests/one_fact_read_authorization_18184_test.py": (
         "autobot-backend",
         "autobot-slm-backend",

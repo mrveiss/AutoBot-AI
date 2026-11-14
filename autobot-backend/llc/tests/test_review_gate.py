@@ -324,9 +324,8 @@ class TestTransitionToDone:
         wi = _make_work_item(status=WorkItemStatus.IN_PROGRESS)
         session = self._make_wi_session(wi)
         svc = WorkItemService()
-        company_id = str(uuid.uuid4())
 
-        result = await svc.transition_to_done(session, str(wi.id), company_id, actor_user_id=str(uuid.uuid4()))
+        result = await svc.transition_to_done(session, str(wi.id), str(wi.company_id), actor_user_id=str(uuid.uuid4()))
 
         assert result.status == WorkItemStatus.DONE
         session.flush.assert_awaited()
@@ -337,22 +336,23 @@ class TestTransitionToDone:
         wi = _make_work_item(status=WorkItemStatus.IN_PROGRESS)
         session = self._make_wi_session(wi)
         company_id, agent_id, reviewer = (str(uuid.uuid4()) for _ in range(3))
-
+        wi.company_id = uuid.UUID(company_id)
+        wi.reviewer_user_id = uuid.UUID(reviewer)
         gate_svc = AsyncMock(spec=ReviewGatePolicyService, requires_review=AsyncMock(return_value=(True, "admin")))
-
         in_review_wi = _make_work_item(status=WorkItemStatus.IN_REVIEW)
         handoff_svc = AsyncMock(spec=HandoffService, agent_to_human=AsyncMock(return_value=in_review_wi))
-
         svc = WorkItemService()
-        result = await svc.transition_to_done(
-            session,
-            str(wi.id),
-            company_id,
-            actor_agent_id=agent_id,
-            review_gate_svc=gate_svc,
-            handoff_svc=handoff_svc,
-            reviewer_user_id=reviewer,
-        )
+        with patch(
+            "llc.services.authz.membership_role", new=AsyncMock(return_value="member")
+        ):  # the reviewer is a member
+            result = await svc.transition_to_done(
+                session,
+                str(wi.id),
+                company_id,
+                actor_agent_id=agent_id,
+                review_gate_svc=gate_svc,
+                handoff_svc=handoff_svc,
+            )
 
         handoff_svc.agent_to_human.assert_awaited_once_with(
             session, str(wi.id), agent_id=agent_id, reviewer_user_id=reviewer, company_id=company_id
@@ -364,7 +364,7 @@ class TestTransitionToDone:
         """Agent actor when gate policy says no review — transitions to done."""
         wi = _make_work_item(status=WorkItemStatus.IN_PROGRESS)
         session = self._make_wi_session(wi)
-        company_id = str(uuid.uuid4())
+        company_id = str(wi.company_id)
 
         gate_svc = AsyncMock(spec=ReviewGatePolicyService)
         gate_svc.requires_review = AsyncMock(return_value=(False, None))
@@ -385,7 +385,7 @@ class TestTransitionToDone:
         """Board override transitions to done regardless of gate policy."""
         wi = _make_work_item(status=WorkItemStatus.IN_REVIEW)
         session = self._make_wi_session(wi)
-        company_id = str(uuid.uuid4())
+        company_id = str(wi.company_id)
 
         gate_svc = AsyncMock(spec=ReviewGatePolicyService)
         gate_svc.requires_review = AsyncMock(return_value=(True, "admin"))
@@ -411,7 +411,7 @@ class TestTransitionToDone:
         svc = WorkItemService()
 
         with pytest.raises(InvalidTransition):
-            await svc.transition_to_done(session, str(wi.id), str(uuid.uuid4()), actor_user_id=str(uuid.uuid4()))
+            await svc.transition_to_done(session, str(wi.id), str(wi.company_id), actor_user_id=str(uuid.uuid4()))
 
     @pytest.mark.asyncio
     async def test_review_gate_transition_not_found_raises(self) -> None:
@@ -426,7 +426,7 @@ class TestTransitionToDone:
         """Board override records board_override=True in the activity log."""
         wi = _make_work_item(status=WorkItemStatus.IN_PROGRESS)
         session = self._make_wi_session(wi)
-        company_id = str(uuid.uuid4())
+        company_id = str(wi.company_id)
         user_id = str(uuid.uuid4())
 
         log_svc = AsyncMock()
@@ -554,7 +554,7 @@ class TestReviewGateEdgeCases:
             await svc.transition_to_done(
                 session,
                 str(wi.id),
-                str(uuid.uuid4()),
+                str(wi.company_id),
                 actor_agent_id=str(uuid.uuid4()),
                 review_gate_svc=gate_svc,
                 handoff_svc=None,
