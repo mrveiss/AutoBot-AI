@@ -49,6 +49,10 @@ class InvalidTransition(Exception):
     """Raised when a status transition is not permitted."""
 
 
+class CheckoutConflict(Exception):
+    """Raised when a work item is held by someone else: another agent, or a person (#20521)."""
+
+
 def refuse_past_reviewer(item: LLCWorkItem, acting_user: Optional[uuid.UUID], new_status: WorkItemStatus) -> None:
     """A person can't finish a task waiting on someone else's review; that reviewer decides (#20508).
 
@@ -111,6 +115,24 @@ def claim_conflict_holder(item: LLCWorkItem, user_id: str) -> Optional[str]:
     return None
 
 
+def refuse_release(item: LLCWorkItem, agent_id: str, run_id: Optional[str] = None) -> None:
+    """Refuse a release by *agent_id* of an item it does not hold, read under the row lock.
+
+    A *run_id* the caller sends must be the checkout generation on the row, so a release replayed from an earlier
+    checkout cannot end a later one (#21499); omitted, the release goes by the generation read here.
+
+    A person's checkout is not an agent's to release (#20521, interim: who may act as a named agent is still open).
+    """
+    if item.assignee_user_id is not None:
+        raise CheckoutConflict(
+            f"Work item {item.id} is held by user {item.assignee_user_id}; an agent cannot release it"
+        )
+    if item.assignee_agent_id and str(item.assignee_agent_id) != agent_id:
+        raise ValueError(f"Agent {agent_id} does not hold checkout for work item {item.id}")
+    if run_id is not None and run_id != item.checkout_run_id:
+        raise CheckoutConflict(f"Work item {item.id} is not checked out in run {run_id!r}; it was not released")
+
+
 def stamp_agent_checkout(item: LLCWorkItem, agent_id: str, run_id: Optional[str], work_intent: Optional[str]) -> None:
     """Record an agent's checkout on the locked row and start the item if it was waiting."""
     now = datetime.now(timezone.utc)
@@ -170,6 +192,24 @@ async def drop_fence(redis: Any, key: str, value: str, acquired: bool) -> None:
         await delete_if_value(redis, key, value)
 
 
+async def drop_fence_of_generation(
+    redis: Any, key: str, generation: Optional[str], agent_id: Optional[str] = None
+) -> None:
+    """Delete the fence at *key* only while it carries checkout generation *generation* (``None``: an untagged one).
+
+    The one "drop the fence of this generation" (#21499): the holder is read from the fence, and the delete is a
+    compare-and-delete on the value just read, so a newer checkout landing in between keeps its fence. With
+    *agent_id*, the fence must also name that agent, compared canonically so a fence written under a raw spelling
+    still matches its own agent. Without it, any holder of that generation is dropped (an item reassigned while
+    checked out still carries the fence its first holder wrote).
+    """
+    value = decode_redis_value(await redis.get(key))
+    if value is None or fence_generation(value) != generation:
+        return
+    if agent_id is None or fence_agent(value) == agent_id:
+        await delete_if_value(redis, key, value)
+
+
 async def release_agent_fence(item_id: Any, agent_id: str, generation: Optional[str]) -> None:
     """Delete the item's fence only while it names *agent_id* in checkout generation *generation* (#19631).
 
@@ -183,10 +223,7 @@ async def release_agent_fence(item_id: Any, agent_id: str, generation: Optional[
         redis = await get_async_redis_client()
         if redis is None:
             return
-        key = checkout_fence_key(item_id)
-        value = decode_redis_value(await redis.get(key))
-        if value is not None and fence_agent(value) == agent_id and fence_generation(value) == generation:
-            await delete_if_value(redis, key, value)
+        await drop_fence_of_generation(redis, checkout_fence_key(item_id), generation, agent_id)
     except Exception:
         logger.warning("Checkout fence of work item %s was not released; it expires on its TTL", item_id, exc_info=True)
 

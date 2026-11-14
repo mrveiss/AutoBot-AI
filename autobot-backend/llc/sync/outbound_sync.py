@@ -20,13 +20,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
-import socket
 import uuid
 from typing import Any, Dict, Optional
 
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.field_encryption import FieldDecryptionError
+from autobot_shared.leader_lease import worker_identity
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import expire_if_value
 
@@ -325,7 +324,7 @@ class LLCOutboundSyncService:
         self._leader_task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
         self._stop_event = asyncio.Event()
         self._is_leader = False
-        self._worker_id = "%s-%d" % (socket.gethostname(), os.getpid())
+        self._worker_id = worker_identity()
 
     async def start(self) -> None:
         """Start the background subscriber task and leader election loop."""
