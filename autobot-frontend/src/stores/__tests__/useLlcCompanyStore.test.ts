@@ -102,7 +102,7 @@ describe('useLlcCompanyStore (GH#9627)', () => {
   })
 
   // #21531: the list holds ROOT companies and hides ARCHIVED ones, so absence from it is not
-  // proof the company is gone. The store probes the company by id and clears on HTTP 404 only.
+  // proof the company is gone. The store probes the company by id and clears only when the backend refuses it (404/403/422).
   describe('a selection the list omits (#21531)', () => {
     const LIST_URL = '/api/llc/companies/'
     const PROBE_URL = '/api/llc/companies/archived-1'
@@ -126,8 +126,12 @@ describe('useLlcCompanyStore (GH#9627)', () => {
       expect(store.companies.map((c) => c.id)).toEqual(['company-1'])
     })
 
-    it('clears it when the probe reports the company gone (HTTP 404)', async () => {
-      routeGet(() => Promise.reject(new HttpError(404, 'Company not found')))
+    it.each([
+      [404, 'Company not found'],
+      [403, 'You are not a member of the requested organization'],
+      [422, 'Unprocessable Entity'],
+    ])('clears it when the backend refuses the company (HTTP %i)', async (status, message) => {
+      routeGet(() => Promise.reject(new HttpError(status, message)))
       const store = useLlcCompanyStore()
       store.selectCompany('archived-1')
       await store.fetchCompanies()
@@ -136,8 +140,11 @@ describe('useLlcCompanyStore (GH#9627)', () => {
       expect(store.error).toBeNull()
     })
 
-    it('keeps it when the probe fails with another HTTP status', async () => {
-      routeGet(() => Promise.reject(new HttpError(500, 'Internal server error')))
+    it.each([
+      [500, 'Internal server error'],
+      [401, 'Unauthorized'],
+    ])('keeps it when the probe fails with HTTP %i', async (status, message) => {
+      routeGet(() => Promise.reject(new HttpError(status, message)))
       const store = useLlcCompanyStore()
       store.selectCompany('archived-1')
       await store.fetchCompanies()

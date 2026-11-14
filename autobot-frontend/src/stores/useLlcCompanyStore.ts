@@ -18,6 +18,10 @@ const logger = createLogger('useLlcCompanyStore')
 
 const COMPANIES_ENDPOINT = '/api/llc/companies/'
 
+// Probe statuses that mean the backend will not serve this company to this user, however often
+// retried: 404 not found, 403 not a member, 422 not a valid company id.
+const SELECTION_REFUSED_STATUSES: readonly number[] = [404, 403, 422]
+
 /** Subset of the backend CompanyRead schema the selector needs. */
 export interface LlcCompany {
   id: string
@@ -45,14 +49,14 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
   const hasCompanies = computed(() => companies.value.length > 0)
 
   /**
-   * Drop a persisted selection the backend reports gone (#21531).
+   * Drop a persisted selection the backend refuses for this user (#21531).
    *
    * The list is narrower than "exists": it holds only ROOT companies and hides ARCHIVED ones, so
    * a selected subsidiary or archived company is absent from it although the route names it.
-   * Absence is therefore probed by id, and the selection is cleared only on HTTP 404 (missing, or
-   * not the caller's: the backend answers both with 404). Any other failure (network, 5xx, 403)
-   * proves nothing about the company, so the selection stays. The probed company is not added to
-   * ``companies``: the selector must not start listing archived or subsidiary entries.
+   * Absence is therefore probed by id. The selection is cleared only when the backend refuses the
+   * company in a way retrying cannot change (``SELECTION_REFUSED_STATUSES``); success, 5xx, 401,
+   * 408/429 and non-HTTP errors keep it. The probed company is not added to ``companies``: the
+   * selector must not start listing archived or subsidiary entries.
    */
   async function dropSelectionIfGone(): Promise<void> {
     const id = selectedCompanyId.value
@@ -61,7 +65,11 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
       await useApiClient().get(`${COMPANIES_ENDPOINT}${encodeURIComponent(id)}`, orgScope(id))
     } catch (err) {
       // A selection switched while the probe was in flight is someone else's; leave it.
-      if (isHttpError(err) && err.status === 404 && selectedCompanyId.value === id) {
+      if (
+        isHttpError(err) &&
+        SELECTION_REFUSED_STATUSES.includes(err.status) &&
+        selectedCompanyId.value === id
+      ) {
         selectedCompanyId.value = ''
         return
       }
