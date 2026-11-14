@@ -18,6 +18,7 @@ from repo_tests._ratchet_base import (
     BaseUnavailable,
     added_entries,
     base_commit,
+    base_file_present,
     base_table,
     base_text,
     literal_in,
@@ -215,3 +216,14 @@ def test_a_base_file_that_does_not_parse_still_raises_with_empty_requested(tmp_p
     _ci(monkeypatch)
     with pytest.raises(SyntaxError):
         base_table(repo, ("table.py",), "T", absent_as_empty=True)
+
+
+def test_the_base_file_being_absent_is_told_from_its_table_being_empty(tmp_path, monkeypatch) -> None:
+    """#21573: only an absent file means the ratchet is new; an empty table is still compared."""
+    repo, _ = _history(tmp_path, "E = {}\nT = {'x.py': 1}\n", "E = {}\nT = {'x.py': 1}\n")
+    _ci(monkeypatch)
+    assert not base_file_present(repo, ("absent.py",))
+    assert base_file_present(repo, ("absent.py", "table.py")), "any of the paths counts"
+    assert base_file_present(repo, ("table.py",)) and base_table(repo, ("table.py",), "E") == {}
+    assert base_table(repo, ("table.py",), "T") == {"x.py": 1}
+    assert raised_entries({"x.py": 1}, base_table(repo, ("table.py",), "E")) == {"x.py": (None, 1)}

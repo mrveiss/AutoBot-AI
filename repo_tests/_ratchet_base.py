@@ -147,6 +147,15 @@ def literal_in(source: str, name: str) -> object:
     raise BaseHasNoTable(f"no literal {name} = ... in the base source")
 
 
+def base_file_present(root: Path, rels: tuple[str, ...]) -> bool:
+    """Whether the base has any of *rels*; False means the ratchet itself is new at this head (#21573).
+
+    An empty table in a file the base has is present: its comparison must still run.
+    """
+    sha = base_commit(root)
+    return any(base_text(root, rel, sha) is not None for rel in rels)
+
+
 def base_table(root: Path, rels: tuple[str, ...], name: str, *, absent_as_empty: bool = False) -> Any:
     """The literal *name* at the base: the ratchet's reference.
 

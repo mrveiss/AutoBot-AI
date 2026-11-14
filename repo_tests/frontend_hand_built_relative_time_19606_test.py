@@ -32,7 +32,7 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table
+from repo_tests._ratchet_base import base_file_present, base_table
 from repo_tests._reach import declare
 
 _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src")
@@ -189,13 +189,10 @@ def test_the_apps_do_not_hand_build_relative_time_beyond_the_pins() -> None:
 
 
 def test_the_pin_was_not_raised_against_the_base() -> None:
-    base = base_table(
-        repo_root(),
-        ("repo_tests/frontend_hand_built_relative_time_19606_test.py",),
-        "PINS",
-    )
-    if not base:
+    this = ("repo_tests/frontend_hand_built_relative_time_19606_test.py",)
+    if not base_file_present(repo_root(), this):
         return  # the guard is new at this base; nothing to compare against yet
+    base = base_table(repo_root(), this, "PINS")
     for key, pinned in PINS.items():
         if key in base:  # a measure the base did not have starts at its first measurement
             assert (

@@ -45,7 +45,9 @@ from repo_tests._hardcoded_colour_detect import (
     white_on_primary_in,
 )
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table, raised_entries
+from repo_tests._ratchet_base import BaseHasNoTable, base_table, raised_entries
+
+from autobot_shared.isolated_git import git, make_repo
 
 
 @pytest.fixture(scope="module")
@@ -93,9 +95,34 @@ def _why(found: str, remedy: str = _USE_TOKEN) -> str:
 _USE_ON_PRIMARY = f" Use var(--text-on-primary) for a label on a --color-primary fill. See {_ISSUE}."
 
 
-def _base_table(name: str, *, absent_as_empty: bool = False) -> dict:
+def _base_table(name: str, *, absent_as_empty: bool = False, root: Path | None = None) -> dict:
     """*name* from the colour baseline at the base commit and the anchor (see base_table)."""
-    return base_table(repo_root(), ("repo_tests/_hardcoded_colour_baseline.py",), name, absent_as_empty=absent_as_empty)
+    return base_table(
+        root or repo_root(), ("repo_tests/_hardcoded_colour_baseline.py",), name, absent_as_empty=absent_as_empty
+    )
+
+
+def _base_without_the_table(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A repo whose base (HEAD^1) has the baseline file but none of the two later tables (#21573)."""
+    repo = make_repo(tmp_path / "base")
+    path = repo / "repo_tests" / "_hardcoded_colour_baseline.py"
+    path.parent.mkdir()
+    for body in ("HARDCODED_COLOUR_LITERALS = {}\n", "HARDCODED_COLOUR_LITERALS = {}\nNEW = {'a.vue': 1}\n"):
+        path.write_text(body, encoding="utf-8")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "c")
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.delenv("AUTOBOT_RATCHET_BASE_SHA", raising=False)
+    return repo
+
+
+def _site_reading_is_empty_and_a_head_entry_rises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    repo = _base_without_the_table(tmp_path, monkeypatch)
+    with pytest.raises(BaseHasNoTable):
+        _base_table(name, root=repo)
+    base = _base_table(name, absent_as_empty=True, root=repo)
+    assert base == {}
+    assert raised_entries({"a.vue": 1}, base) == {"a.vue": (None, 1)}
 
 
 class TestTheDetectorWorksBeforeItsOutputIsRead:
@@ -506,10 +533,9 @@ class TestWhiteOnPrimaryLabelsOnlyShrink:
             f"white-on-primary entries raised or added against the base (base, now): {rose}." + _USE_ON_PRIMARY
         )
 
-    def test_a_head_entry_over_an_empty_base_is_a_rise(self):
-        """#21573: a base with no table reads as empty, so the comparison runs and every entry is a rise."""
-        assert raised_entries({"a.vue": 1}, {}) == {"a.vue": (None, 1)}
-        assert set(raised_entries(WHITE_ON_PRIMARY_LABELS, {})) == set(WHITE_ON_PRIMARY_LABELS)
+    def test_a_base_without_the_table_reads_empty_and_a_head_entry_rises(self, tmp_path, monkeypatch):
+        """#21573: dropping absent_as_empty at the site above turns this reading into BaseHasNoTable."""
+        _site_reading_is_empty_and_a_head_entry_rises(tmp_path, monkeypatch, "WHITE_ON_PRIMARY_LABELS")
 
     def test_every_pinned_count_matches_the_tree(self):
         measured = _scan_white_on_primary(repo_root())
@@ -555,10 +581,9 @@ class TestTheControlPlaneColourSweep:
             f"control-plane colour entries raised or added against the base (base, now): {rose}." + _USE_TOKEN
         )
 
-    def test_a_head_entry_over_an_empty_base_is_a_rise(self):
-        """#21573: a base with no table reads as empty, so the comparison runs and every entry is a rise."""
-        assert raised_entries({"a.vue": 1}, {}) == {"a.vue": (None, 1)}
-        assert set(raised_entries(SLM_HARDCODED_COLOUR_LITERALS, {})) == set(SLM_HARDCODED_COLOUR_LITERALS)
+    def test_a_base_without_the_table_reads_empty_and_a_head_entry_rises(self, tmp_path, monkeypatch):
+        """#21573: dropping absent_as_empty at the site above turns this reading into BaseHasNoTable."""
+        _site_reading_is_empty_and_a_head_entry_rises(tmp_path, monkeypatch, "SLM_HARDCODED_COLOUR_LITERALS")
 
     def test_the_tree_matches_its_baseline(self, measured_slm):
         assert measured_slm == SLM_HARDCODED_COLOUR_LITERALS, (
