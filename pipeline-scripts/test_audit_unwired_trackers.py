@@ -19,9 +19,8 @@ from pathlib import Path
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import audit_unwired_trackers as audit
+import pytest
 
 # ---------------------------------------------------------------------------
 # extract_tracker_refs / ISSUE_REF_RE — #6928 regex coverage
@@ -514,3 +513,43 @@ def test_scan_still_flags_truly_orphaned_module(tmp_path: Path) -> None:
     assert len(findings) == 1
     assert findings[0].tracker == 4242
     assert findings[0].file.endswith("ghost_module.py")
+
+
+# ---------------------------------------------------------------------------
+# main() stdout contract — the workflow redirects stdout into findings.json (#21164)
+# ---------------------------------------------------------------------------
+
+_FIXTURE = [audit.Finding(file="autobot-backend/foo.py", tracker=42, tracker_state="CLOSED", production_callers=0)]
+
+
+def _scan_emitting_diagnostic() -> list:
+    audit.logger.warning("diagnostic that must stay off the report stream")
+    return list(_FIXTURE)
+
+
+def test_main_json_stdout_is_only_the_json_report(capsys: pytest.CaptureFixture[str]) -> None:
+    with patch.object(audit, "scan", _scan_emitting_diagnostic), patch.object(sys, "argv", ["audit", "--json"]):
+        assert audit.main() == 1
+    out = capsys.readouterr().out
+    parsed = json.loads(out)
+    assert parsed == [
+        {"file": "autobot-backend/foo.py", "tracker": 42, "tracker_state": "CLOSED", "production_callers": 0}
+    ]
+    assert out == audit.render_json(_FIXTURE) + "\n"
+
+
+def test_main_human_stdout_is_the_literal_report(capsys: pytest.CaptureFixture[str]) -> None:
+    with patch.object(audit, "scan", _scan_emitting_diagnostic), patch.object(sys, "argv", ["audit"]):
+        assert audit.main() == 1
+    expected = (
+        "❌ 1 unwired-tracker finding(s):\n"
+        "\n"
+        f"{'FILE':<70}  {'TRACKER':>10}  {'STATE':<8}  CALLERS\n"
+        f"{'autobot-backend/foo.py':<70}  #{'42':<9}  {'CLOSED':<8}  0\n"
+        "\n"
+        "Each finding represents a module whose tracker issue is closed but\n"
+        "whose code has zero production callers. Per #6836, file a wire-in\n"
+        "issue for each, or run with --file-issues.\n"
+        "\n"  # print() added a second newline after the report's own; sys.stdout.write keeps it
+    )
+    assert capsys.readouterr().out == expected

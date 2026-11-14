@@ -40,6 +40,17 @@ from pathlib import Path
 from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+# CI runs this as a bare ``python3 pipeline-scripts/...`` with only pytest installed and no PYTHONPATH,
+# so the repo root is added the way the sibling pipeline scripts do (pr_conflict_gate.py, generate_env_docs.py).
+sys.path.insert(0, str(REPO_ROOT))
+
+from autobot_shared.logging_manager import get_logger  # noqa: E402
+
+# Stream contract: the report goes to STDOUT via ``sys.stdout.write`` and the workflow redirects it into
+# ``findings.json`` for ``jq``. The canonical handlers send DEBUG/INFO to stdout and WARNING+ to stderr, so every
+# diagnostic in this module is logged at WARNING or above and can never reach the parsed stream.
+logger = get_logger(__name__)
+
 # #6927: include slm-backend, infrastructure, npu-worker. Original list missed
 # 731 issue refs in autobot-slm-backend and 556 in autobot-infrastructure —
 # the audit silently skipped half the codebase. autobot-ai-stack is excluded
@@ -312,7 +323,7 @@ def fetch_closed_tracker_set() -> set[int]:
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=True)
     except (subprocess.SubprocessError, FileNotFoundError) as e:
-        print(f"warning: gh unavailable, tracker states will be UNKNOWN ({e})", file=sys.stderr)
+        logger.warning("gh unavailable, tracker states will be UNKNOWN (%s)", e)
         return set()
     try:
         data = json.loads(result.stdout)
@@ -457,7 +468,8 @@ Per CLAUDE.md "Issue Closure Verification Gate" + #6836: closed feature trackers
 
 1. **Wire the module in** to a production code path, OR
 2. **Reopen #{finding.tracker}** if integration was unfinished, OR
-3. **Document deliberate deferral** (Protocol/scaffold/future-feature) and convert this finding into a tracking-only note.
+3. **Document deliberate deferral** (Protocol/scaffold/future-feature) and convert \
+this finding into a tracking-only note.
 
 ## Acceptance criteria
 
@@ -483,14 +495,14 @@ P2 — closure-verification process gap, blocks credibility of "closed" tracker 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=True)
     except subprocess.SubprocessError as e:
-        print(f"warning: failed to file issue for {finding.file}: {e}", file=sys.stderr)
+        logger.warning("failed to file issue for %s: %s", finding.file, e)
         return None
     # gh issue create prints the URL; extract the trailing issue number
     m = re.search(r"/issues/(\d+)", result.stdout)
     return int(m.group(1)) if m else None
 
 
-def main() -> int:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true", help="emit JSON")
     parser.add_argument(
@@ -504,30 +516,36 @@ def main() -> int:
         default=20,
         help="cap the number of issues filed in one run (default 20)",
     )
-    args = parser.parse_args()
+    return parser
 
+
+def _file_new_issues(findings: list[Finding], max_issues: int) -> None:
+    """File discovery issues for findings not already filed, capped at *max_issues*."""
+    already_filed = existing_audit_issues_by_tracker()
+    new = [f for f in findings if f.tracker not in already_filed]
+    capped = new[:max_issues]
+    logger.warning(
+        "findings=%d  new=%d  filing=%d  deduped=%d  cap-deferred=%d",
+        len(findings),
+        len(new),
+        len(capped),
+        len(findings) - len(new),
+        len(new) - len(capped),
+    )
+    for f in capped:
+        num = file_discovery_issue(f)
+        if num:
+            sys.stdout.write(f"filed #{num} for {f.file} (tracker #{f.tracker})\n")
+
+
+def main() -> int:
+    args = _build_parser().parse_args()
     findings = scan()
-
     if args.file_issues:
-        already_filed = existing_audit_issues_by_tracker()
-        new = [f for f in findings if f.tracker not in already_filed]
-        capped = new[: args.max_issues]
-        skipped_dupes = len(findings) - len(new)
-        skipped_cap = len(new) - len(capped)
-        print(
-            f"findings={len(findings)}  new={len(new)}  filing={len(capped)}  "
-            f"deduped={skipped_dupes}  cap-deferred={skipped_cap}",
-            file=sys.stderr,
-        )
-        for f in capped:
-            num = file_discovery_issue(f)
-            if num:
-                print(f"filed #{num} for {f.file} (tracker #{f.tracker})")
+        _file_new_issues(findings, args.max_issues)
 
-    if args.json:
-        print(render_json(findings))
-    else:
-        print(render_human(findings))
+    # print() appended one newline; render_human() already ends in one, so it keeps its second.
+    sys.stdout.write((render_json(findings) if args.json else render_human(findings)) + "\n")
 
     return 1 if findings else 0
 
@@ -536,5 +554,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception as e:  # pragma: no cover
-        print(f"error: {e}", file=sys.stderr)
+        logger.error("%s", e)
         sys.exit(2)
