@@ -130,8 +130,8 @@ def test_ci_reads_every_filter_file_exactly_once_in_the_one_changes_job() -> Non
     assert len(ids) == len(set(ids)), "two dorny steps share an id: their outputs would collide"
     for s in steps:
         assert (
-            s["with"]["base"] == "${{ github.event.merge_group.base_sha || steps.pr.outputs.base_sha || '' }}"
-        ), f"step {s['id']} lacks the merge_group base (#14054, #18191) or the dispatch base (#21577)"
+            s["with"]["base"] == "${{ github.event.merge_group.base_sha || '' }}"
+        ), f"step {s['id']} lacks the merge_group base (#14054, #18191)"
 
 
 def test_no_workflow_calls_the_removed_reusable_changes_workflow() -> None:

@@ -46,15 +46,6 @@ on:
     # NO `paths:` FILTER, DELIBERATE (#13388, #14353): a path-filtered workflow that
     # publishes a required context deadlocks every pull request that misses the filter.
     # Which gates have work is decided by `changes` below, never by the event filter.
-  workflow_dispatch:
-    # #21577: the suite on a pull request head WITHOUT a new commit on its branch. The branch sync leaves
-    # a head whose message ends `[skip ci]`; GitHub starts no push/pull_request run for it, but a dispatch
-    # is not skipped by the marker, and its check runs attach to the branch head, which is where the
-    # required contexts are read. No inputs: the dispatched branch names the pull request
-    # (pipeline-scripts/dispatched_pr.py, run by `changes`, refuses a branch that is not exactly one ready
-    # pull request into the default branch). Start it with
-    #   gh workflow run ci.yml --ref <pull request branch>
-    # then `no-commit-trailers.yml` and `pr-blocking-findings.yml` the same way (they publish two contexts).
 
 concurrency:
   # #19283 review: a push keys on its own commit, so no later merge can cancel it. With one
@@ -62,9 +53,7 @@ concurrency:
   # queued -- and the ratchets' base for a push is the commit before it, so a raise in the
   # cancelled merge was accepted for good by the next one (`queue: max` cannot be combined
   # with cancel-in-progress, which PRs need). PRs and merge groups keep the per-ref group.
-  # #21577: a dispatch keys on its own commit like a push: it never joins a pull request's group, and a
-  # second dispatch of the same head queues behind the first instead of cancelling it (cancel is off below).
-  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
   # #13432: cancel superseded PR runs, but let a push to a base branch finish.
   #
   # On a pull request a new push makes the previous run obsolete, so cancelling is right.
@@ -91,12 +80,6 @@ jobs:
     name: Detect changed paths
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
-      packages: read
-      # #21577: needed ONLY by a dispatch (the resolver reads the pull request and the compare API). Job-level, so
-      # no other job gains it; a permissions block cannot depend on the event, so every event's `changes` holds it.
-      pull-requests: read
     outputs:
       # ready: the run is not a draft pull request. Work behind a required gate is held back
       # until then; the gate itself fails with the reason (D4, #18208).
@@ -132,9 +115,6 @@ jobs:
       run_deps_scan: ${{ steps.gp.outputs.self == 'true' || steps.bp.outputs.deps == 'true' }}
       run_static_analysis: ${{ steps.gp.outputs.self == 'true' || steps.bp.outputs.static_analysis == 'true' }}
       codeql_languages: ${{ steps.langs.outputs.languages }}
-      # #21577: the test merge commit a dispatched run checks out (empty on every other event, where the
-      # checkout default is already the merge ref). Every job that checks out the tree passes it as `ref`.
-      checkout_ref: ${{ steps.pr.outputs.checkout_ref }}
       run_ai_review: ${{ github.event_name == 'pull_request' && (steps.gp.outputs.self == 'true' || steps.bp.outputs.reviewable == 'true') }}
       run_npm: >-
         ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.npm_browser_worker == 'true'
@@ -146,35 +126,6 @@ jobs:
       npm_structured_thinking: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.npm_structured_thinking == 'true' }}
       run_slm_frontend: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.slm_frontend == 'true' }}
     steps:
-      # #21577: a dispatch carries no pull_request payload. The resolver turns the dispatched branch into
-      # the facts the steps below read from it, or REFUSES (not a branch, default/release/train branch, no
-      # or several pull requests, stale head, base not the default branch, draft, no current test merge).
-      # A refusal fails this job, and every gate fails closed on a failed `changes`. Both steps are
-      # skipped on every other event.
-      - name: Fetch the dispatch resolver
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@v7
-        with:
-          sparse-checkout: |
-            pipeline-scripts/dispatched_pr.py
-            pipeline-scripts/github_api.py
-            pipeline-scripts/header_safe_secret.py
-          sparse-checkout-cone-mode: false
-          path: dispatch-resolver
-          persist-credentials: false
-
-      - name: Resolve the pull request this dispatch stands for
-        id: pr
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          REF_NAME: ${{ github.ref_name }}
-          REF_TYPE: ${{ github.ref_type }}
-          SHA: ${{ github.sha }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: python3 dispatch-resolver/pipeline-scripts/dispatched_pr.py
-
       # #21490 / #21519: decide first, from facts of the PULL REQUEST (its author, its head and base)
       # -- `github.actor` becomes the human who re-runs it. Labels are read from the event payload, so
       # `ci:full` takes effect on the next run the event starts (push, reopen, ready for review), not
@@ -183,16 +134,14 @@ jobs:
       - name: Hold dependabot and release promotion pull requests
         id: hold
         env:
-          # #21577: a dispatch is judged as the pull request it stands for -- this step stays the ONE
-          # definition of the hold, reading the resolver's facts where the payload has none.
-          EVENT: ${{ github.event_name == 'workflow_dispatch' && 'pull_request' || github.event_name }}
-          AUTHOR: ${{ github.event.pull_request.user.login || steps.pr.outputs.author }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref || steps.pr.outputs.head_ref }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || steps.pr.outputs.head_repo }}
-          BASE_REF: ${{ github.event.pull_request.base.ref || steps.pr.outputs.base_ref }}
+          EVENT: ${{ github.event_name }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           REPO: ${{ github.repository }}
-          LABELS: ${{ steps.pr.outputs.labels || toJSON(github.event.pull_request.labels.*.name) }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         # FAILS OPEN. A broken hold step must degrade to "run everything", never "block everything":
         # a failure here fails `changes` and with it every gate of every pull request. So no `set -e`,
         # and an unreadable label list (jq missing, malformed payload) means NOT held, plus a warning.
@@ -227,22 +176,7 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      # #21577: a held pull request (dependabot, release promotion) starts no work on its own event, and
-      # a dispatch does not lift that: it fails here, so no gate can report it as passed.
-      - name: Refuse a held dispatch
-        if: github.event_name == 'workflow_dispatch' && steps.hold.outputs.held == 'true'
-        run: |
-          echo "::error title=dispatch refused::held pull request: add the ci:full label (a dependabot pull request also needs a train-* branch)"
-          exit 1
-
-      # INVARIANT (#21577): every consumer reads the commit under test from the CHECKOUT -- HEAD = the test merge,
-      # HEAD^1 = the base tip, HEAD^2 = the PR head, exactly what a pull_request run checks out -- and never from
-      # GITHUB_SHA, which is the same commit on every other event but the BRANCH HEAD on a dispatch (a sync merge
-      # whose HEAD^1 is the branch's own previous tip). So a dispatch checks out the test merge, and the shared
-      # scripts (scripts/lib/git-scope.sh, check-pre-commit-hook-pr.sh, check_baseline_no_growth.sh) default to HEAD.
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ steps.pr.outputs.checkout_ref }}
 
       # One dorny step per filter file, each with a distinct id. `base` is the merge group's
       # base on EVERY step: dorny/paths-filter errors on a merge_group event unless it is
@@ -252,44 +186,44 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: gp
         with:
-          base: ${{ github.event.merge_group.base_sha || steps.pr.outputs.base_sha || '' }}
+          base: ${{ github.event.merge_group.base_sha || '' }}
           filters: .github/filters/gate-paths.yml
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: suite
         with:
-          base: ${{ github.event.merge_group.base_sha || steps.pr.outputs.base_sha || '' }}
+          base: ${{ github.event.merge_group.base_sha || '' }}
           filters: .github/filters/python-paths.yml
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: cq
         with:
-          base: ${{ github.event.merge_group.base_sha || steps.pr.outputs.base_sha || '' }}
+          base: ${{ github.event.merge_group.base_sha || '' }}
           filters: .github/filters/code-quality-paths.yml
 
       # #12986: the canonical backend-Python set and every filter composed from it.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: bp
         with:
-          base: ${{ github.event.merge_group.base_sha || steps.pr.outputs.base_sha || '' }}
+          base: ${{ github.event.merge_group.base_sha || '' }}
           filters: .github/filters/backend-python-paths.yml
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: fe
         with:
-          base: ${{ github.event.merge_group.base_sha || steps.pr.outputs.base_sha || '' }}
+          base: ${{ github.event.merge_group.base_sha || '' }}
           filters: .github/filters/frontend-paths.yml
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: dk
         with:
-          base: ${{ github.event.merge_group.base_sha || steps.pr.outputs.base_sha || '' }}
+          base: ${{ github.event.merge_group.base_sha || '' }}
           filters: .github/filters/docker-paths.yml
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: docs
         with:
-          base: ${{ github.event.merge_group.base_sha || steps.pr.outputs.base_sha || '' }}
+          base: ${{ github.event.merge_group.base_sha || '' }}
           filters: .github/filters/docs-only-paths.yml
 
       # The languages CodeQL analyses. A pull request analyses the languages whose filter
@@ -301,9 +235,7 @@ jobs:
       - name: Select the CodeQL languages
         id: langs
         env:
-          # #21577: CodeQL runs for a dispatch as for the pull request it stands for -- the alert ceiling in
-          # code-quality reads CodeQL's analysis of this commit and would otherwise fall back to the default branch.
-          EVENT: ${{ github.event_name == 'workflow_dispatch' && 'pull_request' || github.event_name }}
+          EVENT: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           SELF: ${{ steps.gp.outputs.self }}
           PY: ${{ steps.gp.outputs.codeql_python }}
@@ -349,7 +281,6 @@ jobs:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 2
-        ref: ${{ needs.changes.outputs.checkout_ref }}
     - uses: actions/setup-python@v7
       with:
         python-version-file: '.python-version'
@@ -409,8 +340,6 @@ jobs:
     timeout-minutes: 30
     steps:
     - uses: actions/checkout@v7
-      with:
-        ref: ${{ needs.changes.outputs.checkout_ref }}
 
     # #18102: the runner's apt mirror can be too slow to fetch the ~63 MB ffmpeg/tesseract set
     # inside the per-attempt bound, and a failed provision skips every shard. The archive cache,
@@ -517,7 +446,7 @@ jobs:
     #   line and isn't waiting for a runner. Watchdogs must not read it as an
     #   outage (#16309).
     concurrency:
-      group: ${{ (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && format('python-suite-shard-{0}', matrix.shard) || format('python-suite-shard-{0}-{1}', matrix.shard, github.ref) }}
+      group: ${{ github.event_name == 'pull_request' && format('python-suite-shard-{0}', matrix.shard) || format('python-suite-shard-{0}-{1}', matrix.shard, github.ref) }}
       queue: max
       cancel-in-progress: false
     # An eighth of a ~51-minute run, with generous headroom: observed runner
@@ -599,7 +528,6 @@ jobs:
       # instead of a hand-summed total, and refuse when the base cannot be read.
       with:
         fetch-depth: 2
-        ref: ${{ needs.changes.outputs.checkout_ref }}
 
     # #19283 review: the base a ratchet compares with. A merge group names its own base; a push
     # to main compares with the commit main pointed at before, always an ancestor, so a raise a
@@ -997,8 +925,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
-      with:
-        ref: ${{ needs.changes.outputs.checkout_ref }}
 
     - name: Setup Node.js
       uses: actions/setup-node@v7
@@ -1069,8 +995,6 @@ jobs:
     permissions:
       contents: read
       security-events: read
-    with:
-      checkout_ref: ${{ needs.changes.outputs.checkout_ref }}
 
   # Gate: publishes the REQUIRED `code-quality` context.
   code-quality:
@@ -1109,8 +1033,6 @@ jobs:
     uses: ./.github/workflows/_gate-startup-import-smoke.yml
     permissions:
       contents: read
-    with:
-      checkout_ref: ${{ needs.changes.outputs.checkout_ref }}
 
   # Gate: publishes the REQUIRED `startup-import-smoke` context.
   startup-import-smoke:
@@ -1149,8 +1071,6 @@ jobs:
     uses: ./.github/workflows/_gate-frontend-test.yml
     permissions:
       contents: read
-    with:
-      checkout_ref: ${{ needs.changes.outputs.checkout_ref }}
 
   # Gate: publishes the REQUIRED `Unit & Integration Tests` context. Only the unit suite decides it;
   # the Security Scan and Build Test jobs in the same body report for themselves, as they always did.
@@ -1190,8 +1110,6 @@ jobs:
     uses: ./.github/workflows/_gate-docker-smoke.yml
     permissions:
       contents: read
-    with:
-      checkout_ref: ${{ needs.changes.outputs.checkout_ref }}
 
   # Gate: publishes the REQUIRED `smoke-test` context. Fail-closed when detection fails (#17126):
   # "cannot tell" is a red here, no longer a build that races a second publisher (#17391).
@@ -1231,8 +1149,6 @@ jobs:
     uses: ./.github/workflows/_gate-api-wiring.yml
     permissions:
       contents: read
-    with:
-      checkout_ref: ${{ needs.changes.outputs.checkout_ref }}
 
   # Gate: publishes the REQUIRED `api-wiring` context.
   api-wiring:
@@ -1272,8 +1188,6 @@ jobs:
     permissions:
       contents: read
       packages: read
-    with:
-      checkout_ref: ${{ needs.changes.outputs.checkout_ref }}
 
   # Gate: publishes the REQUIRED `migration-matrix` context.
   migration-matrix:
@@ -1315,7 +1229,6 @@ jobs:
     with:
       run_types: ${{ needs.changes.outputs.run_types }}
       run_slm_types: ${{ needs.changes.outputs.run_slm_types }}
-      checkout_ref: ${{ needs.changes.outputs.checkout_ref }}
 
   # #20552: regenerate only after verify failed; a green or skipped verify has nothing to fix.
   run-auto-fix-types:
@@ -1372,7 +1285,6 @@ jobs:
       contents: read
     with:
       sweep: ${{ needs.changes.outputs.run_precommit_sweep }}
-      checkout_ref: ${{ needs.changes.outputs.checkout_ref }}
 
   # Gate: publishes the REQUIRED `verify-precommit-config` context. It always applies: nothing about a diff
   # makes the config check not affected, so `applies` is the literal 'true' and drafts run it too.

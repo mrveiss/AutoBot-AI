@@ -15,11 +15,6 @@ name: Enforce Pre-commit Hooks (reusable body)
 on:
   workflow_call:
     inputs:
-      checkout_ref:
-        description: "A dispatched run (#21577): the pull request's test merge commit to check out, so the tree has the shape a pull_request run gets (HEAD^1 = base tip, HEAD^2 = head). Empty: the event's own checkout."
-        type: string
-        required: false
-        default: ''
       sweep:
         description: "'true' runs the repo-wide pre-commit sweep; 'false' (a docs-only diff) skips it. Scheduled and manual runs keep the default."
         type: string
@@ -57,7 +52,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.checkout_ref }}
           # fetch-depth: 2 (not the actions/checkout default of 1) so the PR
           # base commit is present. On a pull_request the checkout is the
           # merge commit: depth 2 supplies both parents — HEAD^1 (base tip)
@@ -161,8 +155,7 @@ jobs:
       - name: Run pre-commit over the change under review
         if: inputs.sweep == 'true'
         env:
-          # #21577: a dispatched run (checkout_ref set) is a pull request run: same scope, same merge-shaped tree.
-          IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' || inputs.checkout_ref != '' }}
+          IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
         run: |
           # #14181: this used to swallow the result entirely with
           # `|| { echo "::warning::..."; exit 0; }`. The comment said the goal was
@@ -412,8 +405,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.checkout_ref }}
 
       - name: Verify CONTRIBUTING.md mentions pre-commit
         run: |

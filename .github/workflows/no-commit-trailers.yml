@@ -15,9 +15,6 @@ on:
   merge_group:
   pull_request:
     types: [opened, synchronize, reopened]
-  # #21577: run on a pull request head the branch sync left on a `[skip ci]` merge:
-  #   gh workflow run no-commit-trailers.yml --ref <pull request branch>
-  workflow_dispatch:
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -36,42 +33,12 @@ concurrency:
 
 permissions:
   contents: read
-  # #21577: needed ONLY by a dispatch (the resolver reads the pull request and the compare API). A permissions block
-  # cannot depend on the event, so every event holds this read-only scope; no write scope was added.
-  pull-requests: read
 
 jobs:
   check-trailers:
     name: No commit trailers
     runs-on: ubuntu-latest
     steps:
-      # #21577: a dispatch carries no pull_request payload; the resolver turns the dispatched branch
-      # into the facts read below, or refuses it (the same rules as ci.yml's `changes` job). A head behind its base is
-      # refused, so the base tip below is always an ancestor of the head and present in the clone.
-      - name: Fetch the dispatch resolver
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@v7
-        with:
-          sparse-checkout: |
-            pipeline-scripts/dispatched_pr.py
-            pipeline-scripts/github_api.py
-            pipeline-scripts/header_safe_secret.py
-          sparse-checkout-cone-mode: false
-          path: dispatch-resolver
-          persist-credentials: false
-
-      - name: Resolve the pull request this dispatch stands for
-        id: pr
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          REF_NAME: ${{ github.ref_name }}
-          REF_TYPE: ${{ github.ref_type }}
-          SHA: ${{ github.sha }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: python3 dispatch-resolver/pipeline-scripts/dispatched_pr.py
-
       - name: Checkout
         uses: actions/checkout@v7
         with:
@@ -91,7 +58,7 @@ jobs:
           # depth 100 is guaranteed to fail anyway, so this never spends the #16207 cost
           # on a PR that would have passed. Ordinary PRs keep depth 100. Expressions
           # have comparison but no arithmetic, hence a threshold, not `commits + N`.
-          fetch-depth: ${{ (github.event_name == 'merge_group' || github.event.pull_request.commits > 90 || steps.pr.outputs.commits > 90) && '0' || '100' }}
+          fetch-depth: ${{ (github.event_name == 'merge_group' || github.event.pull_request.commits > 90) && '0' || '100' }}
 
       # #19466: a PR into `release` is judged only on commits not already on main
       # (owner ruling 2026-10-24: "Gates judge only new commits"). Every commit on
@@ -107,11 +74,11 @@ jobs:
 
       - name: Scan PR commits for banned trailers
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || steps.pr.outputs.base_sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || steps.pr.outputs.head_sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           # The TRUE number of commits in the PR, from GitHub rather than from the
           # clone. This is what makes truncation detectable (#16210 review).
-          EXPECTED_COMMITS: ${{ github.event.pull_request.commits || steps.pr.outputs.commits || '' }}
+          EXPECTED_COMMITS: ${{ github.event.pull_request.commits || '' }}
           RELEASE_BASE_SHA: ${{ steps.release-base.outputs.base-sha }}
           RELEASE_NEW_COMMITS: ${{ steps.release-base.outputs.new-commits }}
         run: |
