@@ -116,6 +116,9 @@ export interface UseWebSocketOptions {
   onClose?: (event: CloseEvent, info: WebSocketCloseInfo) => void
 }
 
+/** Delay before reconnect() and the URL watcher reopen a socket they just closed. */
+export const URL_RESTART_DELAY_MS = 100
+
 // `protocols` stays optional: Required<> would strip the `undefined` its type
 // deliberately allows (#17009), and an absent value means "offer none".
 const DEFAULT_OPTIONS: Required<Omit<UseWebSocketOptions, 'protocols'>> = {
@@ -181,6 +184,10 @@ export function useWebSocket(
   // Set once the owning scope is disposed. Not set by disconnect(): a manual
   // disconnect() followed by connect() must keep working.
   let disposed = false
+  // URL the newest socket was created with. The URL watcher restarts only for a URL that differs
+  // from it: a caller that assigns the URL ref and then calls connect() has already opened the
+  // socket to the new URL, and restarting it would drop that socket for an identical one (#21564).
+  let socketUrl: string | null = null
 
   const clearRestartTimer = () => {
     if (restartTimer) {
@@ -195,7 +202,7 @@ export function useWebSocket(
     restartTimer = setTimeout(() => {
       restartTimer = null
       connect()
-    }, 100)
+    }, URL_RESTART_DELAY_MS)
   }
 
   /**
@@ -277,6 +284,7 @@ export function useWebSocket(
 
     isConnecting.value = true
     errors.value = []
+    socketUrl = wsUrl
 
     try {
       // #16457: an auth token travels as a subprotocol, never in the URL.
@@ -423,7 +431,7 @@ export function useWebSocket(
   // Watch URL changes and reconnect
   if (url && typeof url !== 'string') {
     watch(url, (newUrl, oldUrl) => {
-      if (newUrl !== oldUrl && (isConnected.value || isConnecting.value)) {
+      if (newUrl !== oldUrl && newUrl !== socketUrl && (isConnected.value || isConnecting.value)) {
         logger.info('URL changed, disconnecting old connection before reconnecting...')
         // Disconnect old connection first to prevent accumulating connections (#820)
         disconnect()
