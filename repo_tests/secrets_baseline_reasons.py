@@ -25,11 +25,11 @@ comprehensive one:
   from the filename alone.
 - Every other entry present in the baseline at this guard's introduction is
   in ``secrets_baseline_legacy_keys.json`` (kept out of this ``.py`` file --
-  1,355 entries would blow the 600-line file-size ratchet), one disclosed,
+  over a thousand entries would blow the 600-line file-size ratchet), one disclosed,
   generic reason (``LEGACY_REASON``) -- not silently allowed, explicitly
   deferred to #17034 (the full-audit follow-up, v0.9.0).
 
-The legacy set is frozen, not derived from the live baseline at test time: a
+The legacy set is a shrink-only snapshot, not derived from the live baseline at test time: a
 baseline entry NOT in that JSON file may not carry ``LEGACY_REASON`` -- that
 is the guard's actual boundary enforcement (rule 2: a test must fail when the
 boundary moves). A new entry added after this file was written must get its
@@ -37,7 +37,7 @@ own real reason in ``SPECIFIC_REASONS``, or the guard fails; it cannot
 silently borrow the legacy label.
 
 A count ceiling alone does not enforce this: swapping one legitimate legacy
-entry out of the JSON file for a fabricated one, keeping the total at 1,355,
+entry out of the JSON file for a fabricated one, keeping the total unchanged,
 would pass a "does not grow" check while silently laundering a new,
 unreviewed entry under the legacy label. ``FROZEN_LEGACY_KEYS_SHA256`` pins
 the exact CONTENT (a hash over the canonicalised set, not the count), so ANY
@@ -45,7 +45,11 @@ edit -- add, remove, or swap -- must also update this constant, which is a
 visible, deliberate act in the diff. #17034 does not need to touch this file
 at all: a legacy entry it individually reviews moves to ``SPECIFIC_REASONS``
 instead (the guard's membership check is an OR of both sets, so an entry
-present in both is harmless) -- this file is permanently frozen from here.
+present in both is harmless).
+
+The true rule, stated once: the legacy list is SHRINK-ONLY. The sanctioned edit removes entries whose path is
+no longer tracked (``secrets_baseline_legacy_keys_paths_exist_20895_test`` fails on any such entry) and
+recomputes the digest in the same commit. Nothing is ever added; a new finding gets a ``SPECIFIC_REASONS`` entry.
 """
 
 from __future__ import annotations
