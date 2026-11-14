@@ -23,14 +23,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import decode_redis_value, delete_if_value
 
 from ..models.activity import ActorType
 from ..models.enums import ActivityEventType, LLCRunStatus, WorkItemStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..models.work_item import LLCWorkItem
 from .activity_log import LLCActivityLogService
-from .work_item_own_task import checkout_fence_key, fence_generation
+from .work_item_own_task import checkout_fence_key, drop_fence_of_generation
 
 logger = get_logger(__name__)
 
@@ -152,18 +151,6 @@ async def release_checkouts_for_run(
     return [await _release_one(session, item, run_id, why) for item in held]
 
 
-async def _drop_if_generation(redis, fence: ReleasedCheckout) -> None:  # noqa: ANN001 - a Redis client
-    """Drop the fence when it is tagged with the released run, whoever the holder it names is.
-
-    The holder is read from the fence, not derived from the item's current assignee: an item reassigned while
-    checked out still carries the fence its first holder wrote. The delete is a compare-and-delete on the value
-    just read, so a newer checkout landing in between keeps its fence.
-    """
-    value = decode_redis_value(await redis.get(fence.fence_key))
-    if value is not None and fence_generation(value) == fence.generation:
-        await delete_if_value(redis, fence.fence_key, value)
-
-
 async def drop_released_fences(released: list[ReleasedCheckout]) -> None:
     """Drop each released item's Redis fence, after the DB release has committed.
 
@@ -183,7 +170,7 @@ async def drop_released_fences(released: list[ReleasedCheckout]) -> None:
         return
     for fence in released:
         try:
-            await _drop_if_generation(redis, fence)
+            await drop_fence_of_generation(redis, fence.fence_key, fence.generation)
         except Exception as exc:
             logger.warning("Could not drop checkout fence %s: %s", fence.fence_key, exc)
 

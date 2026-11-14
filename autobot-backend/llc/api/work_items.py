@@ -571,7 +571,7 @@ async def release_work_item(
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     try:
-        item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id)
+        item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id, run_id=body.run_id)
         await session.commit()
         return await _item_to_dict(item, session)
     except CheckoutConflict as exc:

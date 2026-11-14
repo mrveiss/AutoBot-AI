@@ -479,10 +479,11 @@ class WorkItemService(LLCServiceBase):
         session: AsyncSession,
         work_item_id: str,
         agent_id: str,
+        run_id: Optional[str] = None,
     ) -> LLCWorkItem:
-        """Release the checkout lock held by agent_id.
+        """Release the checkout lock held by agent_id; a given run_id must be the row's checkout generation (#21499).
 
-        Raises ValueError if the caller does not hold the lock.
+        Raises ValueError if the caller does not hold the lock, CheckoutConflict if a person does or run_id is stale.
         """
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
@@ -490,7 +491,7 @@ class WorkItemService(LLCServiceBase):
         item = result.scalar_one_or_none()
         if item is None:
             raise ValueError(f"Work item {work_item_id} not found")
-        refuse_release(item, agent_id)
+        refuse_release(item, agent_id, run_id)
         release_checkout(session, item, agent_id)
         await session.flush()
         return item
