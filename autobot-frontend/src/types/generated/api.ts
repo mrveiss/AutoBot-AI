@@ -53038,7 +53038,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Release Work Item */
+        /**
+         * Release Work Item
+         * @description Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one. Not enforced: that
+         *     the caller IS that agent, nor that an item held by a person has no agent to match (open, #20521).
+         */
         post: operations["release_work_item_api_llc_work_items__work_item_id__release_post"];
         delete?: never;
         options?: never;

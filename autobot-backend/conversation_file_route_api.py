@@ -25,9 +25,24 @@ FILE_INFO_COLUMNS = """
     cf.file_id, cf.session_id, cf.original_filename AS filename,
     cf.original_filename, cf.stored_filename, cf.file_path,
     cf.file_size AS size, cf.file_hash, cf.mime_type, cf.uploaded_at,
-    cf.uploaded_by, cf.is_deleted, cf.deleted_at,
-    LOWER(SUBSTR(cf.original_filename, INSTR(cf.original_filename, '.') + 1)) AS extension
+    cf.uploaded_by, cf.is_deleted, cf.deleted_at
 """
+
+
+def file_extension(name: str) -> str | None:
+    """The ONE definition of a conversation file's ``extension`` (#21402), used by upload, list and info.
+
+    The text after the last dot of the basename, lower-cased and without the dot. ``None`` when there is
+    none: no dot (``README``), only a leading dot (``.bashrc``), or nothing after it (``file.``).
+    ``a.tar.gz`` is ``gz`` and ``A.TXT`` is ``txt``.
+    """
+    stem, dot, extension = name.replace("\\", "/").rsplit("/", 1)[-1].rpartition(".")
+    return extension.lower() if dot and stem and extension else None
+
+
+def with_extension(row: Dict[str, Any]) -> Dict[str, Any]:
+    """*row* (a ``FILE_INFO_COLUMNS`` row, or an upload result) with ``extension`` set from its ``filename``."""
+    return {**row, "extension": file_extension(row["filename"])}
 
 
 class ConversationFileRouteApi:
@@ -61,8 +76,7 @@ class ConversationFileRouteApi:
             metadata={"description": description} if description else None,
             file_hash=file_hash,
         )
-        extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else None
-        return {**stored, "filename": filename, "size": stored["file_size"], "extension": extension}
+        return with_extension({**stored, "filename": filename, "size": stored["file_size"]})
 
     async def remaining_upload_quota(self, user_id: str | None) -> int:
         """Bytes *user_id* may still store; deleted files awaiting human-approved removal count (#20217)."""
@@ -118,7 +132,7 @@ class ConversationFileRouteApi:
                 (file_id, session_id),
             ) as cursor:
                 row = await cursor.fetchone()
-            return dict(row) if row else None
+            return with_extension(dict(row)) if row else None
         finally:
             await connection.close()
 
