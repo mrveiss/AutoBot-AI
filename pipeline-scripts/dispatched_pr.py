@@ -91,7 +91,7 @@ def pick_pull(pulls: list[dict], repo: str, ref_name: str) -> dict:
     return own[0]
 
 
-def check_pull(pull: dict, sha: str, default_branch: str) -> None:
+def refuse_unready_pull(pull: dict, sha: str, default_branch: str) -> None:
     """Refuse a pull request whose state the gates would not judge as a ready one."""
     if pull["state"] != "open":
         raise Refusal(f"pull request #{pull['number']} is not open")
@@ -125,7 +125,7 @@ def wait_for_merge(
 
     for attempt in range(MERGE_POLLS):
         pull = api(f"repos/{repo}/pulls/{number}")
-        check_pull(pull, sha, default_branch)
+        refuse_unready_pull(pull, sha, default_branch)
         base_tip = api(f"repos/{repo}/git/ref/heads/{default_branch}")["object"]["sha"]
         merge = current_merge(pull, base_tip, parents_of)
         if merge:
@@ -151,7 +151,7 @@ def outputs_for(pull: dict, merge_sha: str, base_tip: str) -> dict[str, str]:
     }
 
 
-def resolve(env: dict[str, str], api: Api = gh_api, sleep: Callable = time.sleep) -> dict[str, str]:
+def resolve_dispatched_pull(env: dict[str, str], api: Api = gh_api, sleep: Callable = time.sleep) -> dict[str, str]:
     """The outputs for the dispatched branch, or a :class:`Refusal`."""
     repo, ref_name, sha = env["REPO"], env["REF_NAME"], env["SHA"]
     default_branch = env["DEFAULT_BRANCH"]
@@ -175,7 +175,7 @@ def write_outputs(outputs: dict[str, str], path: str) -> None:
 def main() -> int:
     """Resolve the dispatched branch from the environment; print the refusal as an error annotation and exit 1."""
     try:
-        outputs = resolve(dict(os.environ))
+        outputs = resolve_dispatched_pull(dict(os.environ))
         write_outputs(outputs, os.environ["GITHUB_OUTPUT"])
     except Refusal as refusal:
         message = str(refusal).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")

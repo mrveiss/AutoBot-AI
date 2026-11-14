@@ -75,7 +75,7 @@ def no_sleep(_seconds) -> None:
 
 
 def test_a_ready_pull_request_resolves_to_the_facts_the_workflows_read(resolver) -> None:
-    out = resolver.resolve(ENV, api=fake_api([pull()]), sleep=no_sleep)
+    out = resolver.resolve_dispatched_pull(ENV, api=fake_api([pull()]), sleep=no_sleep)
     assert out == {
         "number": "7",
         "author": "dev",
@@ -100,7 +100,7 @@ def test_a_default_release_train_or_tag_ref_is_refused_before_any_api_read(resol
         raise AssertionError("a refused ref must not be looked up")
 
     with pytest.raises(resolver.Refusal):
-        resolver.resolve({**ENV, "REF_NAME": ref_name, "REF_TYPE": ref_type}, api=api, sleep=no_sleep)
+        resolver.resolve_dispatched_pull({**ENV, "REF_NAME": ref_name, "REF_TYPE": ref_type}, api=api, sleep=no_sleep)
 
 
 @pytest.mark.parametrize(
@@ -114,7 +114,7 @@ def test_a_default_release_train_or_tag_ref_is_refused_before_any_api_read(resol
 )
 def test_no_pull_request_several_or_a_fork_head_is_refused(resolver, listing, message) -> None:
     with pytest.raises(resolver.Refusal, match=message):
-        resolver.resolve(ENV, api=fake_api([pull()], listing=listing), sleep=no_sleep)
+        resolver.resolve_dispatched_pull(ENV, api=fake_api([pull()], listing=listing), sleep=no_sleep)
 
 
 @pytest.mark.parametrize(
@@ -129,7 +129,7 @@ def test_no_pull_request_several_or_a_fork_head_is_refused(resolver, listing, me
 )
 def test_a_draft_closed_stacked_moved_or_conflicting_pull_request_is_refused(resolver, state, message) -> None:
     with pytest.raises(resolver.Refusal, match=message):
-        resolver.resolve(ENV, api=fake_api([state]), sleep=no_sleep)
+        resolver.resolve_dispatched_pull(ENV, api=fake_api([state]), sleep=no_sleep)
 
 
 def test_a_test_merge_that_is_not_made_yet_is_waited_for_then_refused(resolver, monkeypatch) -> None:
@@ -137,13 +137,13 @@ def test_a_test_merge_that_is_not_made_yet_is_waited_for_then_refused(resolver, 
     sleeps: list = []
     pending = pull(mergeable=None, merge_commit_sha=None)
     with pytest.raises(resolver.Refusal, match="no current test merge .* after 3 reads"):
-        resolver.resolve(ENV, api=fake_api([pending]), sleep=sleeps.append)
+        resolver.resolve_dispatched_pull(ENV, api=fake_api([pending]), sleep=sleeps.append)
     assert len(sleeps) == 2, "it waits between reads, not after the last"
 
 
 def test_a_test_merge_that_appears_while_waiting_is_taken(resolver) -> None:
     states = [pull(mergeable=None, merge_commit_sha=None), pull()]
-    assert resolver.resolve(ENV, api=fake_api(states), sleep=no_sleep)["checkout_ref"] == MERGE
+    assert resolver.resolve_dispatched_pull(ENV, api=fake_api(states), sleep=no_sleep)["checkout_ref"] == MERGE
 
 
 @pytest.mark.parametrize(
@@ -159,7 +159,7 @@ def test_a_test_merge_that_appears_while_waiting_is_taken(resolver) -> None:
 def test_a_stale_or_misshapen_test_merge_is_never_checked_out(resolver, monkeypatch, kwargs) -> None:
     monkeypatch.setattr(resolver, "MERGE_POLLS", 2)
     with pytest.raises(resolver.Refusal, match="no current test merge"):
-        resolver.resolve(ENV, api=fake_api([pull()], **kwargs), sleep=no_sleep)
+        resolver.resolve_dispatched_pull(ENV, api=fake_api([pull()], **kwargs), sleep=no_sleep)
 
 
 def test_an_api_failure_is_a_refusal_never_an_empty_answer(resolver, monkeypatch) -> None:
@@ -181,7 +181,7 @@ def test_main_prints_a_refusal_as_an_escaped_error_and_exits_1(resolver, monkeyp
     def refuse(_env):
         raise resolver.Refusal("one\ntwo 100%")
 
-    monkeypatch.setattr(resolver, "resolve", refuse)
+    monkeypatch.setattr(resolver, "resolve_dispatched_pull", refuse)
     monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "out"))
     assert resolver.main() == 1
     assert capsys.readouterr().out == "::error title=dispatch refused::one%0Atwo 100%25\n"
@@ -189,7 +189,7 @@ def test_main_prints_a_refusal_as_an_escaped_error_and_exits_1(resolver, monkeyp
 
 
 def test_main_writes_the_outputs_and_exits_0_on_success(resolver, monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(resolver, "resolve", lambda _env: {"number": "7", "checkout_ref": MERGE})
+    monkeypatch.setattr(resolver, "resolve_dispatched_pull", lambda _env: {"number": "7", "checkout_ref": MERGE})
     monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "out"))
     assert resolver.main() == 0
     assert (tmp_path / "out").read_text(encoding="utf-8") == f"number=7\ncheckout_ref={MERGE}\n"
