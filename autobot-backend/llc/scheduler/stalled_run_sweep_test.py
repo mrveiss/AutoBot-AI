@@ -20,7 +20,7 @@ import pytest
 from sqlalchemy.dialects import postgresql
 
 from llc.models.enums import LLCRunStatus
-from llc.services import run_checkouts
+from llc.services import run_checkouts, work_item_own_task
 from llc.services.run_checkouts import ReleasedCheckout
 from llc.tests._run_checkout_world import Item, Recorder, bound_values
 from testkit.fake_async_session import FakeAsyncSession
@@ -549,7 +549,7 @@ async def test_one_failing_fence_does_not_stop_the_next(sweep, world, monkeypatc
         await world.fences.delete(key)
         return True
 
-    monkeypatch.setattr(run_checkouts, "delete_if_value", flaky)
+    monkeypatch.setattr(work_item_own_task, "delete_if_value", flaky)
     await world.fences.set("llc:checkout:a", "agent-a#run")
     await world.fences.set("llc:checkout:b", "agent-b#run")
 
