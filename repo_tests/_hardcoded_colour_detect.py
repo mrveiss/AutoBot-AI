@@ -35,6 +35,8 @@ from repo_tests._hardcoded_colour_baseline import (
 )
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import strip_block_comments
+
 _FRONTEND = Path("autobot-frontend/src")
 #: #17567: the `!important` sweep covers the control plane too. Its keys carry this
 #: prefix so a path in one app cannot collide with the same path in the other.
@@ -396,3 +398,86 @@ def _scan_white_on_primary(repo: Path) -> dict[str, int]:
             if found:
                 counts[prefix + path.relative_to(base).as_posix()] = found
     return counts
+
+
+# --- #21543: the same defect written as Tailwind classes ----------------------------------------
+#: ``bg-autobot-primary`` is ``--color-primary``, so ``text-white`` on it is the #20425 defect in class
+#: form. One element is one string of class tokens; a run of class tokens ends at any quote, ``;``,
+#: ``<`` or ``>``, so the pair is read inside one class attribute, ternary branch, object key or
+#: ``@apply`` statement, across line breaks, and never across two elements.
+_CLASS_TOKEN = r"[\w:\[\]#/.%!-]+"
+_CLASS_RUN = re.compile(rf"{_CLASS_TOKEN}(?:\s+{_CLASS_TOKEN})*")
+_VARIANTS = r"(?:[\w\[\]-]+:)*!?"
+_OPACITY = r"(?:/[\w.\[\]%]+)?"
+_PRIMARY_FILL_CLASS = re.compile(rf"^{_VARIANTS}bg-autobot-primary(?:-(?:hover|active|light|dark|bg))?{_OPACITY}$")
+_WHITE_LABEL_CLASS = re.compile(rf"^{_VARIANTS}text-(?:white|\[(?:white|#fff(?:fff)?)\]){_OPACITY}$", re.IGNORECASE)
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+_LINE_COMMENT = re.compile(r"(?:(?<=\s)|^)//[^\n]*", re.MULTILINE)
+_CLASS_FORM_SUFFIXES = {".vue", ".ts", ".tsx", ".js", ".css"}
+_TEST_PATH_PARTS = ("node_modules", "__tests__")
+
+
+def _blank_keeping_lines(m: re.Match[str]) -> str:
+    return re.sub(r"[^\n]", " ", m.group(0))
+
+
+def _without_comments(text: str) -> str:
+    """*text* with block, HTML and ``//`` line comments blanked, line numbers kept.
+
+    The ``//`` pass is this detector's own, so the result is the same whether or not the shared
+    stripper learns to drop ``//`` lines. A ``//`` inside a URL has no whitespace before it and stays.
+    """
+    text = _HTML_COMMENT.sub(_blank_keeping_lines, strip_block_comments(text))
+    return _LINE_COMMENT.sub("", text)
+
+
+def _is_white_on_primary_run(run: str) -> bool:
+    tokens = run.split()
+    return any(_PRIMARY_FILL_CLASS.match(t) for t in tokens) and any(_WHITE_LABEL_CLASS.match(t) for t in tokens)
+
+
+def white_class_on_primary_in(text: str) -> int:
+    """Class-token runs in *text* that fill with ``bg-autobot-primary*`` and write a white ``text-`` utility."""
+    return sum(1 for m in _CLASS_RUN.finditer(_without_comments(text)) if _is_white_on_primary_run(m.group(0)))
+
+
+def _class_form_files(repo: Path) -> list[tuple[Path, str, Path]]:
+    """``(file, key prefix, tree)`` for every file the class-form scan opens, in both apps."""
+    out: list[tuple[Path, str, Path]] = []
+    for tree, prefix in _WHITE_ON_PRIMARY_TREES:
+        base = repo / tree
+        if not base.is_dir():
+            continue
+        for p in sorted(base.rglob("*")):
+            skip = any(part in p.parts for part in _TEST_PATH_PARTS) or p.name.endswith((".spec.ts", ".test.ts"))
+            if p.is_file() and p.suffix in _CLASS_FORM_SUFFIXES and not skip:
+                out.append((p, prefix, base))
+    return out
+
+
+def _class_form_scanned_files(repo: Path) -> list[str]:
+    """Repository-relative paths, so the reach declaration can state its roots."""
+    return [p.relative_to(repo).as_posix() for p, _prefix, _base in _class_form_files(repo)]
+
+
+def _scan_white_class_on_primary(repo: Path) -> dict[str, int]:
+    """``path -> class strings painting a primary fill with a white label`` in both apps (SLM keys prefixed)."""
+    counts: dict[str, int] = {}
+    for path, prefix, base in _class_form_files(repo):
+        try:
+            found = white_class_on_primary_in(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            continue
+        if found:
+            counts[prefix + path.relative_to(base).as_posix()] = found
+    return counts
+
+
+REACH_CLASS_FORM_FILES = declare(
+    "primary-fill-class-label-files",
+    discover=_class_form_scanned_files,
+    roots=(_FRONTEND.as_posix(), _SLM_FRONTEND.as_posix()),
+    growth=60,
+    skips=0,
+    what="frontend .vue, .ts, .js and .css files scanned for a white text utility on bg-autobot-primary, both apps",
+)
