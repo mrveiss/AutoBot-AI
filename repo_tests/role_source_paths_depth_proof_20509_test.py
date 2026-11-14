@@ -54,7 +54,7 @@ def test_contrast_the_old_form_is_caught() -> None:
 
 
 def test_the_ai_stack_copies_from_its_own_tree() -> None:
-    text = (repo_root() / _ROLES / "ai-stack/tasks/main.yml").read_text(encoding="utf-8")
+    text = _code((repo_root() / _ROLES / "ai-stack/tasks/main.yml").read_text(encoding="utf-8"))
     assert "{{ role_path }}/../../../../autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py" in text
 
 
@@ -104,7 +104,7 @@ def test_only_the_playbook_imported_task_reads_playbook_dir_and_it_proves_the_tr
         if str(p.relative_to(root)).startswith(_SHARED) and _reads_playbook_dir(p.read_text(encoding="utf-8"))
     )
     assert users == [_PLAYBOOK_ANCHORED]
-    text = (root / _SHARED / _PLAYBOOK_ANCHORED).read_text(encoding="utf-8")
+    text = _code((root / _SHARED / _PLAYBOOK_ANCHORED).read_text(encoding="utf-8"))
     assert "autobot-slm-backend/ansible/roles/_shared/tasks/install_agent_autobot_shared.yml" in text
     assert text.index("shared_anchor.stat.exists") < text.index("shared_src.stat.exists")
 
@@ -116,7 +116,7 @@ def test_the_role_less_callers_name_their_anchor_and_the_tasks_assert_it() -> No
         ("stage_shared_manifests.yml", "shared_manifests_repo_root"),
     ):
         text = (root / _SHARED / name).read_text(encoding="utf-8")
-        assert f"{var} | length > 0" in text, name
+        assert _asserts_anchor(text, var), f"{name}: no executable assert task checks {var}"
     play = yaml.load_all(
         (root / "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml").read_text(encoding="utf-8"),
         Loader=_PlaybookLoader,
@@ -144,6 +144,30 @@ def _walk_tasks(node):
     elif isinstance(node, list):
         for item in node:
             yield from _walk_tasks(item)
+
+
+def _asserts_anchor(text: str, var: str) -> bool:
+    """True if a parsed ``assert`` task lists ``<var> | length > 0`` under ``that`` (a comment is not parsed)."""
+    wanted = f"{var} | length > 0"
+    for task in (t for doc in yaml.load_all(text, Loader=_PlaybookLoader) for t in _walk_tasks(doc)):
+        spec = task.get("ansible.builtin.assert") or task.get("assert")
+        that = spec.get("that") if isinstance(spec, dict) else None
+        conditions = [that] if isinstance(that, str) else (that or [])
+        if any(isinstance(c, str) and c.strip() == wanted for c in conditions):
+            return True
+    return False
+
+
+def test_contrast_the_anchor_assertion_must_be_an_executable_task() -> None:
+    head = "- name: guard\n  ansible.builtin.assert:\n"
+    assert _asserts_anchor(head + "    that: husk_repo_root | length > 0\n", "husk_repo_root")
+    assert _asserts_anchor(head + "    that:\n      - husk_repo_root | length > 0\n", "husk_repo_root")
+    assert not _asserts_anchor("# husk_repo_root | length > 0\n- name: x\n  debug: {}\n", "husk_repo_root")
+    assert not _asserts_anchor(head + "    that: other_root | length > 0\n", "husk_repo_root")
+    assert not _asserts_anchor(
+        "- name: x\n  debug:\n    msg: husk_repo_root | length > 0\n  # that: husk_repo_root | length > 0\n",
+        "husk_repo_root",
+    )
 
 
 def _includes(task: dict, target: str) -> bool:
