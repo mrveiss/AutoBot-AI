@@ -125,15 +125,11 @@ def _neutralised() -> List[Tuple[Path, str, Path]]:
 _GUARDS = _meta_path_guards()
 _NEUTRALISED = _neutralised()
 
-#: Known instances, with the issue tracking each. Shrink-only: an entry goes when
-#: its issue closes, and a NEW pairing fails below. These are not fixed here
-#: because the fix lives in files whose suites cannot run on a sub-floor
-#: interpreter (`llc/scheduler/base.py` raises at import below Python 3.11 by
-#: deliberate design, #13369), so the change cannot be verified where it is made.
-KNOWN_NEUTRALISED: Dict[str, str] = {
-    "autobot-backend/llc/scheduler/lazy_import_test.py": "#14913",
-    "autobot-backend/llc/services/lazy_import_test.py": "#14913",
-}
+#: Known instances, with the issue tracking each. Shrink-only: an entry goes in the
+#: commit that fixes it, and a NEW pairing fails below. Empty since the two
+#: instances (the llc scheduler and llc services guards) were converted to
+#: fresh-interpreter checks (#21596), which no conftest can pre-cache.
+KNOWN_NEUTRALISED: Dict[str, str] = {}
 
 
 def test_the_sweep_found_the_guards() -> None:
