@@ -48,18 +48,24 @@ def uncovered_data_files(paths: list[str], patterns: list[str]) -> list[str]:
     return sorted(p for p in paths if p.startswith(f"{_TREE}/") and not _is_covered(p, patterns))
 
 
-def test_the_sweep_reaches_the_data_files_it_claims_to() -> None:
-    """Reach before findings: an empty or partial enumeration must fail."""
-    found = set(_data_files())
+def _examined_data_files() -> list[str]:
+    """The data files, after proving the enumeration reached the tree: anchors found, no .py leaked in."""
+    found = _data_files()
     reached = [anchor for anchor in _REACH_ANCHORS if anchor in found]
     assert len(reached) == len(
         _REACH_ANCHORS
     ), f"the enumeration reached {len(reached)} of {len(_REACH_ANCHORS)} anchors, so it is not reading {_TREE}"
     assert not any(p.endswith(".py") for p in found), "the enumeration must exclude the Python files"
+    return found
+
+
+def test_the_sweep_reaches_the_data_files_it_claims_to() -> None:
+    """Reach before findings: an empty or partial enumeration must fail."""
+    assert set(_REACH_ANCHORS) <= set(_examined_data_files())
 
 
 def test_python_filter_covers_every_repo_tests_data_file() -> None:
-    uncovered = uncovered_data_files(_data_files(), _filter_patterns())
+    uncovered = uncovered_data_files(_examined_data_files(), _filter_patterns())
     assert not uncovered, (
         f"the python-suite filter does not cover these {len(uncovered)} data files under {_TREE}/ -- an edit "
         "confined to one takes the required-context shim's green and the guard that reads it never runs "
