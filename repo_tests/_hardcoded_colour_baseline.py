@@ -153,3 +153,12 @@ IMPORTANT_DECLARATIONS: dict[str, int] = {
 #: entry. Every label now reads the token, so the table is empty and a new literal white label on a
 #: primary fill is a measured entry the pin does not hold.
 WHITE_ON_PRIMARY_LABELS: dict[str, int] = {}
+
+#: ``path -> class strings that pair a bg-autobot-primary* fill with a white text- utility`` (#21543).
+#:
+#: The Tailwind form of WHITE_ON_PRIMARY_LABELS: ``--color-autobot-primary`` is ``--color-primary``, so the
+#: same High Contrast Dark and Dark failure reaches the page through classes. The label reads
+#: ``text-autobot-text-on-primary``. Keyed like WHITE_ON_PRIMARY_LABELS (`slm:` marks the control plane).
+#: Shrink-only and empty: every site is converted, so a new white label on the primary fill is a
+#: measured entry the pin does not hold.
+WHITE_ON_PRIMARY_CLASS_LABELS: dict[str, int] = {}

@@ -31,7 +31,7 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
-from config import cfg
+from config import config_manager as cfg
 
 # Import existing AutoBot components
 from knowledge.backends import get_default_client
