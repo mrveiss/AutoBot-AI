@@ -22,6 +22,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.secrets_audit import audit_secret_op
+from api.secrets_delete_outcome import outcome_for
 from api.secrets_guarded_delete import guarded_delete
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secrets_vault import VaultRef
@@ -61,18 +62,9 @@ async def audited_delete(
         await guarded_delete(
             session, secret_id, dependents=dependents, delete=delete, confirmed_digest=confirmed_digest
         )
-    except HTTPException as exc:
-        reason = "has_dependents" if exc.status_code == 409 else "http_%d" % exc.status_code
-        await audit_secret_op("DELETE", ref, request, "denied", reason=reason, actor=actor, **who)
-        raise
-    except SecretAccessError:
-        await audit_secret_op("DELETE", ref, request, "denied", reason="permission_denied", actor=actor, **who)
-        raise
-    except SecretNotFoundError:
-        await audit_secret_op("DELETE", ref, request, "failed", reason="not_found", actor=actor, **who)
-        raise
     except Exception as exc:
-        await audit_secret_op("DELETE", ref, request, "failed", reason=type(exc).__name__, actor=actor, **who)
+        result, reason = outcome_for(exc)
+        await audit_secret_op("DELETE", ref, request, result, reason=reason, actor=actor, **who)
         raise
     await audit_secret_op("DELETE", ref, request, phase="completed", actor=actor, **who)
 
