@@ -128,7 +128,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_knowledge.py": 5113,
     "autobot-backend/api/schemas_system.py": 4117,  # #18734 -> 4176; #17731 -> 4175; #21136 -> 4117
     "autobot-backend/api/schemas_workflows.py": 2823,
-    "autobot-backend/api/secrets.py": 1142,  # #20557 (was 1145); #19476; vault writes: secrets_system_vault.py
+    "autobot-backend/api/secrets.py": 1137,  # #20557 (was 1145); #19476; vault writes: secrets_system_vault.py; #21204
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
     "autobot-backend/api/system.py": 995,

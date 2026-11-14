@@ -36,7 +36,7 @@ inputs:
     required: false
     default: 'false'
   held:
-    description: "'true' when the pull request is a dependabot one held back from the full suite (#21490)."
+    description: "'true' when the pull request is a dependabot or release promotion one held back from the full suite (#21490, #21519)."
     required: false
     default: 'false'
   draft-gated:
