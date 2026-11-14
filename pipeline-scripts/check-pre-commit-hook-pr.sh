@@ -41,9 +41,8 @@
 #
 # Inputs (env, all optional — defaults derived from git/GH Actions):
 #   BASE_SHA          explicit PR base SHA
-#   HEAD_SHA          explicit head SHA (default: HEAD or GITHUB_SHA)
+#   HEAD_SHA          explicit head SHA (default: HEAD -- the checkout, not GITHUB_SHA, #21577)
 #   GITHUB_BASE_REF   PR target branch (set by GH Actions)
-#   GITHUB_SHA        commit SHA (set by GH Actions)
 #
 # Bash hook requirements:
 #   1. Live at autobot-infrastructure/shared/scripts/hooks/<hook-name>
@@ -159,7 +158,8 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../scripts/lib/git-scope.s
 }
 
 BASE_SHA="${BASE_SHA:-}"
-HEAD_SHA="${HEAD_SHA:-${GITHUB_SHA:-HEAD}}"
+# the commit under test is the checkout's HEAD, never GITHUB_SHA: they are the same on every event but a dispatch (#21577), where GITHUB_SHA is the branch head and HEAD is the test merge.
+HEAD_SHA="${HEAD_SHA:-HEAD}"
 
 # Base/head resolution and the status-checked diff both come from the canonical
 # resolver (#13984). The merge-commit rule, the payload fallback, the

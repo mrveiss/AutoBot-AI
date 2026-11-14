@@ -70,7 +70,7 @@ git_scope_have_commit() {
 
 # Resolve the base ref for "what did this change set touch?".
 #
-# Args: $1 head ref (default: $GITHUB_SHA, else HEAD)
+# Args: $1 head ref (default: HEAD -- the commit under test is the checkout's HEAD, never GITHUB_SHA: they are the same on every event but a dispatch (#21577), where GITHUB_SHA is the branch head and HEAD is the test merge)
 #       $2 optional event-payload base sha (github.event.pull_request.base.sha)
 #
 # Order, first match wins -- this is the UNION of what the five call sites did,
@@ -83,7 +83,7 @@ git_scope_have_commit() {
 # Prints the base ref on success; fatal when nothing resolves, because "no base"
 # must never degrade into "no changes".
 git_scope_resolve_base() {
-    local head="${1:-${GITHUB_SHA:-HEAD}}" event_base="${2:-}"
+    local head="${1:-HEAD}" event_base="${2:-}"
     if git_scope_have_commit "${head}^2" && git_scope_have_commit "${head}^1"; then
         printf '%s\n' "${head}^1"
         return 0
@@ -118,7 +118,7 @@ git_scope_resolve_base() {
 # a shallow clone's missing base quietly becoming "<head>^", a different and
 # smaller scope, reported as a successful scan.
 git_scope_resolve_base_explicit() {
-    local head="${1:-${GITHUB_SHA:-HEAD}}" explicit="${2:-}"
+    local head="${1:-HEAD}" explicit="${2:-}"
     if [ -n "$explicit" ]; then
         printf '%s\n' "$explicit"
         return 0

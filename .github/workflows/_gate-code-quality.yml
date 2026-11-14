@@ -186,9 +186,9 @@ jobs:
     - name: Block datetime.utcnow().isoformat() regressions (#5178 #5238 #5268)
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-        # #21577: a dispatch's head for the scope is the test merge it checked out (parents: base tip, head);
-        # github.sha there is the branch head, which a sync made a merge whose first parent is the branch's own tip.
-        HEAD_SHA: ${{ inputs.checkout_ref || github.sha }}
+        # #21577: the commit under test is the checkout's HEAD (on a dispatch the test merge, whose parents are the
+        # base tip and the PR head); github.sha is the same commit on every other event but the branch head here.
+        HEAD_SHA: HEAD
       run: |
         set -euo pipefail
         # Pre-commit covers local dev — this CI step closes the bypass gap

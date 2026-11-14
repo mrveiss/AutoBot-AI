@@ -94,7 +94,9 @@ jobs:
     permissions:
       contents: read
       packages: read
-      pull-requests: read  # #21577: the dispatch resolver reads the pull request
+      # #21577: needed ONLY by a dispatch (the resolver reads the pull request and the compare API). Job-level, so
+      # no other job gains it; a permissions block cannot depend on the event, so every event's `changes` holds it.
+      pull-requests: read
     outputs:
       # ready: the run is not a draft pull request. Work behind a required gate is held back
       # until then; the gate itself fails with the reason (D4, #18208).
@@ -153,7 +155,10 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: actions/checkout@v7
         with:
-          sparse-checkout: pipeline-scripts/dispatched_pr.py
+          sparse-checkout: |
+            pipeline-scripts/dispatched_pr.py
+            pipeline-scripts/github_api.py
+            pipeline-scripts/header_safe_secret.py
           sparse-checkout-cone-mode: false
           path: dispatch-resolver
           persist-credentials: false
@@ -162,7 +167,7 @@ jobs:
         id: pr
         if: github.event_name == 'workflow_dispatch'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           REF_NAME: ${{ github.ref_name }}
           REF_TYPE: ${{ github.ref_type }}
@@ -230,8 +235,11 @@ jobs:
           echo "::error title=dispatch refused::held pull request: add the ci:full label (a dependabot pull request also needs a train-* branch)"
           exit 1
 
-      # A dispatch checks out the pull request's test merge (HEAD^1 = base tip, HEAD^2 = head), the tree a
-      # pull_request run gets, not the branch head: the suite scopes itself by those parents (#21577).
+      # INVARIANT (#21577): every consumer reads the commit under test from the CHECKOUT -- HEAD = the test merge,
+      # HEAD^1 = the base tip, HEAD^2 = the PR head, exactly what a pull_request run checks out -- and never from
+      # GITHUB_SHA, which is the same commit on every other event but the BRANCH HEAD on a dispatch (a sync merge
+      # whose HEAD^1 is the branch's own previous tip). So a dispatch checks out the test merge, and the shared
+      # scripts (scripts/lib/git-scope.sh, check-pre-commit-hook-pr.sh, check_baseline_no_growth.sh) default to HEAD.
       - uses: actions/checkout@v7
         with:
           ref: ${{ steps.pr.outputs.checkout_ref }}

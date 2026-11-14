@@ -14,6 +14,8 @@ head, which is where branch protection reads the eleven required contexts. This 
       work jobs not conditioned on a pull_request / push / merge_group event
 * D3  every `github.event.pull_request.*` / `github.head_ref` / `github.base_ref` use in those workflows and
       in the gate bodies behind them has a dispatch fallback, or is explained below (a dispatch has no payload)
+* D3b every script reachable from those jobs that reads GITHUB_SHA / GITHUB_REF / the event JSON is listed with
+      the reason it is right on a dispatch; the shared scope scripts take the checkout's HEAD, never GITHUB_SHA
 * D4  the refusals: the resolver step runs before the hold, a held dispatch fails the job (every gate then
       fails closed), the hold stays the one definition, and the permissions and concurrency cannot cancel
 * D5  every checkout of the tree takes the dispatched pull request's test merge commit (the shape the suite's
@@ -111,12 +113,18 @@ def test_d2_control_a_conditional_gate_and_an_event_bound_work_job_are_flagged(w
 
 # ----- D3: no pull_request payload use without a dispatch fallback -----
 
-_PR_CONTEXT = re.compile(r"github\.event\.pull_request\b|github\.head_ref|github\.base_ref")
+_PR_USE = re.compile(r"github\.event\.pull_request[\w.*]*|github\.head_ref|github\.base_ref")
 _EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}", re.DOTALL)
 _BARE_IF = re.compile(r"^\s*(?:- )?if:\s*(?!\$\{\{|[|>])(.+)$", re.MULTILINE)
-#: A use is safe when the SAME expression falls back to the resolver's facts, to the dispatched commit, or runs
-#: only for a pull_request event (`github.event_name != 'pull_request' || ...`).
-_FALLBACK = re.compile(r"steps\.pr\.outputs\.|needs\.changes\.outputs\.|\|\|\s*github\.sha\b")
+#: A use is safe when THAT use is the left operand of a `||` whose next operand (past merge_group terms) is the
+#: resolver's fact of the same step chain or the dispatched commit, when the resolver's fact comes first
+#: (`steps.pr.outputs.x || toJSON(use)`), or when the expression runs only for a pull_request event
+#: (`github.event_name != 'pull_request' || ...`). An unrelated `steps.pr.outputs` in the expression is not one.
+_FOLLOWED_BY_FALLBACK = re.compile(
+    r"\s*(?:[<>=!]=?\s*[\w']+)?\s*\|\|\s*(?:github\.event\.merge_group\.[\w.]+\s*\|\|\s*)*"
+    r"(?:steps\.pr\.outputs\.\w+|github\.sha)\b"
+)
+_PRECEDED_BY_FACT = re.compile(r"steps\.pr\.outputs\.\w+\s*\|\|\s*(?:toJSON\(\s*)?$")
 _PR_ONLY_GUARD = "github.event_name != 'pull_request'"
 _CHECK_BASE = "github.event.pull_request.base.sha || github.event.merge_group.base_sha"
 _BASE_REASON = (
@@ -141,13 +149,21 @@ def _normal(expression: str) -> str:
     return " ".join(expression.split())
 
 
+def _has_fallback(expression: str, use: re.Match) -> bool:
+    return bool(
+        _FOLLOWED_BY_FALLBACK.match(expression[use.end() :]) or _PRECEDED_BY_FACT.search(expression[: use.start()])
+    )
+
+
 def pull_request_uses(texts: dict[str, str]) -> list[tuple[str, str]]:
     """(file, normalised expression) for each expression that reads the pull request and has no fallback."""
     found = []
     for fname, text in texts.items():
         expressions = [m.group(1) for m in _EXPRESSION.finditer(text)] + _BARE_IF.findall(text)
         for expression in map(_normal, expressions):
-            if _PR_CONTEXT.search(expression) and not _FALLBACK.search(expression) and _PR_ONLY_GUARD not in expression:
+            if _PR_ONLY_GUARD in expression:
+                continue
+            if any(not _has_fallback(expression, use) for use in _PR_USE.finditer(expression)):
                 found.append((fname, expression))
     return found
 
@@ -179,11 +195,98 @@ def test_d3_the_detector_flags_a_bare_use_and_accepts_a_fallback() -> None:
     bare = "env:\n  A: ${{ github.event.pull_request.base.sha }}\n"
     assert pull_request_uses({"x.yml": bare}) == [("x.yml", "github.event.pull_request.base.sha")]
     assert pull_request_uses({"x.yml": "A: ${{ github.event.pull_request.number || steps.pr.outputs.number }}"}) == []
+    lookalike = "A: ${{ github.event.pull_request.number && steps.pr.outputs.number }}"
+    flagged = [("x.yml", "github.event.pull_request.number && steps.pr.outputs.number")]
+    assert pull_request_uses({"x.yml": lookalike}) == flagged
+    other = "A: ${{ github.event.pull_request.number || github.run_id }} ${{ steps.pr.outputs.n }}"
+    assert len(pull_request_uses({"x.yml": other})) == 1, "an unrelated fallback elsewhere is not this use's fallback"
+    two = "A: ${{ github.event.pull_request.number || steps.pr.outputs.n }}, ${{ github.event.pull_request.title }}"
+    assert pull_request_uses({"x.yml": two}) == [("x.yml", "github.event.pull_request.title")]
     guarded = "if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft }}"
     assert pull_request_uses({"x.yml": guarded}) == []
     assert pull_request_uses({"x.yml": "if: startsWith(github.head_ref, 'x')\n"}) == [
         ("x.yml", "startsWith(github.head_ref, 'x')")
     ]
+
+
+# ----- D3b: scripts that read the commit under test from the environment -----
+
+_SCRIPT_REF = re.compile(
+    r"(?:(?<![\w./-])|(?<=\./))((?:pipeline-scripts|scripts|tools)/[A-Za-z0-9_./-]+\.(?:sh|py))"
+)
+_ENV_READ = re.compile(r"GITHUB_(?:SHA|REF|HEAD_REF|BASE_REF|EVENT_PATH|EVENT_NAME)\b")
+#: script -> why its read of the run's event environment is right on a dispatch, whose GITHUB_SHA is the BRANCH HEAD
+#: (a sync merge) and whose GITHUB_REF is the branch, while the checkout is the test merge. A script that reads the
+#: commit under test must not appear here: it takes HEAD (the checkout) or an explicit value from its caller.
+ENV_READERS = {
+    "scripts/lib/git-scope.sh": (
+        "GITHUB_BASE_REF is the 3rd fallback of git_scope_resolve_base, after the merge commit's parents; empty on a"
+        " dispatch, and the test merge's parents resolve first"
+    ),
+    "pipeline-scripts/check_codeql_alert_ceiling.sh": (
+        "matches CodeQL's analysis of THIS run (ci.yml's run-codeql uploads against GITHUB_REF at GITHUB_SHA, the"
+        " branch ref and head on a dispatch); fails closed when none matches. First proved by a dispatched run"
+    ),
+}
+
+
+def reachable_scripts(texts: dict[str, str], read) -> dict[str, str]:
+    """Every script named (transitively) in the run steps of *texts*, mapped to its comment-free text."""
+    found: dict[str, str] = {}
+    queue = [ref for text in texts.values() for ref in _SCRIPT_REF.findall(text)]
+    while queue:
+        rel = queue.pop()
+        body = None if rel in found else read(rel)
+        if body is not None:
+            found[rel] = body
+            queue += _SCRIPT_REF.findall(body)
+    return found
+
+
+def unlisted_env_readers(scripts: dict[str, str], listed=ENV_READERS) -> list[str]:
+    return sorted(rel for rel, body in scripts.items() if _ENV_READ.search(body) and rel not in listed)
+
+
+def _read_script(rel: str) -> str | None:
+    path = _ROOT / rel
+    return code_text(path) if path.is_file() else None
+
+
+def test_d3b_no_reachable_script_reads_the_commit_under_test_from_the_environment_unlisted(workflows) -> None:
+    scripts = reachable_scripts(_scope_texts(workflows), _read_script)
+    assert len(scripts) >= 40, f"the walk reached only {len(scripts)} scripts"
+    assert "scripts/lib/git-scope.sh" in scripts and "pipeline-scripts/check-pre-commit-hook-pr.sh" in scripts
+    assert unlisted_env_readers(scripts) == []
+
+
+def test_d3b_every_listed_reader_is_still_reached_and_still_reads(workflows) -> None:
+    scripts = reachable_scripts(_scope_texts(workflows), _read_script)
+    stale = sorted(rel for rel in ENV_READERS if rel not in scripts or not _ENV_READ.search(scripts[rel]))
+    assert stale == [], f"listed readers that no longer read the environment or are no longer reached: {stale}"
+
+
+def test_d3b_the_shared_scope_scripts_default_to_the_checkout_never_to_github_sha(workflows) -> None:
+    shared = (
+        "scripts/lib/git-scope.sh",
+        "pipeline-scripts/check-pre-commit-hook-pr.sh",
+        "pipeline-scripts/check_baseline_no_growth.sh",
+    )
+    for rel in shared:
+        body = _read_script(rel)
+        assert "GITHUB_SHA" not in body, f"{rel} takes the commit under test from GITHUB_SHA (the branch head here)"
+        assert ":-HEAD}" in body, rel
+
+
+def test_d3b_control_a_script_defaulting_to_github_sha_is_flagged_and_a_walk_follows_sources() -> None:
+    files = {
+        "scripts/a.sh": 'source scripts/lib/b.sh\nrun pipeline-scripts/c.py\n',
+        "scripts/lib/b.sh": 'HEAD_SHA="${HEAD_SHA:-${GITHUB_SHA:-HEAD}}"\n',
+        "pipeline-scripts/c.py": "import os\nos.environ['GITHUB_EVENT_PATH']\n",
+    }
+    scripts = reachable_scripts({"w.yml": "run: bash ./scripts/a.sh"}, files.get)
+    assert sorted(scripts) == sorted(files)
+    assert unlisted_env_readers(scripts) == ["pipeline-scripts/c.py", "scripts/lib/b.sh"]
+    assert unlisted_env_readers(scripts, listed={"scripts/lib/b.sh": "x", "pipeline-scripts/c.py": "y"}) == []
 
 
 # ----- D4: the refusals -----
@@ -233,7 +336,20 @@ def test_d4_all_three_publishers_run_the_one_resolver_with_values_taken_only_thr
         step = steps[0]
         assert step["run"].strip() == f"python3 {_RESOLVER}" and "${{" not in step["run"], fname
         assert step["if"] == "github.event_name == 'workflow_dispatch'"
-        assert set(step["env"]) == {"GH_TOKEN", "REPO", "REF_NAME", "REF_TYPE", "SHA", "DEFAULT_BRANCH"}, fname
+        assert set(step["env"]) == {"GITHUB_TOKEN", "REPO", "REF_NAME", "REF_TYPE", "SHA", "DEFAULT_BRANCH"}, fname
+
+
+def test_d4_the_resolver_is_fetched_with_the_shared_client_it_imports(workflows) -> None:
+    wanted = {f"pipeline-scripts/{name}.py" for name in ("dispatched_pr", "github_api", "header_safe_secret")}
+    for fname in sorted(PUBLISHERS):
+        fetches = [
+            s
+            for spec in workflows[fname]["jobs"].values()
+            for s in spec.get("steps", [])
+            if s.get("name") == "Fetch the dispatch resolver"
+        ]
+        assert len(fetches) == 1, fname
+        assert set(fetches[0]["with"]["sparse-checkout"].split()) == wanted, fname
 
 
 def test_d4_a_dispatch_never_cancels_and_never_joins_a_pull_request_group(workflows) -> None:

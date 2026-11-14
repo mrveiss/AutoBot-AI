@@ -39,7 +39,7 @@
 # "cannot determine" as "clean" is precisely the class being fixed here.
 #
 # Usage: check_baseline_no_growth.sh
-#   HEAD_SHA / GITHUB_SHA  head commit  (default HEAD)
+#   HEAD_SHA               head commit  (default HEAD, not GITHUB_SHA: #21577)
 #   BASE_SHA               event payload base, used only as a fallback
 
 set -euo pipefail
@@ -58,7 +58,8 @@ source "${PROJECT_ROOT}/scripts/lib/hardcoded-value-rules.sh" || {
 }
 
 BASELINE_REL="pipeline-scripts/hardcoded_values_baseline.txt"
-HEAD_SHA="${HEAD_SHA:-${GITHUB_SHA:-HEAD}}"
+# the commit under test is the checkout's HEAD, never GITHUB_SHA: they are the same on every event but a dispatch (#21577), where GITHUB_SHA is the branch head and HEAD is the test merge.
+HEAD_SHA="${HEAD_SHA:-HEAD}"
 
 cd "$PROJECT_ROOT"
 

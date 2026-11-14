@@ -20,6 +20,8 @@ dispatched branch into the facts those workflows read from the payload, or REFUS
 * its base is the default branch (stacked and release pull requests are judged by their own
   event, not here);
 * it is not a draft (the gates refuse a draft: ``draft: mark ready for review``);
+* the head contains the base tip (a stale branch would run its OWN, older workflow files and resolver, where a
+  ``pull_request`` run takes them from the test merge): the branch sync must have run first;
 * GitHub has a current test merge of it: the commit a ``pull_request`` run checks out, whose
   first parent is the base tip and whose second is the head. The suite scopes itself with
   ``HEAD^1`` / ``HEAD^2``, so a dispatched run checks out THAT commit (``checkout_ref``), never
@@ -36,10 +38,15 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess  # nosec B404  # gh, argv list, no shell
 import sys
 import time
+import urllib.parse
+from pathlib import Path
 from typing import Any, Callable
+
+# The one GitHub REST client of the CI pipeline scripts (timeout, rate-limit backoff, header-safe token).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from github_api import WatchdogError, build_api  # noqa: E402
 
 #: Merge-test polling: GitHub computes the test merge lazily, on the first read after a push.
 MERGE_POLLS = int(os.environ.get("DISPATCH_MERGE_POLLS", "12"))
@@ -54,16 +61,18 @@ class Refusal(Exception):
     """The dispatch does not stand for a pull request the suite may run; the message says why."""
 
 
-def gh_api(path: str, **query: str) -> Any:
-    """GET *path* through the ``gh`` CLI (token from ``GH_TOKEN``); a failure is a refusal, never an empty answer."""
-    argv = ["gh", "api", "-X", "GET", path]
-    for key, value in query.items():
-        argv += ["-f", f"{key}={value}"]
-    done = subprocess.run(argv, capture_output=True, text=True, check=False)  # nosec B603  # argv list, no shell
-    if done.returncode != 0:
-        detail = (done.stderr.strip().splitlines() or ["no output"])[0]
-        raise Refusal(f"the GitHub API read of {path} failed ({detail}); an unreadable pull request does not pass")
-    return json.loads(done.stdout)
+def read_through(client: Any) -> Api:
+    """A GET reader over the shared client; a non-200, an empty body or a transport failure is a refusal."""
+
+    def read(path: str, **query: str) -> Any:
+        full = f"{path}?{urllib.parse.urlencode(query)}" if query else path
+        status, body = client.request("GET", full)
+        if status != 200 or body is None:
+            note = body.get("message", "") if isinstance(body, dict) else ""
+            raise Refusal(f"the GitHub API read of {path} failed (HTTP {status} {note}); unreadable is not a pass")
+        return body
+
+    return read
 
 
 def check_ref(ref_name: str, ref_type: str, default_branch: str) -> None:
@@ -103,6 +112,17 @@ def refuse_unready_pull(pull: dict, sha: str, default_branch: str) -> None:
         raise Refusal(f"draft: pull request #{pull['number']} is a draft; mark it ready for review")
 
 
+def refuse_behind_base(compare: dict, number: int) -> None:
+    """Refuse a head that lacks commits of the base: the branch's workflow files and this resolver would be stale.
+
+    A pull_request run takes everything from the test merge, which includes the current base; a dispatch takes the
+    workflow files from the branch head. Requiring the head to contain the base tip makes the two the same.
+    """
+    behind = int(compare["behind_by"])
+    if behind > 0:
+        raise Refusal(f"pull request #{number} is {behind} commit(s) behind its base; let the branch sync run first")
+
+
 def current_merge(pull: dict, base_tip: str, parents_of: Callable[[str], list[str]]) -> str | None:
     """The test merge commit when current (parents: base tip, head); None while GitHub has not made it."""
     if pull.get("mergeable") is False:
@@ -127,6 +147,7 @@ def wait_for_merge(
         pull = api(f"repos/{repo}/pulls/{number}")
         refuse_unready_pull(pull, sha, default_branch)
         base_tip = api(f"repos/{repo}/git/ref/heads/{default_branch}")["object"]["sha"]
+        refuse_behind_base(api(f"repos/{repo}/compare/{base_tip}...{sha}"), number)
         merge = current_merge(pull, base_tip, parents_of)
         if merge:
             return pull, merge, base_tip
@@ -151,8 +172,11 @@ def outputs_for(pull: dict, merge_sha: str, base_tip: str) -> dict[str, str]:
     }
 
 
-def resolve_dispatched_pull(env: dict[str, str], api: Api = gh_api, sleep: Callable = time.sleep) -> dict[str, str]:
+def resolve_dispatched_pull(
+    env: dict[str, str], api: Api | None = None, sleep: Callable = time.sleep
+) -> dict[str, str]:
     """The outputs for the dispatched branch, or a :class:`Refusal`."""
+    api = api or read_through(build_api())
     repo, ref_name, sha = env["REPO"], env["REF_NAME"], env["SHA"]
     default_branch = env["DEFAULT_BRANCH"]
     check_ref(ref_name, env.get("REF_TYPE", "branch"), default_branch)
@@ -177,8 +201,10 @@ def main() -> int:
     try:
         outputs = resolve_dispatched_pull(dict(os.environ))
         write_outputs(outputs, os.environ["GITHUB_OUTPUT"])
-    except Refusal as refusal:
-        message = str(refusal).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    except (Refusal, WatchdogError, KeyError, TypeError, ValueError) as refusal:
+        known = isinstance(refusal, (Refusal, WatchdogError))
+        text = str(refusal) if known else f"unexpected GitHub answer: {refusal!r}"
+        message = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
         sys.stdout.write(f"::error title=dispatch refused::{message}\n")
         return 1
     merge = outputs["checkout_ref"][:10]

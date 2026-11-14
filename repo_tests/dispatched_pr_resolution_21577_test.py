@@ -8,14 +8,14 @@
 Each refusal below is a case where running the suite would run it as something else, or against a tree the
 suite cannot scope: a protected or train branch, no pull request or several, a fork head, a moved head, a base
 other than the default branch, a draft, a closed pull request, a conflict, and a test merge GitHub has not made
-(or made for another head or another base tip). No GitHub is contacted: the API is a function the tests pass in.
+(or made for another head or another base tip), and a head that lacks commits of its base (it would run the
+branch's own, older workflow files). No GitHub is contacted: the API is a function, or a fake client, the tests pass in.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import json
-import subprocess
 from types import ModuleType
 
 import pytest
@@ -51,7 +51,7 @@ def pull(**over) -> dict:
     return state
 
 
-def fake_api(states: list[dict], *, listing=None, base_tip: str = BASE, parents=(BASE, SHA)):
+def fake_api(states, *, listing=None, base_tip: str = BASE, parents=(BASE, SHA), behind: int = 0):
     """An API whose `pulls/7` answers walk through *states* (the last one repeats)."""
     reads = {"n": 0}
 
@@ -63,6 +63,8 @@ def fake_api(states: list[dict], *, listing=None, base_tip: str = BASE, parents=
             return states[min(reads["n"], len(states)) - 1]
         if path == "repos/o/r/git/ref/heads/main":
             return {"object": {"sha": base_tip}}
+        if path == f"repos/o/r/compare/{base_tip}...{SHA}":
+            return {"behind_by": behind}
         if path == f"repos/o/r/commits/{MERGE}":
             return {"parents": [{"sha": p} for p in parents]}
         raise AssertionError(f"unexpected read of {path}")
@@ -162,11 +164,62 @@ def test_a_stale_or_misshapen_test_merge_is_never_checked_out(resolver, monkeypa
         resolver.resolve_dispatched_pull(ENV, api=fake_api([pull()], **kwargs), sleep=no_sleep)
 
 
-def test_an_api_failure_is_a_refusal_never_an_empty_answer(resolver, monkeypatch) -> None:
-    failed = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="HTTP 403\nsecond line")
-    monkeypatch.setattr(resolver.subprocess, "run", lambda *a, **k: failed)
-    with pytest.raises(resolver.Refusal, match=r"read of repos/o/r/pulls failed \(HTTP 403\)"):
-        resolver.gh_api("repos/o/r/pulls", state="open")
+class FakeClient:
+    """The shared client's `request(method, path)`, answering from a script."""
+
+    def __init__(self, status: int, body) -> None:
+        self.answer, self.calls = (status, body), []
+
+    def request(self, method: str, path: str):
+        self.calls.append((method, path))
+        return self.answer
+
+
+def test_the_reader_issues_a_get_on_the_shared_client_with_an_encoded_query(resolver) -> None:
+    client = FakeClient(200, [{"number": 7}])
+    read = resolver.read_through(client)
+    assert read("repos/o/r/pulls", state="open", head="o:x/y") == [{"number": 7}]
+    assert client.calls == [("GET", "repos/o/r/pulls?state=open&head=o%3Ax%2Fy")]
+    assert read("repos/o/r/pulls/7") == [{"number": 7}]
+    assert client.calls[-1] == ("GET", "repos/o/r/pulls/7")
+
+
+@pytest.mark.parametrize(
+    "status, body, shown",
+    [
+        (403, {"message": "rate limited"}, "HTTP 403 rate limited"),
+        (0, {"message": "transport failure"}, "HTTP 0 transport"),
+        (200, None, "HTTP 200"),
+    ],
+)
+def test_a_failed_or_empty_read_is_a_refusal_never_an_empty_answer(resolver, status, body, shown) -> None:
+    with pytest.raises(resolver.Refusal, match=shown):
+        resolver.read_through(FakeClient(status, body))("repos/o/r/pulls", state="open")
+
+
+def test_a_head_behind_its_base_is_refused_with_the_count_and_never_waits(resolver) -> None:
+    slept: list = []
+    with pytest.raises(resolver.Refusal, match=r"#7 is 2 commit\(s\) behind its base; let the branch sync run first"):
+        resolver.resolve_dispatched_pull(ENV, api=fake_api([pull()], behind=2), sleep=slept.append)
+    assert slept == [], "a stale branch is a refusal, not something to wait out"
+
+
+def test_a_head_that_contains_its_base_is_not_behind(resolver) -> None:
+    resolver.refuse_behind_base({"behind_by": 0}, 7)
+    with pytest.raises(resolver.Refusal, match="behind"):
+        resolver.refuse_behind_base({"behind_by": 1}, 7)
+
+
+def test_an_odd_answer_or_a_missing_token_exits_1_with_an_annotation(resolver, monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "out"))
+    monkeypatch.setattr(resolver, "resolve_dispatched_pull", lambda _env: {}["missing"])
+    assert resolver.main() == 1
+    assert capsys.readouterr().out.startswith("::error title=dispatch refused::unexpected GitHub answer: KeyError")
+    monkeypatch.undo()
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "out"))
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    assert resolver.main() == 1
+    assert "GITHUB_TOKEN is required" in capsys.readouterr().out
 
 
 def test_a_value_spanning_lines_cannot_forge_a_second_output(resolver, tmp_path) -> None:

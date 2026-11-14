@@ -50,8 +50,8 @@
 #   A dispatch is not skipped by the marker in the head message, and its check runs attach
 #   to the branch head, the commit the required contexts are read from. Each run resolves
 #   the branch to its one open PR (pipeline-scripts/dispatched_pr.py) and REFUSES a draft,
-#   a base other than the default branch, a conflict, `main`, `release`, a `train-*` branch
-#   and a branch with no open PR; the dependabot / promotion hold applies unchanged. ci.yml
+#   a base other than the default branch, a conflict, a head behind its base (sync it first),
+#   `main`, `release`, a `train-*` branch and a branch with no open PR; the dependabot / promotion hold applies unchanged. ci.yml
 #   checks out the PR's test merge commit, the tree a pull_request run gets.
 # #14022's one-per-push serialization and #12823's `approve-refreshed-runs` job
 # stay gone: there is no run to reset mid-flight and none to approve.
