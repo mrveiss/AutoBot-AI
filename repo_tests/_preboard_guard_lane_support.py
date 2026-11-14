@@ -40,7 +40,7 @@ def load_lane() -> Iterator[Any]:
 
 
 def env(**over: str) -> dict[str, str]:
-    needs = {"guards": {"result": "success"}, "types": {"result": "success"}}
+    needs = {"guards": {"result": "success"}, "own-tests": {"result": "success"}, "types": {"result": "success"}}
     base = {"NEEDS_JSON": json.dumps(needs), "RUN_ID": "1", "REF": "b", "SHA": "s", "BASE_REF": "main"}
     base["PINNED_BASE_SHA"] = BASE_SHA
     return {**base, **over}

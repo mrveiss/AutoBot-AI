@@ -22,6 +22,9 @@ verdict logic: it asks this module (and ``preboard_guard_lane_report`` for the v
 * ``meta``      -- what one shard records: its exit code, the merge state, the floor and the
   recorded test files it was expected to cover, derived from the tree it tested.
 * ``types-meta`` -- what the types job records: the merge state and the base commit it tested.
+* ``changed-tests`` -- the test files the head adds or changes (#21509), split by who runs them: the
+  guard shards already run the guard roots in full; the ``own-tests`` job runs the rest, so a member's
+  own new tests execute before the train instead of first inside it.
 * ``summarize`` -- the machine-readable result and its job summary.
 """
 
@@ -29,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import configparser
+import fnmatch
 import json
 import math
 import os
@@ -36,7 +40,7 @@ import re
 import subprocess  # nosec B404  # git, argv list, no shell
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 # The repository root (autobot_shared, tools) and this directory (the report module, not a package).
 for _entry in (str(Path(__file__).resolve().parent.parent), str(Path(__file__).resolve().parent)):
@@ -70,6 +74,16 @@ PRODUCT_ROOTS = (
     "libs",
     "plugins/core-plugins",
 )
+
+#: The product root that runs under the SLM interpreter, and the product roots that run in the backend one.
+SLM_ROOT = "autobot-slm-backend"
+OWN_TEST_ROOTS = tuple(r for r in PRODUCT_ROOTS if r != SLM_ROOT)
+
+#: Prefixes pytest.ini's ``addopts --ignore`` leaves uncollected: a test file there never runs.
+IGNORED_PREFIXES = ("autobot-slm-backend/ansible/", "autobot-npu-worker/resources/")
+
+#: Where a changed test file runs. ``guarded`` files belong to the guard shards, which run their roots in full.
+OWN_GROUPS = ("main", "slm", "guarded", "uncollected")
 
 #: The suite's own record of the tests it runs, one node id per entry.
 DURATIONS_FILE = ".test_durations"
@@ -182,6 +196,73 @@ def merge_base_into_head(base_sha: str) -> dict[str, str]:
     return {**info, "merged": "true" if merged else "false"}
 
 
+def python_file_patterns(root: Path) -> list[str]:
+    """The file-name patterns pytest.ini collects (``python_files``)."""
+    parser = configparser.ConfigParser(inline_comment_prefixes=("#",))
+    parser.read(root / "pytest.ini", encoding="utf-8")
+    patterns = parser.get("pytest", "python_files", fallback="").split()
+    if not patterns:
+        raise SystemExit("pytest.ini declares no python_files; the lane cannot tell which files are tests")
+    return patterns
+
+
+def _under(path: str, roots: tuple[str, ...]) -> bool:
+    return any(path.startswith(f"{r}/") for r in roots)
+
+
+def group_of(path: str, patterns: list[str]) -> str | None:
+    """Where the test file *path* runs (one of :data:`OWN_GROUPS`), or ``None`` for a file that is no test."""
+    if not path.endswith(".py") or not any(fnmatch.fnmatchcase(path.rsplit("/", 1)[-1], p) for p in patterns):
+        return None
+    if path.startswith(IGNORED_PREFIXES):
+        return "uncollected"
+    if _under(path, GUARD_ROOTS):
+        return "guarded"
+    if path.startswith(f"{SLM_ROOT}/"):
+        return "slm"
+    return "main" if _under(path, OWN_TEST_ROOTS) else "uncollected"
+
+
+def select_own_tests(paths: list[str], patterns: list[str], exists: Callable[[str], bool]) -> dict[str, list[str]]:
+    """Group the changed *paths* that are test files and still *exist* in the tested tree."""
+    groups: dict[str, list[str]] = {name: [] for name in OWN_GROUPS}
+    for path in sorted(set(paths)):
+        group = group_of(path, patterns)
+        if group is not None and exists(path):
+            groups[group].append(path)
+    return groups
+
+
+def changed_paths(base_sha: str, head_sha: str) -> list[str]:
+    """Files the head adds, copies, modifies or renames relative to the merge base (three-dot diff)."""
+    for sha in (base_sha, head_sha):
+        if not BASE_SHA_PATTERN.fullmatch(sha):
+            raise SystemExit(f"{sha!r} is not a full commit id")
+    out = _git("diff", "--name-only", "-z", "--diff-filter=ACMR", f"{base_sha}...{head_sha}")
+    return [p for p in out.split("\0") if p]
+
+
+def write_own_tests(root: Path, base_sha: str, head_sha: str, out_dir: Path) -> dict[str, int]:
+    """Write one ``<group>.txt`` per group (a path per line) into *out_dir*; return the counts."""
+    paths, patterns = changed_paths(base_sha, head_sha), python_file_patterns(root)
+    groups = select_own_tests(paths, patterns, lambda p: (root / p).is_file())
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for name, files in groups.items():
+        (out_dir / f"{name}.txt").write_text("".join(f"{f}\n" for f in files), encoding="utf-8")
+    return {name: len(files) for name, files in groups.items()}
+
+
+def _changed_tests(root: Path, args: argparse.Namespace) -> None:
+    counts = write_own_tests(root, args.base_sha, args.head_sha, Path(args.out_dir))
+    sys.stdout.write("".join(f"{name}={count}\n" for name, count in counts.items()))
+    if not counts["main"] and not counts["slm"]:
+        sys.stderr.write("no changed test files\n")
+    if counts["guarded"]:
+        sys.stderr.write(f"{counts['guarded']} changed test file(s) in the guard roots run in the guard shards\n")
+    if counts["uncollected"]:
+        sys.stderr.write(f"::notice::{counts['uncollected']} changed test file(s) the suite does not collect\n")
+
+
 def build_meta(root: Path, shard: int, splits: int, rc: int | None, env: dict[str, str]) -> dict[str, Any]:
     """What one shard records. ``rc`` is ``None`` when the head conflicted and no test ran."""
     roots = guard_roots(root)
@@ -236,6 +317,9 @@ def _parser() -> argparse.ArgumentParser:
     meta.add_argument("--splits", type=int, required=True)
     meta.add_argument("--rc", type=int, default=None)
     meta.add_argument("--out", required=True)
+    own = sub.add_parser("changed-tests")
+    for flag in ("--base-sha", "--head-sha", "--out-dir"):
+        own.add_argument(flag, required=True)
     summarize = sub.add_parser("summarize")
     for flag in ("--shards", "--types", "--out", "--markdown"):
         summarize.add_argument(flag, required=True)
@@ -257,6 +341,8 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.out).write_text(json.dumps(lane_durations(root, guard_roots(root))) + "\n", encoding="utf-8")
     elif args.command == "meta":
         _write_meta(args)
+    elif args.command == "changed-tests":
+        _changed_tests(root, args)
     else:
         return _summarize(args)
     return 0
