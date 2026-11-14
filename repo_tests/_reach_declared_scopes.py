@@ -64,6 +64,7 @@ DECLARED_SCOPES = {
     "dead-icon-selector-vue-files": ("autobot-frontend/src",),
     "icon-font-size-rule-vue-files": ("autobot-frontend/src",),
     "primary-fill-white-label-files": ("autobot-frontend/src",),
+    "primary-fill-class-label-files": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "kit-shadow-ts-files-scanned-14908": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "duplicate-type-names-ts-files-scanned-14908": (
         "autobot-frontend/src",

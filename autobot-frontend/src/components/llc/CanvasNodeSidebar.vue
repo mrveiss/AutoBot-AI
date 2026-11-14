@@ -475,7 +475,7 @@ const formatTime = createDateFormatter({ emptyText: () => t('llc.orgChart.never'
           :key="icon"
           class="w-9 h-9 rounded-md flex items-center justify-center text-sm transition-colors"
           :class="activeRail === icon
-            ? 'bg-autobot-primary text-white'
+            ? 'bg-autobot-primary text-autobot-text-on-primary'
             : 'text-autobot-text-muted hover:bg-autobot-bg-elevated hover:text-autobot-text-secondary'"
           :data-testid="`sidebar-rail-${icon}`"
           role="tab"
