@@ -7,7 +7,7 @@
 #
 #   1. detection did not succeed        -> FAIL  (cannot tell whether the gate applies)
 #   2. draft pull request               -> FAIL  "draft: mark ready for review" (D4)
-#   2b. held dependabot pull request    -> FAIL  "held": the work was not run, so nothing is verified (#21490)
+#   2b. held pull request (dependabot, or the release promotion, #21519) -> FAIL  "held": the work was not run, so nothing is verified (#21490)
 #   3. the gate does not apply          -> PASS  "not affected"
 #   4. the work finished and passed     -> PASS
 #   5. anything else                    -> FAIL  (failed, cancelled, skipped, timed out)
@@ -47,8 +47,8 @@ if [ "${GATE_DRAFT_GATED}" = "true" ] && [ "${GATE_EVENT}" = "pull_request" ] &&
 fi
 
 if [ "${GATE_HELD}" = "true" ] && [ "${GATE_EVENT}" = "pull_request" ]; then
-  echo "::error title=${GATE_CONTEXT}::held: dependabot pull request, the work behind this context was not run"
-  echo "A dependabot pull request does not start the full suite on its own (#21490), so nothing behind"
+  echo "::error title=${GATE_CONTEXT}::held: dependabot or release promotion pull request, the work behind this context was not run"
+  echo "A dependabot or release promotion pull request does not start the full suite on its own (#21490, #21519), so nothing behind"
   echo "'${GATE_CONTEXT}' was verified. It is neither passed nor skipped. It runs on a merge-train branch,"
   echo "or when the pull request carries the 'ci:full' label and a new run starts."
   exit 1
