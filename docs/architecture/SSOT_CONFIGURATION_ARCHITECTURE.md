@@ -1,6 +1,6 @@
 # Single Source of Truth Configuration Architecture
 
-> **Freshness:** superseded — 2026-08-30. "Architecture Design" is stale: this shipped as `autobot_shared/ssot_config.py` (the actual SSOT) plus `autobot-backend/services/config_service.py`; the `UnifiedConfigManager` name used here was renamed to `ConfigManager` (#959) and its deprecated alias was removed in #21526, so `ConfigManager` in `autobot-backend/config/manager.py` is the class this document designed.
+> **Freshness:** superseded — 2026-08-30. "Architecture Design" is stale: this shipped as `autobot_shared/ssot_config.py` (the actual SSOT) plus `autobot-backend/services/config_service.py`; the configuration manager class this document describes is `ConfigManager` in `autobot-backend/config/manager.py` (renamed in #959; the old-name alias was removed in #21526).
 
 
 <!--
