@@ -211,9 +211,7 @@ def test_d3_the_detector_flags_a_bare_use_and_accepts_a_fallback() -> None:
 
 # ----- D3b: scripts that read the commit under test from the environment -----
 
-_SCRIPT_REF = re.compile(
-    r"(?:(?<![\w./-])|(?<=\./))((?:pipeline-scripts|scripts|tools)/[A-Za-z0-9_./-]+\.(?:sh|py))"
-)
+_SCRIPT_REF = re.compile(r"(?:(?<![\w./-])|(?<=\./))((?:pipeline-scripts|scripts|tools)/[A-Za-z0-9_./-]+\.(?:sh|py))")
 _ENV_READ = re.compile(r"GITHUB_(?:SHA|REF|HEAD_REF|BASE_REF|EVENT_PATH|EVENT_NAME)\b")
 #: script -> why its read of the run's event environment is right on a dispatch, whose GITHUB_SHA is the BRANCH HEAD
 #: (a sync merge) and whose GITHUB_REF is the branch, while the checkout is the test merge. A script that reads the
@@ -279,7 +277,7 @@ def test_d3b_the_shared_scope_scripts_default_to_the_checkout_never_to_github_sh
 
 def test_d3b_control_a_script_defaulting_to_github_sha_is_flagged_and_a_walk_follows_sources() -> None:
     files = {
-        "scripts/a.sh": 'source scripts/lib/b.sh\nrun pipeline-scripts/c.py\n',
+        "scripts/a.sh": "source scripts/lib/b.sh\nrun pipeline-scripts/c.py\n",
         "scripts/lib/b.sh": 'HEAD_SHA="${HEAD_SHA:-${GITHUB_SHA:-HEAD}}"\n',
         "pipeline-scripts/c.py": "import os\nos.environ['GITHUB_EVENT_PATH']\n",
     }
