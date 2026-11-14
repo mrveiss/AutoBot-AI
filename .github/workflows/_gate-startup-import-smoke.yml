@@ -58,7 +58,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install pytest >/dev/null
+          # #21582: pytest.ini's addopts carries --asyncio-mode=auto, which needs pytest-asyncio; name it
+          # explicitly (bounded by the shared constraints) instead of relying on a transitive install.
+          python -m pip install -c constraints/shared.txt pytest pytest-asyncio >/dev/null
           python -m pip install -e autobot_shared
 
       - name: Run startup-import smoke test
