@@ -18,12 +18,17 @@ import { useLlcCompanyNotices } from '@/composables/useLlcCompanyNotices'
 
 const companyStore = useLlcCompanyStore()
 const route = useRoute()
-// Toast company notices (#21045); re-subscribes when the selected company changes.
-const noticeCompanyId = computed(() => {
+// The company the URL names (store selection when it names none): the notices subscribe to it (#21045)
+// and the routed view is keyed by it (#21502).
+const routeCompanyId = computed(() => {
   const raw = route.params.companyId
   return (Array.isArray(raw) ? raw[0] : raw) ?? companyStore.selectedCompanyId
 })
-useLlcCompanyNotices(noticeCompanyId)
+useLlcCompanyNotices(routeCompanyId)
+// The sidebar's company switch re-targets the same route, so Vue reuses the routed view and its
+// load-on-mount data would stay the previous company's. Keying the view by company remounts it
+// (#21502). A route that handles the switch itself (CEO chat) opts out via meta.
+const viewKey = computed(() => (route.meta?.keepOnCompanySwitch ? undefined : routeCompanyId.value))
 // The creation wizard lands here with ?welcome=plan (#19938 E2).
 const showPlanCard = computed(() => route.query.welcome === 'plan')
 
@@ -39,7 +44,7 @@ onMounted(() => {
     <LlcSidebar />
     <main class="llc-company-content">
       <PlanFirstProcessCard v-if="showPlanCard" class="m-3" />
-      <RouterView />
+      <RouterView :key="viewKey" />
     </main>
   </div>
 </template>
