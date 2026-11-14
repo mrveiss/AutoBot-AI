@@ -22,7 +22,7 @@ The totals are pinned by `repo_tests/test_name_predicate_single_home_21078_test.
 # `pipeline-scripts/audit_unwired_trackers.py` (`TEST_PATH_FRAGMENTS`, `is_test_path`) matches `_test.` and `.test.`
 # anywhere in a path, any extension, and leaves out `/test_` on purpose because pytest `tmp_path` directories embed
 # `test_<name>/`; the canonical base-name rule would change what it audits. The reason is recorded here rather than
-# in the file because that file fails its flake8 hook today (#21164), so editing it would trip the hook.
+# in the file so the reason sits with the baseline it is exempt from; the file's own hooks pass since #21164.
 
 BASELINE: dict[str, int] = {
     # --- NOT_A_FILE_NAME_PREDICATE ---
