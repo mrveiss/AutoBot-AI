@@ -31,13 +31,14 @@ from llc.api import work_items as work_items_api
 from llc.deps import get_session
 from llc.models.activity import LLCActivityLog
 from llc.models.board import LLCBoard, LLCBoardColumn
-from llc.models.enums import BoardType, WorkItemPriority, WorkItemStatus, WorkItemType
+from llc.models.enums import BoardType, MembershipRole, WorkItemPriority, WorkItemStatus, WorkItemType
+from llc.models.membership import LLCCompanyMembership
 from llc.models.review_gate import LLCReviewGatePolicy
 from llc.models.work_item import LLCWorkItem
 from llc.services import after_commit
 from llc.services.activity_log import LLCActivityLogService
 from llc.services.handoff import HandoffService
-from llc.services.work_item_service import WorkItemService
+from llc.services.work_item_service import InvalidTransition, WorkItemService
 from llc.tests import _e2e_harness as harness
 from user_management.services import TenantContext
 
@@ -56,6 +57,10 @@ _SLUG = "agent-21503"
 _NOW = datetime(2026, 11, 1, tzinfo=timezone.utc)
 _PERSON = {"id": str(_HUMAN), "auth_method": "session"}
 _SERVICE = {"id": str(_HUMAN), "auth_method": "session", "service": True}
+#: A token that is not a login session: the verified-user shape without ``login_token``.
+_TOKEN = {"id": str(_HUMAN), "auth_method": "jwt"}
+#: The stand-in the auth middleware yields when authentication is disabled.
+_AUTH_OFF = {"user_id": "admin", "sub": "admin", "username": "admin", "role": "admin", "auth_disabled": True}
 
 
 async def _create_board_tables(engine) -> None:  # noqa: ANN001
@@ -92,12 +97,12 @@ async def effects(factory):  # noqa: ANN001, ANN201
         patch.object(HandoffService, "_generate_and_update_brief_async", new=AsyncMock()),
         patch.object(HandoffService, "_generate_brief", new=MagicMock(return_value={})),
         patch.object(WorkItemService, "_trigger_artifact_ingest", new=AsyncMock()),
-        patch("llc.services.work_item_service.release_workspace_for_task", new=AsyncMock()),
+        patch("llc.services.work_item_service.release_workspace_for_task", new=AsyncMock()) as release,
         patch.object(LLCActivityLogService, "_publish_after_commit", new=AsyncMock()),
         patch("llc.services.board.get_async_redis_client", new=AsyncMock(return_value=None)),
         patch("llc.kb.collections.KbCollectionManager.archive_collection", new=AsyncMock()),
     ):
-        yield SimpleNamespace(fence=fence)
+        yield SimpleNamespace(fence=fence, release=release)
         await asyncio.gather(*after_commit.after_commit_tasks)
 
 
@@ -110,6 +115,7 @@ async def _seed(  # noqa: ANN202
     reviewer: uuid.UUID | None = None,
     creator: uuid.UUID | None = None,
     gated: bool = True,
+    members: tuple[uuid.UUID, ...] = (_REVIEWER, _CREATOR),
 ):
     """One item (held by *agent* with a live checkout) and, when *gated*, a bug policy that requires review."""
     async with factory() as session:
@@ -145,6 +151,8 @@ async def _seed(  # noqa: ANN202
                     requires_cross_vendor_review=False,
                 )
             )
+        for user in members:
+            session.add(LLCCompanyMembership(company_id=_COMPANY, user_id=user, role=MembershipRole.MEMBER))
         session.add(LLCBoard(id=_BOARD, company_id=_COMPANY, type=BoardType.KANBAN, name="Board"))
         await session.flush()
         session.add(LLCBoardColumn(id=_DONE_COLUMN, board_id=_BOARD, name="Done", position=1, status_filter=["done"]))
@@ -256,8 +264,20 @@ async def test_a_gated_finish_by_an_agent_with_no_node_is_refused(factory) -> No
     with pytest.raises(HTTPException) as refused:
         await _agent_asks_for_done(node=None)
 
-    assert refused.value.status_code == 409
+    assert (refused.value.status_code, "has no org node" in refused.value.detail) == (409, True)
     assert (await _row(factory)).status == WorkItemStatus.IN_PROGRESS
+
+
+async def test_a_gated_finish_whose_creator_left_the_company_is_refused(factory, effects) -> None:  # noqa: ANN001
+    await _seed(factory, creator=_CREATOR, members=())
+
+    with pytest.raises(HTTPException) as refused:
+        await _agent_asks_for_done()
+
+    row = await _row(factory)
+    assert (refused.value.status_code, "not a member" in refused.value.detail) == (409, True)
+    assert (row.status, row.assignee_agent_id, row.checkout_run_id) == (WorkItemStatus.IN_PROGRESS, _NODE, "run-1")
+    effects.fence.assert_not_awaited()
 
 
 async def test_an_ungated_finish_by_an_agent_is_done_and_audited(factory, effects) -> None:  # noqa: ANN001
@@ -283,8 +303,10 @@ async def test_an_ungated_finish_by_an_agent_is_done_and_audited(factory, effect
         (_SERVICE, WorkItemType.BUG, 409, WorkItemStatus.IN_PROGRESS, 0),
         (_SERVICE, WorkItemType.TASK, 200, WorkItemStatus.DONE, 1),
         (_PERSON, WorkItemType.BUG, 200, WorkItemStatus.DONE, 1),
+        (_AUTH_OFF, WorkItemType.BUG, 200, WorkItemStatus.DONE, 1),
+        (_TOKEN, WorkItemType.BUG, 409, WorkItemStatus.IN_PROGRESS, 0),
     ],
-    ids=["credential-that-is-no-person-on-a-gated-type", "same-credential-ungated-type", "person-on-a-gated-type"],
+    ids=["service-on-a-gated-type", "service-ungated-type", "person-gated", "auth-disabled-user-gated", "token-gated"],
 )
 async def test_the_rest_transition_to_done(factory, user, type_, code, status, audit_rows) -> None:  # noqa: ANN001
     await _seed(factory, type_=type_, agent=None)
@@ -331,8 +353,10 @@ async def test_a_person_finishes_their_own_task_from_any_status(factory, creator
         (_SERVICE, WorkItemType.BUG, 409, WorkItemStatus.IN_PROGRESS, 0),
         (_SERVICE, WorkItemType.TASK, 200, WorkItemStatus.DONE, 1),
         (_PERSON, WorkItemType.BUG, 200, WorkItemStatus.DONE, 1),
+        (_AUTH_OFF, WorkItemType.BUG, 200, WorkItemStatus.DONE, 1),
+        (_TOKEN, WorkItemType.BUG, 409, WorkItemStatus.IN_PROGRESS, 0),
     ],
-    ids=["credential-that-is-no-person-on-a-gated-type", "same-credential-ungated-type", "person-on-a-gated-type"],
+    ids=["service-on-a-gated-type", "service-ungated-type", "person-gated", "auth-disabled-user-gated", "token-gated"],
 )
 async def test_a_board_move_into_done(factory, user, type_, code, status, audit_rows) -> None:  # noqa: ANN001
     await _seed(factory, type_=type_, agent=None)
@@ -344,3 +368,40 @@ async def test_a_board_move_into_done(factory, user, type_, code, status, audit_
         assert "requires human review" in response.json()["detail"]
     assert (await _row(factory)).status == status
     assert len(await _completed_rows(factory)) == audit_rows
+
+
+# --- the service: no route can leave the gate out ---------------------------------------------------------------
+
+
+async def test_a_move_to_done_that_brings_no_gate_is_still_gated(factory) -> None:  # noqa: ANN001
+    await _seed(factory, agent=None)
+    async with factory() as session:
+        with pytest.raises(InvalidTransition, match="requires human review"):
+            await WorkItemService().transition_status(session, str(_ITEM), WorkItemStatus.DONE)
+    assert (await _row(factory)).status == WorkItemStatus.IN_PROGRESS
+
+
+async def test_a_move_to_done_that_brings_no_gate_asks_the_real_one(factory) -> None:  # noqa: ANN001
+    """The contrast: an ungated type goes through, so the default is the real gate and not a blanket refusal."""
+    await _seed(factory, type_=WorkItemType.TASK, agent=None)
+    async with factory() as session:
+        await WorkItemService().transition_status(session, str(_ITEM), WorkItemStatus.DONE)
+        await session.commit()
+    assert (await _row(factory)).status == WorkItemStatus.DONE
+
+
+async def test_a_finish_with_no_gate_service_is_refused_for_anyone_who_is_not_a_person(factory) -> None:  # noqa: ANN001
+    await _seed(factory, type_=WorkItemType.TASK)
+    async with factory() as session:
+        with pytest.raises(InvalidTransition, match="no review gate"):
+            await WorkItemService().transition_to_done(session, str(_ITEM), actor_agent_id=str(_NODE))
+    assert (await _row(factory)).status == WorkItemStatus.IN_PROGRESS
+
+
+async def test_a_cancel_still_releases_the_task_workspace(factory, effects) -> None:  # noqa: ANN001
+    await _seed(factory, agent=None)
+    async with factory() as session:
+        await WorkItemService().transition_status(session, str(_ITEM), WorkItemStatus.CANCELLED)
+        await session.commit()
+    assert (await _row(factory)).status == WorkItemStatus.CANCELLED
+    assert effects.release.await_args.args[0] == str(_ITEM)

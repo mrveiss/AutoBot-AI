@@ -12,7 +12,6 @@ import pytest
 
 from llc.exceptions import WipLimitExceeded
 from llc.models.enums import BoardType, WorkItemPriority, WorkItemStatus, WorkItemType
-from llc.services.accessors import done_gate_for
 from llc.services.board import _DEFAULT_COLUMNS, BoardService
 
 # ---------------------------------------------------------------------------
@@ -326,7 +325,7 @@ async def test_move_item_transitions_status_and_publishes(service):
         WorkItemStatus.IN_PROGRESS,
         company_id=str(board.company_id),
         acting_user=None,
-        done_gate=done_gate_for(),  # the shared gate services, so every move to done reaches the review gate (#21503)
+        done_gate=None,  # no caller-built gate: the service supplies the real one for a move to done (#21503)
     )
     mock_redis.publish.assert_called_once()
     channel, payload = mock_redis.publish.call_args[0]

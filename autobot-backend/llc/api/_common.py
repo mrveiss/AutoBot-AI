@@ -64,6 +64,25 @@ def own_task_actor(current_user: dict) -> Optional[uuid.UUID]:
     return actor_id(current_user) if is_interactive_human(current_user) else None
 
 
+def moving_as(current_user: dict) -> dict[str, Any]:
+    """Who is moving a work item, as the ``acting_user`` and ``done_gate`` a status move takes (#21503).
+
+    The ONE place that decides who counts as a person for a move to done: an interactive login, or the single
+    local user when authentication is disabled (a stand-in with no user id, so it owns no task and has no
+    ``acting_user``). Any other credential -- a token that is not a login, a service key -- is no person, and a
+    done on a type that requires review is refused for it.
+    """
+    from ..services.accessors import done_gate_for
+
+    local = str(current_user.get("username") or "admin") if _is_auth_disabled_user(current_user) else None
+    return {"acting_user": own_task_actor(current_user), "done_gate": done_gate_for(local_person=local)}
+
+
+def _is_auth_disabled_user(current_user: dict) -> bool:
+    """The stand-in the auth middleware yields when authentication is turned off; no credential can claim it."""
+    return current_user.get("auth_disabled") is True and not current_user.get("service")
+
+
 def acting_user_id(current_user: dict) -> Optional[str]:
     """The acting user's id for the activity log, or None for a principal that is not a user.
 
@@ -250,8 +269,10 @@ async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
 def refused_transition(exc: Exception) -> HTTPException:
     """A refused status move as 409, with the service's reason (#12740).
 
-    The reason names only statuses and permitted moves, so it is safe to show, and the UI can tell
-    the user what went wrong. 409, not 422: the request is well-formed but conflicts with the item's state.
+    The reason names statuses and permitted moves, or why a finish needs review (the item's reviewer or
+    creator is missing or not a member, the agent does not hold the item), so it is safe to show, and
+    the UI can tell the user what went wrong. 409, not 422: the request is well-formed but conflicts with the
+    item's state.
     """
     logger.info("Rejected illegal work-item transition: %s", exc)
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))

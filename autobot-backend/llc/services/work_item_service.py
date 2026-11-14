@@ -59,7 +59,7 @@ from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-ex
 )
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
 from .work_item_completion_effects import release_workspace_for_task
-from .work_item_gated_done import DoneGate, review_outcome
+from .work_item_gated_done import DoneGate, default_gate, review_outcome
 from .work_item_hierarchy import reparent, validate_create
 from .work_item_own_task import (
     CheckoutConflict,
@@ -797,9 +797,8 @@ class WorkItemService(LLCServiceBase):
         A move to done is ``transition_to_done``: the one path, with the review gate and the completion audit row.
         """
         if new_status == WorkItemStatus.DONE:
-            return await self.transition_to_done(
-                session, work_item_id, company_id, **(done_gate or DoneGate()).finish_args(acting_user)
-            )
+            gate = done_gate or default_gate()  # a caller that brings no gate gets the real one, never none
+            return await self.transition_to_done(session, work_item_id, company_id, **gate.finish_args(acting_user))
         item = await self._load_locked(session, work_item_id, company_id)
         current, own = self._check_move(item, acting_user, new_status)
         if not own and current == WorkItemStatus.BLOCKED and new_status == WorkItemStatus.IN_PROGRESS:
@@ -827,50 +826,51 @@ class WorkItemService(LLCServiceBase):
         is_board_override: bool = False,
         review_gate_svc: Optional[Any] = None,
         handoff_svc: Optional[Any] = None,
-        reviewer_user_id: Optional[str] = None,
+        is_agent: bool = False,
         acting_user: Optional[uuid.UUID] = None,
     ) -> "LLCWorkItem":
-        """Move a work item to DONE: the company check, the transition rules and the review gate, then the audit row.
-
-        A person (*acting_user*, *actor_user_id*) or a board override is never gated; they keep the past-reviewer
-        and own-task rules (#20508). When the gate requires review for the item's type, an agent's finish becomes a
-        handoff and the item comes back IN_REVIEW; any other caller is refused.
+        """Move an item to DONE: company check, transition rules, review gate (a person is never gated), audit row.
 
         Raises ValueError for a missing or other company's item, InvalidTransition for a refused move.
         """
         item = await self._load_locked(session, work_item_id, company_id)
         company_id = company_id or str(item.company_id)
         current, own = self._check_move(item, acting_user, WorkItemStatus.DONE)
-        gate = DoneGate(review_gate_svc, handoff_svc, actor_agent_id, reviewer_user_id)
-        is_human = actor_user_id is not None or acting_user is not None
-        in_review = await review_outcome(
-            session, item, company_id, gate, is_human=is_human, is_board_override=is_board_override
+        gate = DoneGate(review_gate_svc, handoff_svc, actor_agent_id, is_agent)
+        person = actor_user_id is not None or acting_user is not None
+        held = await review_outcome(
+            session, item, company_id, gate, is_human=person, is_board_override=is_board_override
         )
-        if in_review is not None:
-            return in_review
+        if held is not None:
+            return held
+        await self._complete(
+            session, item, current, own, company_id, (actor_agent_id, actor_user_id, is_board_override)
+        )
+        return item
 
+    async def _complete(
+        self,
+        session: AsyncSession,
+        item: LLCWorkItem,
+        current: WorkItemStatus,
+        own: bool,
+        company_id: str,
+        actor: tuple,
+    ) -> None:
+        """Stamp the item done, write the completion audit row, then run the effects that cannot be rolled back."""
         stamp_and_release(session, item, WorkItemStatus.DONE, datetime.now(timezone.utc), own=own)
         item.version += 1
         await session.flush()
-        await self._record_completed(
-            session, work_item_id, current, company_id, actor_agent_id, actor_user_id, is_board_override
-        )
+        await self._record_completed(session, str(item.id), current, company_id, actor)
         # External effects (Chroma upsert, worktree removal) only once the audit has succeeded (#20102)
         await self._trigger_artifact_ingest(session, item)
-        await release_workspace_for_task(work_item_id, session)
-        return item
+        await release_workspace_for_task(str(item.id), session)
 
     async def _record_completed(
-        self,
-        session: AsyncSession,
-        work_item_id: str,
-        before: WorkItemStatus,
-        company_id: str,
-        actor_agent_id: Optional[str],
-        actor_user_id: Optional[str],
-        is_board_override: bool,
+        self, session: AsyncSession, work_item_id: str, before: WorkItemStatus, company_id: str, who: tuple
     ) -> None:
-        """The "work item completed" audit row; a board override is named in it."""
+        """The "work item completed" audit row; *who* is (agent id, user id, board override), which it names."""
+        actor_agent_id, actor_user_id, is_board_override = who
         actor = resolve_actor(actor_agent_id, actor_user_id)
         meta = {"board_override": True, "actor_user_id": actor_user_id} if is_board_override else {}
         await audit(

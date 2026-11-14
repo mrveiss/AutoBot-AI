@@ -337,6 +337,7 @@ class TestTransitionToDone:
         session = self._make_wi_session(wi)
         company_id, agent_id, reviewer = (str(uuid.uuid4()) for _ in range(3))
         wi.company_id = uuid.UUID(company_id)
+        wi.reviewer_user_id = uuid.UUID(reviewer)
 
         gate_svc = AsyncMock(spec=ReviewGatePolicyService, requires_review=AsyncMock(return_value=(True, "admin")))
 
@@ -351,7 +352,6 @@ class TestTransitionToDone:
             actor_agent_id=agent_id,
             review_gate_svc=gate_svc,
             handoff_svc=handoff_svc,
-            reviewer_user_id=reviewer,
         )
 
         handoff_svc.agent_to_human.assert_awaited_once_with(

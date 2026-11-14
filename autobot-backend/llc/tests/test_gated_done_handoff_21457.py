@@ -64,6 +64,7 @@ def _gate() -> AsyncMock:
 
 
 async def _done(item: MagicMock, handoff: HandoffService, reviewer):
+    item.reviewer_user_id = uuid.UUID(reviewer) if reviewer else None
     with patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=None)):
         return await WorkItemService().transition_to_done(
             _session(item),
@@ -72,7 +73,6 @@ async def _done(item: MagicMock, handoff: HandoffService, reviewer):
             actor_agent_id=_AGENT,
             review_gate_svc=_gate(),
             handoff_svc=handoff,
-            reviewer_user_id=reviewer,
         )
 
 

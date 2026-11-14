@@ -264,9 +264,13 @@ async def test_transition_to_done_records_the_actor_and_survives_a_service_princ
     from llc.services import work_item_service as wis
 
     can_finish = next(st for st, to in wis._ALLOWED_TRANSITIONS.items() if WorkItemStatus.DONE in to)
+
+    def _ungated():  # the agent's finish needs a review gate, and this type does not require review
+        return MagicMock(requires_review=AsyncMock(return_value=(False, None)))
+
     for kwargs, expected_type, expected_id in (
         ({"actor_user_id": _USER}, ActorType.USER, _USER),
-        ({"actor_agent_id": _AGENT}, ActorType.AGENT, _AGENT),
+        ({"actor_agent_id": _AGENT, "review_gate_svc": _ungated()}, ActorType.AGENT, _AGENT),
         ({"actor_user_id": "service-key"}, ActorType.SYSTEM, None),
     ):
         log = MagicMock(record=AsyncMock())
