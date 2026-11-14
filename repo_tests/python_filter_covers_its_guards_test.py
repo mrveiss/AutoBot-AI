@@ -143,28 +143,37 @@ def _filter_patterns() -> list[str]:
     return [str(pattern) for pattern in document["python"]]
 
 
-def _double_star_covers(path: str, pattern: str) -> bool:
-    """Whether a `<head>/**...` pattern covers *path*.
+#: One glob token, tried in this order: a `**/` that opens a segment (zero or more directories), a
+#: trailing `/**` (the subtree and the directory itself), a pattern that is only `**`, any other
+#: `**` (inside a segment, so it is a plain `*`), then `*` and `?`.
+_GLOB_TOKEN = re.compile(
+    r"(?P<lead>(?<![^/])\*\*/)|(?P<tail>/\*\*\Z)|(?P<whole>\A\*\*\Z)|(?P<mid>\*\*)|(?P<star>\*)|(?P<one>\?)"
+)
+_GLOB_REGEX = {
+    "lead": "(?:.*/)?",
+    "tail": "(?:/.*)?",
+    "whole": ".*",
+    "mid": "[^/]*",
+    "star": "[^/]*",
+    "one": "[^/]",
+}
 
-    A trailing `/**` covers the whole subtree. A remainder after it (`<head>/**/*.json`) covers a
-    path under `<head>` only if the path's trailing segments match the remainder; `**` spans zero or
-    more directories, as in the standard glob reading (agreement with the CI action's matcher on
-    dot-files is not established from the repository).
+
+def _double_star_regex(pattern: str) -> re.Pattern[str]:
+    """The regex for a pattern containing `**`, with `*` and `?` confined to one segment.
+
+    Only a trailing `/**` covers a whole subtree, and `**/` spans zero or more directories; a `*`
+    after either is still a single-segment `*`, so `**/requirements*.txt` does not cover
+    `a/b/requirements/c.txt` (#21555). Every other character is literal. Dot-files match like any
+    other name: agreement with the CI action's dot default is not established from the repository.
     """
-    head, sep, tail = pattern.partition("/**")
-    if not sep or not (path == head or path.startswith(f"{head}/")):
-        return False
-    if tail in ("", "/"):
-        return True
-    if not tail.startswith("/"):
-        return False
-    remainder = tail[1:]
-    rest = path[len(head) + 1 :]
-    if "**" in remainder:
-        return fnmatch.fnmatch(rest, remainder.replace("**/", "*/").replace("**", "*"))
-    count = remainder.count("/") + 1
-    segments = rest.split("/")
-    return len(segments) >= count and fnmatch.fnmatch("/".join(segments[-count:]), remainder)
+    out, last = [], 0
+    for token in _GLOB_TOKEN.finditer(pattern):
+        out.append(re.escape(pattern[last : token.start()]))
+        out.append(_GLOB_REGEX[token.lastgroup])
+        last = token.end()
+    out.append(re.escape(pattern[last:]))
+    return re.compile("".join(out))
 
 
 def _is_covered(path: str, patterns: list[str]) -> bool:
@@ -181,16 +190,14 @@ def _is_covered(path: str, patterns: list[str]) -> bool:
     for pattern in patterns:
         if pattern == path:
             return True
-        if _double_star_covers(path, pattern):
-            return True
+        if "**" in pattern:
+            if _double_star_regex(pattern).fullmatch(path):
+                return True
+            continue
         # A pattern with no `**` is single-segment per `*`, as in the real filter: `docs/*.md`
         # must not "cover" `docs/a/b.md` just because fnmatch's `*` crosses `/` (#17930).
-        if "**" not in pattern and path.count("/") != pattern.count("/"):
-            continue
-        if fnmatch.fnmatch(path, pattern.replace("**/", "*/").replace("**", "*")):
+        if path.count("/") == pattern.count("/") and fnmatch.fnmatch(path, pattern):
             return True
-        if pattern.startswith("**/") and fnmatch.fnmatch(path, pattern[3:].replace("**", "*")):
-            return True  # the real filter's `**/` also matches zero directories (#19817)
     return False
 
 
@@ -504,7 +511,7 @@ def test_a_composition_off_an_unknown_base_is_collected_then_dropped() -> None:
     assert "docker/with-secrets.sh" in collected, "composition off any base must be collected"
 
     reads: dict[str, set[str]] = {}
-    _record("nonexistent-tree-xyz/made-up.sh", "fixture.py", reads, _filter_patterns())
+    _record("nonexistent-tree-xyz/made-up.sh", "fixture.py", _filter_patterns(), reads)
     assert not reads, "a candidate that is not a real path must be dropped, not reported"
 
 
