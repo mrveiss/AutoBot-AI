@@ -41,18 +41,17 @@
 #   no suite, so the train's builder merges main into it with CI (#19724).
 # - Pending checks on a `[skip ci]` head do not block hand-off to the trainmaster; red
 #   checks still do.
-# - A PR that lands on its own, not in a train, needs its suite on the synced head. Start
-#   it WITHOUT a new commit by dispatching, on the PR branch, the three workflows that
-#   publish the eleven required contexts (#21577):
-#     gh workflow run ci.yml --ref <branch>
-#     gh workflow run no-commit-trailers.yml --ref <branch>
-#     gh workflow run pr-blocking-findings.yml --ref <branch>
-#   A dispatch is not skipped by the marker in the head message, and its check runs attach
-#   to the branch head, the commit the required contexts are read from. Each run resolves
-#   the branch to its one open PR (pipeline-scripts/dispatched_pr.py) and REFUSES a draft,
-#   a base other than the default branch, a conflict, a head behind its base (sync it first),
-#   `main`, `release`, a `train-*` branch and a branch with no open PR; the dependabot / promotion hold applies unchanged. ci.yml
-#   checks out the PR's test merge commit, the tree a pull_request run gets.
+# - A PR that lands on its own, not in a train, needs its suite on the synced head. The
+#   sync starts it ON REQUEST (#21577): dispatch this workflow with the PR number,
+#     gh workflow run sync-branches-with-main.yml -f start_ci_for_pr=<PR number>
+#   and the run (that request only, no other sync) pushes ONE empty commit WITHOUT the
+#   marker onto that PR's branch with the same push token, so the ordinary `pull_request`
+#   pipeline runs on it, unchanged. It refuses (exit 1, `::error::`) anything but an open,
+#   non-draft, same-repo PR into main on a branch the sync writes to, that is 0 behind main
+#   (a branch behind is merged by the ordinary sync first; ask again) and whose head is the
+#   commit this run fetched; it is a notice and no commit when the head already has a
+#   non-cancelled `pull_request` run of ci.yml. The commit's parent is that head and the push
+#   is plain, so a branch that moved meanwhile is rejected, never overwritten.
 # #14022's one-per-push serialization and #12823's `approve-refreshed-runs` job
 # stay gone: there is no run to reset mid-flight and none to approve.
 #
@@ -85,6 +84,10 @@ on:
         description: 'Report what would change without pushing, labelling or commenting'
         type: boolean
         default: false
+      start_ci_for_pr:
+        description: 'A pull request number: push ONE empty commit (no skip marker) onto its synced head so its suite runs. Does only that.'
+        type: string
+        default: ''
 
 # One at a time: two runs would race on the same branches. `cancel-in-progress:
 # false` because a run that is mid-push must finish; cancelling it would leave
@@ -113,6 +116,8 @@ jobs:
       pull-requests: write
       # Creating the two sync labels the first time goes through the issues API.
       issues: write
+      # Listing the workflow runs of a head (the "suite already started" check of start_ci_for_pr) needs it.
+      actions: read
 
     steps:
       - name: Require AUTOBOT_PUSH_TOKEN
@@ -151,6 +156,8 @@ jobs:
           AUTOBOT_PUSH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           DRY_RUN: ${{ inputs.dry_run }}
+          # Untrusted text: only ever read from this variable, validated as digits by the script.
+          START_CI_FOR_PR: ${{ inputs.start_ci_for_pr }}
           # The shared git runner's per-call timeout (default 30s, sized for probes).
           # A merge or push on a full clone of this repository needs more.
           AUTOBOT_GIT_PROBE_TIMEOUT_SECONDS: '600'
@@ -165,4 +172,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           args=(--base main)
           if [ "${DRY_RUN:-false}" = "true" ]; then args+=(--dry-run); fi
+          if [ -n "${START_CI_FOR_PR:-}" ]; then args+=(--start-ci-for-pr "${START_CI_FOR_PR}"); fi
           python3 pipeline-scripts/branch_sync.py "${args[@]}"
