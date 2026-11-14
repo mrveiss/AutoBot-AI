@@ -329,6 +329,15 @@ async def test_a_stale_build_does_not_block_a_new_start(env, monkeypatch):
     assert (await sw.start_switch(_kb(), MODEL))["state"] == "building"
 
 
+async def test_the_owner_is_the_shared_unique_worker_identity(env, monkeypatch):
+    """#21518: the owner in the state hash and the claim is the helper's per-instance identity."""
+    monkeypatch.setattr(sw, "fire_and_forget", lambda coro, name: coro.close())
+    monkeypatch.setattr(sw, "worker_identity", lambda *, unique=False: "host-3-9:ab12cd34" if unique else "host-3-9")
+    status = await sw.start_switch(_kb(), MODEL)
+    assert status["owner"] == "host-3-9:ab12cd34"
+    assert env.claims.holder() == "host-3-9:ab12cd34"
+
+
 async def test_each_attempt_writes_a_new_collection(env, monkeypatch):
     """A→B→A must not reopen the abandoned A collection."""
     monkeypatch.setattr(sw, "fire_and_forget", lambda coro, name: coro.close())
