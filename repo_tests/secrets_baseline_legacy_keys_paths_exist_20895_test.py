@@ -46,18 +46,30 @@ def _entry_paths() -> set[str]:
     return {key[0] for key in load_legacy_keys()}
 
 
-def test_the_enumeration_reaches_the_tree_it_compares_against() -> None:
-    tracked = _tracked()
+def _examined() -> tuple[set[str], set[str]]:
+    """``(entry paths, tracked paths)`` after proving both sides were really read.
+
+    The tree side must list the anchors; the entry side must MATCH the tree for at least one path,
+    so a broken enumeration (everything "missing") or an emptied file (nothing to miss) cannot read as a result.
+    """
+    tracked, paths = _tracked(), _entry_paths()
     reached = [anchor for anchor in _REACH_ANCHORS if anchor in tracked]
     assert len(reached) == len(
         _REACH_ANCHORS
     ), f"git ls-files lists {len(reached)} of {len(_REACH_ANCHORS)} anchors; a missing-path result would be vacuous"
-    assert _entry_paths(), "the legacy-keys file names no paths; there is nothing to check"
+    matched = paths & tracked
+    assert len(matched) > 0, f"none of the {len(paths)} legacy-key paths is in the tree; the comparison read nothing"
+    return paths, tracked
+
+
+def test_the_enumeration_reaches_the_tree_it_compares_against() -> None:
+    paths, tracked = _examined()
+    assert set(_REACH_ANCHORS) <= tracked and paths
 
 
 def test_every_legacy_key_path_exists_in_the_tree() -> None:
-    paths = _entry_paths()
-    missing = missing_paths(paths, _tracked())
+    paths, tracked = _examined()
+    missing = missing_paths(paths, tracked)
     assert not missing, (
         f"{len(missing)} of {len(paths)} paths in secrets_baseline_legacy_keys.json are not tracked "
         "(#20895). Remove their entries, and update FROZEN_LEGACY_KEYS_SHA256 with them -- never add or "
