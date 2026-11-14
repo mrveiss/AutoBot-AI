@@ -125,13 +125,13 @@ def _green_shards() -> list[dict[str, Any]]:
     "own,expected", [("success", "green"), ("failure", "red"), ("skipped", "red"), ("cancelled", "cancelled")]
 )
 def test_the_own_tests_job_decides_the_lane(lane, tmp_path, own, expected) -> None:
-    needs = json.dumps({"guards": {"result": "success"}, "own-tests": {"result": own}, "types": {"result": "success"}})
+    needs = json.dumps({**support.env_needs(), "own-tests": {"result": own}})
     result = support.verdict(lane, tmp_path, _green_shards(), NEEDS_JSON=needs)
     assert result["overall"] == expected and result["checks"]["own_tests"]["status"] == own
 
 
 def test_a_needs_without_the_own_tests_job_is_red(lane, tmp_path) -> None:
-    needs = json.dumps({"guards": {"result": "success"}, "types": {"result": "success"}})
+    needs = json.dumps({k: v for k, v in support.env_needs().items() if k != "own-tests"})
     result = support.verdict(lane, tmp_path, _green_shards(), NEEDS_JSON=needs)
     assert result["overall"] == "red" and result["checks"]["own_tests"]["status"] == "missing"
 

@@ -33,7 +33,7 @@ from redis.exceptions import TimeoutError as RedisTimeoutError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from autobot_shared.ssot_config import config
-from config import unified_config_manager
+from config import config_manager
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_1_HOUR
 from conversation_file_cleanup import deleted_file_stats, pending_cleanup_stats
@@ -83,7 +83,7 @@ class ConversationFileManager(ConversationFileRouteApi):
 
     def _init_redis_config(self, redis_host: str | None, redis_port: int | None) -> None:
         """Initialize Redis configuration from params or unified config."""
-        redis_config = unified_config_manager.get_redis_config()
+        redis_config = config_manager.get_redis_config()
         self.redis_host = redis_host or redis_config.get("host")
         self.redis_port = redis_port or redis_config.get("port")
         self._redis_manager = None

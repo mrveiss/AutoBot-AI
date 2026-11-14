@@ -40,6 +40,12 @@
 #           interpreter, SLM backend files in the SLM interpreter, in separate sessions as the suite does. Files
 #           under the guard roots (repo_tests included) are left to the guard shards. An empty selection is
 #           green ("no changed test files"). Not covered: frontend specs (#21509).
+#   added-headers  Every file the head ADDS (or renames or copies into place) in the license-header check's scope must carry the
+#           header in its COMMITTED text at the dispatched head (#21535). The train content gate fails the same file, but
+#           only after the member has boarded; this fails it before. A small job of its own, with no suite environment and
+#           no merge: it reads `git show <head>:<path>`, never a working tree the merge would have changed. The selection
+#           is `added-headers` in pipeline-scripts/preboard_guard_lane.py, over the same three-dot diff as `changed-tests`.
+#           A file the head only modifies is not judged. A failed or missing job is red.
 #   types   The generated-types check on the merged tree, through the composite action the types
 #           dispatch uses.
 #   result  The summary and the artifact below. Fails only when the lane is red or cancelled.
@@ -80,6 +86,7 @@
 #                 unexpected exit code, a recorded test file that produced no test, a conflict, a shard
 #                 or the types job that merged a base other than `base_sha`, a missing types record)
 #   checks.own_tests  status (the own-tests job result; anything but "success", or a missing job, is red)
+#   checks.added_headers  status (the added-headers job result; anything but "success", or a missing job, is red)
 #   checks.types  status (the types job result); the base it merged is recorded in types-meta.json
 #                 (artifact preboard-types-record) and compared with base_sha in checks.guards.problems
 #   failed_tests  [{nodeid, kind: "failure" | "error", message: first line}]
@@ -335,6 +342,29 @@ jobs:
           fi
           exit "$rc"
 
+  # The committed text of the head's added files, not the merged tree: no merge step, no suite environment.
+  added-headers:
+    name: added files carry the license header
+    needs: [pin]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      # The dispatched ref's own head against the pinned base: three dots, from the merge base.
+      - name: Fail on a file this head adds without the license header
+        env:
+          BASE_SHA: ${{ needs.pin.outputs.base_sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python3 pipeline-scripts/preboard_guard_lane.py added-headers --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA"
+
   types:
     name: types
     needs: [pin]
@@ -386,7 +416,7 @@ jobs:
 
   result:
     name: result
-    needs: [pin, guards, own-tests, types]
+    needs: [pin, guards, own-tests, added-headers, types]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
