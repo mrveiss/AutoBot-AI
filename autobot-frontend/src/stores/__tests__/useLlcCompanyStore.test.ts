@@ -101,11 +101,89 @@ describe('useLlcCompanyStore (GH#9627)', () => {
     expect(store.selectedCompany).toBeNull()
   })
 
-  it('fetchCompanies drops a persisted selection that no longer exists', async () => {
-    const store = useLlcCompanyStore()
-    store.selectCompany('deleted-company')
-    await store.fetchCompanies()
-    expect(store.selectedCompanyId).toBe('')
+  // #21531: the list holds ROOT companies and hides ARCHIVED ones, so absence from it is not
+  // proof the company is gone. The store probes the company by id and clears only when the backend refuses it (404/403/422).
+  describe('a selection the list omits (#21531)', () => {
+    const LIST_URL = '/api/llc/companies/'
+    const PROBE_URL = '/api/llc/companies/archived-1'
+    const probeCalls = () => getMock.mock.calls.filter(([url]) => url === PROBE_URL)
+
+    /** Answer the list with one company and the by-id probe with whatever `probe` returns. */
+    const routeGet = (probe: () => Promise<unknown>) =>
+      getMock.mockImplementation((url: string) =>
+        url === LIST_URL ? Promise.resolve([mockCompany()]) : probe(),
+      )
+
+    it('keeps it, and does not list it, when the probe finds the company', async () => {
+      routeGet(() => Promise.resolve(mockCompany({ id: 'archived-1', llc_status: 'archived' })))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(probeCalls()).toEqual([
+        [PROBE_URL, { headers: { 'X-Organization-Id': 'archived-1' } }],
+      ])
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(store.companies.map((c) => c.id)).toEqual(['company-1'])
+    })
+
+    it.each([
+      [404, 'Company not found'],
+      [403, 'You are not a member of the requested organization'],
+      [422, 'Unprocessable Entity'],
+    ])('clears it when the backend refuses the company (HTTP %i)', async (status, message) => {
+      routeGet(() => Promise.reject(new HttpError(status, message)))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(probeCalls()).toHaveLength(1)
+      expect(store.selectedCompanyId).toBe('')
+      expect(store.error).toBeNull()
+    })
+
+    it.each([
+      [500, 'Internal server error'],
+      [401, 'Unauthorized'],
+    ])('keeps it when the probe fails with HTTP %i', async (status, message) => {
+      routeGet(() => Promise.reject(new HttpError(status, message)))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(probeCalls()).toHaveLength(1)
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(store.error).toBeNull()
+    })
+
+    it('keeps it when the probe fails with a non-HTTP error', async () => {
+      routeGet(() => Promise.reject(new Error('network down')))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      await store.fetchCompanies()
+      expect(probeCalls()).toHaveLength(1)
+      expect(store.selectedCompanyId).toBe('archived-1')
+      expect(store.error).toBeNull()
+    })
+
+    it('does not clear a selection made while the probe was in flight', async () => {
+      let rejectProbe: (err: unknown) => void = () => undefined
+      routeGet(() => new Promise((_resolve, reject) => { rejectProbe = reject }))
+      const store = useLlcCompanyStore()
+      store.selectCompany('archived-1')
+      const pending = store.fetchCompanies()
+      await vi.waitFor(() => expect(probeCalls()).toHaveLength(1))
+      store.selectCompany('company-1')
+      rejectProbe(new HttpError(404, 'Company not found'))
+      await pending
+      expect(store.selectedCompanyId).toBe('company-1')
+    })
+
+    it('sends no probe when the list already holds the selection', async () => {
+      routeGet(() => Promise.reject(new HttpError(404, 'Company not found')))
+      const store = useLlcCompanyStore()
+      store.selectCompany('company-1')
+      await store.fetchCompanies()
+      expect(getMock.mock.calls.map(([url]) => url)).toEqual([LIST_URL])
+      expect(store.selectedCompanyId).toBe('company-1')
+    })
   })
 
   it('fetchCompanies keeps a selection that still exists', async () => {
