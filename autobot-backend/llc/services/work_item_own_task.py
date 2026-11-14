@@ -49,6 +49,10 @@ class InvalidTransition(Exception):
     """Raised when a status transition is not permitted."""
 
 
+class CheckoutConflict(Exception):
+    """Raised when a work item is held by someone else: another agent, or a person (#20521)."""
+
+
 def refuse_past_reviewer(item: LLCWorkItem, acting_user: Optional[uuid.UUID], new_status: WorkItemStatus) -> None:
     """A person can't finish a task waiting on someone else's review; that reviewer decides (#20508).
 
@@ -109,6 +113,19 @@ def claim_conflict_holder(item: LLCWorkItem, user_id: str) -> Optional[str]:
     if item.assignee_user_id is not None and str(item.assignee_user_id) != user_id:
         return f"user {item.assignee_user_id}"
     return None
+
+
+def refuse_release(item: LLCWorkItem, agent_id: str) -> None:
+    """Refuse a release by *agent_id* of an item it does not hold, read under the row lock.
+
+    A person's checkout is not an agent's to release (#20521, interim: who may act as a named agent is still open).
+    """
+    if item.assignee_user_id is not None:
+        raise CheckoutConflict(
+            f"Work item {item.id} is held by user {item.assignee_user_id}; an agent cannot release it"
+        )
+    if item.assignee_agent_id and str(item.assignee_agent_id) != agent_id:
+        raise ValueError(f"Agent {agent_id} does not hold checkout for work item {item.id}")
 
 
 def stamp_agent_checkout(item: LLCWorkItem, agent_id: str, run_id: Optional[str], work_intent: Optional[str]) -> None:

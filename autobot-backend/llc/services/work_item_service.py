@@ -62,6 +62,7 @@ from .work_item_completion_effects import release_workspace_for_task
 from .work_item_gated_done import hand_off_for_review
 from .work_item_hierarchy import reparent, validate_create
 from .work_item_own_task import (
+    CheckoutConflict,
     InvalidTransition,
     checkout_fence_value,
     claim_conflict_holder,
@@ -70,6 +71,7 @@ from .work_item_own_task import (
     is_own_task,
     other_checkout_holder,
     refuse_past_reviewer,
+    refuse_release,
     release_checkout,
     stamp_agent_checkout,
     stamp_and_release,
@@ -106,10 +108,6 @@ _ALLOWED_TRANSITIONS: Dict[WorkItemStatus, set] = {
     WorkItemStatus.DONE: set(),
     WorkItemStatus.CANCELLED: set(),
 }
-
-
-class CheckoutConflict(Exception):
-    """Raised when a work item is already checked out by a different agent."""
 
 
 class CoWorkingPermissionError(Exception):
@@ -492,8 +490,7 @@ class WorkItemService(LLCServiceBase):
         item = result.scalar_one_or_none()
         if item is None:
             raise ValueError(f"Work item {work_item_id} not found")
-        if item.assignee_agent_id and str(item.assignee_agent_id) != agent_id:
-            raise ValueError(f"Agent {agent_id} does not hold checkout for work item {work_item_id}")
+        refuse_release(item, agent_id)
         release_checkout(session, item, agent_id)
         await session.flush()
         return item
