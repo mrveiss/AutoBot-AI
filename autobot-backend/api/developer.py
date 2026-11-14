@@ -25,7 +25,7 @@ from api.schemas_system import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from config import unified_config_manager
+from config import config_manager
 from services.config_service import ConfigService
 from type_defs.common import Metadata
 
@@ -99,7 +99,7 @@ api_registry = RuntimeEndpointRegistry()
 )
 async def get_api_endpoints():
     """Get all registered API endpoints (developer mode)"""
-    developer_mode = unified_config_manager.get_nested("developer.enabled", False)
+    developer_mode = config_manager.get_nested("developer.enabled", False)
 
     if not developer_mode:
         raise HTTPException(status_code=403, detail="Developer mode is not enabled")
@@ -115,7 +115,7 @@ async def get_api_endpoints():
 )
 async def get_developer_config():
     """Get developer mode configuration"""
-    developer_config = unified_config_manager.get_nested("developer", {})
+    developer_config = config_manager.get_nested("developer", {})
     return {
         "enabled": developer_config.get("enabled", False),
         # Back-compat: fall back to the legacy ``enhanced_errors`` key for configs written before #10792.
@@ -134,12 +134,12 @@ async def get_developer_config():
 async def update_developer_config(config: dict):
     """Update developer mode configuration"""
     # Update the configuration
-    current_config = unified_config_manager.get_nested("developer", {})
+    current_config = config_manager.get_nested("developer", {})
     current_config.update(config)
 
     # Save to config file
-    unified_config_manager.set_nested("developer", current_config)
-    unified_config_manager.save_settings()
+    config_manager.set_nested("developer", current_config)
+    config_manager.save_settings()
     ConfigService.clear_cache()
 
     logger.info("Developer configuration updated: %s", config)
@@ -154,16 +154,16 @@ async def update_developer_config(config: dict):
 )
 async def get_system_info():
     """Get system information for debugging"""
-    developer_mode = unified_config_manager.get_nested("developer.enabled", False)
+    developer_mode = config_manager.get_nested("developer.enabled", False)
 
     if not developer_mode:
         raise HTTPException(status_code=403, detail="Developer mode is not enabled")
 
     return {
-        "config_loaded": bool(unified_config_manager.to_dict()),
-        "backend_config": unified_config_manager.get_backend_config(),
-        "redis_config": unified_config_manager.get_redis_config(),
-        "llm_config": unified_config_manager.get_nested("llm_config", {}),
+        "config_loaded": bool(config_manager.to_dict()),
+        "backend_config": config_manager.get_backend_config(),
+        "redis_config": config_manager.get_redis_config(),
+        "llm_config": config_manager.get_nested("llm_config", {}),
         "available_routers": api_registry.routers,
     }
 
@@ -171,11 +171,11 @@ async def get_system_info():
 # Custom exception handler for 404 errors with developer mode enhancements
 async def not_found_handler(request: Request, exc: HTTPException):
     """404 handler that provides helpful suggestions in developer mode"""
-    developer_mode = unified_config_manager.get_nested("developer.enabled", False)
+    developer_mode = config_manager.get_nested("developer.enabled", False)
     # Back-compat: fall back to the legacy ``enhanced_errors`` key for configs written before #10792.
-    detailed_errors = unified_config_manager.get_nested(
+    detailed_errors = config_manager.get_nested(
         "developer.detailed_errors",
-        unified_config_manager.get_nested("developer.enhanced_errors", True),
+        config_manager.get_nested("developer.enhanced_errors", True),
     )
 
     if not developer_mode or not detailed_errors:
@@ -207,11 +207,11 @@ async def not_found_handler(request: Request, exc: HTTPException):
 # Custom exception handler for 405 errors (Method Not Allowed)
 async def method_not_allowed_handler(request: Request, exc: HTTPException):
     """405 handler for developer mode"""
-    developer_mode = unified_config_manager.get_nested("developer.enabled", False)
+    developer_mode = config_manager.get_nested("developer.enabled", False)
     # Back-compat: fall back to the legacy ``enhanced_errors`` key for configs written before #10792.
-    detailed_errors = unified_config_manager.get_nested(
+    detailed_errors = config_manager.get_nested(
         "developer.detailed_errors",
-        unified_config_manager.get_nested("developer.enhanced_errors", True),
+        config_manager.get_nested("developer.enhanced_errors", True),
     )
 
     if not developer_mode or not detailed_errors:

@@ -15,7 +15,7 @@ import aiohttp
 # Add the project root to Python path
 sys.path.insert(0, os.getcwd())
 
-from config import global_config_manager
+from config import config_manager
 from services.config_service import ConfigService
 from tests.test_helpers import live_backend_url
 
@@ -44,21 +44,21 @@ async def test_config_service():
 
 
 async def test_global_config_manager():
-    """Test global_config_manager directly"""
-    print("Testing global_config_manager...")  # noqa: print
+    """Test config_manager directly"""
+    print("Testing config_manager...")  # noqa: print
 
     start_time = time.time()
     try:
         # Test a simple get operation
-        value = global_config_manager.get_nested("message_display.show_thoughts", True)
+        value = config_manager.get_nested("message_display.show_thoughts", True)
         end_time = time.time()
 
-        print(f"✅ global_config_manager test completed in {end_time - start_time:.2f} seconds")  # noqa: print
+        print(f"✅ config_manager test completed in {end_time - start_time:.2f} seconds")  # noqa: print
         print(f"Retrieved value: {value}")  # noqa: print
         return True
     except Exception as e:
         end_time = time.time()
-        print(f"❌ global_config_manager test failed after {end_time - start_time:.2f} seconds: {e}")  # noqa: print
+        print(f"❌ config_manager test failed after {end_time - start_time:.2f} seconds: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()
@@ -128,8 +128,8 @@ async def main() -> None:
         print(f"{status} - {test_name}")  # noqa: print
 
     # Determine root cause
-    if not results[0][1]:  # global_config_manager failed
-        print("\n🎯 ROOT CAUSE: global_config_manager is blocking")  # noqa: print
+    if not results[0][1]:  # config_manager failed
+        print("\n🎯 ROOT CAUSE: config_manager is blocking")  # noqa: print
     elif not results[1][1]:  # ConfigService failed
         print("\n🎯 ROOT CAUSE: ConfigService is blocking")  # noqa: print
     elif not results[2][1]:  # API endpoint failed

@@ -138,7 +138,7 @@ celery_app.conf.update(
         **_PRIORITY_TASK_ROUTES,
     },
     # Worker configuration for long-running Ansible playbooks
-    # Uses centralized config from unified_config_manager
+    # Uses centralized config from config_manager
     worker_prefetch_multiplier=_worker_prefetch,
     worker_max_tasks_per_child=_worker_max_tasks,
     # Redis visibility timeout for long-running deployments

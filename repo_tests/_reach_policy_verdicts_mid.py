@@ -271,4 +271,10 @@ MID: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Both frontends' source (#17567), against all tracked `.vue`/`.ts`/`.js`, which includes the shared kit.",
     ),
+    "no-sleep-in-async-21527": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every tracked .py file, so a blocking sleep in a coroutine anywhere is seen (#21527); files are added "
+        "in every PR, so an exact floor would fail any new file.",
+    ),
 }

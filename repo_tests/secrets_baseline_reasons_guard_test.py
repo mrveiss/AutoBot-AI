@@ -98,16 +98,17 @@ def test_legacy_keys_match_the_frozen_snapshot_exactly() -> None:
     fabricated one while keeping the total unchanged -- silently laundering a new,
     unreviewed entry under the legacy label without ever growing the count. Pinning
     the exact content (a hash over the canonicalised set) catches an add, a remove,
-    OR a swap; #17034 never needs to touch this file at all (see
-    repo_tests/secrets_baseline_reasons.py's module docstring for why), so this
-    hash should never need updating again."""
+    OR a swap. The list is shrink-only (see repo_tests/secrets_baseline_reasons.py): removing
+    entries whose path is gone is the sanctioned edit and recomputes this digest in the same
+    commit; adding one never is."""
     legacy_keys = load_legacy_keys()
     actual_hash = content_hash(legacy_keys)
     assert actual_hash == FROZEN_LEGACY_KEYS_SHA256, (
         f"secrets_baseline_legacy_keys.json's content no longer matches the hash frozen at "
         f"#16299's introduction ({len(legacy_keys)} entries, hash {actual_hash}) -- this file "
-        "is not meant to be edited; a new baseline entry must get a real reason in "
-        "SPECIFIC_REASONS instead of touching this snapshot"
+        "is shrink-only: removing entries for paths that no longer exist, with the digest recomputed, is the "
+        "sanctioned edit; a new baseline entry must get a real reason in SPECIFIC_REASONS "
+        "instead of joining this snapshot"
     )
 
 
