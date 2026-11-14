@@ -59,8 +59,10 @@ from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-ex
 )
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
 from .work_item_completion_effects import release_workspace_for_task
+from .work_item_gated_done import hand_off_for_review
 from .work_item_hierarchy import reparent, validate_create
 from .work_item_own_task import (
+    CheckoutConflict,
     InvalidTransition,
     checkout_fence_value,
     claim_conflict_holder,
@@ -69,6 +71,7 @@ from .work_item_own_task import (
     is_own_task,
     other_checkout_holder,
     refuse_past_reviewer,
+    refuse_release,
     release_checkout,
     stamp_agent_checkout,
     stamp_and_release,
@@ -105,10 +108,6 @@ _ALLOWED_TRANSITIONS: Dict[WorkItemStatus, set] = {
     WorkItemStatus.DONE: set(),
     WorkItemStatus.CANCELLED: set(),
 }
-
-
-class CheckoutConflict(Exception):
-    """Raised when a work item is already checked out by a different agent."""
 
 
 class CoWorkingPermissionError(Exception):
@@ -480,10 +479,11 @@ class WorkItemService(LLCServiceBase):
         session: AsyncSession,
         work_item_id: str,
         agent_id: str,
+        run_id: Optional[str] = None,
     ) -> LLCWorkItem:
-        """Release the checkout lock held by agent_id.
+        """Release the checkout lock held by agent_id; a given run_id must be the row's checkout generation (#21499).
 
-        Raises ValueError if the caller does not hold the lock.
+        Raises ValueError if the caller does not hold the lock, CheckoutConflict if a person does or run_id is stale.
         """
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
@@ -491,8 +491,7 @@ class WorkItemService(LLCServiceBase):
         item = result.scalar_one_or_none()
         if item is None:
             raise ValueError(f"Work item {work_item_id} not found")
-        if item.assignee_agent_id and str(item.assignee_agent_id) != agent_id:
-            raise ValueError(f"Agent {agent_id} does not hold checkout for work item {work_item_id}")
+        refuse_release(item, agent_id, run_id)
         release_checkout(session, item, agent_id)
         await session.flush()
         return item
@@ -854,18 +853,8 @@ class WorkItemService(LLCServiceBase):
             item_type = WorkItemType(item.type)
             requires, reviewer_role = await review_gate_svc.requires_review(session, company_id, item_type)
             if requires:
-                if handoff_svc is not None:
-                    return await handoff_svc.agent_to_human(
-                        session,
-                        work_item_id,
-                        company_id,
-                        reviewer_user_id=reviewer_user_id,
-                        agent_notes=None,
-                        actor_agent_id=actor_agent_id,
-                    )
-                raise InvalidTransition(
-                    f"Work item {work_item_id} requires human review before it can be marked done. "
-                    "No HandoffService available to initiate handoff."
+                return await hand_off_for_review(
+                    handoff_svc, session, work_item_id, company_id, actor_agent_id, reviewer_user_id
                 )
 
         stamp_and_release(session, item, WorkItemStatus.DONE, datetime.now(timezone.utc))

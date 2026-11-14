@@ -18,12 +18,19 @@ import { useLlcCompanyNotices } from '@/composables/useLlcCompanyNotices'
 
 const companyStore = useLlcCompanyStore()
 const route = useRoute()
-// Toast company notices (#21045); re-subscribes when the selected company changes.
-const noticeCompanyId = computed(() => {
+// The company the URL names (store selection when it names none): the notices subscribe to it (#21045)
+// and the routed view is keyed by it (#21502).
+const routeCompanyId = computed(() => {
   const raw = route.params.companyId
   return (Array.isArray(raw) ? raw[0] : raw) ?? companyStore.selectedCompanyId
 })
-useLlcCompanyNotices(noticeCompanyId)
+useLlcCompanyNotices(routeCompanyId)
+// The sidebar's company switch re-targets the same route, so Vue reuses the routed view and its
+// load-on-mount data would stay the previous company's. The key sits on the <RouterView> vnode itself:
+// a changed key remounts that RouterView subtree (the routed child and any nested view) once, while the
+// layout, sidebar and plan card stay mounted (#21502). A route that must keep its instance opts out via
+// meta.keepOnCompanySwitch: CEO chat (handles the switch itself) and the workflow builder (unsaved draft).
+const viewKey = computed(() => (route.meta?.keepOnCompanySwitch ? undefined : routeCompanyId.value))
 // The creation wizard lands here with ?welcome=plan (#19938 E2).
 const showPlanCard = computed(() => route.query.welcome === 'plan')
 
@@ -39,7 +46,7 @@ onMounted(() => {
     <LlcSidebar />
     <main class="llc-company-content">
       <PlanFirstProcessCard v-if="showPlanCard" class="m-3" />
-      <RouterView />
+      <RouterView :key="viewKey" />
     </main>
   </div>
 </template>

@@ -19,6 +19,27 @@ import type { components } from '@/types/generated/api'
 export type AuditResult = 'success' | 'denied' | 'failed' | 'error' | 'attempted'
 
 /**
+ * Whether each result is still unfinished. Typed against {@link AuditResult}, so a new member cannot be
+ * added without deciding which side it is on (#20665).
+ */
+const UNFINISHED_RESULT: Record<AuditResult, boolean> = {
+  success: false,
+  denied: false,
+  failed: false,
+  error: false,
+  attempted: true,
+}
+
+/**
+ * Whether an audit row's outcome is final. An `attempted` row records that an operation began, not how
+ * it ended, so it counts neither as a success nor as a failure. The wire row types `result` as a plain
+ * string, hence the parameter; a value outside {@link AuditResult} is not an unfinished claim.
+ */
+export function isTerminalAuditResult(result: string): boolean {
+  return UNFINISHED_RESULT[result as AuditResult] !== true
+}
+
+/**
  * One row as `GET /audit/logs` sends it: the generated `AuditEntryResponse`
  * (backend `api/schemas_audit.py`). `timestamp` is epoch SECONDS (a float),
  * the operation's data is in `details`, and there is no `metadata`,
@@ -191,11 +212,12 @@ export const DEFAULT_AUDIT_FILTER: AuditFilter = {
 }
 
 /**
- * Helper to calculate success rate percentage
+ * The one definition of the success rate: successes as a whole percentage of the rows whose outcome is
+ * final (see {@link isTerminalAuditResult}). With no final row there is no rate to speak of, so it is 0.
  */
-export function calculateSuccessRate(stats: AuditStatistics): number {
-  if (stats.total_entries === 0) return 0
-  return Math.round((stats.success_count / stats.total_entries) * 100)
+export function calculateSuccessRate(successCount: number, terminalCount: number): number {
+  if (terminalCount === 0) return 0
+  return Math.round((successCount / terminalCount) * 100)
 }
 
 /**
