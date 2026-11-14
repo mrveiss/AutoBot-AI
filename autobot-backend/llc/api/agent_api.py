@@ -28,6 +28,7 @@ from pydantic import BaseModel
 from autobot_shared.logging_manager import get_logger
 from security.upload_filename_policy import require_safe_upload
 
+from ..deps import logged_server_error
 from ._common import agent_context, agent_node_uuid, assert_item_in_company, parse_work_item_id
 from ._peer_search import fetch_peer_rows
 
@@ -505,11 +506,7 @@ async def search_peer_agents(
         ]
         return {"agents": agents, "count": len(agents), "query": q, "querying_agent": agent_id}
     except Exception as e:
-        from autobot_shared.logging_manager import get_logger
-
-        logger_inner = get_logger(__name__)
-        logger_inner.exception("Peer agent search failed for agent %s: %s", agent_id, str(e))
-        raise HTTPException(status_code=500, detail=f"Peer search failed: {str(e)}")
+        raise logged_server_error(logger, "Peer search failed", f"agent {agent_id}", e) from e
 
 
 # ── Agent-facing wiki routes (GH#9021) ─────────────────────────────────────
