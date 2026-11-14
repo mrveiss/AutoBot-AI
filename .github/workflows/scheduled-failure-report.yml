@@ -1,0 +1,66 @@
+# Scheduled Failure Report (#21592)
+#
+# A scheduled workflow that has been failing for days is invisible until someone opens the
+# Actions tab. This sweep reads `.github/workflows/*.yml` at run time (any `on.schedule`, so
+# nothing is listed by hand), asks the Actions API for each one's latest completed scheduled
+# run, and keeps ONE issue per failing workflow: opened on the first failure, a comment on each
+# further failing run, closed with a comment once the latest scheduled run passes. Cancelled and
+# skipped runs are not evidence either way; a workflow that never ran is left alone. Logic,
+# markers and the fixture tests: pipeline-scripts/scheduled_failure_report.py.
+#
+# Daily 07:23 UTC (09:23 Riga in winter, 10:23 in summer), after the night-time schedules.
+# `workflow_dispatch` takes `dry_run` to print what would be done without writing any issue.
+
+name: Scheduled Failure Report
+
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report what would be opened, updated or closed; write no issue or comment'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: scheduled-failure-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      # The repo scripts import autobot_shared, which refuses an interpreter below the
+      # .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install PyYAML
+        run: pip install -c constraints/shared.txt pyyaml
+
+      - name: Report failing scheduled workflows
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "${DRY_RUN}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          python3 pipeline-scripts/scheduled_failure_report.py "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
