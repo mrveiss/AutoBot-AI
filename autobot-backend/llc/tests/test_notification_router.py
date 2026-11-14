@@ -10,10 +10,19 @@ import asyncio
 import json
 from unittest.mock import AsyncMock, patch
 
+import fakeredis.aioredis
 import pytest
 
+from llc.notifications import router as router_module
 from llc.notifications.publisher import LLCWebSocketPublisher
 from llc.notifications.router import LLCNotificationRouter
+
+
+@pytest.fixture(autouse=True)
+def _lock_redis(monkeypatch):  # noqa: ANN001, ANN201
+    """start() takes the single-instance lock (#21456): give it a Redis of its own instead of the real one."""
+    client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    monkeypatch.setattr(router_module, "get_async_redis_client", AsyncMock(return_value=client))
 
 
 class _FakePublisher:
@@ -141,6 +150,7 @@ async def test_reconnects_on_redis_failure():
         with patch("llc.notifications.router._RECONNECT_DELAY", 0):
             await router.start()
             await asyncio.wait_for(router._task, timeout=2)
+            await router.stop()
 
     assert call_count == 3
 

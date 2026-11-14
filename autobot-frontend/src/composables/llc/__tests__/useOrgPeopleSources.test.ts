@@ -116,16 +116,48 @@ describe('useOrgPeopleSources (#21469)', () => {
     expect(s.loading.value).toBe(false)
   })
 
-  it('issues both requests one microtask after the entry, so a caller snapshotting right after it counts them', async () => {
+  it('issues both requests, and a completed load is not repeated', async () => {
     get.mockImplementation((url: string) => Promise.resolve(answer(url)))
     const s = setup()
     void s.load()
-    await Promise.resolve()
-
-    expect(get).toHaveBeenCalledTimes(2)
     await flushPromises()
+
+    expect(get.mock.calls.map(([url]) => url).sort()).toEqual([
+      '/api/llc/companies/c1/teams',
+      '/api/llc/contacts/c1/involved',
+    ])
     get.mockClear()
     await s.load()
+    expect(get).not.toHaveBeenCalled()
+  })
+
+  it('keeps a completed load when a later call cannot resolve the company, and asks for nothing', async () => {
+    get.mockImplementation((url: string) => Promise.resolve(answer(url)))
+    let mode: 'ok' | 'reject' | 'empty' = 'ok'
+    const s = useOrgPeopleSources({
+      api: { get } as unknown as PeopleSourcesApi,
+      resolveCompanyId: () => (mode === 'reject' ? Promise.reject(new Error('store down')) : Promise.resolve(mode === 'empty' ? '' : current)),
+      companyId: () => current,
+    })
+    await s.load()
+    expect(s.contacts.value).toEqual([contact])
+    get.mockClear()
+
+    mode = 'reject'
+    await s.load()
+    expect(s.contacts.value).toEqual([contact])
+    expect(s.teams.value).toHaveLength(1)
+    expect(s.contactsFailed.value).toBe(false)
+    expect(s.teamsFailed.value).toBe(false)
+    expect(s.loading.value).toBe(false)
+    expect(get).not.toHaveBeenCalled()
+
+    mode = 'empty'
+    await s.load()
+    expect(s.contacts.value).toEqual([contact])
+    expect(s.teams.value).toHaveLength(1)
+    expect(s.contactsFailed.value).toBe(false)
+    expect(s.loading.value).toBe(false)
     expect(get).not.toHaveBeenCalled()
   })
 

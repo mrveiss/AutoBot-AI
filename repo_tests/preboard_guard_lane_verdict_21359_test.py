@@ -93,7 +93,7 @@ def test_an_empty_shard_or_an_unexplained_exit_is_red(lane, tmp_path) -> None:
     [("cancelled", "success", "cancelled"), ("success", "failure", "red")],
 )
 def test_a_cancelled_job_is_cancelled_and_a_failed_types_check_is_red(lane, tmp_path, guards, types, expected) -> None:
-    needs = json.dumps({"guards": {"result": guards}, "types": {"result": types}})
+    needs = json.dumps({"guards": {"result": guards}, "own-tests": {"result": "success"}, "types": {"result": types}})
     assert _verdict(lane, tmp_path, [shard(1, 1, 0, passing(_M, 9))], NEEDS_JSON=needs)["overall"] == expected
 
 
@@ -204,7 +204,7 @@ def test_the_summary_lists_every_skipped_test_with_its_reason_and_standing(lane,
     ],
 )
 def test_the_verdict_table(lane, guards, types, expected) -> None:
-    assert lane.report.lane_verdict(guards, types) == expected
+    assert lane.report.lane_verdict(guards, types, "success") == expected
 
 
 def test_only_green_and_green_with_skips_exit_zero(lane, tmp_path, monkeypatch) -> None:
@@ -222,7 +222,9 @@ def test_only_green_and_green_with_skips_exit_zero(lane, tmp_path, monkeypatch) 
         argv = ["summarize", "--shards", str(folder), "--types", types, "--out", str(out), "--markdown", str(md)]
         assert lane.main(argv) == code
         assert json.loads(out.read_text(encoding="utf-8"))["overall"] == expected
-    needs = json.dumps({"guards": {"result": "cancelled"}, "types": {"result": "success"}})
+    needs = json.dumps(
+        {"guards": {"result": "cancelled"}, "own-tests": {"result": "success"}, "types": {"result": "success"}}
+    )
     monkeypatch.setenv("NEEDS_JSON", needs)
     argv = [
         "summarize",

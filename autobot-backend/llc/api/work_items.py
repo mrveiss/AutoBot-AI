@@ -74,6 +74,7 @@ from ._common import FenceSafeAgentId
 from ._common import actor_id as verified_user_id
 from ._common import own_task_actor, refused_transition, write_refusal
 from ._handoff_identity import handing_off_agent, member_reviewer
+from ._release_request import ReleaseRequest
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
 from .work_item_comments import require_work_item_id, serialize_comment
@@ -176,10 +177,6 @@ class CheckoutRequest(BaseModel):
     run_id: Optional[str] = None
     # GH#9532: optional free-text intent for the audit trail + similarity check
     work_intent: Optional[str] = None
-
-
-class ReleaseRequest(BaseModel):
-    agent_id: FenceSafeAgentId
 
 
 class TransitionRequest(BaseModel):
@@ -567,16 +564,18 @@ async def release_work_item(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
-    """Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one. Not enforced: that
-    the caller IS that agent, nor that an item held by a person has no agent to match (open, #20521)."""
+    """Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one; an item held by a
+    person is refused (409). Not enforced: that the caller IS that agent (open, #20521)."""
     # IDOR guard (M4/GH#9861).
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     try:
-        item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id)
+        item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id, run_id=body.run_id)
         await session.commit()
         return await _item_to_dict(item, session)
+    except CheckoutConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=400, detail="Internal server error")

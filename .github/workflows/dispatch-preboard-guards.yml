@@ -32,13 +32,21 @@
 #           Split in the matrix below by the suite's stable module sharding, balanced over the
 #           lane's own recorded durations. Not fail-fast, no stop-on-first-failure option: one
 #           complete list per run.
+#   own-tests  The test files the head adds or changes (three-dot diff from the pinned base) in the product trees,
+#           run with the suite's own pytest options (-n auto --dist loadscope, its marker selection), so a
+#           member's new tests, and a collection error that only xdist shows (different ids per worker), fail
+#           here and not first inside the train (#21509). The selection is `changed-tests` in
+#           pipeline-scripts/preboard_guard_lane.py: backend, tts-worker, libs and plugins run in the backend
+#           interpreter, SLM backend files in the SLM interpreter, in separate sessions as the suite does. Files
+#           under the guard roots (repo_tests included) are left to the guard shards. An empty selection is
+#           green ("no changed test files"). Not covered: frontend specs (#21509).
 #   types   The generated-types check on the merged tree, through the composite action the types
 #           dispatch uses.
 #   result  The summary and the artifact below. Fails only when the lane is red or cancelled.
 #
 # Not covered (each is an inline step of a larger job; copying it would give it a second
 # definition). Follow-up #21360: move each into a composite action that its workflow and this one call.
-#   - the product test trees (autobot-backend, autobot-slm-backend, autobot-tts-worker, libs,
+#   - the product test trees, except the test files the head changes (own-tests runs those) (autobot-backend, autobot-slm-backend, autobot-tts-worker, libs,
 #     plugins/core-plugins), the frontend tests, and the interaction of two members
 #   - the dependency-floor check, the hardcoded-value baseline audit (ssot-coverage.yml), Semgrep
 #     at ERROR severity (security.yml)
@@ -71,6 +79,7 @@
 #                 (the reasons the run was not a complete one: a shard missing or unreadable, an
 #                 unexpected exit code, a recorded test file that produced no test, a conflict, a shard
 #                 or the types job that merged a base other than `base_sha`, a missing types record)
+#   checks.own_tests  status (the own-tests job result; anything but "success", or a missing job, is red)
 #   checks.types  status (the types job result); the base it merged is recorded in types-meta.json
 #                 (artifact preboard-types-record) and compared with base_sha in checks.guards.problems
 #   failed_tests  [{nodeid, kind: "failure" | "error", message: first line}]
@@ -232,6 +241,100 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  own-tests:
+    name: own tests
+    needs: [pin]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTEST_FAULTHANDLER_TIMEOUT_S: 600
+      PINNED_BASE_SHA: ${{ needs.pin.outputs.base_sha }}
+    services:
+      redis:
+        image: ghcr.io/mrveiss/ci-redis:7-alpine
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout the dispatched branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Merge the pinned base into the head (local commit, never pushed)
+        id: base
+        run: python3 pipeline-scripts/preboard_guard_lane.py merge --base-sha "$PINNED_BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Stop on a head that conflicts with the base
+        if: steps.base.outputs.merged != 'true'
+        run: |
+          echo "::error::the head conflicts with the base; nothing was tested"
+          exit 1
+
+      # The dispatched ref's own head (not the merge commit) against the pinned base: three dots, from the merge base.
+      - name: Select the test files this head adds or changes
+        id: select
+        env:
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          python3 pipeline-scripts/preboard_guard_lane.py changed-tests \
+            --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" --out-dir "$RUNNER_TEMP/own-tests" >> "$GITHUB_OUTPUT"
+
+      - name: Set up the suite environment
+        id: suite
+        if: steps.select.outputs.main != '0' || steps.select.outputs.slm != '0'
+        uses: ./.github/actions/setup-python-suite
+
+      # The suite's own options (ci.yml, backend step) without the shard plugin: everything selected runs. Exit 5
+      # is every selected test deselected by the marker selection, not a failure.
+      - name: Run the changed tests - backend, tts-worker, libs, plugins
+        if: steps.select.outputs.main != '0'
+        run: |
+          mapfile -t FILES < "$RUNNER_TEMP/own-tests/main.txt"
+          rc=0
+          python -m pytest "${FILES[@]}" \
+            -n auto --dist loadscope \
+            -m "not integration and not slow and not distributed and not performance" \
+            --tb=short \
+            -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
+            -q -rs || rc=$?
+          if [ "$rc" -eq 5 ]; then
+            echo "::notice::pytest exit 5, no test ran from: ${FILES[*]} (every test deselected by the marker selection, or none collected)"
+            exit 0
+          fi
+          exit "$rc"
+
+      - name: Run the changed tests - slm-backend
+        if: ${{ !cancelled() && steps.suite.outcome == 'success' && steps.select.outputs.slm != '0' }}
+        env:
+          SLM_PYTHON: ${{ steps.suite.outputs.slm-venv }}/bin/python
+        run: |
+          mapfile -t FILES < "$RUNNER_TEMP/own-tests/slm.txt"
+          rc=0
+          "$SLM_PYTHON" -m pytest "${FILES[@]}" \
+            -n auto --dist loadscope \
+            -m "not integration and not slow and not distributed and not performance" \
+            --tb=short \
+            -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
+            -q -rs || rc=$?
+          if [ "$rc" -eq 5 ]; then
+            echo "::notice::pytest exit 5, no test ran from: ${FILES[*]} (every test deselected by the marker selection, or none collected)"
+            exit 0
+          fi
+          exit "$rc"
+
   types:
     name: types
     needs: [pin]
@@ -283,7 +386,7 @@ jobs:
 
   result:
     name: result
-    needs: [pin, guards, types]
+    needs: [pin, guards, own-tests, types]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -185,11 +185,11 @@ def guards_status(needs_result: str, problems: list[str], counts: dict[str, int]
     return "success_with_skips" if counts["allowed_skips"] else "success"
 
 
-def lane_verdict(guards: str, types: str) -> str:
+def lane_verdict(guards: str, types: str, own_tests: str) -> str:
     """``cancelled`` beats everything; ``green_with_skips`` is never reported as ``green``."""
-    if "cancelled" in (guards, types):
+    if "cancelled" in (guards, types, own_tests):
         return "cancelled"
-    if types != "success" or guards not in ("success", "success_with_skips"):
+    if types != "success" or own_tests != "success" or guards not in ("success", "success_with_skips"):
         return "red"
     return "green" if guards == "success" else "green_with_skips"
 
@@ -245,6 +245,7 @@ def build_result(env: dict[str, str], shard_dir: Path, types_dir: Path) -> dict[
     needs, facts = json.loads(env["NEEDS_JSON"]), lane_facts(metas)
     guards = guards_check(needs, metas, total, read + types_read, base_problems(pinned, metas, records))
     types = needs["types"]["result"]
+    own_tests = needs.get("own-tests", {}).get("result", "missing")  # absent from the needs: never a green
     return {
         "schema": SCHEMA_VERSION,
         "run_id": env.get("RUN_ID", ""),
@@ -254,9 +255,9 @@ def build_result(env: dict[str, str], shard_dir: Path, types_dir: Path) -> dict[
         "base_sha": pinned,
         "behind_base": facts["behind_base"],
         "merged": facts["merged"],
-        "overall": lane_verdict(guards["status"], types),
+        "overall": lane_verdict(guards["status"], types, own_tests),
         "roots": facts["roots"],
-        "checks": {"guards": guards, "types": {"status": types}},
+        "checks": {"guards": guards, "types": {"status": types}, "own_tests": {"status": own_tests}},
         "failed_tests": total["failed"],
         "skipped_tests": total["skipped"],
     }
@@ -289,6 +290,7 @@ def render_lane_summary(result: dict[str, Any]) -> str:
         f"| guards ({guards['executed']} executed, floor {guards['floor']}, "
         f"{guards['failed']} failed, {guards['skipped']} skipped) | {guards['status']} |",
         f"| types | {result['checks']['types']['status']} |",
+        f"| own tests (the test files this head adds or changes) | {result['checks']['own_tests']['status']} |",
         "",
         f"Skips by class: {classes}. `covered-by-suite-only` is still exercised by the train's suite; "
         "`equivalent-to-suite` is skipped there too.",

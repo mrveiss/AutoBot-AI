@@ -27,7 +27,13 @@ import type {
   AuditFilter,
   AuditResult
 } from '@/types/audit'
-import { DEFAULT_AUDIT_FILTER, auditTimestampToDate, getDateRangeForFilter } from '@/types/audit'
+import {
+  DEFAULT_AUDIT_FILTER,
+  auditTimestampToDate,
+  calculateSuccessRate,
+  getDateRangeForFilter,
+  isTerminalAuditResult,
+} from '@/types/audit'
 import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useAuditApi')
@@ -149,13 +155,16 @@ export function useAuditState() {
   const userTrail = ref<AuditEntry[]>([])
 
   const successEntries = computed(() => entries.value.filter((e) => e.result === 'success'))
-  const failedEntries = computed(() => entries.value.filter((e) => e.result !== 'success'))
+  // An `attempted` row has no outcome yet, so it is neither a success nor a failure (#20665).
+  const terminalEntries = computed(() => entries.value.filter((e) => isTerminalAuditResult(e.result)))
+  const failedEntries = computed(() => terminalEntries.value.filter((e) => e.result !== 'success'))
   const deniedEntries = computed(() => entries.value.filter((e) => e.result === 'denied'))
 
   const successRate = computed(() => {
-    if (statistics.value) return statistics.value.success_rate
-    if (entries.value.length === 0) return 0
-    return Math.round((successEntries.value.length / entries.value.length) * 100)
+    // The server does not send a rate today, so the object being present says nothing about it.
+    const served: unknown = statistics.value?.success_rate
+    if (typeof served === 'number' && Number.isFinite(served)) return served
+    return calculateSuccessRate(successEntries.value.length, terminalEntries.value.length)
   })
 
   const uniqueOperations = computed(() => {
