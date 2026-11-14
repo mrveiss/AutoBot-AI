@@ -15,8 +15,10 @@ What can still bypass it is code that skips ``transition_status``:
 * a write of ``WorkItemStatus.DONE`` to a work item outside the two homes that may stamp it: the service
   (``transition_to_done``'s stamp) and ``HandoffService.approve`` (a reviewer's decision, the review flow itself).
 
-Boundary: it sees an assignment of the member, a stamp helper called with it, and ``status=`` in a call to it
-(``update().values``). A status held in a variable (``item.status = new_status``) is not seen.
+Boundary: a name is followed through ``import ... as`` and ``Alias = Name``; a write is an assignment (plain or
+annotated) of the member to ``.status``, a stamp helper given it, ``.values(status=...)`` or ``LLCWorkItem(status=...)``
+(see ``done_writes``). A status held in a variable (``item.status = new_status``) is not seen, and a read
+(``filter_by(status=...)``, ``where(...)``) is not a write.
 """
 
 from __future__ import annotations
@@ -69,48 +71,88 @@ REACH = declare(
 )
 
 
-def _is_done(node: ast.AST) -> bool:
-    return isinstance(node, ast.Attribute) and node.attr == "DONE" and ast.unparse(node).endswith("WorkItemStatus.DONE")
+def _bound(tree: ast.AST, symbol: str) -> set[str]:
+    """The names *symbol* goes by in this file: itself, an ``import ... as`` alias, and ``Alias = symbol``."""
+    names = {symbol}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            names.update(a.asname for a in node.names if a.name == symbol and a.asname)
+    for node in ast.walk(tree):  # ``Gate = DoneGate`` makes ``Gate(...)`` a use too
+        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
+            value = node.value
+            if (isinstance(value, ast.Name) and value.id in names) or (
+                isinstance(value, ast.Attribute) and value.attr == symbol
+            ):
+                names.add(node.targets[0].id)
+    return names
+
+
+def _callee(call: ast.Call) -> tuple[str, bool]:
+    """(name, qualified): ``f(...)`` is (f, False); ``mod.f(...)`` is (f, True)."""
+    func = call.func
+    if isinstance(func, ast.Attribute):
+        return func.attr, True
+    return getattr(func, "id", ""), False
+
+
+def _calls_of(tree: ast.AST, symbol: str) -> list[ast.Call]:
+    """Calls of *symbol*: by a name it is bound to here, or as an attribute of any module (``mod.symbol(...)``)."""
+    names = _bound(tree, symbol)
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            name, qualified = _callee(node)
+            if (name == symbol and qualified) or (not qualified and name in names):
+                found.append(node)
+    return found
+
+
+def _is_done(node: ast.AST, status_names: set[str]) -> bool:
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr == "DONE"
+        and isinstance(node.value, (ast.Name, ast.Attribute))
+        and (getattr(node.value, "id", None) in status_names or getattr(node.value, "attr", None) == "WorkItemStatus")
+    )
 
 
 def done_calls(source: str) -> list[int]:
     """Lines calling ``transition_to_done``, as a method or by name."""
-    found = []
-    for node in ast.walk(parse_cache.parse(source)):
-        if isinstance(node, ast.Call):
-            func = node.func
-            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
-            if name == "transition_to_done":
-                found.append(node.lineno)
-    return sorted(found)
+    return sorted(c.lineno for c in _calls_of(parse_cache.parse(source), "transition_to_done"))
 
 
 def gate_constructions(source: str) -> list[int]:
-    """Lines constructing a ``DoneGate``."""
-    found = []
-    for node in ast.walk(parse_cache.parse(source)):
-        if isinstance(node, ast.Call):
-            func = node.func
-            if (func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")) == "DoneGate":
-                found.append(node.lineno)
-    return sorted(found)
+    """Lines constructing a ``DoneGate``, under any alias."""
+    return sorted(c.lineno for c in _calls_of(parse_cache.parse(source), "DoneGate"))
 
 
 def done_writes(source: str) -> list[int]:
-    """Lines writing ``WorkItemStatus.DONE``: ``x.status = DONE``, a stamp helper given it, or ``status=DONE``."""
+    """Lines writing ``WorkItemStatus.DONE`` to a work item. The write shapes, and only these:
+
+    * ``x.status = DONE`` and ``x.status: T = DONE``;
+    * a stamp helper (``stamp_status`` / ``stamp_and_release``) given it as an argument;
+    * ``.values(status=DONE)`` (an ``update(...)`` or ``insert(...)`` statement);
+    * ``LLCWorkItem(..., status=DONE)`` (a new row).
+
+    A read -- ``filter_by(status=DONE)``, ``where(...)``, a comparison -- is not a write.
+    """
+    tree = parse_cache.parse(source)
+    status_names = _bound(tree, "WorkItemStatus")
+    done = lambda n: _is_done(n, status_names)  # noqa: E731
     found = []
-    for node in ast.walk(parse_cache.parse(source)):
-        if isinstance(node, ast.Assign) and _is_done(node.value):
-            if any(isinstance(t, ast.Attribute) and t.attr == "status" for t in node.targets):
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None and done(node.value):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(t, ast.Attribute) and t.attr == "status" for t in targets):
                 found.append(node.lineno)
-        elif isinstance(node, ast.Call):
-            func = node.func
-            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
-            if (name in _STAMPS and any(_is_done(a) for a in node.args)) or any(
-                k.arg == "status" and _is_done(k.value) for k in node.keywords
-            ):
-                found.append(node.lineno)
-    return sorted(found)
+    for symbol in _STAMPS:
+        found += [c.lineno for c in _calls_of(tree, symbol) if any(done(a) for a in c.args)]
+    for call in ast.walk(tree):
+        if isinstance(call, ast.Call) and any(k.arg == "status" and done(k.value) for k in call.keywords):
+            name, _qualified = _callee(call)
+            if name == "values" or name in _bound(tree, "LLCWorkItem"):
+                found.append(call.lineno)
+    return sorted(set(found))
 
 
 @pytest.mark.parametrize(
@@ -121,8 +163,9 @@ def done_writes(source: str) -> list[int]:
         ("x = 1\nawait self.transition_to_done(s, i, review_gate_svc=None)", [2]),
         ("await svc.transition_status(session, item_id, WorkItemStatus.DONE)", []),
         ("def transition_to_done(self):\n    return 1", []),
+        ("from m import transition_to_done as finish\nawait finish(session, item_id)", [2]),
     ],
-    ids=["method", "bare-name", "second-line", "transition-status-is-gated", "a-definition-is-not-a-call"],
+    ids=["method", "bare-name", "second-line", "transition-status-is-gated", "a-definition-is-not-a-call", "aliased"],
 )
 def test_control_a_call_to_the_done_transition_is_seen(source: str, expected: list[int]) -> None:
     assert done_calls(source) == expected
@@ -139,6 +182,13 @@ def test_control_a_call_to_the_done_transition_is_seen(source: str, expected: li
         ("item.status = new_status", []),
         ("if item.status == WorkItemStatus.DONE:\n    pass", []),
         ("stamp_status(item, new_status, now)", []),
+        ("item.status: WorkItemStatus = WorkItemStatus.DONE", [1]),
+        ("from m import WorkItemStatus as S\nitem.status = S.DONE", [2]),
+        ("from m import stamp_status as ss\nss(item, WorkItemStatus.DONE, now)", [2]),
+        ("row = LLCWorkItem(title=t, status=WorkItemStatus.DONE)", [1]),
+        ("q = select(LLCWorkItem).filter_by(status=WorkItemStatus.DONE)", []),
+        ("q = select(LLCWorkItem).where(LLCWorkItem.status == WorkItemStatus.DONE)", []),
+        ("q = repo.list(status=WorkItemStatus.DONE)", []),
     ],
     ids=[
         "assign",
@@ -149,6 +199,13 @@ def test_control_a_call_to_the_done_transition_is_seen(source: str, expected: li
         "variable",
         "compare",
         "stamp-var",
+        "annotated-assign",
+        "aliased-enum",
+        "aliased-stamp",
+        "new-row",
+        "filter-by-is-a-read",
+        "where-is-a-read",
+        "a-keyword-on-any-call-is-not-a-write",
     ],
 )
 def test_control_a_write_of_done_is_seen(source: str, expected: list[int]) -> None:
@@ -162,8 +219,19 @@ def test_control_a_write_of_done_is_seen(source: str, expected: list[int]) -> No
         ("x = 1\ng = gated_done.DoneGate(review_gate_svc=None)", [2]),
         ("class DoneGate:\n    pass", []),
         ("g = done_gate_for()", []),
+        ("from m import DoneGate as Gate\ng = Gate(review_gate_svc=None)", [2]),
+        ("import m.work_item_gated_done as g\nx = g.DoneGate(None)", [2]),
+        ("from m import DoneGate\nGate = DoneGate\nx = Gate()", [3]),
     ],
-    ids=["bare", "qualified", "a-definition-is-not-a-construction", "the-accessor"],
+    ids=[
+        "bare",
+        "qualified",
+        "a-definition-is-not-a-construction",
+        "the-accessor",
+        "from-import-alias",
+        "module-alias",
+        "assigned-alias",
+    ],
 )
 def test_control_a_built_gate_is_seen(source: str, expected: list[int]) -> None:
     assert gate_constructions(source) == expected

@@ -54,6 +54,9 @@ _HUMAN = uuid.UUID("7b9b2870-6283-4c1a-9d09-86a87b3c4db3")
 _BOARD = uuid.UUID("8cac3981-7394-4d2b-8e1a-97b98c4d5ec4")
 _DONE_COLUMN = uuid.UUID("9dbd4a92-84a5-4e3c-9f2b-a8ca9d5e6fd5")
 _SLUG = "agent-21503"
+_BY_SYSTEM = [("system", None, None)]
+_BY_PERSON = [("user", _HUMAN, None)]
+_BY_LOCAL_USER = [("system", None, "admin")]  # the auth-disabled stand-in has no user id: its name is claimed
 _NOW = datetime(2026, 11, 1, tzinfo=timezone.utc)
 _PERSON = {"id": str(_HUMAN), "auth_method": "session"}
 _SERVICE = {"id": str(_HUMAN), "auth_method": "session", "service": True}
@@ -172,6 +175,14 @@ async def _completed_rows(factory) -> list[LLCActivityLog]:  # noqa: ANN001
             )
         )
         return list(rows.scalars())
+
+
+async def _who(factory) -> list[tuple]:  # noqa: ANN001
+    """Who each completion row names: (actor type, user id, the name claimed when it could not be stored)."""
+    return [
+        (r.actor_type, r.actor_user_id, (r.log_metadata or {}).get("claimed_actor"))
+        for r in await _completed_rows(factory)
+    ]
 
 
 async def _agent_asks_for_done(node: uuid.UUID | None = _NODE) -> dict:
@@ -298,17 +309,17 @@ async def test_an_ungated_finish_by_an_agent_is_done_and_audited(factory, effect
 
 
 @pytest.mark.parametrize(
-    ("user", "type_", "code", "status", "audit_rows"),
+    ("user", "type_", "code", "status", "audit"),
     [
-        (_SERVICE, WorkItemType.BUG, 409, WorkItemStatus.IN_PROGRESS, 0),
-        (_SERVICE, WorkItemType.TASK, 200, WorkItemStatus.DONE, 1),
-        (_PERSON, WorkItemType.BUG, 200, WorkItemStatus.DONE, 1),
-        (_AUTH_OFF, WorkItemType.BUG, 200, WorkItemStatus.DONE, 1),
-        (_TOKEN, WorkItemType.BUG, 409, WorkItemStatus.IN_PROGRESS, 0),
+        (_SERVICE, WorkItemType.BUG, 409, WorkItemStatus.IN_PROGRESS, []),
+        (_SERVICE, WorkItemType.TASK, 200, WorkItemStatus.DONE, _BY_SYSTEM),
+        (_PERSON, WorkItemType.BUG, 200, WorkItemStatus.DONE, _BY_PERSON),
+        (_AUTH_OFF, WorkItemType.BUG, 200, WorkItemStatus.DONE, _BY_LOCAL_USER),
+        (_TOKEN, WorkItemType.BUG, 409, WorkItemStatus.IN_PROGRESS, []),
     ],
     ids=["service-on-a-gated-type", "service-ungated-type", "person-gated", "auth-disabled-user-gated", "token-gated"],
 )
-async def test_the_rest_transition_to_done(factory, user, type_, code, status, audit_rows) -> None:  # noqa: ANN001
+async def test_the_rest_transition_to_done(factory, user, type_, code, status, audit) -> None:  # noqa: ANN001
     await _seed(factory, type_=type_, agent=None)
 
     response = await _rest_done(factory, user)
@@ -317,7 +328,7 @@ async def test_the_rest_transition_to_done(factory, user, type_, code, status, a
     if code == 409:
         assert "requires human review" in response.json()["detail"]
     assert (await _row(factory)).status == status
-    assert len(await _completed_rows(factory)) == audit_rows
+    assert await _who(factory) == audit
 
 
 async def test_a_person_cannot_finish_a_task_waiting_on_another_reviewer(factory) -> None:  # noqa: ANN001
@@ -348,17 +359,17 @@ async def test_a_person_finishes_their_own_task_from_any_status(factory, creator
 
 
 @pytest.mark.parametrize(
-    ("user", "type_", "code", "status", "audit_rows"),
+    ("user", "type_", "code", "status", "audit"),
     [
-        (_SERVICE, WorkItemType.BUG, 409, WorkItemStatus.IN_PROGRESS, 0),
-        (_SERVICE, WorkItemType.TASK, 200, WorkItemStatus.DONE, 1),
-        (_PERSON, WorkItemType.BUG, 200, WorkItemStatus.DONE, 1),
-        (_AUTH_OFF, WorkItemType.BUG, 200, WorkItemStatus.DONE, 1),
-        (_TOKEN, WorkItemType.BUG, 409, WorkItemStatus.IN_PROGRESS, 0),
+        (_SERVICE, WorkItemType.BUG, 409, WorkItemStatus.IN_PROGRESS, []),
+        (_SERVICE, WorkItemType.TASK, 200, WorkItemStatus.DONE, _BY_SYSTEM),
+        (_PERSON, WorkItemType.BUG, 200, WorkItemStatus.DONE, _BY_PERSON),
+        (_AUTH_OFF, WorkItemType.BUG, 200, WorkItemStatus.DONE, _BY_LOCAL_USER),
+        (_TOKEN, WorkItemType.BUG, 409, WorkItemStatus.IN_PROGRESS, []),
     ],
     ids=["service-on-a-gated-type", "service-ungated-type", "person-gated", "auth-disabled-user-gated", "token-gated"],
 )
-async def test_a_board_move_into_done(factory, user, type_, code, status, audit_rows) -> None:  # noqa: ANN001
+async def test_a_board_move_into_done(factory, user, type_, code, status, audit) -> None:  # noqa: ANN001
     await _seed(factory, type_=type_, agent=None)
 
     response = await _board_done(factory, user)
@@ -367,7 +378,7 @@ async def test_a_board_move_into_done(factory, user, type_, code, status, audit_
     if code == 409:
         assert "requires human review" in response.json()["detail"]
     assert (await _row(factory)).status == status
-    assert len(await _completed_rows(factory)) == audit_rows
+    assert await _who(factory) == audit
 
 
 # --- the service: no route can leave the gate out ---------------------------------------------------------------
