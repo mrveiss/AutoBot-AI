@@ -21,10 +21,12 @@ import in the same file. Those are not claimed clean.
 from __future__ import annotations
 
 import ast
+import functools
 from pathlib import Path
 
+import pytest
 from repo_tests._paths import repo_root
-from repo_tests._reach import declare
+from repo_tests._reach import ReachFloorError, declare
 
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
@@ -77,10 +79,23 @@ def _is_sleep(call: ast.Call, modules: set[str], functions: set[str]) -> bool:
 def _walk(node: ast.AST, in_async: bool, names, hits: list[int]) -> None:
     """Visit `node`'s children; `in_async` is whether the innermost enclosing function is `async def`."""
     for child in ast.iter_child_nodes(node):
-        inner = isinstance(child, ast.AsyncFunctionDef) if isinstance(child, _FUNCTIONS) else in_async
-        if isinstance(child, ast.Call) and in_async and _is_sleep(child, *names):
-            hits.append(child.lineno)
-        _walk(child, inner, names, hits)
+        _visit(child, in_async, names, hits)
+
+
+def _visit(node: ast.AST, in_async: bool, names, hits: list[int]) -> None:
+    if isinstance(node, ast.Call) and in_async and _is_sleep(node, *names):
+        hits.append(node.lineno)
+    if not isinstance(node, _FUNCTIONS):
+        _walk(node, in_async, names, hits)
+        return
+    # Decorators, defaults and annotations run in the ENCLOSING scope when the def statement runs; only the
+    # body switches context.
+    body_context = isinstance(node, ast.AsyncFunctionDef)
+    for field, value in ast.iter_fields(node):
+        context = body_context if field == "body" else in_async
+        for item in value if isinstance(value, list) else [value]:
+            if isinstance(item, ast.AST):
+                _visit(item, context, names, hits)
 
 
 def sleeps_in_async(source: str, filename: str = "<unknown>") -> list[int]:
@@ -91,25 +106,42 @@ def sleeps_in_async(source: str, filename: str = "<unknown>") -> list[int]:
     return hits
 
 
-def _violations(root: Path) -> list[str]:
+def _sweep(root: Path, files) -> tuple[list[str], int]:
+    """(`path:line` of every hit, files actually read AND parsed). An unreadable or unparsable file is
+    skipped and not counted, so the completion floor sees the work done rather than the work available."""
     found: list[str] = []
-    for rel in REACH.examined(root):
+    scanned = 0
+    for rel in files:
         try:
             text = (root / rel).read_text(encoding="utf-8")
             lines = sleeps_in_async(text, rel)
-        except (SyntaxError, UnicodeDecodeError, OSError):
+        except (SyntaxError, UnicodeDecodeError, OSError, ValueError):
             continue
+        scanned += 1
         found.extend(f"{rel}:{line}" for line in lines)
-    return found
+    return found, scanned
 
 
-def test_the_sweep_read_a_real_tree():
-    files = REACH.examined(repo_root())
-    REACH.completed(files, repo_root())
+@functools.cache
+def _live() -> tuple[list[str], int]:
+    root = repo_root()
+    return _sweep(root, REACH.examined(root))
+
+
+def test_the_sweep_read_and_parsed_a_real_tree():
+    REACH.completed(_live()[1], repo_root())
 
 
 def test_no_tracked_python_sleeps_directly_inside_an_async_function():
-    assert _violations(repo_root()) == []
+    assert _live()[0] == []
+
+
+def test_contrast_discovery_succeeding_while_every_parse_fails_is_refused(tmp_path):
+    (tmp_path / "bad.py").write_text("def broken(:\n", encoding="utf-8")
+    found, scanned = _sweep(tmp_path, ["bad.py"])
+    assert (found, scanned) == ([], 0)
+    with pytest.raises(ReachFloorError):
+        REACH.completed(scanned, tmp_path)
 
 
 _ASYNC = "async def f():\n    {call}\n"
@@ -155,3 +187,27 @@ def test_contrast_a_planted_violation_is_reported_with_its_path(tmp_path):
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("import time\nasync def f():\n    time.sleep(1)\n", encoding="utf-8")
     assert sleeps_in_async(target.read_text(encoding="utf-8"), "pkg/mod.py") == [3]
+
+
+def test_contrast_a_nested_sync_defs_default_runs_in_the_coroutine():
+    source = "import time\nasync def f():\n    def inner(delay=time.sleep(1)):\n        return delay\n"
+    assert sleeps_in_async(source) == [3]
+
+
+def test_contrast_a_nested_sync_defs_keyword_only_default_and_lambda_default_are_hits():
+    source = "import time\nasync def f():\n    def a(*, d=time.sleep(1)): ...\n    return lambda x=time.sleep(1): x\n"
+    assert sleeps_in_async(source) == [3, 4]
+
+
+def test_contrast_a_nested_sync_defs_decorator_runs_in_the_coroutine():
+    source = "import time\nasync def f():\n    @time.sleep(1)\n    def inner():\n        pass\n"
+    assert sleeps_in_async(source) == [3]
+
+
+def test_contrast_a_nested_class_base_runs_in_the_coroutine():
+    source = "import time\nasync def f():\n    class C(time.sleep(1)):\n        pass\n"
+    assert sleeps_in_async(source) == [3]
+
+
+def test_contrast_a_module_level_async_defs_own_default_is_evaluated_at_import():
+    assert sleeps_in_async("import time\nasync def f(d=time.sleep(1)):\n    return d\n") == []
