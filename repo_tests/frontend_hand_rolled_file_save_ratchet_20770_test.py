@@ -70,7 +70,7 @@ _ANCHOR_SOURCE = re.compile(
     re.I,
 )
 
-PIN = 6
+PIN = 5
 
 
 def _is_anchor(receiver: str | None, bindings: dict[str, str] | None = None) -> bool:
@@ -95,15 +95,17 @@ def _is_anchor(receiver: str | None, bindings: dict[str, str] | None = None) -> 
     return bool(_ANCHOR_SOURCE.search(init)) or bool(_ANCHOR_RECEIVER.fullmatch(init.strip()))
 
 
-def _scope_ends(text: str, starts: list[int]) -> list[int]:
-    """The end position of the innermost block enclosing each declaration in *starts*.
+def _scope_ranges(text: str, starts: list[int]) -> list[tuple[int, int]]:
+    """The lexical scope of each declaration in *starts*: (scope start, scope end).
 
-    The walk matches braces over the source with strings and comments blanked at the
-    same length, so a `const` inside a function or block ends its scope at that block's
-    `}` and cannot stand in for a later use outside it (#21195). An inline `// }` is
-    comment, not code: it closes nothing, and the declaration keeps the block the source
-    actually gives it. A declaration no block encloses (top level) runs to the end of the
-    file. Unbalanced braces degrade to that same file-wide end.
+    The scope starts at the enclosing block's `{` — or the start of the file
+    for a top-level declaration — and ends at that block's matching `}` (or
+    the end of the file). The walk matches braces over the source with strings
+    and comments blanked at the same length, so a `const` inside a function or
+    block ends its scope at that block's `}` and cannot stand in for a later
+    use outside it (#21195). An inline `// }` is comment, not code: it closes
+    nothing, and the declaration keeps the block the source actually gives
+    it. Unbalanced braces degrade to the file-wide end.
     """
     src = _MASKED_REGION.sub(lambda m: " " * len(m.group(0)), text)
     remaining = set(starts)
@@ -125,24 +127,60 @@ def _scope_ends(text: str, starts: list[int]) -> list[int]:
         elif char == "}" and stack:
             closes[stack.pop()] = pos
     end = len(src)
-    return [end if owner[s] is None else closes.get(owner[s], end) for s in starts]
+    return [
+        (0 if owner[s] is None else owner[s], end if owner[s] is None else closes.get(owner[s], end)) for s in starts
+    ]
+
+
+def _mask_comments(text: str) -> str:
+    """*text* with `//` and `/* */` comments blanked at the same length.
+
+    Comments are found with the same single left-to-right pass as
+    `_MASKED_REGION`, so a `//` inside a string literal is string, not
+    comment, and a quote inside a comment opens no literal. Only the comment
+    spans are blanked — string literals stay, because `_ASSIGNMENT` matches
+    the `'download'` literal itself (#21195). Offsets stay valid, so a match
+    found in the masked text still resolves its binding in the unmasked one.
+    """
+    chars = list(text)
+    for match in _MASKED_REGION.finditer(text):
+        if match.group(0).startswith("/"):
+            chars[match.start() : match.end()] = " " * len(match.group(0))
+    return "".join(chars)
 
 
 def _binding_in_force(
-    declarations: list[tuple[int, str, str, int]], receiver: str | None, pos: int
+    declarations: list[tuple[int, str, str, int, int]], receiver: str | None, pos: int
 ) -> dict[str, str] | None:
     """The declaration of the receiver's root name that applies at `pos`.
 
-    A later redeclaration must not stand in for the value the use actually sees —
-    two functions each binding `el` read their own — and neither may a nearer
-    declaration whose block has already closed: `const el = …` inside a bare inner
-    block is out of scope where the outer `el` is still in force (#21195).
+    A declaration applies when the use lies inside its lexical scope — from
+    the enclosing block's `{` to that block's `}` — not only when the use
+    follows it in source order: a function that uses a binding declared later
+    in the file still sees it, so `function save() { el.setAttribute(…) }`
+    followed by `const el = document.createElement('a')` counts (#21195).
+    Among declarations whose scope contains the use, the nearest enclosing
+    one wins — deepest block first, and within one block the latest
+    declaration at or before the use (or the first one when the use precedes
+    them all) — so a later redeclaration still must not stand in for the
+    value the use actually sees, and neither may a declaration whose block
+    has already closed.
     """
     if receiver is None:
         return None
     name = receiver.replace("?.", ".").split(".")[0]
-    applicable = [init for start, decl, init, scope_end in declarations if decl == name and start < pos <= scope_end]
-    return {name: applicable[-1]} if applicable else None
+    applicable = [
+        (scope_start, start, init)
+        for start, decl, init, scope_start, scope_end in declarations
+        if decl == name and scope_start <= pos <= scope_end
+    ]
+    if not applicable:
+        return None
+    deepest = max(scope_start for scope_start, _, _ in applicable)
+    in_scope = [(start, init) for scope_start, start, init in applicable if scope_start == deepest]
+    before = [(start, init) for start, init in in_scope if start <= pos]
+    chosen = before[-1] if before else min(in_scope, key=lambda item: item[0])
+    return {name: chosen[1]}
 
 
 def _sources(root: Path) -> list[Path]:
@@ -158,16 +196,23 @@ def _sources(root: Path) -> list[Path]:
 
 
 def count(paths: list[Path]) -> int:
-    """Anchor `download` assignments over *paths*, comment lines removed."""
+    """Anchor `download` assignments over *paths*, comment lines removed.
+
+    The match scan runs over the text with inline comments blanked, so a
+    `download` spelled only inside a `//` or `/* */` comment is not a save
+    (#21195); the binding walk still reads the unmasked text, and offsets
+    stay valid because the blanking preserves length.
+    """
     total = 0
     for path in paths:
         text = _COMMENT_LINE.sub("", path.read_text(encoding="utf-8"))
         starts = [m.start() for m in _BINDING.finditer(text)]
-        scope_ends = _scope_ends(text, starts)
+        ranges = _scope_ranges(text, starts)
         declarations = [
-            (m.start(), m.group(1), m.group(2), scope_ends[i]) for i, m in enumerate(_BINDING.finditer(text))
+            (m.start(), m.group(1), m.group(2), ranges[i][0], ranges[i][1])
+            for i, m in enumerate(_BINDING.finditer(text))
         ]
-        for match in _ASSIGNMENT.finditer(text):
+        for match in _ASSIGNMENT.finditer(_mask_comments(text)):
             receiver = match.group("assign_receiver") or match.group("attr_receiver")
             if _is_anchor(receiver, _binding_in_force(declarations, receiver, match.start())):
                 total += 1
@@ -181,7 +226,7 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "frontend-hand-rolled-file-save-scan",
     discover=_population,
-    floor=1155,  # mid-window: population 1185, window (1125, 1185)
+    floor=1181,  # mid-window: population 1211, window (1151, 1211)
     growth=60,
     what="vue and ts sources in both frontends",
     roots=_ROOTS,
@@ -303,13 +348,38 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         )
         assert count([planted]) == 1
 
-    def test_an_inline_comment_on_the_same_line_does_not_close_the_binding_scope(self, tmp_path: Path) -> None:
-        planted = _w(
-            tmp_path,
-            "a/IC1.ts",
-            "function save() { const el = document.createElement('a'); // } el.setAttribute('download', name); }\n",
-        )
-        assert count([planted]) == 1
+    def test_a_use_before_its_declaration_in_the_same_scope_still_counts(self, tmp_path: Path) -> None:
+        paths = [
+            _w(
+                tmp_path,
+                "a/F.ts",
+                "function save() { el.setAttribute('download', n) }\n" "const el = document.createElement('a')\n",
+            ),
+        ]
+        assert count(paths) == 1
+
+    def test_a_use_before_a_non_anchor_declaration_is_still_not_a_save(self, tmp_path: Path) -> None:
+        paths = [
+            _w(
+                tmp_path,
+                "a/F2.ts",
+                "function save() { el.setAttribute('download', n) }\n" "const el = document.createElement('div')\n",
+            ),
+        ]
+        assert count(paths) == 0
+
+    def test_a_save_spelled_only_inside_an_inline_comment_is_not_counted(self, tmp_path: Path) -> None:
+        paths = [
+            _w(tmp_path, "a/C1.ts", "const b = 1; // a.download = x\n"),
+            _w(tmp_path, "a/C2.ts", "const b = 1; /* a.setAttribute('download', x) */\n"),
+        ]
+        assert count(paths) == 0
+
+    def test_a_real_save_with_a_trailing_comment_still_counts(self, tmp_path: Path) -> None:
+        assert count([_w(tmp_path, "a/T.ts", "a.download = name // save it\n")]) == 1
+
+    def test_a_save_after_a_url_string_is_not_masked_as_a_comment(self, tmp_path: Path) -> None:
+        assert count([_w(tmp_path, "a/U.ts", 'const u = "http://example.com"; a.download = name\n')]) == 1
 
     def test_an_element_the_save_never_touches_is_not_counted_next_to_an_inline_comment(self, tmp_path: Path) -> None:
         paths = [
