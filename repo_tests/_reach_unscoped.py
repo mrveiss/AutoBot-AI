@@ -145,5 +145,8 @@ UNSCOPED = frozenset(
         "websocket-subprotocol-echo",
         "workflow-job-parse-sweep",
         "workflow-rc-capture",
+        # #21527: every tracked .py file, since a blocking sleep in a coroutine can be written in any
+        # component; the population is the whole tree by suffix, so no prefix describes it.
+        "no-sleep-in-async-21527",
     }
 )
