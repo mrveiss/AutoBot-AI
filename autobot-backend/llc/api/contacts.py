@@ -49,7 +49,7 @@ from user_management.services import TenantContext
 from ..services.authz import NotAuthorisedError
 from ..services.contact import ContactService
 from ..services.contact_directory import ContactDirectoryService, ContactInUseError
-from ._common import actor_id, bad_request, forbidden
+from ._common import actor_id, bad_request, forbidden, http_refusal
 
 router = APIRouter(prefix="/contacts", tags=["llc-contacts"])
 
@@ -210,10 +210,11 @@ async def _delete_via_directory(
             actor_user_id=actor_id(current_user),
         )
     except ContactInUseError as exc:
+        refusal = http_refusal(status.HTTP_409_CONFLICT, exc, scope="contacts.delete_contact")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"message": str(exc), "company_ids": [str(c) for c in exc.company_ids]},
-        ) from exc
+            detail={"message": refusal.detail, "company_ids": [str(c) for c in exc.company_ids]},
+        ) from None
     except NotAuthorisedError as exc:
         raise forbidden(exc) from exc
     if not deleted:

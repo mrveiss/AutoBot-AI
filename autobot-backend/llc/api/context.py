@@ -13,7 +13,7 @@ that path and sat behind it, unreachable.
 
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
@@ -23,8 +23,9 @@ from user_management.services import TenantContext
 from ..kb.context_builder import HeartbeatContextBuilder
 from ..kb.rag_assembler import LLCRAGAssembler
 from ..services.accessors import get_work_item_service
+from ..services.company_os.errors import CompanyOsError, CompanyOsNotFound
 from ..services.goal import GoalService
-from ._common import parse_work_item_id
+from ._common import http_refusal, parse_work_item_id
 
 router = APIRouter(tags=["llc-context"])
 
@@ -88,10 +89,11 @@ async def get_context(
             context_mode=mode,
             company_id=str(ctx.org_id),
         )
-    except ValueError as e:
-        error_msg = str(e)
-        if "Unknown context_mode" in error_msg:
-            raise HTTPException(status_code=422, detail=error_msg)
-        raise HTTPException(status_code=404, detail=error_msg)
+    except CompanyOsNotFound as exc:
+        raise http_refusal(404, exc, scope="context.get_context") from None
+    except CompanyOsError as exc:
+        raise http_refusal(422, exc, scope="context.get_context") from None
+    except ValueError as exc:
+        raise http_refusal(404, exc, scope="context.get_context") from None
 
     return context_dict

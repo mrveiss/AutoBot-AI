@@ -38,6 +38,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import delete_if_value
 from autobot_shared.ssot_constants import QueryDefaults
 
+from ..exceptions import PublicMessageMixin
 from ..models.activity import ActorType
 from ..models.enums import (
     ActivityEventType,
@@ -51,6 +52,7 @@ from ..models.label import LLCWorkItemLabel
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from .actor import ActivityRecordError, audit, resolve_actor, resolve_actor_as
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError, CompanyOsNotFound
 from .wake_events import wake_for_comment, wake_for_item_changes
 from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-exported for the API and tests
     _coworking_state,
@@ -110,7 +112,7 @@ _ALLOWED_TRANSITIONS: Dict[WorkItemStatus, set] = {
 }
 
 
-class CoWorkingPermissionError(Exception):
+class CoWorkingPermissionError(PublicMessageMixin, Exception):
     """Raised when the caller lacks board or lead permission for co-working ops."""
 
 
@@ -335,7 +337,7 @@ class WorkItemService(LLCServiceBase):
             )
         for key, val in fields.items():
             if key not in allowed:
-                raise ValueError(f"Field '{key}' is not updatable via WorkItemService.update()")
+                raise CompanyOsError(f"Field '{key}' is not updatable via WorkItemService.update()")
         for key, val in fields.items():
             setattr(item, key, val)
         await wake_for_item_changes(session, item)  # #19582: before the flush clears the history
@@ -447,7 +449,7 @@ class WorkItemService(LLCServiceBase):
         item = result.scalar_one_or_none()
         if item is None:
             await drop_fence(redis, redis_key, fence_value, acquired)
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
 
         if holder := other_checkout_holder(item, agent_id):
             await drop_fence(redis, redis_key, fence_value, acquired)
@@ -490,7 +492,7 @@ class WorkItemService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         refuse_release(item, agent_id, run_id)
         release_checkout(session, item, agent_id)
         await session.flush()
@@ -531,7 +533,7 @@ class WorkItemService(LLCServiceBase):
         item = result.scalar_one_or_none()
         if item is None:
             await drop_fence(redis, redis_key, redis_value, acquired)
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
 
         # Row lock is the authority (the fence may have expired): a live agent checkout is never overwritten.
         if holder := claim_conflict_holder(item, user_id):
@@ -585,9 +587,9 @@ class WorkItemService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         if item.assignee_user_id is None or str(item.assignee_user_id) != user_id:
-            raise ValueError(f"User {user_id} does not hold claim for work item {work_item_id}")
+            raise CompanyOsError(f"User {user_id} does not hold claim for work item {work_item_id}")
 
         item.assignee_user_id = None
         item.assignee_type = None
@@ -643,24 +645,22 @@ class WorkItemService(LLCServiceBase):
         """
         if denied := coworking_denial(caller_role):
             raise CoWorkingPermissionError(denied)
-        # #13970: one vocabulary for the actor axis. A legacy "human" from an
-        # older caller is still accepted and normalised to "user" rather than
-        # rejected — the stored rows are migrated by 20260815_075, but an
-        # in-flight client should not start failing mid-deploy.
+        # #13970: one actor vocabulary. A legacy "human" is normalised to "user", not rejected: rows are
+        # migrated by 20260815_075, but an in-flight client should not fail mid-deploy.
         if co_worker_type == CoWorkerType.HUMAN.value:
             co_worker_type = AssigneeType.USER.value
         co_type = AssigneeType(co_worker_type)
         if co_type == AssigneeType.AGENT and not co_worker_agent_id:
-            raise ValueError("co_worker_agent_id required when co_worker_type is 'agent'")
+            raise CompanyOsError("co_worker_agent_id required when co_worker_type is 'agent'")
         if co_type == AssigneeType.USER and not co_worker_user_id:
-            raise ValueError("co_worker_user_id required when co_worker_type is 'user'")
+            raise CompanyOsError("co_worker_user_id required when co_worker_type is 'user'")
 
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
 
         before = _coworking_state(item)
 
@@ -711,7 +711,7 @@ class WorkItemService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
 
         before = _coworking_state(item)
 
@@ -750,7 +750,7 @@ class WorkItemService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None or (company_id is not None and str(item.company_id) != str(company_id)):
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         return item
 
     @staticmethod

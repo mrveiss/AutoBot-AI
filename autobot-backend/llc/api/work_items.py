@@ -38,9 +38,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.human_decider import require_interactive_human
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.user_management.models.user import resolve_display_name
-from llc.deps import assert_company_access, get_session, service_dep
+from llc.deps import assert_company_access, get_session, log_unexpected, service_dep
 from models.agent_org import AgentOrgNode
 from security.upload_filename_policy import require_safe_upload
 from user_management.models.user import User
@@ -62,6 +63,7 @@ from ..services.attachment_service import (
     AttachmentService,
     AttachmentTooLarge,
 )
+from ..services.company_os.errors import CompanyOsNotFound
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import (
     CheckoutConflict,
@@ -72,7 +74,7 @@ from ..services.work_item_service import (
 )
 from ._common import FenceSafeAgentId
 from ._common import actor_id as verified_user_id
-from ._common import moving_as, refused_transition, write_refusal
+from ._common import http_refusal, moving_as, refused_transition, write_refusal
 from ._handoff_identity import handing_off_agent, member_reviewer
 from ._release_request import ReleaseRequest
 from .activity import ActivityLogEntry, ActivityLogResponse
@@ -517,8 +519,8 @@ async def _drop_kb_collection(work_item_id: str) -> None:
 
     try:
         await KbCollectionManager().drop_collection(KbCollectionManager.WORK_ITEM_PREFIX, work_item_id)
-    except Exception:  # noqa: BLE001 - defensive; drop_collection does not raise
-        logger.warning("Could not drop KB collection for work item %s", work_item_id, exc_info=True)
+    except Exception as exc:  # noqa: BLE001 - defensive; drop_collection does not raise
+        log_unexpected(logger, f"work_items.drop_kb_collection {work_item_id}", exc)
 
 
 @router.post("/{work_item_id}/checkout")
@@ -549,10 +551,10 @@ async def checkout_work_item(
         # out by agent Y") was still replaced with a generic string, so a caller
         # could not tell WHO holds the checkout. Domain-level message, safe to
         # surface.
-        logger.info("Rejected work-item checkout conflict: %s", exc)
-        raise HTTPException(status_code=409, detail=str(exc))
+        logger.info("Rejected work-item checkout conflict: %s", safe_log_text(repr(exc)))
+        raise http_refusal(409, exc, scope="work_items.checkout_work_item") from None
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
 
 
@@ -575,9 +577,9 @@ async def release_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise http_refusal(409, exc, scope="work_items.release_work_item") from None
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=400, detail="Internal server error")
 
 
@@ -602,7 +604,7 @@ async def transition_work_item(
     except InvalidTransition as exc:
         raise refused_transition(exc)
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
 
 
@@ -666,10 +668,10 @@ async def claim_work_item(
         return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
         # #12740 (same defect class): surface WHO holds the checkout.
-        logger.info("Rejected work-item checkout conflict: %s", exc)
-        raise HTTPException(status_code=409, detail=str(exc))
+        logger.info("Rejected work-item checkout conflict: %s", safe_log_text(repr(exc)))
+        raise http_refusal(409, exc, scope="work_items.claim_work_item") from None
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
 
 
@@ -695,7 +697,7 @@ async def unclaim_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=400, detail="Internal server error")
 
 
@@ -759,14 +761,12 @@ async def set_coworker(
         await session.commit()
         return await _item_to_dict(item, session)
     except CoWorkingPermissionError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=403, detail="Internal server error")
-    except ValueError as exc:
-        msg = str(exc)
-        # "not found" errors → 404; identity/type validation errors → 422
-        if "not found" in msg.lower():
-            raise HTTPException(status_code=404, detail=msg)
-        raise HTTPException(status_code=422, detail=msg)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
+        raise http_refusal(403, exc, scope="work_items.set_coworker") from None
+    except CompanyOsNotFound as exc:
+        raise http_refusal(404, exc, scope="work_items.set_coworker") from None
+    except ValueError as exc:  # CompanyOsError (identity missing) or a plain ValueError: both 422
+        raise http_refusal(422, exc, scope="work_items.set_coworker") from None
 
 
 @router.post("/{work_item_id}/comments", status_code=201)
@@ -835,10 +835,10 @@ async def handoff_to_agent(
             "review_brief": result.review_brief,
         }
     except HandoffNotAuthorized as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=403, detail="Internal server error")
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
 
 
@@ -871,10 +871,10 @@ async def handoff_to_human(
         await session.commit()
         return await _item_to_dict(item, session)
     except HandoffNotAllowed as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=403, detail="Internal server error")
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
 
 
@@ -900,10 +900,10 @@ async def review_approve(
         await session.commit()
         return await _item_to_dict(item, session)
     except HandoffNotAllowed as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=403, detail="Internal server error")
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
 
 
@@ -932,10 +932,10 @@ async def review_request_changes(
         await session.commit()
         return await _item_to_dict(item, session)
     except HandoffNotAllowed as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=403, detail="Internal server error")
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
 
 
@@ -954,7 +954,7 @@ async def get_handoff_brief(
         brief = await _handoff_service().get_brief(session, work_item_id)
         return {"work_item_id": work_item_id, "brief": brief}
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
 
 
@@ -1168,7 +1168,7 @@ async def upload_attachment(
             uploaded_by_user_id=uploader,
         )
     except (AttachmentTooLarge, ValueError) as exc:  # #17302: ValueError was an uncaught 500
-        logger.warning("Attachment upload refused for %s: %s", work_item_id, exc)
+        logger.warning("Attachment upload refused for %s: %s", work_item_id, safe_log_text(repr(exc)))
         raise HTTPException(413 if isinstance(exc, AttachmentTooLarge) else 400, "Attachment rejected")
     return _attachment_to_dict(row)
 
