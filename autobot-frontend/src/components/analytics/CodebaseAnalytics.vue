@@ -436,7 +436,7 @@ import { BaseButton } from '@autobot/ui'
  *   useCodebaseExport      - Report/section export (pre-existing)
  */
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, getCurrentInstance, onMounted, onUnmounted, type Ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -930,10 +930,10 @@ const onPatternAnalysisError = (message: string) => {
 // Lifecycle Hooks
 // =============================================
 // #21474: the open sequence stops after any await the page did not survive (see openProjectPage).
-const page = getCurrentInstance()
+let isUnmounted = false
 onMounted(() => openProjectPage({
   sourceId: route.params.sourceId as string | undefined,
-  pageOpen: () => !!page && !page.isUnmounted,
+  pageOpen: () => !isUnmounted,
   leave: () => { analyticsRouter.replace({ name: 'analytics-codebase' }) },
   beforeSourceLoad: () => { void loadProjectRepoMap() }, // GH#11129: labels populate even if the source does not load
   loadSourceById,
@@ -946,9 +946,8 @@ onMounted(() => openProjectPage({
 }))
 
 onUnmounted(() => {
-  if (refreshInterval.value) {
-    clearInterval(refreshInterval.value)
-  }
+  isUnmounted = true
+  if (refreshInterval.value) clearInterval(refreshInterval.value)
   stopJobPolling()
 })
 </script>
