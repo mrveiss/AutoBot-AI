@@ -14,8 +14,12 @@ What can still bypass it is code that skips ``transition_status``:
   permissive gate is a way round the real one; and
 * a write of ``WorkItemStatus.DONE`` to a work item outside the service (``transition_to_done``'s stamp): a
   reviewer's approval finishes the item through that same path (#21590), so the handoff no longer writes it; and
-* a write of ``WorkItemStatus.IN_REVIEW`` outside its one home (the handoff's ``agent_to_human``),
-  since an item put in review with no reviewer named has nobody entitled to approve it (#21591).
+* a LITERAL write of ``WorkItemStatus.IN_REVIEW`` outside its one home (the handoff's ``agent_to_human``),
+  since an item put in review with no reviewer named has nobody entitled to approve it (#21591). This census
+  sees only literal-member writes (``.status = IN_REVIEW``, a stamp helper given the literal,
+  ``.values(status=...)``, ``LLCWorkItem(status=...)``). The generic ``WorkItemService.transition_status``
+  path writes a status held in a variable, so it can still enter review without a reviewer; that path is
+  the open decision in #21645.
 
 Boundary: a name is followed through ``import ... as`` and ``Alias = Name``; a write is an assignment (plain or
 annotated) of the member to ``.status``, a stamp helper given it, ``.values(status=...)`` or ``LLCWorkItem(status=...)``
@@ -283,7 +287,8 @@ def test_nothing_outside_the_homes_writes_done_to_a_work_item() -> None:
 
 def test_nothing_outside_the_homes_writes_in_review_to_a_work_item() -> None:
     offenders = [f"{rel}:{n}" for rel, text in _production() if rel not in _REVIEW_HOMES for n in review_writes(text)]
-    assert not offenders, "review starts through HandoffService.agent_to_human: " + ", ".join(offenders)
+    message = "a literal IN_REVIEW write outside HandoffService.agent_to_human (generic transition path: #21645): "
+    assert not offenders, message + ", ".join(offenders)
 
 
 @pytest.mark.parametrize(
