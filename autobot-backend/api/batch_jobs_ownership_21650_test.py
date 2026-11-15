@@ -67,8 +67,10 @@ def test_an_ownerless_record_is_for_administrators_only():
 
 
 def test_a_caller_with_no_user_identity_records_no_owner(redis):
-    assert ownership.record_owner(redis, ownership.JOBS, "job-1", SERVICE) is None
+    ownership.create_record(redis, ownership.JOBS, "job-1", "batch:job:job-1", "{}", SERVICE)
     assert ownership.owner_of(redis, ownership.JOBS, "job-1") is None
+    assert redis.exists("batch:job:job-1")
+    assert "job-1" in redis.smembers("batch:jobs:all")
 
 
 # --- jobs -----------------------------------------------------------------------------

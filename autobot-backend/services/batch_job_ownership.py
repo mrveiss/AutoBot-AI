@@ -46,6 +46,8 @@ def owners_key(kind: str) -> str:
 def record_owner(redis_client, kind: str, record_id: str, user: dict | None) -> str | None:
     """Store the caller as the owner of a new record; return the owner id written.
 
+    *redis_client* may be a pipeline, which is how :func:`create_record` calls it.
+
     A caller with no user identity (an internal service key) writes no owner, so the
     record is administrators-only -- the same as one created before #21650.
     """
@@ -73,9 +75,7 @@ def create_record(
     pipe = redis_client.pipeline(transaction=True)
     pipe.set(record_key, payload)
     pipe.sadd(f"batch:{kind}:all", record_id)
-    owner = resolve_principal_id(user)
-    if owner:
-        pipe.hset(owners_key(kind), record_id, owner)
+    record_owner(pipe, kind, record_id, user)
     if created_at is not None:
         pipe.zadd(f"batch:{kind}:created", {record_id: created_at})
     pipe.execute()
