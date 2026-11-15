@@ -380,10 +380,16 @@ def _join_continuations(lines: Iterable[CodeLine]) -> list[CodeLine]:
     return [CodeLine(numbers[i - 1] if 0 < i <= len(numbers) else i, body) for i, body in folded]
 
 
-#: A ``<script>`` element (group 1) or an HTML comment, whichever starts first. Markup has no line comments, so the
-#: comment is its whole comment syntax; a script element is matched only so its body is kept, since a ``'<!--'`` in
-#: JavaScript is a string and not a comment. A comment that wraps a script element starts first and goes whole.
-_HTML_SCRIPT_OR_COMMENT = re.compile(r"(<script\b[^>]*>.*?</script\b[^>]*>)|<!--.*?-->", re.DOTALL | re.IGNORECASE)
+#: The one ``<script>`` element pattern, its body in the one group; compile it with ``SCRIPT_ELEMENT_FLAGS``. The
+#: closing tag tolerates whitespace and attributes (``</script >``), as browsers do. ``repo_tests`` builds its SFC
+#: script extractor (``_ui_literal_scan.SCRIPT_BODY``) from it.
+SCRIPT_ELEMENT = r"<script\b[^>]*>(.*?)</script\b[^>]*>"
+SCRIPT_ELEMENT_FLAGS = re.DOTALL | re.IGNORECASE
+
+#: A ``<script>`` element (group 1, whole) or an HTML comment, whichever starts first. Markup has no line comments, so
+#: the comment is its whole comment syntax; a script element is matched only so its body is kept, since a ``'<!--'``
+#: in JavaScript is a string and not a comment. A comment that wraps a script element starts first and goes whole.
+_HTML_SCRIPT_OR_COMMENT = re.compile(f"({SCRIPT_ELEMENT})|<!--.*?-->", SCRIPT_ELEMENT_FLAGS)
 
 
 def strip_html_comments(text: str) -> str:
