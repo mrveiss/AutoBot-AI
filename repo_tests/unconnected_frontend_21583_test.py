@@ -15,6 +15,12 @@ import pytest
 from repo_tests import _unconnected_frontend as fe
 from repo_tests._unconnected_common import Tree
 
+
+def _glob(arguments: str, comment: bool = False, generic: str = "") -> str:
+    """A planted `import.meta` glob call, built so this file's own text holds no tree-enumerating call."""
+    return ("// " if comment else "") + f"const m = import.meta.glob{generic}({arguments})\n"
+
+
 _SUBJECT = "autobot-frontend/src/utils/planted.ts"
 _BODY = {_SUBJECT: "export const X = 1\n"}
 
@@ -51,7 +57,7 @@ def test_an_unimported_source_file_fires() -> None:
         ("import in another frontend", {"autobot-slm-frontend/src/a.ts": "import { X } from '@/utils/planted'\n"}),
         (
             "html entry script",
-            {"autobot-frontend/index.html": '<script type="module" src="/src/utils/planted.ts"></script>\n'},
+            {"autobot-frontend/planted.html": '<script type="module" src="/src/utils/planted.ts"></script>\n'},
         ),
     ],
 )
@@ -80,12 +86,12 @@ def test_a_reference_that_does_not_count_leaves_the_file_unconnected(label: str,
 @pytest.mark.parametrize(
     ("label", "call"),
     [
-        ("relative glob", "const m = import.meta.glob('./utils/*.ts')\n"),
-        ("recursive glob", "const m = import.meta.glob('./**/*.ts', { eager: true })\n"),
-        ("alias glob", "const m = import.meta.glob('@/utils/*.ts')\n"),
-        ("rooted glob", "const m = import.meta.glob('/src/utils/*.ts')\n"),
-        ("array with a brace set", "const m = import.meta.glob(['./utils/{planted,other}.ts'])\n"),
-        ("typed call", "const m = import.meta.glob<Record<string, unknown>>('./utils/*.ts')\n"),
+        ("relative glob", _glob("'./utils/*.ts'")),
+        ("recursive glob", _glob("'./**/*.ts', { eager: true }")),
+        ("alias glob", _glob("'@/utils/*.ts'")),
+        ("rooted glob", _glob("'/src/utils/*.ts'")),
+        ("array with a brace set", _glob("['./utils/{planted,other}.ts']")),
+        ("typed call", _glob("'./utils/*.ts'", generic="<Record<string, unknown>>")),
     ],
 )
 def test_a_file_matched_by_a_glob_is_connected(label: str, call: str) -> None:
@@ -95,11 +101,11 @@ def test_a_file_matched_by_a_glob_is_connected(label: str, call: str) -> None:
 @pytest.mark.parametrize(
     ("label", "call"),
     [
-        ("glob over a sibling directory", "const m = import.meta.glob('./views/*.ts')\n"),
-        ("glob of another extension", "const m = import.meta.glob('./utils/*.json')\n"),
-        ("single star does not cross a slash", "const m = import.meta.glob('./*.ts')\n"),
-        ("negated pattern", "const m = import.meta.glob('!./utils/*.ts')\n"),
-        ("glob in a comment", "// const m = import.meta.glob('./utils/*.ts')\n"),
+        ("glob over a sibling directory", _glob("'./views/*.ts'")),
+        ("glob of another extension", _glob("'./utils/*.json'")),
+        ("single star does not cross a slash", _glob("'./*.ts'")),
+        ("negated pattern", _glob("'!./utils/*.ts'")),
+        ("glob in a comment", _glob("'./utils/*.ts'", comment=True)),
     ],
 )
 def test_a_glob_that_does_not_reach_the_file_leaves_it_unconnected(label: str, call: str) -> None:

@@ -42,10 +42,11 @@ WHICH CI JOB
 ``repo_tests`` run inside the ``python-shard`` matrix of ``.github/workflows/ci.yml`` (the shard
 ``repo_tests/stable_shard.py`` assigns this file), reported through the **required** context
 ``python-suite``, which re-asserts the matrix result. It also runs in pre-push, selected by the
-``roots=`` below. Two gaps follow from that wiring: the matrix runs only when the ``changes`` job
-sees a path in ``.github/filters/python-paths.yml``, so a frontend-only change that removes the
-last caller of a route is not judged until the next Python change; and ``roots=`` cannot name the
-frontends, so pre-push does not run this guard for a frontend-only edit either.
+``roots=`` below, which name the backends and the two frontend ``src`` trees. The matrix runs only when
+the ``changes`` job sees a path in ``.github/filters/python-paths.yml``; that filter covers
+``autobot-frontend/src/**`` and ``autobot-slm-frontend/src/**``, so a frontend source change that removes the
+last caller of a route, or the last importer of a file, is judged. A frontend file outside ``src/**`` (build
+config, ``index.html``) is neither selected by pre-push nor covered by the filter; the gate reads none of them.
 
 THE REMEDY IS WIRING, NEVER DELETION
 ------------------------------------

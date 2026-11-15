@@ -37,9 +37,9 @@ WHAT THIS CANNOT SEE (known limits, reported as gaps)
 * A name built at runtime (``import(`./${name}`)``) and a component used by tag name through auto-registration
   have no quoted path.
 * An import inside a string that is not an import counts as one.
-* CI selection: the gate is not selected by pre-push for a frontend-only edit (``roots=`` cannot name the
-  frontends), and the python shard runs only on Python path changes, so a frontend-only change that drops the
-  last importer of a file is not judged until the next Python change.
+* CI selection: `python-paths.yml` covers `autobot-frontend/src/**` and `autobot-slm-frontend/src/**` (#17885), so a
+  frontend source change runs the python suite and this gate. The pre-push hook selects the gate through the `roots=`
+  declared for the frontend reach (`_reach_roots_record.py`).
 """
 
 from __future__ import annotations
