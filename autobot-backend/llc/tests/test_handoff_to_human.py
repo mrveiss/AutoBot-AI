@@ -12,6 +12,7 @@ from autobot_shared.redis_utils import COMPARE_HOLDER_AND_DELETE_LUA
 from llc.models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem, LLCWorkItemComment
 from llc.services.handoff import HandoffNotAllowed, HandoffService
+from llc.services.work_item_service import WorkItemService
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -295,6 +296,18 @@ class TestAgentToHuman:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def done_path():
+    """The shared work item service approve finishes through (#21590), with its outward effects faked."""
+    svc = WorkItemService(activity_log=MagicMock(record=AsyncMock()))
+    svc._trigger_artifact_ingest = AsyncMock()
+    with (
+        patch("llc.services.handoff.get_work_item_service", return_value=svc),
+        patch("llc.services.work_item_service.release_workspace_for_task", new=AsyncMock()),
+    ):
+        yield svc
+
+
 class TestApprove:
     async def test_raises_if_not_found(self, service, mock_session):
         mock_session._db_result.scalar_one_or_none.return_value = None
@@ -320,7 +333,7 @@ class TestApprove:
                 company_id=str(item.company_id),
             )
 
-    async def test_sets_status_done_and_completed_at(self, service, mock_session):
+    async def test_sets_status_done_and_completed_at(self, service, mock_session, done_path):
         reviewer_id = uuid.uuid4()
         item = _make_item(reviewer_user_id=reviewer_id, status=WorkItemStatus.IN_REVIEW)
         mock_session._db_result.scalar_one_or_none.return_value = item

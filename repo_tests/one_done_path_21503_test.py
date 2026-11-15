@@ -12,9 +12,9 @@ What can still bypass it is code that skips ``transition_status``:
 * a ``DoneGate(...)`` built outside the two homes that build one (the accessors, which fill it with the real
   services, and the service, which rebuilds it from ``transition_to_done``'s arguments), since a caller's own
   permissive gate is a way round the real one; and
-* a write of ``WorkItemStatus.DONE`` to a work item outside the two homes that may stamp it: the service
-  (``transition_to_done``'s stamp) and ``HandoffService.approve`` (a reviewer's decision, the review flow itself); and
-* a write of ``WorkItemStatus.IN_REVIEW`` outside those same two homes (the handoff's ``agent_to_human`` and the
+* a write of ``WorkItemStatus.DONE`` to a work item outside the service (``transition_to_done``'s stamp): a
+  reviewer's approval finishes the item through that same path (#21590), so the handoff no longer writes it; and
+* a write of ``WorkItemStatus.IN_REVIEW`` outside the two homes (the handoff's ``agent_to_human`` and the
   service), since an item put in review with no reviewer named has nobody entitled to approve it (#21591).
 
 Boundary: a name is followed through ``import ... as`` and ``Alias = Name``; a write is an assignment (plain or
@@ -40,8 +40,10 @@ _SERVICE = "autobot-backend/llc/services/work_item_service.py"
 _HANDOFF = "autobot-backend/llc/services/handoff.py"
 #: Where a call to ``transition_to_done`` may be: the service itself (``transition_status`` delegates to it).
 _CALL_HOMES = frozenset({_SERVICE})
-#: Where ``WorkItemStatus.DONE`` may be written to a work item.
-_WRITE_HOMES = frozenset({_SERVICE, _HANDOFF})
+#: Where ``WorkItemStatus.DONE`` may be written to a work item: only the service (#21590).
+_DONE_HOMES = frozenset({_SERVICE})
+#: Where ``WorkItemStatus.IN_REVIEW`` may be written to a work item.
+_REVIEW_HOMES = frozenset({_SERVICE, _HANDOFF})
 #: Where a ``DoneGate`` may be constructed.
 _GATE_HOMES = frozenset({_SERVICE, "autobot-backend/llc/services/accessors.py"})
 _STAMPS = frozenset({"stamp_status", "stamp_and_release"})
@@ -275,12 +277,12 @@ def test_nothing_outside_the_service_calls_the_done_transition() -> None:
 
 
 def test_nothing_outside_the_homes_writes_done_to_a_work_item() -> None:
-    offenders = [f"{rel}:{n}" for rel, text in _production() if rel not in _WRITE_HOMES for n in done_writes(text)]
+    offenders = [f"{rel}:{n}" for rel, text in _production() if rel not in _DONE_HOMES for n in done_writes(text)]
     assert not offenders, "a work item is finished by WorkItemService.transition_status: " + ", ".join(offenders)
 
 
 def test_nothing_outside_the_homes_writes_in_review_to_a_work_item() -> None:
-    offenders = [f"{rel}:{n}" for rel, text in _production() if rel not in _WRITE_HOMES for n in review_writes(text)]
+    offenders = [f"{rel}:{n}" for rel, text in _production() if rel not in _REVIEW_HOMES for n in review_writes(text)]
     assert not offenders, "review starts through HandoffService.agent_to_human or the service: " + ", ".join(offenders)
 
 
@@ -330,5 +332,6 @@ def test_nothing_outside_the_homes_builds_a_done_gate() -> None:
 def test_the_homes_are_real() -> None:
     """Control: each home is examined and does what it is excused for, so an excuse cannot outlive its code."""
     seen = {rel: text for rel, text in _production()}
-    assert done_writes(seen[_SERVICE]) and done_writes(seen[_HANDOFF])
+    assert done_writes(seen[_SERVICE]) and review_writes(seen[_HANDOFF])
+    assert not done_writes(seen[_HANDOFF]), "the handoff finishes an item through the done path, never its own write"
     assert all(gate_constructions(seen[home]) for home in _GATE_HOMES)
