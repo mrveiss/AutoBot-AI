@@ -59,8 +59,8 @@ All three planned items exist on main, but item A only in part:
 
 | # | Technique | AutoBot target | Already-exists audit | Visible benefit | Hidden cost | Verdict | Effort |
 |---|---|---|---|---|---|---|---|
-| 1 | Cache key includes the installed grammar versions | `code_indexer.py` cache (`_CACHE_VERSION_KEY`, `EXTRACTOR_VERSION = 1` at line 94) | The key is content SHA-256 plus a hand-bumped `EXTRACTOR_VERSION`. `requirements.txt:97-99` has no upper bound on `tree-sitter*`, so a grammar upgrade serves old parses until someone remembers to bump | No stale call graph after a dependency update | One `importlib.metadata` lookup per run | adopt | trivial |
-| 2 | Keep every call site as evidence on an edge | `_record_call_edge` (`code_indexer.py:230`) | Deduplicates on `(scope, target_name)` and keeps only the **first** call line, so other call sites are lost | Impact analysis can list every line that calls X | Bigger edge documents in ChromaDB | adopt-with-conditions (cap the list per edge) | moderate |
+| 1 | Cache key includes the installed grammar versions — **done**: fixed by #21397 (merged 12.11.2026) | `code_indexer.py` cache (`_CACHE_VERSION_KEY`, `EXTRACTOR_VERSION = 1` at line 94) | The key is content SHA-256 plus a hand-bumped `EXTRACTOR_VERSION`. `requirements.txt:97-99` has no upper bound on `tree-sitter*`, so a grammar upgrade serves old parses until someone remembers to bump | No stale call graph after a dependency update | One `importlib.metadata` lookup per run | adopt | trivial |
+| 2 | Keep every call site as evidence on an edge — **done**: fixed by #21397 (merged 12.11.2026) | `_record_call_edge` (`code_indexer.py:230`) | Deduplicates on `(scope, target_name)` and keeps only the **first** call line, so other call sites are lost | Impact analysis can list every line that calls X | Bigger edge documents in ChromaDB | adopt-with-conditions (cap the list per edge) | moderate |
 | 3 | A path's confidence is its weakest hop | `services/knowledge/impact_analysis.py` | Tracks ambiguous/unresolved edges it skipped (lines 21, 87, 129, 155). No grep hit for a per-path tier (`weakest`, `min(`) | One honest confidence per impact answer | None notable | adopt | trivial |
 | 4 | `imports` / `inherits` edges in the code graph | `code_indexer.py` + `autobot_shared/code_graph/` | Indexer emits only `kind: "calls"`. Import resolution and cycle detection exist separately in `codebase_analytics/endpoints/dependencies.py` (`_resolve_import`:155, `_find_cycles_dfs`:167), using stdlib `ast` and Python only | Dependency questions answered from the same graph as calls | Must **reuse** the dependencies resolver, not write a second one (twice-defined rule) | adopt-with-conditions | moderate |
 | 5 | Rationale nodes: link `#NNNN` issue refs and `NOTE:`/`WHY:` comments to the code they annotate | `code_indexer.py` structural pass | No `rationale`/`NOTE:` handling. AutoBot code is dense with issue refs (e.g. `#13469`, `#13471` in `code_indexer.py` itself) | "Why is this like this?" answered from the graph, with each issue linked to its code | Parsing comments; issue-ref false positives | adopt | moderate |
@@ -82,11 +82,11 @@ All three planned items exist on main, but item A only in part:
 - **Clustering needs no extra dependency** (NetworkX Louvain).
 
 ### Gaps & Opportunities (by impact)
-1. #1 grammar-versioned cache (correctness, trivial).
+1. #1 grammar-versioned cache (correctness, trivial). — **done**: fixed by #21397 (merged 12.11.2026)
 2. #7 finish the mesh provenance tier (recorded plan, unfinished).
 3. #3 weakest-hop confidence (trivial, user-facing honesty).
 4. #4 import/inherit edges reusing `dependencies.py`.
-5. #2 all call sites as evidence.
+5. #2 all call sites as evidence. — **done**: fixed by #21397 (merged 12.11.2026)
 6. #5 rationale nodes from issue refs.
 7. #6 Vue/TS coverage (largest effort, largest blind spot).
 
@@ -94,7 +94,7 @@ All three planned items exist on main, but item A only in part:
 - `autobot-backend/services/knowledge/code_indexer.py`: items 1, 2, 4, 5, 6.
 - `autobot_shared/code_graph/resolver.py`: item 4, with the import resolver moved here from `api/codebase_analytics/endpoints/dependencies.py`.
 - `autobot-backend/services/knowledge/impact_analysis.py`: item 3.
-- `autobot-backend/services/mesh_brain/mesh_db.py`, `edge_learner.py`, `edge_discoverer.py` and `graph_rag_service.py`, plus a migration: item 7.
+- `autobot-backend/services/mesh_brain/mesh_db.py`, `edge_learner.py`, `edge_discoverer.py` and `autobot-backend/services/graph_rag_service.py`, plus a migration: item 7.
 - `autobot-backend/requirements.txt`, `constraints/shared.txt`: item 6.
 
 ### Other findings
