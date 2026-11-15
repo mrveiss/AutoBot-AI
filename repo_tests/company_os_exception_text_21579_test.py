@@ -88,6 +88,18 @@ _FIRES = [
         "walrus_overwrite_keeps_taint",
         "def h(cond):\n    try:\n        run()\n    except ValueError as exc:\n        msg = str(exc)\n        (msg := 'ok')\n        raise HTTPException(400, detail=msg)\n",
     ),
+    (
+        "handler_overwrite_still_reports",  # known conservative finding: only a function-level overwrite clears
+        "def h(cond):\n    try:\n        run()\n    except ValueError as exc:\n        msg = str(exc)\n        msg = 'ok'\n        raise HTTPException(400, detail=msg)\n",
+    ),
+    (
+        "with_overwrite",
+        "def h(cond):\n    try:\n        run()\n    except ValueError as exc:\n        msg = str(exc)\n        with swallow():\n            msg = 'ok'\n        raise HTTPException(400, detail=msg)\n",
+    ),
+    (
+        "handler_finally_overwrite",
+        "def h():\n    try:\n        try:\n            run()\n        except ValueError as exc:\n            msg = str(exc)\n            msg = 'ok'\n            raise HTTPException(400, detail=msg)\n        finally:\n            cleanup()\n    except OSError:\n        pass\n",
+    ),
     ("param_tainted_local", "def helper(exc):\n    msg = str(exc)\n    raise HTTPException(400, detail=msg)\n"),
     ("param_str", _param("HTTPException(400, detail=str(exc))")),
     ("param_fstring", _param('HTTPException(400, detail=f"bad {exc}")')),
@@ -113,7 +125,7 @@ _QUIET = [
     ),
     (
         "safe_overwrite",
-        "def h(cond):\n    try:\n        run()\n    except ValueError as exc:\n        msg = str(exc)\n        msg = 'Invalid request'\n        raise HTTPException(400, detail=msg)\n",
+        "def h(exc):\n    msg = str(exc)\n    msg = 'Invalid request'\n    raise HTTPException(400, detail=msg)\n",
     ),
     ("param_public_local", "def helper(exc):\n    msg = exc.public_detail\n    raise HTTPException(400, detail=msg)\n"),
     ("isinstance_test", _wrap("HTTPException(413 if isinstance(exc, KeyError) else 400, detail='x')")),
