@@ -299,7 +299,21 @@ def gate_reports(baseline: Mapping[str, Any], candidate: Mapping[str, Any], run:
     return gate_decision(b, c)
 
 
+def _fixture_factory() -> Callable[[], Retriever]:
+    # Imported on use: the fixture module imports this one for GoldQuery/RetrievalOutput (circular otherwise).
+    from knowledge.retrieval_gate_fixture import factory
+
+    return factory
+
+
+#: Named retrievers the CLI accepts for ``--retriever``; the real-index adapter (#21611) registers here too.
+RETRIEVER_REGISTRY: Dict[str, Callable[[], Callable[[], Retriever]]] = {"fixture": _fixture_factory}
+
+
 def _load_factory(spec: str) -> Callable[[], Retriever]:
+    """Resolve a registered retriever name, else a ``module:factory`` path."""
+    if spec in RETRIEVER_REGISTRY:
+        return RETRIEVER_REGISTRY[spec]()
     mod, _, attr = spec.partition(":")
     return getattr(importlib.import_module(mod), attr)
 
@@ -309,7 +323,9 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="run the ablation and write a JSON report")
     r.add_argument("--gold", help="one JSONL file; default: the configured gold set in the gold dir")
-    r.add_argument("--retriever", required=True, help="module:factory returning a Retriever")
+    r.add_argument(
+        "--retriever", required=True, help="registered name (fixture) or module:factory returning a Retriever"
+    )
     r.add_argument("--split", default="test", choices=[s.value for s in BenchmarkSplit])
     r.add_argument("--out", required=True)
     g = sub.add_parser("gate", help="exit 1 unless candidate beats baseline")

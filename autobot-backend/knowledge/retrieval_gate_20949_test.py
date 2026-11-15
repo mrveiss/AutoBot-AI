@@ -325,3 +325,10 @@ def test_blank_gold_set_env_falls_back_to_fixture(monkeypatch):
     finally:
         monkeypatch.delenv("AUTOBOT_RETRIEVAL_GATE_GOLD_SET")
         importlib.reload(rg)
+
+
+def test_retriever_registry_resolves_the_fixture_by_name():
+    from knowledge.retrieval_gate_fixture import factory
+
+    assert rg._load_factory("fixture") is factory
+    assert rg._load_factory("knowledge.retrieval_gate_fixture:factory") is factory
