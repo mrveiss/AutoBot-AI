@@ -21,13 +21,13 @@ function isAbort(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'AbortError'
 }
 
-function record(method: string, url: string, startTime: number, status: number | string, error?: Error): void {
+function record(method: string, url: string, startTime: number, status: number | string, error?: Error, timedOut = false): void {
   const rum = typeof window === 'undefined' ? undefined : window.rum
   if (!rum) return
   try {
     const call = rum.trackApiCall(method, url, startTime, performance.now(), status, error)
     // RumAgent already reports a call that outlived its own threshold; add the typed timeout only when it did not.
-    if (error && isRequestTimeout(error) && !call.isTimeout) {
+    if (error && timedOut && !call.isTimeout) {
       rum.reportCriticalIssue('api_timeout', { method, url, duration: call.duration, error: error.message })
     }
   } catch (monitorError) {
@@ -45,7 +45,11 @@ export async function monitorApiCall(method: string, url: string, send: () => Pr
     return response
   } catch (error) {
     // An abort on unmount or navigation is the caller's own doing, not a failed call.
-    if (!isAbort(error)) record(method, url, startTime, 'error', error instanceof Error ? error : new Error(String(error)))
+    // Classify the thrown value itself: a DOMException from AbortSignal.timeout() is not always `instanceof Error`
+    // (cross-realm, jsdom), and re-wrapping it would drop the `TimeoutError` name the classification reads.
+    if (!isAbort(error)) {
+      record(method, url, startTime, 'error', error instanceof Error ? error : new Error(String(error)), isRequestTimeout(error))
+    }
     throw error
   }
 }
