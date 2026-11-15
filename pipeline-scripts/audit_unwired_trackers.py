@@ -292,10 +292,11 @@ def grep_count_production_callers(stem: str, self_path: Path) -> int:
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
-    except subprocess.TimeoutExpired:
-        return -1
+    except subprocess.TimeoutExpired as e:
+        # -1 would drop the file from the audit as if it were wired (#21582).
+        raise TrackerLookupError(f"caller grep for {stem!r} timed out ({e})") from e
     if result.returncode > 1:  # 0 = matches, 1 = no matches, >1 = error
-        return -1
+        raise TrackerLookupError(f"caller grep for {stem!r} failed (exit {result.returncode})")
     self_str = str(self_path)
     count = 0
     for line in result.stdout.splitlines():
@@ -370,11 +371,16 @@ def existing_audit_issues_by_tracker() -> set[int]:
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=True)
         data = json.loads(result.stdout)
-    except (subprocess.SubprocessError, json.JSONDecodeError, FileNotFoundError):
-        return set()
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        # An empty set here would make --file-issues file duplicates (#21582).
+        raise TrackerLookupError(f"gh issue list (open audit issues) failed, cannot dedupe ({e})") from e
+    except json.JSONDecodeError as e:
+        raise TrackerLookupError(f"open audit issue list was not JSON ({e!r})") from e
     out: set[int] = set()
     pat = re.compile(r"tracker #(\d+) closed prematurely")
     for item in data:
+        if not isinstance(item, dict):
+            raise TrackerLookupError(f"open audit issue list held a non-object item ({type(item).__name__})")
         m = pat.search(item.get("title", ""))
         if m:
             out.add(int(m.group(1)))
@@ -559,12 +565,12 @@ def main() -> int:
     args = _build_parser().parse_args()
     try:
         findings = scan()
+        if args.file_issues:
+            _file_new_issues(findings, args.max_issues)
     except TrackerLookupError as e:
         # Before any report or filing: a degraded scan must neither claim a clean run nor file issues.
         logger.error("%s", e)
         return EXIT_LOOKUP_FAILED
-    if args.file_issues:
-        _file_new_issues(findings, args.max_issues)
 
     # The report was previously emitted with the builtin that appends one newline; render_human() already
     # ends in one, so its output keeps a second. Writing "+ \n" keeps stdout byte-identical.

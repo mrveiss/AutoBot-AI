@@ -177,21 +177,23 @@ def test_grep_count_excludes_self_and_test_paths() -> None:
 
 
 def test_grep_count_handles_grep_error() -> None:
-    """grep returncode > 1 means an error — return -1 (skip) not 0."""
+    """grep returncode > 1 means an error — raise, never -1 (which would drop the file silently)."""
     fake_run = MagicMock(returncode=2, stdout="", stderr="grep: I/O error")
     with patch.object(audit.subprocess, "run", return_value=fake_run):
-        assert audit.grep_count_production_callers("foo", Path("/dev/null")) == -1
+        with pytest.raises(audit.TrackerLookupError):
+            audit.grep_count_production_callers("foo", Path("/dev/null"))
 
 
 def test_grep_count_handles_timeout() -> None:
-    """subprocess.TimeoutExpired must return -1, not crash."""
+    """subprocess.TimeoutExpired must raise TrackerLookupError, not read as wired."""
     import subprocess as _sp
 
     def _raise(*_a, **_kw):
         raise _sp.TimeoutExpired(cmd="grep", timeout=60)
 
     with patch.object(audit.subprocess, "run", side_effect=_raise):
-        assert audit.grep_count_production_callers("foo", Path("/dev/null")) == -1
+        with pytest.raises(audit.TrackerLookupError):
+            audit.grep_count_production_callers("foo", Path("/dev/null"))
 
 
 # ---------------------------------------------------------------------------
@@ -302,9 +304,10 @@ def test_existing_audit_issues_extracts_tracker_numbers() -> None:
 
 
 def test_existing_audit_issues_gh_failure() -> None:
-    """gh failures must return empty set (open-mode default — file new ones)."""
+    """gh failures must raise: an empty set would make --file-issues file duplicates (#21582)."""
     with patch.object(audit.subprocess, "run", side_effect=FileNotFoundError("gh")):
-        assert audit.existing_audit_issues_by_tracker() == set()
+        with pytest.raises(audit.TrackerLookupError):
+            audit.existing_audit_issues_by_tracker()
 
 
 # ---------------------------------------------------------------------------

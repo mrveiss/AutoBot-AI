@@ -66,3 +66,23 @@ def test_good_lookup_keeps_the_clean_and_findings_codes(capsys: pytest.CaptureFi
         rc, out = _run_main(capsys, "--json")
     assert rc == audit.EXIT_FINDINGS
     assert json.loads(out)[0]["tracker"] == 7
+
+
+def test_failing_dedupe_lookup_files_nothing_and_returns_lookup_code(capsys: pytest.CaptureFixture[str]) -> None:
+    finding = audit.Finding(file="a/b.py", tracker=7, tracker_state="CLOSED", production_callers=0)
+    with (
+        patch.object(audit, "scan", return_value=[finding]),
+        patch.object(audit.subprocess, "run", side_effect=_gh_fails),
+        patch.object(audit, "file_discovery_issue") as filed,
+    ):
+        rc, out = _run_main(capsys, "--file-issues")
+    assert rc == audit.EXIT_LOOKUP_FAILED
+    filed.assert_not_called()
+    assert out == ""
+
+
+def test_unparsable_dedupe_lookup_raises() -> None:
+    fake = MagicMock(returncode=0, stdout="<<not json>>", stderr="")
+    with patch.object(audit.subprocess, "run", return_value=fake):
+        with pytest.raises(audit.TrackerLookupError):
+            audit.existing_audit_issues_by_tracker()
