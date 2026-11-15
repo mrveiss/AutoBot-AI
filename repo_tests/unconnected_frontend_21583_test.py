@@ -80,6 +80,13 @@ def test_an_unimported_source_file_fires() -> None:
                 '<script type="module" src="/src/utils/planted.ts"></script>\n'
             },
         ),
+        (
+            "html module script holding comment markers as strings",
+            {
+                "autobot-frontend/planted.html": "<script type=\"module\">\nconst open = '<!--'\n"
+                "import { X } from '/src/utils/planted.ts'\nconst close = '-->'\n</script>\n"
+            },
+        ),
     ],
 )
 def test_the_connected_twin_of_each_form_is_clean(label: str, importer: dict[str, str]) -> None:

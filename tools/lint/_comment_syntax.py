@@ -380,14 +380,16 @@ def _join_continuations(lines: Iterable[CodeLine]) -> list[CodeLine]:
     return [CodeLine(numbers[i - 1] if 0 < i <= len(numbers) else i, body) for i, body in folded]
 
 
-#: An HTML comment. Markup has no line comments, so this is its whole comment syntax.
-_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+#: A ``<script>`` element (group 1) or an HTML comment, whichever starts first. Markup has no line comments, so the
+#: comment is its whole comment syntax; a script element is matched only so its body is kept, since a ``'<!--'`` in
+#: JavaScript is a string and not a comment. A comment that wraps a script element starts first and goes whole.
+_HTML_SCRIPT_OR_COMMENT = re.compile(r"(<script\b[^>]*>.*?</script\b[^>]*>)|<!--.*?-->", re.DOTALL | re.IGNORECASE)
 
 
 def strip_html_comments(text: str) -> str:
-    """*text* with every ``<!-- ... -->`` removed, keeping its newlines so line numbers hold; an unclosed ``<!--``
-    stays as text."""
-    return _HTML_COMMENT.sub(lambda m: "\n" * m.group().count("\n"), text)
+    """*text* with every ``<!-- ... -->`` outside a ``<script>`` element removed, keeping its newlines so line numbers
+    hold; script contents are left as they are, and an unclosed ``<!--`` stays as text."""
+    return _HTML_SCRIPT_OR_COMMENT.sub(lambda m: m.group(1) or "\n" * m.group().count("\n"), text)
 
 
 def code_text(source: str | Path, **kwargs) -> str:
