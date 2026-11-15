@@ -13,7 +13,7 @@
  */
 
 import { ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useSourcesListEndpoint } from '@/composables/analytics/useSourcesListEndpoint'
 import apiClient from '@/utils/ApiClient'
@@ -102,6 +102,7 @@ export const STORAGE_KEY_PATH = 'codebase-analytics-path'
 export function useSourceRegistry(deps: UseSourceRegistryDeps) {
   const { t, notify } = deps
   const route = useRoute()
+  const router = useRouter()
 
   // Load path from localStorage if available, otherwise use default
   const savedPath = localStorage.getItem(STORAGE_KEY_PATH)
@@ -143,13 +144,21 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
     },
   )
 
+  // #21474: another source is a navigation to its page, never an in-place swap. The analytics view
+  // keys its routed page by `:sourceId`, so the page remounts: every section starts empty, the
+  // previous page's in-flight requests are disposed with it, and the new page reads the cached
+  // results exactly as on page open -- no scan. The current route (and its sub-tab) is kept.
   function handleSelectSource(source: CodeSource) {
-    selectedSource.value = source
-    if (source.clone_path) {
-      rootPath.value = source.clone_path
-      localStorage.setItem(STORAGE_KEY_PATH, source.clone_path)
-    }
     showSourceManager.value = false
+    if (source.id !== route.params.sourceId) {
+      void router.push({ name: route.name ?? 'analytics-codebase-project', params: { ...route.params, sourceId: source.id } })
+    } else {
+      selectedSource.value = source
+      if (source.clone_path) {
+        rootPath.value = source.clone_path
+        localStorage.setItem(STORAGE_KEY_PATH, source.clone_path)
+      }
+    }
     notify(
       t('analytics.codebase.notify.selectedSource', { name: source.name }),
       'info',
