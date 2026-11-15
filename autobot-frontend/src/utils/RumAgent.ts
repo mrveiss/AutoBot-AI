@@ -11,6 +11,7 @@ import { saveTextFile } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { isBenignBrowserNotice } from '@/utils/benignBrowserNotice'
+import { pushCapped } from '@/utils/rumBufferCap'
 
 // Issue #981: Use scoped logger — console.* was causing [object Object] in log output
 const logger = createLogger('RumAgent')
@@ -299,7 +300,7 @@ class RumAgent {
       sessionId: this.sessionId
     }
 
-    this.metrics.apiCalls.push(apiCall)
+    pushCapped(this.metrics.apiCalls, apiCall)
 
     // Issue #476: Queue for Prometheus reporting
     if (this.prometheusEnabled) {
@@ -308,7 +309,7 @@ class RumAgent {
         : String(status)
       const errorType = error ? 'network' : (isTimeout ? 'timeout' : undefined)
 
-      this.pendingApiCalls.push({
+      pushCapped(this.pendingApiCalls, {
         endpoint: this.normalizeEndpoint(url),
         method,
         status: isTimeout ? 'timeout' : statusStr,
@@ -327,7 +328,6 @@ class RumAgent {
       logger.warn('🐌 VERY SLOW API', apiCall)
     } else if (isSlow) {
       logger.warn('⚠️ SLOW API', apiCall)
-    } else {
     }
 
     return apiCall

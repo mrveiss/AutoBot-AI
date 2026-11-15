@@ -236,6 +236,8 @@ class CacheBuster {
                 return response;
             } catch (error) {
                 // Rate-limit connection/timeout error logging to prevent console spam
+                // Producer is the browser's window.fetch (never the kit client), so the name checks are the typed signal;
+                // the message texts below stay for engines that throw a plain TypeError worded by the browser.
                 const isConnectionOrTimeoutError =
                     error.name === 'AbortError' ||
                     error.name === 'TimeoutError' ||
