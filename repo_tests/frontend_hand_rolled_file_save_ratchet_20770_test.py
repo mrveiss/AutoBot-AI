@@ -32,7 +32,8 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_table
 from repo_tests._reach import declare
-from tools.lint._comment_syntax import blank_comments, blank_comments_and_strings
+
+from tools.lint._comment_syntax import code_text
 
 _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src")
 _EXCLUDED = re.compile(r"(\.test\.|\.spec\.|\.stories\.|/__tests__/)")
@@ -44,7 +45,9 @@ _ASSIGNMENT = re.compile(
     r"|(?:(?P<attr_receiver>[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*)\s*\??\.)?"
     r"setAttribute\(\s*['\"`]download['\"`]"
 )
-_COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
+#: A quoted literal on one line, or a template literal. Run over text the shared comment helper has
+#: already cleaned, only to keep a `{` / `}` inside a string from opening or closing a block.
+_STRING_LITERAL = re.compile(r"'(?:\\.|[^'\\\n])*'|\"(?:\\.|[^\"\\\n])*\"|`(?:\\.|[^`\\])*`")
 #: A receiver segment that reads as an anchor (#21195): a bare `a`, or a name carrying
 #: `anchor` / `link` (`anchorEl`, `linkRef`). `settings` and friends carry neither.
 _ANCHOR_RECEIVER = re.compile(r"a|(?:\w*(?:anchor|link)\w*)", re.I)
@@ -114,13 +117,13 @@ def _scope_ranges(text: str, starts: list[int]) -> list[tuple[int, int]]:
     The scope starts at the enclosing block's `{` — or the start of the file
     for a top-level declaration — and ends at that block's matching `}` (or
     the end of the file). The walk matches braces over the source with strings
-    and comments blanked at the same length, so a `const` inside a function or
+    blanked at the same length (comments are already gone, see `count`), so a `const` inside a function or
     block ends its scope at that block's `}` and cannot stand in for a later
     use outside it (#21195). An inline `// }` is comment, not code: it closes
     nothing, and the declaration keeps the block the source actually gives
     it. Unbalanced braces degrade to the file-wide end.
     """
-    masked = blank_comments_and_strings(text)
+    masked = _STRING_LITERAL.sub(lambda m: re.sub(r"[^\n]", " ", m.group()), text)
     closes, owners = _brace_walk(masked, starts)
     end = len(masked)
     return [
@@ -185,23 +188,22 @@ def _sources(root: Path) -> list[Path]:
 
 
 def count(paths: list[Path]) -> int:
-    """Anchor `download` assignments over *paths*, comment lines removed.
+    """Anchor `download` assignments over *paths*, comments removed.
 
-    The match scan runs over the text with inline comments blanked, so a
-    `download` spelled only inside a `//` or `/* */` comment is not a save
-    (#21195); the binding walk still reads the unmasked text, and offsets
-    stay valid because the blanking preserves length.
+    Every scan reads the text the shared comment helper returns, so a `download`
+    or a `const` spelled only inside a `//` or `/* */` comment is not a save
+    (#21195) and offsets agree between the binding walk and the match scan.
     """
     total = 0
     for path in paths:
-        text = _COMMENT_LINE.sub("", path.read_text(encoding="utf-8"))
+        text = code_text(path, strip_trailing=True)
         starts = [m.start() for m in _BINDING.finditer(text)]
         ranges = _scope_ranges(text, starts)
         declarations = [
             (m.start(), m.group(1), m.group(2), ranges[i][0], ranges[i][1])
             for i, m in enumerate(_BINDING.finditer(text))
         ]
-        for match in _ASSIGNMENT.finditer(blank_comments(text)):
+        for match in _ASSIGNMENT.finditer(text):
             receiver = match.group("assign_receiver") or match.group("attr_receiver")
             if _is_anchor(receiver, _binding_in_force(declarations, receiver, match.start())):
                 total += 1
@@ -373,23 +375,27 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         assert count([_w(tmp_path, "a/U.ts", 'const u = "http://example.com"; a.download = name\n')]) == 1
 
     def test_a_non_anchor_receiver_and_a_non_download_call_are_not_saves(self, tmp_path: Path) -> None:
-        # Plain negative controls: neither case depends on comment masking.
+        # Each fixture would be counted if comments / strings were not masked.
         paths = [
             _w(
                 tmp_path,
                 "a/NC.ts",
                 "function save() {\n"
                 "  const box = document.createElement('div');\n"
+                "  // const box = document.createElement('a');\n"
+                "  /* const box = document.createElement('a'); */\n"
                 "  box.setAttribute('download', name);\n"
                 "}\n",
             ),
             _w(
                 tmp_path,
                 "a/NC2.ts",
-                "function preview() {\n"
+                "function make() {\n"
+                "  const note = '}';\n"
+                "  // }\n"
                 "  const el = document.createElement('a');\n"
-                "  el.setAttribute('title', name);\n"
-                "}\n",
+                "}\n"
+                "el.setAttribute('download', name);\n",
             ),
         ]
         assert count(paths) == 0
@@ -409,7 +415,7 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         paths = [
             _w(tmp_path, "a/A.vue", "saveBlob(blob, 'x.csv')\nsaveTextFile(t, 'y.md', 'text/markdown')\n"),
             _w(tmp_path, "a/B.ts", "if (a.download == name) {}\nif (a.download === name) {}\n"),
-            _w(tmp_path, "a/C.vue", "// a.download = name\n * link.download = name\n"),
+            _w(tmp_path, "a/C.vue", "// a.download = name\n/*\n * link.download = name\n */\n"),
             _w(tmp_path, "a/D.vue", '<template><a :href="url" download>x</a></template>\n'),
         ]
         assert count(paths) == 0
