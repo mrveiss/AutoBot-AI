@@ -363,7 +363,8 @@ def test_a_planted_unconnected_case_fires(tmp_path: Path, label: str, files: dic
         (
             "route called by the frontend",
             {**_ROUTE, **_WIRED},
-            {"autobot-frontend/src/api.ts": "get('/api/planted/orphan')\n"},
+            # `main.ts` is an entry point, so the planted caller is not itself a `frontend:` candidate (#21583).
+            {"autobot-frontend/src/main.ts": "get('/api/planted/orphan')\n"},
         ),
         ("route called by a script", {**_ROUTE, **_WIRED}, {"scripts/probe.py": 'URL = "/api/planted/orphan"\n'}),
         ("route under a declared external prefix", {**_HOOK, **_WIRED}, {}),
