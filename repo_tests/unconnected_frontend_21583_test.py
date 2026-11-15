@@ -73,6 +73,13 @@ def test_an_unimported_source_file_fires() -> None:
             "html entry script",
             {"autobot-frontend/planted.html": '<script type="module" src="/src/utils/planted.ts"></script>\n'},
         ),
+        (
+            "html entry script beside a commented one",
+            {
+                "autobot-frontend/planted.html": '<!-- <script src="/src/utils/old.ts"></script> -->\n'
+                '<script type="module" src="/src/utils/planted.ts"></script>\n'
+            },
+        ),
     ],
 )
 def test_the_connected_twin_of_each_form_is_clean(label: str, importer: dict[str, str]) -> None:
@@ -90,6 +97,12 @@ def test_the_connected_twin_of_each_form_is_clean(label: str, importer: dict[str
         ("a line comment naming it", {"autobot-frontend/src/a.ts": "// import { X } from '@/utils/planted'\n"}),
         ("a block comment naming it", {"autobot-frontend/src/a.ts": "/* import { X } from '@/utils/planted' */\n"}),
         ("a vue template naming it", {"autobot-frontend/src/a.vue": "<template>'@/utils/planted'</template>\n"}),
+        (
+            "an html comment naming it",
+            {
+                "autobot-frontend/planted.html": '<!--\n<script type="module" src="/src/utils/planted.ts"></script>\n-->\n'
+            },
+        ),
         ("the file importing itself", {_SUBJECT: "import { X } from './planted'\nexport const X = 1\n"}),
     ],
 )
@@ -139,6 +152,12 @@ def test_a_glob_that_does_not_reach_the_file_leaves_it_unconnected(label: str, c
         ("outside a frontend src tree", "libs/autobot-ui/src/planted.ts"),
     ],
 )
+def test_a_file_reached_only_by_its_own_glob_is_unconnected() -> None:
+    """A glob counts only from ANOTHER file, as an ordinary reference does; the sibling twin is connected."""
+    assert _found({_SUBJECT: _glob("'./*.ts'")}) == [_SUBJECT]
+    assert _found({"autobot-frontend/src/utils/loader.ts": _glob("'./*.ts'")}) == []
+
+
 def test_a_file_that_cannot_have_an_importer_is_not_a_candidate(label: str, rel: str) -> None:
     assert fe.candidates(Tree.of_files({rel: "export const X = 1\n"})) == [], label
 
@@ -151,6 +170,23 @@ def test_an_index_file_is_reached_through_its_directory_name() -> None:
     index = "autobot-frontend/src/components/panel/index.ts"
     assert index not in fe.unconnected(Tree.of_files(files))
     assert fe.unconnected(Tree.of_files({index: files[index]})) == [index]
+
+
+@pytest.mark.parametrize(
+    ("label", "importer", "spec"),
+    [
+        ("sibling ./index", "autobot-frontend/src/components/panel/consumer.ts", "./index"),
+        ("sibling ./index.ts", "autobot-frontend/src/components/panel/consumer.ts", "./index.ts"),
+        ("parent ../index", "autobot-frontend/src/components/panel/sub/consumer.ts", "../index"),
+    ],
+)
+def test_a_relative_index_import_is_resolved_against_the_importer(label: str, importer: str, spec: str) -> None:
+    """`./index` names the importer's directory; an `./index` in an unrelated directory does not reach this one."""
+    index = "autobot-frontend/src/components/panel/index.ts"
+    body = f"import {{ X }} from '{spec}'\n"
+    assert index not in fe.unconnected(Tree.of_files({index: "export const X = 1\n", importer: body})), label
+    elsewhere = {index: "export const X = 1\n", "autobot-frontend/src/views/other/consumer.ts": body}
+    assert index in fe.unconnected(Tree.of_files(elsewhere)), label
 
 
 def test_a_same_named_sibling_marks_the_file_connected_which_is_the_documented_under_report() -> None:

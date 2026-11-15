@@ -15,10 +15,13 @@ connected when another production file, outside comments:
 
 * names it in a quoted path -- ``import x from '@/utils/foo'``, ``import('./foo.js')``, ``require('../foo')``,
   ``export * from './foo'``, a router ``component: () => import(...)`` -- matched on the LAST path segment with
-  its extension dropped (``index`` resolves to its directory name); or
-* matches an ``import.meta.glob(...)`` pattern some production file uses. The pattern is resolved against the
+  its extension dropped (``index`` resolves to its directory name; a relative ``./index``/``../index`` is first
+  resolved against the importer); or
+* matches an ``import.meta.glob(...)`` pattern some OTHER production file uses. The pattern is resolved against the
   importer (``./``, ``../``, ``@/`` and ``/src/``), ``*``, ``**``, ``?`` and ``{a,b}`` are honoured, and a
   ``!negated`` pattern is ignored (it can only over-connect).
+
+An ``.html`` file is read with its ``<!-- -->`` comments removed; its ``<script src>`` elements count.
 
 NOT A CANDIDATE
 ---------------
@@ -51,7 +54,7 @@ from repo_tests._ui_literal_scan import SCRIPT_BODY
 from repo_tests._unconnected_common import Tree
 
 from autobot_shared.testfile_names import is_test_filename
-from tools.lint._comment_syntax import code_lines
+from tools.lint._comment_syntax import code_lines, strip_html_comments
 
 #: The frontend source trees whose files are candidates.
 FRONTEND_ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src")
@@ -95,22 +98,32 @@ def stem(rel_or_spec: str) -> str:
 
 
 def _code_text(rel: str, text: str) -> str:
-    """*text* without comments; HTML is read as it is (an entry ``<script src>`` is not a comment).
+    """*text* without comments; HTML loses only its ``<!-- -->`` comments (an entry ``<script src>`` is not one).
 
     A ``.vue`` file contributes its ``<script>`` blocks only: a template's prose holds apostrophes and ``//`` that a
     comment scanner would read as the start of a string or comment, swallowing the real imports below it.
     """
     if rel.endswith(".html"):
-        return text
+        return strip_html_comments(text)
     name = rel
     if rel.endswith(".vue"):
         text, name = "\n".join(SCRIPT_BODY.findall(text)), "script.ts"
     return "\n".join(line.text for line in code_lines(text, name=name, strip_trailing=True))
 
 
-def quoted_stems(code: str) -> set[str]:
-    """Stems of every quoted path in *code* (a string holding a ``/`` or starting with a dot)."""
-    return {stem(spec) for spec in _QUOTED_RE.findall(code) if "/" in spec or spec.startswith(".")} - {""}
+def _spec_stem(spec: str, importer: str) -> str:
+    """The stem *spec* names. A relative path to an ``index`` is resolved against *importer* first, so ``./index``
+    names the importer's directory, as the candidate ``<dir>/index.ts`` does."""
+    name = stem(spec)
+    if name == "index" and spec.startswith(("./", "../")):
+        return stem(posixpath.normpath(posixpath.join(posixpath.dirname(importer), spec)))
+    return name
+
+
+def quoted_stems(code: str, importer: str) -> set[str]:
+    """Stems of every quoted path in *code* from *importer* (a string holding a ``/`` or starting with a dot)."""
+    specs = (spec for spec in _QUOTED_RE.findall(code) if "/" in spec or spec.startswith("."))
+    return {_spec_stem(spec, importer) for spec in specs} - {""}
 
 
 def _project_root(rel: str) -> str:
@@ -162,27 +175,27 @@ def glob_regex(pattern: str) -> re.Pattern[str]:
     return re.compile("".join(out))
 
 
-def _importer_index(tree: Tree) -> tuple[dict[str, set[str]], list[re.Pattern[str]]]:
-    """``({stem: importing files}, [glob regexes])`` over every production source file in the tree."""
+def _importer_index(tree: Tree) -> tuple[dict[str, set[str]], list[tuple[str, re.Pattern[str]]]]:
+    """``({stem: importing files}, [(importer, glob regex)])`` over every production source file in the tree."""
     importers: dict[str, set[str]] = {}
-    globs: list[re.Pattern[str]] = []
+    globs: list[tuple[str, re.Pattern[str]]] = []
     for rel in tree.select(*_CODE_SUFFIXES, ".html"):
         code = _code_text(rel, tree.text(rel))
-        for name in quoted_stems(code):
+        for name in quoted_stems(code, rel):
             importers.setdefault(name, set()).add(rel)
-        globs.extend(glob_regex(p) for p in glob_patterns(rel, code))
+        globs.extend((rel, glob_regex(p)) for p in glob_patterns(rel, code))
     return importers, globs
 
 
 def unconnected(tree: Tree, cands: list[str] | None = None) -> list[str]:
-    """Candidates no other production file imports and no ``import.meta.glob`` reaches, sorted."""
+    """Candidates no other production file imports or reaches with an ``import.meta.glob``, sorted."""
     cands = candidates(tree) if cands is None else cands
     importers, globs = _importer_index(tree)
     out = []
     for rel in cands:
         if importers.get(stem(rel), set()) - {rel}:
             continue
-        if any(g.fullmatch(rel) for g in globs):
+        if any(importer != rel and g.fullmatch(rel) for importer, g in globs):
             continue
         out.append(rel)
     return sorted(out)
