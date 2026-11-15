@@ -215,7 +215,6 @@ def load_router_registry_modules() -> set[str]:
         try:
             content = f.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as e:
-            # Skipping it would report the modules it registers as unwired (#21582).
             raise TrackerLookupError(f"router registry file {f} is unreadable ({e!r})") from e
         for m in REGISTRY_TUPLE_RE.finditer(content):
             modules.add(m.group(1))
@@ -245,7 +244,6 @@ def extract_tracker_refs(file_path: Path) -> list[int]:
         with file_path.open("r", encoding="utf-8") as f:
             head = "".join(line for _, line in zip(range(DOCSTRING_HEAD_LINES), f))
     except (OSError, UnicodeDecodeError) as e:
-        # [] would drop the file from the audit as if it cited no tracker (#21582).
         raise TrackerLookupError(f"{file_path} is unreadable ({e!r})") from e
     refs: list[int] = []
     for m in ISSUE_REF_RE.finditer(head):
@@ -295,7 +293,6 @@ def grep_count_production_callers(stem: str, self_path: Path) -> int:
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
     except subprocess.TimeoutExpired as e:
-        # -1 would drop the file from the audit as if it were wired (#21582).
         raise TrackerLookupError(f"caller grep for {stem!r} timed out ({e})") from e
     if result.returncode > 1:  # 0 = matches, 1 = no matches, >1 = error
         raise TrackerLookupError(f"caller grep for {stem!r} failed (exit {result.returncode})")
@@ -324,30 +321,49 @@ class TrackerLookupError(RuntimeError):
     """
 
 
+#: ``gh issue list --limit`` for closed issues. A result of exactly this size may be truncated, so it fails.
+CLOSED_ISSUE_LIMIT = 10000
+_CLOSED_ISSUES_CMD = [
+    "gh",
+    "issue",
+    "list",
+    "--state",
+    "closed",
+    "--limit",
+    str(CLOSED_ISSUE_LIMIT),
+    "--json",
+    "number",
+]
+_OPEN_AUDIT_CMD = [
+    *("gh", "issue", "list", "--state", "open", "--search", "discovery(unwired-tracker)"),
+    *("--limit", "1000", "--json", "number,title"),
+]
+
+
+def _gh_json(cmd: list[str], timeout: int, what: str) -> list[dict]:
+    """Run a ``gh ... --json`` listing; raise ``TrackerLookupError`` unless it yields a JSON list of objects."""
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=True).stdout
+        data = json.loads(out)
+    except (subprocess.SubprocessError, FileNotFoundError, json.JSONDecodeError) as e:
+        raise TrackerLookupError(f"{what} failed or was unreadable ({e!r})") from e
+    if not isinstance(data, list) or not all(isinstance(i, dict) for i in data):
+        raise TrackerLookupError(f"{what} was not a list of objects")
+    return data
+
+
 def fetch_closed_tracker_set() -> set[int]:
     """One-shot fetch of all CLOSED issues so per-finding lookups are O(1).
 
-    Raises ``TrackerLookupError`` when ``gh`` fails or its output is not the expected JSON.
+    Raises ``TrackerLookupError`` when ``gh`` fails, its output is unusable, or it hit the limit.
     """
-    cmd = [
-        "gh",
-        "issue",
-        "list",
-        "--state",
-        "closed",
-        "--limit",
-        "10000",
-        "--json",
-        "number",
-    ]
+    data = _gh_json(_CLOSED_ISSUES_CMD, 120, "closed issue list")
+    if len(data) >= CLOSED_ISSUE_LIMIT:
+        raise TrackerLookupError(f"closed issue list hit its {CLOSED_ISSUE_LIMIT}-issue limit; older trackers unseen")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=True)
-    except (subprocess.SubprocessError, FileNotFoundError) as e:
-        raise TrackerLookupError(f"gh issue list failed, tracker states are unknown ({e})") from e
-    try:
-        return {item["number"] for item in json.loads(result.stdout)}
-    except (json.JSONDecodeError, KeyError, TypeError) as e:
-        raise TrackerLookupError(f"gh issue list output was not a list of issue numbers ({e!r})") from e
+        return {item["number"] for item in data}
+    except KeyError as e:
+        raise TrackerLookupError(f"closed issue list item without a number ({e!r})") from e
 
 
 def existing_audit_issues_by_tracker() -> set[int]:
@@ -355,34 +371,11 @@ def existing_audit_issues_by_tracker() -> set[int]:
 
     Convention: audit-discovery issues are titled
     `discovery(unwired-tracker): wire in <module> (tracker #NNNN closed prematurely)`.
-    We search by the exact title prefix to avoid filing duplicates.
+    We search by the exact title prefix to avoid filing duplicates. A failed lookup raises (#21582).
     """
-    cmd = [
-        "gh",
-        "issue",
-        "list",
-        "--state",
-        "open",
-        "--search",
-        "discovery(unwired-tracker)",
-        "--limit",
-        "1000",
-        "--json",
-        "number,title",
-    ]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=True)
-        data = json.loads(result.stdout)
-    except (subprocess.SubprocessError, FileNotFoundError) as e:
-        # An empty set here would make --file-issues file duplicates (#21582).
-        raise TrackerLookupError(f"gh issue list (open audit issues) failed, cannot dedupe ({e})") from e
-    except json.JSONDecodeError as e:
-        raise TrackerLookupError(f"open audit issue list was not JSON ({e!r})") from e
     out: set[int] = set()
     pat = re.compile(r"tracker #(\d+) closed prematurely")
-    for item in data:
-        if not isinstance(item, dict):
-            raise TrackerLookupError(f"open audit issue list held a non-object item ({type(item).__name__})")
+    for item in _gh_json(_OPEN_AUDIT_CMD, 60, "open audit issue list"):
         m = pat.search(item.get("title", ""))
         if m:
             out.add(int(m.group(1)))
@@ -563,21 +556,23 @@ def _file_new_issues(findings: list[Finding], max_issues: int) -> None:
             sys.stdout.write(f"filed #{num} for {f.file} (tracker #{f.tracker})\n")
 
 
+def _scan_and_file(args: argparse.Namespace) -> list[Finding]:
+    """Scan, then file; a failed lookup raises before any report or filing (a degraded scan files nothing)."""
+    findings = scan()
+    if args.file_issues:
+        _file_new_issues(findings, args.max_issues)
+    return findings
+
+
 def main() -> int:
     args = _build_parser().parse_args()
     try:
-        findings = scan()
-        if args.file_issues:
-            _file_new_issues(findings, args.max_issues)
+        findings = _scan_and_file(args)
     except TrackerLookupError as e:
-        # Before any report or filing: a degraded scan must neither claim a clean run nor file issues.
         logger.error("%s", e)
         return EXIT_LOOKUP_FAILED
-
-    # The report was previously emitted with the builtin that appends one newline; render_human() already
-    # ends in one, so its output keeps a second. Writing "+ \n" keeps stdout byte-identical.
+    # render_human() ends in one newline; the trailing "\n" keeps stdout byte-identical to the old print().
     sys.stdout.write((render_json(findings) if args.json else render_human(findings)) + "\n")
-
     return EXIT_FINDINGS if findings else EXIT_CLEAN
 
 

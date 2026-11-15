@@ -94,3 +94,17 @@ def test_unreadable_registry_file_raises_naming_the_file(tmp_path: Path) -> None
     with patch.object(audit, "ROUTER_REGISTRY_DIR", tmp_path):
         with pytest.raises(audit.TrackerLookupError, match="bad_registry.py"):
             audit.load_router_registry_modules()
+
+
+def test_closed_issue_list_at_the_limit_raises() -> None:
+    """A result the size of --limit may be truncated; older closed trackers would read as open."""
+    full = json.dumps([{"number": n} for n in range(audit.CLOSED_ISSUE_LIMIT)])
+    with patch.object(audit.subprocess, "run", return_value=MagicMock(returncode=0, stdout=full, stderr="")):
+        with pytest.raises(audit.TrackerLookupError, match=str(audit.CLOSED_ISSUE_LIMIT)):
+            audit.fetch_closed_tracker_set()
+
+
+def test_closed_issue_list_under_the_limit_is_returned() -> None:
+    short = json.dumps([{"number": n} for n in range(audit.CLOSED_ISSUE_LIMIT - 1)])
+    with patch.object(audit.subprocess, "run", return_value=MagicMock(returncode=0, stdout=short, stderr="")):
+        assert len(audit.fetch_closed_tracker_set()) == audit.CLOSED_ISSUE_LIMIT - 1
