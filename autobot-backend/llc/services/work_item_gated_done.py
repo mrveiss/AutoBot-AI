@@ -18,6 +18,8 @@ from .authz import is_company_member
 from .work_item_own_task import InvalidTransition
 
 _NO_NODE = "this agent has no org node, so a gated item cannot be handed to review"
+_NO_REVIEWER = "A reviewer is required to initiate the handoff: it has none and no creator."
+_REVIEWER_NOT_A_MEMBER = "The item's reviewer or creator is not a member of the company."
 _NOT_A_PERSON = "this credential is neither a person nor the agent holding the item"
 
 
@@ -94,14 +96,9 @@ async def hand_off_for_review(
         raise ReviewRefused(refusal + "No HandoffService available to initiate handoff.", ReviewRefused.NO_SERVICE)
     reviewer = item_reviewer(item)
     if not reviewer:
-        raise ReviewRefused(
-            refusal + "A reviewer is required to initiate the handoff: it has none and no creator.",
-            ReviewRefused.NO_REVIEWER,
-        )
+        raise ReviewRefused(refusal + _NO_REVIEWER, ReviewRefused.NO_REVIEWER)
     if not await is_company_member(session, company_id, reviewer):
-        raise ReviewRefused(
-            refusal + "The item's reviewer or creator is not a member of the company.", ReviewRefused.NOT_A_MEMBER
-        )
+        raise ReviewRefused(refusal + _REVIEWER_NOT_A_MEMBER, ReviewRefused.NOT_A_MEMBER)
     try:
         return await handoff_svc.agent_to_human(
             session, work_item_id, agent_id=agent_id, reviewer_user_id=reviewer, company_id=company_id
