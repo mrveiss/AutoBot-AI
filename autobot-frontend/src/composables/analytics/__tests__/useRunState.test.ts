@@ -110,6 +110,34 @@ describe('useRunState (#21003)', () => {
     })
   })
 
+  // #21474: run ids are uuid4s with no order; `started_at` is the generation. Pre-fix: the older
+  // run's `completed` replaced the newer run's `running`, and the partial warning went away.
+  describe('a snapshot of an older run (the requests are not ordered)', () => {
+    const R1_COMPLETED = { ...KILLED, run_id: 'r1', status: 'completed', partial: false, reason: '', started_at: '2026-11-01T10:00:00+00:00' }
+    const R2_RUNNING = { ...KILLED, run_id: 'r2', status: 'running', reason: '', finished_at: '', started_at: '2026-11-01T14:25:50+00:00' }
+
+    it('a delayed `completed` of an earlier run does not replace a later run that is still going', () => {
+      const state = useRunState(withSource, () => 'autobot')
+      state.applyRunFields({ partial: true, run: R2_RUNNING })
+      state.applyRunFields({ partial: false, run: R1_COMPLETED }) // read before r2 started, arrived after
+      expect(state.run.value).toEqual(R2_RUNNING)
+    })
+
+    it('control: the later run replaces the earlier one in arrival order', () => {
+      const state = useRunState(withSource, () => 'autobot')
+      state.applyRunFields({ run: R1_COMPLETED })
+      state.applyRunFields({ run: R2_RUNNING })
+      expect(state.run.value).toEqual(R2_RUNNING)
+    })
+
+    it('a run with no recorded start cannot be ordered and is applied, as before', () => {
+      const state = useRunState(withSource, () => 'autobot')
+      state.applyRunFields({ run: R2_RUNNING })
+      state.applyRunFields({ run: { ...R1_COMPLETED, started_at: '' } })
+      expect(state.run.value?.run_id).toBe('r1')
+    })
+  })
+
   describe('a failed read', () => {
     const failing = () => new Response('{}', { status: 503 })
 
