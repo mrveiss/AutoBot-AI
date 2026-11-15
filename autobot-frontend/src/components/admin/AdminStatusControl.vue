@@ -32,6 +32,13 @@
         </BaseButton>
       </template>
     </BaseModal>
+    <!-- The status is stored but earlier sign-ins were not ended: the retry re-sends the SAME value. -->
+    <span v-if="retryValue !== null" class="admin-status-control__incomplete" role="alert">
+      {{ t('adminUsers.adminStatusRevocationIncomplete') }}
+      <BaseButton variant="secondary" size="sm" :disabled="saving" @click="retryRevocation">
+        {{ t('adminUsers.adminStatusRetryRevocation') }}
+      </BaseButton>
+    </span>
   </span>
 </template>
 
@@ -54,6 +61,8 @@ const { t } = useI18n()
 const logger = createLogger('AdminStatusControl')
 const saving = ref(false)
 const confirming = ref(false)
+/** The value whose sign-in revocation did not finish (a 503 with a plain detail), or null. */
+const retryValue = ref<boolean | null>(null)
 
 /** The #21018 refusal codes (autobot_shared/user_management/last_platform_admin.py), worded for a person. */
 const LAST_ADMIN_TEXT: Record<string, string> = {
@@ -68,8 +77,17 @@ function failureText(err: unknown): string {
   return key ? t(key) : httpErrorText(err, t('adminUsers.adminStatusFailed'))
 }
 
+/**
+ * ``commit_or_503`` (revocation_outcome.py) and the route's ``RevocationCheckUnavailable`` answer 503 with a plain
+ * string detail: the status is stored, the revocation is not confirmed. The #21018 retry-503 carries a ``code``.
+ */
+function isRevocationIncomplete(err: unknown): boolean {
+  return isHttpError(err) && err.status === 503 && typeof err.details?.detail === 'string'
+}
+
 async function setAdmin(isPlatformAdmin: boolean): Promise<void> {
   saving.value = true
+  retryValue.value = null
   let failure: string | null = null
   try {
     await apiClient.call('put', '/api/user-management/users/{user_id}/admin', {
@@ -78,7 +96,8 @@ async function setAdmin(isPlatformAdmin: boolean): Promise<void> {
     })
   } catch (err) {
     logger.error('Failed to change admin status:', err)
-    failure = failureText(err)
+    if (isRevocationIncomplete(err)) retryValue.value = isPlatformAdmin
+    else failure = failureText(err)
   } finally {
     saving.value = false
     confirming.value = false
@@ -97,11 +116,25 @@ function onToggle(next: boolean): void {
 function confirmRevoke(): void {
   void setAdmin(false)
 }
+
+function retryRevocation(): void {
+  if (retryValue.value !== null) void setAdmin(retryValue.value)
+}
 </script>
 
 <style scoped>
 .admin-status-control {
   display: inline-flex;
   align-items: center;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+}
+
+.admin-status-control__incomplete {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: var(--text-xs);
+  color: var(--color-warning);
 }
 </style>

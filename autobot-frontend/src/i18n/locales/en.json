@@ -10526,8 +10526,9 @@
     "adminStatusFailed": "Could not change platform admin status.",
     "adminStatusLastAdmin": "This is the last active platform admin. Make another user a platform admin first.",
     "adminStatusRetry": "Another admin change was in progress. Nothing was changed; try again.",
-    "roleHint": "The role sets permissions only. Platform admin status is changed in its own column.",
-    "roleSelectLabel": "Role for {username}",
+    "adminStatusRevocationIncomplete": "The platform admin status changed, but earlier sign-ins may still work.",
+    "adminStatusRetryRevocation": "Retry ending earlier sign-ins",
+    "roleSelectLabel": "Role for {username}. Sets permissions only, not platform admin status.",
     "roleUpdateFailed": "Could not update the role."
   },
   "schedulers": {

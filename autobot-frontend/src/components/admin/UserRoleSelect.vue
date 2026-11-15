@@ -7,24 +7,20 @@
   derived from `is_platform_admin`. Admin status has its own control, AdminStatusControl.
 -->
 <template>
-  <select
-    class="role-select"
-    :value="current"
-    :title="t('adminUsers.roleHint')"
-    :aria-label="t('adminUsers.roleSelectLabel', { username: user.username })"
-    @change="onRoleChange(($event.target as HTMLSelectElement).value)"
-  >
-    <!-- #14937: a role the UI does not assign still shows as itself
-         instead of leaving the select blank. -->
-    <option v-if="!isAssignableRole(current)" :value="current" disabled>{{ roleLabel(current) }}</option>
-    <option v-for="role in ASSIGNABLE_ROLES" :key="role" :value="role">{{ roleLabel(role) }}</option>
-  </select>
+  <!-- Controlled: after a failed PUT /role the list is re-read and the menu snaps back to the stored role. -->
+  <BaseSelectMenu
+    :model-value="current"
+    :options="options"
+    :label="t('adminUsers.roleSelectLabel', { username: user.username })"
+    size="sm"
+    @update:model-value="onRoleChange"
+  />
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { httpErrorText } from '@autobot/ui'
+import { BaseSelectMenu, httpErrorText, type SelectMenuOption } from '@autobot/ui'
 import { ASSIGNABLE_ROLES, DEFAULT_ROLE, isAssignableRole } from '@/constants/roles'
 import type { Role } from '@/types/_generated/workflow'
 import apiClient from '@/utils/ApiClient'
@@ -57,6 +53,12 @@ function roleLabel(role: string): string {
   return (roleLabels.value as Record<string, string>)[role] ?? role
 }
 
+/** The assignable roles; #14937: a role the UI does not assign still shows as itself, disabled, not blank. */
+const options = computed<SelectMenuOption[]>(() => [
+  ...(isAssignableRole(current.value) ? [] : [{ value: current.value, label: roleLabel(current.value), disabled: true }]),
+  ...ASSIGNABLE_ROLES.map(role => ({ value: role, label: roleLabel(role) })),
+])
+
 async function onRoleChange(role: string): Promise<void> {
   let failure: string | null = null
   try {
@@ -71,13 +73,3 @@ async function onRoleChange(role: string): Promise<void> {
   emit('changed', failure)
 }
 </script>
-
-<style scoped>
-.role-select {
-  padding: var(--spacing-1) var(--spacing-2);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  font-size: var(--tbl-font-size);
-  background: transparent;
-}
-</style>
