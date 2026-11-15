@@ -280,10 +280,10 @@ class RumAgent {
     })
   }
 
-  // API Call Monitoring
-  trackApiCall(method: string, url: string, startTime: number, endTime: number, status: string | number, error?: Error | null): ApiCall {
+  // API Call Monitoring. A call is a timeout when the caller classified it so by type (#21583) or it outlived the threshold.
+  trackApiCall(method: string, url: string, startTime: number, endTime: number, status: string | number, error?: Error | null, timedOut = false): ApiCall {
     const duration = endTime - startTime
-    const isTimeout = duration > this.thresholds.timeoutThreshold
+    const isTimeout = timedOut || duration > this.thresholds.timeoutThreshold
     const isSlow = duration > this.thresholds.slowApiCall
     const isVerySlow = duration > this.thresholds.verySlowApiCall
 
@@ -307,7 +307,7 @@ class RumAgent {
       const statusStr = typeof status === 'number'
         ? (status >= 200 && status < 400 ? 'success' : 'error')
         : String(status)
-      const errorType = error ? 'network' : (isTimeout ? 'timeout' : undefined)
+      const errorType = isTimeout ? 'timeout' : (error ? 'network' : undefined)
 
       pushCapped(this.pendingApiCalls, {
         endpoint: this.normalizeEndpoint(url),
@@ -594,7 +594,7 @@ class RumAgent {
 
     // Issue #476: Queue for Prometheus reporting
     if (this.prometheusEnabled) {
-      this.pendingCriticalIssues.push({
+      pushCapped(this.pendingCriticalIssues, {
         issue_type: type
       })
     }

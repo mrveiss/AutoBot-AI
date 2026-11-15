@@ -168,9 +168,10 @@ window.rumDebug = () => {
     startTime: number,
     endTime: number,
     status: string | number,
-    error?: Error | null
+    error?: Error | null,
+    timedOut = false
   ) {
-    return originalTrackApiCall(method, url, startTime, endTime, status, error)
+    return originalTrackApiCall(method, url, startTime, endTime, status, error, timedOut)
   }
 
   const originalTrackError = window.rum.trackError.bind(window.rum)
