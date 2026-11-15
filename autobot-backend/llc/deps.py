@@ -139,6 +139,30 @@ def _frames_label(exc: BaseException) -> str:
     return " <- ".join(sanitize_log_value(f"{f.filename}:{f.lineno} in {f.name}") for f in reversed(frames))
 
 
+def log_unexpected(
+    log: logging.Logger,
+    scope: str,
+    exc: BaseException,
+    *,
+    headline: str = "Unexpected error",
+    level: int = logging.WARNING,
+) -> None:
+    """One redacted log line for an exception nobody planned for: class, text, innermost frames (#21579).
+
+    The traceback is never attached (no ``exc_info``): its text would carry the raw message past the redactor.
+    *scope* is neutralised like any other untrusted log value.
+    """
+    log.log(
+        level,
+        "%s for %s: %s: %s [at %s]",
+        headline,
+        sanitize_log_value(scope),
+        type(exc).__name__,
+        safe_log_text(exc),
+        _frames_label(exc),
+    )
+
+
 def logged_server_error(log: logging.Logger, detail: str, scope: str, exc: Exception) -> HTTPException:
     """500 carrying only the fixed *detail*; the cause goes to *log*, redacted (#21396).
 
@@ -147,14 +171,7 @@ def logged_server_error(log: logging.Logger, detail: str, scope: str, exc: Excep
     text through ``safe_log_text``, and the innermost frames (location only),
     all on one line; *scope* is neutralised like any other untrusted log value.
     """
-    log.error(
-        "%s for %s: %s: %s [at %s]",
-        detail,
-        sanitize_log_value(scope),
-        type(exc).__name__,
-        safe_log_text(exc),
-        _frames_label(exc),
-    )
+    log_unexpected(log, scope, exc, headline=detail, level=logging.ERROR)
     return HTTPException(status_code=500, detail=detail)
 
 
