@@ -26,8 +26,8 @@ from services.retrieval_contract import (
     PlannedMetrics,
     RetrievalPlan,
     get_provenance,
-    uses_shared_cache,
     unsupported_toggles,
+    uses_shared_cache,
 )
 
 SCOPE = "scope-x"
