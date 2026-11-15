@@ -32,6 +32,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_table
 from repo_tests._reach import declare
+from tools.lint._comment_syntax import blank_comments, blank_comments_and_strings
 
 _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src")
 _EXCLUDED = re.compile(r"(\.test\.|\.spec\.|\.stories\.|/__tests__/)")
@@ -52,15 +53,6 @@ _ANCHOR_RECEIVER = re.compile(r"a|(?:\w*(?:anchor|link)\w*)", re.I)
 #: An optional type annotation between the name and `=` is skipped, so a typed
 #: declaration (`const el: HTMLAnchorElement = …`) still binds its initializer.
 _BINDING = re.compile(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;\n]*)?=\s*([^;\n]+)")
-#: String and template literals, blanked at the same length before brace matching so
-#: a `{` inside a string or a regex does not unbalance the scope walk.
-_STRING_LITERAL = re.compile(r"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|`(?:\\.|[^`\\])*`")
-#: Strings and comments in ONE left-to-right pass: scanning them together is what keeps
-#: a `//` inside a string from being read as a comment and a quote inside a comment from
-#: opening a literal, so neither can swallow real code. Each match is blanked at the same
-#: length (#21195), which keeps every offset in the source valid — an inline `// }`
-#: closes no block, and `_scope_ends` sees the braces the code actually has.
-_MASKED_REGION = re.compile(_STRING_LITERAL.pattern + r"|//[^\n]*|/\*.*?\*/", re.S)
 #: Evidence, in a binding's initializer, that the variable holds an anchor element:
 #: the tag-a lookups. An id or selector of unknown target is not evidence (#21195).
 _ANCHOR_SOURCE = re.compile(
@@ -95,6 +87,27 @@ def _is_anchor(receiver: str | None, bindings: dict[str, str] | None = None) -> 
     return bool(_ANCHOR_SOURCE.search(init)) or bool(_ANCHOR_RECEIVER.fullmatch(init.strip()))
 
 
+def _brace_walk(text: str, starts: list[int]) -> tuple[dict[int, int], dict[int, int | None]]:
+    """One pass over *text*: `{opener: closer}` and each start's enclosing opener.
+
+    The opener a start sits in is the block whose `{` the walk has seen most
+    recently without its `}` — or none for a top-level declaration.
+    """
+    closes: dict[int, int] = {}
+    owners: dict[int, int | None] = {}
+    stack: list[int] = []
+    remaining = set(starts)
+    for pos, char in enumerate(text):
+        if pos in remaining:
+            owners[pos] = stack[-1] if stack else None
+            remaining.discard(pos)
+        if char == "{":
+            stack.append(pos)
+        elif char == "}" and stack:
+            closes[stack.pop()] = pos
+    return closes, owners
+
+
 def _scope_ranges(text: str, starts: list[int]) -> list[tuple[int, int]]:
     """The lexical scope of each declaration in *starts*: (scope start, scope end).
 
@@ -107,46 +120,26 @@ def _scope_ranges(text: str, starts: list[int]) -> list[tuple[int, int]]:
     nothing, and the declaration keeps the block the source actually gives
     it. Unbalanced braces degrade to the file-wide end.
     """
-    src = _MASKED_REGION.sub(lambda m: " " * len(m.group(0)), text)
-    remaining = set(starts)
-    stack: list[int] = []
-    owner: dict[int, int | None] = {}
-    for pos, char in enumerate(src):
-        if pos in remaining:
-            owner[pos] = stack[-1] if stack else None
-            remaining.discard(pos)
-        if char == "{":
-            stack.append(pos)
-        elif char == "}" and stack:
-            stack.pop()
-    closes: dict[int, int] = {}
-    stack = []
-    for pos, char in enumerate(src):
-        if char == "{":
-            stack.append(pos)
-        elif char == "}" and stack:
-            closes[stack.pop()] = pos
-    end = len(src)
+    masked = blank_comments_and_strings(text)
+    closes, owners = _brace_walk(masked, starts)
+    end = len(masked)
     return [
-        (0 if owner[s] is None else owner[s], end if owner[s] is None else closes.get(owner[s], end)) for s in starts
+        (0 if owners[s] is None else owners[s], end if owners[s] is None else closes.get(owners[s], end))
+        for s in starts
     ]
 
 
-def _mask_comments(text: str) -> str:
-    """*text* with `//` and `/* */` comments blanked at the same length.
+def _nearest_init(applicable: list[tuple[int, int, str]], pos: int) -> str:
+    """The init of the declaration in force at *pos* among *applicable*.
 
-    Comments are found with the same single left-to-right pass as
-    `_MASKED_REGION`, so a `//` inside a string literal is string, not
-    comment, and a quote inside a comment opens no literal. Only the comment
-    spans are blanked — string literals stay, because `_ASSIGNMENT` matches
-    the `'download'` literal itself (#21195). Offsets stay valid, so a match
-    found in the masked text still resolves its binding in the unmasked one.
+    Deepest block first; within one block the latest declaration at or
+    before the use — or the first one when the use precedes them all.
     """
-    chars = list(text)
-    for match in _MASKED_REGION.finditer(text):
-        if match.group(0).startswith("/"):
-            chars[match.start() : match.end()] = " " * len(match.group(0))
-    return "".join(chars)
+    deepest = max(scope_start for scope_start, _, _ in applicable)
+    in_scope = [(start, init) for scope_start, start, init in applicable if scope_start == deepest]
+    before = [(start, init) for start, init in in_scope if start <= pos]
+    chosen = before[-1] if before else min(in_scope, key=lambda item: item[0])
+    return chosen[1]
 
 
 def _binding_in_force(
@@ -176,11 +169,7 @@ def _binding_in_force(
     ]
     if not applicable:
         return None
-    deepest = max(scope_start for scope_start, _, _ in applicable)
-    in_scope = [(start, init) for scope_start, start, init in applicable if scope_start == deepest]
-    before = [(start, init) for start, init in in_scope if start <= pos]
-    chosen = before[-1] if before else min(in_scope, key=lambda item: item[0])
-    return {name: chosen[1]}
+    return {name: _nearest_init(applicable, pos)}
 
 
 def _sources(root: Path) -> list[Path]:
@@ -212,7 +201,7 @@ def count(paths: list[Path]) -> int:
             (m.start(), m.group(1), m.group(2), ranges[i][0], ranges[i][1])
             for i, m in enumerate(_BINDING.finditer(text))
         ]
-        for match in _ASSIGNMENT.finditer(_mask_comments(text)):
+        for match in _ASSIGNMENT.finditer(blank_comments(text)):
             receiver = match.group("assign_receiver") or match.group("attr_receiver")
             if _is_anchor(receiver, _binding_in_force(declarations, receiver, match.start())):
                 total += 1
@@ -359,6 +348,8 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         assert count(paths) == 1
 
     def test_a_use_before_a_non_anchor_declaration_is_still_not_a_save(self, tmp_path: Path) -> None:
+        # Control for the F.ts test above: an unbound `el` counts 0 even
+        # without the later-declaration lookup, so this passes on its own.
         paths = [
             _w(
                 tmp_path,
@@ -381,13 +372,14 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
     def test_a_save_after_a_url_string_is_not_masked_as_a_comment(self, tmp_path: Path) -> None:
         assert count([_w(tmp_path, "a/U.ts", 'const u = "http://example.com"; a.download = name\n')]) == 1
 
-    def test_an_element_the_save_never_touches_is_not_counted_next_to_an_inline_comment(self, tmp_path: Path) -> None:
+    def test_a_non_anchor_receiver_and_a_non_download_call_are_not_saves(self, tmp_path: Path) -> None:
+        # Plain negative controls: neither case depends on comment masking.
         paths = [
             _w(
                 tmp_path,
                 "a/NC.ts",
                 "function save() {\n"
-                "  const box = document.createElement('div'); // }\n"
+                "  const box = document.createElement('div');\n"
                 "  box.setAttribute('download', name);\n"
                 "}\n",
             ),
@@ -395,12 +387,23 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
                 tmp_path,
                 "a/NC2.ts",
                 "function preview() {\n"
-                "  const el = document.createElement('a'); // }\n"
+                "  const el = document.createElement('a');\n"
                 "  el.setAttribute('title', name);\n"
                 "}\n",
             ),
         ]
         assert count(paths) == 0
+
+    def test_an_apostrophe_in_template_text_does_not_hide_a_later_comment(self, tmp_path: Path) -> None:
+        planted = _w(
+            tmp_path,
+            "a/V.vue",
+            "<template><p>Don't</p></template>\n"
+            "const el = document.createElement('a'); // x.download = 1\n"
+            'const note = "it\'s";\n'
+            "el.setAttribute('download', name);\n",
+        )
+        assert count([planted]) == 1
 
     def test_a_kit_call_a_comparison_a_comment_and_a_template_attribute_are_not_saves(self, tmp_path: Path) -> None:
         paths = [

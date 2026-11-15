@@ -240,3 +240,63 @@ def code_text(source: str | Path, **kwargs) -> str:
 def iter_code_lines(source: str | Path, **kwargs) -> Iterator[CodeLine]:
     """Streaming form, for the call sites written against a generator."""
     yield from code_lines(source, **kwargs)
+
+
+def _masked_spans(text: str, *, strings: bool) -> list[tuple[int, int]]:
+    """[start, end) comment spans — plus string spans when *strings*.
+    One pass tracking quote state: `//` in a string is data, a quote in a
+    comment opens no literal; `'`/`"` end at the newline, only `` ` `` spans lines.
+    """
+    spans: list[tuple[int, int]] = []
+    quote: str | None = None
+    i = start = 0
+    while i < len(text):
+        char = text[i]
+        if quote is not None:
+            closed = char == quote or (char == "\n" and quote != "`")
+            if char == "\\":
+                i += 1
+            elif closed:
+                if strings:
+                    spans.append((start, i + (char != "\n")))
+                quote = None
+        elif char in ("'", '"', "`"):
+            quote, start = char, i
+        elif text[i : i + 2] in ("//", "/*"):
+            block = text[i + 1] == "*"
+            end = text.find("*/" if block else "\n", i + 2)
+            end = len(text) if end < 0 else end + (2 if block else 0)
+            spans.append((i, end))
+            i = end - 1
+        i += 1
+    if strings and quote is not None:
+        spans.append((start, len(text)))
+    return spans
+
+
+def _blank(text: str, spans: list[tuple[int, int]]) -> str:
+    """*text* with each [start, end) span replaced by spaces (newlines kept)."""
+    chars = list(text)
+    for start, end in spans:
+        for i in range(start, end):
+            if chars[i] != "\n":
+                chars[i] = " "
+    return "".join(chars)
+
+
+def blank_comments(text: str) -> str:
+    """*text* with `//` and `/* */` comments blanked at the same length.
+
+    String literals are kept, so a caller matching a literal still sees it.
+    Newlines are preserved, so offsets still refer to the original file.
+    """
+    return _blank(text, _masked_spans(text, strings=False))
+
+
+def blank_comments_and_strings(text: str) -> str:
+    """*text* with comments and string literals blanked at the same length.
+
+    For brace matching: a `{` inside a string or comment must not open a
+    block. Newlines are preserved, so offsets still refer to the original.
+    """
+    return _blank(text, _masked_spans(text, strings=True))
