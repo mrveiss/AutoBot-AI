@@ -249,6 +249,8 @@ class _FakeRedis:
 
     def __init__(self):
         self._store: dict[str, bytes] = {}
+        self._sets: dict[str, set] = {}
+        self._hashes: dict[str, dict[str, bytes]] = {}
 
     def get(self, key):
         return self._store.get(key)
@@ -262,15 +264,44 @@ class _FakeRedis:
     def delete(self, key):
         self._store.pop(key, None)
 
-    def sadd(self, *_a, **_k):
+    # #21650: sets and hashes are real, so the owner index and the list routes can be exercised.
+    def sadd(self, key, *members):
+        self._sets.setdefault(key, set()).update(members)
+        return len(members)
+
+    def srem(self, key, *members):
+        self._sets.get(key, set()).difference_update(members)
+        return len(members)
+
+    def smembers(self, key):
+        return set(self._sets.get(key, set()))
+
+    def zadd(self, *_a, **_k):
         return 1
 
-    def srem(self, *_a, **_k):
+    def zrem(self, *_a, **_k):
         return 1
+
+    def lrange(self, *_a, **_k):
+        return []
+
+    def hset(self, key, field, value):
+        self._hashes.setdefault(key, {})[field] = value.encode("utf-8") if isinstance(value, str) else value
+        return 1
+
+    def hget(self, key, field):
+        return self._hashes.get(key, {}).get(field)
+
+    def hmget(self, key, fields):
+        return [self.hget(key, f) for f in fields]
+
+    def hdel(self, key, *fields):
+        return sum(1 for f in fields if self._hashes.get(key, {}).pop(f, None) is not None)
 
 
 import api.batch_jobs as _bj  # noqa: E402  (intentionally after sys.modules setup)
 from api.schemas_workflows import BatchSchedule, BatchScheduleUpdate  # noqa: E402
+from services import batch_job_ownership as ownership  # noqa: E402
 
 
 def _seed_schedule(redis, schedule_id="sched-1", enabled=True):
@@ -282,6 +313,7 @@ def _seed_schedule(redis, schedule_id="sched-1", enabled=True):
         next_run=datetime.now(tz=timezone.utc),
     )
     redis.set(_bj._get_schedule_key(schedule_id), schedule.model_dump_json())
+    redis.hset(ownership.owners_key(ownership.SCHEDULES), schedule_id, "test")  # #21650: the callers below are "test"
     return schedule
 
 

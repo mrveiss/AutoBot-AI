@@ -47,6 +47,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.redis_utils import decode_redis_value
+from services import batch_job_ownership as ownership
 from services.batch_job_store import deserialize_job as _deserialize_job
 from services.batch_job_store import get_job_key as _get_job_key
 from services.batch_job_store import get_logs_key as _get_logs_key
@@ -70,6 +71,14 @@ router = APIRouter(tags=["batch-jobs", "management"])
 # are re-exported from services.batch_job_store (the canonical implementation
 # shared with tasks/batch_job_tasks.py) so this module keeps its existing
 # private-name call sites and test seams unchanged.
+
+
+def _redis_or_503():
+    """The main-database Redis client, or 503 when it is unavailable."""
+    redis_client = get_redis_client(database="main")
+    if not redis_client:
+        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    return redis_client
 
 
 def _get_template_key(template_id: str) -> str:
@@ -122,9 +131,7 @@ async def create_batch_job(
     Returns:
         BatchJob: Created job with ID and initial status
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     job_id = str(uuid.uuid4())
     now = datetime.now(tz=timezone.utc)
@@ -142,6 +149,7 @@ async def create_batch_job(
     job_key = _get_job_key(job_id)
     redis_client.set(job_key, _serialize_job(job))
     redis_client.sadd("batch:jobs:all", job_id)
+    ownership.record_owner(redis_client, ownership.JOBS, job_id, current_user)
     redis_client.zadd("batch:jobs:created", {job_id: now.timestamp()})
 
     logger.info("Created batch job %s: %s", job_id, job_data.name)
@@ -173,16 +181,13 @@ async def list_batch_jobs(
     Returns:
         BatchJobList: List of jobs with counts
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
-    job_ids = redis_client.smembers("batch:jobs:all")
+    job_ids = ownership.visible_ids(redis_client, ownership.JOBS, redis_client.smembers("batch:jobs:all"), current_user)
     jobs = []
     status_counts: Dict[str, int] = {}
 
-    for job_id_bytes in job_ids:
-        job_id = decode_redis_value(job_id_bytes)
+    for job_id in job_ids:
         job_key = _get_job_key(job_id)
         job_data = redis_client.get(job_key)
 
@@ -300,15 +305,14 @@ async def get_batch_job(
     Returns:
         BatchJob: Full job details
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     job_key = _get_job_key(job_id)
     job_data = redis_client.get(job_key)
 
     if not job_data:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    ownership.require_access(redis_client, ownership.JOBS, job_id, current_user, "Job")
 
     return _deserialize_job(decode_redis_value(job_data))
 
@@ -334,15 +338,14 @@ async def delete_batch_job(
     Returns:
         dict: Success status
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     job_key = _get_job_key(job_id)
     job_data = redis_client.get(job_key)
 
     if not job_data:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    ownership.require_access(redis_client, ownership.JOBS, job_id, current_user, "Job")
 
     job = _deserialize_job(decode_redis_value(job_data))
 
@@ -352,6 +355,7 @@ async def delete_batch_job(
 
     redis_client.delete(job_key)
     redis_client.srem("batch:jobs:all", job_id)
+    ownership.forget_owner(redis_client, ownership.JOBS, job_id)
     redis_client.zrem("batch:jobs:created", job_id)
 
     logs_key = _get_logs_key(job_id)
@@ -385,14 +389,13 @@ async def run_batch_job_now(
         BatchJob: Current job state (status unchanged until the worker
         picks up the task and transitions it to running).
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     job_key = _get_job_key(job_id)
     job_data = redis_client.get(job_key)
     if not job_data:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    ownership.require_access(redis_client, ownership.JOBS, job_id, current_user, "Job")
 
     job = _deserialize_job(decode_redis_value(job_data))
     if job.status == BatchJobStatus.running:
@@ -431,13 +434,12 @@ async def get_job_logs(
     Returns:
         List[BatchLogEntry]: Job execution logs
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     job_key = _get_job_key(job_id)
     if not redis_client.exists(job_key):
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    ownership.require_access(redis_client, ownership.JOBS, job_id, current_user, "Job")
 
     logs_key = _get_logs_key(job_id)
     log_entries = redis_client.lrange(logs_key, 0, -1)
@@ -469,15 +471,14 @@ async def list_batch_templates(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
-    template_ids = redis_client.smembers("batch:templates:all")
+    template_ids = ownership.visible_ids(
+        redis_client, ownership.TEMPLATES, redis_client.smembers("batch:templates:all"), current_user
+    )
     templates = []
 
-    for template_id_bytes in template_ids:
-        template_id = decode_redis_value(template_id_bytes)
+    for template_id in template_ids:
         template_key = _get_template_key(template_id)
         template_data = redis_client.get(template_key)
 
@@ -505,9 +506,7 @@ async def create_batch_template(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     template_id = str(uuid.uuid4())
     template = BatchTemplate(
@@ -521,6 +520,7 @@ async def create_batch_template(
     template_key = _get_template_key(template_id)
     redis_client.set(template_key, template.model_dump_json())
     redis_client.sadd("batch:templates:all", template_id)
+    ownership.record_owner(redis_client, ownership.TEMPLATES, template_id, current_user)
 
     logger.info("Created batch template %s: %s", template_id, name)
     return template
@@ -541,15 +541,14 @@ async def get_batch_template(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     template_key = _get_template_key(template_id)
     template_data = redis_client.get(template_key)
 
     if not template_data:
         raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
+    ownership.require_access(redis_client, ownership.TEMPLATES, template_id, current_user, "Template")
 
     template_dict = json.loads(decode_redis_value(template_data))
     return BatchTemplate(**template_dict)
@@ -570,16 +569,16 @@ async def delete_batch_template(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     template_key = _get_template_key(template_id)
     if not redis_client.exists(template_key):
         raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
+    ownership.require_access(redis_client, ownership.TEMPLATES, template_id, current_user, "Template")
 
     redis_client.delete(template_key)
     redis_client.srem("batch:templates:all", template_id)
+    ownership.forget_owner(redis_client, ownership.TEMPLATES, template_id)
 
     logger.info("Deleted batch template %s", template_id)
     return {"status": "success", "template_id": template_id}
@@ -604,15 +603,14 @@ async def list_batch_schedules(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
-    schedule_ids = redis_client.smembers("batch:schedules:all")
+    schedule_ids = ownership.visible_ids(
+        redis_client, ownership.SCHEDULES, redis_client.smembers("batch:schedules:all"), current_user
+    )
     schedules = []
 
-    for schedule_id_bytes in schedule_ids:
-        schedule_id = decode_redis_value(schedule_id_bytes)
+    for schedule_id in schedule_ids:
         schedule_key = _get_schedule_key(schedule_id)
         schedule_data = redis_client.get(schedule_key)
 
@@ -640,13 +638,12 @@ async def create_batch_schedule(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     job_key = _get_job_key(job_id)
     if not redis_client.exists(job_key):
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    ownership.require_access(redis_client, ownership.JOBS, job_id, current_user, "Job")
 
     # Issue #12439: a brand-new schedule must fire on its next cron tick, not
     # immediately — dispatch_due_batch_schedules() treats next_run <= now as
@@ -670,6 +667,7 @@ async def create_batch_schedule(
     schedule_key = _get_schedule_key(schedule_id)
     redis_client.set(schedule_key, schedule.model_dump_json())
     redis_client.sadd("batch:schedules:all", schedule_id)
+    ownership.record_owner(redis_client, ownership.SCHEDULES, schedule_id, current_user)
 
     logger.info("Created batch schedule %s for job %s", schedule_id, job_id)
     return schedule
@@ -695,15 +693,14 @@ async def update_batch_schedule(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     schedule_key = _get_schedule_key(schedule_id)
     schedule_data = redis_client.get(schedule_key)
 
     if not schedule_data:
         raise HTTPException(status_code=404, detail=f"Schedule {schedule_id} not found")
+    ownership.require_access(redis_client, ownership.SCHEDULES, schedule_id, current_user, "Schedule")
 
     schedule = BatchSchedule(**json.loads(decode_redis_value(schedule_data)))
     updates = update.model_dump(exclude_unset=True)
@@ -744,16 +741,16 @@ async def delete_batch_schedule(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     schedule_key = _get_schedule_key(schedule_id)
     if not redis_client.exists(schedule_key):
         raise HTTPException(status_code=404, detail=f"Schedule {schedule_id} not found")
+    ownership.require_access(redis_client, ownership.SCHEDULES, schedule_id, current_user, "Schedule")
 
     redis_client.delete(schedule_key)
     redis_client.srem("batch:schedules:all", schedule_id)
+    ownership.forget_owner(redis_client, ownership.SCHEDULES, schedule_id)
 
     logger.info("Deleted batch schedule %s", schedule_id)
     return {"status": "success", "schedule_id": schedule_id}
