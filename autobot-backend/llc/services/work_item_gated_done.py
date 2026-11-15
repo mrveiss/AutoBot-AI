@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.enums import WorkItemType
 from ..models.work_item import LLCWorkItem
 from .authz import is_company_member
-from .work_item_own_task import InvalidTransition
+from .work_item_own_task import InvalidTransition, refuse_unheld_agent_move
 
 _NO_NODE = "this agent has no org node, so a gated item cannot be handed to review"
 _NO_REVIEWER = "A reviewer is required to initiate the handoff: it has none and no creator."
@@ -53,6 +53,10 @@ class DoneGate:
     agent_id: Optional[str] = None
     is_agent: bool = False
     local_person: Optional[str] = None
+
+    def refuse_unheld(self, item: LLCWorkItem) -> None:
+        """An agent caller changes only an item it holds, and never one waiting on its reviewer (#21586)."""
+        refuse_unheld_agent_move(item, self.agent_id, self.is_agent)
 
     def finish_args(self, acting_user: Optional[uuid.UUID]) -> Dict[str, Any]:
         """The keyword arguments of ``WorkItemService.transition_to_done`` for this caller."""

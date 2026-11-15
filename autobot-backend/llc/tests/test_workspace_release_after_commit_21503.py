@@ -88,9 +88,15 @@ async def test_the_worktree_stays_when_the_transition_does_not_commit(status) ->
 async def test_the_approve_path_removes_the_worktree_only_after_commit(commit: bool, removals: int) -> None:
     reviewer, item, workspace = uuid.uuid4(), _item(), SimpleNamespace(workspace_dir="/workspaces/task")
     item.reviewer_user_id = reviewer
-    session = _TxSession(results=[FakeResult([item]), FakeResult([workspace])])
+    # the approve's own lock, the done path's lock, then the workspace row the release reads (#21590)
+    session = _TxSession(results=[FakeResult([item]), FakeResult([item]), FakeResult([workspace])])
     removed = MagicMock()
-    with patch("services.task_workspace.release_workspace", removed):
+    done_path = WorkItemService(activity_log=MagicMock(record=AsyncMock()))
+    with (
+        patch("services.task_workspace.release_workspace", removed),
+        patch("llc.services.handoff.get_work_item_service", return_value=done_path),
+        patch.object(WorkItemService, "_trigger_artifact_ingest", new=AsyncMock()),
+    ):
         service = HandoffService(activity_log=MagicMock(record=AsyncMock()))
         await service.approve(session, str(item.id), str(reviewer), str(item.company_id))
         assert removed.call_count == 0, "the worktree was removed before the approval committed"
