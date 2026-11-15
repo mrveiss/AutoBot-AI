@@ -4,8 +4,8 @@
  * Bound for RumAgent's per-call buffers (#21583).
  *
  * Every kit-client request is recorded now, so a polling view would grow the buffers without bound. They keep the
- * latest N. The unflushed reporting queue is bounded too: it is only drained by the periodic reporter, which runs
- * only when RUM is enabled. N is env-backed (`VITE_RUM_MAX_API_CALLS`); an unset, non-numeric or non-positive value
+ * latest N. The unflushed reporting queues (API calls and critical issues) are bounded too: they are only drained by
+ * the periodic reporter, which runs only when RUM is enabled. N is env-backed (`VITE_RUM_MAX_API_CALLS`); an unset, non-numeric or non-positive value
  * falls back to the default (read through the kit's `getEnvPositiveInt`, #20135).
  */
 

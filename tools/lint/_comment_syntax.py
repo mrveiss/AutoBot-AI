@@ -380,6 +380,16 @@ def _join_continuations(lines: Iterable[CodeLine]) -> list[CodeLine]:
     return [CodeLine(numbers[i - 1] if 0 < i <= len(numbers) else i, body) for i, body in folded]
 
 
+#: An HTML comment. Markup has no line comments, so this is its whole comment syntax.
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+def strip_html_comments(text: str) -> str:
+    """*text* with every ``<!-- ... -->`` removed, keeping its newlines so line numbers hold; an unclosed ``<!--``
+    stays as text."""
+    return _HTML_COMMENT.sub(lambda m: "\n" * m.group().count("\n"), text)
+
+
 def code_text(source: str | Path, **kwargs) -> str:
     """`code_lines` rejoined, for callers that search the whole file at once."""
     return "\n".join(line.text for line in code_lines(source, **kwargs))
