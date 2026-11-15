@@ -94,7 +94,7 @@ async def effects(factory):  # noqa: ANN001, ANN201
         patch("user_management.database.get_async_session_factory", return_value=factory),
         patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)),
         patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=MagicMock())),
-        patch("llc.services.handoff.delete_if_holder", new=AsyncMock()) as fence,
+        patch("llc.services.handoff.release_agent_fence", new=AsyncMock()) as fence,
         patch.object(HandoffService, "_record_a2h_activity", new=AsyncMock()),
         patch.object(HandoffService, "_publish_a2h_notification", new=AsyncMock()),
         patch.object(HandoffService, "_generate_and_update_brief_async", new=AsyncMock()),
@@ -242,7 +242,7 @@ async def test_a_gated_finish_by_the_holder_goes_to_review(factory, effects, rev
     assert answer["status"] == "in_review"
     assert (row.status, row.reviewer_user_id, row.assignee_user_id) == (WorkItemStatus.IN_REVIEW, expected, expected)
     assert (row.assignee_agent_id, row.checkout_run_id, row.checkout_locked_at, row.completed_at) == (None,) * 4
-    assert effects.fence.await_args.args[1:] == (f"llc:checkout:{_ITEM}", str(_NODE))
+    assert effects.fence.await_args.args[1:] == (str(_NODE), "run-1")  # this checkout generation only
     assert await _completed_rows(factory) == []
 
 

@@ -52,6 +52,7 @@ from ..models.label import LLCWorkItemLabel
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from .actor import ActivityRecordError, audit, resolve_actor, resolve_actor_as
 from .base import LLCServiceBase
+from .commit_publish import run_after_commit
 from .company_os.errors import CompanyOsError, CompanyOsNotFound
 from .wake_events import wake_for_comment, wake_for_item_changes
 from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-exported for the API and tests
@@ -60,7 +61,7 @@ from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-ex
     resolve_actor_role,
 )
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
-from .work_item_completion_effects import release_workspace_for_task
+from .work_item_completion_effects import index_artifacts_after_commit, release_workspace_for_task
 from .work_item_gated_done import DoneGate, default_gate, review_outcome
 from .work_item_hierarchy import reparent, validate_create
 from .work_item_own_task import (
@@ -858,7 +859,7 @@ class WorkItemService(LLCServiceBase):
         item.version += 1
         await session.flush()
         await self._record_completed(session, str(item.id), current, company_id, actor)
-        # External effects (Chroma upsert, worktree removal) only once the audit has succeeded (#20102)
+        # External effects only once the audit has succeeded (#20102); the Chroma upsert waits for the commit (#21586)
         await self._trigger_artifact_ingest(session, item)
         await release_workspace_for_task(str(item.id), session)
 
@@ -953,27 +954,13 @@ class WorkItemService(LLCServiceBase):
                 )
         return f"WI-{uuid.uuid4().hex[:8].upper()}"
 
-    async def _trigger_artifact_ingest(
-        self,
-        session: AsyncSession,
-        item: LLCWorkItem,
-    ) -> None:
-        """Non-fatally call ArtifactIngestor for all pending products on this item."""
-        try:
-            from ..kb.artifact_ingestor import ArtifactIngestor
-
-            ingestor = ArtifactIngestor()
-            await ingestor.ingest_all_pending(
-                session,
-                work_item_id=str(item.id),
-                project_id=str(item.project_id) if item.project_id else None,
-                work_item_identifier=item.identifier,
-                company_id=str(item.company_id),
-                completed_at=item.completed_at,
-            )
-        except Exception:
-            logger.warning(
-                "ArtifactIngestor failed for work item %s — transition still succeeds",
-                item.id,
-                exc_info=True,
-            )
+    async def _trigger_artifact_ingest(self, session: AsyncSession, item: LLCWorkItem) -> None:
+        """Index the item's pending artifacts once *session* commits; a rollback indexes nothing (#21586)."""
+        job = dict(
+            work_item_id=str(item.id),
+            project_id=str(item.project_id) if item.project_id else None,
+            identifier=item.identifier,
+            company_id=str(item.company_id),
+            completed_at=item.completed_at,
+        )
+        await run_after_commit(session, lambda: index_artifacts_after_commit(**job), f"index artifacts of {item.id}")

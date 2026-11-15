@@ -36,7 +36,7 @@ from llc.models.work_item import LLCWorkItem
 from llc.services import after_commit
 from llc.services.activity_log import LLCActivityLogService
 from llc.services.handoff import HandoffService
-from llc.services.work_item_own_task import InvalidTransition
+from llc.services.work_item_own_task import InvalidTransition, release_agent_fence
 from llc.services.work_item_service import WorkItemService
 from llc.tests import _e2e_harness as harness
 from user_management.services import TenantContext
@@ -53,6 +53,8 @@ _STRANGER = uuid.UUID("7a8b9c0d-1e2f-4a3b-8c5d-6e7f8091a2b3")
 _SLUG = "agent-21586"
 _NOW = datetime(2026, 11, 1, tzinfo=timezone.utc)
 _FENCE = f"llc:checkout:{_ITEM}"
+#: The real scheduler, kept before the fixture swaps it for a spy (the after-commit indexing tests need it).
+_REAL_INGEST = WorkItemService._trigger_artifact_ingest
 
 
 @pytest_asyncio.fixture
@@ -77,7 +79,7 @@ async def effects(factory):  # noqa: ANN001, ANN201
             new=AsyncMock(return_value=MagicMock(publish=published)),
         ),
         patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=MagicMock())),
-        patch("llc.services.handoff.delete_if_holder", new=AsyncMock()) as fence,
+        patch("llc.services.handoff.release_agent_fence", new=AsyncMock()) as fence,
         patch("llc.services.handoff.delete_if_value", new=AsyncMock(return_value=True)) as human_fence,
         patch("llc.services.handoff.wake_for_item_changes", new=AsyncMock()),
         patch.object(HandoffService, "_record_a2h_activity", new=AsyncMock()),
@@ -418,3 +420,62 @@ async def test_a_missing_item_is_a_404_that_does_not_say_internal_server_error(f
 
     assert response.status_code == 404, response.text
     assert "Internal server error" not in response.text
+
+
+# --- #21640 review: the handed-off checkout generation only; indexing after the approval commits -----------------
+
+
+@pytest.mark.parametrize(
+    ("fence", "kept"),
+    [(f"{_NODE}#run-1", False), (f"{_NODE}#run-2", True)],
+    ids=["the-handed-off-checkout-is-dropped", "the-same-agents-next-checkout-is-kept"],
+)
+async def test_a_handoff_drops_only_the_checkout_generation_it_handed_off(  # noqa: ANN001
+    factory, effects, fence, kept
+) -> None:
+    await _seed(factory)  # the agent holds checkout run-1
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    await redis.set(_FENCE, fence)
+    effects.fence.side_effect = release_agent_fence  # the real release, behind the fixture's spy
+    with patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=redis)):
+        async with factory() as session:
+            await _a2h(session)
+            await session.commit()
+        await _settle()
+
+    assert effects.fence.await_args.args == (str(_ITEM), str(_NODE), "run-1")
+    assert await redis.get(_FENCE) == (fence if kept else None)
+
+
+async def test_an_approval_indexes_artifacts_only_after_its_commit(factory, effects) -> None:  # noqa: ANN001
+    await _seed(factory, agent=None, user=_REVIEWER, status=WorkItemStatus.IN_REVIEW, reviewer=_REVIEWER)
+    with (
+        patch.object(WorkItemService, "_trigger_artifact_ingest", new=_REAL_INGEST),
+        patch("llc.services.work_item_service.index_artifacts_after_commit", new=AsyncMock()) as job,
+    ):
+        async with factory() as session:
+            await HandoffService().approve(session, str(_ITEM), str(_REVIEWER), str(_COMPANY))
+            await _settle()
+            job.assert_not_awaited()  # nothing is indexed while the approval can still roll back
+            await session.commit()
+        await _settle()
+
+    job.assert_awaited_once()
+    assert (job.await_args.kwargs["work_item_id"], job.await_args.kwargs["identifier"]) == (str(_ITEM), "T-21586")
+
+
+async def test_an_approval_whose_audit_fails_indexes_nothing(factory, effects) -> None:  # noqa: ANN001
+    await _seed(factory, agent=None, user=_REVIEWER, status=WorkItemStatus.IN_REVIEW, reviewer=_REVIEWER)
+    with (
+        patch.object(WorkItemService, "_trigger_artifact_ingest", new=_REAL_INGEST),
+        patch("llc.services.work_item_service.index_artifacts_after_commit", new=AsyncMock()) as job,
+        patch("llc.services.handoff.audit", new=AsyncMock(side_effect=RuntimeError("audit store down"))),
+    ):
+        async with factory() as session:
+            with pytest.raises(RuntimeError, match="audit store down"):
+                await HandoffService().approve(session, str(_ITEM), str(_REVIEWER), str(_COMPANY))
+            await session.rollback()
+        await _settle()
+
+    job.assert_not_awaited()
+    assert (await _row(factory)).status == WorkItemStatus.IN_REVIEW

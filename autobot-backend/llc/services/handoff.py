@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_holder, delete_if_value
+from autobot_shared.redis_utils import delete_if_value
 from autobot_shared.time_utils import utc_timestamp
 
 from ..exceptions import PublicMessageMixin
@@ -29,6 +29,7 @@ from .base import LLCServiceBase
 from .commit_publish import publish_after_commit, run_after_commit
 from .company_os.errors import CompanyOsNotFound
 from .wake_events import wake_for_item_changes
+from .work_item_own_task import release_agent_fence
 
 try:
     from user_management.database import get_async_session_factory
@@ -174,6 +175,7 @@ class HandoffService(LLCServiceBase):
         item.assignee_type = AssigneeType.USER.value
         item.assignee_agent_id = None
         item.assignee_user_id = uuid.UUID(reviewer_user_id)
+        run_id = item.checkout_run_id  # read under the row lock: the fence drop names THIS checkout only
         item.checkout_run_id = None
         item.checkout_locked_at = None
         item.version += 1
@@ -181,8 +183,10 @@ class HandoffService(LLCServiceBase):
         # Audit first: a failed audit rolls the database back. The fence drop, the notification and the
         # brief task cannot be taken back, so each waits for the caller's commit (#21589).
         await self._record_a2h_activity(session, company_id, agent_id, reviewer_user_id, work_item_id, brief)
-        await run_after_commit(
-            session, lambda: self._drop_agent_fence(work_item_id, agent_id), f"release checkout fence of {work_item_id}"
+        await run_after_commit(  # the same agent's next checkout carries another generation and keeps its fence
+            session,
+            lambda: release_agent_fence(work_item_id, agent_id, run_id),
+            f"release checkout fence of {work_item_id}",
         )
         await self._publish_a2h_notification(session, company_id, work_item_id, reviewer_user_id, brief)
         generation = dict(
@@ -330,12 +334,6 @@ class HandoffService(LLCServiceBase):
         task = asyncio.create_task(coro)
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
-
-    async def _drop_agent_fence(self, work_item_id: str, agent_id: str) -> None:
-        """Drop the agent's fence only, whatever checkout generation it carries; another holder's stays."""
-        redis = await get_async_redis_client()
-        if redis is not None:
-            await delete_if_holder(redis, f"{_CHECKOUT_REDIS_PREFIX}{work_item_id}", agent_id)
 
     async def _release_redis_key(self, work_item_id: str, user_id: str) -> None:
         redis = await get_async_redis_client()
