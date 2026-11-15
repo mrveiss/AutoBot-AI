@@ -19,6 +19,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import delete_if_holder, delete_if_value
 from autobot_shared.time_utils import utc_timestamp
 
+from ..exceptions import PublicMessageMixin
 from ..kb.handoff_brief import HandoffBriefGenerator
 from ..models.activity import ActorType
 from ..models.enums import ActivityEventType, AssigneeType, WorkItemStatus
@@ -26,6 +27,7 @@ from ..models.work_item import LLCWorkItem
 from .actor import audit
 from .base import LLCServiceBase
 from .commit_publish import publish_after_commit
+from .company_os.errors import CompanyOsNotFound
 from .wake_events import wake_for_item_changes
 
 try:
@@ -40,11 +42,14 @@ _NOTIFICATION_CHANNEL_PREFIX = "llc:notifications:"
 _LLC_H2A_BRIEF_CACHE_TTL = env_int("AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL", 86400)
 
 
-class HandoffNotAuthorized(Exception):
-    """Raised when the human does not hold the item."""
+class HandoffNotAuthorized(PublicMessageMixin, Exception):
+    """Raised when the human does not hold the item.
+
+    Public: the holder named in the message is a member of the caller's own company.
+    """
 
 
-class HandoffNotAllowed(Exception):
+class HandoffNotAllowed(PublicMessageMixin, Exception):
     """Raised when the agent does not hold the checkout lock."""
 
 
@@ -155,7 +160,7 @@ class HandoffService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         if item.assignee_agent_id is None or str(item.assignee_agent_id) != agent_id:
             raise HandoffNotAllowed(f"Agent {agent_id} does not hold checkout for work item {work_item_id}")
 
@@ -202,7 +207,7 @@ class HandoffService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         self._assert_reviewer(item, reviewer_user_id)
         now = datetime.now(timezone.utc)
         item.status = WorkItemStatus.DONE
@@ -250,7 +255,7 @@ class HandoffService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         self._assert_reviewer(item, reviewer_user_id)
         item.status = WorkItemStatus.IN_PROGRESS
         item.reviewer_user_id = None
@@ -290,7 +295,7 @@ class HandoffService(LLCServiceBase):
         result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)))
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         return item.review_brief
 
     async def _get_and_validate_human(self, session: AsyncSession, work_item_id: str, user_id: str) -> LLCWorkItem:
@@ -299,7 +304,7 @@ class HandoffService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         holder_user_id = str(item.assignee_user_id) if item.assignee_user_id else None
         if item.assignee_type != AssigneeType.USER.value or holder_user_id != user_id:
             raise HandoffNotAuthorized(

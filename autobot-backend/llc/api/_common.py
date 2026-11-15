@@ -24,6 +24,7 @@ from pydantic import AfterValidator
 
 from autobot_shared.auth.interactive_principal import is_interactive_human
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text, sanitize_log_value
 
 from ..services.work_item_hierarchy import HierarchyViolation
 from ..services.work_item_own_task import canonical_agent_id, ensure_fence_safe_agent_id
@@ -105,12 +106,53 @@ def acting_user_id(current_user: dict) -> Optional[str]:
         return None
 
 
+#: What a caller is told when an exception does not say what it may show, by status code (#21579). One table, so
+#: no handler word a refusal differently or let exception text through.
+_REFUSAL_TEXT: dict[int, str] = {
+    status.HTTP_400_BAD_REQUEST: "Invalid request",
+    status.HTTP_403_FORBIDDEN: "Forbidden",
+    status.HTTP_404_NOT_FOUND: "Not found",
+    status.HTTP_409_CONFLICT: "Conflict",
+    status.HTTP_422_UNPROCESSABLE_ENTITY: "Unprocessable request",
+    status.HTTP_503_SERVICE_UNAVAILABLE: "Service unavailable",
+}
+_REFUSAL_DEFAULT = "Request refused"
+
+
+def http_refusal(status_code: int, exc: BaseException, *, scope: str) -> HTTPException:
+    """The refusal for *exc*: its ``public_detail`` when it has one, else a fixed text by status (#21579).
+
+    An exception is public by construction only when it carries a ``public_detail`` string. Its own
+    message (``str(exc)``) is never the response: it can hold a driver message, a path, a company's
+    data. The cause is logged once, redacted, with *scope* and the exception class.
+    """
+    public = getattr(exc, "public_detail", None)
+    if isinstance(public, str):
+        if public != str(exc):  # a redacted class: the dropped detail (ids, remedy) still reaches the log
+            logger.info(
+                "Refused %s with %s: %s: %s",
+                status_code,
+                sanitize_log_value(scope),
+                type(exc).__name__,
+                safe_log_text(exc),
+            )
+        return HTTPException(status_code=status_code, detail=public)
+    logger.warning(
+        "Refused %s with %s: %s: %s",
+        status_code,
+        sanitize_log_value(scope),
+        type(exc).__name__,
+        safe_log_text(exc),
+    )
+    return HTTPException(status_code=status_code, detail=_REFUSAL_TEXT.get(status_code, _REFUSAL_DEFAULT))
+
+
 def bad_request(exc: Exception) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return http_refusal(status.HTTP_400_BAD_REQUEST, exc, scope="llc.bad_request")
 
 
 def forbidden(exc: Exception) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    return http_refusal(status.HTTP_403_FORBIDDEN, exc, scope="llc.forbidden")
 
 
 def registry_unavailable(exc: Exception) -> HTTPException:
@@ -120,7 +162,7 @@ def registry_unavailable(exc: Exception) -> HTTPException:
     a bad request tells the caller to fix their input when there is nothing
     wrong with it.
     """
-    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    return http_refusal(status.HTTP_503_SERVICE_UNAVAILABLE, exc, scope="llc.registry_unavailable")
 
 
 async def agent_node_uuid(agent_id: str, company_id: str) -> Optional[uuid.UUID]:
@@ -276,15 +318,13 @@ async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
 
 
 def refused_transition(exc: Exception) -> HTTPException:
-    """A refused status move as 409, with the service's reason (#12740).
+    """A refused status move as 409 (#12740).
 
-    The reason names statuses and permitted moves, or why a finish needs review (the item's reviewer or
-    creator is missing or not a member, the agent does not hold the item), so it is safe to show, and
-    the UI can tell the user what went wrong. 409, not 422: the request is well-formed but conflicts with the
-    item's state.
+    The caller sees the exception's ``public_detail`` when it has one (the service's reason: statuses and
+    permitted moves, or why a finish needs review), else the fixed 409 text; the raw message is only ever
+    logged, redacted (#21579). 409, not 422: the request is well-formed but conflicts with the item's state.
     """
-    logger.info("Rejected illegal work-item transition: %s", exc)
-    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    return http_refusal(status.HTTP_409_CONFLICT, exc, scope="llc.refused_transition")
 
 
 def write_refusal(exc: ValueError) -> HTTPException:
@@ -293,4 +333,4 @@ def write_refusal(exc: ValueError) -> HTTPException:
     Any other ``ValueError`` (e.g. an unknown approval category, GH#11206) stays 400.
     """
     code = status.HTTP_422_UNPROCESSABLE_ENTITY if isinstance(exc, HierarchyViolation) else status.HTTP_400_BAD_REQUEST
-    return HTTPException(status_code=code, detail=str(exc))
+    return http_refusal(code, exc, scope="llc.write_refusal")

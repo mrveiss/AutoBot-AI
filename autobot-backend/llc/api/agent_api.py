@@ -26,11 +26,19 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from security.upload_filename_policy import require_safe_upload
 
 from ..deps import logged_server_error
 from ..services.work_item_own_task import InvalidTransition
-from ._common import agent_context, agent_node_uuid, assert_item_in_company, parse_work_item_id, refused_transition
+from ._common import (
+    agent_context,
+    agent_node_uuid,
+    assert_item_in_company,
+    http_refusal,
+    parse_work_item_id,
+    refused_transition,
+)
 from ._peer_search import fetch_peer_rows
 
 logger = get_logger(__name__)
@@ -150,7 +158,7 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
         except InvalidTransition as exc:  # a refused move, or a done the review gate cannot send to review
             raise refused_transition(exc) from exc
         except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            raise http_refusal(404, exc, scope="agent_api.update_work_item_status") from None
 
         # #16017: `comment` was declared and read nowhere -- accepted, answered
         # 200, discarded. Wired not removed: the store already exists unreached
@@ -225,11 +233,11 @@ async def ingest_cost_event(body: CostEvent, request: Request) -> Dict[str, Any]
             )
             await session.commit()
     except WorkItemNotInCompany as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise http_refusal(404, exc, scope="agent_api.ingest_cost_event") from None
     except BudgetExhausted as exc:
-        raise HTTPException(status_code=402, detail=str(exc)) from exc
+        raise http_refusal(402, exc, scope="agent_api.ingest_cost_event") from None
     except UnpricedModel as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise http_refusal(422, exc, scope="agent_api.ingest_cost_event") from None
 
     return {"recorded": True, "cost": str(cost)}
 
@@ -385,10 +393,7 @@ async def report_heartbeat(body: HeartbeatReport, request: Request) -> Dict[str,
     if body.work_item_id is not None:
         item_uuid = await assert_item_in_company(body.work_item_id, company_id)
 
-    values: Dict[str, Any] = {
-        "status": status.value,
-        "finished_at": datetime.now(tz=timezone.utc),
-    }
+    values: Dict[str, Any] = {"status": status.value, "finished_at": datetime.now(tz=timezone.utc)}
     if item_uuid is not None:
         values["work_item_id"] = item_uuid
 
@@ -450,7 +455,7 @@ async def agent_upload_attachment(
             "text_extracted": row.text_extracted,
         }
     except AttachmentTooLarge as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=413, detail="Internal server error")
 
 

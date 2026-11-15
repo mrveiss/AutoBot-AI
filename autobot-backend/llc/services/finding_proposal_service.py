@@ -20,6 +20,7 @@ import uuid
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..exceptions import PublicMessageMixin
 from ..models.enums import ApprovalType, FindingProposalStatus, WorkItemPriority, WorkItemType
 from ..models.finding_proposal import LLCFindingProposal
 from .findings_gather import gather_findings
@@ -32,11 +33,11 @@ logger = logging.getLogger(__name__)
 _BUG_TYPES = frozenset({"bug", "race_condition", "security", "vulnerability", "null_dereference"})
 
 
-class FindingsDisabledError(Exception):
+class FindingsDisabledError(PublicMessageMixin, Exception):
     """Raised when scan/promote is called but the feature flag is OFF."""
 
 
-class ProposalStateError(Exception):
+class ProposalStateError(PublicMessageMixin, Exception):
     """Raised when a proposal is in the wrong state for the requested action."""
 
 

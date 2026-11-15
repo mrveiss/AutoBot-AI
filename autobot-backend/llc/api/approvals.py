@@ -21,6 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.human_decider import require_interactive_human
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
+from llc.api._common import http_refusal
 from llc.deps import assert_company_access, get_session, load_authorized, service_dep
 from models.approval import Approval
 from services.ai_line_change_action import ACTION as LINE_CHANGE_ACTION
@@ -114,7 +116,7 @@ async def request_approval(
                 actor_user_id=ctx.user_id,
             )
     except ApprovalHookError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise http_refusal(422, exc, scope="approvals.request_approval") from None
     await svc.publish_requested(approval)
     return _to_response(approval)
 
@@ -205,17 +207,21 @@ async def decide_approval(
         await session.commit()
     except NotAuthorisedError as exc:
         await session.rollback()
-        logger.warning("Refused approval decision on %s: %s", aid, exc)
+        logger.warning("Refused approval decision on %s: %s", aid, safe_log_text(repr(exc)))
         raise HTTPException(status_code=403, detail="Only a company owner or admin may decide an approval")
     except ApprovalHookError as exc:
         await session.rollback()
-        logger.warning("Approval %s left pending: its action could not be applied: %s", aid, exc)
+        logger.warning(
+            "Approval %s left pending: its action could not be applied: %s",
+            aid,
+            safe_log_text(repr(exc)),
+        )
         raise HTTPException(
             status_code=409, detail="The approved action could not be applied; the approval is still pending"
         )
     except ApprovalNotFoundError as exc:
         await session.rollback()
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
     except (ApprovalStateError, ApprovalRequiredError):
         await session.rollback()

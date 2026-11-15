@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from llc.deps import get_session, service_dep
 from user_management.services import TenantContext
 
@@ -165,7 +166,7 @@ async def create_kanban_board(
         board = await svc.get_or_create_kanban(session, body.company_id, body.project_id, name=body.name)
         await session.commit()
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=400, detail="Internal server error")
     return _board_response(board)
 
@@ -186,7 +187,7 @@ async def create_sprint_board(
         board = await svc.get_or_create_sprint_board(session, body.company_id, body.sprint_id, name=body.name)
         await session.commit()
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=400, detail="Internal server error")
     return _board_response(board)
 
@@ -231,7 +232,7 @@ async def get_board_items(
     try:
         result = await svc.get_board_items(session, board_id)
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
 
     board = result["board"]
@@ -351,7 +352,7 @@ async def move_item(
     except InvalidTransition as exc:
         raise refused_transition(exc)
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
 
     return _work_item_summary(updated_item, body.column_id)
