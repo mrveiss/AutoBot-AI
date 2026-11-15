@@ -221,7 +221,7 @@ class PagedClient:
 
 
 def test_list_issues_drops_pull_requests_keeps_the_filters_and_reports_a_page_cap() -> None:
-    pages = [[{"number": 1}, {"number": 2, "pull_request": {}}], [{"number": 3}, {"number": 4}]]
+    pages = [[{"number": 1}, {"number": 2, "pull_request": {"url": "x"}}], [{"number": 3}, {"number": 4}]]
     client = PagedClient(pages)
     items, complete = ia.list_issues(client, {"state": "open", "labels": "bug,ci"}, page_size=2, max_pages=2)
     assert [i["number"] for i in items] == [1, 3, 4] and complete is False
