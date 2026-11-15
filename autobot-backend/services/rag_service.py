@@ -33,7 +33,7 @@ from services.rag_config import RAGConfig, get_rag_config
 from services.rag_derived_context import RAGDerivedContextMixin
 from services.rag_learning import RAGLearningMixin
 from services.rag_legs import RAGLegsMixin
-from services.rag_visibility import VISIBILITY_OVERFETCH, cache_scope, filter_ranked
+from services.rag_visibility import VISIBILITY_OVERFETCH, filter_ranked
 from services.retrieval_contract import DEFAULT_PLAN, RetrievalPlan, finalize_hits, require_plan
 from services.session_adaptive_reranker import get_session_adaptive_reranker, session_adapted_weights
 from type_defs.common import Metadata
@@ -409,19 +409,9 @@ class RAGService(RAGDerivedContextMixin, RAGCacheTiersMixin, RAGLegsMixin, RAGLe
         if not self.config.enable_advanced_rag:
             return await self._fallback_basic_search(query, max_results, categories, principal=principal)
 
-        # The cache toggle off makes the scope None: every tier is skipped, read and write (#20958).
-        scope = await cache_scope(principal) if plan.cache else None
-        # Tiers 0 and 2 hold results that already include docs, so a docs-less plan never reads them;
-        # tier 1 is stored before the docs merge and is shared, so the key needs no plan part.
-        hit = await self._check_cache_tiers(
-            query, max_results, enable_reranking, categories, principal, scope, shared_tiers=plan.docs
-        )
-        if hit is not None:
-            return hit[0], hit[1]
-
-        # Neural Mesh RAG path (Issue #2059)
-        if self.config.mesh_retriever_enabled and self._mesh_retriever is not None:
-            return await self._run_mesh_retriever(query, max_results, principal)
+        early, scope = await self._cached_or_mesh(query, max_results, enable_reranking, categories, principal, plan)
+        if early is not None:
+            return early
 
         if not await self.initialize():
             logger.warning("RAG init failed, using fallback")

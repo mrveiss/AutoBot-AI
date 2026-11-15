@@ -9,9 +9,9 @@ Request contract of the canonical retrieval entry ``RAGService.advanced_search``
 returned hit carries a ``HitProvenance`` (bucket, leg, per-leg scores, final score). A toggle whose
 leg does not exist yet is accepted and listed in ``PlannedMetrics.unsupported`` -- never ignored.
 
-The toggle names equal the benchmark gate's ``TECHNIQUES`` (#20949, ``knowledge/retrieval_gate.py``)
-plus ``docs``; ``GATE_TECHNIQUES`` below mirrors them until that gate lands on main, and the
-reconciliation test then reads the gate's tuple instead.
+The toggle names equal the benchmark gate's techniques (#20949) plus ``docs``. ``RETRIEVAL_TECHNIQUES``
+below is the ONE definition of that list; the gate (PR #21064) imports it instead of defining its own
+(#21625), and ``retrieval_contract_21606_test`` keeps the plan and the gate equal until then.
 """
 
 from dataclasses import dataclass, field, fields
@@ -19,8 +19,17 @@ from typing import Any, Dict, List, Mapping, Tuple
 
 from advanced_rag_optimizer import RAGMetrics, RankedResult
 
-#: The gate's technique names (#20949) -- source of the plan's field names, plus ``docs``.
-GATE_TECHNIQUES: Tuple[str, ...] = ("dense", "bm25", "fusion", "rerank", "query_expansion", "graph", "memory", "cache")
+#: The canonical technique list; the plan's field names are these plus ``docs``. The gate imports it (#21625).
+RETRIEVAL_TECHNIQUES: Tuple[str, ...] = (
+    "dense",
+    "bm25",
+    "fusion",
+    "rerank",
+    "query_expansion",
+    "graph",
+    "memory",
+    "cache",
+)
 
 PROVENANCE_ATTR = "provenance"
 
@@ -77,6 +86,7 @@ class HitProvenance:
 
     bucket: str
     leg: str
+    origin: str = ""  # the cache tier that served the hit ("topic_cache" / "semantic_cache"), else ""
     scores: Mapping[str, float] = field(default_factory=dict)
     final_score: float = 0.0
 
@@ -88,17 +98,21 @@ class PlannedMetrics(RAGMetrics):
     unsupported: List[str] = field(default_factory=list)
 
 
-def _bucket_and_leg(source: str) -> Tuple[str, str]:
-    if source == "autobot_docs":
+def _bucket_and_leg(source: str, cached_from: str) -> Tuple[str, str]:
+    """Bucket and leg of a hit; a cache-served hit keeps the bucket and leg it was produced by when known."""
+    produced_by = cached_from if source in _CACHE_SOURCES and cached_from else source
+    if produced_by == "autobot_docs":
         return BUCKET_DOCS, LEG_DOCS
-    if source in _CACHE_SOURCES:
+    if source in _CACHE_SOURCES and not cached_from:
         return BUCKET_FACTS, LEG_CACHE
     return BUCKET_FACTS, LEG_HYBRID
 
 
 def build_provenance(hit: RankedResult) -> HitProvenance:
     """The provenance of *hit*: its source decides bucket and leg, its score fields the per-leg scores."""
-    bucket, leg = _bucket_and_leg((hit.metadata or {}).get("source", ""))
+    meta = hit.metadata or {}
+    source = meta.get("source", "")
+    bucket, leg = _bucket_and_leg(source, meta.get("cached_from", ""))
     scores: Dict[str, float] = {
         "semantic": hit.semantic_score,
         "keyword": hit.keyword_score,
@@ -107,7 +121,8 @@ def build_provenance(hit: RankedResult) -> HitProvenance:
     if hit.rerank_score is not None:
         scores["rerank"] = hit.rerank_score
     final = hit.rerank_score if hit.rerank_score is not None else hit.hybrid_score
-    return HitProvenance(bucket=bucket, leg=leg, scores=scores, final_score=final)
+    origin = source if source in _CACHE_SOURCES else ""
+    return HitProvenance(bucket=bucket, leg=leg, origin=origin, scores=scores, final_score=final)
 
 
 def get_provenance(hit: RankedResult) -> HitProvenance | None:

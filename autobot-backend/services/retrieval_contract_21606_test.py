@@ -21,7 +21,7 @@ from knowledge.search_filters import SYSTEM_SCOPE
 from services.rag_service import RAGService
 from services.retrieval_contract import (
     DEFAULT_PLAN,
-    GATE_TECHNIQUES,
+    RETRIEVAL_TECHNIQUES,
     PlannedMetrics,
     RetrievalPlan,
     get_provenance,
@@ -64,6 +64,14 @@ class _Run:
     def __init__(self, hits):
         self.hits = hits
         self.mocks = {}
+        self.order: list = []
+
+    def _step(self, name, passthrough=None):
+        async def run(*args, **kwargs):
+            self.order.append(name)
+            return passthrough(*args) if passthrough else None
+
+        return AsyncMock(side_effect=run)
 
     async def go(self, **kwargs):
         svc = _service()
@@ -79,16 +87,16 @@ class _Run:
                 RAGService,
                 _check_cache_tiers=AsyncMock(return_value=None),
                 _execute_and_cache_search=AsyncMock(return_value=(self.hits, RAGMetrics())),
-                _merge_docs_leg=AsyncMock(side_effect=lambda q, r, *a: r),
-                _store_in_semantic_cache=AsyncMock(),
-                _store_in_topic_cache=AsyncMock(),
+                _merge_docs_leg=self._step("docs", lambda q, r, *a: r),
+                _store_in_semantic_cache=self._step("sem"),
+                _store_in_topic_cache=self._step("topic"),
                 _lookup_retrieval_pattern=AsyncMock(return_value=None),
                 _record_retrieval_outcome=AsyncMock(),
                 _emit_ranked_feedback=AsyncMock(),
-                _filter_stale_chunks=AsyncMock(side_effect=lambda r: r),
+                _filter_stale_chunks=self._step("stale", lambda r: r),
                 initialize=AsyncMock(return_value=True),
             ),
-            patch("services.rag_service.cache_scope", AsyncMock(return_value=SCOPE)),
+            patch("services.rag_cache_tiers.cache_scope", AsyncMock(return_value=SCOPE)),
             patch("services.rag_service.get_query_classifier", MagicMock()),
         ):
             out = await svc.advanced_search("q", principal=SYSTEM_SCOPE, **kwargs)
@@ -99,15 +107,17 @@ class _Run:
 
 
 def test_plan_field_names_equal_the_gate_toggle_names_plus_docs():
-    assert {f.name for f in fields(RetrievalPlan)} == set(GATE_TECHNIQUES) | {"docs"}
+    assert {f.name for f in fields(RetrievalPlan)} == set(RETRIEVAL_TECHNIQUES) | {"docs"}
 
 
 def test_plan_field_names_equal_the_merged_gate_when_it_is_on_main():
-    """Reads the gate's own tuple once #20949 (PR #21064) lands; until then there is nothing to read."""
+    """Compares with the gate's tuple once #20949 (PR #21064) lands; #21625 makes the gate import ours."""
     try:
         gate = importlib.import_module("knowledge.retrieval_gate")
     except ModuleNotFoundError:
-        pytest.skip("knowledge.retrieval_gate is not on main yet (#21064); GATE_TECHNIQUES mirrors it")
+        pytest.skip(
+            "knowledge.retrieval_gate is not on main yet (#21064); RETRIEVAL_TECHNIQUES is the one definition (#21625)"
+        )
     assert {f.name for f in fields(RetrievalPlan)} == set(gate.TECHNIQUES) | {"docs"}
 
 
@@ -188,3 +198,54 @@ def test_a_plan_that_is_not_a_retrieval_plan_is_rejected():
 
     with pytest.raises(TypeError):
         require_plan({"docs": False})
+
+
+@pytest.mark.asyncio
+async def test_the_order_is_docs_merge_then_stale_cut_then_the_cache_stores():
+    run = _Run([_hit()])
+    await run.go()
+    assert run.order == ["docs", "stale", "sem", "topic"]
+    docs_less = _Run([_hit()])
+    await docs_less.go(plan=RetrievalPlan(docs=False))
+    assert docs_less.order == ["stale"]  # neither merged nor stored: tiers 0/2 hold post-docs results
+    cold = _Run([_hit()])
+    await cold.go(plan=RetrievalPlan(cache=False))
+    assert cold.order == ["docs", "stale"]
+
+
+@pytest.mark.asyncio
+async def test_a_docs_chunk_served_from_a_cache_tier_keeps_the_docs_bucket_and_names_the_tier():
+    from services.retrieval_contract import build_provenance
+
+    for tier in ("topic_cache", "semantic_cache"):
+        hit = _hit(tier)
+        hit.metadata["cached_from"] = "autobot_docs"
+        mark = build_provenance(hit)
+        assert (mark.bucket, mark.leg, mark.origin) == ("docs", "docs", tier)
+    fact = _hit("topic_cache")
+    fact.metadata["cached_from"] = "unknown_leg"
+    assert (build_provenance(fact).bucket, build_provenance(fact).leg) == ("facts", "hybrid")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("shared", [True, False])
+async def test_the_real_cache_tier_check_reads_tiers_0_and_2_only_when_shared(shared):
+    from services.context_sufficiency import SufficiencyVerdict
+
+    warm = ([_hit()], RAGMetrics())
+    evaluator = MagicMock()
+    evaluator.evaluate = AsyncMock(return_value=SimpleNamespace(verdict=SufficiencyVerdict.SUFFICIENT, reason=""))
+    sem, topic = AsyncMock(return_value=warm), AsyncMock(return_value=None)
+    with (
+        patch.multiple(
+            RAGService,
+            _check_semantic_cache=sem,
+            _check_topic_cache=topic,
+            _get_from_cache=AsyncMock(return_value=None),
+        ),
+        patch("services.rag_cache_tiers.get_context_sufficiency_evaluator", return_value=evaluator),
+    ):
+        got = await _service()._check_cache_tiers("q", 5, True, None, SYSTEM_SCOPE, SCOPE, shared_tiers=shared)
+    assert sem.await_count == (1 if shared else 0)
+    assert topic.await_count == (1 if shared else 0)
+    assert (got is not None) == shared  # a warm tier 0 is served only to a plan that includes docs
