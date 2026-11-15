@@ -1230,7 +1230,7 @@
       "quality": {
         "title": "Code Quality",
         "overallScore": "Overall Score",
-        "testCoverage": "Test Coverage",
+        "testability": "Testability",
         "codeDuplicates": "Code Duplicates",
         "technicalDebt": "Technical Debt",
         "notAvailable": "Not available",
@@ -2501,7 +2501,7 @@
       "noCommunicationData": "No communication data available",
       "codeQuality": "Code Quality",
       "overallScore": "Overall Score",
-      "testCoverage": "Test Coverage",
+      "testability": "Testability",
       "codeDuplicates": "Code Duplicates",
       "technicalDebt": "Technical Debt",
       "notAvailable": "Not available",
