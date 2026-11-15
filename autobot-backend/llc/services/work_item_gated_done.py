@@ -21,6 +21,22 @@ _NO_NODE = "this agent has no org node, so a gated item cannot be handed to revi
 _NOT_A_PERSON = "this credential is neither a person nor the agent holding the item"
 
 
+class ReviewRefused(InvalidTransition):
+    """A handoff to review that was refused; ``reason`` is a code a caller can branch on without parsing the text.
+
+    It is an ``InvalidTransition``, so every caller that catches that keeps working (#21591).
+    """
+
+    NO_SERVICE = "no_handoff_service"
+    NO_REVIEWER = "no_reviewer"
+    NOT_A_MEMBER = "reviewer_not_a_member"
+    NOT_THE_HOLDER = "not_the_holder"
+
+    def __init__(self, message: str, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 @dataclass(frozen=True)
 class DoneGate:
     """What a caller of ``transition_status`` brings to a move to done: the gate's services and who is finishing.
@@ -75,18 +91,23 @@ async def hand_off_for_review(
     work_item_id = str(item.id)
     refusal = f"Work item {work_item_id} requires human review before it can be marked done. "
     if handoff_svc is None:
-        raise InvalidTransition(refusal + "No HandoffService available to initiate handoff.")
+        raise ReviewRefused(refusal + "No HandoffService available to initiate handoff.", ReviewRefused.NO_SERVICE)
     reviewer = item_reviewer(item)
     if not reviewer:
-        raise InvalidTransition(refusal + "A reviewer is required to initiate the handoff: it has none and no creator.")
+        raise ReviewRefused(
+            refusal + "A reviewer is required to initiate the handoff: it has none and no creator.",
+            ReviewRefused.NO_REVIEWER,
+        )
     if not await is_company_member(session, company_id, reviewer):
-        raise InvalidTransition(refusal + "The item's reviewer or creator is not a member of the company.")
+        raise ReviewRefused(
+            refusal + "The item's reviewer or creator is not a member of the company.", ReviewRefused.NOT_A_MEMBER
+        )
     try:
         return await handoff_svc.agent_to_human(
             session, work_item_id, agent_id=agent_id, reviewer_user_id=reviewer, company_id=company_id
         )
     except HandoffNotAllowed as exc:
-        raise InvalidTransition(str(exc)) from exc
+        raise ReviewRefused(str(exc), ReviewRefused.NOT_THE_HOLDER) from exc
 
 
 async def review_outcome(

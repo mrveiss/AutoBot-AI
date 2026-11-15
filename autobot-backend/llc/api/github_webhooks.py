@@ -29,8 +29,7 @@ from llc.deps import get_session
 from ..models.enums import WorkItemStatus
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from ..services.accessors import get_handoff_service
-from ..services.work_item_gated_done import hand_off_for_review
-from ..services.work_item_own_task import InvalidTransition
+from ..services.work_item_gated_done import ReviewRefused, hand_off_for_review
 from ..services.work_item_service import _ALLOWED_TRANSITIONS
 
 logger = get_logger(__name__)
@@ -123,30 +122,34 @@ def _system_comment(item: LLCWorkItem, body: str) -> LLCWorkItemComment:
     )
 
 
-async def _lock_item(session: AsyncSession, item: LLCWorkItem) -> LLCWorkItem:
-    """The item under its row lock, re-read from the database (``_load_locked``'s shape).
+async def _load_item_locked(session: AsyncSession, work_item_id: UUID) -> Optional[LLCWorkItem]:
+    """The item under its row lock (``_load_locked``'s shape), loaded BEFORE any change is made to it.
 
-    ``populate_existing`` makes the row already loaded in this session take the committed values, so a delivery
-    that waited on another's handoff sees the item as that handoff left it.
+    A repeated or concurrent delivery waits here and then reads the item as the delivery before it left it. The
+    lock comes first because the production session does not autoflush: a re-read after the link was set would
+    overwrite it.
     """
-    stmt = (
-        select(LLCWorkItem).where(LLCWorkItem.id == item.id).with_for_update().execution_options(populate_existing=True)
-    )
-    return (await session.execute(stmt)).scalar_one()
+    stmt = select(LLCWorkItem).where(LLCWorkItem.id == work_item_id).with_for_update()
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+#: Why a handoff was refused, as text for a comment: fixed wording, so no id or internal message reaches readers.
+_REFUSAL_TEXT = {
+    ReviewRefused.NO_SERVICE: "no handoff service is available",
+    ReviewRefused.NO_REVIEWER: "it has no reviewer and no creator to hand it to",
+    ReviewRefused.NOT_A_MEMBER: "its reviewer or creator is not a member of the company",
+    ReviewRefused.NOT_THE_HOLDER: "the agent that held it no longer does",
+}
 
 
 async def _hand_off(session: AsyncSession, item: LLCWorkItem) -> Optional[str]:
-    """Hand the held item to its reviewer; ``None`` when it went, else a reason that names no ids."""
-    from ..services.handoff import HandoffNotAllowed  # lazy: the handoff module pulls in llc.kb (#13057)
-
+    """Hand the held item to its reviewer; ``None`` when it went, else the fixed text of why it did not."""
     try:
         await hand_off_for_review(
             get_handoff_service(), session, item, str(item.company_id), str(item.assignee_agent_id)
         )
-    except InvalidTransition as exc:
-        if isinstance(exc.__cause__, HandoffNotAllowed):  # its text names the agent node
-            return "the agent that held it no longer does"
-        return str(exc).partition("marked done. ")[2] or "no reviewer could be named"
+    except ReviewRefused as exc:
+        return _REFUSAL_TEXT.get(exc.reason, "the handoff was refused")
     return None
 
 
@@ -157,7 +160,6 @@ async def _review_after_merge(session: AsyncSession, item: LLCWorkItem, pr_numbe
     company member. An item that is finished, may not enter review from its status, is held by no agent, or has
     no reviewer is left where it is, with a comment a person can read saying why.
     """
-    item = await _lock_item(session, item)  # a repeated or concurrent delivery waits here and sees the committed state
     current = WorkItemStatus(item.status)
     if current in (WorkItemStatus.DONE, WorkItemStatus.CANCELLED):
         return
@@ -251,9 +253,7 @@ async def handle_github_webhook(
         )
         return {"status": "error", "reason": "Invalid or mismatched PR URL"}
 
-    stmt = select(LLCWorkItem).where(LLCWorkItem.id == work_item_uuid)
-    result = await session.execute(stmt)
-    item = result.scalar_one_or_none()
+    item = await _load_item_locked(session, work_item_uuid)
     if not item:
         logger.warning("Work item %s not found", work_item_uuid)
         return {"status": "error", "reason": "Work item not found"}

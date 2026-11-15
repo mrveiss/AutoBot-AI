@@ -148,7 +148,6 @@ def _make_webhook_app(item=None):
     mock_session = AsyncMock()
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = item
-    mock_result.scalar_one.return_value = item  # the locked re-read of a merged PR's item
     mock_session.execute = AsyncMock(return_value=mock_result)
     mock_session.add = MagicMock()
     mock_session.commit = AsyncMock()
@@ -273,6 +272,14 @@ class TestWebhookEndpoint:
         assert resp.json()["status"] == "processed"
         assert item.status == "in_progress"
         assert session.add.call_count == 1  # close comment only (already linked)
+
+    def test_the_item_is_loaded_under_a_row_lock_before_anything_changes(self, monkeypatch):
+        monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", _SECRET)
+        item = _mock_item(status="done")
+        app, session = _make_webhook_app(item)
+        _post(TestClient(app), _pr_payload(action="closed", merged=True))
+        first_select = session.execute.await_args_list[0].args[0]
+        assert first_select._for_update_arg is not None  # FOR UPDATE: a repeated delivery waits for the first
 
     def test_mismatched_pr_url_rejected(self, monkeypatch):
         monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", _SECRET)

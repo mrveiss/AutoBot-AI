@@ -55,7 +55,7 @@ async def factory():  # noqa: ANN201
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")  # canonical: ignore py-adhoc-db-engine (test-local)
     await harness.create_loop_schema(engine)
     yield async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
-        engine, expire_on_commit=False, class_=AsyncSession
+        engine, expire_on_commit=False, autoflush=False, class_=AsyncSession  # as the production session is built
     )
     await engine.dispose()
 
@@ -84,6 +84,7 @@ async def _seed(  # noqa: ANN202
     reviewer: uuid.UUID | None = None,
     creator: uuid.UUID | None = None,
     members: tuple[uuid.UUID, ...] = (_REVIEWER, _CREATOR),
+    linked: bool = True,
 ) -> None:
     async with factory() as session:
         session.add(
@@ -96,7 +97,7 @@ async def _seed(  # noqa: ANN202
                 status=status,
                 priority=WorkItemPriority.MEDIUM,
                 labels=[],
-                linked_pr_urls=[_PR_URL],
+                linked_pr_urls=[_PR_URL] if linked else [],
                 requires_approval_before=[],
                 backlog_position=0,
                 needs_triage=False,
@@ -169,7 +170,7 @@ async def test_a_merge_hands_a_held_item_to_a_named_reviewer(
 @pytest.mark.parametrize(
     ("kwargs", "reason"),
     [
-        ({}, "A reviewer is required"),
+        ({}, "no reviewer and no creator"),
         ({"reviewer": _STRANGER}, "not a member of the company"),
         ({"agent": None, "reviewer": _REVIEWER}, "no agent holds it"),
         ({"status": WorkItemStatus.BACKLOG, "reviewer": _REVIEWER}, "review cannot start from backlog"),
@@ -188,6 +189,21 @@ async def test_a_merge_that_cannot_name_a_reviewer_leaves_the_item_with_a_commen
     assert (item.assignee_agent_id is None) == (kwargs.get("agent", _AGENT) is None)
     assert item.reviewer_user_id == kwargs.get("reviewer")
     assert any("merged; the item stays" in c and reason in c for c in comments)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "status"),
+    [({"reviewer": _REVIEWER}, WorkItemStatus.IN_REVIEW), ({}, WorkItemStatus.IN_PROGRESS)],
+    ids=["handed-off", "left-with-a-reason"],
+)
+async def test_a_first_sighting_merge_keeps_the_pr_link_on_a_session_that_does_not_autoflush(  # noqa: ANN001
+    factory, kwargs, status
+) -> None:
+    await _seed(factory, linked=False, **kwargs)
+    assert (await _merge(factory)).json()["status"] == "processed"
+    item, comments = await _state(factory)
+    assert (item.status, item.linked_pr_urls) == (status, [_PR_URL])
+    assert any("linked" in c for c in comments)
 
 
 async def test_a_repeated_delivery_hands_off_once_and_names_no_ids(factory) -> None:  # noqa: ANN001
