@@ -247,6 +247,33 @@ def test_a_merge_the_gate_cannot_account_for_fails(train):
     assert "cannot account for" in gate.check_range("main..train").findings[0]
 
 
+def passenger(pr: int, head: str, *strategy: str, suffix: str = " (passenger)") -> None:
+    message = f"Merge the #{pr} research doc @ {head[:10]} into the merge train{suffix}"
+    run("merge", "-q", "--no-ff", *strategy, "-m", message, head)
+
+
+def test_a_passenger_merge_is_accepted_and_its_content_checked(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}))
+    report = gate.check_range("main..train", "chore(merge-train): #1")
+    assert report.findings == [] and (report.members, report.files, report.lines) == (2, 2, 2)
+    assert any(note.startswith("passenger #7: merged at") for note in report.notes)
+    assert "#7 is declared" in gate.check_range("main..train", "chore(merge-train): #1 #7").findings[0]
+
+
+def test_a_passenger_that_lost_its_file_is_reported(train):
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}), "-s", "ours")
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "passenger #7 docs/seven.md: missing" in findings[0]
+
+
+def test_a_passenger_like_merge_without_the_suffix_is_unaccounted(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}), suffix="")
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "cannot account for" in findings[0]
+
+
 def test_merging_main_into_the_train_adds_no_member(train):
     board(1, member("one", {"one.txt": LONG.format(1)}))
     run("switch", "-q", "main")
