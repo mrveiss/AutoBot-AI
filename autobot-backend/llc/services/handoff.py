@@ -29,7 +29,7 @@ from .base import LLCServiceBase
 from .commit_publish import publish_after_commit, run_after_commit
 from .company_os.errors import CompanyOsNotFound
 from .wake_events import wake_for_item_changes
-from .work_item_own_task import release_agent_fence
+from .work_item_own_task import checkout_fence_key, release_agent_fence
 
 try:
     from user_management.database import get_async_session_factory
@@ -38,7 +38,6 @@ except ImportError:  # pragma: no cover — not available in unit-test environme
 
 logger = logging.getLogger(__name__)
 
-_CHECKOUT_REDIS_PREFIX = "llc:checkout:"
 _NOTIFICATION_CHANNEL_PREFIX = "llc:notifications:"
 _LLC_H2A_BRIEF_CACHE_TTL = env_int("AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL", 86400)
 
@@ -159,26 +158,9 @@ class HandoffService(LLCServiceBase):
         company_id: str,
         agent_notes: Optional[str] = None,
     ) -> LLCWorkItem:
-        result = await session.execute(
-            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
-        )
-        item = result.scalar_one_or_none()
-        if item is None:
-            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
-        if item.assignee_agent_id is None or str(item.assignee_agent_id) != agent_id:
-            raise HandoffNotAllowed(f"Agent {agent_id} does not hold checkout for work item {work_item_id}")
-
+        item = await self._get_agent_held(session, work_item_id, agent_id)
         brief = self._generate_brief(item, agent_notes)
-        item.status = WorkItemStatus.IN_REVIEW
-        item.reviewer_user_id = uuid.UUID(reviewer_user_id)
-        item.review_brief = brief
-        item.assignee_type = AssigneeType.USER.value
-        item.assignee_agent_id = None
-        item.assignee_user_id = uuid.UUID(reviewer_user_id)
-        run_id = item.checkout_run_id  # read under the row lock: the fence drop names THIS checkout only
-        item.checkout_run_id = None
-        item.checkout_locked_at = None
-        item.version += 1
+        run_id = self._stamp_in_review(item, reviewer_user_id, brief)
         await session.flush()
         # Audit first: a failed audit rolls the database back. The fence drop, the notification and the
         # brief task cannot be taken back, so each waits for the caller's commit (#21589).
@@ -189,6 +171,49 @@ class HandoffService(LLCServiceBase):
             f"release checkout fence of {work_item_id}",
         )
         await self._publish_a2h_notification(session, company_id, work_item_id, reviewer_user_id, brief)
+        await self._queue_a2h_brief(session, item, work_item_id, agent_id, company_id, agent_notes)
+        return item
+
+    async def _get_agent_held(self, session: AsyncSession, work_item_id: str, agent_id: str) -> LLCWorkItem:
+        """Lock the item's row; refuse unless *agent_id* holds it."""
+        result = await session.execute(
+            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
+        )
+        item = result.scalar_one_or_none()
+        if item is None:
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
+        if item.assignee_agent_id is None or str(item.assignee_agent_id) != agent_id:
+            raise HandoffNotAllowed(f"Agent {agent_id} does not hold checkout for work item {work_item_id}")
+        return item
+
+    @staticmethod
+    def _stamp_in_review(item: LLCWorkItem, reviewer_user_id: str, brief: Dict[str, Any]) -> Optional[str]:
+        """Hand the locked row to its reviewer and clear the checkout; returns the checkout generation it cleared.
+
+        The run id is read here, under the row lock and before it is cleared, so the fence drop names THIS checkout.
+        """
+        item.status = WorkItemStatus.IN_REVIEW
+        item.reviewer_user_id = uuid.UUID(reviewer_user_id)
+        item.review_brief = brief
+        item.assignee_type = AssigneeType.USER.value
+        item.assignee_agent_id = None
+        item.assignee_user_id = uuid.UUID(reviewer_user_id)
+        run_id = item.checkout_run_id
+        item.checkout_run_id = None
+        item.checkout_locked_at = None
+        item.version += 1
+        return run_id
+
+    async def _queue_a2h_brief(
+        self,
+        session: AsyncSession,
+        item: LLCWorkItem,
+        work_item_id: str,
+        agent_id: str,
+        company_id: str,
+        agent_notes: Optional[str],
+    ) -> None:
+        """Generate the KB-powered review brief once the handoff commits (#21589)."""
         generation = dict(
             work_item_id=work_item_id,
             agent_id=agent_id,
@@ -203,7 +228,6 @@ class HandoffService(LLCServiceBase):
             lambda: self._spawn(self._generate_and_update_brief_async(**generation)),
             f"generate handoff brief of {work_item_id}",
         )
-        return item
 
     async def approve(
         self, session: AsyncSession, work_item_id: str, reviewer_user_id: str, company_id: str
@@ -339,7 +363,7 @@ class HandoffService(LLCServiceBase):
         redis = await get_async_redis_client()
         if redis is None:
             return
-        key = f"{_CHECKOUT_REDIS_PREFIX}{work_item_id}"
+        key = checkout_fence_key(work_item_id)
         # Two atomic compare-and-deletes, never a client-side GET then DEL: a fence re-taken in that gap would
         # be deleted. ``user:<id>`` is what claim_human writes, so it goes first; the bare ``<id>`` is the legacy form.
         if not await delete_if_value(redis, key, f"user:{user_id}"):
