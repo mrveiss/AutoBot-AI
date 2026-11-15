@@ -14,11 +14,11 @@ import math
 import re
 from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Union
 
-from autobot_shared.env_utils import env_float_clamped
+from autobot_shared.env_utils import env_registered
 
 #: Fraction of a claim's content tokens that must appear in a chunk for the
 #: default lexical support check to count the claim as grounded.
-GROUNDING_OVERLAP_THRESHOLD = env_float_clamped("AUTOBOT_RETRIEVAL_GROUNDING_OVERLAP", 0.6, 0.0, 1.0)
+GROUNDING_OVERLAP_THRESHOLD = env_registered("AUTOBOT_RETRIEVAL_GROUNDING_OVERLAP")
 
 Gold = Union[Set[str], Mapping[str, float]]
 

@@ -31,3 +31,10 @@ The contradiction metric needs a detector with no default: the existing one
 to `run_ablation`; without it the metric is unmeasured (`None`) and the gate rejects. Fixture runs
 (`knowledge.retrieval_gate_fixture:factory`) give no answers, so grounding is unmeasured there too: the fixture
 set checks the metric and plumbing deterministically, not acceptance.
+
+## Report fingerprints
+
+A report carries two SHA-256 fingerprints. `gold_sha256` covers the whole gold set that was loaded.
+`evaluated_sha256` covers only the queries actually scored (the chosen dev/test split), so two runs on the same
+gold set but different evaluated queries differ. `gate_reports` rejects a baseline/candidate pair whose
+`gold_sha256` or `evaluated_sha256` differs, and a report without `evaluated_sha256` (older or hand-made JSON).

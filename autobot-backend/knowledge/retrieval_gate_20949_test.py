@@ -305,3 +305,23 @@ def test_report_fingerprints_the_evaluated_queries_not_only_the_gold_set(monkeyp
     assert first["evaluated_sha256"] != second["evaluated_sha256"]
     verdict = rg.gate_reports(first, second)
     assert not verdict.accepted and "same queries" in verdict.reasons[0]
+
+
+def test_default_toggles_are_the_production_plan_values():
+    from services.retrieval_contract import DEFAULT_PLAN
+
+    assert rg.DEFAULT_TOGGLES == {t: getattr(DEFAULT_PLAN, t) for t in rg.TECHNIQUES}
+    assert rg.DEFAULT_TOGGLES["cache"] is True
+    names = [n for n, _ in rg.ablation_combinations()]
+    assert "-cache" in names and "+cache" not in names
+
+
+def test_blank_gold_set_env_falls_back_to_fixture(monkeypatch):
+    import importlib
+
+    monkeypatch.setenv("AUTOBOT_RETRIEVAL_GATE_GOLD_SET", "")
+    try:
+        assert importlib.reload(rg).RETRIEVAL_GATE_GOLD_SET == "fixture"
+    finally:
+        monkeypatch.delenv("AUTOBOT_RETRIEVAL_GATE_GOLD_SET")
+        importlib.reload(rg)

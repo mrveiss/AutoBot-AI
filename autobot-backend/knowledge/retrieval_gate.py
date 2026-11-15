@@ -25,7 +25,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple
 
-from autobot_shared.env_utils import env_float_clamped, env_int_clamped
+from autobot_shared.env_utils import env_registered
 from autobot_shared.logging_manager import get_logger
 from knowledge.rag_benchmarks import BenchmarkSplit, _deterministic_dev_test_split
 from knowledge.retrieval_metrics import (
@@ -36,27 +36,24 @@ from knowledge.retrieval_metrics import (
     recall_at_k,
     reciprocal_rank,
 )
+from services.retrieval_contract import DEFAULT_PLAN
 from services.retrieval_contract import RETRIEVAL_TECHNIQUES as TECHNIQUES  # the one list (#21625)
 
 logger = get_logger(__name__)
 
 #: Cutoff for recall@k / nDCG@k.
-RETRIEVAL_GATE_K = env_int_clamped("AUTOBOT_RETRIEVAL_GATE_K", 5, 1, 100)
+RETRIEVAL_GATE_K = env_registered("AUTOBOT_RETRIEVAL_GATE_K")
 #: Every one of the five metrics must improve by at least this much (absolute).
-RETRIEVAL_GATE_MIN_IMPROVEMENT = env_float_clamped(
-    "AUTOBOT_RETRIEVAL_GATE_MIN_IMPROVEMENT", 0.01, 0.0, 1.0, positive_finite=True
-)
+RETRIEVAL_GATE_MIN_IMPROVEMENT = env_registered("AUTOBOT_RETRIEVAL_GATE_MIN_IMPROVEMENT", positive_finite=True)
 #: Share of queries routed to the dev split.
-RETRIEVAL_GATE_DEV_FRACTION = env_float_clamped(
-    "AUTOBOT_RETRIEVAL_GATE_DEV_FRACTION", 0.8, 0.05, 0.95, positive_finite=True
-)
+RETRIEVAL_GATE_DEV_FRACTION = env_registered("AUTOBOT_RETRIEVAL_GATE_DEV_FRACTION", positive_finite=True)
 
 #: Directory holding versioned gold sets (fixture_<bucket>.jsonl shipped; live_<bucket>.jsonl owner-curated).
 RETRIEVAL_GATE_GOLD_DIR = os.getenv("AUTOBOT_RETRIEVAL_GATE_GOLD_DIR") or os.path.join(
     os.path.dirname(__file__), "benchmarks", "gold"
 )
 #: Which gold set the CLI loads by default: "fixture" (CI) or "live" (owner-curated).
-RETRIEVAL_GATE_GOLD_SET = os.getenv("AUTOBOT_RETRIEVAL_GATE_GOLD_SET", "fixture")
+RETRIEVAL_GATE_GOLD_SET = os.getenv("AUTOBOT_RETRIEVAL_GATE_GOLD_SET") or "fixture"
 
 BUCKETS = ("docs", "code", "memory", "facts", "patterns", "cross")
 #: metric name -> True when higher is better
@@ -67,11 +64,8 @@ METRICS: Dict[str, bool] = {
     "grounding": True,
     "contradiction": False,
 }
-#: Production default toggles; the baseline every combination is compared with.
-DEFAULT_TOGGLES: Dict[str, bool] = {
-    "dense": True, "bm25": True, "fusion": True, "rerank": True,
-    "query_expansion": True, "graph": False, "memory": False, "cache": False,
-}  # fmt: skip
+#: Production default toggles, read from the retrieval plan so the baseline is exactly today's behaviour.
+DEFAULT_TOGGLES: Dict[str, bool] = {t: bool(getattr(DEFAULT_PLAN, t)) for t in TECHNIQUES}
 
 
 @dataclass(frozen=True)
@@ -310,7 +304,7 @@ def _load_factory(spec: str) -> Callable[[], Retriever]:
     return getattr(importlib.import_module(mod), attr)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="retrieval_gate")
     sub = p.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="run the ablation and write a JSON report")
@@ -322,16 +316,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     g.add_argument("--baseline", required=True)
     g.add_argument("--candidate", required=True)
     g.add_argument("--run", default="default")
-    args = p.parse_args(argv)
-    if args.cmd == "run":
-        report = run_ablation(
-            _load_factory(args.retriever)(),
-            load_gold(args.gold) if args.gold else load_gold_set(),
-            BenchmarkSplit(args.split),
-        )
-        with open(args.out, "w", encoding="utf-8") as fh:
-            json.dump(report, fh, indent=2, sort_keys=True)
-        return 0
+    return p
+
+
+def _cmd_run(args: argparse.Namespace) -> int:
+    report = run_ablation(
+        _load_factory(args.retriever)(),
+        load_gold(args.gold) if args.gold else load_gold_set(),
+        BenchmarkSplit(args.split),
+    )
+    with open(args.out, "w", encoding="utf-8") as fh:
+        json.dump(report, fh, indent=2, sort_keys=True)
+    return 0
+
+
+def _cmd_gate(args: argparse.Namespace) -> int:
     with open(args.baseline, encoding="utf-8") as fh:
         base = json.load(fh)
     with open(args.candidate, encoding="utf-8") as fh:
@@ -340,6 +339,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     logger.info("retrieval gate accepted=%s reasons=%s", verdict.accepted, verdict.reasons)
     sys.stdout.write(json.dumps({"accepted": verdict.accepted, "reasons": verdict.reasons}) + "\n")
     return 0 if verdict.accepted else 1
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    args = _build_parser().parse_args(argv)
+    return _cmd_run(args) if args.cmd == "run" else _cmd_gate(args)
 
 
 if __name__ == "__main__":
