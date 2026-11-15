@@ -186,11 +186,17 @@ interface RumReport {
   recentIssues: Array<ApiCall | ErrorInfo>
 }
 
+function emptyMetrics(): RumMetrics {
+  return { apiCalls: [], errors: [], userInteractions: [], webSocketEvents: [], pageMetrics: {}, resourceTimings: [], sessionDuration: 0 }
+}
+
 class RumAgent {
   private isEnabled: boolean
   private sessionId: string
   private startTime: number
   private metrics: RumMetrics
+  // Session totals (#21583): metrics.apiCalls keeps only the latest RUM_MAX_API_CALLS, the summary counts every call.
+  private sessionApiCalls = { total: 0, slow: 0, timeouts: 0 }
   private thresholds: {
     slowApiCall: number
     verySlowApiCall: number
@@ -219,15 +225,7 @@ class RumAgent {
     this.isEnabled = import.meta.env.DEV || localStorage.getItem('rum_enabled') === 'true'
     this.sessionId = this.generateSessionId()
     this.startTime = performance.now()
-    this.metrics = {
-      apiCalls: [],
-      errors: [],
-      userInteractions: [],
-      webSocketEvents: [],
-      pageMetrics: {},
-      resourceTimings: [],
-      sessionDuration: 0
-    }
+    this.metrics = emptyMetrics()
     this.thresholds = {
       slowApiCall: 1000, // ms
       verySlowApiCall: 5000, // ms
@@ -300,6 +298,8 @@ class RumAgent {
       sessionId: this.sessionId
     }
 
+    const totals = this.sessionApiCalls
+    this.sessionApiCalls = { total: totals.total + 1, slow: totals.slow + Number(isSlow), timeouts: totals.timeouts + Number(isTimeout) }
     pushCapped(this.metrics.apiCalls, apiCall)
 
     // Issue #476: Queue for Prometheus reporting
@@ -768,9 +768,9 @@ class RumAgent {
       sessionDuration,
       timestamp: new Date().toISOString(),
       summary: {
-        totalApiCalls: this.metrics.apiCalls.length,
-        slowApiCalls: this.metrics.apiCalls.filter(call => call.isSlow).length,
-        timeoutApiCalls: this.metrics.apiCalls.filter(call => call.isTimeout).length,
+        totalApiCalls: this.sessionApiCalls.total,
+        slowApiCalls: this.sessionApiCalls.slow,
+        timeoutApiCalls: this.sessionApiCalls.timeouts,
         totalErrors: this.metrics.errors.length,
         userInteractions: this.metrics.userInteractions.length,
         webSocketEvents: this.metrics.webSocketEvents.length
@@ -822,15 +822,8 @@ class RumAgent {
   }
 
   clear(): void {
-    this.metrics = {
-      apiCalls: [],
-      errors: [],
-      userInteractions: [],
-      webSocketEvents: [],
-      pageMetrics: {},
-      resourceTimings: [],
-      sessionDuration: 0
-    }
+    this.metrics = emptyMetrics()
+    this.sessionApiCalls = { total: 0, slow: 0, timeouts: 0 }
     localStorage.removeItem('rum_reports')
     localStorage.removeItem('rum_critical_issues')
   }

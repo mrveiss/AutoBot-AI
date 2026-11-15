@@ -50,6 +50,16 @@ describe('RumAgent.trackApiCall buffers', () => {
     expect(buffers().pendingCriticalIssues).toEqual([{ issue_type: 'api_timeout' }])
   })
 
+  it('summarises every call of the session, including a timeout the buffer evicted', () => {
+    rum.trackApiCall('GET', '/api/slow', 0, 30001, 'error', new Error('timed out'), true)
+    for (let i = 0; i <= RUM_MAX_API_CALLS; i++) rum.trackApiCall('GET', `/api/poll/${i}`, 0, 1, 200)
+    expect(buffers().metrics.apiCalls.some(call => call.isTimeout)).toBe(false)
+    const { summary } = rum.generateReport()
+    expect(summary.totalApiCalls).toBe(RUM_MAX_API_CALLS + 2)
+    expect(summary.timeoutApiCalls).toBe(1)
+    expect(summary.slowApiCalls).toBe(1)
+  })
+
   it('has a positive default bound', () => {
     expect(RUM_MAX_API_CALLS).toBeGreaterThan(0)
   })
