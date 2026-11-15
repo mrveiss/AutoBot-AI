@@ -24,6 +24,7 @@ from api.batch_jobs_run_route_test import _seed_job  # noqa: E402
 from api.batch_jobs_schedules_test import _FakeRedis  # noqa: F401  (sets up the stubs first)
 from api.schemas_workflows import BatchJobCreate, BatchJobType  # noqa: E402
 from services import batch_job_ownership as ownership  # noqa: E402
+from testkit.fake_redis_pipeline import FakePipeline  # noqa: E402
 
 ALICE = {"user_id": "alice", "role": "user"}
 BOB = {"user_id": "bob", "role": "user"}
@@ -71,6 +72,16 @@ def test_a_caller_with_no_user_identity_records_no_owner(redis):
     assert ownership.owner_of(redis, ownership.JOBS, "job-1") is None
     assert redis.exists("batch:job:job-1")
     assert "job-1" in redis.smembers("batch:jobs:all")
+
+
+def test_a_create_that_fails_at_exec_writes_nothing(redis, monkeypatch):
+    """Record, index and owner are queued and applied only at EXEC, so a failed EXEC leaves none of them."""
+    monkeypatch.setattr(redis, "pipeline", lambda transaction=True: FakePipeline(redis, execute_error=OSError("down")))
+    with pytest.raises(OSError):
+        ownership.create_record(redis, ownership.JOBS, "job-1", "batch:job:job-1", "{}", ALICE)
+    assert not redis.exists("batch:job:job-1")
+    assert "job-1" not in redis.smembers("batch:jobs:all")
+    assert ownership.owner_of(redis, ownership.JOBS, "job-1") is None
 
 
 # --- jobs -----------------------------------------------------------------------------
