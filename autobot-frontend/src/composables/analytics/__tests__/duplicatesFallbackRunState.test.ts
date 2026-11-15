@@ -33,10 +33,10 @@ const KILLED_RUN = {
   last_completed_at: '2026-11-14T10:30:00+00:00',
 }
 
-const fetchers = () =>
+const fetchers = (sourceKey = ref('source_id=s1')) =>
   useAnalyticsDataFetchers({
     rootPath: ref('/repo'),
-    sourceIdParam: computed(() => 'source_id=s1'),
+    sourceIdParam: computed(() => sourceKey.value),
     sourceIdQuery: computed(() => ({ source_id: 's1' })),
     withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=s1`,
     analyzing: ref(false),
@@ -66,10 +66,28 @@ describe('the duplicates index fallback and the run state (#21418)', () => {
   it('a live result, which carries no run label, leaves the run state as it was', async () => {
     fetchWithAuth.mockResolvedValue(respond({ status: 'success', duplicates: [HIT], total_count: 1, storage_type: 'live_analysis' }))
     const f = fetchers()
+    f.runState.applyRunFields({ partial: true, run: KILLED_RUN }) // known from another results body
+    expect(f.runState.run.value?.status).toBe('killed') // CONTROL: the state the live body must leave
 
     await f.getDuplicatesData()
 
     expect(f.duplicateAnalysis.value).toHaveLength(1)
+    expect(f.runState.run.value).toEqual(KILLED_RUN)
+  })
+
+  it('a fallback answered after a source switch does not label the newly selected source', async () => {
+    const key = ref('source_id=s1')
+    let answer!: () => void
+    const body = { status: 'success', duplicates: [HIT], total_count: 1, storage_type: 'chromadb_fallback', partial: true, run: KILLED_RUN }
+    fetchWithAuth.mockImplementation(() => new Promise((resolve) => { answer = () => resolve(respond(body)) }))
+    const f = fetchers(key)
+
+    const pending = f.getDuplicatesData()
+    await vi.waitFor(() => expect(fetchWithAuth).toHaveBeenCalled())
+    key.value = 'source_id=s2'
+    answer()
+    await pending
+
     expect(f.runState.run.value).toBeNull()
   })
 })
