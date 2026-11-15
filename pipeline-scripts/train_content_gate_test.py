@@ -262,9 +262,16 @@ def test_a_passenger_merge_is_accepted_and_its_content_checked(train):
 
 
 def test_a_passenger_that_lost_its_file_is_reported(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
     passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}), "-s", "ours")
     findings = gate.check_range("main..train").findings
     assert len(findings) == 1 and "passenger #7 docs/seven.md: missing" in findings[0]
+
+
+def test_a_range_with_only_a_passenger_merge_measures_nothing(train):
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}))
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "nothing was measured" in findings[0]
 
 
 def test_a_passenger_like_merge_without_the_suffix_is_unaccounted(train):

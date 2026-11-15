@@ -192,9 +192,9 @@ def check_range(rng: str, title: str = "", body: str = "") -> ContentReport:
     report = ContentReport()
     merges = member_merges(rng, report)
     report.members = len(merges)
-    if not merges:
-        report.findings.append(f"no 'Merge #N @ sha' commit in {rng}: nothing was measured")
     members = {pr for kind, pr in merges if kind == "member"}  # a passenger never satisfies the title
+    if not members:
+        report.findings.append(f"no 'Merge #N @ sha' commit in {rng}: nothing was measured")
     for pr in sorted(declared_members(title) - members, key=int):
         report.findings.append(f"#{pr} is declared by the train and has no merge in {rng}")
     drops = set(DELIBERATE_DROP.findall(body))
