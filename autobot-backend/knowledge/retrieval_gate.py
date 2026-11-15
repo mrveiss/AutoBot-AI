@@ -266,10 +266,8 @@ def gate_decision(
 ) -> GateVerdict:
     """Accept only if the candidate beats the baseline on ALL five metrics (#20948).
 
-    "Beats" means better by at least ``min_improvement`` (lower is better for
-    contradiction). A metric that is None on either side is a rejection: an
-    unmeasured metric cannot show improvement. ``min_improvement`` must be finite
-    and > 0: NaN makes every ``gain < margin`` false and 0 accepts unchanged metrics.
+    "Beats" means better by at least ``min_improvement`` (finite, > 0; lower is better for contradiction).
+    A metric that is None on either side is a rejection: an unmeasured metric cannot show improvement.
     """
     if not (math.isfinite(min_improvement) and min_improvement > 0):
         raise ValueError(f"min_improvement must be a positive finite number, got {min_improvement!r}")
