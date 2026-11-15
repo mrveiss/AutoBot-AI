@@ -34,6 +34,7 @@ DECLARED_SCOPES = {
         "scripts",
         "tools",
     ),
+    "llc-exception-text-sweep-files-21579": ("autobot-backend/llc",),
     "slm-users-db-scan": ("autobot-slm-backend",),
     "test-name-predicate-single-home-21078": (
         "autobot-backend",
@@ -396,4 +397,5 @@ DECLARED_SCOPES = {
     "ansible-secret-renders-20941": ("autobot-slm-backend/ansible",),
     "one-after-commit-queue-21107": ("autobot-backend", "autobot_shared"),
     "one-done-path": ("autobot-backend",),
+    "scheduled-workflows-derived-for-failure-report-21592": (".github/workflows",),
 }

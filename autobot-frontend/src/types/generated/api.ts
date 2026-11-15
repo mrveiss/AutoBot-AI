@@ -53457,7 +53457,8 @@ export interface paths {
          *     1. Branch name: ``llc/{work_item_id}`` (and variants)
          *     2. PR body: ``Closes #llc-{work_item_id}``
          *
-         *     On PR merge → transition the work item to ``in_review``.
+         *     On PR merge → hand the work item to its reviewer through the review handoff, or leave it
+         *     where it is with a comment saying why (#21591).
          *     On PR close without merge → add a comment to the work item.
          */
         post: operations["handle_github_webhook_api_llc_webhooks_github_post"];
