@@ -11,11 +11,12 @@ the `on` key parsing as the boolean `True`, a `.yaml` extension, a trigger writt
 parser reads differently -- missing a workflow that does have a schedule.
 
 The rule: the script's own discovery function, run over the real `.github/workflows`, returns
-exactly the files an independent scan finds. The scan reads text, not YAML: a `schedule:` line
-that is not a comment, followed by a `- cron:` entry. Two instruments with different failure modes
-agreeing is the evidence; one disagreeing names the file. The population is declared with the
-reach mechanism as a fraction of that independent count (1.0: every file the text scan finds), so
-a derivation that reaches fewer files, or a scan that finds none, is refused rather than passed.
+exactly the files an independent scan finds. The scan reads text, not YAML, and is the repo's one text
+reader of a workflow's schedule, `release_sync_main.declares_schedule` (comment-stripped `on:` block
+with a `schedule:` key and a `cron:` value). Two instruments with different failure modes agreeing is
+the evidence; one disagreeing names the file. The population is declared with the reach mechanism as a
+fraction of that independent count (1.0: every file the text scan finds), so a derivation that reaches
+fewer files, or a scan that finds none, is refused rather than passed.
 
 Controls: planted workflows in every trigger form (bare and quoted `on`, `.yaml`, string and list
 `on`, an empty and a commented-out `schedule`) must come out the same from both instruments, and
@@ -26,24 +27,20 @@ from __future__ import annotations
 
 import functools
 import importlib.util
-import re
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import Callable
 
 import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
+from repo_tests._release_sync_fakes import load_script
 
 _SCRIPT = "pipeline-scripts/scheduled_failure_report.py"
 _WORKFLOWS = ".github/workflows"
 _REPORT_WORKFLOW = "scheduled-failure-report.yml"
 _MODULE_NAME = "_scheduled_failure_report_guard_21592"
-
-#: A `schedule:` key that is not a comment, then (past blank and comment lines) a `- cron:` entry.
-_SCHEDULE_WITH_CRON = re.compile(
-    r"^[ \t]*schedule:[ \t]*(?:#[^\n]*)?\n(?:[ \t]*(?:#[^\n]*)?\n)*[ \t]*-[ \t]+cron:", re.MULTILINE
-)
 
 
 @functools.lru_cache(maxsize=1)
@@ -57,6 +54,12 @@ def _script() -> ModuleType:
     return module
 
 
+@functools.lru_cache(maxsize=1)
+def _text_reader() -> Callable[[str], bool]:
+    """The repo's one text reader of a workflow's schedule (release_sync_main), loaded the way its own tests do."""
+    return load_script().declares_schedule
+
+
 def derived_names(directory: Path) -> set[str]:
     """The workflow files the script's own discovery calls scheduled."""
     if not directory.is_dir():
@@ -65,11 +68,11 @@ def derived_names(directory: Path) -> set[str]:
 
 
 def scanned_names(directory: Path) -> set[str]:
-    """The same question asked of the text: no YAML parse, no glob, no shared code with the script."""
+    """The same question asked of the text: no YAML parse, no glob, no code shared with the script."""
     if not directory.is_dir():
         return set()
     files = [path for path in directory.iterdir() if path.suffix in {".yml", ".yaml"}]
-    return {path.name for path in files if _SCHEDULE_WITH_CRON.search(path.read_text(encoding="utf-8"))}
+    return {path.name for path in files if _text_reader()(path.read_text(encoding="utf-8"))}
 
 
 def uncovered(derived: set[str], scanned: set[str]) -> list[str]:
