@@ -292,7 +292,8 @@ export class ApiClient extends ApiClientBase<RequestOptions, paths> {
     const send = () => (key
       ? runWithCircuitBreaker(key, () => super.rawRequest(endpoint, options))
       : super.rawRequest(endpoint, options));
-    // Every verb funnels through here, so this is the one place a call is timed for RUM (#21583).
+    // Every kit-client fetch verb funnels through here, so this is the one place a call is timed for RUM (#21583).
+    // XHR uploads (uploadFile/wireUpload) and direct fetch users bypass it.
     return monitorApiCall(options.method ?? 'GET', endpoint, send);
   }
 

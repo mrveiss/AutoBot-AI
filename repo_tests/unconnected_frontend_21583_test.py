@@ -17,7 +17,9 @@ from repo_tests._unconnected_common import Tree
 
 
 def _glob(arguments: str, comment: bool = False, generic: str = "") -> str:
-    """A planted `import.meta` glob call, built so this file's own text holds no tree-enumerating call."""
+    """A planted `import.meta` glob call. This file reads no tree (`Tree.of_files` only); the call is assembled from
+    an f-string because a literal dot-glob call in the source matches the guard-reach census regex
+    (`_guard_reach_census._ENUMERATOR`), which would misclassify this control-only file as a tree-scanning guard."""
     return ("// " if comment else "") + f"const m = import.meta.glob{generic}({arguments})\n"
 
 
@@ -26,7 +28,19 @@ _BODY = {_SUBJECT: "export const X = 1\n"}
 
 
 def _found(files: dict[str, str]) -> list[str]:
-    return fe.unconnected(Tree.of_files({**_BODY, **files}))
+    """What the detector says about the SUBJECT only.
+
+    The planted importer is itself a candidate nothing imports, so the full result also names it (the case below
+    proves that on purpose); every other control asks about the subject alone.
+    """
+    return [rel for rel in fe.unconnected(Tree.of_files({**_BODY, **files})) if rel == _SUBJECT]
+
+
+def test_an_importer_nothing_imports_is_itself_reported() -> None:
+    """Leaf-only reporting: the subject is connected by `a.ts`, and `a.ts` is the unconnected leaf."""
+    importer = "autobot-frontend/src/a.ts"
+    result = fe.unconnected(Tree.of_files({**_BODY, importer: "import { X } from '@/utils/planted'\n"}))
+    assert result == [importer]
 
 
 def test_an_unimported_source_file_fires() -> None:
@@ -134,10 +148,9 @@ def test_an_index_file_is_reached_through_its_directory_name() -> None:
         "autobot-frontend/src/components/panel/index.ts": "export const X = 1\n",
         "autobot-frontend/src/a.ts": "import { X } from '@/components/panel'\n",
     }
-    assert fe.unconnected(Tree.of_files(files)) == []
-    assert fe.unconnected(Tree.of_files({k: v for k, v in files.items() if k.endswith("index.ts")})) == [
-        "autobot-frontend/src/components/panel/index.ts"
-    ]
+    index = "autobot-frontend/src/components/panel/index.ts"
+    assert index not in fe.unconnected(Tree.of_files(files))
+    assert fe.unconnected(Tree.of_files({index: files[index]})) == [index]
 
 
 def test_a_same_named_sibling_marks_the_file_connected_which_is_the_documented_under_report() -> None:

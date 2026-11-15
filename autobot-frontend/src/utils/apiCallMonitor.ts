@@ -3,8 +3,9 @@
 /**
  * Per-call RUM tracking for the shared ApiClient (#21583).
  *
- * Replaces the unloaded `ApiClientMonitor.js` Proxy: every request the client sends is
- * timed and handed to RumAgent (`window.rum`), and a client or fetch timeout is reported
+ * Replaces the unloaded `ApiClientMonitor.js` Proxy: every kit-client fetch verb (get, post, put, delete,
+ * rawRequest) is timed and handed to RumAgent (`window.rum`). XHR uploads (`ApiClientBase.uploadFile` /
+ * `wireUpload`) and callers that use `fetch` directly bypass it. A client or fetch timeout is reported
  * as a critical `api_timeout` issue. A timeout is recognised by type
  * (`isRequestTimeout`), never by message text. Connectivity failures are already
  * reported once, throttled, by the fetch interceptor in `plugins/errorHandler.ts`, so
