@@ -125,6 +125,12 @@ ISSUE_REF_RE = re.compile(
 )
 
 
+#: Exit codes: 0 = clean, 1 = findings, 2 = the audit could not run (lookup or unexpected error).
+EXIT_CLEAN = 0
+EXIT_FINDINGS = 1
+EXIT_LOOKUP_FAILED = 2
+
+
 @dataclass
 class Finding:
     file: str
@@ -307,8 +313,19 @@ def grep_count_production_callers(stem: str, self_path: Path) -> int:
     return count
 
 
+class TrackerLookupError(RuntimeError):
+    """The closed-tracker lookup failed or was unreadable (#21582).
+
+    An empty closed set makes ``scan`` skip every file (state != CLOSED), so a failed lookup would
+    render as a clean audit. "Could not look" must not read as "found nothing".
+    """
+
+
 def fetch_closed_tracker_set() -> set[int]:
-    """One-shot fetch of all CLOSED issues so per-finding lookups are O(1)."""
+    """One-shot fetch of all CLOSED issues so per-finding lookups are O(1).
+
+    Raises ``TrackerLookupError`` when ``gh`` fails or its output is not the expected JSON.
+    """
     cmd = [
         "gh",
         "issue",
@@ -323,13 +340,11 @@ def fetch_closed_tracker_set() -> set[int]:
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=True)
     except (subprocess.SubprocessError, FileNotFoundError) as e:
-        logger.warning("gh unavailable, tracker states will be UNKNOWN (%s)", e)
-        return set()
+        raise TrackerLookupError(f"gh issue list failed, tracker states are unknown ({e})") from e
     try:
-        data = json.loads(result.stdout)
-        return {item["number"] for item in data}
-    except (json.JSONDecodeError, KeyError):
-        return set()
+        return {item["number"] for item in json.loads(result.stdout)}
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        raise TrackerLookupError(f"gh issue list output was not a list of issue numbers ({e!r})") from e
 
 
 def existing_audit_issues_by_tracker() -> set[int]:
@@ -542,7 +557,12 @@ def _file_new_issues(findings: list[Finding], max_issues: int) -> None:
 
 def main() -> int:
     args = _build_parser().parse_args()
-    findings = scan()
+    try:
+        findings = scan()
+    except TrackerLookupError as e:
+        # Before any report or filing: a degraded scan must neither claim a clean run nor file issues.
+        logger.error("%s", e)
+        return EXIT_LOOKUP_FAILED
     if args.file_issues:
         _file_new_issues(findings, args.max_issues)
 
@@ -550,7 +570,7 @@ def main() -> int:
     # ends in one, so its output keeps a second. Writing "+ \n" keeps stdout byte-identical.
     sys.stdout.write((render_json(findings) if args.json else render_human(findings)) + "\n")
 
-    return 1 if findings else 0
+    return EXIT_FINDINGS if findings else EXIT_CLEAN
 
 
 if __name__ == "__main__":
@@ -558,4 +578,4 @@ if __name__ == "__main__":
         sys.exit(main())
     except Exception as e:  # pragma: no cover
         logger.error("%s", e)
-        sys.exit(2)
+        sys.exit(EXIT_LOOKUP_FAILED)

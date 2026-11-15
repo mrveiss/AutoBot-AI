@@ -260,15 +260,17 @@ def test_fetch_closed_tracker_set_parses_gh_output() -> None:
 
 
 def test_fetch_closed_tracker_set_gh_unavailable() -> None:
-    """gh missing or non-zero exit must degrade gracefully to empty set."""
+    """gh missing must raise, never read as "no closed trackers" (#21582)."""
     with patch.object(audit.subprocess, "run", side_effect=FileNotFoundError("gh")):
-        assert audit.fetch_closed_tracker_set() == set()
+        with pytest.raises(audit.TrackerLookupError):
+            audit.fetch_closed_tracker_set()
 
 
 def test_fetch_closed_tracker_set_invalid_json() -> None:
     fake_run = MagicMock(returncode=0, stdout="<<not json>>", stderr="")
     with patch.object(audit.subprocess, "run", return_value=fake_run):
-        assert audit.fetch_closed_tracker_set() == set()
+        with pytest.raises(audit.TrackerLookupError):
+            audit.fetch_closed_tracker_set()
 
 
 # ---------------------------------------------------------------------------

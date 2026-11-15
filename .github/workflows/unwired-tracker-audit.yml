@@ -71,7 +71,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          python3 pipeline-scripts/audit_unwired_trackers.py --json > findings.json || true
+          # Exit 1 = findings (reported below); 2 = the audit could not read tracker states (#21582).
+          # Capturing with `|| rc=$?` keeps errexit from aborting before the check.
+          rc=0
+          python3 pipeline-scripts/audit_unwired_trackers.py --json > findings.json || rc=$?
+          if [ "$rc" -gt 1 ]; then
+            echo "::error::audit exited ${rc}: it could not run to completion, findings.json is not a report"
+            exit "$rc"
+          fi
           count=$(jq 'length' findings.json)
           echo "count=${count}" >> "$GITHUB_OUTPUT"
           jq -r '.[:50][] | "\(.file)\t#\(.tracker)"' findings.json
