@@ -14,6 +14,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -32,11 +33,12 @@ from llc.models.enums import MembershipRole, WorkItemPriority, WorkItemStatus, W
 from llc.models.membership import LLCCompanyMembership
 from llc.models.work_item import LLCWorkItem, LLCWorkItemComment
 from llc.services import after_commit
-from llc.services.handoff import HandoffService
+from llc.services.handoff import HandoffNotAllowed, HandoffService
 from llc.tests import _e2e_harness as harness
 
 pytestmark = pytest.mark.asyncio
 
+_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 _SIGNER = "hook-signer-21591"
 _COMPANY = uuid.UUID("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d")
 _ITEM = uuid.UUID("2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e")
@@ -186,3 +188,34 @@ async def test_a_merge_that_cannot_name_a_reviewer_leaves_the_item_with_a_commen
     assert (item.assignee_agent_id is None) == (kwargs.get("agent", _AGENT) is None)
     assert item.reviewer_user_id == kwargs.get("reviewer")
     assert any("merged; the item stays" in c and reason in c for c in comments)
+
+
+async def test_a_repeated_delivery_hands_off_once_and_names_no_ids(factory) -> None:  # noqa: ANN001
+    await _seed(factory, reviewer=_REVIEWER)
+    handoffs: list[str] = []
+    original = HandoffService.agent_to_human
+
+    async def spy(self, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202
+        handoffs.append("called")
+        return await original(self, *args, **kwargs)
+
+    with patch.object(HandoffService, "agent_to_human", new=spy):
+        await _merge(factory)
+        await _merge(factory)
+    item, comments = await _state(factory)
+    assert (len(handoffs), item.status) == (1, WorkItemStatus.IN_REVIEW)
+    reasons = [c for c in comments if "merged; the item stays in_review" in c]
+    assert len(reasons) == 1
+    assert not _UUID.search(reasons[0])
+
+
+async def test_a_delivery_whose_holder_changed_is_left_with_a_comment_naming_no_agent(factory) -> None:  # noqa: ANN001
+    await _seed(factory, reviewer=_REVIEWER)
+    refusal = HandoffNotAllowed(f"Agent {_AGENT} does not hold checkout for work item {_ITEM}")
+    with patch.object(HandoffService, "agent_to_human", new=AsyncMock(side_effect=refusal)):
+        assert (await _merge(factory)).json()["status"] == "processed"
+    item, comments = await _state(factory)
+    assert item.status == WorkItemStatus.IN_PROGRESS
+    reasons = [c for c in comments if "merged; the item stays" in c]
+    assert [r for r in reasons if "the agent that held it no longer does" in r]
+    assert not any(_UUID.search(r) for r in reasons)

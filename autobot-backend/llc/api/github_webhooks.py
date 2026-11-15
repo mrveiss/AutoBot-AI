@@ -123,6 +123,33 @@ def _system_comment(item: LLCWorkItem, body: str) -> LLCWorkItemComment:
     )
 
 
+async def _lock_item(session: AsyncSession, item: LLCWorkItem) -> LLCWorkItem:
+    """The item under its row lock, re-read from the database (``_load_locked``'s shape).
+
+    ``populate_existing`` makes the row already loaded in this session take the committed values, so a delivery
+    that waited on another's handoff sees the item as that handoff left it.
+    """
+    stmt = (
+        select(LLCWorkItem).where(LLCWorkItem.id == item.id).with_for_update().execution_options(populate_existing=True)
+    )
+    return (await session.execute(stmt)).scalar_one()
+
+
+async def _hand_off(session: AsyncSession, item: LLCWorkItem) -> Optional[str]:
+    """Hand the held item to its reviewer; ``None`` when it went, else a reason that names no ids."""
+    from ..services.handoff import HandoffNotAllowed  # lazy: the handoff module pulls in llc.kb (#13057)
+
+    try:
+        await hand_off_for_review(
+            get_handoff_service(), session, item, str(item.company_id), str(item.assignee_agent_id)
+        )
+    except InvalidTransition as exc:
+        if isinstance(exc.__cause__, HandoffNotAllowed):  # its text names the agent node
+            return "the agent that held it no longer does"
+        return str(exc).partition("marked done. ")[2] or "no reviewer could be named"
+    return None
+
+
 async def _review_after_merge(session: AsyncSession, item: LLCWorkItem, pr_number: Any) -> None:
     """A merged PR puts the item in review only through the review handoff, with a reviewer named (#21591).
 
@@ -130,6 +157,7 @@ async def _review_after_merge(session: AsyncSession, item: LLCWorkItem, pr_numbe
     company member. An item that is finished, may not enter review from its status, is held by no agent, or has
     no reviewer is left where it is, with a comment a person can read saying why.
     """
+    item = await _lock_item(session, item)  # a repeated or concurrent delivery waits here and sees the committed state
     current = WorkItemStatus(item.status)
     if current in (WorkItemStatus.DONE, WorkItemStatus.CANCELLED):
         return
@@ -139,12 +167,7 @@ async def _review_after_merge(session: AsyncSession, item: LLCWorkItem, pr_numbe
     elif item.assignee_agent_id is None:
         why = "no agent holds it, so there is no handoff to make"
     else:
-        try:
-            await hand_off_for_review(
-                get_handoff_service(), session, item, str(item.company_id), str(item.assignee_agent_id)
-            )
-        except InvalidTransition as exc:
-            why = str(exc)
+        why = await _hand_off(session, item)
     if why is None:
         session.add(_system_comment(item, f"✅ PR #{pr_number} merged → handed to its reviewer for review"))
         logger.info("PR #%s merged: handed work item %s to review", pr_number, item.id)

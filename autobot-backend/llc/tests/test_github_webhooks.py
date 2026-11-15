@@ -148,6 +148,7 @@ def _make_webhook_app(item=None):
     mock_session = AsyncMock()
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = item
+    mock_result.scalar_one.return_value = item  # the locked re-read of a merged PR's item
     mock_session.execute = AsyncMock(return_value=mock_result)
     mock_session.add = MagicMock()
     mock_session.commit = AsyncMock()
