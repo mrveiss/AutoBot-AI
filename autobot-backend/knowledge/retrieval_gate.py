@@ -25,7 +25,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple
 
-from autobot_shared.env_utils import env_float_clamped
+from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from knowledge.rag_benchmarks import BenchmarkSplit, _deterministic_dev_test_split
 from knowledge.retrieval_metrics import (
@@ -36,17 +36,20 @@ from knowledge.retrieval_metrics import (
     recall_at_k,
     reciprocal_rank,
 )
+from services.retrieval_contract import RETRIEVAL_TECHNIQUES as TECHNIQUES  # the one list (#21625)
 
 logger = get_logger(__name__)
 
 #: Cutoff for recall@k / nDCG@k.
-RETRIEVAL_GATE_K = int(os.getenv("AUTOBOT_RETRIEVAL_GATE_K", "5"))
+RETRIEVAL_GATE_K = env_int_clamped("AUTOBOT_RETRIEVAL_GATE_K", 5, 1, 100)
 #: Every one of the five metrics must improve by at least this much (absolute).
 RETRIEVAL_GATE_MIN_IMPROVEMENT = env_float_clamped(
     "AUTOBOT_RETRIEVAL_GATE_MIN_IMPROVEMENT", 0.01, 0.0, 1.0, positive_finite=True
 )
 #: Share of queries routed to the dev split.
-RETRIEVAL_GATE_DEV_FRACTION = float(os.getenv("AUTOBOT_RETRIEVAL_GATE_DEV_FRACTION", "0.8"))
+RETRIEVAL_GATE_DEV_FRACTION = env_float_clamped(
+    "AUTOBOT_RETRIEVAL_GATE_DEV_FRACTION", 0.8, 0.05, 0.95, positive_finite=True
+)
 
 #: Directory holding versioned gold sets (fixture_<bucket>.jsonl shipped; live_<bucket>.jsonl owner-curated).
 RETRIEVAL_GATE_GOLD_DIR = os.getenv("AUTOBOT_RETRIEVAL_GATE_GOLD_DIR") or os.path.join(
@@ -56,7 +59,6 @@ RETRIEVAL_GATE_GOLD_DIR = os.getenv("AUTOBOT_RETRIEVAL_GATE_GOLD_DIR") or os.pat
 RETRIEVAL_GATE_GOLD_SET = os.getenv("AUTOBOT_RETRIEVAL_GATE_GOLD_SET", "fixture")
 
 BUCKETS = ("docs", "code", "memory", "facts", "patterns", "cross")
-TECHNIQUES = ("dense", "bm25", "fusion", "rerank", "query_expansion", "graph", "memory", "cache")
 #: metric name -> True when higher is better
 METRICS: Dict[str, bool] = {
     "recall": True,
@@ -172,17 +174,30 @@ def evaluate(
     for bucket, rows in per_bucket.items():
         result[bucket] = {m: mean(r[m] for r in rows) for m in METRICS if m != "contradiction"}
         result[bucket]["contradiction"] = contradiction_rate(texts[bucket], has_conflict) if has_conflict else None
-    result["overall"] = _overall(result, {b: len(r) for b, r in per_bucket.items()})
+    result["overall"] = _overall(result, _measured_counts(per_bucket, texts, has_conflict is not None))
     return result
 
 
+def _measured_counts(
+    per_bucket: Mapping[str, Sequence[Mapping[str, Optional[float]]]],
+    texts: Mapping[str, Sequence[Sequence[str]]],
+    conflicts_measured: bool,
+) -> Dict[str, Dict[str, int]]:
+    """Per bucket and metric, how many queries actually contributed to the bucket value."""
+    counts: Dict[str, Dict[str, int]] = {}
+    for bucket, rows in per_bucket.items():
+        counts[bucket] = {m: sum(1 for r in rows if r[m] is not None) for m in METRICS if m != "contradiction"}
+        counts[bucket]["contradiction"] = len(texts[bucket]) if conflicts_measured else 0
+    return counts
+
+
 def _overall(
-    by_bucket: Mapping[str, Mapping[str, Optional[float]]], sizes: Mapping[str, int]
+    by_bucket: Mapping[str, Mapping[str, Optional[float]]], measured: Mapping[str, Mapping[str, int]]
 ) -> Dict[str, Optional[float]]:
-    """Query-weighted mean across buckets, per metric (None-aware)."""
+    """Mean across buckets weighted by each metric's measured query count (None-aware)."""
     out: Dict[str, Optional[float]] = {}
     for m in METRICS:
-        pairs = [(by_bucket[b][m], n) for b, n in sizes.items() if by_bucket[b][m] is not None]
+        pairs = [(by_bucket[b][m], measured[b][m]) for b in measured if by_bucket[b][m] is not None]
         total = sum(n for _, n in pairs)
         out[m] = sum(v * n for v, n in pairs) / total if total else None
     return out
@@ -228,6 +243,7 @@ def run_ablation(
         "held_out": split == BenchmarkSplit.TEST,
         "query_count": len(chosen),
         "gold_sha256": gold_fingerprint(queries),
+        "evaluated_sha256": gold_fingerprint(chosen),
         "runs": runs,
     }
 
@@ -280,6 +296,8 @@ def gate_reports(baseline: Mapping[str, Any], candidate: Mapping[str, Any], run:
         return GateVerdict(False, ["reports use different k"])
     if not baseline.get("gold_sha256") or baseline.get("gold_sha256") != candidate.get("gold_sha256"):
         return GateVerdict(False, ["reports were not produced from the same gold set"])
+    if not baseline.get("evaluated_sha256") or baseline.get("evaluated_sha256") != candidate.get("evaluated_sha256"):
+        return GateVerdict(False, ["reports were not evaluated on the same queries"])
     if not baseline.get("query_count") or baseline.get("query_count") != candidate.get("query_count"):
         return GateVerdict(False, ["reports differ in query_count, or it is zero"])
     b = baseline["runs"]["default"]["metrics"]["overall"]

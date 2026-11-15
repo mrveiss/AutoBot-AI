@@ -11,13 +11,14 @@ Relevance is graded: ``gold`` maps doc id -> gain (a set means gain 1 each).
 from __future__ import annotations
 
 import math
-import os
 import re
 from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Union
 
+from autobot_shared.env_utils import env_float_clamped
+
 #: Fraction of a claim's content tokens that must appear in a chunk for the
 #: default lexical support check to count the claim as grounded.
-GROUNDING_OVERLAP_THRESHOLD = float(os.getenv("AUTOBOT_RETRIEVAL_GROUNDING_OVERLAP", "0.6"))
+GROUNDING_OVERLAP_THRESHOLD = env_float_clamped("AUTOBOT_RETRIEVAL_GROUNDING_OVERLAP", 0.6, 0.0, 1.0)
 
 Gold = Union[Set[str], Mapping[str, float]]
 

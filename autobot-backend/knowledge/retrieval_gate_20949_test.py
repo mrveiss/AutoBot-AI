@@ -273,3 +273,35 @@ def test_load_gold_rejects_empty_gold(tmp_path):
     p.write_text(json.dumps({"id": "1", "query": "q", "bucket": "docs", "gold": []}), encoding="utf-8")
     with pytest.raises(ValueError, match="empty gold"):
         rg.load_gold(str(p))
+
+
+def test_overall_weights_each_metric_by_its_measured_count():
+    """Grounding [1.0, None] in one bucket and [0.0] in another is 0.5, not 2/3 (#21064 review)."""
+    answers = {"g1": "Redis runs on port 6379.", "g2": None, "g3": "unrelated claim xyzzy plugh."}
+
+    def retriever(query, toggles, k):
+        return rg.RetrievalOutput(["a"], ["Redis runs on port 6379"], answers[query.id])
+
+    qs = [
+        rg.GoldQuery("g1", "one", "docs", {"a": 1.0}),
+        rg.GoldQuery("g2", "two", "docs", {"a": 1.0}),
+        rg.GoldQuery("g3", "three", "code", {"a": 1.0}),
+    ]
+    m = rg.evaluate(retriever, qs, rg.DEFAULT_TOGGLES, k=3)
+    assert m["docs"]["grounding"] == pytest.approx(1.0)
+    assert m["code"]["grounding"] == pytest.approx(0.0)
+    assert m["overall"]["grounding"] == pytest.approx(0.5)
+    assert m["overall"]["recall"] == pytest.approx(1.0)
+
+
+def test_report_fingerprints_the_evaluated_queries_not_only_the_gold_set(monkeypatch):
+    """Two runs on the same gold set with different equal-size ``chosen`` subsets must not match."""
+    monkeypatch.setattr(rg, "select_split", lambda queries, split: [queries[0]])
+    first = rg.run_ablation(fake_retriever, GOLD, BenchmarkSplit.TEST, k=3)
+    monkeypatch.setattr(rg, "select_split", lambda queries, split: [queries[1]])
+    second = rg.run_ablation(fake_retriever, GOLD, BenchmarkSplit.TEST, k=3)
+    assert first["query_count"] == second["query_count"] == 1
+    assert first["gold_sha256"] == second["gold_sha256"]
+    assert first["evaluated_sha256"] != second["evaluated_sha256"]
+    verdict = rg.gate_reports(first, second)
+    assert not verdict.accepted and "same queries" in verdict.reasons[0]
