@@ -208,6 +208,12 @@ MID: dict[str, tuple[str, str, str]] = {
         "Backend files that declare a route decorator; a subset of the backends' `.py` files that drifts as "
         "non-router modules are added (#20512).",
     ),
+    "unconnected-code-frontend": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Production `.ts`/`.js`/`.vue` files of the two frontends' `src` trees (no tests, stories or entry points); a "
+        "subset of all tracked files that drifts as components are added (#21583).",
+    ),
     "unconnected-code-stores": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

@@ -20,6 +20,8 @@ Detected, compared with ``unconnected_code_baseline.txt`` (a key not in it fails
              declared external prefix calls -- see ``_unconnected_routes``.
 ``queue:``   a Redis list or stream pushed and never read -- see ``_unconnected_stores``.
 ``table:``   a SQL table defined and never read or written -- see ``_unconnected_stores``.
+``frontend:`` a frontend source file no production file imports and no ``import.meta.glob`` reaches -- see
+             ``_unconnected_frontend`` (#21583).
 
 ``declared:`` entries are hand-recorded for what no detector can see; each is true only while its
 stated set of referencing files is exactly the live one.
@@ -32,8 +34,8 @@ WHAT IT CANNOT SEE (each detector's module docstring has the full list)
 * A caller that is itself dead, or that builds its path or key at runtime.
 * Loading by directory scan (plugins, ``skills/builtin``, migrations): no textual reference.
 * Redis keys held in a variable or another module's constant; non-list/stream Redis types.
-* Anything outside the trees named in the detectors. Frontend, Ansible and shell code that is
-  never called is not judged.
+* Anything outside the trees named in the detectors. Ansible and shell code that is never called is not
+  judged; frontend source files are judged only for having an importer (``_unconnected_frontend`` lists its limits).
 
 WHICH CI JOB
 ------------
@@ -62,6 +64,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests import _unconnected_code as uc
+from repo_tests import _unconnected_frontend as frontend
 from repo_tests import _unconnected_modules as modules
 from repo_tests import _unconnected_routes as routes
 from repo_tests import _unconnected_stores as stores
@@ -108,6 +111,22 @@ ROUTES_REACH = declare(
     roots=routes.ROUTE_ROOTS,
     growth=40,
 )
+
+
+def _frontend_files(root: Path) -> list[str]:
+    return frontend.candidates(_state(root)[0])
+
+
+FRONTEND_REACH = declare(
+    "unconnected-code-frontend",
+    discover=_frontend_files,
+    # Measured 1180 candidates (2026-11-15); growth 200 makes the pin mid-window (1180 - 100). A new guard pins
+    # `floor=` until it lands on the base (#19676).
+    floor=1080,
+    what="production .ts, .js and .vue files of autobot-frontend and autobot-slm-frontend that could have an importer",
+    roots=frontend.FRONTEND_ROOTS,
+    growth=200,
+)
 STORES_REACH = declare(
     "unconnected-code-stores",
     discover=_store_files,
@@ -121,7 +140,7 @@ STORES_REACH = declare(
 @functools.lru_cache(maxsize=1)
 def _live() -> frozenset[str]:
     root = repo_root()
-    for reach in (MODULES_REACH, ROUTES_REACH, STORES_REACH):
+    for reach in (MODULES_REACH, ROUTES_REACH, STORES_REACH, FRONTEND_REACH):
         reach.examined(root)  # a sweep that reached implausibly little must not read as "nothing unconnected"
     tree, audit = _state(root)
     return frozenset(uc.detected(tree, audit))
@@ -183,6 +202,7 @@ def test_declared_entries_describe_the_live_references() -> None:
 REMEASURE_RELS = (
     "repo_tests/unconnected_code_remeasure_20910.txt",
     "repo_tests/unconnected_code_remeasure_21428.txt",
+    "repo_tests/unconnected_code_remeasure_21583.txt",
 )
 
 
