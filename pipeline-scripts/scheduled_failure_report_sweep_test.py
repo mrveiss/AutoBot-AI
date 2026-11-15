@@ -193,7 +193,8 @@ def _boom(number: int) -> List[Dict[str, Any]]:
 def test_a_comment_read_failure_is_one_workflows_error_not_the_sweeps() -> None:
     runs = {"nightly.yml": FAILING, "weekly.yml": FAILING}
     api = FakeApi(runs, [own_issue(40, 1, "nightly.yml"), own_issue(41, 1, "weekly.yml")])
-    outcomes, errors = mod.sweep(mod.SweepClient(api, comments=_boom), [NIGHTLY, WEEKLY], False)
+    client = mod.SweepClient(api, comments=_boom)
+    outcomes, errors = mod.sweep_scheduled_failures(client, [NIGHTLY, WEEKLY], False)
     assert [(o.file, o.action) for o in outcomes] == [("weekly.yml", "update")]
     assert len(errors) == 1 and errors[0].startswith("nightly.yml:") and "OSError" in errors[0]
 
@@ -232,7 +233,7 @@ def test_list_issues_drops_pull_requests_keeps_the_filters_and_reports_a_page_ca
 # ---- main ------------------------------------------------------------------------------
 
 
-def _patch_main(monkeypatch: pytest.MonkeyPatch, workflows: List[mod.ScheduledWorkflow], problems: List[str], api: Any):
+def _patch_main(monkeypatch: pytest.MonkeyPatch, workflows: List[Any], problems: List[str], api: Any) -> None:
     monkeypatch.setattr(mod, "scan_workflows", lambda: (workflows, problems))
     monkeypatch.setattr(mod, "build_api", lambda: api)
 

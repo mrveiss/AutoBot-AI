@@ -33,7 +33,8 @@ Run by `.github/workflows/scheduled-failure-report.yml`. Nothing is listed by ha
    of opening its own (idempotent per run) and never closes it. On recovery it adds one "passes again"
    note, and only when its own last word on that issue was a failure. Naming the file is not opting in.
 
-``--dry-run`` reads everything and writes nothing. Stdlib plus PyYAML; HTTP goes through
+The failing step of a failed job is ``ci_red_cause.first_failing_step`` (the earliest one), the one home of
+that rule. ``--dry-run`` reads everything and writes nothing. Stdlib plus PyYAML; HTTP goes through
 ``github_api.GitHubApi``, the issue client and paginator are ``issue_api`` (#19522), the comment
 reader is the shared helper (#12984). The report goes to STDOUT, diagnostics at WARNING or above.
 """
@@ -56,6 +57,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from ci_red_cause import first_failing_step  # noqa: E402
 from github_api import WatchdogApiError, WatchdogError, build_api  # noqa: E402
 from issue_api import IssueApiError, IssueClient, list_issues  # noqa: E402
 from scheduled_failure_issues import (  # noqa: E402
@@ -66,7 +68,7 @@ from scheduled_failure_issues import (  # noqa: E402
     PHASE_LABEL,
     Failure,
     Json,
-    ScheduledWorkflow,
+    ScheduledWorkflowFile,
     Targets,
     build_targets,
     failure_comment,
@@ -91,7 +93,7 @@ MILESTONE_PAGE_SIZE = 100
 
 FAILING_CONCLUSIONS: FrozenSet[str] = frozenset({"failure", "timed_out", "startup_failure"})
 PASSING_CONCLUSIONS: FrozenSet[str] = frozenset({"success"})
-STEP_FAILED: FrozenSet[str] = frozenset({"failure", "timed_out"})
+JOB_FAILED: FrozenSet[str] = frozenset({"failure", "timed_out"})
 
 STATE_FAILING = "failing"
 STATE_PASSING = "passing"
@@ -125,7 +127,7 @@ def triggers_of(doc: Any) -> Any:
     return doc[True] if True in doc else doc.get("on")
 
 
-def declares_schedule(triggers: Any) -> bool:
+def triggers_declare_schedule(triggers: Any) -> bool:
     """True when the map form carries a ``schedule`` entry with a cron; string and list forms never do."""
     if not isinstance(triggers, dict):
         return False
@@ -144,9 +146,9 @@ def _workflow_name(doc: Json, path: Path) -> str:
     return name.strip() if isinstance(name, str) and name.strip() else path.stem
 
 
-def scan_workflows(directory: Path = WORKFLOW_DIR) -> Tuple[List[ScheduledWorkflow], List[str]]:
+def scan_workflows(directory: Path = WORKFLOW_DIR) -> Tuple[List[ScheduledWorkflowFile], List[str]]:
     """``(scheduled workflows, problems)``; a file that cannot be read is a problem, never a skip."""
-    found: List[ScheduledWorkflow] = []
+    found: List[ScheduledWorkflowFile] = []
     problems: List[str] = []
     for path in workflow_files(directory):
         try:
@@ -154,12 +156,12 @@ def scan_workflows(directory: Path = WORKFLOW_DIR) -> Tuple[List[ScheduledWorkfl
         except (yaml.YAMLError, OSError, UnicodeDecodeError) as exc:
             problems.append(f"{path.name}: cannot be read ({type(exc).__name__})")
             continue
-        if declares_schedule(triggers_of(doc)):
-            found.append(ScheduledWorkflow(path.name, _workflow_name(doc, path)))
+        if triggers_declare_schedule(triggers_of(doc)):
+            found.append(ScheduledWorkflowFile(path.name, _workflow_name(doc, path)))
     return found, problems
 
 
-def scheduled_workflows(directory: Path = WORKFLOW_DIR) -> List[ScheduledWorkflow]:
+def scheduled_workflows(directory: Path = WORKFLOW_DIR) -> List[ScheduledWorkflowFile]:
     return scan_workflows(directory)[0]
 
 
@@ -200,15 +202,15 @@ def plan_for(verdict: Verdict, issue: Optional[Json], human: bool = False) -> st
     return ACTION_NONE
 
 
-def first_failure(jobs: Iterable[Json]) -> Failure:
-    """The first failed job and its first failed step; a run with no job at all failed at start-up."""
+def first_failed_job(jobs: Iterable[Json]) -> Failure:
+    """The first failed job and its earliest failed step; a run with no job at all failed at start-up."""
     listed = list(jobs)
     if not listed:
         return Failure(NO_JOB_STARTED, "-")
     for job in listed:
-        if job.get("conclusion") in STEP_FAILED:
-            steps = [s for s in job.get("steps") or [] if s.get("conclusion") in STEP_FAILED]
-            return Failure(job.get("name") or NOT_DETERMINED, steps[0].get("name") if steps else NOT_DETERMINED)
+        if job.get("conclusion") in JOB_FAILED:
+            step = first_failing_step(job.get("steps") or [])
+            return Failure(job.get("name") or NOT_DETERMINED, step.get("name") if step else NOT_DETERMINED)
     return Failure()
 
 
@@ -264,7 +266,7 @@ class SweepClient(IssueClient):
 
     def failure_of(self, run_id: int) -> Failure:
         try:
-            return first_failure(self.api.run_jobs(run_id))
+            return first_failed_job(self.api.run_jobs(run_id))
         except WatchdogApiError as exc:
             raise self.error(str(exc)) from exc
 
@@ -324,7 +326,12 @@ Done = Tuple[str, Optional[int]]
 
 
 def _open(
-    client: SweepClient, wf: ScheduledWorkflow, verdict: Verdict, targets: Targets, age: Optional[int], dry_run: bool
+    client: SweepClient,
+    wf: ScheduledWorkflowFile,
+    verdict: Verdict,
+    targets: Targets,
+    age: Optional[int],
+    dry_run: bool,
 ) -> Done:
     run = verdict.run
     failure = client.failure_of(run["id"]) if run else Failure()
@@ -345,7 +352,7 @@ def _open(
 
 def _update(
     client: SweepClient,
-    wf: ScheduledWorkflow,
+    wf: ScheduledWorkflowFile,
     verdict: Verdict,
     issue: Json,
     human: bool,
@@ -361,7 +368,7 @@ def _update(
     return ACTION_UPDATE, number
 
 
-def _close(client: SweepClient, wf: ScheduledWorkflow, run: Json, issue: Json, dry_run: bool) -> Done:
+def _close(client: SweepClient, wf: ScheduledWorkflowFile, run: Json, issue: Json, dry_run: bool) -> Done:
     """Close first, comment second: a failed close leaves nothing posted, so the next sweep cannot double the note."""
     number = issue["number"]
     if not dry_run:
@@ -370,7 +377,7 @@ def _close(client: SweepClient, wf: ScheduledWorkflow, run: Json, issue: Json, d
     return ACTION_CLOSE, number
 
 
-def _recover(client: SweepClient, wf: ScheduledWorkflow, run: Json, issue: Json, dry_run: bool) -> Done:
+def _recover(client: SweepClient, wf: ScheduledWorkflowFile, run: Json, issue: Json, dry_run: bool) -> Done:
     """A person's issue is never closed: one note, and only when our own last word there was a failure."""
     number = issue["number"]
     if not last_word_is_failure(marker_events(issue, client.comments(number))):
@@ -382,7 +389,7 @@ def _recover(client: SweepClient, wf: ScheduledWorkflow, run: Json, issue: Json,
 
 def _apply(
     client: SweepClient,
-    wf: ScheduledWorkflow,
+    wf: ScheduledWorkflowFile,
     verdict: Verdict,
     targets: Targets,
     issue: Optional[Json],
@@ -406,7 +413,7 @@ def _apply(
     return ACTION_NONE, issue["number"]
 
 
-def handle_workflow(client: SweepClient, wf: ScheduledWorkflow, targets: Targets, dry_run: bool) -> Outcome:
+def handle_workflow(client: SweepClient, wf: ScheduledWorkflowFile, targets: Targets, dry_run: bool) -> Outcome:
     verdict = verdict_of(client.scheduled_runs(wf.file))
     age = client.workflow_age_days(wf.file) if verdict.state == STATE_NEVER_RUN else None
     verdict = settle(verdict, age)
@@ -420,8 +427,8 @@ def handle_workflow(client: SweepClient, wf: ScheduledWorkflow, targets: Targets
     return Outcome(wf.file, verdict.state, shown, number, note)
 
 
-def sweep(
-    client: SweepClient, workflows: Sequence[ScheduledWorkflow], dry_run: bool
+def sweep_scheduled_failures(
+    client: SweepClient, workflows: Sequence[ScheduledWorkflowFile], dry_run: bool
 ) -> Tuple[List[Outcome], List[str]]:
     """Every workflow handled on its own: one API failure is reported and the rest still run."""
     files = [wf.file for wf in workflows]
@@ -449,7 +456,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         logger.error("no scheduled workflow found under %s; refusing to report a clean sweep", WORKFLOW_DIR)
         return 1
     try:
-        outcomes, errors = sweep(SweepClient(build_api()), workflows, args.dry_run)
+        outcomes, errors = sweep_scheduled_failures(SweepClient(build_api()), workflows, args.dry_run)
     except (IssueApiError, WatchdogError) as exc:
         logger.error("%s", exc)
         return 1

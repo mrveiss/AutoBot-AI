@@ -62,7 +62,7 @@ _EVENT_RE = re.compile(r"<!-- scheduled-failure-(run|recovered):(\w+) -->")
 
 
 @dataclass(frozen=True)
-class ScheduledWorkflow:
+class ScheduledWorkflowFile:
     file: str
     name: str
 
@@ -85,7 +85,7 @@ def run_date(run: Json) -> str:
     return (run.get("run_started_at") or run.get("created_at") or "unknown")[:10]
 
 
-def _facts(wf: ScheduledWorkflow, run: Optional[Json], failure: Failure, age_days: Optional[int]) -> str:
+def _facts(wf: ScheduledWorkflowFile, run: Optional[Json], failure: Failure, age_days: Optional[int]) -> str:
     rows = [f"| Workflow | {wf.name} (`.github/workflows/{wf.file}`) |"]
     if run is None:
         age = "unknown" if age_days is None else f"{age_days} days ago"
@@ -101,11 +101,11 @@ def _facts(wf: ScheduledWorkflow, run: Optional[Json], failure: Failure, age_day
     return "\n".join(["| | |", "| --- | --- |", *rows])
 
 
-def issue_title(wf: ScheduledWorkflow) -> str:
+def issue_title(wf: ScheduledWorkflowFile) -> str:
     return f"Scheduled workflow failing: {wf.name} ({wf.file})"
 
 
-def issue_body(wf: ScheduledWorkflow, run: Optional[Json], failure: Failure, age_days: Optional[int] = None) -> str:
+def issue_body(wf: ScheduledWorkflowFile, run: Optional[Json], failure: Failure, age_days: Optional[int] = None) -> str:
     lead = (
         "The latest scheduled run of this workflow failed."
         if run
@@ -120,7 +120,11 @@ def issue_body(wf: ScheduledWorkflow, run: Optional[Json], failure: Failure, age
 
 
 def failure_comment(
-    wf: ScheduledWorkflow, run: Optional[Json], failure: Failure, age_days: Optional[int] = None, human: bool = False
+    wf: ScheduledWorkflowFile,
+    run: Optional[Json],
+    failure: Failure,
+    age_days: Optional[int] = None,
+    human: bool = False,
 ) -> str:
     lead = "The scheduled workflow failed again." if run else "Still no completed scheduled run of this workflow."
     if human:
@@ -128,7 +132,7 @@ def failure_comment(
     return f"{RUN_MARKER.format(key=run_key(run))}\n{lead}\n\n{_facts(wf, run, failure, age_days)}"
 
 
-def passing_comment(wf: ScheduledWorkflow, run: Json, human: bool = False) -> str:
+def passing_comment(wf: ScheduledWorkflowFile, run: Json, human: bool = False) -> str:
     seen = f"({run.get('html_url')}, {run_date(run)}, conclusion {run.get('conclusion')})"
     if human:
         return (
@@ -148,7 +152,7 @@ def marker_file(body: Optional[str]) -> Optional[str]:
     return match.group(1) if match else None
 
 
-def tracked_files(body: Optional[str]) -> set:
+def tracked_workflow_files(body: Optional[str]) -> set:
     """The workflow files a person's issue opted in to, by ``scheduled-failure-tracks`` lines anywhere in its body."""
     return set(_TRACKS_MARKER_RE.findall(body or ""))
 
@@ -198,7 +202,7 @@ def build_targets(items: Iterable[Json], files: Iterable[str]) -> Targets:
         key = marked[item["number"]]
         if key and key != UMBRELLA_KEY and key not in own:
             own[key] = item
-    unmarked = [(i, tracked_files(i.get("body"))) for i in listed if marked[i["number"]] is None]
+    unmarked = [(i, tracked_workflow_files(i.get("body"))) for i in listed if marked[i["number"]] is None]
     human: Dict[str, Json] = {}
     for file in files:
         if file in own:

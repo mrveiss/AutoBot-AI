@@ -21,8 +21,8 @@ import scheduled_failure_report as mod
 
 REPO = "example-org/example-repo"
 RUN_URL = "https://github.com/example-org/example-repo/actions/runs/{}"
-NIGHTLY = mod.ScheduledWorkflow("nightly.yml", "Nightly")
-WEEKLY = mod.ScheduledWorkflow("weekly.yml", "Weekly")
+NIGHTLY = mod.ScheduledWorkflowFile("nightly.yml", "Nightly")
+WEEKLY = mod.ScheduledWorkflowFile("weekly.yml", "Weekly")
 UMBRELLA = {"number": 30, "title": "Umbrella", "body": iss.REPORT_MARKER.format(file="umbrella")}
 
 
@@ -97,8 +97,8 @@ def test_discovery_reads_both_extensions_names_the_workflow_and_falls_back_to_th
     _plant(tmp_path, "a.yml", f"name: Alpha job\n{cron}")
     _plant(tmp_path, "c.yml", "on: push\n")
     assert mod.scheduled_workflows(tmp_path) == [
-        mod.ScheduledWorkflow("a.yml", "Alpha job"),
-        mod.ScheduledWorkflow("b.yaml", "b"),
+        mod.ScheduledWorkflowFile("a.yml", "Alpha job"),
+        mod.ScheduledWorkflowFile("b.yaml", "b"),
     ]
 
 
@@ -199,16 +199,25 @@ def test_a_never_run_workflow_becomes_never_fired_only_past_the_threshold(
 
 
 def test_the_first_failing_job_and_step_are_named() -> None:
-    assert mod.first_failure(FAILED_JOBS) == mod.Failure("build", "Compile")
+    assert mod.first_failed_job(FAILED_JOBS) == mod.Failure("build", "Compile")
+
+
+def test_the_earliest_failing_step_by_number_is_named_through_the_shared_rule() -> None:
+    steps = [
+        {"name": "Test", "number": 9, "conclusion": "failure"},
+        {"name": "Setup", "number": 4, "conclusion": "failure"},
+    ]
+    jobs = [{"name": "build", "conclusion": "failure", "steps": steps}]
+    assert mod.first_failed_job(jobs) == mod.Failure("build", "Setup")
 
 
 def test_a_run_that_started_no_job_says_so() -> None:
-    assert mod.first_failure([]).job == mod.NO_JOB_STARTED
+    assert mod.first_failed_job([]).job == mod.NO_JOB_STARTED
 
 
 def test_a_failed_job_without_a_failed_step_keeps_the_job_name() -> None:
     jobs = [{"name": "build", "conclusion": "timed_out", "steps": [{"name": "Compile", "conclusion": "cancelled"}]}]
-    assert mod.first_failure(jobs) == mod.Failure("build", mod.NOT_DETERMINED)
+    assert mod.first_failed_job(jobs) == mod.Failure("build", mod.NOT_DETERMINED)
 
 
 # ---- text and markers ------------------------------------------------------------------
@@ -389,9 +398,9 @@ def do_sweep(
     api: FakeApi,
     comments: Comments = None,
     dry_run: bool = False,
-    workflows: Optional[List[mod.ScheduledWorkflow]] = None,
+    workflows: Optional[List[mod.ScheduledWorkflowFile]] = None,
 ):
-    return mod.sweep(make_client(api, comments), workflows or [NIGHTLY], dry_run)
+    return mod.sweep_scheduled_failures(make_client(api, comments), workflows or [NIGHTLY], dry_run)
 
 
 def own_issue(number: int = 40, key: Any = 1, file: str = "nightly.yml", parent: bool = True) -> Dict[str, Any]:
