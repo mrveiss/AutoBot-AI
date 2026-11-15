@@ -263,7 +263,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
 
   const duplicatesSilent = useFetchEndpoint<unknown, unknown>(
     { path: '/api/analytics/codebase/duplicates', scopeToSource: true, requireSource: true, label: 'Duplicates endpoint',
-      pickData: (raw) => raw, onSuccess: applyDuplicates, onError: failDuplicates },
+      pickData: (raw) => raw, onSuccess: (raw) => { applyDuplicates(raw); runState.applyRunFields(raw) }, onError: failDuplicates }, // #21418: an index fallback carries `run`
     { withSourceId },
   )
 
