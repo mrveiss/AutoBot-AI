@@ -47,6 +47,7 @@ from __future__ import annotations
 import posixpath
 import re
 
+from repo_tests._ui_literal_scan import SCRIPT_BODY
 from repo_tests._unconnected_common import Tree
 
 from autobot_shared.testfile_names import is_test_filename
@@ -60,7 +61,6 @@ _ENTRY_NAMES = frozenset({"main.ts", "main.js", "App.vue"})
 _NOT_SOURCE_DIRS = frozenset({"testing"})
 _GLOB_TOKENS = {"*": "[^/]*", "?": "[^/]", "{": "(?:", "}": ")", ",": "|"}
 
-_SCRIPT_RE = re.compile(r"<script\b[^>]*>(.*?)</script>", re.DOTALL)
 _QUOTED_RE = re.compile(r"""["'`]([^"'`\n]{1,300})["'`]""")
 _GLOB_CALL_RE = re.compile(r"import\.meta\.glob\s*(?:<[^()]*?>)?\s*\(\s*(\[[^\]]*\]|[\"'`][^\"'`]*[\"'`])")
 
@@ -104,7 +104,7 @@ def _code_text(rel: str, text: str) -> str:
         return text
     name = rel
     if rel.endswith(".vue"):
-        text, name = "\n".join(_SCRIPT_RE.findall(text)), "script.ts"
+        text, name = "\n".join(SCRIPT_BODY.findall(text)), "script.ts"
     return "\n".join(line.text for line in code_lines(text, name=name, strip_trailing=True))
 
 
