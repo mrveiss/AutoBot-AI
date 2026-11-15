@@ -224,7 +224,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/facts.py": 1709,
     "autobot-backend/knowledge/ownership.py": 757,
     "autobot-backend/knowledge/pipeline/cognifiers/cognifiers_test.py": 806,
-    "autobot-backend/knowledge/rag_benchmarks.py": 1607,
+    "autobot-backend/knowledge/rag_benchmarks.py": 1606,
     "autobot-backend/knowledge/search.py": 1040,
     "autobot-backend/knowledge/search_components/retrieval_learner.py": 734,
     "autobot-backend/knowledge/search_quality.py": 931,
