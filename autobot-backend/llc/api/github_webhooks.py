@@ -28,6 +28,10 @@ from llc.deps import get_session
 
 from ..models.enums import WorkItemStatus
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
+from ..services.accessors import get_handoff_service
+from ..services.work_item_gated_done import hand_off_for_review
+from ..services.work_item_own_task import InvalidTransition
+from ..services.work_item_service import _ALLOWED_TRANSITIONS
 
 logger = get_logger(__name__)
 
@@ -119,6 +123,53 @@ def _system_comment(item: LLCWorkItem, body: str) -> LLCWorkItemComment:
     )
 
 
+async def _review_after_merge(session: AsyncSession, item: LLCWorkItem, pr_number: Any) -> None:
+    """A merged PR puts the item in review only through the review handoff, with a reviewer named (#21591).
+
+    The reviewer rule is ``hand_off_for_review``'s: the item's reviewer, else its creator, who must be a
+    company member. An item that is finished, may not enter review from its status, is held by no agent, or has
+    no reviewer is left where it is, with a comment a person can read saying why.
+    """
+    current = WorkItemStatus(item.status)
+    if current in (WorkItemStatus.DONE, WorkItemStatus.CANCELLED):
+        return
+    why = None
+    if WorkItemStatus.IN_REVIEW not in _ALLOWED_TRANSITIONS.get(current, set()):
+        why = f"review cannot start from {current.value}"
+    elif item.assignee_agent_id is None:
+        why = "no agent holds it, so there is no handoff to make"
+    else:
+        try:
+            await hand_off_for_review(
+                get_handoff_service(), session, item, str(item.company_id), str(item.assignee_agent_id)
+            )
+        except InvalidTransition as exc:
+            why = str(exc)
+    if why is None:
+        session.add(_system_comment(item, f"✅ PR #{pr_number} merged → handed to its reviewer for review"))
+        logger.info("PR #%s merged: handed work item %s to review", pr_number, item.id)
+        return
+    session.add(_system_comment(item, f"✅ PR #{pr_number} merged; the item stays {current.value}: {why}"))
+    logger.info("PR #%s merged: work item %s left in %s (%s)", pr_number, item.id, current.value, why)
+
+
+def _require_valid_signature(body: bytes, signature: Optional[str]) -> None:
+    """Fail closed: 503 without a configured secret, 401 on a missing or invalid signature."""
+    webhook_secret = os.environ.get("GITHUB_WEBHOOK_SECRET")
+    if not webhook_secret:
+        logger.error("GITHUB_WEBHOOK_SECRET not configured — rejecting webhook")
+        raise HTTPException(
+            status_code=503,
+            detail="Webhook endpoint not configured. Set GITHUB_WEBHOOK_SECRET.",
+        )
+    if not signature:
+        logger.warning("GitHub webhook: missing signature header")
+        raise HTTPException(status_code=401, detail="Missing webhook signature")
+    if not verify_webhook_signature(body, signature, webhook_secret):
+        logger.warning("GitHub webhook: invalid signature")
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+
 @router.post("/github")
 async def handle_github_webhook(
     request: Request,
@@ -132,25 +183,12 @@ async def handle_github_webhook(
     1. Branch name: ``llc/{work_item_id}`` (and variants)
     2. PR body: ``Closes #llc-{work_item_id}``
 
-    On PR merge → transition the work item to ``in_review``.
+    On PR merge → hand the work item to its reviewer through the review handoff, or leave it
+    where it is with a comment saying why (#21591).
     On PR close without merge → add a comment to the work item.
     """
-    webhook_secret = os.environ.get("GITHUB_WEBHOOK_SECRET")
-    if not webhook_secret:
-        logger.error("GITHUB_WEBHOOK_SECRET not configured — rejecting webhook")
-        raise HTTPException(
-            status_code=503,
-            detail="Webhook endpoint not configured. Set GITHUB_WEBHOOK_SECRET.",
-        )
-
     body = await request.body()
-    if not x_hub_signature_256:
-        logger.warning("GitHub webhook: missing signature header")
-        raise HTTPException(status_code=401, detail="Missing webhook signature")
-
-    if not verify_webhook_signature(body, x_hub_signature_256, webhook_secret):
-        logger.warning("GitHub webhook: invalid signature")
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    _require_valid_signature(body, x_hub_signature_256)
 
     if x_github_event != "pull_request":
         return {"status": "ignored", "reason": "Not a pull_request event"}
@@ -204,20 +242,7 @@ async def handle_github_webhook(
         logger.info("Linked PR #%s to work item %s", pr_number, work_item_uuid)
 
     if action == "closed" and pr_merged:
-        current_status = WorkItemStatus(item.status)
-        if current_status not in (WorkItemStatus.DONE, WorkItemStatus.CANCELLED):
-            item.status = WorkItemStatus.IN_REVIEW
-            session.add(
-                _system_comment(
-                    item,
-                    f"✅ PR #{pr_number} merged → transitioned from " f"{current_status.value} to in_review",
-                )
-            )
-            logger.info(
-                "PR #%s merged: transitioned work item %s to in_review",
-                pr_number,
-                work_item_uuid,
-            )
+        await _review_after_merge(session, item, pr_number)
     elif action == "closed" and not pr_merged:
         session.add(_system_comment(item, f"❌ PR #{pr_number} closed without merge"))
         logger.info("PR #%s closed without merge", pr_number)

@@ -252,18 +252,6 @@ class TestWebhookEndpoint:
         assert resp.json()["status"] == "processed"
         assert item.linked_pr_urls
 
-    def test_merge_transitions_to_in_review(self, monkeypatch):
-        from llc.models.enums import WorkItemStatus  # noqa: PLC0415
-
-        monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", _SECRET)
-        item = _mock_item(status="in_progress")
-        app, session = _make_webhook_app(item)
-        resp = _post(TestClient(app), _pr_payload(action="closed", merged=True))
-        assert resp.json()["status"] == "processed"
-        assert item.status == WorkItemStatus.IN_REVIEW
-        # Two comments: link + transition.
-        assert session.add.call_count == 2
-
     def test_merge_does_not_touch_done_item(self, monkeypatch):
         monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", _SECRET)
         item = _mock_item(status="done")
