@@ -332,3 +332,57 @@ def test_retriever_registry_resolves_the_fixture_by_name():
 
     assert rg._load_factory("fixture") is factory
     assert rg._load_factory("knowledge.retrieval_gate_fixture:factory") is factory
+
+
+# ---- train review fixes (#21640) ------------------------------------------
+
+
+def test_split_membership_is_hash_only_and_stable_when_queries_are_added():
+    """q1-q3 all hash to DEV; no fallback moves one to TEST, and more queries never move them."""
+    assert rg.select_split(GOLD, BenchmarkSplit.TEST) == []
+    more = GOLD + [rg.GoldQuery(f"extra{i}", "x", "docs", {"a": 1.0}) for i in range(40)]
+    dev_ids = {q.id for q in rg.select_split(more, BenchmarkSplit.DEV)}
+    assert {q.id for q in GOLD} <= dev_ids and rg.select_split(more, BenchmarkSplit.TEST)
+    empty = rg.run_ablation(fake_retriever, GOLD, BenchmarkSplit.TEST, k=3)
+    verdict = rg.gate_reports(empty, empty)
+    assert empty["query_count"] == 0 and not verdict.accepted and "query_count" in verdict.reasons[0]
+
+
+@pytest.mark.parametrize("margin", [float("nan"), float("inf"), 0.0, -0.01])
+def test_gate_decision_rejects_an_invalid_explicit_min_improvement(margin):
+    with pytest.raises(ValueError, match="min_improvement"):
+        rg.gate_decision(_BASE, _BASE, min_improvement=margin)
+
+
+def test_cli_run_takes_a_conflict_detector_and_states_when_unmeasured(tmp_path, monkeypatch):
+    gold = tmp_path / "gold.jsonl"
+    gold.write_text(
+        "\n".join(json.dumps({"id": q.id, "query": q.query, "bucket": q.bucket, "gold": list(q.gold)}) for q in GOLD),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(rg, "_load_factory", lambda spec: (lambda: fake_retriever))
+    base = ["run", "--gold", str(gold), "--retriever", "x:y", "--split", "all"]
+    measured, unmeasured = tmp_path / "m.json", tmp_path / "u.json"
+    assert rg.main([*base, "--out", str(measured), "--conflict-detector", "builtins:bool"]) == 0
+    assert rg.main([*base, "--out", str(unmeasured)]) == 0
+    m, u = (json.loads(p.read_text(encoding="utf-8")) for p in (measured, unmeasured))
+    assert m["contradiction_measured"] is True
+    assert m["runs"]["default"]["metrics"]["overall"]["contradiction"] == pytest.approx(1.0)
+    assert u["contradiction_measured"] is False
+    assert u["runs"]["default"]["metrics"]["overall"]["contradiction"] is None
+
+
+def test_load_gold_rejects_a_non_finite_gain(tmp_path):
+    p = tmp_path / "g.jsonl"
+    p.write_text('{"id": "1", "query": "q", "bucket": "docs", "gold": {"a": 1e309}}', encoding="utf-8")
+    with pytest.raises(ValueError, match="non-finite"):
+        rg.load_gold(str(p))
+
+
+def test_cli_run_refuses_to_write_a_non_finite_report(tmp_path, monkeypatch):
+    monkeypatch.setattr(rg, "_load_factory", lambda spec: (lambda: fake_retriever))
+    monkeypatch.setattr(rg, "load_gold_set", lambda: GOLD)
+    monkeypatch.setattr(rg, "run_ablation", lambda *a, **kw: {"k": 3, "score": float("nan")})
+    out = tmp_path / "r.json"
+    assert rg.main(["run", "--retriever", "x:y", "--out", str(out)]) == 1
+    assert not out.exists()

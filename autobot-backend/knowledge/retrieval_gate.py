@@ -27,7 +27,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Seque
 
 from autobot_shared.env_utils import env_registered
 from autobot_shared.logging_manager import get_logger
-from knowledge.rag_benchmarks import BenchmarkSplit, _deterministic_dev_test_split
+from knowledge.rag_benchmarks import BenchmarkSplit, is_dev_query
 from knowledge.retrieval_metrics import (
     contradiction_rate,
     grounding_rate,
@@ -105,6 +105,8 @@ def load_gold(path: str) -> List[GoldQuery]:
             if not gold:
                 raise ValueError(f"query {row['id']!r} has empty gold")
             gains = {d: 1.0 for d in gold} if isinstance(gold, list) else {d: float(g) for d, g in gold.items()}
+            if not all(math.isfinite(g) for g in gains.values()):
+                raise ValueError(f"query {row['id']!r} has a non-finite gold gain")
             out.append(GoldQuery(row["id"], row["query"], row["bucket"], gains))
     return out
 
@@ -132,12 +134,15 @@ def gold_fingerprint(queries: Sequence[GoldQuery]) -> str:
 
 
 def select_split(queries: Sequence[GoldQuery], split: BenchmarkSplit) -> List[GoldQuery]:
-    """Filter to the deterministic dev/test split (same hashing as rag_benchmarks)."""
+    """Filter to the dev/test split by each query's own hash (rag_benchmarks.is_dev_query).
+
+    Membership never depends on the rest of the gold set, so adding queries cannot move an existing one.
+    There is no empty-side fallback: an empty TEST split yields query_count 0, which gate_reports rejects.
+    """
     if split == BenchmarkSplit.ALL:
         return list(queries)
-    ids = _deterministic_dev_test_split([q.id for q in queries], RETRIEVAL_GATE_DEV_FRACTION)
-    keep = ids["dev_ids"] if split == BenchmarkSplit.DEV else ids["test_ids"]
-    return [q for q in queries if q.id in keep]
+    want_dev = split == BenchmarkSplit.DEV
+    return [q for q in queries if is_dev_query(q.id, RETRIEVAL_GATE_DEV_FRACTION) == want_dev]
 
 
 def _score_one(q: GoldQuery, out: RetrievalOutput, k: int) -> Dict[str, Optional[float]]:
@@ -238,6 +243,8 @@ def run_ablation(
         "query_count": len(chosen),
         "gold_sha256": gold_fingerprint(queries),
         "evaluated_sha256": gold_fingerprint(chosen),
+        # False: no detector was supplied, so every contradiction value is None (unmeasured, not zero).
+        "contradiction_measured": has_conflict is not None,
         "runs": runs,
     }
 
@@ -259,10 +266,11 @@ def gate_decision(
 ) -> GateVerdict:
     """Accept only if the candidate beats the baseline on ALL five metrics (#20948).
 
-    "Beats" means better by at least ``min_improvement`` (lower is better for
-    contradiction). A metric that is None on either side is a rejection: an
-    unmeasured metric cannot show improvement.
+    "Beats" means better by at least ``min_improvement`` (finite, > 0; lower is better for contradiction).
+    A metric that is None on either side is a rejection: an unmeasured metric cannot show improvement.
     """
+    if not (math.isfinite(min_improvement) and min_improvement > 0):
+        raise ValueError(f"min_improvement must be a positive finite number, got {min_improvement!r}")
     reasons: List[str] = []
     for m, higher_better in METRICS.items():
         b, c = baseline.get(m), candidate.get(m)
@@ -314,6 +322,11 @@ def _load_factory(spec: str) -> Callable[[], Retriever]:
     """Resolve a registered retriever name, else a ``module:factory`` path."""
     if spec in RETRIEVER_REGISTRY:
         return RETRIEVER_REGISTRY[spec]()
+    return _import_attr(spec)
+
+
+def _import_attr(spec: str) -> Any:
+    """Resolve a ``module:attr`` path (retriever factories and contradiction detectors)."""
     mod, _, attr = spec.partition(":")
     return getattr(importlib.import_module(mod), attr)
 
@@ -327,6 +340,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--retriever", required=True, help="registered name (fixture) or module:factory returning a Retriever"
     )
     r.add_argument("--split", default="test", choices=[s.value for s in BenchmarkSplit])
+    r.add_argument(
+        "--conflict-detector",
+        help="module:callable taking a query's texts, True on a conflict; omitted -> contradiction unmeasured",
+    )
     r.add_argument("--out", required=True)
     g = sub.add_parser("gate", help="exit 1 unless candidate beats baseline")
     g.add_argument("--baseline", required=True)
@@ -340,9 +357,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
         _load_factory(args.retriever)(),
         load_gold(args.gold) if args.gold else load_gold_set(),
         BenchmarkSplit(args.split),
+        has_conflict=_import_attr(args.conflict_detector) if args.conflict_detector else None,
     )
+    try:  # strict JSON: a NaN/Infinity measurement is an error, never a non-standard token in the report
+        text = json.dumps(report, indent=2, sort_keys=True, allow_nan=False)
+    except ValueError:
+        logger.error("retrieval gate report has a non-finite measurement; %s not written", args.out)
+        return 1
     with open(args.out, "w", encoding="utf-8") as fh:
-        json.dump(report, fh, indent=2, sort_keys=True)
+        fh.write(text)
     return 0
 
 
