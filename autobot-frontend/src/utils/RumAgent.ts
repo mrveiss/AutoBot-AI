@@ -762,15 +762,16 @@ class RumAgent {
   generateReport(): RumReport {
     const now = performance.now()
     const sessionDuration = now - this.startTime
+    const apiTotals = this.getApiCallTotals()
 
     const report: RumReport = {
       sessionId: this.sessionId,
       sessionDuration,
       timestamp: new Date().toISOString(),
       summary: {
-        totalApiCalls: this.sessionApiCalls.total,
-        slowApiCalls: this.sessionApiCalls.slow,
-        timeoutApiCalls: this.sessionApiCalls.timeouts,
+        totalApiCalls: apiTotals.total,
+        slowApiCalls: apiTotals.slow,
+        timeoutApiCalls: apiTotals.timeouts,
         totalErrors: this.metrics.errors.length,
         userInteractions: this.metrics.userInteractions.length,
         webSocketEvents: this.metrics.webSocketEvents.length
@@ -789,6 +790,11 @@ class RumAgent {
   }
 
   // Get current metrics
+  /** Every API call of the session (#21583); metrics.apiCalls keeps only the latest RUM_MAX_API_CALLS. */
+  getApiCallTotals(): { total: number; slow: number; timeouts: number } {
+    return { ...this.sessionApiCalls }
+  }
+
   getMetrics(): RumMetrics & { sessionId: string; sessionDuration: number } {
     return {
       ...this.metrics,

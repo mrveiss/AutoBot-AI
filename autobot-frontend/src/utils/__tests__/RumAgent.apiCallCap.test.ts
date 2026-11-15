@@ -58,6 +58,7 @@ describe('RumAgent.trackApiCall buffers', () => {
     expect(summary.totalApiCalls).toBe(RUM_MAX_API_CALLS + 2)
     expect(summary.timeoutApiCalls).toBe(1)
     expect(summary.slowApiCalls).toBe(1)
+    expect(rum.getApiCallTotals()).toEqual({ total: RUM_MAX_API_CALLS + 2, slow: 1, timeouts: 1 })
   })
 
   it('has a positive default bound', () => {

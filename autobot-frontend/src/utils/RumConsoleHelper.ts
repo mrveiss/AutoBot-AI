@@ -79,14 +79,14 @@ window.rumStats = () => {
   }
 
   const metrics = window.rum.getMetrics()
-  const slowCalls = metrics.apiCalls.filter((call: ApiCall) => call.isSlow).length
-  const timeouts = metrics.apiCalls.filter((call: ApiCall) => call.isTimeout).length
+  // Session totals, not the retained window of metrics.apiCalls (#21583).
+  const { total, slow, timeouts } = window.rum.getApiCallTotals()
   const errors = metrics.errors.length
 
   console.log(`
 📊 RUM Quick Stats:
    Session: ${Math.round(metrics.sessionDuration / 1000)}s
-   API Calls: ${metrics.apiCalls.length} (${slowCalls} slow, ${timeouts} timeouts)
+   API Calls: ${total} (${slow} slow, ${timeouts} timeouts)
    Errors: ${errors}
    WebSocket Events: ${metrics.webSocketEvents.length}
    User Interactions: ${metrics.userInteractions.length}
@@ -118,7 +118,7 @@ window.rumApiStats = () => {
   const metrics = window.rum.getMetrics()
   const apiCalls = metrics.apiCalls
 
-  // Group by endpoint
+  // Group by endpoint over the RECENT calls RumAgent keeps (a window, not the session; rumStats() has the totals).
   const endpointStats: Record<string, EndpointStats> = {}
   apiCalls.forEach((call: ApiCall) => {
     const endpoint = call.url
@@ -145,7 +145,7 @@ window.rumApiStats = () => {
     const hasIssues = stats.timeouts > 0 || stats.errors > 0 || stats.slowCalls > 0
 
     console.log(`${hasIssues ? '⚠️' : '✅'} ${endpoint}:`, {
-      calls: stats.count,
+      recentCalls: stats.count,
       avgDuration: `${avgDuration}ms`,
       timeouts: stats.timeouts,
       errors: stats.errors,
