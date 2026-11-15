@@ -9,6 +9,7 @@
 # One ruled exception (#20910): the detector fixes newly flagged routes that were always unconnected;
 # they were added once, each linked to a grouped wiring issue under #20512 (frozen in the gate test).
 # A second, #21428: following a router included through a package router unmasked twelve routes, added once and frozen.
+# A third, #21651 (2026-11-15): judging SLM routes at their real mount unmasked six routes, added once and frozen.
 #
 # What it cannot see: a function nobody calls inside a module somebody imports; a module imported
 # only by another unused module; callers that build a path or key at runtime; plugins and
@@ -154,8 +155,6 @@ route:autobot-backend/api/monitoring.py:GET /alerts/check	#19484
 route:autobot-backend/api/monitoring.py:GET /hardware/gpu	#19484
 route:autobot-backend/api/monitoring.py:GET /hardware/npu	#19484
 route:autobot-backend/api/monitoring.py:GET /optimization/recommendations	#19484
-route:autobot-slm-backend/api/update_report.py:GET /update-all/nodes-offline	#20867
-route:autobot-slm-backend/api/update_report.py:GET /update-all/progress	#20867
 declared:get_api_key_user=autobot_shared/user_management/models/api_key.py	#10603
 declared:require_key_permission=autobot-slm-backend/services/api_key_routes.py	#10603
 declared:RoleCredentialService=autobot-backend/llc/api/roles.py,autobot-backend/llc/models/role_credential.py,autobot-backend/migrations/versions/20260820_080_llc_role_tools_and_credentials.py	#10603
@@ -854,14 +853,9 @@ route:autobot-backend/services/knowledge_sync_service.py:POST /daemon/stop	#1060
 route:autobot-backend/services/workflow_automation/routes.py:GET /workflow_state/{workflow_id}	#10603
 route:autobot-backend/services/workflow_rbac.py:GET /workflows/{workflow_id}/steps	#10603
 route:autobot-backend/utils/response_builder.py:GET /items/{id}	#10603
-route:autobot-slm-backend/api/agent_ledger.py:GET /dev-loop/{issue}	#10603
-route:autobot-slm-backend/api/agent_ledger.py:POST /claims/yield-request	#10603
 route:autobot-slm-backend/api/blue_green.py:POST /{bg_deployment_id}/stop-monitoring	#10603
 route:autobot-slm-backend/api/capability_profile.py:GET /{node_id}/capability-profile	#10603
 route:autobot-slm-backend/api/code_sync.py:POST /nodes/{node_id}/mark-synced	#10603
-route:autobot-slm-backend/api/config.py:DELETE /defaults/{key}	#10603
-route:autobot-slm-backend/api/config.py:GET /defaults/{key}	#10603
-route:autobot-slm-backend/api/config.py:PUT /defaults/{key}	#10603
 route:autobot-slm-backend/api/discovery.py:GET /{service_name}/all	#10603
 route:autobot-slm-backend/api/full_tree_drift.py:GET /drift/full	#10603
 route:autobot-slm-backend/api/infrastructure.py:GET /playbooks/{playbook_id}	#10603
@@ -873,12 +867,6 @@ route:autobot-slm-backend/api/nodes.py:GET /{node_id}/service-order	#10603
 route:autobot-slm-backend/api/nodes.py:GET /{node_id}/update-policy	#10603
 route:autobot-slm-backend/api/nodes.py:POST /{node_id}/a2a-card/refresh	#10603
 route:autobot-slm-backend/api/nodes.py:POST /{node_id}/acknowledge-remediation	#10603
-route:autobot-slm-backend/api/performance.py:DELETE /alerts/rules/{rule_id}	#10603
-route:autobot-slm-backend/api/performance.py:DELETE /slos/{slo_id}	#10603
-route:autobot-slm-backend/api/performance.py:GET /alerts/rules	#10603
-route:autobot-slm-backend/api/performance.py:GET /traces/{trace_id}	#10603
-route:autobot-slm-backend/api/performance.py:POST /alerts/rules	#10603
-route:autobot-slm-backend/api/performance.py:PUT /alerts/rules/{rule_id}	#10603
 route:autobot-slm-backend/api/redis_service.py:POST /{action}	#10603
 route:autobot-slm-backend/api/security.py:DELETE /policies/{policy_id}	#10603
 route:autobot-slm-backend/api/security.py:GET /audit-logs/{log_id}	#10603
@@ -1497,3 +1485,11 @@ route:autobot-backend/api/codebase_analytics/endpoints/ownership.py:GET /experti
 route:autobot-backend/api/codebase_analytics/endpoints/ownership.py:GET /knowledge-gaps	#21459
 route:autobot-backend/api/codebase_analytics/endpoints/stats.py:GET /embedding-stats	#21459
 route:autobot-backend/llc/api/__init__.py:GET /health	#21460
+# The one-time re-measure of the #20910 SLM mount fix (frozen in unconnected_code_remeasure_21651.txt; owner ruling
+# 2026-11-15): six SLM routes no caller reaches once they are judged at their real mount. #21651: wire or retire each.
+route:autobot-slm-backend/api/auth.py:POST /users	#21651
+route:autobot-slm-backend/api/code_source.py:POST /upload-package	#21651
+route:autobot-slm-backend/api/code_sync.py:GET /nodes/{node_id}/package	#21651
+route:autobot-slm-backend/api/memory_lifecycle_proxy.py:GET /lifecycle	#21651
+route:autobot-slm-backend/api/performance.py:GET /metrics/node/{node_id}	#21651
+route:autobot-slm-backend/api/redis_service.py:GET /status	#21651

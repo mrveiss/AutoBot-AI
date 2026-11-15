@@ -32,11 +32,11 @@ WHAT THIS CANNOT SEE
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 from types import ModuleType
 
 from autobot_shared.api_routing.mount_graph import APP_ROOT, ModuleScan, build_graph
+from tools.lint._parse_cache import parse
 
 #: The router variables whose route decorators the gate reads (``ROUTE_DECORATOR_RE``); ``app`` has no mount.
 _JUDGED = ("router", "api_router")
@@ -61,7 +61,7 @@ class _Canon:
     def _local(self, module: str, file: Path) -> dict[str, str]:
         """*module*'s name bindings as ``mount_graph`` resolves them, parsed once per module."""
         if module not in self._locals:
-            scan = ModuleScan(module, ast.parse(file.read_text(encoding="utf-8")), self.backend_dir)
+            scan = ModuleScan(module, parse(file.read_text(encoding="utf-8")), self.backend_dir)
             scan.run()
             self._locals[module] = scan.local
         return self._locals[module]

@@ -23,6 +23,15 @@ SLM frontend (``autobot-slm-frontend/src/utils/ApiClient.ts``, ``SlmApiClient.re
   path (loose: it errs toward "connected").
 * ``${getSlmApiBase()}/x`` in a template -> ``/api`` + ``/x`` (same base, written out).
 
+Two file-local forms resolve to those clients (#20910):
+
+* a path constant, ``const SETUP_RESET = '/setup/reset'`` (or a template, ``const url = `/x${qs}` ``):
+  ``client.post(SETUP_RESET)``, ``${LEDGER}/claims`` and ``wrapper(url)`` read as the value. The latest
+  declaration above the use applies, whichever function declared it.
+* a request wrapper, ``function read(path: string) { ... client.rawRequest(`${LEDGER}${path}`) }`` or
+  ``async function apiRequest(method, path) { ... client.get(path) }``: a call ``read('/claims')`` or
+  ``apiRequest('GET', '/config/defaults')`` is the client's base + the wrapper's prefix + the path.
+
 Main frontend (``autobot-frontend/src/utils/ApiClient.ts``): the base is the host (``baseUrl`` is
 ``''`` in proxy mode) and the ``/api`` is written at the call site, which ``frontend_calls`` already
 reads. A relative ``/x`` through ``apiClient`` / ``useApiClient()`` / ``new ApiClient()`` therefore
@@ -41,6 +50,10 @@ WHAT THIS CANNOT SEE
 * A path held in a variable (``get(url)``) or concatenated from a base variable (``get(base + '/x')``).
 * A receiver name reused for two different clients in one file: the file's declarations are merged.
 * A call that is dead (the function making it is never invoked), and any ``fetch``/``axios`` call.
+* A wrapper that is an arrow function or a method, or whose body passes its path to the client in any form
+  other than the bare parameter or ``${PREFIX}${param}``; a wrapper call whose leading arguments before the
+  path are not plain string literals.
+* A path constant built by concatenation, or one whose value does not start with ``/``.
 """
 
 from __future__ import annotations
@@ -64,6 +77,15 @@ _DECLARED = (
 _MAIN_NAMED = {"apiClient": ""}
 _SLM_BASE_CALL = re.compile(r"\$\{getSlmApiBase\(\)\}(/[^`'\"\s]*)")
 _COMMENT_PREFIXES = ("* ", "//", "/*")
+#: ``const NAME = '/path'`` or a template; a ``${...}`` counts only as a whole segment (``/x/${id}/y``), so a
+#: query glued on (``/x${qs ? ...}``) ends the value.
+_PATH_CONST = re.compile(
+    r"""\b(?:const|let)\s+(\w+)\s*(?::\s*string\s*)?=\s*[`'"]""" r"""(/(?:[\w.\-/]|\$\{[^}`'"\n]*\}(?=[/`'"]))*)"""
+)
+#: ``[async] function name<T>(params)``: a candidate request wrapper.
+_FUNCTION = re.compile(r"(?:async\s+)?function\s+(\w+)\s*(?:<[^()]*>)?\s*\(([^)]*)\)")
+#: How far into a wrapper's body its client call is looked for.
+_WRAPPER_BODY = 1500
 _SLM_ROOT = "autobot-slm-frontend/src"
 _MAIN_ROOT = "autobot-frontend/src"
 
@@ -82,6 +104,45 @@ def _site_pattern(receivers: dict[str, str]) -> re.Pattern[str]:
     return re.compile(rf"(?<![\w.$])({names})\s*\.\s*{_VERBS}\s*{_PATH}")
 
 
+def _inline_constants(lines: list[str]) -> str:
+    """The text with each file-local path constant replaced by its value where a call can use it."""
+    consts: dict[str, str] = {}
+    out: list[str] = []
+    for line in lines:
+        for name, value in consts.items():
+            line = line.replace("${" + name + "}", value)
+            line = re.sub(rf"(\(\s*){name}(?=\s*[,)])", rf"\g<1>'{value}'", line)
+        consts.update(_PATH_CONST.findall(line))
+        out.append(line)
+    return "\n".join(out)
+
+
+def _wrappers(text: str, receivers: dict[str, str]) -> dict[str, tuple[int, str]]:
+    """``{wrapper: (index of its path argument, base + prefix)}`` for functions that hand a path to a client."""
+    names = "|".join(re.escape(n) for n in sorted(receivers, key=len, reverse=True))
+    found: dict[str, tuple[int, str]] = {}
+    for fn in _FUNCTION.finditer(text):
+        params = [p.split(":")[0].split("=")[0].strip(" ?\t\n") for p in fn.group(2).split(",")]
+        body = text[fn.end() : fn.end() + _WRAPPER_BODY]
+        for index, param in enumerate(params):
+            arg = rf"(?:`(/[^`'\"\s$]*)\$\{{{param}\}}`|{param}\b)" if param.isidentifier() else None
+            hit = arg and re.search(rf"(?<![\w.$])({names})\s*\.\s*{_VERBS}\s*(?:<[^()]*>)?\s*\(\s*{arg}", body)
+            if hit:
+                found[fn.group(1)] = (index, receivers[hit.group(1)] + (hit.group(2) or ""))
+                break
+    return found
+
+
+def _wrapper_calls(text: str, wrappers: dict[str, tuple[int, str]]) -> set[str]:
+    """``base + prefix + path`` for each call of a wrapper with a literal path at its path argument."""
+    out: set[str] = set()
+    for name, (index, base) in wrappers.items():
+        lead = r"\s*[`'\"][^`'\"]*[`'\"]\s*," * index
+        call = re.compile(rf"(?<![\w.$]){name}\s*(?:<[^()]*>)?\s*\({lead}\s*[`'\"](/[^`'\"\s]*)")
+        out.update(base + m.group(1) for m in call.finditer(text))
+    return out
+
+
 def _file_calls(rel: str, text: str) -> set[str]:
     """Raw ``base + path`` strings the client calls in one file make.
 
@@ -89,9 +150,11 @@ def _file_calls(rel: str, text: str) -> set[str]:
     sits on the line after ``client.post<T>(`` is seen (``_PATH`` already allows the newline).
     """
     receivers = _receivers(rel, text)
-    pattern, out = _site_pattern(receivers), set()
+    pattern, out = _site_pattern(receivers), set[str]()
     lines = ["" if (ln.lstrip()[:2] in _COMMENT_PREFIXES or ln.strip() == "*") else ln for ln in text.splitlines()]
-    out.update(receivers[m.group(1)] + m.group(2) for m in pattern.finditer("\n".join(lines)) if m.group(2) != "/api")
+    code = _inline_constants(lines)
+    out.update(receivers[m.group(1)] + m.group(2) for m in pattern.finditer(code) if m.group(2) != "/api")
+    out.update(_wrapper_calls(code, _wrappers(code, receivers)))
     if rel.startswith(_SLM_ROOT):
         for line in lines:
             out.update("/api" + suffix for suffix in _SLM_BASE_CALL.findall(line))

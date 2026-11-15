@@ -51,6 +51,8 @@ WHAT THIS CANNOT SEE
 * **A call that is dead**: a frontend function that makes the call but nothing invokes.
 * **Method.** A caller of ``GET /x`` marks ``POST /x`` connected; paths are matched, not verbs.
 * Routes registered programmatically (``add_api_route``) have no decorator and are not seen.
+* A decorator is read from code only: one in a ``#`` comment is not a route (#20910), but one quoted in a
+  docstring or string literal still reads as one.
 """
 
 from __future__ import annotations
@@ -65,6 +67,8 @@ from repo_tests._unconnected_clients import client_calls
 from repo_tests._unconnected_common import Tree
 from repo_tests._unconnected_mounts import package_mounts
 
+from tools.lint._comment_syntax import code_lines
+
 ROUTE_ROOTS = ("autobot-backend", "autobot-slm-backend")
 FRONTENDS = ("autobot-frontend/src", "autobot-slm-frontend/src")
 _CALLER_SUFFIXES = (".py", ".sh", ".yml", ".yaml", ".j2", ".ts", ".js", ".vue", ".service", ".conf")
@@ -78,6 +82,9 @@ EXTERNAL_CALLER_PREFIXES: dict[str, str] = {
     # #20910: SCIM 2.0 inbound provisioning (RFC 7644) is pushed by the identity provider's SCIM client;
     # the SLM mounts it outside /api so the provider reaches it directly. Nothing in this repository calls it.
     "/scim/v2": "an identity provider's SCIM client, over HTTP",
+    # #20910: the OAuth2 redirect URI (api/sso_auth.py GET /callback). The identity provider sends the user's browser
+    # here after sign-in; nothing in this repository requests it.
+    "/api/auth/sso/callback": "the identity provider's browser redirect after sign-in",
 }
 
 
@@ -170,7 +177,7 @@ def route_sites(tree: Tree, audit: Audit) -> list[tuple[str, str, str, tuple[str
             text = tree.text(rel)
             if "@" not in text:
                 continue
-            found = mod.ROUTE_DECORATOR_RE.findall(text)
+            found = mod.ROUTE_DECORATOR_RE.findall(_code_text(rel, text))
             if not found:
                 continue
             own = mod.apirouter_prefix(text)
@@ -179,6 +186,11 @@ def route_sites(tree: Tree, audit: Audit) -> list[tuple[str, str, str, tuple[str
             for method, raw in found:
                 out.append((rel, method.upper(), raw, _candidates(mod, raw, own, regs)))
     return out
+
+
+def _code_text(rel: str, text: str) -> str:
+    """*text* without its comments, so ``# Handle @router.get("/path") style`` is not read as a route (#20910)."""
+    return "\n".join(line.text for line in code_lines(text, name=rel, strip_trailing=True))
 
 
 def _candidates(mod: ModuleType, raw: str, own: str, regs: list[str]) -> tuple[str, ...]:
