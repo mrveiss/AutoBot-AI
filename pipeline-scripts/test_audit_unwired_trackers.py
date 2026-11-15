@@ -57,11 +57,12 @@ def test_extract_tracker_refs_only_first_40_lines(tmp_path: Path) -> None:
     the audit is a docstring-citation check, not a full-file scan."""
     f = tmp_path / "deep.py"
     f.write_text("\n" * 100 + "Issue #4242", encoding="utf-8")
-    assert audit.extract_tracker_refs(f) == []
+    with pytest.raises(audit.TrackerLookupError, match="binary.py"):
+        audit.extract_tracker_refs(f)
 
 
 def test_extract_tracker_refs_unreadable_file(tmp_path: Path) -> None:
-    """OSError / UnicodeDecodeError must return [] not crash the audit."""
+    """OSError / UnicodeDecodeError must raise TrackerLookupError, never [] (#21582)."""
     f = tmp_path / "binary.py"
     f.write_bytes(b"\x80\x81\x82\xfe\xff\x00")
     assert audit.extract_tracker_refs(f) == []

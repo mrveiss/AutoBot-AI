@@ -214,8 +214,9 @@ def load_router_registry_modules() -> set[str]:
             continue
         try:
             content = f.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
+        except (OSError, UnicodeDecodeError) as e:
+            # Skipping it would report the modules it registers as unwired (#21582).
+            raise TrackerLookupError(f"router registry file {f} is unreadable ({e!r})") from e
         for m in REGISTRY_TUPLE_RE.finditer(content):
             modules.add(m.group(1))
     return modules
@@ -243,8 +244,9 @@ def extract_tracker_refs(file_path: Path) -> list[int]:
     try:
         with file_path.open("r", encoding="utf-8") as f:
             head = "".join(line for _, line in zip(range(DOCSTRING_HEAD_LINES), f))
-    except (OSError, UnicodeDecodeError):
-        return []
+    except (OSError, UnicodeDecodeError) as e:
+        # [] would drop the file from the audit as if it cited no tracker (#21582).
+        raise TrackerLookupError(f"{file_path} is unreadable ({e!r})") from e
     refs: list[int] = []
     for m in ISSUE_REF_RE.finditer(head):
         # 5 alternation branches → 5 capture groups; pick whichever matched.

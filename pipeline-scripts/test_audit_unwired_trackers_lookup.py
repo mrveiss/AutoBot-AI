@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import audit_unwired_trackers as audit
@@ -86,3 +87,10 @@ def test_unparsable_dedupe_lookup_raises() -> None:
     with patch.object(audit.subprocess, "run", return_value=fake):
         with pytest.raises(audit.TrackerLookupError):
             audit.existing_audit_issues_by_tracker()
+
+
+def test_unreadable_registry_file_raises_naming_the_file(tmp_path: Path) -> None:
+    (tmp_path / "bad_registry.py").write_bytes(b"\x80\x81\xfe\xff")
+    with patch.object(audit, "ROUTER_REGISTRY_DIR", tmp_path):
+        with pytest.raises(audit.TrackerLookupError, match="bad_registry.py"):
+            audit.load_router_registry_modules()
