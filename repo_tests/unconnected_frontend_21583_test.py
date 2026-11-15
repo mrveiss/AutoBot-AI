@@ -139,6 +139,12 @@ def test_a_glob_that_does_not_reach_the_file_leaves_it_unconnected(label: str, c
     assert _found({"autobot-frontend/src/a.ts": call}) == [_SUBJECT], label
 
 
+def test_a_file_reached_only_by_its_own_glob_is_unconnected() -> None:
+    """A glob counts only from ANOTHER file, as an ordinary reference does; the sibling twin is connected."""
+    assert _found({_SUBJECT: _glob("'./*.ts'")}) == [_SUBJECT]
+    assert _found({"autobot-frontend/src/utils/loader.ts": _glob("'./*.ts'")}) == []
+
+
 @pytest.mark.parametrize(
     ("label", "rel"),
     [
@@ -152,12 +158,6 @@ def test_a_glob_that_does_not_reach_the_file_leaves_it_unconnected(label: str, c
         ("outside a frontend src tree", "libs/autobot-ui/src/planted.ts"),
     ],
 )
-def test_a_file_reached_only_by_its_own_glob_is_unconnected() -> None:
-    """A glob counts only from ANOTHER file, as an ordinary reference does; the sibling twin is connected."""
-    assert _found({_SUBJECT: _glob("'./*.ts'")}) == [_SUBJECT]
-    assert _found({"autobot-frontend/src/utils/loader.ts": _glob("'./*.ts'")}) == []
-
-
 def test_a_file_that_cannot_have_an_importer_is_not_a_candidate(label: str, rel: str) -> None:
     assert fe.candidates(Tree.of_files({rel: "export const X = 1\n"})) == [], label
 
