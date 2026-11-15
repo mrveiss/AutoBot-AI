@@ -29,7 +29,8 @@ from autobot_shared.logging_manager import get_logger
 from security.upload_filename_policy import require_safe_upload
 
 from ..deps import logged_server_error
-from ._common import agent_context, agent_node_uuid, assert_item_in_company, parse_work_item_id
+from ..services.work_item_own_task import InvalidTransition
+from ._common import agent_context, agent_node_uuid, assert_item_in_company, parse_work_item_id, refused_transition
 from ._peer_search import fetch_peer_rows
 
 logger = get_logger(__name__)
@@ -102,6 +103,19 @@ class StatusUpdate(BaseModel):
     comment: Optional[str] = None
 
 
+async def _status_gate(agent_id: str, company_id: str, new_status: Any, comment: Optional[str]) -> tuple:
+    """The review gate for this move and the agent's node, looked up only when a done or a comment needs it (#21503).
+
+    The node UUID is the key the handoff names the agent by, and the comment's author.
+    """
+    from ..models.enums import WorkItemStatus
+    from ..services.accessors import done_gate_for
+
+    wanted = new_status == WorkItemStatus.DONE or bool(comment and comment.strip())
+    node = await agent_node_uuid(agent_id, company_id) if wanted else None
+    return done_gate_for(str(node) if node else None, is_agent=True), node
+
+
 @router.post("/work-items/{item_id}/status")
 async def update_work_item_status(item_id: str, body: StatusUpdate, request: Request) -> Dict[str, Any]:
     """Transition a work item, enforcing the state machine (#15859).
@@ -126,15 +140,15 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=f"Unknown work item status {body.status!r}") from exc
 
+    gate, author_uuid = await _status_gate(agent_id, company_id, new_status, body.comment)
     factory = get_async_session_factory()
     async with factory() as session:
         try:
             item = await get_work_item_service().transition_status(
-                session,
-                work_item_id=str(item_id),
-                new_status=new_status,
-                company_id=str(company_id),
+                session, item_id, new_status, company_id=str(company_id), done_gate=gate
             )
+        except InvalidTransition as exc:  # a refused move, or a done the review gate cannot send to review
+            raise refused_transition(exc) from exc
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -145,7 +159,6 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
         # failed to commit is a reason for something that did not happen.
         comment_id = None
         if body.comment and body.comment.strip():
-            author_uuid = await agent_node_uuid(agent_id, company_id)
             comment = await get_work_item_service().add_comment(
                 session,
                 work_item_id=str(item_id),
@@ -156,7 +169,7 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
             comment_id = str(comment.id)
 
         await session.commit()
-        resulting = str(item.status)
+        resulting = WorkItemStatus(item.status).value
 
     # `comment_id` separates a 200 that stored the comment from one with none
     # to store; the caller could not tell those apart (#16017).

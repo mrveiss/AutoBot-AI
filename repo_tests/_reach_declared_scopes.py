@@ -395,5 +395,6 @@ DECLARED_SCOPES = {
     ),
     "ansible-secret-renders-20941": ("autobot-slm-backend/ansible",),
     "one-after-commit-queue-21107": ("autobot-backend", "autobot_shared"),
+    "one-done-path": ("autobot-backend",),
     "scheduled-workflows-derived-for-failure-report-21592": (".github/workflows",),
 }

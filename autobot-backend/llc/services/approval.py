@@ -25,7 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.redis_client import get_async_redis_client
 from models.approval import Approval
 
-from ..kb.decision_log import DecisionLogWriter
 from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType
 from .approval_hooks import (
     ApprovalHookError,
@@ -240,6 +239,12 @@ class ApprovalService(LLCServiceBase):
         Call AFTER the DB transaction commits, alongside ``publish_decided``.
         """
         try:
+            # Deferred (#21596): llc.kb pulls the vector stack, and this module is
+            # imported at llc.scheduler package import (Celery registration).
+            from ..kb.decision_log import (  # noqa: PLC0415 -- keeps llc.kb out of scheduler import
+                DecisionLogWriter,
+            )
+
             writer = DecisionLogWriter()
             await writer.write(approval)
         except Exception as exc:
