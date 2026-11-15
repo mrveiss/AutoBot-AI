@@ -162,18 +162,21 @@ class RAGCacheTiersMixin:
         categories: List[str] | None,
         principal: KbPrincipal,
         scope: str | None,
+        shared_tiers: bool = True,
     ) -> Tuple[List[RankedResult], RAGMetrics, str] | None:
         """Check all cache tiers before falling through to ChromaDB. Ref: #1376.
 
         Returns (results, metrics, cache_key) on hit, None on miss. Every tier is skipped when
         *scope* is None (the ACL epoch was unreadable). Each hit is post-filtered (#16664).
+        Tiers 0 and 2 hold results that include docs, so ``shared_tiers=False`` (a plan without
+        docs, #21606) skips them; tier 1 is stored before the docs merge and is always shared.
         """
         if scope is None:
             return None
         evaluator = get_context_sufficiency_evaluator()
 
         # Tier 0: Semantic similarity cache (Issue #1372)
-        sem_result = await self._check_semantic_cache(query, principal, scope)
+        sem_result = await self._check_semantic_cache(query, principal, scope) if shared_tiers else None
         if sem_result is not None:
             context_text = sem_result[0][0].content
             cached_at = sem_result[0][0].metadata.get("cached_at", 0)
@@ -194,7 +197,7 @@ class RAGCacheTiersMixin:
             logger.info("Cache hit rejected: %s", check.reason)
 
         # Tier 2: Topic-level retrieval cache (Issue #1376)
-        topic_result = await self._check_topic_cache(query, principal, scope)
+        topic_result = await self._check_topic_cache(query, principal, scope) if shared_tiers else None
         if topic_result is not None:
             return topic_result + (cache_key,)
 
