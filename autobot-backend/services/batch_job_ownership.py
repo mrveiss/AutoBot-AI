@@ -55,6 +55,32 @@ def record_owner(redis_client, kind: str, record_id: str, user: dict | None) -> 
     return owner
 
 
+def create_record(
+    redis_client,
+    kind: str,
+    record_id: str,
+    record_key: str,
+    payload: str,
+    user: dict | None,
+    created_at: float | None = None,
+) -> None:
+    """Write a new record, its ``all``-set membership and its owner entry in one transaction.
+
+    A crash between separate writes would leave a record in the index with no owner
+    (administrators-only) or an owner with no record. ``created_at`` also adds the id to the
+    ``batch:{kind}:created`` time index.
+    """
+    pipe = redis_client.pipeline(transaction=True)
+    pipe.set(record_key, payload)
+    pipe.sadd(f"batch:{kind}:all", record_id)
+    owner = resolve_principal_id(user)
+    if owner:
+        pipe.hset(owners_key(kind), record_id, owner)
+    if created_at is not None:
+        pipe.zadd(f"batch:{kind}:created", {record_id: created_at})
+    pipe.execute()
+
+
 def forget_owner(redis_client, kind: str, record_id: str) -> None:
     """Drop a deleted record's owner entry."""
     redis_client.hdel(owners_key(kind), record_id)
@@ -69,7 +95,7 @@ def may_access(owner: str | None, user: dict | None) -> bool:
         is_authenticated=bool(user),
     )
     resource = ResourceDescriptor(owner_id=owner or None, company_id=None, scope=ScopeLevel.PRIVATE)
-    return is_visible(principal, resource, lambda: bool(user) and is_admin_role(user.get("role")))
+    return is_visible(principal, resource, lambda: user is not None and is_admin_role(user.get("role")))
 
 
 def owner_of(redis_client, kind: str, record_id: str) -> str | None:

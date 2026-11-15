@@ -146,11 +146,9 @@ async def create_batch_job(
         created_at=now,
     )
 
-    job_key = _get_job_key(job_id)
-    redis_client.set(job_key, _serialize_job(job))
-    redis_client.sadd("batch:jobs:all", job_id)
-    ownership.record_owner(redis_client, ownership.JOBS, job_id, current_user)
-    redis_client.zadd("batch:jobs:created", {job_id: now.timestamp()})
+    ownership.create_record(
+        redis_client, ownership.JOBS, job_id, _get_job_key(job_id), _serialize_job(job), current_user, now.timestamp()
+    )
 
     logger.info("Created batch job %s: %s", job_id, job_data.name)
     return job
@@ -517,10 +515,9 @@ async def create_batch_template(
         created_at=datetime.now(tz=timezone.utc),
     )
 
-    template_key = _get_template_key(template_id)
-    redis_client.set(template_key, template.model_dump_json())
-    redis_client.sadd("batch:templates:all", template_id)
-    ownership.record_owner(redis_client, ownership.TEMPLATES, template_id, current_user)
+    key = _get_template_key(template_id)
+    payload = template.model_dump_json()
+    ownership.create_record(redis_client, ownership.TEMPLATES, template_id, key, payload, current_user)
 
     logger.info("Created batch template %s: %s", template_id, name)
     return template
@@ -664,10 +661,9 @@ async def create_batch_schedule(
         next_run=next_run,
     )
 
-    schedule_key = _get_schedule_key(schedule_id)
-    redis_client.set(schedule_key, schedule.model_dump_json())
-    redis_client.sadd("batch:schedules:all", schedule_id)
-    ownership.record_owner(redis_client, ownership.SCHEDULES, schedule_id, current_user)
+    key = _get_schedule_key(schedule_id)
+    payload = schedule.model_dump_json()
+    ownership.create_record(redis_client, ownership.SCHEDULES, schedule_id, key, payload, current_user)
 
     logger.info("Created batch schedule %s for job %s", schedule_id, job_id)
     return schedule

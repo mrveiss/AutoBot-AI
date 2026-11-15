@@ -298,6 +298,31 @@ class _FakeRedis:
     def hdel(self, key, *fields):
         return sum(1 for f in fields if self._hashes.get(key, {}).pop(f, None) is not None)
 
+    def pipeline(self, transaction=True):
+        return _FakePipeline(self)
+
+
+class _FakePipeline:
+    """Queues calls and applies them on execute(), like a MULTI/EXEC pipeline."""
+
+    def __init__(self, redis):
+        self._redis = redis
+        self._ops: list = []
+
+    def __getattr__(self, name):
+        method = getattr(self._redis, name)
+
+        def queue(*args, **kwargs):
+            self._ops.append((method, args, kwargs))
+            return self
+
+        return queue
+
+    def execute(self):
+        results = [method(*args, **kwargs) for method, args, kwargs in self._ops]
+        self._ops = []
+        return results
+
 
 import api.batch_jobs as _bj  # noqa: E402  (intentionally after sys.modules setup)
 from api.schemas_workflows import BatchSchedule, BatchScheduleUpdate  # noqa: E402

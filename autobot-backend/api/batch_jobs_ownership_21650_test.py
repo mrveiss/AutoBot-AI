@@ -199,3 +199,47 @@ async def test_schedule_list_patch_and_delete_are_owner_scoped(redis):
     ).enabled is False
     await _bj.delete_batch_schedule(sid, current_user=ALICE)
     assert ownership.owner_of(redis, ownership.SCHEDULES, sid) is None
+
+
+# --- admin, owner and count rows ---------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_may_delete_another_users_template(redis):
+    template = await _alice_template()
+    await _bj.delete_batch_template(template.template_id, current_user=ADMIN)
+    assert ownership.owner_of(redis, ownership.TEMPLATES, template.template_id) is None
+    assert not redis.exists(_bj._get_template_key(template.template_id))
+
+
+@pytest.mark.asyncio
+async def test_admin_may_schedule_and_delete_on_another_users_record(redis):
+    _seed_job(redis, "a-1", owner="alice")
+    schedule = await _bj.create_batch_schedule(job_id="a-1", cron_expression="0 0 1 1 *", current_user=ADMIN)
+    assert ownership.owner_of(redis, ownership.SCHEDULES, schedule.schedule_id) == "root"
+    alice_schedule = await _alice_schedule(redis)
+    await _bj.delete_batch_schedule(alice_schedule.schedule_id, current_user=ADMIN)
+    assert ownership.owner_of(redis, ownership.SCHEDULES, alice_schedule.schedule_id) is None
+
+
+@pytest.mark.asyncio
+async def test_schedule_owner_may_patch_their_schedule(redis):
+    from api.schemas_workflows import BatchScheduleUpdate
+
+    schedule = await _alice_schedule(redis)
+    patch = BatchScheduleUpdate(enabled=False)
+    updated = await _bj.update_batch_schedule(schedule.schedule_id, patch, current_user=ALICE)
+    assert updated.enabled is False
+
+
+@pytest.mark.asyncio
+async def test_list_counts_exclude_another_users_records(redis):
+    _seed_job(redis, "a-1", owner="alice")
+    _seed_job(redis, "b-1", owner="bob")
+    _seed_job(redis, "b-2", owner="bob")
+    listing = await _bj.list_batch_jobs(status=None, job_type=None, pagination=PAGE, current_user=ALICE)
+    assert listing.total_count == 1
+    assert sum(listing.status_counts.values()) == 1
+    admin_listing = await _bj.list_batch_jobs(status=None, job_type=None, pagination=PAGE, current_user=ADMIN)
+    assert admin_listing.total_count == 3
+    assert sum(admin_listing.status_counts.values()) == 3
