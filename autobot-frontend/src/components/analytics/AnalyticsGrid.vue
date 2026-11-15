@@ -90,8 +90,8 @@
         </div>
         <div class="quality-details">
           <div class="quality-item">
-            <span class="quality-label">{{ $t('analytics.grid.testCoverage') }}</span>
-            <span class="quality-value"><template v-if="codeQuality.test_coverage !== null">{{ codeQuality.test_coverage }}%</template><template v-else>{{ $t('analytics.grid.notAvailable') }}</template></span>
+            <span class="quality-label">{{ $t('analytics.grid.testability') }}</span>
+            <span class="quality-value">{{ codeQuality.testability ?? $t('analytics.grid.notAvailable') }}</span>
           </div>
           <div class="quality-item">
             <span class="quality-label">{{ $t('analytics.grid.codeDuplicates') }}</span>
@@ -181,7 +181,7 @@ interface CommunicationPatterns {
 
 interface CodeQuality {
   overall_score: number | null
-  test_coverage: number | null
+  testability: number | null
   code_duplicates: number | null
   technical_debt: number | null
 }

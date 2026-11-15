@@ -261,9 +261,9 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { withSourceId },
   )
 
-  const duplicatesSilent = useFetchEndpoint<unknown, unknown>(
+  const duplicatesSilent = useFetchEndpoint<unknown, unknown, string>(
     { path: '/api/analytics/codebase/duplicates', scopeToSource: true, requireSource: true, label: 'Duplicates endpoint',
-      pickData: (raw) => raw, onSuccess: applyDuplicates, onError: failDuplicates },
+      pickData: (raw) => raw, onSuccess: (raw, _b, forSource) => { applyDuplicates(raw); runState.applyRunFields(raw, forSource) }, onError: failDuplicates }, // #21418: an index fallback carries `run`
     { withSourceId },
   )
 
@@ -461,7 +461,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
       'duplicates',
       'analytics.codebase.status.findingDuplicates',
       async () => {
-        await duplicatesSilent.load()
+        await duplicatesSilent.load(undefined, deps.sourceIdParam.value)
         if (duplicatesSilent.error.value || duplicateScanState.value === 'failed') return null
         return { count: duplicateAnalysis.value.length }
       },
