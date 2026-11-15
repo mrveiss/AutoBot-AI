@@ -8,7 +8,7 @@
   account; its refusal is shown here in words.
 -->
 <template>
-  <span class="admin-status-control">
+  <span class="inline-flex flex-wrap items-center gap-2">
     <BaseSwitch
       :model-value="user.is_platform_admin"
       :label="t('adminUsers.adminStatusLabel', { username: user.username })"
@@ -33,7 +33,7 @@
       </template>
     </BaseModal>
     <!-- The status is stored but earlier sign-ins were not ended: the retry re-sends the SAME value. -->
-    <span v-if="retryValue !== null" class="admin-status-control__incomplete" role="alert">
+    <span v-if="retryValue !== null" class="inline-flex items-center gap-2 text-xs text-autobot-warning" role="alert">
       {{ t('adminUsers.adminStatusRevocationIncomplete') }}
       <BaseButton variant="secondary" size="sm" :disabled="saving" @click="retryRevocation">
         {{ t('adminUsers.adminStatusRetryRevocation') }}
@@ -121,20 +121,3 @@ function retryRevocation(): void {
   if (retryValue.value !== null) void setAdmin(retryValue.value)
 }
 </script>
-
-<style scoped>
-.admin-status-control {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  flex-wrap: wrap;
-}
-
-.admin-status-control__incomplete {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  font-size: var(--text-xs);
-  color: var(--color-warning);
-}
-</style>
