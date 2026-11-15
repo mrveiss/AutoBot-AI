@@ -90,6 +90,7 @@ Research reports covering hardware integration, system conflicts, and technology
 | [[ontology-grounded-text-to-sql-context-layer]] | Ontology-grounded text-to-SQL context layer — an open-source service that compiles database metadata into reviewed terms, measures and joins, compared against AutoBot's NL→SQL path; gaps are an answerability gate, a validate-and-repair loop and question-level coverage on KB answers (#20808) |
 | [[physical-modelling-articulatory-voice-synthesis]] | Physical-modelling articulatory voice synthesis — fitness for AutoBot's speech output (not fit as an engine; measurement method adoptable); see #21372 |
 | [[RES_deterministic-code-knowledge-graph]] | Deterministic code knowledge graph with edge provenance — comparison with AutoBot's code indexer and graph retrieval; defects filed as #21316–#21318 |
+| [[RES_agent-governance-guards-budget-audit-loop]] | Agent governance guards — pre-request dollar budget, tier-aware pricing, tamper-evident audit hash chain, cycle-aware loop guard and publish-validated versioned agent spec, compared with AutoBot; adoptable patterns filed as #21635, #21636, #21637, #21638, #21639 |
 
 ## Related Sections
 

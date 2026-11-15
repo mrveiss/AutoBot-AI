@@ -224,7 +224,14 @@ async def test_a_refused_checkout_keeps_a_fence_a_new_holder_took_while_it_ran(r
 
 
 async def _agent_to_human(redis, item_id: str) -> None:
-    item = MagicMock(assignee_agent_id=uuid.UUID(_AGENT), project_id=None, title="t", description="d", version=1)
+    item = MagicMock(
+        assignee_agent_id=uuid.UUID(_AGENT),
+        checkout_run_id="run-1",
+        project_id=None,
+        title="t",
+        description="d",
+        version=1,
+    )
     session = AsyncMock()
     session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=item)))
     service = HandoffService()
@@ -232,7 +239,7 @@ async def _agent_to_human(redis, item_id: str) -> None:
     service._record_a2h_activity = AsyncMock()
     service._publish_a2h_notification = AsyncMock()
     service._generate_and_update_brief_async = AsyncMock()
-    with patch.object(handoff_module, "get_async_redis_client", new=AsyncMock(return_value=redis)):
+    with patch.object(own_task, "get_async_redis_client", new=AsyncMock(return_value=redis)):
         await service.agent_to_human(session, item_id, _AGENT, str(uuid.uuid4()), str(_ORG))
     await asyncio.gather(*service._background_tasks)
 

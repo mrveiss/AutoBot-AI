@@ -104,6 +104,7 @@ DECLARED_SCOPES = {
     "compat-module-needs-importer": ("autobot-backend",),
     "unconnected-code-modules": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "unconnected-code-routes": ("autobot-backend", "autobot-slm-backend"),
+    "unconnected-code-frontend": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "unconnected-code-stores": ("autobot-backend", "autobot-slm-backend", "autobot_shared", "autobot-infrastructure"),
     "compose-nodes-restated-default": ("autobot-slm-backend", "autobot-infrastructure", "docker", "docker-compose.yml"),
     "chat-history-async-calls-awaited": ("autobot-backend/api",),
