@@ -347,10 +347,6 @@ route:autobot-backend/api/nl_database.py:GET /schema
 route:autobot-backend/api/nl_database.py:POST /query
 route:autobot-backend/api/nl_database.py:POST /train
 route:autobot-backend/api/personality.py:GET /languages
-route:autobot-backend/api/personality.py:GET /profiles
-route:autobot-backend/api/personality.py:GET /status
-route:autobot-backend/api/personality.py:POST /profiles
-route:autobot-backend/api/personality.py:POST /toggle
 route:autobot-backend/api/phases.py:GET /status
 route:autobot-backend/api/playwright.py:GET /capabilities
 route:autobot-backend/api/playwright.py:GET /status
@@ -503,11 +499,8 @@ route:autobot-backend/llc/api/api_keys.py:POST /{agent_id}/api-keys
 route:autobot-backend/llc/api/budget.py:GET /{agent_id}
 route:autobot-backend/llc/api/budget.py:POST /{agent_id}
 route:autobot-backend/llc/api/budget.py:POST /{agent_id}/ingest
-route:autobot-backend/llc/api/companies.py:DELETE /{company_id}
-route:autobot-backend/llc/api/companies.py:GET /{company_id}
 route:autobot-backend/llc/api/companies.py:GET /{company_id}/agents/search
 route:autobot-backend/llc/api/companies.py:GET /{company_id}/kb/ancestry-collections
-route:autobot-backend/llc/api/companies.py:PATCH /{company_id}
 route:autobot-backend/llc/api/companies.py:POST /{company_id}/pm-config/test
 route:autobot-backend/llc/api/company_members.py:DELETE /{company_id}/members/{user_id}
 route:autobot-backend/llc/api/company_members.py:PATCH /{company_id}/members/{user_id}

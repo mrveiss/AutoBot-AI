@@ -151,10 +151,6 @@ table:system_events	#10603
 table:validation_results	#10603
 route:autobot-backend/api/admin_ownerless_chat_sessions.py:POST /ownerless-chat-sessions/requests	#20904
 route:autobot-backend/api/knowledge_chunked_upload.py:DELETE /expired/{upload_id}	#20905
-route:autobot-backend/api/monitoring.py:GET /alerts/check	#19484
-route:autobot-backend/api/monitoring.py:GET /hardware/gpu	#19484
-route:autobot-backend/api/monitoring.py:GET /hardware/npu	#19484
-route:autobot-backend/api/monitoring.py:GET /optimization/recommendations	#19484
 declared:get_api_key_user=autobot_shared/user_management/models/api_key.py	#10603
 declared:require_key_permission=autobot-slm-backend/services/api_key_routes.py	#10603
 declared:RoleCredentialService=autobot-backend/llc/api/roles.py,autobot-backend/llc/models/role_credential.py,autobot-backend/migrations/versions/20260820_080_llc_role_tools_and_credentials.py	#10603
@@ -417,19 +413,11 @@ route:autobot-backend/api/git_mcp.py:POST /mcp/resources/unsubscribe	#10603
 route:autobot-backend/api/git_mcp.py:POST /mcp/show	#10603
 route:autobot-backend/api/git_mcp.py:POST /mcp/status	#10603
 route:autobot-backend/api/graph_rag.py:GET /collections/{collection_id}/graph	#10603
-route:autobot-backend/api/heartbeat.py:GET /{agent_id}/config	#10603
-route:autobot-backend/api/heartbeat.py:GET /{agent_id}/runs	#10603
 route:autobot-backend/api/heartbeat.py:GET /{agent_id}/runs/{run_id}	#10603
-route:autobot-backend/api/heartbeat.py:GET /{agent_id}/wakeup	#10603
 route:autobot-backend/api/heartbeat.py:PATCH /{agent_id}/session	#10603
 route:autobot-backend/api/heartbeat.py:POST /{agent_id}/error	#10603
-route:autobot-backend/api/heartbeat.py:POST /{agent_id}/pause	#10603
 route:autobot-backend/api/heartbeat.py:POST /{agent_id}/recover	#10603
-route:autobot-backend/api/heartbeat.py:POST /{agent_id}/resume	#10603
 route:autobot-backend/api/heartbeat.py:POST /{agent_id}/terminate	#10603
-route:autobot-backend/api/heartbeat.py:POST /{agent_id}/trigger	#10603
-route:autobot-backend/api/heartbeat.py:POST /{agent_id}/wakeup	#10603
-route:autobot-backend/api/heartbeat.py:PUT /{agent_id}/config	#10603
 route:autobot-backend/api/http_client_mcp.py:GET /mcp/status	#10603
 route:autobot-backend/api/http_client_mcp.py:POST /mcp/delete	#10603
 route:autobot-backend/api/http_client_mcp.py:POST /mcp/get	#10603
@@ -650,8 +638,6 @@ route:autobot-backend/api/npu_workers.py:PUT /npu/workers/{worker_id}/logging	#1
 route:autobot-backend/api/openai_compat.py:POST /chat/completions	#10603
 route:autobot-backend/api/overseer_handlers.py:GET /status/{session_id}	#10603
 route:autobot-backend/api/overseer_handlers.py:POST /query/{session_id}	#10603
-route:autobot-backend/api/personality.py:POST /profiles/{pid}/activate	#10603
-route:autobot-backend/api/personality.py:POST /profiles/{pid}/reset	#10603
 route:autobot-backend/api/phases.py:POST /validation/run	#10603
 route:autobot-backend/api/playwright.py:POST /automation/quick-test	#10603
 route:autobot-backend/api/project_state.py:POST /phase/{phase_id}/activate	#10603
@@ -875,8 +861,6 @@ route:autobot-slm-backend/api/security.py:GET /policies/{policy_id}	#10603
 route:autobot-slm-backend/api/security.py:PATCH /policies/{policy_id}	#10603
 route:autobot-slm-backend/api/services.py:GET /{service_name}/conflicts	#10603
 route:autobot-slm-backend/api/services.py:POST /{node_id}/services/scan	#10603
-route:autobot-slm-backend/api/settings.py:GET /time/config	#10603
-route:autobot-slm-backend/api/settings.py:PUT /time/config	#10603
 route:autobot-slm-backend/api/sso.py:POST /{provider_id}/rotate-kek	#10603
 route:autobot-slm-backend/api/sso.py:POST /{provider_id}/rotate-value	#10603
 route:autobot-slm-backend/api/sso_auth.py:GET /saml/slo	#10603
@@ -1231,10 +1215,6 @@ route:autobot-backend/api/nl_database.py:GET /schema	#20975
 route:autobot-backend/api/nl_database.py:POST /query	#20975
 route:autobot-backend/api/nl_database.py:POST /train	#20975
 route:autobot-backend/api/personality.py:GET /languages	#20970
-route:autobot-backend/api/personality.py:GET /profiles	#20970
-route:autobot-backend/api/personality.py:GET /status	#20970
-route:autobot-backend/api/personality.py:POST /profiles	#20970
-route:autobot-backend/api/personality.py:POST /toggle	#20970
 route:autobot-backend/api/phases.py:GET /status	#20974
 route:autobot-backend/api/playwright.py:GET /capabilities	#20973
 route:autobot-backend/api/playwright.py:GET /status	#20973
@@ -1387,11 +1367,8 @@ route:autobot-backend/llc/api/api_keys.py:POST /{agent_id}/api-keys	#20977
 route:autobot-backend/llc/api/budget.py:GET /{agent_id}	#20977
 route:autobot-backend/llc/api/budget.py:POST /{agent_id}	#20977
 route:autobot-backend/llc/api/budget.py:POST /{agent_id}/ingest	#20977
-route:autobot-backend/llc/api/companies.py:DELETE /{company_id}	#20977
-route:autobot-backend/llc/api/companies.py:GET /{company_id}	#20977
 route:autobot-backend/llc/api/companies.py:GET /{company_id}/agents/search	#20977
 route:autobot-backend/llc/api/companies.py:GET /{company_id}/kb/ancestry-collections	#20977
-route:autobot-backend/llc/api/companies.py:PATCH /{company_id}	#20977
 route:autobot-backend/llc/api/companies.py:POST /{company_id}/pm-config/test	#20977
 route:autobot-backend/llc/api/company_members.py:DELETE /{company_id}/members/{user_id}	#20977
 route:autobot-backend/llc/api/company_members.py:PATCH /{company_id}/members/{user_id}	#20977
