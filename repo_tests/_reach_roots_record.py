@@ -396,6 +396,7 @@ REACH_ROOTS = {
         "scripts",
         "tools",
     ),
+    "repo_tests/scheduled_workflows_covered_by_failure_report_21592_test.py": (".github/workflows",),
     "repo_tests/script_module_names_unique_14873_test.py": ("autobot-infrastructure/shared/scripts",),
     "repo_tests/search_mode_one_home_19335_test.py": ("autobot-backend",),
     "repo_tests/service_port_homes_test.py": (

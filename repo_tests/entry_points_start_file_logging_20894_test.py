@@ -156,10 +156,12 @@ OVERSIZE: dict[str, str] = {
     "autobot-infrastructure/shared/scripts/utilities/enhance_workflow_ui.py": _TOO_BIG,
 }
 
+_CI_JOB_SCRIPT = "CI job script: the job log is its output, a file would be discarded"
 #: Entry points that use the manager and deliberately stay console-only.
 CONSOLE_ONLY: dict[str, str] = {
-    "pipeline-scripts/pr_conflict_gate.py": "CI job script: the job log is its output, a file would be discarded",
-    "pipeline-scripts/audit_unwired_trackers.py": "CI job script: the job log is its output, a file would be discarded",
+    "pipeline-scripts/pr_conflict_gate.py": _CI_JOB_SCRIPT,
+    "pipeline-scripts/audit_unwired_trackers.py": _CI_JOB_SCRIPT,
+    "pipeline-scripts/scheduled_failure_report.py": _CI_JOB_SCRIPT,
 }
 
 
