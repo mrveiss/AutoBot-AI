@@ -464,8 +464,10 @@ REACH_ROOTS = {
     ),
     "repo_tests/unconnected_code_gate_20512_test.py": (
         "autobot-backend",
+        "autobot-frontend/src",
         "autobot-infrastructure",
         "autobot-slm-backend",
+        "autobot-slm-frontend/src",
         "autobot_shared",
     ),
     "repo_tests/v_html_sanitiser_guard_19118_test.py": (

@@ -53553,6 +53553,8 @@ export interface paths {
          *     The company check is not incidental: ``transition_status`` takes
          *     ``company_id`` and this route is reached with an agent's context, so an
          *     item belonging to another company must 404 rather than transition.
+         *
+         *     Only an item the agent holds changes (404 as if missing, #21586); one waiting on its reviewer is 409.
          */
         post: operations["update_work_item_status_api_llc_agent_work_items__item_id__status_post"];
         delete?: never;

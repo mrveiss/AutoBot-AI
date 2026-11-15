@@ -108,3 +108,64 @@ def test_no_domain_handler_still_returns_a_generic_message():
         for exc_name in ("InvalidTransition", "CheckoutConflict"):
             for h in _handlers_for(module, exc_name):
                 assert "Internal server error" not in ast.unparse(h), f"{module}/{exc_name} still swallows"
+
+
+def _route_handlers(module: str, route: str, exc_name: str):
+    """Yield the ``except <exc_name>`` handlers inside the route function *route* of *module* (#21587)."""
+    tree = ast.parse((_API / module).read_text(encoding="utf-8"))
+    for fn in ast.walk(tree):
+        if isinstance(fn, ast.AsyncFunctionDef) and fn.name == route:
+            for try_node in (n for n in ast.walk(fn) if isinstance(n, ast.Try)):
+                # A ``try`` with no ``await`` parses input (the 422 enum parse), it is not a service refusal.
+                if not any(isinstance(n, ast.Await) for b in try_node.body for n in ast.walk(b)):
+                    continue
+                for node in try_node.handlers:
+                    if getattr(node.type, "id", None) == exc_name:
+                        yield node
+
+
+#: Each refusal the handoff, review, transition, checkout, claim and agent status routes answer, with its true code.
+_ROUTE_REFUSALS = [
+    ("work_items.py", "handoff_to_agent", "HandoffNotAuthorized", 403),
+    ("work_items.py", "handoff_to_agent", "ValueError", 404),
+    ("work_items.py", "handoff_to_human", "HandoffNotAllowed", 403),
+    ("work_items.py", "handoff_to_human", "ValueError", 404),
+    ("work_items.py", "review_approve", "HandoffNotAllowed", 403),
+    ("work_items.py", "review_approve", "InvalidTransition", 409),
+    ("work_items.py", "review_approve", "ValueError", 404),
+    ("work_items.py", "review_request_changes", "HandoffNotAllowed", 403),
+    ("work_items.py", "review_request_changes", "ValueError", 404),
+    ("work_items.py", "transition_work_item", "InvalidTransition", 409),
+    ("work_items.py", "transition_work_item", "ValueError", 404),
+    ("work_items.py", "checkout_work_item", "ValueError", 404),
+    ("work_items.py", "release_work_item", "ValueError", 400),
+    ("work_items.py", "claim_work_item", "ValueError", 404),
+    ("work_items.py", "unclaim_work_item", "ValueError", 400),
+    ("work_items.py", "get_handoff_brief", "ValueError", 404),
+    ("agent_api.py", "update_work_item_status", "InvalidTransition", 409),
+    ("agent_api.py", "update_work_item_status", "ValueError", 404),
+    ("agent_api.py", "agent_upload_attachment", "AttachmentTooLarge", 413),
+]
+
+
+@pytest.mark.parametrize(("module", "route", "exc_name", "code"), _ROUTE_REFUSALS)
+def test_every_refusal_route_answers_its_true_code_through_the_shared_helper(module, route, exc_name, code):
+    handlers = list(_route_handlers(module, route, exc_name))
+    assert handlers, f"{module}:{route} has no `except {exc_name}` handler"
+    for h in handlers:
+        assert _raises_status(h) == code, f"{module}:{route} {exc_name}: expected an http_refusal {code}"
+
+
+@pytest.mark.parametrize(
+    "exc_name", ["HandoffNotAuthorized", "HandoffNotAllowed", "CompanyOsError", "AttachmentTooLarge"]
+)
+def test_the_handoff_refusals_are_public_so_the_caller_sees_the_reason(exc_name):
+    assert _is_public(exc_name), f"{exc_name} answers a fixed text, not its reason, unless it is a PublicMessageMixin"
+
+
+@pytest.mark.parametrize("module", ["work_items.py", "agent_api.py"])
+def test_no_work_item_route_answers_internal_server_error_for_a_refusal(module):
+    """The text is never a refusal's answer: a refused or missing item is a 4xx with a stated reason (#21587)."""
+    tree = ast.parse((_API / module).read_text(encoding="utf-8"))
+    offenders = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Constant) and n.value == "Internal server error"]
+    assert not offenders, f"{module} still answers 'Internal server error' at lines {offenders}"
