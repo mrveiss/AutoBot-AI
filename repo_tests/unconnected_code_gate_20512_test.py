@@ -480,6 +480,30 @@ def test_a_prefixed_route_with_no_caller_is_flagged_beside_an_unrelated_caller_2
     assert routes.unconnected(*_plant(tmp_path, {**files, **real})) == [], label
 
 
+_SLM = "autobot-slm-backend"
+_NESTED = {
+    f"{_SLM}/main.py": 'from api import parent_router\n\napp.include_router(parent_router, prefix="/api")\n',
+    f"{_SLM}/api/__init__.py": (
+        "from .child import router as child_router\nfrom .parent import router as parent_router\n"
+        "parent_router.include_router(child_router)\n"
+    ),
+    f"{_SLM}/api/parent.py": 'from fastapi import APIRouter\nrouter = APIRouter(prefix="/monitoring")\n',
+    f"{_SLM}/api/child.py": _ROUTER.format(prefix="gpu", verb="get", path="nodes"),
+    "scripts/probe.py": 'URL = "/api/monitoring/gpu/nodes"\n',
+}
+
+
+def test_a_route_under_a_nested_router_is_judged_at_its_parents_mount_20910(tmp_path: Path) -> None:
+    """A registry-less backend's include graph: `/gpu` nested in `/monitoring`, mounted at `/api` by main.py."""
+    tree, audit = _plant(tmp_path, _NESTED)
+    mounts = audit.registry_prefixes(_SLM)
+    assert mounts == {f"{_SLM}/api/parent.py": ["/api"], f"{_SLM}/api/child.py": ["/api/monitoring"]}, mounts
+    assert routes.unconnected(tree, audit) == [], "the real 4-segment caller connects the nested route"
+    # Control: the parent-less candidate the gate used to build does not match that caller.
+    parentless = [(f"{_SLM}/api/child.py", "GET", "/nodes", ("/gpu/nodes",))]
+    assert routes.unconnected(tree, audit, sites=parentless) == [f"{_SLM}/api/child.py:GET /nodes"]
+
+
 @pytest.mark.parametrize(
     ("label", "path", "body"),
     [
