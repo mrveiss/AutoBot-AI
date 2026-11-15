@@ -72,6 +72,22 @@ _FIRES = [
         "branch_overwrite_keeps_taint",
         "def h(cond):\n    try:\n        run()\n    except ValueError as exc:\n        msg = str(exc)\n        if cond:\n            msg = 'Invalid request'\n        raise HTTPException(400, detail=msg)\n",
     ),
+    (
+        "taint_in_two_lists",
+        "def h(cond):\n    try:\n        run()\n    except ValueError as exc:\n        msg = str(exc)\n        if cond:\n            msg = str(exc)\n            msg = 'ok'\n        raise HTTPException(400, detail=msg)\n",
+    ),
+    (
+        "try_body_overwrite",
+        "def h():\n    try:\n        run()\n    except ValueError as exc:\n        try:\n            msg = str(exc)\n            risky()\n            msg = 'ok'\n        except OSError:\n            raise HTTPException(400, detail=msg)\n",
+    ),
+    (
+        "loop_break_overwrite",
+        "def h(cond):\n    try:\n        run()\n    except ValueError as exc:\n        while cond:\n            msg = str(exc)\n            if cond:\n                break\n            msg = 'ok'\n        raise HTTPException(400, detail=msg)\n",
+    ),
+    (
+        "walrus_overwrite_keeps_taint",
+        "def h(cond):\n    try:\n        run()\n    except ValueError as exc:\n        msg = str(exc)\n        (msg := 'ok')\n        raise HTTPException(400, detail=msg)\n",
+    ),
     ("param_tainted_local", "def helper(exc):\n    msg = str(exc)\n    raise HTTPException(400, detail=msg)\n"),
     ("param_str", _param("HTTPException(400, detail=str(exc))")),
     ("param_fstring", _param('HTTPException(400, detail=f"bad {exc}")')),

@@ -97,15 +97,41 @@ def _exc_text_leaks(name: ast.Name, parents: dict[ast.AST, ast.AST], rel: str, f
     return from_except or _exc_text_in_format(name, parents)
 
 
-def _exc_text_stmt_lists(func: ast.AST) -> dict[int, int]:
-    """`{id(statement): id(the statement list holding it)}` for every statement under *func*."""
+_EXC_TEXT_LOOPS = (ast.For, ast.AsyncFor, ast.While)
+_EXC_TEXT_TRIES = tuple({ast.Try, getattr(ast, "TryStar", ast.Try)})
+_EXC_TEXT_NESTED_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+#: A name tainted in two different statement lists: no same-list overwrite can clear it any more.
+_EXC_TEXT_TAINTED_ELSEWHERE = -1
+
+
+def _exc_text_stmt_lists(func: ast.AST) -> tuple[dict[int, int], set[int], int]:
+    """`({id(statement): id(its statement list)}, ids of lists an overwrite may clear in, id(function body))`.
+
+    A list is clearing-safe unless control can leave it between two of its statements: it sits inside a
+    loop (any part, `orelse` included) or is a `try`'s `body`, `orelse` or `finalbody`, at any enclosing level.
+    An except-handler body is safe unless its `try` is itself inside a loop or another try's block.
+    """
     homes: dict[int, int] = {}
-    for node in ast.walk(func):
+    safe: set[int] = set()
+
+    def walk(node: ast.AST, unsafe: bool) -> None:
+        inner = unsafe or isinstance(node, _EXC_TEXT_LOOPS + _EXC_TEXT_TRIES)
         for field in ("body", "orelse", "finalbody"):
             block = getattr(node, field, None)
-            if isinstance(block, list):
-                homes.update({id(stmt): id(block) for stmt in block if isinstance(stmt, ast.stmt)})
-    return homes
+            if not (isinstance(block, list) and block and isinstance(block[0], ast.stmt)):
+                continue
+            homes.update({id(stmt): id(block) for stmt in block})
+            if not inner:
+                safe.add(id(block))
+            for stmt in block:
+                if not isinstance(stmt, _EXC_TEXT_NESTED_SCOPES):
+                    walk(stmt, inner)
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.ExceptHandler, ast.match_case)):
+                walk(child, unsafe)
+
+    walk(func, False)
+    return homes, safe, id(func.body)
 
 
 class _ExcTextScan(ast.NodeVisitor):
@@ -118,6 +144,7 @@ class _ExcTextScan(ast.NodeVisitor):
         #: Per function: where each statement lives (id of its statement list), the function's own list, and
         #: the list each tainted name was last tainted in -- what decides whether an overwrite is definite.
         self.stmt_list: list[dict[int, int]] = [{}]
+        self.safe_lists: list[set[int]] = [set()]
         self.top_list: list[int] = [0]
         self.taint_list: list[dict[str, int]] = [{}]
         self.counts: dict[str, int] = {}
@@ -129,12 +156,15 @@ class _ExcTextScan(ast.NodeVisitor):
         self.qual.append(node.name)
         self.params.append({a.arg for a in every if _exc_text_is_exception_param(a)})
         self.tainted.append(set())
-        self.stmt_list.append(_exc_text_stmt_lists(node))
-        self.top_list.append(id(node.body))
+        homes, safe, top = _exc_text_stmt_lists(node)
+        self.stmt_list.append(homes)
+        self.safe_lists.append(safe)
+        self.top_list.append(top)
         self.taint_list.append({})
         self.generic_visit(node)
         self.taint_list.pop()
         self.top_list.pop()
+        self.safe_lists.pop()
         self.stmt_list.pop()
         self.tainted.pop()
         self.params.pop()
@@ -173,12 +203,19 @@ class _ExcTextScan(ast.NodeVisitor):
         home = self.stmt_list[-1].get(id(stmt)) if stmt is not None else None
         if self._exc_text_carries_text(value):
             self.tainted[-1].update(names)
-            self.taint_list[-1].update({n: home for n in names if home is not None})
+            where = self.taint_list[-1]
+            for name in names:
+                seen = where.get(name, home)
+                where[name] = home if home is not None and seen == home else _EXC_TEXT_TAINTED_ELSEWHERE
         elif value is not None and home is not None and all(isinstance(t, ast.Name) for t in targets):
             for name in names:
-                if home in (self.top_list[-1], self.taint_list[-1].get(name)):
+                if self._exc_text_overwrite_is_definite(name, home):
                     self.tainted[-1].discard(name)
                     self.taint_list[-1].pop(name, None)
+
+    def _exc_text_overwrite_is_definite(self, name: str, home: int) -> bool:
+        """Whether an overwrite of *name* in statement list *home* runs after every taint of it, whatever happens."""
+        return home == self.top_list[-1] or (home == self.taint_list[-1].get(name) and home in self.safe_lists[-1])
 
     def visit_Assign(self, node: ast.Assign) -> None:
         self._exc_text_taint(node.targets, node.value, node)
