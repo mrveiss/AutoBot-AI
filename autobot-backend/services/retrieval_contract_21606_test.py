@@ -121,6 +121,8 @@ def test_plan_field_names_equal_the_merged_gate_when_it_is_on_main():
             "knowledge.retrieval_gate is not on main yet (#21064); RETRIEVAL_TECHNIQUES is the one definition (#21625)"
         )
     assert {f.name for f in fields(RetrievalPlan)} == set(gate.TECHNIQUES) | {"docs"}
+    assert gate.TECHNIQUES is RETRIEVAL_TECHNIQUES
+    assert gate.DEFAULT_TOGGLES == {t: getattr(DEFAULT_PLAN, t) for t in RETRIEVAL_TECHNIQUES}  # values, not only names
 
 
 def test_default_plan_is_pinned_to_todays_behaviour():
