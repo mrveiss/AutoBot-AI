@@ -10515,7 +10515,20 @@
     "useRoleDefault": "— Use role default —",
     "deleteUserTitle": "Delete User",
     "deleteConfirm": "Delete",
-    "deleteUndone": "This cannot be undone."
+    "deleteUndone": "This cannot be undone.",
+    "colAdmin": "Platform admin",
+    "adminBadge": "platform admin",
+    "adminStatusLabel": "Platform admin status for {username}",
+    "revokeAdminTitle": "Remove platform admin status",
+    "revokeAdminConfirm": "Remove platform admin status from {username}? They are signed out and sign in again without admin access.",
+    "revokeAdminSelf": "Remove your own platform admin status? You are signed out and lose access to this page.",
+    "revokeAdminAction": "Remove admin status",
+    "adminStatusFailed": "Could not change platform admin status.",
+    "adminStatusLastAdmin": "This is the last active platform admin. Make another user a platform admin first.",
+    "adminStatusRetry": "Another admin change was in progress. Nothing was changed; try again.",
+    "roleHint": "The role sets permissions only. Platform admin status is changed in its own column.",
+    "roleSelectLabel": "Role for {username}",
+    "roleUpdateFailed": "Could not update the role."
   },
   "schedulers": {
     "title": "Background schedulers",
