@@ -11,7 +11,7 @@ and the mandatory principal.
 
 import asyncio
 import importlib
-from dataclasses import fields
+from dataclasses import fields, replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -26,6 +26,7 @@ from services.retrieval_contract import (
     PlannedMetrics,
     RetrievalPlan,
     get_provenance,
+    uses_shared_cache,
     unsupported_toggles,
 )
 
@@ -171,7 +172,17 @@ async def test_toggles_without_a_leg_are_reported_not_ignored():
     _, metrics = await run.go(plan=RetrievalPlan(dense=False, graph=True, memory=True))
     assert isinstance(metrics, PlannedMetrics)
     assert metrics.unsupported == ["dense", "graph", "memory"]
-    assert run.calls["execute"].args[5] == EXPECTED_DEFAULT_KEY  # results are unchanged, so is the key
+    assert run.calls["check"].args[5] is None and run.calls["execute"].args[5] == ""  # not the default: no tier
+
+
+@pytest.mark.parametrize("name", [f.name for f in fields(RetrievalPlan)])
+def test_flipping_any_single_toggle_from_its_default_disables_the_shared_cache(name):
+    flipped = replace(DEFAULT_PLAN, **{name: not getattr(DEFAULT_PLAN, name)})
+    assert not uses_shared_cache(flipped)
+
+
+def test_the_default_plan_uses_the_shared_cache():
+    assert uses_shared_cache(DEFAULT_PLAN) and uses_shared_cache(RetrievalPlan())
 
 
 @pytest.mark.asyncio

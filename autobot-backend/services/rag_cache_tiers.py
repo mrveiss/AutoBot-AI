@@ -217,7 +217,7 @@ class RAGCacheTiersMixin:
         """The cache tiers, then the Neural Mesh path (#2059): ``(result or None, cache scope)``."""
         # The cache toggle off makes the scope None: every tier is skipped, read and write (#20958).
         scope = await cache_scope(principal) if uses_shared_cache(plan) else None
-        # A plan that changes results bypasses every shared tier, read and write (retrieval_contract).
+        # Only DEFAULT_PLAN uses the shared tiers; any other plan bypasses them, read and write (retrieval_contract).
         hit = await self._check_cache_tiers(query, max_results, enable_reranking, categories, principal, scope)
         if hit is not None:
             return (hit[0], hit[1]), scope
