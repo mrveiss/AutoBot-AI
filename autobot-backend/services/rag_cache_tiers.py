@@ -19,7 +19,7 @@ from autobot_shared.logging_manager import get_llm_logger
 from knowledge.search_filters import KbPrincipal
 from services.context_sufficiency import SufficiencyVerdict, get_context_sufficiency_evaluator
 from services.rag_visibility import RESULT_METADATA_KEY, cache_scope, filter_ranked
-from services.retrieval_contract import RetrievalPlan, stamp_cached_from
+from services.retrieval_contract import RetrievalPlan, stamp_cached_from, uses_shared_cache
 from services.semantic_query_cache import get_semantic_query_cache
 from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cache
 
@@ -167,21 +167,18 @@ class RAGCacheTiersMixin:
         categories: List[str] | None,
         principal: KbPrincipal,
         scope: str | None,
-        shared_tiers: bool = True,
     ) -> Tuple[List[RankedResult], RAGMetrics, str] | None:
         """Check all cache tiers before falling through to ChromaDB. Ref: #1376.
 
         Returns (results, metrics, cache_key) on hit, None on miss. Every tier is skipped when
         *scope* is None (the ACL epoch was unreadable). Each hit is post-filtered (#16664).
-        Tiers 0 and 2 hold results that include docs, so ``shared_tiers=False`` (a plan without
-        docs, #21606) skips them; tier 1 is stored before the docs merge and is always shared.
         """
         if scope is None:
             return None
         evaluator = get_context_sufficiency_evaluator()
 
         # Tier 0: Semantic similarity cache (Issue #1372)
-        sem_result = await self._check_semantic_cache(query, principal, scope) if shared_tiers else None
+        sem_result = await self._check_semantic_cache(query, principal, scope)
         if sem_result is not None:
             context_text = sem_result[0][0].content
             cached_at = sem_result[0][0].metadata.get("cached_at", 0)
@@ -202,7 +199,7 @@ class RAGCacheTiersMixin:
             logger.info("Cache hit rejected: %s", check.reason)
 
         # Tier 2: Topic-level retrieval cache (Issue #1376)
-        topic_result = await self._check_topic_cache(query, principal, scope) if shared_tiers else None
+        topic_result = await self._check_topic_cache(query, principal, scope)
         if topic_result is not None:
             return topic_result + (cache_key,)
 
@@ -219,12 +216,9 @@ class RAGCacheTiersMixin:
     ) -> Tuple[Tuple[List[RankedResult], RAGMetrics] | None, str | None]:
         """The cache tiers, then the Neural Mesh path (#2059): ``(result or None, cache scope)``."""
         # The cache toggle off makes the scope None: every tier is skipped, read and write (#20958).
-        scope = await cache_scope(principal) if plan.cache else None
-        # Tiers 0 and 2 hold results that already include docs, so a docs-less plan never reads them;
-        # tier 1 is stored before the docs merge and is shared, so the key needs no plan part.
-        hit = await self._check_cache_tiers(
-            query, max_results, enable_reranking, categories, principal, scope, shared_tiers=plan.docs
-        )
+        scope = await cache_scope(principal) if uses_shared_cache(plan) else None
+        # A plan that changes results bypasses every shared tier, read and write (retrieval_contract).
+        hit = await self._check_cache_tiers(query, max_results, enable_reranking, categories, principal, scope)
         if hit is not None:
             return (hit[0], hit[1]), scope
         if self.config.mesh_retriever_enabled and self._mesh_retriever is not None:

@@ -9,6 +9,7 @@ under ``DEFAULT_PLAN`` to today's, a provenance record on every hit, the unsuppo
 and the mandatory principal.
 """
 
+import asyncio
 import importlib
 from dataclasses import fields
 from types import SimpleNamespace
@@ -160,7 +161,7 @@ async def test_default_plan_returns_the_plain_metrics_and_todays_cache_key():
     _, metrics = await run.go()
     assert type(metrics) is RAGMetrics
     assert run.calls["execute"].args[5] == EXPECTED_DEFAULT_KEY
-    assert run.calls["check"].args[5] == SCOPE and run.calls["check"].kwargs == {"shared_tiers": True}
+    assert run.calls["check"].args[5] == SCOPE and run.calls["check"].kwargs == {}
     assert run.called["docs"] and run.called["sem"] and run.called["topic"]
 
 
@@ -174,23 +175,13 @@ async def test_toggles_without_a_leg_are_reported_not_ignored():
 
 
 @pytest.mark.asyncio
-async def test_a_docs_less_plan_skips_the_docs_merge_and_the_post_docs_cache_tiers():
+@pytest.mark.parametrize("plan", [RetrievalPlan(docs=False), RetrievalPlan(rerank=False), RetrievalPlan(cache=False)])
+async def test_a_plan_that_changes_results_bypasses_every_shared_cache_tier(plan):
     run = _Run([_hit()])
-    await run.go(plan=RetrievalPlan(docs=False))
-    assert run.calls["check"].kwargs == {"shared_tiers": False}
-    assert not run.called["docs"] and not run.called["sem"] and not run.called["topic"]
-    assert run.calls["execute"].args[5] == EXPECTED_DEFAULT_KEY  # tier 1 is stored before the docs merge
-
-
-@pytest.mark.asyncio
-async def test_rerank_off_is_part_of_the_key_and_cache_off_has_no_scope():
-    run = _Run([_hit()])
-    await run.go(plan=RetrievalPlan(rerank=False))
-    assert run.calls["execute"].args[2] is False and run.calls["execute"].args[5] == f"{SCOPE}:q:5:False:all"
-    cold = _Run([_hit()])
-    await cold.go(plan=RetrievalPlan(cache=False))
-    assert cold.calls["check"].args[5] is None and cold.calls["execute"].args[5] == ""
-    assert not cold.called["sem"] and not cold.called["topic"]
+    await run.go(plan=plan)
+    assert run.calls["check"].args[5] is None  # scope None: tiers 0, 1 and 2 are neither read nor written
+    assert run.calls["execute"].args[5] == ""
+    assert not run.called["sem"] and not run.called["topic"]
 
 
 def test_a_plan_that_is_not_a_retrieval_plan_is_rejected():
@@ -228,27 +219,61 @@ async def test_a_docs_chunk_served_from_a_cache_tier_keeps_the_docs_bucket_and_n
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("shared", [True, False])
-async def test_the_real_cache_tier_check_reads_tiers_0_and_2_only_when_shared(shared):
+@pytest.mark.parametrize("scope", [SCOPE, None])
+async def test_the_real_cache_tier_check_reads_tiers_0_and_2_only_inside_a_scope(scope):
     from services.context_sufficiency import SufficiencyVerdict
 
-    warm = ([_hit()], RAGMetrics())
     evaluator = MagicMock()
     evaluator.evaluate = AsyncMock(return_value=SimpleNamespace(verdict=SufficiencyVerdict.SUFFICIENT, reason=""))
-    sem, topic = AsyncMock(return_value=warm), AsyncMock(return_value=None)
+    sem = AsyncMock(return_value=([_hit()], RAGMetrics()))
+    with (
+        patch.multiple(RAGService, _check_semantic_cache=sem, _get_from_cache=AsyncMock(return_value=None)),
+        patch("services.rag_cache_tiers.get_context_sufficiency_evaluator", return_value=evaluator),
+    ):
+        got = await _service()._check_cache_tiers("q", 5, True, None, SYSTEM_SCOPE, scope)
+    assert sem.await_count == (0 if scope is None else 1)
+    assert (got is None) == (scope is None)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("first", [RetrievalPlan(docs=False), RetrievalPlan(rerank=False)])
+async def test_a_non_default_plan_never_leaves_an_entry_a_default_plan_reads(first):
+    """Sequential: the odd plan runs, then the default plan on the same query must run the full search."""
+    from services.context_sufficiency import SufficiencyVerdict
+
+    svc = _service()
+    svc.config.cache_ttl_seconds = 60
+    svc._cache, svc._cache_lock = {}, asyncio.Lock()
+    evaluator = MagicMock()
+    evaluator.evaluate = AsyncMock(return_value=SimpleNamespace(verdict=SufficiencyVerdict.SUFFICIENT, reason=""))
+    search = AsyncMock(side_effect=lambda *a: ([_hit()], RAGMetrics()))
+    sem, topic = AsyncMock(), AsyncMock()
+    docs = AsyncMock(side_effect=lambda q, r, *a: r + [_hit("autobot_docs")])
     with (
         patch.multiple(
             RAGService,
-            _check_semantic_cache=sem,
-            _check_topic_cache=topic,
-            _get_from_cache=AsyncMock(return_value=None),
+            _execute_search_with_timeout=search,
+            _merge_docs_leg=docs,
+            _store_in_semantic_cache=sem,
+            _store_in_topic_cache=topic,
+            _check_semantic_cache=AsyncMock(return_value=None),
+            _check_topic_cache=AsyncMock(return_value=None),
+            _lookup_retrieval_pattern=AsyncMock(return_value=None),
+            _record_retrieval_outcome=AsyncMock(),
+            _emit_ranked_feedback=AsyncMock(),
+            _filter_stale_chunks=AsyncMock(side_effect=lambda r: r),
+            initialize=AsyncMock(return_value=True),
         ),
+        patch("services.rag_cache_tiers.cache_scope", AsyncMock(return_value=SCOPE)),
+        patch("services.rag_service.get_query_classifier", MagicMock()),
         patch("services.rag_cache_tiers.get_context_sufficiency_evaluator", return_value=evaluator),
     ):
-        got = await _service()._check_cache_tiers("q", 5, True, None, SYSTEM_SCOPE, SCOPE, shared_tiers=shared)
-    assert sem.await_count == (1 if shared else 0)
-    assert topic.await_count == (1 if shared else 0)
-    assert (got is not None) == shared  # a warm tier 0 is served only to a plan that includes docs
+        await svc.advanced_search("q", principal=SYSTEM_SCOPE, plan=first)
+        assert svc._cache == {} and not sem.await_count and not topic.await_count  # nothing written, any tier
+        got, _ = await svc.advanced_search("q", principal=SYSTEM_SCOPE)
+    assert search.await_count == 2  # the default plan did not read an entry of the odd plan
+    assert any((get_provenance(h).bucket == "docs") for h in got)  # and it got the docs merge
+    assert sem.await_count == 1 and topic.await_count == 1  # the default plan still writes
 
 
 @pytest.mark.asyncio

@@ -476,9 +476,8 @@ class RAGService(RAGDerivedContextMixin, RAGCacheTiersMixin, RAGLegsMixin, RAGLe
         # Issue #4689: drop doc chunks whose file has left the doc index (knowledge.stale_filter).
         results = await self._filter_stale_chunks(results)
 
-        # Store the filtered results in the semantic + topic caches, inside this scope. A docs-less
-        # plan never stores: its results would be served to plans that include docs.
-        if scope is not None and plan.docs:
+        # Store the filtered results in the semantic + topic caches, inside this scope.
+        if scope is not None:
             await self._store_in_semantic_cache(query, results, scope)
             await self._store_in_topic_cache(results, scope)
         return results

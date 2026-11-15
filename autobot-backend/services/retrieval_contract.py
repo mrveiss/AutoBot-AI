@@ -66,6 +66,17 @@ DEFAULT_PLAN = RetrievalPlan()
 SUPPORTED_TOGGLES = frozenset({"rerank", "docs", "cache"})
 
 
+#: Toggles that change WHICH results come back. The cache tiers are shared across plans and their keys
+#: carry no plan, so a plan that differs from ``DEFAULT_PLAN`` in one of these neither reads nor writes
+#: ANY shared tier (exact, semantic, topic); the default plan's keys stay byte-identical to main.
+RESULT_AFFECTING_TOGGLES = ("docs", "rerank")
+
+
+def uses_shared_cache(plan: RetrievalPlan) -> bool:
+    """Whether *plan* may read and write the shared cache tiers: ``cache`` on and no result-affecting deviation."""
+    return plan.cache and all(getattr(plan, n) == getattr(DEFAULT_PLAN, n) for n in RESULT_AFFECTING_TOGGLES)
+
+
 def unsupported_toggles(plan: RetrievalPlan) -> Tuple[str, ...]:
     """The toggles *plan* sets away from today's fixed engine behaviour that no leg can honour yet."""
     return tuple(
