@@ -147,11 +147,24 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
   // #21474: another source is a navigation to its page, never an in-place swap. The analytics view
   // keys its routed page by `:sourceId`, so the page remounts: every section starts empty, the
   // previous page's in-flight requests are disposed with it, and the new page reads the cached
-  // results exactly as on page open -- no scan. The current route (and its sub-tab) is kept.
-  function handleSelectSource(source: CodeSource) {
+  // results exactly as on page open -- no scan. The current route (its sub-tab, query and hash) is
+  // kept, and "selected" is said only once the navigation landed: a blocked or aborted one did not.
+  async function navigateToSource(source: CodeSource): Promise<boolean> {
+    const to = { name: route.name ?? 'analytics-codebase-project', params: { ...route.params, sourceId: source.id }, query: route.query, hash: route.hash }
+    try {
+      const failure = await router.push(to)
+      if (failure) logger.warn('Source switch did not navigate:', failure.message)
+      return !failure
+    } catch (err: unknown) {
+      logger.error('Source switch navigation failed:', err)
+      return false
+    }
+  }
+
+  async function handleSelectSource(source: CodeSource) {
     showSourceManager.value = false
     if (source.id !== route.params.sourceId) {
-      void router.push({ name: route.name ?? 'analytics-codebase-project', params: { ...route.params, sourceId: source.id } })
+      if (!(await navigateToSource(source))) return
     } else {
       selectedSource.value = source
       if (source.clone_path) {
@@ -159,10 +172,7 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
         localStorage.setItem(STORAGE_KEY_PATH, source.clone_path)
       }
     }
-    notify(
-      t('analytics.codebase.notify.selectedSource', { name: source.name }),
-      'info',
-    )
+    notify(t('analytics.codebase.notify.selectedSource', { name: source.name }), 'info')
   }
 
   function handleClearSource() {
@@ -203,7 +213,11 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
   // Issue #6068: Load a single source by ID and populate selectedSource +
   // rootPath. Returns true on success, false on failure (caller handles
   // navigation).
-  async function loadSourceById(sourceId: string): Promise<boolean> {
+  /**
+   * `pageOpen` is the page's liveness (#21474): an answer arriving after the page was left writes
+   * nothing -- no selection, no toast, and no saved path over the one the next page saved.
+   */
+  async function loadSourceById(sourceId: string, pageOpen: () => boolean = () => true): Promise<boolean> {
     try {
       const endpoint = useFetchEndpoint<CodeSource, CodeSource>({
         path: `/api/analytics/codebase/sources/${encodeURIComponent(sourceId)}`,
@@ -211,6 +225,7 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
         label: 'Load source by ID',
       })
       await endpoint.load()
+      if (!pageOpen()) return false
       if (endpoint.error.value || !endpoint.data.value) {
         notify(t('analytics.codebase.notify.sourceNotFound'), 'error')
         return false
@@ -223,7 +238,7 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       logger.error('Failed to load source metadata:', msg)
-      notify(t('analytics.codebase.notify.sourceNotFound'), 'error')
+      if (pageOpen()) notify(t('analytics.codebase.notify.sourceNotFound'), 'error')
       return false
     }
   }

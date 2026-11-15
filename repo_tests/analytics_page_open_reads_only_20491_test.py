@@ -22,6 +22,7 @@ LOADERS = "autobot-frontend/src/composables/analytics/useDashboardLoaders.ts"
 JOB = "autobot-frontend/src/composables/analytics/useIndexingJob.ts"
 MOUNT_ALLOWED = {
     "checkCurrentIndexingJob",
+    "codeIntelExtraScans",  # the page-open scan list, itself checked by ``scan_calls``
     "loadCachedAnalyticsData",
     "loadCodeQuality",
     "loadCommunicationPatterns",
@@ -54,11 +55,22 @@ def page_open_scans(source: str) -> str:
     return match.group(0)
 
 
+#: The page's open sequence is the steps it hands ``openProjectPage`` (#21474), which calls nothing else.
+MOUNT_OPENING = "onMounted(() => openProjectPage({"
+
+
 def mount_calls(source: str) -> set[str]:
-    """The functions ``onMounted`` calls directly, by name."""
-    opening = "onMounted(async () => {"
-    body = source[source.index(opening) + len(opening) :].split("\n})\n", 1)[0]
-    return set(re.findall(r"^\s*(?:await |void )?(\w+)\(", body, re.MULTILINE))
+    """The functions the page-open steps call, or hand on as a step, by name.
+
+    A step is either written as a call (``() => loadSources()``, several on one line) or handed on
+    bare (``loadSourceById,`` / ``step: loadSourceById,``); both count, so a scan cannot be passed in
+    as a step uncalled. A method call (``router.replace(``) is not a page loader and is skipped.
+    """
+    body = source[source.index(MOUNT_OPENING) + len(MOUNT_OPENING) :].split("\n}))\n", 1)[0]
+    code = _strip_comments(body)
+    called = set(re.findall(r"(?<![\w.])(\w+)\(", code))
+    handed = set(re.findall(r"^\s*(?:\w+:\s*)?(\w+),?\s*$", code, re.MULTILINE))
+    return called | handed
 
 
 def scan_calls(source: str) -> set[str]:
@@ -69,8 +81,11 @@ def scan_calls(source: str) -> set[str]:
 def test_the_detectors_read_what_they_mean() -> None:
     planted = "const codeIntelExtraScans = (): X[] => [\n  { run: async () => { await loadRedisHealth() } },\n]\nloadOther()\n"
     assert scan_calls(planted) == {"loadRedisHealth"}
-    mounted = "onMounted(async () => {\n  void a()\n  await b()\n  c()\n  if (d) {\n    x.y()\n  }\n})\nz()\n"
-    assert mount_calls(mounted) == {"a", "b", "c"}
+    mounted = (
+        "onMounted(() => openProjectPage({\n  s: x as string,\n  b,\n  c: d,\n  e: () => { void f() }, // g()\n"
+        "  h: () => {\n    i(j()); k(); x.y()\n  },\n}))\nz()\n"
+    )
+    assert mount_calls(mounted) == {"b", "d", "f", "i", "j", "k"}
 
 
 def test_page_open_calls_only_what_reads() -> None:
@@ -189,8 +204,12 @@ def test_a_planted_page_open_scan_is_caught() -> None:
         "const codeIntelExtraScans = (): X[] => [\n  { run: async () => { await runCodeIntelligenceAnalysis() } },\n]\n"
     )
     assert scan_calls(planted_scan) - SCAN_ALLOWED == {"runCodeIntelligenceAnalysis"}
-    planted_mount = "onMounted(async () => {\n  await loadSources()\n  await loadRedisHealth()\n})\n"
+    planted_mount = (
+        "onMounted(() => openProjectPage({\n  loadPageResults: () => { loadSources(); loadRedisHealth() },\n}))\n"
+    )
     assert mount_calls(planted_mount) - MOUNT_ALLOWED == {"loadRedisHealth"}
+    handed_on = "onMounted(() => openProjectPage({\n  loadPageResults: loadRedisHealth,\n}))\n"
+    assert mount_calls(handed_on) - MOUNT_ALLOWED == {"loadRedisHealth"}
 
 
 def test_the_other_cached_security_read_sends_its_source() -> None:
