@@ -25,11 +25,16 @@ WHAT A CALLER IS
 
 WHAT THIS CANNOT SEE
 --------------------
-* **Static prefix resolution.** The route's mount path is the registry prefix and the router's
-  own prefix, combined every way the script combines them; a package entry's router chain
-  (``__init__`` -> ``router.py`` -> ``endpoints/*.py``) is followed by ``_unconnected_mounts`` (#21428).
-  The union is deliberately loose, so a route whose real path differs from every candidate can read as
-  called by an unrelated caller (it errs toward "connected", never toward a false failure).
+* **Static prefix resolution.** A route is judged at ``mount + own prefix + path`` and nowhere else:
+  one candidate per mount, and the router's own ``APIRouter(prefix=...)`` is never dropped, since
+  FastAPI always applies it (#20910). The mounts are the registry's, including nested
+  ``include_router`` mounts and a package entry's router chain (``__init__`` -> ``router.py`` ->
+  ``endpoints/*.py``, followed by ``_unconnected_mounts``, #21428). A file the registry does not mount
+  (every SLM router: ``main.py`` mounts them at ``/api`` or the root) has the empty mount; ``/api`` is
+  toggled on every candidate, so both of those are covered. A form without the own prefix used to be
+  a candidate too, and let an unrelated caller of the same segment shape mark the route connected.
+* **Which router a decorator is on.** Only ``@router``/``@app``/``@api_router`` decorators are seen,
+  and the own prefix is the first ``APIRouter(prefix=...)`` in the file.
 * **A caller that builds its path at runtime** (``f"/api/{resource}/{id}"`` from a table) shows
   as a wildcard or not at all. A wildcard segment matches any single segment.
 * **A route whose mounted path starts with a parameter** (a router mounted at the root, ``/{id}/x``): no
@@ -67,7 +72,15 @@ EXTERNAL_CALLER_PREFIXES: dict[str, str] = {
     # #21048: the knowledge-wipe preview and proposal are called by an administrator over HTTP; there is no
     # UI for it yet. The operator script raises the same proposal directly through the same service.
     "/api/admin/knowledge-wipe": "an administrator, over HTTP (no UI yet)",
+    # #20910: SCIM 2.0 inbound provisioning (RFC 7644) is pushed by the identity provider's SCIM client;
+    # the SLM mounts it outside /api so the provider reaches it directly. Nothing in this repository calls it.
+    "/scim/v2": "an identity provider's SCIM client, over HTTP",
 }
+
+
+#: The mount of a router no registry entry reaches: an SLM router (``main.py`` mounts it at ``/api`` or
+#: the root, and ``_reached`` tries every candidate with and without ``/api``) or a router mounted nowhere.
+_UNREGISTERED_MOUNT = ""
 
 
 def load_script(root: Path, name: str) -> ModuleType:
@@ -157,22 +170,20 @@ def route_sites(tree: Tree, audit: Audit) -> list[tuple[str, str, str, tuple[str
                 continue
             own = mod.apirouter_prefix(text)
             own = own.rstrip("/") if own is not None else ""
-            regs = registry.get(rel)
+            regs = registry.get(rel) or [_UNREGISTERED_MOUNT]
             for method, raw in found:
                 out.append((rel, method.upper(), raw, _candidates(mod, raw, own, regs)))
     return out
 
 
-def _candidates(mod: ModuleType, raw: str, own: str, regs: list[str] | None) -> tuple[str, ...]:
-    """Every full path a route is served at: one per mount prefix (a router can be mounted more than once)."""
+def _candidates(mod: ModuleType, raw: str, own: str, regs: list[str]) -> tuple[str, ...]:
+    """Every full path a route is served at: ``mount + own prefix + path``, one per mount (#20910).
+
+    A router can be mounted more than once. The router's own prefix is in every form: FastAPI applies
+    it wherever the router is mounted, so a form without it names a path nothing serves.
+    """
     glue = "" if (raw.startswith("/") or not raw) else "/"
-    if regs is None:
-        forms = {raw, own + glue + raw}  # no registry mount known: the router may be mounted anywhere
-    else:
-        forms = {reg + own + glue + raw for reg in regs}
-        if not own:
-            forms.update(reg + glue + raw for reg in regs)
-    return tuple(sorted({mod.norm_path(f) if f else mod.norm_path(own or (regs or ["/"])[0] or "/") for f in forms}))
+    return tuple(sorted({mod.norm_path(reg + own + glue + raw or "/") for reg in regs}))
 
 
 def other_callers(tree: Tree, audit: Audit) -> dict[str, set[str]]:

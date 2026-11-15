@@ -880,13 +880,6 @@ route:autobot-slm-backend/api/performance.py:GET /traces/{trace_id}	#10603
 route:autobot-slm-backend/api/performance.py:POST /alerts/rules	#10603
 route:autobot-slm-backend/api/performance.py:PUT /alerts/rules/{rule_id}	#10603
 route:autobot-slm-backend/api/redis_service.py:POST /{action}	#10603
-route:autobot-slm-backend/api/scim.py:DELETE /Users/{user_id}	#10603
-route:autobot-slm-backend/api/scim.py:GET /Groups/{group_id}	#10603
-route:autobot-slm-backend/api/scim.py:GET /Users/{user_id}	#10603
-route:autobot-slm-backend/api/scim.py:PATCH /Groups/{group_id}	#10603
-route:autobot-slm-backend/api/scim.py:PATCH /Users/{user_id}	#10603
-route:autobot-slm-backend/api/scim.py:PUT /Groups/{group_id}	#10603
-route:autobot-slm-backend/api/scim.py:PUT /Users/{user_id}	#10603
 route:autobot-slm-backend/api/security.py:DELETE /policies/{policy_id}	#10603
 route:autobot-slm-backend/api/security.py:GET /audit-logs/{log_id}	#10603
 route:autobot-slm-backend/api/security.py:GET /certificates/expiring	#10603

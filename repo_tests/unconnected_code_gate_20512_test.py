@@ -439,11 +439,45 @@ class _NormMod:
 
 
 def test_route_candidates_have_no_phantom_forms_20910() -> None:
-    """With a registration prefix and an own prefix only reg+own+raw is real; reg+raw only without an own prefix."""
+    """Every candidate is mount + own prefix + path, with or without a registry mount: no form drops the own prefix."""
     cand = routes._candidates
     assert cand(_NormMod, "/x", "/own", ["/api"]) == ("/api/own/x",)
     assert cand(_NormMod, "/x", "", ["/api"]) == ("/api/x",)
-    assert cand(_NormMod, "/x", "/own", None) == ("/own/x", "/x")
+    assert cand(_NormMod, "/x", "/own", [routes._UNREGISTERED_MOUNT]) == ("/own/x",)
+    assert cand(_NormMod, "", "", [routes._UNREGISTERED_MOUNT]) == ("/",)
+
+
+_PLANS_REL = "autobot-backend/api/planted_plans.py"
+_PLANS = (
+    'from fastapi import APIRouter\nrouter = APIRouter(prefix="/workflow-plans")\n\n\n'
+    '@router.get("{path}")\nasync def h():\n    return {{}}\n'
+)
+_LLC_MOUNT = {
+    "autobot-backend/initialization/router_registry/planted.py": 'R = [("api.planted_plans", "/llc", ["llc"], "plans")]\n'
+}
+_UNRELATED_LLC_CALLER = {"scripts/probe.py": 'URL = "/api/llc/work-items/{item_id}"\n'}
+
+
+@pytest.mark.parametrize(
+    ("label", "mount", "path", "served"),  # served: the mount and own prefix the route is really under
+    [
+        ("registry mount: reg + path lost the own prefix", _LLC_MOUNT, "/{plan_key}/gate", "/llc/workflow-plans"),
+        ("no registry mount: the bare path dropped it", {}, "/llc/{plan_key}/gate", "/workflow-plans"),
+    ],
+)
+def test_a_prefixed_route_with_no_caller_is_flagged_beside_an_unrelated_caller_20910(
+    tmp_path: Path, label: str, mount: dict[str, str], path: str, served: str
+) -> None:
+    """#20910: `/api/llc/work-items/{id}` must not connect a `/workflow-plans` route through `/api/llc/{p}/gate`."""
+    files = {_PLANS_REL: _PLANS.format(path=path), **mount, **_UNRELATED_LLC_CALLER}
+    tree, audit = _plant(tmp_path, files)
+    key = f"{_PLANS_REL}:GET {path}"
+    assert routes.unconnected(tree, audit) == [key], label
+    # Control: the old own-prefix-less candidate IS reached by that caller, so the first assert fails on old code.
+    assert routes.unconnected(tree, audit, sites=[(_PLANS_REL, "GET", path, ("/llc/{p}/gate",))]) == [], label
+    # Connected twin: a caller of the path the route is really served at connects it.
+    real = {"scripts/real.py": f'URL = "/api{served}{path}"\n'}
+    assert routes.unconnected(*_plant(tmp_path, {**files, **real})) == [], label
 
 
 @pytest.mark.parametrize(
