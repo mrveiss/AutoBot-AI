@@ -47,7 +47,7 @@ describe('buildCodeQuality (#20498)', () => {
     const q = buildCodeQuality(null, null, null)
     expect(q).toEqual({
       overall_score: null,
-      test_coverage: null,
+      testability: null,
       code_duplicates: null,
       technical_debt: null,
     })
@@ -58,9 +58,11 @@ describe('buildCodeQuality (#20498)', () => {
     expect(q.technical_debt).toBeNull()
   })
 
-  it('reads test coverage from breakdown.testability and duplicates from total_count', () => {
+  // #21395: the figure is the testability factor, not test coverage, and is named for it.
+  it('reads testability from breakdown.testability and duplicates from total_count', () => {
     const q = buildCodeQuality(health, dup, debt)
-    expect(q.test_coverage).toBe(61)
+    expect(q.testability).toBe(61)
+    expect(q).not.toHaveProperty('test_coverage')
     expect(q.code_duplicates).toBe(7)
   })
 })
