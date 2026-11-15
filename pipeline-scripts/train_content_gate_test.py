@@ -275,6 +275,16 @@ def test_a_passenger_merged_twice_is_a_finding_not_an_overwrite(train):
     findings = gate.check_range("main..train").findings
     assert len(findings) == 1 and "passenger #7 merged more than once" in findings[0]
     assert "merge each passenger once" in findings[0]
+    assert gate.check_range("main..train").files == 3
+
+
+def test_the_older_of_two_same_numbered_passenger_merges_is_measured_too(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}), "-s", "ours")
+    passenger(7, member("seven-b", {"docs/seven-b.md": LONG.format("7b")}))
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 2 and "merged more than once" in findings[0]
+    assert "passenger #7 (" in findings[1] and " docs/seven.md: missing" in findings[1]
 
 
 def test_a_range_with_only_a_passenger_merge_measures_nothing(train):

@@ -87,19 +87,26 @@ def _merge_key(subject: str) -> tuple[str, str] | None:
     return None
 
 
-def _label(key: tuple[str, str]) -> str:
-    kind, pr = key
-    return f"#{pr}" if kind == "member" else f"{kind} #{pr}"
+def _label(key: tuple[str, ...]) -> str:
+    """``#N`` for a member, ``passenger #N`` for a passenger, ``passenger #N (sha)`` for a repeated passenger merge."""
+    kind, pr, *repeat = key
+    if kind == "member":
+        return f"#{pr}"
+    return f"{kind} #{pr} ({repeat[0]})" if repeat else f"{kind} #{pr}"
 
 
-def member_merges(rng: str, report: ContentReport) -> dict[tuple[str, str], tuple[str, str]]:
-    """``{(kind, pr): (last merge, first merge)}``; a merge that is neither member, passenger nor main is a finding."""
-    found: dict[tuple[str, str], tuple[str, str]] = {}
+def member_merges(rng: str, report: ContentReport) -> dict[tuple[str, ...], tuple[str, str]]:
+    """``{(kind, pr): (last merge, first merge)}``; a merge that is neither member, passenger nor main is a finding.
+
+    A passenger number merged again is a finding, and each repeat is measured on its own under ``(kind, pr, sha)``.
+    """
+    found: dict[tuple[str, ...], tuple[str, str]] = {}
     for line in _git("log", "--first-parent", "--merges", "--format=%H %s", rng).splitlines():  # newest first
         sha, _, subject = line.partition(" ")
         key = _merge_key(subject)
         if key and key[0] == "passenger" and key in found:
             report.findings.append(f"passenger #{key[1]} merged more than once ({sha[:10]}); merge each passenger once")
+            found[(*key, sha[:10])] = (sha, sha)
         elif key:
             found[key] = (found.get(key, (sha,))[0], sha)
         elif not BASE_MERGE.match(subject):
@@ -161,9 +168,9 @@ def _judge_file(status: str, path: str, base: str, head: str, merge: str, report
 
 
 def _check_member(
-    key: tuple[str, str], last: str, first: str, rng: str, drops: set[tuple[str, str]], report: ContentReport
+    key: tuple[str, ...], last: str, first: str, rng: str, drops: set[tuple[str, str]], report: ContentReport
 ) -> None:
-    """Judge one member or passenger merge; *key* is ``(kind, pr)``, named in every note and finding."""
+    """Judge one member or passenger merge; *key* is ``(kind, pr[, sha])``, named in every note and finding."""
     start, tip = rng.split("..")
     pr, who = key[1], _label(key)
     head = f"{last}^2"
@@ -194,7 +201,7 @@ def check_range(rng: str, title: str = "", body: str = "") -> ContentReport:
     report = ContentReport()
     merges = member_merges(rng, report)
     report.members = len(merges)
-    members = {pr for kind, pr in merges if kind == "member"}  # a passenger never satisfies the title
+    members = {key[1] for key in merges if key[0] == "member"}  # a passenger never satisfies the title
     if not members:
         report.findings.append(f"no 'Merge #N @ sha' commit in {rng}: nothing was measured")
     for pr in sorted(declared_members(title) - members, key=int):
