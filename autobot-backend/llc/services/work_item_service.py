@@ -755,11 +755,12 @@ class WorkItemService(LLCServiceBase):
 
     @staticmethod
     def _check_move(
-        item: LLCWorkItem, acting_user: Optional[uuid.UUID], new_status: WorkItemStatus
+        item: LLCWorkItem, acting_user: Optional[uuid.UUID], new_status: WorkItemStatus, gate: DoneGate = DoneGate()
     ) -> tuple[WorkItemStatus, bool]:
         """The allowed-transition rule, with the person-only parts: no finishing past a reviewer, own tasks (#20508)."""
         current = WorkItemStatus(item.status)
         allowed = _ALLOWED_TRANSITIONS.get(current, set())
+        gate.refuse_unheld(item)  # an agent moves only an item it holds (#21586)
         refuse_past_reviewer(item, acting_user, new_status)
         own = is_own_task(item, acting_user, new_status)
         if not own and new_status not in allowed:
@@ -800,7 +801,7 @@ class WorkItemService(LLCServiceBase):
             gate = done_gate or default_gate()  # a caller that brings no gate gets the real one, never none
             return await self.transition_to_done(session, work_item_id, company_id, **gate.finish_args(acting_user))
         item = await self._load_locked(session, work_item_id, company_id)
-        current, own = self._check_move(item, acting_user, new_status)
+        current, own = self._check_move(item, acting_user, new_status, done_gate or DoneGate())
         if not own and current == WorkItemStatus.BLOCKED and new_status == WorkItemStatus.IN_PROGRESS:
             await self._refuse_unresolved_blockers(session, work_item_id, item, relation_svc)
 
@@ -835,11 +836,10 @@ class WorkItemService(LLCServiceBase):
         """
         item = await self._load_locked(session, work_item_id, company_id)
         company_id = company_id or str(item.company_id)
-        current, own = self._check_move(item, acting_user, WorkItemStatus.DONE)
         gate = DoneGate(review_gate_svc, handoff_svc, actor_agent_id, is_agent)
+        current, own = self._check_move(item, acting_user, WorkItemStatus.DONE, gate)
         who = (actor_agent_id, actor_user_id, is_board_override)
-        held = await review_outcome(session, item, company_id, gate, who, acting_user)
-        if held is not None:
+        if (held := await review_outcome(session, item, company_id, gate, who, acting_user)) is not None:
             return held
         await self._complete(session, item, current, own, company_id, who)
         return item

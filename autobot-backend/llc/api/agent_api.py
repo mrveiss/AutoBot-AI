@@ -111,16 +111,15 @@ class StatusUpdate(BaseModel):
     comment: Optional[str] = None
 
 
-async def _status_gate(agent_id: str, company_id: str, new_status: Any, comment: Optional[str]) -> tuple:
-    """The review gate for this move and the agent's node, looked up only when a done or a comment needs it (#21503).
+async def _status_gate(agent_id: str, company_id: str) -> tuple:
+    """The review gate for this move and the agent's node (#21503, #21586).
 
-    The node UUID is the key the handoff names the agent by, and the comment's author.
+    The node UUID is the key the handoff names the agent by, the comment's author, and what the item's holder is
+    compared with: every move needs it, because an agent changes only an item it holds.
     """
-    from ..models.enums import WorkItemStatus
     from ..services.accessors import done_gate_for
 
-    wanted = new_status == WorkItemStatus.DONE or bool(comment and comment.strip())
-    node = await agent_node_uuid(agent_id, company_id) if wanted else None
+    node = await agent_node_uuid(agent_id, company_id)
     return done_gate_for(str(node) if node else None, is_agent=True), node
 
 
@@ -135,6 +134,8 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
     The company check is not incidental: ``transition_status`` takes
     ``company_id`` and this route is reached with an agent's context, so an
     item belonging to another company must 404 rather than transition.
+
+    Only an item the agent holds changes (404 as if missing, #21586); one waiting on its reviewer is 409.
     """
     item_id = str(parse_work_item_id(item_id))
     from user_management.database import get_async_session_factory
@@ -148,7 +149,7 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=f"Unknown work item status {body.status!r}") from exc
 
-    gate, author_uuid = await _status_gate(agent_id, company_id, new_status, body.comment)
+    gate, author_uuid = await _status_gate(agent_id, company_id)
     factory = get_async_session_factory()
     async with factory() as session:
         try:
