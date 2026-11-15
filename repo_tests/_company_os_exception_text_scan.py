@@ -97,6 +97,17 @@ def _exc_text_leaks(name: ast.Name, parents: dict[ast.AST, ast.AST], rel: str, f
     return from_except or _exc_text_in_format(name, parents)
 
 
+def _exc_text_stmt_lists(func: ast.AST) -> dict[int, int]:
+    """`{id(statement): id(the statement list holding it)}` for every statement under *func*."""
+    homes: dict[int, int] = {}
+    for node in ast.walk(func):
+        for field in ("body", "orelse", "finalbody"):
+            block = getattr(node, field, None)
+            if isinstance(block, list):
+                homes.update({id(stmt): id(block) for stmt in block if isinstance(stmt, ast.stmt)})
+    return homes
+
+
 class _ExcTextScan(ast.NodeVisitor):
     def __init__(self, rel: str) -> None:
         self.rel = rel
@@ -104,6 +115,11 @@ class _ExcTextScan(ast.NodeVisitor):
         self.excepts: list[str] = []
         self.params: list[set[str]] = []
         self.tainted: list[set[str]] = [set()]
+        #: Per function: where each statement lives (id of its statement list), the function's own list, and
+        #: the list each tainted name was last tainted in -- what decides whether an overwrite is definite.
+        self.stmt_list: list[dict[int, int]] = [{}]
+        self.top_list: list[int] = [0]
+        self.taint_list: list[dict[str, int]] = [{}]
         self.counts: dict[str, int] = {}
         self.sites: list[str] = []
 
@@ -113,7 +129,13 @@ class _ExcTextScan(ast.NodeVisitor):
         self.qual.append(node.name)
         self.params.append({a.arg for a in every if _exc_text_is_exception_param(a)})
         self.tainted.append(set())
+        self.stmt_list.append(_exc_text_stmt_lists(node))
+        self.top_list.append(id(node.body))
+        self.taint_list.append({})
         self.generic_visit(node)
+        self.taint_list.pop()
+        self.top_list.pop()
+        self.stmt_list.pop()
         self.tainted.pop()
         self.params.pop()
         self.qual.pop()
@@ -146,16 +168,24 @@ class _ExcTextScan(ast.NodeVisitor):
         parents = _exc_text_parent_map(value)
         return any(self._exc_text_name_leaks(n, parents) for n in _exc_text_names_outside_sanctioned(value))
 
-    def _exc_text_taint(self, targets: list[ast.expr], value: ast.AST | None) -> None:
+    def _exc_text_taint(self, targets: list[ast.expr], value: ast.AST | None, stmt: ast.stmt | None = None) -> None:
+        names = [n.id for t in targets for n in ast.walk(t) if isinstance(n, ast.Name)]
+        home = self.stmt_list[-1].get(id(stmt)) if stmt is not None else None
         if self._exc_text_carries_text(value):
-            self.tainted[-1].update(n.id for t in targets for n in ast.walk(t) if isinstance(n, ast.Name))
+            self.tainted[-1].update(names)
+            self.taint_list[-1].update({n: home for n in names if home is not None})
+        elif value is not None and home is not None and all(isinstance(t, ast.Name) for t in targets):
+            for name in names:
+                if home in (self.top_list[-1], self.taint_list[-1].get(name)):
+                    self.tainted[-1].discard(name)
+                    self.taint_list[-1].pop(name, None)
 
     def visit_Assign(self, node: ast.Assign) -> None:
-        self._exc_text_taint(node.targets, node.value)
+        self._exc_text_taint(node.targets, node.value, node)
         self.generic_visit(node)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
-        self._exc_text_taint([node.target], node.value)
+        self._exc_text_taint([node.target], node.value, node)
         self.generic_visit(node)
 
     def visit_NamedExpr(self, node: ast.NamedExpr) -> None:

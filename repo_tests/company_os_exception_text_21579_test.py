@@ -68,6 +68,10 @@ _FIRES = [
         "tainted_local_chain",
         "def h():\n    try:\n        run()\n    except ValueError as exc:\n        a = f'x {exc}'\n        b: str = a\n        raise HTTPException(400, detail=b)\n",
     ),
+    (
+        "branch_overwrite_keeps_taint",
+        "def h(cond):\n    try:\n        run()\n    except ValueError as exc:\n        msg = str(exc)\n        if cond:\n            msg = 'Invalid request'\n        raise HTTPException(400, detail=msg)\n",
+    ),
     ("param_tainted_local", "def helper(exc):\n    msg = str(exc)\n    raise HTTPException(400, detail=msg)\n"),
     ("param_str", _param("HTTPException(400, detail=str(exc))")),
     ("param_fstring", _param('HTTPException(400, detail=f"bad {exc}")')),
@@ -90,6 +94,10 @@ _QUIET = [
     (
         "isinstance_local",
         "def h():\n    try:\n        run()\n    except ValueError as exc:\n        msg = isinstance(exc, KeyError)\n        raise HTTPException(400, detail=msg)\n",
+    ),
+    (
+        "safe_overwrite",
+        "def h(cond):\n    try:\n        run()\n    except ValueError as exc:\n        msg = str(exc)\n        msg = 'Invalid request'\n        raise HTTPException(400, detail=msg)\n",
     ),
     ("param_public_local", "def helper(exc):\n    msg = exc.public_detail\n    raise HTTPException(400, detail=msg)\n"),
     ("isinstance_test", _wrap("HTTPException(413 if isinstance(exc, KeyError) else 400, detail='x')")),
