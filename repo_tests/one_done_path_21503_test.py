@@ -13,7 +13,9 @@ What can still bypass it is code that skips ``transition_status``:
   services, and the service, which rebuilds it from ``transition_to_done``'s arguments), since a caller's own
   permissive gate is a way round the real one; and
 * a write of ``WorkItemStatus.DONE`` to a work item outside the two homes that may stamp it: the service
-  (``transition_to_done``'s stamp) and ``HandoffService.approve`` (a reviewer's decision, the review flow itself).
+  (``transition_to_done``'s stamp) and ``HandoffService.approve`` (a reviewer's decision, the review flow itself); and
+* a write of ``WorkItemStatus.IN_REVIEW`` outside those same two homes (the handoff's ``agent_to_human`` and the
+  service), since an item put in review with no reviewer named has nobody entitled to approve it (#21591).
 
 Boundary: a name is followed through ``import ... as`` and ``Alias = Name``; a write is an assignment (plain or
 annotated) of the member to ``.status``, a stamp helper given it, ``.values(status=...)`` or ``LLCWorkItem(status=...)``
@@ -107,10 +109,10 @@ def _calls_of(tree: ast.AST, symbol: str) -> list[ast.Call]:
     return found
 
 
-def _is_done(node: ast.AST, status_names: set[str]) -> bool:
+def _is_done(node: ast.AST, status_names: set[str], member: str = "DONE") -> bool:
     return (
         isinstance(node, ast.Attribute)
-        and node.attr == "DONE"
+        and node.attr == member
         and isinstance(node.value, (ast.Name, ast.Attribute))
         and (getattr(node.value, "id", None) in status_names or getattr(node.value, "attr", None) == "WorkItemStatus")
     )
@@ -126,8 +128,13 @@ def gate_constructions(source: str) -> list[int]:
     return sorted(c.lineno for c in _calls_of(parse_cache.parse(source), "DoneGate"))
 
 
-def done_writes(source: str) -> list[int]:
-    """Lines writing ``WorkItemStatus.DONE`` to a work item. The write shapes, and only these:
+def review_writes(source: str) -> list[int]:
+    """Lines writing ``WorkItemStatus.IN_REVIEW`` to a work item: the same write shapes as ``done_writes``."""
+    return done_writes(source, "IN_REVIEW")
+
+
+def done_writes(source: str, member: str = "DONE") -> list[int]:
+    """Lines writing ``WorkItemStatus.<member>`` (DONE unless told) to a work item. The write shapes, and only these:
 
     * ``x.status = DONE`` and ``x.status: T = DONE``;
     * a stamp helper (``stamp_status`` / ``stamp_and_release``) given it as an argument;
@@ -138,7 +145,7 @@ def done_writes(source: str) -> list[int]:
     """
     tree = parse_cache.parse(source)
     status_names = _bound(tree, "WorkItemStatus")
-    done = lambda n: _is_done(n, status_names)  # noqa: E731
+    done = lambda n: _is_done(n, status_names, member)  # noqa: E731
     found = []
     for node in ast.walk(tree):
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None and done(node.value):
@@ -257,7 +264,7 @@ def _production() -> list[tuple[str, str]]:
         if is_test_filename(base, include_js=False) or "/tests/" in f"/{rel}" or "test_support" in base:
             continue
         text = (_ROOT / rel).read_text(encoding="utf-8")
-        if "DONE" in text or "transition_to_done" in text or "DoneGate" in text:
+        if "DONE" in text or "IN_REVIEW" in text or "transition_to_done" in text or "DoneGate" in text:
             sources.append((rel, text))
     return sources
 
@@ -270,6 +277,47 @@ def test_nothing_outside_the_service_calls_the_done_transition() -> None:
 def test_nothing_outside_the_homes_writes_done_to_a_work_item() -> None:
     offenders = [f"{rel}:{n}" for rel, text in _production() if rel not in _WRITE_HOMES for n in done_writes(text)]
     assert not offenders, "a work item is finished by WorkItemService.transition_status: " + ", ".join(offenders)
+
+
+def test_nothing_outside_the_homes_writes_in_review_to_a_work_item() -> None:
+    offenders = [f"{rel}:{n}" for rel, text in _production() if rel not in _WRITE_HOMES for n in review_writes(text)]
+    assert not offenders, "review starts through HandoffService.agent_to_human or the service: " + ", ".join(offenders)
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("item.status = WorkItemStatus.IN_REVIEW", [1]),
+        ("item.status: WorkItemStatus = WorkItemStatus.IN_REVIEW", [1]),
+        ("from m import WorkItemStatus as S\nitem.status = S.IN_REVIEW", [2]),
+        ("await s.execute(update(LLCWorkItem).values(status=WorkItemStatus.IN_REVIEW))", [1]),
+        ("row = LLCWorkItem(title=t, status=WorkItemStatus.IN_REVIEW)", [1]),
+        ("item.status = WorkItemStatus.DONE", []),
+        ("item.status = new_status", []),
+        ("if item.status == WorkItemStatus.IN_REVIEW:\n    pass", []),
+        ("q = select(LLCWorkItem).filter_by(status=WorkItemStatus.IN_REVIEW)", []),
+        ("q = select(LLCWorkItem).where(LLCWorkItem.status == WorkItemStatus.IN_REVIEW)", []),
+    ],
+    ids=[
+        "assign",
+        "annotated-assign",
+        "aliased-enum",
+        "update-values",
+        "new-row",
+        "done-is-the-other-guard",
+        "variable",
+        "compare",
+        "filter-by-is-a-read",
+        "where-is-a-read",
+    ],
+)
+def test_control_a_write_of_in_review_is_seen(source: str, expected: list[int]) -> None:
+    assert review_writes(source) == expected
+
+
+def test_the_review_home_is_real() -> None:
+    """Control: the handoff still writes in-review itself, so its excuse cannot outlive the code."""
+    assert review_writes(dict(_production())[_HANDOFF])
 
 
 def test_nothing_outside_the_homes_builds_a_done_gate() -> None:
