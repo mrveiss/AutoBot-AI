@@ -111,7 +111,7 @@ def require_access(redis_client, kind: str, record_id: str, user: dict | None, l
 
 def visible_ids(redis_client, kind: str, raw_ids: Iterable, user: dict | None) -> list[str]:
     """The ids, decoded, that *user* may see: their own, or all of them for an administrator."""
-    ids = [decode_redis_value(raw) for raw in raw_ids]
+    ids = [rid for rid in (decode_redis_value(raw) for raw in raw_ids) if rid]
     if not ids:
         return []
     owners = redis_client.hmget(owners_key(kind), ids)
