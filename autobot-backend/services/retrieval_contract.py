@@ -32,6 +32,8 @@ RETRIEVAL_TECHNIQUES: Tuple[str, ...] = (
 )
 
 PROVENANCE_ATTR = "provenance"
+#: Attribute (not a field, not a metadata key) naming the leg a cache-served hit was produced by.
+CACHED_FROM_ATTR = "cached_from"
 
 BUCKET_DOCS = "docs"
 BUCKET_FACTS = "facts"
@@ -112,7 +114,7 @@ def build_provenance(hit: RankedResult) -> HitProvenance:
     """The provenance of *hit*: its source decides bucket and leg, its score fields the per-leg scores."""
     meta = hit.metadata or {}
     source = meta.get("source", "")
-    bucket, leg = _bucket_and_leg(source, meta.get("cached_from", ""))
+    bucket, leg = _bucket_and_leg(source, getattr(hit, CACHED_FROM_ATTR, ""))
     scores: Dict[str, float] = {
         "semantic": hit.semantic_score,
         "keyword": hit.keyword_score,
@@ -123,6 +125,11 @@ def build_provenance(hit: RankedResult) -> HitProvenance:
     final = hit.rerank_score if hit.rerank_score is not None else hit.hybrid_score
     origin = source if source in _CACHE_SOURCES else ""
     return HitProvenance(bucket=bucket, leg=leg, origin=origin, scores=scores, final_score=final)
+
+
+def stamp_cached_from(hit: RankedResult, source: str) -> None:
+    """Record on *hit* the source it had when cached; metadata and the cached form stay untouched."""
+    setattr(hit, CACHED_FROM_ATTR, source)
 
 
 def get_provenance(hit: RankedResult) -> HitProvenance | None:

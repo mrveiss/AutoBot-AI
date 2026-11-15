@@ -19,7 +19,7 @@ from autobot_shared.logging_manager import get_llm_logger
 from knowledge.search_filters import KbPrincipal
 from services.context_sufficiency import SufficiencyVerdict, get_context_sufficiency_evaluator
 from services.rag_visibility import RESULT_METADATA_KEY, cache_scope, filter_ranked
-from services.retrieval_contract import RetrievalPlan
+from services.retrieval_contract import RetrievalPlan, stamp_cached_from
 from services.semantic_query_cache import get_semantic_query_cache
 from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cache
 
@@ -54,7 +54,7 @@ class RAGCacheTiersMixin:
             results = [
                 RankedResult(
                     content=c.content,
-                    metadata={**c.metadata, "source": "topic_cache", "cached_from": c.metadata.get("source", "")},
+                    metadata={**c.metadata, "source": "topic_cache"},
                     semantic_score=c.score,
                     keyword_score=0.0,
                     hybrid_score=c.score,
@@ -63,6 +63,8 @@ class RAGCacheTiersMixin:
                 )
                 for i, c in enumerate(chunks)
             ]
+            for hit, chunk in zip(results, chunks):
+                stamp_cached_from(hit, chunk.metadata.get("source", ""))
             results = await self._visible(results, principal)
             if not results:
                 return None
@@ -109,7 +111,6 @@ class RAGCacheTiersMixin:
                 metadata={
                     **stored,
                     "source": "semantic_cache",
-                    "cached_from": stored.get("source", ""),  # the leg that produced it (#21606 provenance)
                     "model": hit.model,
                     "original_query": hit.original_query,
                     "similarity_score": hit.similarity_score,
@@ -120,6 +121,7 @@ class RAGCacheTiersMixin:
                 relevance_rank=1,
                 source_path="semantic_cache",
             )
+            stamp_cached_from(sr, stored.get("source", ""))
             if not await self._visible([sr], principal):
                 return None
             metrics = RAGMetrics()

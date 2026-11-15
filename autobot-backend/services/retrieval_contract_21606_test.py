@@ -215,15 +215,15 @@ async def test_the_order_is_docs_merge_then_stale_cut_then_the_cache_stores():
 
 @pytest.mark.asyncio
 async def test_a_docs_chunk_served_from_a_cache_tier_keeps_the_docs_bucket_and_names_the_tier():
-    from services.retrieval_contract import build_provenance
+    from services.retrieval_contract import build_provenance, stamp_cached_from
 
     for tier in ("topic_cache", "semantic_cache"):
         hit = _hit(tier)
-        hit.metadata["cached_from"] = "autobot_docs"
+        stamp_cached_from(hit, "autobot_docs")
         mark = build_provenance(hit)
         assert (mark.bucket, mark.leg, mark.origin) == ("docs", "docs", tier)
     fact = _hit("topic_cache")
-    fact.metadata["cached_from"] = "unknown_leg"
+    stamp_cached_from(fact, "unknown_leg")
     assert (build_provenance(fact).bucket, build_provenance(fact).leg) == ("facts", "hybrid")
 
 
@@ -249,3 +249,25 @@ async def test_the_real_cache_tier_check_reads_tiers_0_and_2_only_when_shared(sh
     assert sem.await_count == (1 if shared else 0)
     assert topic.await_count == (1 if shared else 0)
     assert (got is not None) == shared  # a warm tier 0 is served only to a plan that includes docs
+
+
+@pytest.mark.asyncio
+async def test_a_cache_served_hit_has_the_same_metadata_as_a_cold_hit():
+    from knowledge.search_filters import SYSTEM_SCOPE as scope_
+    from services.retrieval_contract import CACHED_FROM_ATTR
+    from services.topic_retrieval_cache import CachedChunk
+
+    cold_meta = {"source": "autobot_docs", "file_path": "a.md"}
+    chunk = CachedChunk(content="c", metadata=dict(cold_meta), score=0.7)
+    topic_cache = MagicMock()
+    topic_cache.lookup = AsyncMock(return_value=[chunk])
+    facts = MagicMock(_generate_embedding_with_npu_fallback=AsyncMock(return_value=[0.1]))
+    with (
+        patch.multiple(RAGService, _visible=AsyncMock(side_effect=lambda r, p: r)),
+        patch("services.rag_cache_tiers.get_topic_retrieval_cache", AsyncMock(return_value=topic_cache)),
+        patch.dict("sys.modules", {"knowledge.facts": facts}),
+    ):
+        hits, _ = await _service()._check_topic_cache("q", scope_, SCOPE)
+    assert hits[0].metadata == {**cold_meta, "source": "topic_cache"}  # exactly main's tier-2 metadata
+    assert "cached_from" not in hits[0].metadata and getattr(hits[0], CACHED_FROM_ATTR) == "autobot_docs"
+    assert chunk.metadata == cold_meta  # what the cache holds is untouched
