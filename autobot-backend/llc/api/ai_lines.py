@@ -35,7 +35,7 @@ from services.ai_line_change_proposal import propose_line_change
 from services.ai_line_view import describe_lines
 from user_management.services import TenantContext
 
-from ._common import actor_id
+from ._common import actor_id, http_refusal
 
 router = APIRouter(prefix="/ai-lines", tags=["llc-ai-lines"])
 register_ai_line_change_action()  # the handler exists before any approval can name it
@@ -118,7 +118,7 @@ async def propose_my_change(
     try:
         key = normalise_key(payload.action_key)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise http_refusal(422, exc, scope="ai_lines.propose_my_change") from None
     approval = await propose_line_change(
         scope=LineScope(SCOPE_USER, user), key=key, line=payload.line, requested_by=str(user), reason=payload.reason
     )
@@ -149,7 +149,7 @@ async def propose_change(
     try:
         key = normalise_key(payload.action_key)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise http_refusal(422, exc, scope="ai_lines.propose_change") from None
     approval = await propose_line_change(
         scope=LineScope(SCOPE_COMPANY, company_id),
         key=key,

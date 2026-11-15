@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from llc.deps import log_unexpected
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
@@ -238,10 +239,8 @@ async def get_agent_diary(
 
         diary = AgentDiaryService()
         entries = await diary.read(agent_name=agent_id, last_n=limit + offset)
-    except Exception:
-        import logging
-
-        logging.getLogger(__name__).warning("get_agent_diary: KB read failed for agent_id=%s", agent_id, exc_info=True)
+    except Exception as exc:
+        log_unexpected(logger, f"runs.get_agent_diary {agent_id}", exc)
         return []
 
     if date_from or date_to:

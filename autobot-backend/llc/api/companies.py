@@ -43,16 +43,11 @@ from api.user_management.dependencies import (
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
+from llc.api._common import http_refusal
 from llc.api.company_member_schemas import CompanyMembersResponse
-from llc.deps import assert_company_access, get_session, logged_server_error, service_dep
+from llc.deps import assert_company_access, get_session, log_unexpected, logged_server_error, service_dep
 from llc.kb.collections import KbCollectionManager, company_id_of
-from llc.models.company import (
-    CompanyAncestor,
-    CompanyCreate,
-    CompanyRead,
-    CompanyTreeNode,
-    CompanyUpdate,
-)
+from llc.models.company import CompanyAncestor, CompanyCreate, CompanyRead, CompanyTreeNode, CompanyUpdate
 from llc.models.enums import (
     AssigneeType,
     ExternalPMType,
@@ -75,9 +70,7 @@ from llc.services.company import (
 )
 from llc.services.company_move_lock import CompanyMoveContendedError
 from llc.services.member_standing import member_people, person_is_active, viewer_standing
-from llc.services.membership_service import (
-    MembershipService,
-)
+from llc.services.membership_service import MembershipService
 from llc.services.org_chart_placement import apply_reporting_lines, assemble_forest
 from llc.services.org_chart_rows import assigned_counts_by_agent, latest_runs_by_agent
 from llc.services.portability import PortabilityService
@@ -350,7 +343,7 @@ async def activate_company(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.activate_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -380,7 +373,7 @@ async def suspend_company(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.suspend_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -411,7 +404,7 @@ async def offboard_company(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.offboard_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -440,7 +433,7 @@ async def archive_company(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.archive_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -644,7 +637,7 @@ async def test_pm_config(
         health = await _test_pm_connectivity(pm_type, pm_config)
     except Exception as exc:
         # #17300: str(exc) to the caller leaked the decrypted pm_config URL and its credentials.
-        logger.warning("PM connectivity test failed for %s: %s", pm_type, exc, exc_info=True)
+        log_unexpected(logger, f"companies.test_pm_config {pm_type}", exc)
         return {"ok": False, "error": "Connectivity test failed; see server logs"}
     return {"ok": health.get("ok", False), "details": health}
 
