@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from llc.models.api_key import LLCApiKey
 from llc.services.api_key import ApiKeyService
 from user_management.database import get_async_session
@@ -92,7 +93,7 @@ async def revoke_api_key(
     try:
         await _svc.revoke_key(session, agent_id=agent_id, key_id=key_id, company_id=str(ctx.org_id))
     except KeyError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error") from exc
 
 

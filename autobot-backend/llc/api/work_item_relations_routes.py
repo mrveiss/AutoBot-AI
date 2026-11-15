@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.singleton_factory import lazy_singleton
 from llc.deps import get_session, service_dep
 from user_management.services import TenantContext
@@ -108,10 +109,10 @@ async def add_relation(
         )
         await session.commit()
     except RelationConflict as exc:
-        logger.info("Relation conflict on %s: %s", work_item_id, exc)
+        logger.info("Relation conflict on %s: %s", work_item_id, safe_log_text(repr(exc)))
         raise HTTPException(status_code=409, detail="Relation already exists or is invalid")
     except ValueError as exc:
-        logger.info("Relation add rejected on %s: %s", work_item_id, exc)
+        logger.info("Relation add rejected on %s: %s", work_item_id, safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
     return {
         "id": str(rel.id),
@@ -141,5 +142,5 @@ async def remove_relation(
         )
         await session.commit()
     except ValueError as exc:
-        logger.info("Relation remove rejected on %s: %s", work_item_id, exc)
+        logger.info("Relation remove rejected on %s: %s", work_item_id, safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail=_REL_NOT_FOUND)

@@ -20,9 +20,11 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value, delete_if_value
 
+from ..exceptions import PublicMessageMixin
 from ..models.enums import AssigneeType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
 from .after_commit import defer_until_commit
+from .company_os.errors import CompanyOsError
 
 logger = get_logger(__name__)
 
@@ -45,12 +47,16 @@ def _past_its_reviewer(item: LLCWorkItem, acting_user: uuid.UUID, new_status: Op
     )
 
 
-class InvalidTransition(Exception):
+class InvalidTransition(PublicMessageMixin, Exception):
     """Raised when a status transition is not permitted."""
 
 
-class CheckoutConflict(Exception):
-    """Raised when a work item is held by someone else: another agent, or a person (#20521)."""
+class CheckoutConflict(PublicMessageMixin, Exception):
+    """Raised when a work item is held by someone else: another agent, or a person (#20521).
+
+    Public: the holder is a member or agent of the company the caller is already authorised for, and
+    telling the caller who holds the item is the route's contract.
+    """
 
 
 def refuse_past_reviewer(item: LLCWorkItem, acting_user: Optional[uuid.UUID], new_status: WorkItemStatus) -> None:
@@ -128,7 +134,7 @@ def refuse_release(item: LLCWorkItem, agent_id: str, run_id: Optional[str] = Non
             f"Work item {item.id} is held by user {item.assignee_user_id}; an agent cannot release it"
         )
     if item.assignee_agent_id and str(item.assignee_agent_id) != agent_id:
-        raise ValueError(f"Agent {agent_id} does not hold checkout for work item {item.id}")
+        raise CompanyOsError(f"Agent {agent_id} does not hold checkout for work item {item.id}")
     if run_id is not None and run_id != item.checkout_run_id:
         raise CheckoutConflict(f"Work item {item.id} is not checked out in run {run_id!r}; it was not released")
 
