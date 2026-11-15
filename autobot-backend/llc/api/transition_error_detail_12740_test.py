@@ -140,6 +140,7 @@ _ROUTE_REFUSALS = [
     ("work_items.py", "get_handoff_brief", "ValueError", 404),
     ("agent_api.py", "update_work_item_status", "InvalidTransition", 409),
     ("agent_api.py", "update_work_item_status", "ValueError", 404),
+    ("agent_api.py", "agent_upload_attachment", "AttachmentTooLarge", 413),
 ]
 
 
@@ -151,13 +152,16 @@ def test_every_refusal_route_answers_its_true_code_through_the_shared_helper(mod
         assert _raises_status(h) == code, f"{module}:{route} {exc_name}: expected an http_refusal {code}"
 
 
-@pytest.mark.parametrize("exc_name", ["HandoffNotAuthorized", "HandoffNotAllowed", "CompanyOsError"])
+@pytest.mark.parametrize(
+    "exc_name", ["HandoffNotAuthorized", "HandoffNotAllowed", "CompanyOsError", "AttachmentTooLarge"]
+)
 def test_the_handoff_refusals_are_public_so_the_caller_sees_the_reason(exc_name):
     assert _is_public(exc_name), f"{exc_name} answers a fixed text, not its reason, unless it is a PublicMessageMixin"
 
 
-def test_no_work_item_route_answers_internal_server_error_for_a_refusal():
+@pytest.mark.parametrize("module", ["work_items.py", "agent_api.py"])
+def test_no_work_item_route_answers_internal_server_error_for_a_refusal(module):
     """The text is never a refusal's answer: a refused or missing item is a 4xx with a stated reason (#21587)."""
-    tree = ast.parse((_API / "work_items.py").read_text(encoding="utf-8"))
+    tree = ast.parse((_API / module).read_text(encoding="utf-8"))
     offenders = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Constant) and n.value == "Internal server error"]
-    assert not offenders, f"work_items.py still answers 'Internal server error' at lines {offenders}"
+    assert not offenders, f"{module} still answers 'Internal server error' at lines {offenders}"
