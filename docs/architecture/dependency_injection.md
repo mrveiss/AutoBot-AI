@@ -204,11 +204,11 @@ python test_dependency_injection_demo.py
 ### 1. Basic Dependency Injection
 
 ```python
-from src.config import global_config_manager
+from src.config import config_manager
 from src.orchestrator import Orchestrator
 
 # Create orchestrator with specific config
-orchestrator = Orchestrator(config_manager=global_config_manager)
+orchestrator = Orchestrator(config_manager=config_manager)
 ```
 
 ### 2. Full Dependency Chain
@@ -334,9 +334,9 @@ orchestrator = Orchestrator()  # Still works exactly the same
 ### After (Option 2 - Explicit Dependency Injection)
 ```python
 from src.orchestrator import Orchestrator
-from src.config import global_config_manager
+from src.config import config_manager
 
-orchestrator = Orchestrator(config_manager=global_config_manager)
+orchestrator = Orchestrator(config_manager=config_manager)
 ```
 
 ### After (Option 3 - FastAPI Endpoints)

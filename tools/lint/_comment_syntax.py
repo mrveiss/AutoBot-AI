@@ -43,6 +43,8 @@ behaviour matches what the seven call sites already relied on.
 
 from __future__ import annotations
 
+import re
+from bisect import bisect_left
 from pathlib import Path
 from typing import Iterable, Iterator, NamedTuple, Sequence
 
@@ -58,6 +60,8 @@ _MARKERS: dict[str, tuple[str, ...]] = {
     ".cfg": ("#",),
     ".ini": ("#",),
     ".ts": ("//",),
+    ".mts": ("//",),
+    ".cts": ("//",),
     ".js": ("//",),
     ".mjs": ("//",),
     ".cjs": ("//",),
@@ -80,7 +84,7 @@ _BACKSLASH_ESCAPES = frozenset({".sh", ".bash", ""})
 #: the very line it guards. The anchor was a heuristic; quote tracking is the
 #: actual answer, since a `/*` inside a string literal is data in every case the
 #: heuristic was approximating.
-_BLOCK_COMMENTS = frozenset({".ts", ".js", ".mjs", ".cjs", ".vue", ".json5"})
+_BLOCK_COMMENTS = frozenset({".ts", ".mts", ".cts", ".js", ".mjs", ".cjs", ".vue", ".json5"})
 
 
 class CodeLine(NamedTuple):
@@ -126,50 +130,178 @@ def strip_trailing_comment(line: str, markers: Sequence[str], *, escapes: bool =
     return line
 
 
-def strip_block_comments(text: str) -> str:
+#: A `/` after one of these (or after nothing, or a newline) begins a regex literal, not a division. `<` and `>`
+#: are left out: `</tag>` and `<br/>` are everywhere in `.vue`, `a < /re/` is not (`=>` is handled apart, as are
+#: `++`/`--` and a postfix `!`). `of` and `in` are left out of the words: `of` is an ordinary identifier, and a regex
+#: literal is neither iterable nor a sensible right operand of `in`.
+_REGEX_AFTER = frozenset("(,=:[!&|?{};+-*%~^")
+_REGEX_AFTER_WORDS = frozenset({"return", "typeof", "case", "void", "delete", "throw"})
+_TRAILING_WORD = re.compile(r"[A-Za-z0-9_$]+$")
+
+
+def _ends_with_regex_word(before: str) -> bool:
+    """Whether *before* ends in a keyword after which an expression, and so a regex, may start."""
+    word = _TRAILING_WORD.search(before)
+    return word is not None and word.group() in _REGEX_AFTER_WORDS
+
+
+def _prefix_position(prior: str) -> bool:
+    """Whether a `!` that follows *prior* negates (so a regex may follow it) rather than asserts non-null (`x!`)."""
+    if not prior or prior[-1] not in ")]" and _TRAILING_WORD.search(prior) is None:
+        return True
+    return _ends_with_regex_word(prior)
+
+
+class _BlockScan:
+    """Position and string/comment state of one `strip_block_comments` pass; each method consumes one construct."""
+
+    def __init__(self, text: str, line_comments: bool) -> None:
+        self.text = text
+        self.line_comments = line_comments
+        self.out: list[str] = []
+        self.recent = ""  # the last few emitted characters, runs of blanks collapsed to one
+        self.size = 0  # characters emitted so far
+        self.cuts: list[int] = []  # output offsets where a `//` comment starts: the one source for "where it begins"
+        self.quote: str | None = None
+        self.in_block = False
+        self.i = 0
+
+    def run(self) -> str:
+        while self.i < len(self.text):
+            if self.in_block:
+                self._in_block()
+            elif self.quote is not None:
+                self._in_string()
+            else:
+                self._in_code()
+        return "".join(self.out)
+
+    def _emit(self, piece: str) -> None:
+        self.out.append(piece)
+        self.size += len(piece)
+        if piece.strip(" \t"):
+            self.recent = (self.recent + piece)[-16:]
+        elif not self.recent.endswith(" "):
+            self.recent += " "
+
+    def _in_block(self) -> None:
+        """Inside `/* ... */`: blank everything but newlines, leave at the closing `*/`."""
+        if self.text.startswith("*/", self.i):
+            self.in_block = False
+            self.i += 2
+            return
+        self._emit("\n" if self.text[self.i] == "\n" else " ")
+        self.i += 1
+
+    def _in_string(self) -> None:
+        """Inside a string literal: keep it, honour a backslash escape, leave at the matching quote."""
+        char = self.text[self.i]
+        if char == "\\":
+            self._emit(self.text[self.i : self.i + 2])
+            self.i += 2
+            return
+        if char == self.quote:
+            self.quote = None
+        self._emit(char)
+        self.i += 1
+
+    def _in_code(self) -> None:
+        """Outside any string or block: open a string, a block, step over a `//` comment or a regex; else keep."""
+        char = self.text[self.i]
+        if char in ("'", '"', "`"):
+            self.quote = char
+        elif self.text.startswith("/*", self.i):
+            self.in_block = True
+            self.i += 2
+            return
+        elif self.line_comments and self.text.startswith("//", self.i):
+            self.cuts.append(self.size)
+            self._keep_to(self._line_end())
+            return
+        elif self.line_comments and char == "/" and self._regex_allowed() and self._regex_end():
+            self._keep_to(self._regex_end())
+            return
+        self._emit(char)
+        self.i += 1
+
+    def _keep_to(self, end: int) -> None:
+        self._emit(self.text[self.i : end])
+        self.i = end
+
+    def _line_end(self) -> int:
+        end = self.text.find("\n", self.i)
+        return len(self.text) if end < 0 else end
+
+    def _regex_allowed(self) -> bool:
+        """Whether a `/` here opens a regex literal: at a line start, or after an operator or a keyword."""
+        before = self.recent.rstrip(" \t")
+        if before[-2:] in ("++", "--"):
+            return False  # a postfix increment ends an operand, so the slash divides
+        if before[-2:] == "=>":
+            return True  # an arrow function's body
+        if before[-1:] == "!":
+            return _prefix_position(before[:-1].rstrip(" \t"))
+        if not before or before[-1] == "\n" or before[-1] in _REGEX_AFTER:
+            return True
+        return _ends_with_regex_word(before)
+
+    def _regex_end(self) -> int:
+        """Index after the closing `/` of the regex literal opening here, 0 when there is none to accept.
+
+        0 when it does not close on this line, or when the close is followed by `/` or `*`: that is a division
+        whose operand is followed by a comment opener, and the comment rules must see it.
+        """
+        in_class, j = False, self.i + 1
+        while j < len(self.text) and self.text[j] != "\n":
+            char = self.text[j]
+            if char == "\\":
+                j += 1
+            elif char == "[":
+                in_class = True
+            elif char == "]":
+                in_class = False
+            elif char == "/" and not in_class:
+                return 0 if self.text[j + 1 : j + 2] in ("/", "*") else j + 1
+            j += 1
+        return 0
+
+
+def strip_block_comments(text: str, *, line_comments: bool = False) -> str:
     """*text* with `/* ... */` runs removed, respecting string literals.
 
     Quote-aware for the reason above: the construct that broke the heuristic
     was a glob pattern inside quotes, and tracking quotes answers that exactly
     rather than approximately. Newlines inside a removed run are preserved, so
     line numbers downstream still refer to the original file.
+
+    `line_comments` makes the scan step over a `//` comment (outside a string)
+    to the end of the line, keeping its text. Without it an apostrophe or `/*`
+    in prose after `//` is read as code -- a `worker's` opens a "string" that
+    swallows every later `/**/` glob in the file (#21509). Opt-in because CSS,
+    the other direct caller, has no `//` comments.
     """
-    out: list[str] = []
-    quote: str | None = None
-    in_block = False
-    i = 0
-    while i < len(text):
-        char = text[i]
-        if in_block:
-            if text.startswith("*/", i):
-                in_block = False
-                i += 2
-                continue
-            out.append("\n" if char == "\n" else " ")
-            i += 1
-            continue
-        if quote is not None:
-            if char == "\\":
-                out.append(text[i : i + 2])
-                i += 2
-                continue
-            if char == quote:
-                quote = None
-            out.append(char)
-            i += 1
-            continue
-        if char in ("'", '"', "`"):
-            quote = char
-            out.append(char)
-            i += 1
-            continue
-        if text.startswith("/*", i):
-            in_block = True
-            i += 2
-            continue
-        out.append(char)
-        i += 1
-    return "".join(out)
+    return _BlockScan(text, line_comments).run()
+
+
+def _scan_block_syntax(text: str, suffix: str) -> tuple[str, list[int] | None]:
+    """*text* with block comments blanked, and the offsets where `//` comments start; `None` for other syntaxes."""
+    if suffix not in _BLOCK_COMMENTS:
+        return text, None
+    scan = _BlockScan(text, True)
+    return scan.run(), scan.cuts
+
+
+def _cut_comment(raw: str, start: int, cuts: list[int]) -> str:
+    """*raw* (the line that begins at output offset *start*) up to the `//` comment the scanner found in it.
+
+    The scanner has already walked strings, templates, regex literals and block comments, so its offsets are the
+    only answer to "where does a trailing comment begin" on this path; a quote-only re-scan of the line would
+    disagree on a `//` inside a regex class.
+    """
+    index = bisect_left(cuts, start)
+    if index < len(cuts) and cuts[index] < start + len(raw):
+        return raw[: cuts[index] - start]
+    return raw
 
 
 def code_lines(
@@ -190,27 +322,43 @@ def code_lines(
     first physical line of it -- the redirect and the `|| true` can sit two
     lines below the thing the guard matched on.
     """
-    if isinstance(source, Path):
-        name = name or source
-        text = source.read_text(encoding="utf-8")
-    else:
-        text = source
+    text, name = _read(source, name)
     markers = markers_for(name) if name is not None else _DEFAULT_MARKERS
     suffix = Path(name).suffix if name is not None else ""
-    escapes = suffix in _BACKSLASH_ESCAPES
-    if suffix in _BLOCK_COMMENTS:
-        text = strip_block_comments(text)
+    text, cuts = _scan_block_syntax(text, suffix)
+    trailing = (cuts, markers, suffix in _BACKSLASH_ESCAPES) if strip_trailing else None
+    kept = _code_lines_of(text, markers, trailing)
+    return _join_continuations(kept) if join_continuations else kept
 
+
+def _read(source: str | Path, name: str | Path | None) -> tuple[str, str | Path | None]:
+    """``(text, name)`` of *source*: a `Path` is read and names itself, a string is the text."""
+    if isinstance(source, Path):
+        return source.read_text(encoding="utf-8"), name or source
+    return source, name
+
+
+def _code_lines_of(text: str, markers: Sequence[str], trailing: tuple | None) -> list[CodeLine]:
+    """The lines of *text* that do not start with a comment marker, each cut at its trailing comment if *trailing*.
+
+    *trailing* is ``(scanner cuts or None, markers, backslash escapes)``; the scanner's cuts decide where a `//`
+    comment starts on the block-comment suffixes, `strip_trailing_comment` everywhere else.
+    """
     kept: list[CodeLine] = []
-    for lineno, raw in enumerate(text.splitlines(), 1):
-        stripped = raw.lstrip()
-        if any(stripped.startswith(marker) for marker in markers):
+    offset = 0
+    for lineno, (raw, whole) in enumerate(zip(text.splitlines(), text.splitlines(True)), 1):
+        start, offset = offset, offset + len(whole)
+        if any(raw.lstrip().startswith(marker) for marker in markers):
             continue
-        kept.append(CodeLine(lineno, strip_trailing_comment(raw, markers, escapes=escapes) if strip_trailing else raw))
-
-    if join_continuations:
-        kept = _join_continuations(kept)
+        kept.append(CodeLine(lineno, _cut_trailing(raw, start, trailing) if trailing else raw))
     return kept
+
+
+def _cut_trailing(raw: str, start: int, trailing: tuple) -> str:
+    cuts, markers, escapes = trailing
+    if cuts is None:
+        return strip_trailing_comment(raw, markers, escapes=escapes)
+    return _cut_comment(raw, start, cuts)
 
 
 def _join_continuations(lines: Iterable[CodeLine]) -> list[CodeLine]:

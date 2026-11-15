@@ -23,11 +23,8 @@ nothing about a fresh import.
 from __future__ import annotations
 
 import subprocess
-import sys
-from pathlib import Path
 
-_BACKEND_DIR = Path(__file__).parents[2]
-_WORKTREE_ROOT = _BACKEND_DIR.parent
+from tests.helpers._fresh_interpreter import run_fresh
 
 # Every concrete connector's real module -- if package import stays lazy,
 # none of these may appear in sys.modules after importing credential_store.
@@ -50,14 +47,7 @@ _CONCRETE_CONNECTOR_MODULES = (
 
 
 def _run(script: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=str(_BACKEND_DIR),
-        capture_output=True,
-        text=True,
-        env={"PYTHONPATH": f"{_WORKTREE_ROOT}{__import__('os').pathsep}{_BACKEND_DIR}"},
-        timeout=60,
-    )
+    return run_fresh(script, timeout=60, inherit_env=False)
 
 
 def test_importing_credential_store_pulls_in_no_concrete_connector() -> None:

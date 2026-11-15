@@ -95,7 +95,7 @@ MODULES_REACH = declare(
     "unconnected-code-modules",
     discover=_module_files,
     # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=2870,  # mid-window: population 3020, window (2720, 3020)
+    floor=2992,  # mid-window: population 3142, window (2842, 3142)
     what="non-test python modules of autobot-backend, autobot-slm-backend and autobot_shared that could have a caller",
     roots=modules.BACKEND_ROOTS,
     growth=300,

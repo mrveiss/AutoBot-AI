@@ -76,7 +76,7 @@ watch(isPaired, (paired) => {
         <p class="text-red-600 text-sm text-center">{{ error }}</p>
         <button
           type="button"
-          class="px-4 py-2 bg-autobot-primary text-white rounded-md text-sm hover:opacity-90 transition-opacity"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-md text-sm hover:opacity-90 transition-opacity"
           @click="fetchChallenge()"
         >
           {{ $t('mobile.pairing.retry') }}
@@ -122,7 +122,7 @@ watch(isPaired, (paired) => {
         <div v-if="isExpired" class="flex justify-center">
           <button
             type="button"
-            class="inline-flex items-center gap-2 px-6 py-2 bg-autobot-primary text-white rounded-md text-sm hover:opacity-90 transition-opacity"
+            class="inline-flex items-center gap-2 px-6 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-md text-sm hover:opacity-90 transition-opacity"
             @click="fetchChallenge()"
           >
             <Icon name="sync" />

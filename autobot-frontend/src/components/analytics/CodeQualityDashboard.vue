@@ -603,8 +603,8 @@ const {
     wsConnected.value = true;
     logger.debug('WebSocket connected');
   },
-  onClose: () => {
-    wsConnected.value = false;
+  onClose: (_event, info) => {
+    if (info.current) wsConnected.value = false;
     logger.debug('WebSocket disconnected');
   },
   onError: (error) => {

@@ -550,6 +550,10 @@ python:
   - 'docs/developer/DEVELOPER_SETUP.md'
   - 'docs/developer/HARDCODING_PREVENTION.md'
   - 'docs/guides/chat-ollama-configuration.md'
+  # #21468: the data files beside the guards -- baselines, frozen re-measure lists, fixtures -- are read by
+  # repo_tests guards but match no `**/*.py`; an edit confined to one skipped the guard that reads it.
+  # repo_tests/python_filter_covers_repo_tests_data_21468_test.py fails on any tracked one this misses.
+  - 'repo_tests/**'
 
 
 # Retired with #18208: these workflow files no longer exist (their gates are `_gate-*.yml` bodies called by

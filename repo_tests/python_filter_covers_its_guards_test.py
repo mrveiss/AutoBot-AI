@@ -143,6 +143,39 @@ def _filter_patterns() -> list[str]:
     return [str(pattern) for pattern in document["python"]]
 
 
+#: One glob token, tried in this order: a `**/` that opens a segment (zero or more directories), a
+#: trailing `/**` (the subtree and the directory itself), a pattern that is only `**`, any other
+#: `**` (inside a segment, so it is a plain `*`), then `*` and `?`.
+_GLOB_TOKEN = re.compile(
+    r"(?P<lead>(?<![^/])\*\*/)|(?P<tail>/\*\*\Z)|(?P<whole>\A\*\*\Z)|(?P<mid>\*\*)|(?P<star>\*)|(?P<one>\?)"
+)
+_GLOB_REGEX = {
+    "lead": "(?:.*/)?",
+    "tail": "(?:/.*)?",
+    "whole": ".*",
+    "mid": "[^/]*",
+    "star": "[^/]*",
+    "one": "[^/]",
+}
+
+
+def _double_star_regex(pattern: str) -> re.Pattern[str]:
+    """The regex for a pattern containing `**`, with `*` and `?` confined to one segment.
+
+    Only a trailing `/**` covers a whole subtree, and `**/` spans zero or more directories; a `*`
+    after either is still a single-segment `*`, so `**/requirements*.txt` does not cover
+    `a/b/requirements/c.txt` (#21555). Every other character is literal. Dot-files match like any
+    other name: agreement with the CI action's dot default is not established from the repository.
+    """
+    out, last = [], 0
+    for token in _GLOB_TOKEN.finditer(pattern):
+        out.append(re.escape(pattern[last : token.start()]))
+        out.append(_GLOB_REGEX[token.lastgroup])
+        last = token.end()
+    out.append(re.escape(pattern[last:]))
+    return re.compile("".join(out))
+
+
 def _is_covered(path: str, patterns: list[str]) -> bool:
     """Whether the filter runs the suite for a change to *path*.
 
@@ -157,17 +190,14 @@ def _is_covered(path: str, patterns: list[str]) -> bool:
     for pattern in patterns:
         if pattern == path:
             return True
-        head, sep, tail = pattern.partition("/**")
-        if sep and (path == head or path.startswith(f"{head}/")):
-            return True
+        if "**" in pattern:
+            if _double_star_regex(pattern).fullmatch(path):
+                return True
+            continue
         # A pattern with no `**` is single-segment per `*`, as in the real filter: `docs/*.md`
         # must not "cover" `docs/a/b.md` just because fnmatch's `*` crosses `/` (#17930).
-        if "**" not in pattern and path.count("/") != pattern.count("/"):
-            continue
-        if fnmatch.fnmatch(path, pattern.replace("**/", "*/").replace("**", "*")):
+        if path.count("/") == pattern.count("/") and fnmatch.fnmatch(path, pattern):
             return True
-        if pattern.startswith("**/") and fnmatch.fnmatch(path, pattern[3:].replace("**", "*")):
-            return True  # the real filter's `**/` also matches zero directories (#19817)
     return False
 
 
@@ -175,6 +205,17 @@ def test_a_leading_double_star_covers_the_repository_root_too() -> None:
     assert _is_covered("Dockerfile.x", ["**/Dockerfile*"])
     assert _is_covered("docker/slm/Dockerfile", ["**/Dockerfile*"])
     assert not _is_covered("notes/Dockerfile.md", ["**/*.Dockerfile"])
+
+
+def test_a_remainder_after_a_double_star_is_matched_not_skipped() -> None:
+    suffixed = ["repo_tests/**/*.json"]
+    assert _is_covered("repo_tests/fixtures/a.json", suffixed)
+    assert _is_covered("repo_tests/a.json", suffixed)
+    assert not _is_covered("repo_tests/fixtures/a.txt", suffixed)
+    assert not _is_covered("repo_tests/a.txt", suffixed)
+    assert not _is_covered("repo_tests/dir.json/a.txt", suffixed)
+    assert _is_covered("repo_tests/fixtures/a.txt", ["repo_tests/**"])
+    assert _is_covered("repo_tests/a.json", ["repo_tests/**"])
 
 
 def _record(candidate: str, guard: str, patterns: list[str], reads: dict[str, set[str]]) -> None:
@@ -470,7 +511,7 @@ def test_a_composition_off_an_unknown_base_is_collected_then_dropped() -> None:
     assert "docker/with-secrets.sh" in collected, "composition off any base must be collected"
 
     reads: dict[str, set[str]] = {}
-    _record("nonexistent-tree-xyz/made-up.sh", "fixture.py", reads, _filter_patterns())
+    _record("nonexistent-tree-xyz/made-up.sh", "fixture.py", _filter_patterns(), reads)
     assert not reads, "a candidate that is not a real path must be dropped, not reported"
 
 

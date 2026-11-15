@@ -20,7 +20,7 @@ from __future__ import annotations
 
 KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/a2a/a2a_test.py": 713,
-    "autobot-backend/advanced_rag_optimizer.py": 1091,
+    "autobot-backend/advanced_rag_optimizer.py": 1087,
     "autobot-backend/agent_loop/loop.py": 2046,
     "autobot-backend/agent_loop/types.py": 669,
     "autobot-backend/agents/agent_orchestration/distributed_management.py": 649,
@@ -104,7 +104,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_mcp.py": 1440,
     "autobot-backend/api/knowledge_population.py": 1238,
     "autobot-backend/api/knowledge_search.py": 808,  # #16665: analytics endpoints moved out
-    "autobot-backend/api/knowledge_search_aggregator.py": 950,  # #16665: doc-search moved out
+    "autobot-backend/api/knowledge_search_aggregator.py": 900,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
     "autobot-backend/api/knowledge_vectorization.py": 1690,
     "autobot-backend/api/knowledge_vectorization_test.py": 601,
@@ -125,7 +125,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_analytics.py": 3533,
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3257,
-    "autobot-backend/api/schemas_knowledge.py": 5113,
+    "autobot-backend/api/schemas_knowledge.py": 5108,
     "autobot-backend/api/schemas_system.py": 4117,  # #18734 -> 4176; #17731 -> 4175; #21136 -> 4117
     "autobot-backend/api/schemas_workflows.py": 2823,
     "autobot-backend/api/secrets.py": 1137,  # #20557 (was 1145); #19476; vault writes: secrets_system_vault.py; #21204
@@ -412,7 +412,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/api/code_source.py": 701,
-    "autobot-slm-backend/api/code_sync.py": 5769,  # #19352, #19367, #20743 (was 5779)
+    "autobot-slm-backend/api/code_sync.py": 5763,  # #19352, #19367, #20743, #21334 (was 5779)
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 722,
     "autobot-slm-backend/api/monitoring.py": 1087,

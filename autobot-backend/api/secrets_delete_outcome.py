@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, status
 
 from autobot_shared.logging_manager import get_logger
 from services.audit_logger import AuditResult
@@ -55,6 +55,46 @@ def outcome_for(exc: BaseException) -> tuple[AuditResult, str]:
     return "failed", type(exc).__name__
 
 
+#: The HTTP error each recorded reason implies: (status, fixed body). The texts carry no exception message, secret
+#: id, owner reference, name or value, and the 403 text says "refused" without revealing whether the secret exists
+#: or who owns it. Keyed by the reason ``outcome_for`` returns, so the record and the response are read from one
+#: classification and cannot drift (#21539). The one table for every secret delete route AND the envelope
+#: routes' ``_mapped`` (#21559); its 403 text follows the wording of ``api/secrets.py``'s create refusal.
+_ERROR_FOR_REASON: dict[str, tuple[int, str]] = {
+    "not_found": (status.HTTP_404_NOT_FOUND, "Secret not found"),
+    "permission_denied": (status.HTTP_403_FORBIDDEN, "Not permitted to access this secret"),
+}
+
+
+def error_for(exc: BaseException) -> HTTPException | None:
+    """The HTTP error a non-HTTP secret failure is answered with, or None to keep the caller's behaviour.
+
+    Not found is 404 and permission denied is 403, the status the audit record of the same failure implies.
+    An ``HTTPException`` already carries its status, so it is never rewritten here.
+    """
+    if isinstance(exc, HTTPException):
+        return None
+    mapped = _ERROR_FOR_REASON.get(outcome_for(exc)[1])
+    if mapped is None:
+        return None
+    return HTTPException(status_code=mapped[0], detail=mapped[1])
+
+
+def fixed_secret_error_for(exc: BaseException) -> HTTPException | None:
+    """The fixed-text 403 / 404 for a refused or missing secret on an envelope route, or None (#21559).
+
+    The answer is :func:`error_for`'s, never ``str(exc)``: the message carries the caller-supplied secret id,
+    the owner reference and, on a dependency route, free text. The log line carries the exception CLASS and the
+    audit REASON only: the message text is not logged, because it holds an id that cannot be isolated to hash
+    with ``secret_log_ref`` and a CR/LF-bearing string (``REDACTION_BOUNDARY.md``). The audit record is written
+    by the route, unchanged.
+    """
+    known = error_for(exc)
+    if known is not None:
+        logger.warning("envelope secret request refused: %s (%s)", type(exc).__name__, outcome_for(exc)[1])
+    return known
+
+
 async def record_delete_failure(
     audit: Audit, secret_id: str, request: Request, exc: Exception, *, intent_recorded: bool
 ) -> HTTPException:
@@ -69,7 +109,8 @@ async def record_delete_failure(
     await audit("DELETE", secret_id, request, result, reason=reason)
     if isinstance(exc, HTTPException):
         return exc
-    if isinstance(exc, PermissionError):
-        return HTTPException(status_code=403, detail="Internal server error")
+    known = error_for(exc)
+    if known is not None:
+        return known
     logger.error("Failed to delete secret: %s", type(exc).__name__)
     return HTTPException(status_code=500, detail="Failed to delete secret")

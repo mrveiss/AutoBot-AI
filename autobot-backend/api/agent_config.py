@@ -638,7 +638,7 @@ DEFAULT_AGENT_CONFIGS = {
 }
 
 
-async def _resolve_agent_effective_config(agent_id: str, config: dict, unified_config_manager) -> tuple:
+async def _resolve_agent_effective_config(agent_id: str, config: dict, config_manager) -> tuple:
     """Helper for list_agents and get_all_agents. Ref: #1088.
 
     Resolves model, provider, enabled, and config_source for an agent
@@ -657,9 +657,9 @@ async def _resolve_agent_effective_config(agent_id: str, config: dict, unified_c
             "slm",
         )
 
-    current_model = unified_config_manager.get_nested(f"agents.{agent_id}.model", config["default_model"])
-    current_provider = unified_config_manager.get_nested(f"agents.{agent_id}.provider", config["provider"])
-    enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", config["enabled"])
+    current_model = config_manager.get_nested(f"agents.{agent_id}.model", config["default_model"])
+    current_provider = config_manager.get_nested(f"agents.{agent_id}.provider", config["provider"])
+    enabled = config_manager.get_nested(f"agents.{agent_id}.enabled", config["enabled"])
     return current_model, current_provider, enabled, "local"
 
 
@@ -675,9 +675,9 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
 
     Issue #744: Requires admin authentication.
     """
-    from config import unified_config_manager
+    from config import config_manager
 
-    llm_config = unified_config_manager.get_llm_config()
+    llm_config = config_manager.get_llm_config()
     provider_type = llm_config.get("provider_type", "local")
 
     agents = []
@@ -687,7 +687,7 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
             current_provider,
             enabled,
             config_source,
-        ) = await _resolve_agent_effective_config(agent_id, agent_cfg, unified_config_manager)
+        ) = await _resolve_agent_effective_config(agent_id, agent_cfg, config_manager)
 
         status = "connected" if enabled and current_model else "disconnected"
 
@@ -741,7 +741,7 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
     )
 
 
-async def _resolve_agent_entry(agent_id: str, config: dict, unified_config_manager) -> dict:
+async def _resolve_agent_entry(agent_id: str, config: dict, config_manager) -> dict:
     """Resolve model, enabled state, and config_source for a single agent. Ref: #2735.
 
     Tries SLM first; falls back to local unified config.
@@ -752,8 +752,8 @@ async def _resolve_agent_entry(agent_id: str, config: dict, unified_config_manag
         enabled = slm_config.get("enabled", True)
         config_source = "slm"
     else:
-        current_model = unified_config_manager.get_nested(f"agents.{agent_id}.model", config["default_model"])
-        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", config["enabled"])
+        current_model = config_manager.get_nested(f"agents.{agent_id}.model", config["default_model"])
+        enabled = config_manager.get_nested(f"agents.{agent_id}.enabled", config["enabled"])
         config_source = "local"
 
     return {
@@ -787,11 +787,11 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
 
     Issue #744: Requires admin authentication.
     """
-    from config import unified_config_manager
+    from config import config_manager
 
     backend_agents = []
     for agent_id, agent_cfg in DEFAULT_AGENT_CONFIGS.items():
-        backend_agents.append(await _resolve_agent_entry(agent_id, agent_cfg, unified_config_manager))
+        backend_agents.append(await _resolve_agent_entry(agent_id, agent_cfg, config_manager))
 
     healthy_count = sum(1 for a in backend_agents if a["status"] == "connected")
 
@@ -1004,7 +1004,7 @@ async def get_agent_config(agent_id: str, admin_check: bool = Depends(check_admi
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from config import unified_config_manager
+    from config import config_manager
 
     base_config = DEFAULT_AGENT_CONFIGS[agent_id]
 
@@ -1017,9 +1017,9 @@ async def get_agent_config(agent_id: str, admin_check: bool = Depends(check_admi
         enabled = slm_config.get("enabled", True)
         config_source = "slm"
     else:
-        current_model = unified_config_manager.get_nested(f"agents.{agent_id}.model", base_config["default_model"])
-        current_provider = unified_config_manager.get_nested(f"agents.{agent_id}.provider", base_config["provider"])
-        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", base_config["enabled"])
+        current_model = config_manager.get_nested(f"agents.{agent_id}.model", base_config["default_model"])
+        current_provider = config_manager.get_nested(f"agents.{agent_id}.provider", base_config["provider"])
+        enabled = config_manager.get_nested(f"agents.{agent_id}.enabled", base_config["enabled"])
         config_source = "local"
 
     # Build detailed response
@@ -1054,7 +1054,7 @@ async def get_agent_config(agent_id: str, admin_check: bool = Depends(check_admi
 async def _apply_agent_model_update(
     agent_id: str,
     update: "AgentModelUpdate",
-    unified_config_manager,
+    config_manager,
     session: "AsyncSession",
     created_by: str,
 ) -> dict:
@@ -1064,15 +1064,15 @@ async def _apply_agent_model_update(
     """
     base = DEFAULT_AGENT_CONFIGS[agent_id]
     before_config = {
-        "model": unified_config_manager.get_nested(f"agents.{agent_id}.model", base["default_model"]),
-        "provider": unified_config_manager.get_nested(f"agents.{agent_id}.provider", base["provider"]),
+        "model": config_manager.get_nested(f"agents.{agent_id}.model", base["default_model"]),
+        "provider": config_manager.get_nested(f"agents.{agent_id}.provider", base["provider"]),
     }
 
     # Persist changes
-    unified_config_manager.set_nested(f"agents.{agent_id}.model", update.model)
+    config_manager.set_nested(f"agents.{agent_id}.model", update.model)
     if update.provider:
-        unified_config_manager.set_nested(f"agents.{agent_id}.provider", update.provider)
-    unified_config_manager.save_settings()
+        config_manager.set_nested(f"agents.{agent_id}.provider", update.provider)
+    config_manager.save_settings()
     ConfigService.clear_cache()
 
     # Issue #1747: Record audit revision
@@ -1124,7 +1124,7 @@ async def update_agent_model(
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from config import unified_config_manager
+    from config import config_manager
 
     if update.agent_id != agent_id:
         raise HTTPException(
@@ -1132,7 +1132,7 @@ async def update_agent_model(
             detail="Agent ID in URL must match agent ID in request body",
         )
 
-    updated_config = await _apply_agent_model_update(agent_id, update, unified_config_manager, session, created_by)
+    updated_config = await _apply_agent_model_update(agent_id, update, config_manager, session, created_by)
 
     return JSONResponse(
         status_code=200,
@@ -1164,11 +1164,11 @@ async def enable_agent(
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from config import unified_config_manager
+    from config import config_manager
 
-    before_enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", True)
-    unified_config_manager.set_nested(f"agents.{agent_id}.enabled", True)
-    unified_config_manager.save_settings()
+    before_enabled = config_manager.get_nested(f"agents.{agent_id}.enabled", True)
+    config_manager.set_nested(f"agents.{agent_id}.enabled", True)
+    config_manager.save_settings()
     ConfigService.clear_cache()
 
     # Issue #1747: Record audit revision
@@ -1213,11 +1213,11 @@ async def disable_agent(
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from config import unified_config_manager
+    from config import config_manager
 
-    before_enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", True)
-    unified_config_manager.set_nested(f"agents.{agent_id}.enabled", False)
-    unified_config_manager.save_settings()
+    before_enabled = config_manager.get_nested(f"agents.{agent_id}.enabled", True)
+    config_manager.set_nested(f"agents.{agent_id}.enabled", False)
+    config_manager.save_settings()
     ConfigService.clear_cache()
 
     # Issue #1747: Record audit revision
@@ -1289,12 +1289,10 @@ async def check_agent_health(agent_id: str, admin_check: bool = Depends(check_ad
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from config import unified_config_manager
+    from config import config_manager
 
-    enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", True)
-    model = unified_config_manager.get_nested(
-        f"agents.{agent_id}.model", DEFAULT_AGENT_CONFIGS[agent_id]["default_model"]
-    )
+    enabled = config_manager.get_nested(f"agents.{agent_id}.enabled", True)
+    model = config_manager.get_nested(f"agents.{agent_id}.model", DEFAULT_AGENT_CONFIGS[agent_id]["default_model"])
 
     provider_available, response_time = await _check_provider_availability(agent_id)
 
@@ -1330,7 +1328,7 @@ async def get_agents_overview(admin_check: bool = Depends(check_admin_permission
 
     Issue #744: Requires admin authentication.
     """
-    from config import unified_config_manager
+    from config import config_manager
 
     total_agents = len(DEFAULT_AGENT_CONFIGS)
     enabled_agents = 0
@@ -1339,8 +1337,8 @@ async def get_agents_overview(admin_check: bool = Depends(check_admin_permission
     agent_summary = []
 
     for agent_id, agent_cfg in DEFAULT_AGENT_CONFIGS.items():
-        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", agent_cfg["enabled"])
-        model = unified_config_manager.get_nested(f"agents.{agent_id}.model", agent_cfg["default_model"])
+        enabled = config_manager.get_nested(f"agents.{agent_id}.enabled", agent_cfg["enabled"])
+        model = config_manager.get_nested(f"agents.{agent_id}.model", agent_cfg["default_model"])
 
         if enabled:
             enabled_agents += 1

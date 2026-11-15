@@ -11,8 +11,11 @@ the queue head's guard run sat queued 10-20 minutes for a runner.
 The rule: every `pull_request` workflow is either on `CHEAP` (named, with its job count, so a
 cheap workflow that grows a job is looked at again) or each of its expensive jobs is held --
 its `if:` names the dependabot author / `changes` outputs `ready` or `held`, or it `needs` a
-job that is. "Expensive" is a property of the job (a reusable-workflow call, a timeout of
-`_EXPENSIVE_MINUTES` or more, or an end-to-end / smoke / matrix / docker name), not a list.
+job that is. In `ci.yml` "expensive" is a property of the job (a reusable-workflow call, a timeout of
+`_EXPENSIVE_MINUTES` or more, or an end-to-end / smoke / matrix / docker name), because its change
+detection and reporting jobs run on purpose. In every other workflow EVERY job is in scope: a job
+that is neither held nor named in `EXEMPT_JOBS` is a violation, so a job the heuristic does not
+recognise (no timeout, no matching name) cannot run for a held pull request (#21519).
 
 #21519: the same rule holds the release promotion pull request (head = this repository's default
 branch, base = `release`) unless it carries `ci:full`. A job must be held in BOTH scenarios in
@@ -109,6 +112,10 @@ EXEMPT_JOBS: dict[tuple[str, str], str] = {
         "ci.yml",
         "run-precommit",
     ): "the config check carries the SPDX and symlink checks and runs on every PR, drafts included (#17957)",
+    (
+        "test-durations.yml",
+        "land",
+    ): "needs a successful store-durations (held) and never runs on a pull_request, so it is skipped when held",
 }
 
 
@@ -279,15 +286,18 @@ def _needs(spec: dict) -> list:
     return [needs] if isinstance(needs, str) else list(needs)
 
 
+def _in_scope(name: str, job_id: str, spec: dict, cheap=CHEAP) -> bool:
+    """A non-cheap workflow outside ci.yml: every job; ci.yml and the cheap record: the expensive-looking ones."""
+    if name != "ci.yml" and name not in cheap:
+        return True
+    return _is_expensive(job_id, spec) and job_id not in REPORTING_GATES
+
+
 def violations(workflows: dict[str, dict], cheap=CHEAP, exempt=EXEMPT_JOBS) -> list[str]:
     problems = []
     for name, doc in workflows.items():
         jobs = doc.get("jobs") or {}
-        expensive = [
-            j
-            for j, spec in jobs.items()
-            if _is_expensive(j, spec) and (name, j) not in exempt and not (name == "ci.yml" and j in REPORTING_GATES)
-        ]
+        expensive = [j for j, spec in jobs.items() if _in_scope(name, j, spec, cheap) and (name, j) not in exempt]
         if name in cheap:
             if len(jobs) != cheap[name]:
                 problems.append(
@@ -300,7 +310,7 @@ def violations(workflows: dict[str, dict], cheap=CHEAP, exempt=EXEMPT_JOBS) -> l
             problems.append(f"{name}: no expensive job -- add it to CHEAP with its job count")
         held = _held_jobs(jobs)
         problems.extend(
-            f"{name}: expensive job {j!r} is not held for dependabot or promotion pull requests (#21490, #21519)"
+            f"{name}: job {j!r} is not held for dependabot or promotion pull requests (#21490, #21519)"
             for j in expensive
             if j not in held
         )
@@ -358,7 +368,7 @@ _UNGATED = {
     }
 }
 _GATED = {
-    "x.yml": {
+    "ci.yml": {
         "jobs": {
             "changes": {"outputs": {"held": "x"}},
             "run-big": {"uses": "./a.yml", "if": "${{ needs.changes.outputs.held != 'true' }}"},
@@ -376,6 +386,26 @@ def test_control_an_ungated_expensive_job_is_flagged():
 
 def test_control_held_jobs_and_their_dependants_pass():
     assert violations(_GATED, cheap={}) == []
+
+
+def test_control_one_held_job_does_not_excuse_an_unheld_sibling_in_a_workflow():
+    """The wiring audit ran for the promotion because its sibling job was held (#21519)."""
+    held = {"timeout-minutes": 45, "if": "${{ " + _BOTH + " }}"}
+    plain = {"runs-on": "ubuntu-latest", "if": "${{ github.event.pull_request.draft == false }}"}
+    problems = violations({"x.yml": {"jobs": {"big": held, "audit": plain}}}, cheap={})
+    assert len(problems) == 1 and "'audit'" in problems[0], problems
+    assert violations({"x.yml": {"jobs": {"big": held, "audit": held}}}, cheap={}) == []
+    assert (
+        violations({"x.yml": {"jobs": {"big": held, "audit": plain}}}, cheap={}, exempt={("x.yml", "audit"): "r"}) == []
+    )
+
+
+def test_control_a_cheap_listed_workflow_keeps_the_heuristic_and_the_job_count_pin():
+    plain = {"c.yml": {"jobs": {"a": {"runs-on": "x"}, "b": {"if": "${{ true }}"}}}}
+    assert violations(plain, cheap={"c.yml": 2}) == []
+    assert len(violations(plain, cheap={"c.yml": 1})) == 1
+    heavy = {"c.yml": {"jobs": {"a": {}, "b": {"timeout-minutes": 45}}}}
+    assert violations(heavy, cheap={"c.yml": 2})
 
 
 def test_control_a_cheap_workflow_that_grew_a_job_is_flagged():
@@ -406,20 +436,21 @@ def test_control_the_positive_dependabot_test_is_not_a_hold():
     assert violations(wf, cheap={})
 
 
+# These two exercise the ci.yml heuristic path (a `changes` job, always-running dependants), so they use that name.
 def test_control_changes_outputs_count_only_where_changes_defines_them():
     big = {"timeout-minutes": 45, "if": "${{ needs.changes.outputs.ready == 'true' }}", "needs": ["changes"]}
-    assert violations({"x.yml": {"jobs": {"changes": {"outputs": {}}, "big": big}}}, cheap={})
-    assert violations({"x.yml": {"jobs": {"changes": {"outputs": {"ready": "x"}}, "big": big}}}, cheap={}) == []
+    assert violations({"ci.yml": {"jobs": {"changes": {"outputs": {}}, "big": big}}}, cheap={})
+    assert violations({"ci.yml": {"jobs": {"changes": {"outputs": {"ready": "x"}}, "big": big}}}, cheap={}) == []
 
 
 @pytest.mark.parametrize("condition", ["always()", "${{ !cancelled() }}", "${{ failure() }}"])
 def test_control_an_always_running_dependent_does_not_inherit_the_hold(condition):
     jobs = {"held": {"if": "${{ " + _BOTH + " }}"}}
     jobs["after"] = {"uses": "./a.yml", "needs": ["held"], "if": condition}
-    assert violations({"x.yml": {"jobs": jobs}}, cheap={}) == [
-        "x.yml: expensive job 'after' is not held for dependabot or promotion pull requests (#21490, #21519)"
+    assert violations({"ci.yml": {"jobs": jobs}}, cheap={}) == [
+        "ci.yml: job 'after' is not held for dependabot or promotion pull requests (#21490, #21519)"
     ]
-    exempted = violations({"x.yml": {"jobs": jobs}}, cheap={}, exempt={("x.yml", "after"): "reports"})
+    exempted = violations({"ci.yml": {"jobs": jobs}}, cheap={}, exempt={("ci.yml", "after"): "reports"})
     assert not any("not held" in problem for problem in exempted)
 
 

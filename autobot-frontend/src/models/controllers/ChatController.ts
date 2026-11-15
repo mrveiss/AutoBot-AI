@@ -1,5 +1,6 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
+import { RequestTimeoutError } from '@autobot/ui'
 import { useChatStore, type ChatSession } from '@/stores/useChatStore'
 import { useAppStore } from '@/stores/useAppStore'
 import { chatRepository } from '@/models/repositories'
@@ -258,7 +259,6 @@ export class ChatController {
 
   private getUserFriendlyErrorMessage(error: unknown): string {
     const status = (error as { status?: number }).status
-    const name = (error as { name?: string }).name
     const message = extractErrorMessage(error, 'Unknown error')
 
     if (status === 422) {
@@ -270,10 +270,10 @@ export class ChatController {
     if (status === 500) {
       return i18n.global.t('chat.errors.serverError')
     }
-    if (name === 'NetworkError') {
+    if ((error as { name?: string }).name === 'NetworkError') {
       return i18n.global.t('chat.errors.networkFailed')
     }
-    if (message.includes('timeout')) {
+    if (error instanceof RequestTimeoutError || message.includes('timeout')) {
       return i18n.global.t('chat.errors.timeout')
     }
 

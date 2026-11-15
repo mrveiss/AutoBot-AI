@@ -174,11 +174,7 @@ def __getattr__(name: str):
     if name in ("ConfigManager", "get_config_manager"):
         return _lazy_import_manager()[name]
 
-    if name in ("config_manager", "unified_config_manager"):
-        return _get_cached_config_manager()
-
-    # Backward compatibility aliases
-    if name in ("global_config_manager", "config", "cfg"):
+    if name == "config_manager":
         return _get_cached_config_manager()
 
     # Settings
@@ -257,14 +253,11 @@ __all__ = [
     "ConfigManager",
     "config_manager",
     "get_config_manager",
-    # Deprecated alias (remove after one release cycle)
-    "unified_config_manager",
     # Settings
     "ConfigSettings",
-    # Backward compatibility aliases
-    "global_config_manager",
+    # The SSOT proxy bound by the module-level `from autobot_shared.ssot_config import config`;
+    # NOT an alias of config_manager (#21533). `cfg` was the alias and is gone.
     "config",
-    "cfg",
     # Convenience functions
     "get_config_value",
     "get_config_section",

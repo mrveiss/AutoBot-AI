@@ -129,9 +129,7 @@
       </div>
     </div>
 
-    <!-- A drawn graph can still be missing a whole store. That has to stay on
-         screen: the failure notification above is a 5s toast, so without this
-         the gap became invisible while the incomplete picture stayed (#17612). -->
+    <!-- A drawn graph can still lack a whole store; the failure toast above lasts 5s, so keep this on screen (#17612). -->
     <div v-if="graphIsPartial && entities.length > 0" class="error-notification" role="status">
       <Icon name="exclamation-triangle" />
       <span>
@@ -142,6 +140,7 @@
       <button @click="refreshGraph" class="btn-link">{{ $t('knowledge.graph.retry') }}</button>
     </div>
 
+    <KnowledgeGraphMoreFacts v-if="hasMoreFacts" :loading="isLoadingMore" @more="loadMoreFacts().then(updateCytoscapeElements)" />
     <!-- Loading State -->
     <div v-if="isLoading" class="loading-state">
       <div class="spinner">
@@ -300,7 +299,7 @@
             <ul class="relations-list">
               <li
                 v-for="relation in getEntityRelations(selectedEntity.id)"
-                :key="`${relation.from}-${relation.to}`"
+                :key="JSON.stringify([relation.from, relation.to, relation.type])"
                 @click="navigateToEntity(relation)"
               >
                 <span class="relation-type">{{ relation.type }}</span>
@@ -450,6 +449,7 @@ import { useTransientError } from '@/composables/useTransientError'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebouncedFn } from '@/composables/useDebounce'
 import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
+import KnowledgeGraphMoreFacts from '@/components/knowledge/KnowledgeGraphMoreFacts.vue'
 import { isReducedMotion } from '@/composables/useReducedMotion'
 import { createDateFormatter } from '@/utils/formatHelpers'
 const KnowledgeGraph3D = defineAsyncComponent(() =>
@@ -498,11 +498,11 @@ const { t, locale } = useI18n()
 const {
   entities,
   relations,
-  isLoading,
+  isLoading, isLoadingMore,
   errorMessage: graphError,
   sources: graphSources,
   fetchGraphData,
-  createGraphEntity,
+  createGraphEntity, hasMoreFacts, loadMoreFacts,
 } = useKnowledgeGraphEntities()
 
 /**
@@ -881,7 +881,7 @@ function updateCytoscapeElements(): void {
   for (const edge of graphEdges.value) {
     elements.push({
       data: {
-        id: `${edge.from}-${edge.to}`,
+        id: JSON.stringify([edge.from, edge.to, edge.type]), // unambiguous: `-`-joined ids collide, and two types of one pair are two edges
         source: edge.from,
         target: edge.to,
         label: edge.type

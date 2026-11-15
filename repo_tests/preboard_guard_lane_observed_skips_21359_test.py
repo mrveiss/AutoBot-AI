@@ -50,7 +50,6 @@ SKIPPED [1] repo_tests/dpkg_tests_installed_state_not_knowledge_17387_test.py:32
 SKIPPED [1] repo_tests/severity_enum_fork_guard_18098_test.py:411: got empty parameter set for (entry)
 SKIPPED [1] repo_tests/request_schema_fields_are_read_15966_test.py:164: StatusUpdate has no tracked unread field
 SKIPPED [1] repo_tests/request_schema_fields_are_read_15966_test.py:164: CostEvent has no tracked unread field
-SKIPPED [1] repo_tests/meta_path_guards_are_not_precached_14913_test.py:155: autobot-backend/llc/scheduler/lazy_import_test.py: known, tracked by #14913
 SKIPPED [1] repo_tests/pytest_testpaths_cover_every_test_dir_15183_test.py:202: #15476: testpaths does not reach 16 directories holding files pytest would collect.
 SKIPPED [1] repo_tests/import_hermeticity_test.py:373: the sweep runs in CI; set AUTOBOT_IMPORT_HERMETICITY_SWEEP=1 to run it locally, one interpreter per module
 """
