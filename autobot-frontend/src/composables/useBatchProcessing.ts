@@ -15,7 +15,7 @@
  * and keeps loading, error and empty apart in `jobsView`.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, type Ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
@@ -74,41 +74,72 @@ function cancelJob(jobId: string): Promise<{ status: string }> {
   return apiClient.post<{ status: string }>(`${getApiBase()}/batch-jobs/${encodeURIComponent(jobId)}/cancel`)
 }
 
+/** Job calls: the list, one job, its logs, and the job actions. */
+const jobCalls = {
+  listJobs,
+  getJob: (jobId: string): Promise<BatchJob> =>
+    apiClient.call('get', '/api/batch-jobs/{job_id}', { path: { job_id: jobId } }),
+  createJob: (request: CreateBatchJobRequest): Promise<BatchJob> =>
+    apiClient.call('post', '/api/batch-jobs', { body: request }),
+  deleteJob: (jobId: string) => apiClient.call('delete', '/api/batch-jobs/{job_id}', { path: { job_id: jobId } }),
+  runJob: (jobId: string): Promise<BatchJob> =>
+    apiClient.call('post', '/api/batch-jobs/{job_id}/run', { path: { job_id: jobId } }),
+  cancelJob,
+  getJobLogs: (jobId: string): Promise<BatchLogEntry[]> =>
+    apiClient.call('get', '/api/batch-jobs/{job_id}/logs', { path: { job_id: jobId } }),
+}
+
+/** Template calls: name and type travel as query on create, the parameters as the body. */
+const templateCalls = {
+  listTemplates: (): Promise<BatchTemplate[]> => apiClient.call('get', '/api/batch-jobs/templates/'),
+  createTemplate: ({ name, job_type, parameters }: CreateBatchTemplateRequest): Promise<BatchTemplate> =>
+    apiClient.call('post', '/api/batch-jobs/templates/', { query: { name, job_type }, body: parameters ?? {} }),
+  deleteTemplate: (templateId: string) =>
+    apiClient.call('delete', '/api/batch-jobs/templates/{template_id}', { path: { template_id: templateId } }),
+}
+
+/** Schedule calls: every create field travels as query. */
+const scheduleCalls = {
+  listSchedules: (): Promise<BatchSchedule[]> => apiClient.call('get', '/api/batch-jobs/schedules/'),
+  createSchedule: (request: CreateBatchScheduleRequest): Promise<BatchSchedule> =>
+    apiClient.call('post', '/api/batch-jobs/schedules/', { query: request }),
+  // #12326 / #12380: PATCH /api/batch-jobs/schedules/{id} toggles a schedule.
+  toggleSchedule: (scheduleId: string, enabled: boolean): Promise<BatchSchedule> =>
+    apiClient.call('patch', '/api/batch-jobs/schedules/{schedule_id}', {
+      path: { schedule_id: scheduleId },
+      body: { enabled },
+    }),
+  deleteSchedule: (scheduleId: string) =>
+    apiClient.call('delete', '/api/batch-jobs/schedules/{schedule_id}', { path: { schedule_id: scheduleId } }),
+}
+
 /** The raw batch-jobs calls. Each resolves to the backend's reply and throws on a non-2xx. */
 export function useBatchProcessingApi() {
-  return {
-    listJobs,
-    getJob: (jobId: string): Promise<BatchJob> =>
-      apiClient.call('get', '/api/batch-jobs/{job_id}', { path: { job_id: jobId } }),
-    createJob: (request: CreateBatchJobRequest): Promise<BatchJob> =>
-      apiClient.call('post', '/api/batch-jobs', { body: request }),
-    deleteJob: (jobId: string) => apiClient.call('delete', '/api/batch-jobs/{job_id}', { path: { job_id: jobId } }),
-    runJob: (jobId: string): Promise<BatchJob> =>
-      apiClient.call('post', '/api/batch-jobs/{job_id}/run', { path: { job_id: jobId } }),
-    cancelJob,
-    getJobLogs: (jobId: string): Promise<BatchLogEntry[]> =>
-      apiClient.call('get', '/api/batch-jobs/{job_id}/logs', { path: { job_id: jobId } }),
-    listTemplates: (): Promise<BatchTemplate[]> => apiClient.call('get', '/api/batch-jobs/templates/'),
-    createTemplate: ({ name, job_type, parameters }: CreateBatchTemplateRequest): Promise<BatchTemplate> =>
-      apiClient.call('post', '/api/batch-jobs/templates/', { query: { name, job_type }, body: parameters ?? {} }),
-    deleteTemplate: (templateId: string) =>
-      apiClient.call('delete', '/api/batch-jobs/templates/{template_id}', { path: { template_id: templateId } }),
-    listSchedules: (): Promise<BatchSchedule[]> => apiClient.call('get', '/api/batch-jobs/schedules/'),
-    createSchedule: (request: CreateBatchScheduleRequest): Promise<BatchSchedule> =>
-      apiClient.call('post', '/api/batch-jobs/schedules/', { query: request }),
-    // #12326 / #12380: PATCH /api/batch-jobs/schedules/{id} toggles a schedule.
-    toggleSchedule: (scheduleId: string, enabled: boolean): Promise<BatchSchedule> =>
-      apiClient.call('patch', '/api/batch-jobs/schedules/{schedule_id}', {
-        path: { schedule_id: scheduleId },
-        body: { enabled },
-      }),
-    deleteSchedule: (scheduleId: string) =>
-      apiClient.call('delete', '/api/batch-jobs/schedules/{schedule_id}', { path: { schedule_id: scheduleId } }),
-    getHealth,
-  }
+  return { ...jobCalls, ...templateCalls, ...scheduleCalls, getHealth }
 }
 
 type BatchApi = ReturnType<typeof useBatchProcessingApi>
+
+/** What the list shows, and the per-status counts read from `status_counts`. */
+function useJobsView(
+  jobs: Ref<BatchJob[]>,
+  statusCounts: Ref<Record<string, number>>,
+  loaded: Ref<boolean>,
+  error: Ref<unknown>,
+) {
+  const countOf = (status: BatchJobStatus) => computed(() => statusCounts.value[status] ?? 0)
+  return {
+    jobsView: computed<BatchJobsView>(() => {
+      if (error.value) return 'error'
+      if (!loaded.value) return 'loading'
+      return jobs.value.length ? 'ready' : 'empty'
+    }),
+    pendingCount: countOf('pending'),
+    runningCount: countOf('running'),
+    completedCount: countOf('completed'),
+    failedCount: countOf('failed'),
+  }
+}
 
 /** The jobs list: rows, per-status counts, and its own loading and error. */
 function useJobsList(batchApi: BatchApi) {
@@ -136,19 +167,9 @@ function useJobsList(batchApi: BatchApi) {
     })
   }
 
-  const jobsView = computed<BatchJobsView>(() => {
-    if (error.value) return 'error'
-    if (!loaded.value) return 'loading'
-    return jobs.value.length ? 'ready' : 'empty'
-  })
-  const countOf = (status: BatchJobStatus) => computed(() => statusCounts.value[status] ?? 0)
-
   return {
-    jobs, totalCount, statusCounts, loaded, error, loading, filter, loadJobs, jobsView,
-    pendingCount: countOf('pending'),
-    runningCount: countOf('running'),
-    completedCount: countOf('completed'),
-    failedCount: countOf('failed'),
+    jobs, totalCount, statusCounts, loaded, error, loading, filter, loadJobs,
+    ...useJobsView(jobs, statusCounts, loaded, error),
   }
 }
 
@@ -227,51 +248,32 @@ function useJobDetail(batchApi: BatchApi) {
   return { selectedJob, jobLogs, logsError, loadJobLogs, selectJob }
 }
 
-/**
- * Batch processing screen state. Loads record their failure in the matching error ref;
- * mutations (create, cancel, delete, run, toggle) reject, so the caller reports them.
- */
-export function useBatchProcessingState() {
-  const batchApi = useBatchProcessingApi()
-  const list = useJobsList(batchApi)
-  const detail = useJobDetail(batchApi)
-  const templates = useLoadedList(batchApi.listTemplates, 'templates')
-  const schedules = useLoadedList(batchApi.listSchedules, 'schedules')
+type JobsList = ReturnType<typeof useJobsList>
+type JobDetail = ReturnType<typeof useJobDetail>
+
+/** The list split by status, and the service health those groups sit beside. */
+function useJobGroups(list: JobsList, batchApi: BatchApi) {
   const healthStatus = ref<BatchHealthResponse | null>(null)
-
   const activeJobs = computed(() => list.jobs.value.filter((j) => j.status === 'running' || j.status === 'pending'))
-  const completedJobs = computed(() => list.jobs.value.filter((j) => j.status === 'completed'))
-  const failedJobs = computed(() => list.jobs.value.filter((j) => j.status === 'failed'))
-  const hasActiveJobs = computed(() => activeJobs.value.length > 0)
-  const isServiceHealthy = computed(() => healthStatus.value?.status === 'healthy')
-
-  async function refreshJob(jobId: string): Promise<BatchJob> {
-    const job = await batchApi.getJob(jobId)
-    const index = list.jobs.value.findIndex((j) => j.job_id === job.job_id)
-    if (index !== -1) list.jobs.value[index] = job
-    if (detail.selectedJob.value?.job_id === jobId) detail.selectedJob.value = job
-    return job
-  }
-
-  const mutations = useMutations(batchApi, list.loadJobs, detail.selectedJob, templates.reload, schedules.reload)
-  const polling = useJobsPolling(async () => {
-    if (!hasActiveJobs.value) return
-    await list.loadJobs()
-    const selected = detail.selectedJob.value
-    if (selected && !isTerminalStatus(selected.status)) await refreshJob(selected.job_id)
-  })
 
   return {
-    ...list, ...detail, ...mutations, ...polling,
-    healthStatus, activeJobs, completedJobs, failedJobs, hasActiveJobs, isServiceHealthy, refreshJob,
-    templates: templates.items, templatesLoading: templates.loading, templatesError: templates.error,
-    loadTemplates: templates.reload,
-    schedules: schedules.items, schedulesLoading: schedules.loading, schedulesError: schedules.error,
-    loadSchedules: schedules.reload,
+    healthStatus,
+    activeJobs,
+    completedJobs: computed(() => list.jobs.value.filter((j) => j.status === 'completed')),
+    failedJobs: computed(() => list.jobs.value.filter((j) => j.status === 'failed')),
+    hasActiveJobs: computed(() => activeJobs.value.length > 0),
+    isServiceHealthy: computed(() => healthStatus.value?.status === 'healthy'),
+    getJobsByStatus: (status: BatchJobStatus): BatchJob[] => list.jobs.value.filter((j) => j.status === status),
     async checkHealth() {
       healthStatus.value = await batchApi.getHealth()
       return healthStatus.value
     },
+  }
+}
+
+/** Filter changes; each reloads the list with the new filter. */
+function useFilterActions(list: JobsList) {
+  return {
     async setFilter(newFilter: Partial<BatchJobsFilter>) {
       list.filter.value = { ...list.filter.value, ...newFilter }
       await list.loadJobs()
@@ -280,7 +282,53 @@ export function useBatchProcessingState() {
       list.filter.value = { status: undefined, job_type: undefined, limit: 50 }
       await list.loadJobs()
     },
-    getJobsByStatus: (status: BatchJobStatus): BatchJob[] => list.jobs.value.filter((j) => j.status === status),
+  }
+}
+
+/** Re-read one job into the list and, if it is the selected one, into the detail. */
+function useRefreshJob(batchApi: BatchApi, list: JobsList, detail: JobDetail) {
+  return async function refreshJob(jobId: string): Promise<BatchJob> {
+    const job = await batchApi.getJob(jobId)
+    const index = list.jobs.value.findIndex((j) => j.job_id === job.job_id)
+    if (index !== -1) list.jobs.value[index] = job
+    if (detail.selectedJob.value?.job_id === jobId) detail.selectedJob.value = job
+    return job
+  }
+}
+
+/** Templates and schedules, each under the names the screen state has always exposed. */
+function useTemplatesAndSchedules(batchApi: BatchApi) {
+  const templates = useLoadedList(batchApi.listTemplates, 'templates')
+  const schedules = useLoadedList(batchApi.listSchedules, 'schedules')
+  return {
+    templates: templates.items, templatesLoading: templates.loading, templatesError: templates.error,
+    loadTemplates: templates.reload,
+    schedules: schedules.items, schedulesLoading: schedules.loading, schedulesError: schedules.error,
+    loadSchedules: schedules.reload,
+  }
+}
+
+/**
+ * Batch processing screen state. Loads record their failure in the matching error ref;
+ * mutations (create, cancel, delete, run, toggle) reject, so the caller reports them.
+ */
+export function useBatchProcessingState() {
+  const batchApi = useBatchProcessingApi()
+  const list = useJobsList(batchApi)
+  const detail = useJobDetail(batchApi)
+  const lists = useTemplatesAndSchedules(batchApi)
+  const groups = useJobGroups(list, batchApi)
+  const refreshJob = useRefreshJob(batchApi, list, detail)
+  const mutations = useMutations(batchApi, list.loadJobs, detail.selectedJob, lists.loadTemplates, lists.loadSchedules)
+  const polling = useJobsPolling(async () => {
+    if (!groups.hasActiveJobs.value) return
+    await list.loadJobs()
+    const selected = detail.selectedJob.value
+    if (selected && !isTerminalStatus(selected.status)) await refreshJob(selected.job_id)
+  })
+
+  return {
+    ...list, ...detail, ...mutations, ...polling, ...lists, ...groups, ...useFilterActions(list), refreshJob,
   }
 }
 
