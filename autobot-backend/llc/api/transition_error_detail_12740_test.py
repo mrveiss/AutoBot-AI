@@ -115,9 +115,13 @@ def _route_handlers(module: str, route: str, exc_name: str):
     tree = ast.parse((_API / module).read_text(encoding="utf-8"))
     for fn in ast.walk(tree):
         if isinstance(fn, ast.AsyncFunctionDef) and fn.name == route:
-            for node in ast.walk(fn):
-                if isinstance(node, ast.ExceptHandler) and getattr(node.type, "id", None) == exc_name:
-                    yield node
+            for try_node in (n for n in ast.walk(fn) if isinstance(n, ast.Try)):
+                # A ``try`` with no ``await`` parses input (the 422 enum parse), it is not a service refusal.
+                if not any(isinstance(n, ast.Await) for b in try_node.body for n in ast.walk(b)):
+                    continue
+                for node in try_node.handlers:
+                    if getattr(node.type, "id", None) == exc_name:
+                        yield node
 
 
 #: Each refusal the handoff, review, transition, checkout, claim and agent status routes answer, with its true code.
