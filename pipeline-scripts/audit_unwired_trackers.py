@@ -571,7 +571,7 @@ def main() -> int:
     except TrackerLookupError as e:
         logger.error("%s", e)
         return EXIT_LOOKUP_FAILED
-    # render_human() ends in one newline; the trailing "\n" keeps stdout byte-identical to the old print().
+    # render_human() ends in one newline; the trailing "\n" keeps stdout byte-identical to the earlier output.
     sys.stdout.write((render_json(findings) if args.json else render_human(findings)) + "\n")
     return EXIT_FINDINGS if findings else EXIT_CLEAN
 
