@@ -59,18 +59,56 @@ def page_open_scans(source: str) -> str:
 MOUNT_OPENING = "onMounted(() => openProjectPage({"
 
 
-def mount_calls(source: str) -> set[str]:
-    """The functions the page-open steps call, or hand on as a step, by name.
+#: Steps that carry data, not a function: their value is read, never called or handed on.
+DATA_STEPS = {"sourceId"}
+_CALL = r"(?<![\w.])(\w+)\("
 
-    A step is either written as a call (``() => loadSources()``, several on one line) or handed on
-    bare (``loadSourceById,`` / ``step: loadSourceById,``); both count, so a scan cannot be passed in
-    as a step uncalled. A method call (``router.replace(``) is not a page loader and is skipped.
+
+def _top_level_entries(body: str) -> list[str]:
+    """The object literal's entries: split on commas outside any bracket, blanks dropped."""
+    entries: list[str] = []
+    depth = start = 0
+    for i, ch in enumerate(body):
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            entries.append(body[start:i])
+            start = i + 1
+    entries.append(body[start:])
+    return [e.strip() for e in entries if e.strip()]
+
+
+def _step_names(entry: str) -> set[str]:
+    """What one step entry calls or hands on; an entry of no known shape is returned as unclassified.
+
+    Shapes: shorthand ``name``; ``key: name`` (handed on); ``key: (...) => body`` (the calls in its
+    body; a method call such as ``router.replace(`` is not a page loader); a ``DATA_STEPS`` key (the
+    calls in its value). Anything else fails closed: it cannot be shown to start no scan.
     """
+    if re.fullmatch(r"\w+", entry):
+        return {entry}
+    key, sep, value = (part.strip() for part in entry.partition(":"))
+    if not sep or not re.fullmatch(r"\w+", key):
+        return {f"<unclassified: {entry}>"}
+    if re.fullmatch(r"\w+", value):
+        return {value}
+    arrow = re.fullmatch(r"(?:async\s*)?\([^)]*\)\s*=>(.*)", value, re.DOTALL)
+    if arrow:
+        return set(re.findall(_CALL, arrow.group(1)))
+    if key in DATA_STEPS:
+        return set(re.findall(_CALL, value))
+    return {f"<unclassified: {entry}>"}
+
+
+def mount_calls(source: str) -> set[str]:
+    """The functions the page-open steps call or hand on, by name (one entry at a time, fail closed)."""
     body = source[source.index(MOUNT_OPENING) + len(MOUNT_OPENING) :].split("\n}))\n", 1)[0]
-    code = _strip_comments(body)
-    called = set(re.findall(r"(?<![\w.])(\w+)\(", code))
-    handed = set(re.findall(r"^\s*(?:\w+:\s*)?(\w+),?\s*$", code, re.MULTILINE))
-    return called | handed
+    names: set[str] = set()
+    for entry in _top_level_entries(_strip_comments(body)):
+        names |= _step_names(entry)
+    return names
 
 
 def scan_calls(source: str) -> set[str]:
@@ -82,10 +120,16 @@ def test_the_detectors_read_what_they_mean() -> None:
     planted = "const codeIntelExtraScans = (): X[] => [\n  { run: async () => { await loadRedisHealth() } },\n]\nloadOther()\n"
     assert scan_calls(planted) == {"loadRedisHealth"}
     mounted = (
-        "onMounted(() => openProjectPage({\n  s: x as string,\n  b,\n  c: d,\n  e: () => { void f() }, // g()\n"
+        "onMounted(() => openProjectPage({\n  sourceId: x as string,\n  b,\n  c: d,\n  e: () => { void f() }, // g()\n"
         "  h: () => {\n    i(j()); k(); x.y()\n  },\n}))\nz()\n"
     )
     assert mount_calls(mounted) == {"b", "d", "f", "i", "j", "k"}
+    # Two entries on one line are two steps: neither hides the other.
+    same_line = "onMounted(() => openProjectPage({\n  beforeSourceLoad: loadRedisHealth, loadSourceById,\n}))\n"
+    assert mount_calls(same_line) == {"loadRedisHealth", "loadSourceById"}
+    # An entry of no known shape fails closed instead of reading as "calls nothing".
+    hidden = "onMounted(() => openProjectPage({\n  leave: cond ? loadRedisHealth : noop,\n}))\n"
+    assert mount_calls(hidden) == {"<unclassified: leave: cond ? loadRedisHealth : noop>"}
 
 
 def test_page_open_calls_only_what_reads() -> None:
