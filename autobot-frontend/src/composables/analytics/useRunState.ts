@@ -81,6 +81,27 @@ export function endedRunOutcome(
   return { status: 'failed', error: run.reason || run.status }
 }
 
+/** Milliseconds of an ISO start time, or null when the record has none (a run whose start was lost). */
+const startedMs = (state: CodebaseRunState): number | null => {
+  const ms = Date.parse(state.started_at)
+  return Number.isNaN(ms) ? null : ms
+}
+
+/**
+ * True when `incoming` is older than the run state already known, so applying it would go back.
+ * The requests are not ordered, so a snapshot can arrive after a newer one:
+ * - the same run, `running`, after that run was known to have ended (the first terminal status is final);
+ * - another run that STARTED earlier than the known one (#21474): run ids are uuid4s with no order, so
+ *   the generation is `started_at`. A run with no recorded start cannot be ordered and is applied.
+ */
+export function isStaleSnapshot(known: CodebaseRunState | null, incoming: CodebaseRunState | null): boolean {
+  if (!known || !incoming) return false
+  if (known.run_id === incoming.run_id) return known.status !== 'running' && incoming.status === 'running'
+  const knownStart = startedMs(known)
+  const incomingStart = startedMs(incoming)
+  return knownStart !== null && incomingStart !== null && incomingStart < knownStart
+}
+
 /**
  * Create the page's run state and offer it to the components below the caller.
  *
@@ -95,11 +116,7 @@ export function useRunState(withSourceId: (url: string) => string, currentSource
     if (forSource !== currentSource()) return
     if (body && typeof body === 'object' && 'run' in body) {
       const incoming = (body as RunBodyFields).run ?? null
-      const known = run.value
-      // The requests are not ordered: a snapshot taken while the run was going can arrive last.
-      const staleRunning = !!known && !!incoming && known.run_id === incoming.run_id &&
-        known.status !== 'running' && incoming.status === 'running'
-      if (!staleRunning) run.value = incoming
+      if (!isStaleSnapshot(run.value, incoming)) run.value = incoming
       if (incoming) readFailed.value = false // `run: null` on a results body may itself be a failed label read
     }
   }

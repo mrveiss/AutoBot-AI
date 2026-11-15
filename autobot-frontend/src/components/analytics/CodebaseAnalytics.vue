@@ -450,6 +450,7 @@ import { useIndexingJob } from '@/composables/analytics/useIndexingJob'
 import { useDashboardLoaders } from '@/composables/analytics/useDashboardLoaders'
 import { useSourceRegistry } from '@/composables/analytics/useSourceRegistry'
 import { useAnalyticsDataFetchers } from '@/composables/analytics/useAnalyticsDataFetchers'
+import { openProjectPage } from '@/composables/analytics/openProjectPage'
 import { useCodeIntelAnalysis } from '@/composables/analytics/useCodeIntelAnalysis'
 import { useAnalyticsDebug } from '@/composables/analytics/useAnalyticsDebug'
 import { useProjectSubTabs } from '@/composables/analytics/useProjectSubTabs'
@@ -928,37 +929,25 @@ const onPatternAnalysisError = (message: string) => {
 // =============================================
 // Lifecycle Hooks
 // =============================================
-onMounted(async () => {
-  const sourceId = route.params.sourceId as string | undefined
-  if (!sourceId) {
-    analyticsRouter.replace({ name: 'analytics-codebase' })
-    return
-  }
-
-  // GH#11129: load project→source map unconditionally so labels populate
-  // regardless of whether the source-load guard returns early.
-  void loadProjectRepoMap()
-
-  // Load source metadata from backend (#6068: extracted to useSourceRegistry)
-  const loaded = await loadSourceById(sourceId)
-  if (!loaded) {
-    analyticsRouter.replace({ name: 'analytics-codebase' })
-    return
-  }
-  await checkCurrentIndexingJob()
-  loadCachedAnalyticsData(codeIntelExtraScans())
-  // #2390: Auto-load overview dashboard cards on page visit
-  loadSystemOverview()
-  loadCommunicationPatterns()
-  loadCodeQuality()
-  loadPerformanceMetrics()
-  loadSources()
-})
+// #21474: the open sequence stops after any await the page did not survive (see openProjectPage).
+let isUnmounted = false
+onMounted(() => openProjectPage({
+  sourceId: route.params.sourceId as string | undefined,
+  pageOpen: () => !isUnmounted,
+  leave: () => { analyticsRouter.replace({ name: 'analytics-codebase' }) },
+  beforeSourceLoad: () => { void loadProjectRepoMap() }, // GH#11129: labels populate even if the source does not load
+  loadSourceById,
+  checkCurrentIndexingJob: () => checkCurrentIndexingJob(),
+  loadPageResults: () => {
+    loadCachedAnalyticsData(codeIntelExtraScans())
+    // #2390: Auto-load overview dashboard cards on page visit
+    loadSystemOverview(); loadCommunicationPatterns(); loadCodeQuality(); loadPerformanceMetrics(); loadSources()
+  },
+}))
 
 onUnmounted(() => {
-  if (refreshInterval.value) {
-    clearInterval(refreshInterval.value)
-  }
+  isUnmounted = true
+  if (refreshInterval.value) clearInterval(refreshInterval.value)
   stopJobPolling()
 })
 </script>

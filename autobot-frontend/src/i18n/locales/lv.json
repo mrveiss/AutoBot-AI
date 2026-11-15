@@ -1114,7 +1114,6 @@
       "quality": {
         "title": "Koda kvalitāte",
         "overallScore": "Kopējais rezultāts",
-        "testCoverage": "Testa pārklājums",
         "codeDuplicates": "Kodu dublikāti",
         "technicalDebt": "Tehniskais parāds",
         "noMetrics": "Nav pieejama koda kvalitātes metrika."
@@ -2313,7 +2312,6 @@
       "noCommunicationData": "No communication data available",
       "codeQuality": "Code Quality",
       "overallScore": "Overall Score",
-      "testCoverage": "Test Coverage",
       "codeDuplicates": "Code Duplicates",
       "technicalDebt": "Technical Debt",
       "noQualityMetrics": "No quality metrics available",
