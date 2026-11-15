@@ -8,6 +8,7 @@ import { getApiBase, getBackendUrl } from '@/config/ssot-config';
 import { getSelectedCompanyId } from '@/utils/orgContext';
 import { clearStoredAuth, readStoredAuthToken } from '@/utils/authToken';
 import { CircuitBreakerError, runWithCircuitBreaker } from '@/utils/apiCircuitBreaker';
+import { monitorApiCall } from '@/utils/apiCallMonitor';
 
 // Create scoped logger for ApiClient
 const logger = createLogger('ApiClient');
@@ -288,8 +289,11 @@ export class ApiClient extends ApiClientBase<RequestOptions, paths> {
   // Raw Response access (streaming, blobs); `circuitBreaker` opts in to fail-fast (#11682).
   async rawRequest(endpoint: string, options: RawRequestOptions<RequestOptions> = {}): Promise<Response> {
     const key = options.circuitBreaker;
-    if (!key) return super.rawRequest(endpoint, options);
-    return runWithCircuitBreaker(key, () => super.rawRequest(endpoint, options));
+    const send = () => (key
+      ? runWithCircuitBreaker(key, () => super.rawRequest(endpoint, options))
+      : super.rawRequest(endpoint, options));
+    // Every verb funnels through here, so this is the one place a call is timed for RUM (#21583).
+    return monitorApiCall(options.method ?? 'GET', endpoint, send);
   }
 
   // ==================================================================================

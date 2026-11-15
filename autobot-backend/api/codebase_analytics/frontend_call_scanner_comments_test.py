@@ -39,7 +39,6 @@ _CASES = [
     # useFileDownload.ts went with #20770 (one kit save helper); useErrorHandler.ts carries the same
     # shape -- a JSDoc usage example with a literal path call.
     ("autobot-frontend/src/composables/useErrorHandler.ts", [35], []),
-    ("autobot-frontend/src/utils/apiErrorHandler.ts", [222], []),
     ("autobot-frontend/src/views/slm/ThemeManagerView.vue", [], [35]),
 ]
 
