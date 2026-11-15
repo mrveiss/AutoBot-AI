@@ -34,6 +34,7 @@ DECLARED_SCOPES = {
         "scripts",
         "tools",
     ),
+    "llc-exception-text-sweep-files-21579": ("autobot-backend/llc",),
     "slm-users-db-scan": ("autobot-slm-backend",),
     "test-name-predicate-single-home-21078": (
         "autobot-backend",

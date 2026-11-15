@@ -14,12 +14,32 @@ from __future__ import annotations
 
 import pytest
 from repo_tests._company_os_exception_text_baseline import COMPANY_OS_EXCEPTION_TEXT_SITES
-from repo_tests._company_os_exception_text_scan import exc_text_scan_source, exc_text_scan_tree
+from repo_tests._company_os_exception_text_scan import (
+    LLC_ROOT,
+    exc_text_scan_report,
+    exc_text_scan_source,
+    exc_text_scan_tree,
+    exc_text_scanned_files,
+)
 from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_file_present, base_table, raised_known_entries
+from repo_tests._reach import declare
 
 _BASELINE = "repo_tests/_company_os_exception_text_baseline.py"
 _TABLE = "COMPANY_OS_EXCEPTION_TEXT_SITES"
+#: Measured 288 non-test modules (2026-11-15); growth 20 makes the pin mid-window (288 - 10). A new guard pins
+#: `floor=` until it lands on the base (#19676).
+_LLC_FILES_FLOOR = 278
+
+REACH_LLC_EXCEPTION_TEXT_FILES = declare(
+    "llc-exception-text-sweep-files-21579",
+    discover=exc_text_scanned_files,
+    roots=(LLC_ROOT,),
+    floor=_LLC_FILES_FLOOR,
+    growth=20,
+    skips=0,
+    what="non-test Python modules parsed for response bodies built from exception text",
+)
 _FIX = "Answer through `http_refusal(...)` or the exception's `public_detail` (#21579)."
 
 
@@ -48,6 +68,7 @@ _FIRES = [
         "tainted_local_chain",
         "def h():\n    try:\n        run()\n    except ValueError as exc:\n        a = f'x {exc}'\n        b: str = a\n        raise HTTPException(400, detail=b)\n",
     ),
+    ("param_tainted_local", "def helper(exc):\n    msg = str(exc)\n    raise HTTPException(400, detail=msg)\n"),
     ("param_str", _param("HTTPException(400, detail=str(exc))")),
     ("param_fstring", _param('HTTPException(400, detail=f"bad {exc}")')),
     ("param_args", _param("HTTPException(400, detail=exc.args[0])")),
@@ -70,6 +91,7 @@ _QUIET = [
         "isinstance_local",
         "def h():\n    try:\n        run()\n    except ValueError as exc:\n        msg = isinstance(exc, KeyError)\n        raise HTTPException(400, detail=msg)\n",
     ),
+    ("param_public_local", "def helper(exc):\n    msg = exc.public_detail\n    raise HTTPException(400, detail=msg)\n"),
     ("isinstance_test", _wrap("HTTPException(413 if isinstance(exc, KeyError) else 400, detail='x')")),
     ("param_passed_through", _param("HTTPException(400, detail=exc)")),
     ("param_public_detail", _param("HTTPException(400, detail=exc.public_detail)")),
@@ -98,8 +120,33 @@ def measured() -> dict[str, int]:
 
 
 def test_the_scan_reads_the_llc_tree(measured: dict[str, int]) -> None:
-    assert (repo_root() / "autobot-backend" / "llc" / "api" / "_common.py").is_file(), "llc has moved; update the scan"
-    assert all(k.startswith("autobot-backend/llc/") for k in measured)
+    root = repo_root()
+    assert (root / LLC_ROOT / "api" / "_common.py").is_file(), "llc has moved; update the scan"
+    assert all(k.startswith(f"{LLC_ROOT}/") for k in measured)
+    parsed = exc_text_scan_report(root)[1]
+    assert parsed >= _LLC_FILES_FLOOR, f"the sweep parsed {parsed} files, below its floor {_LLC_FILES_FLOOR}"
+    REACH_LLC_EXCEPTION_TEXT_FILES.examined(root)
+
+
+_LEAK = "def f(exc):\n    raise HTTPException(400, detail=str(exc))\n"
+
+
+def _tree(root, *dirs: str) -> None:
+    for d in dirs:
+        target = root / LLC_ROOT / d / "m.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(_LEAK, encoding="utf-8")
+
+
+def test_a_scan_root_under_a_tests_ancestor_is_still_scanned(tmp_path) -> None:
+    root = tmp_path / "tests" / "checkout"
+    _tree(root, "api")
+    assert exc_text_scan_report(root) == ({f"{LLC_ROOT}/api/m.py::f#1": 1}, 1)
+
+
+def test_a_tests_directory_inside_the_root_is_skipped(tmp_path) -> None:
+    _tree(tmp_path, "api", "tests")
+    assert exc_text_scan_report(tmp_path) == ({f"{LLC_ROOT}/api/m.py::f#1": 1}, 1)
 
 
 def test_the_tree_matches_its_baseline(measured: dict[str, int]) -> None:

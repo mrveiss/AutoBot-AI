@@ -130,16 +130,21 @@ class _ExcTextScan(ast.NodeVisitor):
         self.generic_visit(node)
         self.excepts.pop()
 
+    def _exc_text_name_leaks(self, name: ast.Name, parents: dict[ast.AST, ast.AST]) -> bool:
+        """Whether *name* renders an exception to text: an except-bound or tainted name by any use, an
+        exception-typed parameter only when run through the parameter-rendering rules."""
+        bound = {n for n in self.excepts if n}.union(*self.tainted)
+        if name.id in bound:
+            return _exc_text_leaks(name, parents, self.rel, True)
+        params = set().union(*self.params)
+        return name.id in params and _exc_text_leaks(name, parents, self.rel, False)
+
     def _exc_text_carries_text(self, value: ast.AST | None) -> bool:
-        """Whether *value* renders an except-bound or tainted name to text (not via `public_detail`)."""
+        """Whether *value* renders an exception (bound, tainted or parameter) to text, not via `public_detail`."""
         if value is None:
             return False
-        live = {n for n in self.excepts if n}.union(*self.tainted)
         parents = _exc_text_parent_map(value)
-        return any(
-            n.id in live and _exc_text_leaks(n, parents, self.rel, True)
-            for n in _exc_text_names_outside_sanctioned(value)
-        )
+        return any(self._exc_text_name_leaks(n, parents) for n in _exc_text_names_outside_sanctioned(value))
 
     def _exc_text_taint(self, targets: list[ast.expr], value: ast.AST | None) -> None:
         if self._exc_text_carries_text(value):
@@ -168,15 +173,8 @@ class _ExcTextScan(ast.NodeVisitor):
         if SANCTIONED_CALL in self.qual:
             return False
         parents = _exc_text_parent_map(call)
-        bound = {n for n in self.excepts if n}.union(*self.tainted)
-        params = set().union(*self.params) if self.params else set()
         values = [*call.args, *(k.value for k in call.keywords)]
-        for name in (n for v in values for n in _exc_text_names_outside_sanctioned(v)):
-            if name.id in bound and _exc_text_leaks(name, parents, self.rel, True):
-                return True
-            if name.id in params and name.id not in bound and _exc_text_leaks(name, parents, self.rel, False):
-                return True
-        return False
+        return any(self._exc_text_name_leaks(n, parents) for v in values for n in _exc_text_names_outside_sanctioned(v))
 
 
 def exc_text_scan_source(source: str, rel: str) -> list[str]:
@@ -186,17 +184,30 @@ def exc_text_scan_source(source: str, rel: str) -> list[str]:
     return scan.sites
 
 
-def _exc_text_is_test_file(path: Path) -> bool:
-    return "tests" in path.parts or is_test_filename(path.name)
+def _exc_text_is_test_file(path: Path, root: Path) -> bool:
+    """A test module, judged by the directories BELOW *root*: a checkout under a `tests` ancestor is not tests."""
+    return "tests" in path.relative_to(root).parts[:-1] or is_test_filename(path.name)
+
+
+def exc_text_scanned_files(root: Path) -> list[str]:
+    """Repo-relative paths of the non-test modules under `autobot-backend/llc` the sweep parses."""
+    return [
+        path.relative_to(root).as_posix()
+        for path in sorted((root / LLC_ROOT).rglob("*.py"))
+        if not _exc_text_is_test_file(path, root)
+    ]
+
+
+def exc_text_scan_report(root: Path) -> tuple[dict[str, int], int]:
+    """`({identity: 1}, files parsed)`: the parsed count is independent of what was found."""
+    found: dict[str, int] = {}
+    files = exc_text_scanned_files(root)
+    for rel in files:
+        for site in exc_text_scan_source((root / rel).read_text(encoding="utf-8"), rel):
+            found[site] = 1
+    return found, len(files)
 
 
 def exc_text_scan_tree(root: Path) -> dict[str, int]:
     """`{identity: 1}` for every non-test module under `autobot-backend/llc`."""
-    found: dict[str, int] = {}
-    for path in sorted((root / LLC_ROOT).rglob("*.py")):
-        if _exc_text_is_test_file(path):
-            continue
-        rel = path.relative_to(root).as_posix()
-        for site in exc_text_scan_source(path.read_text(encoding="utf-8"), rel):
-            found[site] = 1
-    return found
+    return exc_text_scan_report(root)[0]
