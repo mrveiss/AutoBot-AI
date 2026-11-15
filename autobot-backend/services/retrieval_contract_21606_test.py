@@ -271,3 +271,35 @@ async def test_a_cache_served_hit_has_the_same_metadata_as_a_cold_hit():
     assert hits[0].metadata == {**cold_meta, "source": "topic_cache"}  # exactly main's tier-2 metadata
     assert "cached_from" not in hits[0].metadata and getattr(hits[0], CACHED_FROM_ATTR) == "autobot_docs"
     assert chunk.metadata == cold_meta  # what the cache holds is untouched
+
+
+@pytest.mark.asyncio
+async def test_a_semantic_cache_hit_has_the_same_metadata_as_main_builds():
+    from services.rag_visibility import RESULT_METADATA_KEY
+    from services.retrieval_contract import CACHED_FROM_ATTR
+
+    cold_meta = {"source": "autobot_docs", "file_path": "a.md"}
+    entry = SimpleNamespace(
+        response_text="c",
+        metadata={RESULT_METADATA_KEY: dict(cold_meta)},
+        model="rag",
+        original_query="q0",
+        similarity_score=0.9,
+    )
+    sem_cache = MagicMock()
+    sem_cache.lookup = AsyncMock(return_value=entry)
+    with (
+        patch.multiple(RAGService, _visible=AsyncMock(side_effect=lambda r, p: r)),
+        patch("services.rag_cache_tiers.get_semantic_query_cache", AsyncMock(return_value=sem_cache)),
+    ):
+        hits, _ = await _service()._check_semantic_cache("q", SYSTEM_SCOPE, SCOPE)
+    expected = {
+        **cold_meta,
+        "source": "semantic_cache",
+        "model": "rag",
+        "original_query": "q0",
+        "similarity_score": 0.9,
+    }
+    assert hits[0].metadata == expected  # exactly main's tier-0 metadata
+    assert "cached_from" not in hits[0].metadata and getattr(hits[0], CACHED_FROM_ATTR) == "autobot_docs"
+    assert entry.metadata[RESULT_METADATA_KEY] == cold_meta  # what the cache holds is untouched
