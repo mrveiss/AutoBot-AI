@@ -98,7 +98,9 @@ def member_merges(rng: str, report: ContentReport) -> dict[tuple[str, str], tupl
     for line in _git("log", "--first-parent", "--merges", "--format=%H %s", rng).splitlines():  # newest first
         sha, _, subject = line.partition(" ")
         key = _merge_key(subject)
-        if key:
+        if key and key[0] == "passenger" and key in found:
+            report.findings.append(f"passenger #{key[1]} merged more than once ({sha[:10]}); merge each passenger once")
+        elif key:
             found[key] = (found.get(key, (sha,))[0], sha)
         elif not BASE_MERGE.match(subject):
             report.findings.append(f"{sha[:10]} is a merge this gate cannot account for: {subject!r}")

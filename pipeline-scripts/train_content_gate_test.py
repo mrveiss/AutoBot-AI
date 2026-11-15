@@ -268,6 +268,15 @@ def test_a_passenger_that_lost_its_file_is_reported(train):
     assert len(findings) == 1 and "passenger #7 docs/seven.md: missing" in findings[0]
 
 
+def test_a_passenger_merged_twice_is_a_finding_not_an_overwrite(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}))
+    passenger(7, member("seven-b", {"docs/seven-b.md": LONG.format("7b")}))
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "passenger #7 merged more than once" in findings[0]
+    assert "merge each passenger once" in findings[0]
+
+
 def test_a_range_with_only_a_passenger_merge_measures_nothing(train):
     passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}))
     findings = gate.check_range("main..train").findings
