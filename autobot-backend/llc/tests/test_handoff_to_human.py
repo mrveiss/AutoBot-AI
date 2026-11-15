@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autobot_shared.redis_utils import COMPARE_HOLDER_AND_DELETE_LUA
+from autobot_shared.redis_utils import COMPARE_AND_DELETE_LUA
 from llc.models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem, LLCWorkItemComment
 from llc.services.handoff import HandoffNotAllowed, HandoffService
@@ -157,7 +157,7 @@ class TestAgentToHuman:
         mock_session._db_result.scalar_one_or_none.return_value = item
 
         with (
-            patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=None)),
+            patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)),
             patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=None)),
         ):
             result = await service.agent_to_human(
@@ -180,7 +180,7 @@ class TestAgentToHuman:
         mock_session._db_result.scalar_one_or_none.return_value = item
 
         with (
-            patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=None)),
+            patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)),
             patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=None)),
         ):
             result = await service.agent_to_human(
@@ -206,7 +206,7 @@ class TestAgentToHuman:
         mock_session._db_result.scalar_one_or_none.return_value = item
 
         with (
-            patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=None)),
+            patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)),
             patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=None)),
         ):
             await service.agent_to_human(
@@ -225,8 +225,9 @@ class TestAgentToHuman:
         mock_session._db_result.scalar_one_or_none.return_value = item
 
         redis_mock = AsyncMock()
+        redis_mock.get.return_value = f"{agent_id}#run-123"  # the fence of the checkout being handed off
         with (
-            patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=redis_mock)),
+            patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=redis_mock)),
             patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=redis_mock)),
         ):
             await service.agent_to_human(
@@ -238,8 +239,9 @@ class TestAgentToHuman:
             )
 
         redis_mock.delete.assert_not_called()  # never an unconditional DEL (#19631)
+        # the exact fence of the handed-off generation, so the same agent's next checkout keeps its own (#21640 review)
         redis_mock.eval.assert_called_once_with(
-            COMPARE_HOLDER_AND_DELETE_LUA, 1, f"llc:checkout:{item.id}", str(agent_id)
+            COMPARE_AND_DELETE_LUA, 1, f"llc:checkout:{item.id}", f"{agent_id}#run-123"
         )
 
     async def test_publishes_notification(self, service, mock_session):
@@ -251,7 +253,7 @@ class TestAgentToHuman:
 
         redis_mock = AsyncMock()
         with (
-            patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=redis_mock)),
+            patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)),
             patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=redis_mock)),
         ):
             await service.agent_to_human(
@@ -277,7 +279,7 @@ class TestAgentToHuman:
         mock_session._db_result.scalar_one_or_none.return_value = item
 
         with (
-            patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=None)),
+            patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)),
             patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=None)),
         ):
             await service.agent_to_human(
