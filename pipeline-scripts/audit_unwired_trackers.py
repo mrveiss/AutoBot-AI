@@ -125,6 +125,12 @@ ISSUE_REF_RE = re.compile(
 )
 
 
+#: Exit codes: 0 = clean, 1 = findings, 2 = the audit could not run (lookup or unexpected error).
+EXIT_CLEAN = 0
+EXIT_FINDINGS = 1
+EXIT_LOOKUP_FAILED = 2
+
+
 @dataclass
 class Finding:
     file: str
@@ -208,8 +214,8 @@ def load_router_registry_modules() -> set[str]:
             continue
         try:
             content = f.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
+        except (OSError, UnicodeDecodeError) as e:
+            raise TrackerLookupError(f"router registry file {f} is unreadable ({e!r})") from e
         for m in REGISTRY_TUPLE_RE.finditer(content):
             modules.add(m.group(1))
     return modules
@@ -237,8 +243,8 @@ def extract_tracker_refs(file_path: Path) -> list[int]:
     try:
         with file_path.open("r", encoding="utf-8") as f:
             head = "".join(line for _, line in zip(range(DOCSTRING_HEAD_LINES), f))
-    except (OSError, UnicodeDecodeError):
-        return []
+    except (OSError, UnicodeDecodeError) as e:
+        raise TrackerLookupError(f"{file_path} is unreadable ({e!r})") from e
     refs: list[int] = []
     for m in ISSUE_REF_RE.finditer(head):
         # 5 alternation branches → 5 capture groups; pick whichever matched.
@@ -286,10 +292,10 @@ def grep_count_production_callers(stem: str, self_path: Path) -> int:
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
-    except subprocess.TimeoutExpired:
-        return -1
+    except subprocess.TimeoutExpired as e:
+        raise TrackerLookupError(f"caller grep for {stem!r} timed out ({e})") from e
     if result.returncode > 1:  # 0 = matches, 1 = no matches, >1 = error
-        return -1
+        raise TrackerLookupError(f"caller grep for {stem!r} failed (exit {result.returncode})")
     self_str = str(self_path)
     count = 0
     for line in result.stdout.splitlines():
@@ -307,29 +313,57 @@ def grep_count_production_callers(stem: str, self_path: Path) -> int:
     return count
 
 
+class TrackerLookupError(RuntimeError):
+    """The closed-tracker lookup failed or was unreadable (#21582).
+
+    An empty closed set makes ``scan`` skip every file (state != CLOSED), so a failed lookup would
+    render as a clean audit. "Could not look" must not read as "found nothing".
+    """
+
+
+#: ``gh issue list --limit`` for closed issues. A result of exactly this size may be truncated, so it fails.
+CLOSED_ISSUE_LIMIT = 10000
+_CLOSED_ISSUES_CMD = [
+    "gh",
+    "issue",
+    "list",
+    "--state",
+    "closed",
+    "--limit",
+    str(CLOSED_ISSUE_LIMIT),
+    "--json",
+    "number",
+]
+_OPEN_AUDIT_CMD = [
+    *("gh", "issue", "list", "--state", "open", "--search", "discovery(unwired-tracker)"),
+    *("--limit", "1000", "--json", "number,title"),
+]
+
+
+def _gh_json(cmd: list[str], timeout: int, what: str) -> list[dict]:
+    """Run a ``gh ... --json`` listing; raise ``TrackerLookupError`` unless it yields a JSON list of objects."""
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=True).stdout
+        data = json.loads(out)
+    except (subprocess.SubprocessError, FileNotFoundError, json.JSONDecodeError) as e:
+        raise TrackerLookupError(f"{what} failed or was unreadable ({e!r})") from e
+    if not isinstance(data, list) or not all(isinstance(i, dict) for i in data):
+        raise TrackerLookupError(f"{what} was not a list of objects")
+    return data
+
+
 def fetch_closed_tracker_set() -> set[int]:
-    """One-shot fetch of all CLOSED issues so per-finding lookups are O(1)."""
-    cmd = [
-        "gh",
-        "issue",
-        "list",
-        "--state",
-        "closed",
-        "--limit",
-        "10000",
-        "--json",
-        "number",
-    ]
+    """One-shot fetch of all CLOSED issues so per-finding lookups are O(1).
+
+    Raises ``TrackerLookupError`` when ``gh`` fails, its output is unusable, or it hit the limit.
+    """
+    data = _gh_json(_CLOSED_ISSUES_CMD, 120, "closed issue list")
+    if len(data) >= CLOSED_ISSUE_LIMIT:
+        raise TrackerLookupError(f"closed issue list hit its {CLOSED_ISSUE_LIMIT}-issue limit; older trackers unseen")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=True)
-    except (subprocess.SubprocessError, FileNotFoundError) as e:
-        logger.warning("gh unavailable, tracker states will be UNKNOWN (%s)", e)
-        return set()
-    try:
-        data = json.loads(result.stdout)
         return {item["number"] for item in data}
-    except (json.JSONDecodeError, KeyError):
-        return set()
+    except KeyError as e:
+        raise TrackerLookupError(f"closed issue list item without a number ({e!r})") from e
 
 
 def existing_audit_issues_by_tracker() -> set[int]:
@@ -337,29 +371,11 @@ def existing_audit_issues_by_tracker() -> set[int]:
 
     Convention: audit-discovery issues are titled
     `discovery(unwired-tracker): wire in <module> (tracker #NNNN closed prematurely)`.
-    We search by the exact title prefix to avoid filing duplicates.
+    We search by the exact title prefix to avoid filing duplicates. A failed lookup raises (#21582).
     """
-    cmd = [
-        "gh",
-        "issue",
-        "list",
-        "--state",
-        "open",
-        "--search",
-        "discovery(unwired-tracker)",
-        "--limit",
-        "1000",
-        "--json",
-        "number,title",
-    ]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=True)
-        data = json.loads(result.stdout)
-    except (subprocess.SubprocessError, json.JSONDecodeError, FileNotFoundError):
-        return set()
     out: set[int] = set()
     pat = re.compile(r"tracker #(\d+) closed prematurely")
-    for item in data:
+    for item in _gh_json(_OPEN_AUDIT_CMD, 60, "open audit issue list"):
         m = pat.search(item.get("title", ""))
         if m:
             out.add(int(m.group(1)))
@@ -540,17 +556,24 @@ def _file_new_issues(findings: list[Finding], max_issues: int) -> None:
             sys.stdout.write(f"filed #{num} for {f.file} (tracker #{f.tracker})\n")
 
 
-def main() -> int:
-    args = _build_parser().parse_args()
+def _scan_and_file(args: argparse.Namespace) -> list[Finding]:
+    """Scan, then file; a failed lookup raises before any report or filing (a degraded scan files nothing)."""
     findings = scan()
     if args.file_issues:
         _file_new_issues(findings, args.max_issues)
+    return findings
 
-    # The report was previously emitted with the builtin that appends one newline; render_human() already
-    # ends in one, so its output keeps a second. Writing "+ \n" keeps stdout byte-identical.
+
+def main() -> int:
+    args = _build_parser().parse_args()
+    try:
+        findings = _scan_and_file(args)
+    except TrackerLookupError as e:
+        logger.error("%s", e)
+        return EXIT_LOOKUP_FAILED
+    # render_human() ends in one newline; the trailing "\n" keeps stdout byte-identical to the earlier output.
     sys.stdout.write((render_json(findings) if args.json else render_human(findings)) + "\n")
-
-    return 1 if findings else 0
+    return EXIT_FINDINGS if findings else EXIT_CLEAN
 
 
 if __name__ == "__main__":
@@ -558,4 +581,4 @@ if __name__ == "__main__":
         sys.exit(main())
     except Exception as e:  # pragma: no cover
         logger.error("%s", e)
-        sys.exit(2)
+        sys.exit(EXIT_LOOKUP_FAILED)
