@@ -103,13 +103,13 @@ Sessions can terminate before their PRs merge. **Each session leaves a handoff n
    markers (`^<<<<<<< `) before the final push.
 3. Push and open/update the PR.
 4. Before removing any worktree, write or update the main-checkout `.notes/` note and `INDEX.md` ([`SESSION_END.md`](SESSION_END.md)). Do not commit it; anything a future reader must not lose belongs in the issue or the PR body.
-5. Release your ledger claims (`ledger release worktree <dir>`) and remove your worktrees with plain `git worktree remove` (never `--force`) only when all work is pushed **and** has landed (PR merged, content in base) (rule 9). A pushed but unmerged branch keeps its worktree; a tree that refuses to go is reported and left.
+5. Release your ledger claims (`ledger release worktree <dir>`) and remove your worktrees with plain `git worktree remove` (never `--force`) once all work is pushed, landed or not (rule 9). The pushed branch is the takeover point; the worktree is disposable. A tree that refuses to go is reported and left.
 
 **Who disposes of a worktree:** whoever observes the merge. If your PR merges while you are
 still running, clean up in the same breath as the merge (worktree, local branch, remote
 branch) — a merged PR whose worktree still exists is an unfinished merge. If the session ends
-first, an orphan is taken over by the next session, which finishes its work and then disposes of it. Nobody removes a worktree
-whose work has not landed (pushed is not landed), and nobody touches another live session's tree.
+first, it pushes and releases its worktrees; the next session takes over from the pushed branch. An orphan worktree (session gone without ending) is taken over, its work finished, then disposed of. Nobody removes a worktree
+whose work is not pushed, and nobody touches another live session's tree.
 
 LICENSE/NOTICE/SPDX headers are read-only during a session — flag concerns,
 never edit.
