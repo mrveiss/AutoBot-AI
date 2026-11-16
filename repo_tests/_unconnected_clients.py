@@ -65,7 +65,7 @@ from __future__ import annotations
 import re
 
 from repo_tests._unconnected_common import Tree
-from repo_tests._unconnected_frontend import code_text
+from repo_tests._unconnected_frontend import frontend_code_text
 
 _VERBS = r"(?:get|post|put|patch|delete|getContract|rawRequest|upload\w*|request)"
 _PATH = r"""(?:<[^()]*>)?\s*\(\s*[`'"](/[^`'"\s]*)"""
@@ -182,10 +182,10 @@ def _wrappers(rel: str, text: str, receivers: dict[str, str]) -> dict[str, tuple
     """``{wrapper: (index of its path argument, base + prefix)}`` for functions that hand a path to a client.
 
     Read from *rel*'s code without comments, each file in its own syntax and a ``.vue`` file from its ``<script>``
-    blocks only (``_unconnected_frontend.code_text``), so a brace or quote in a comment or in template prose cannot
-    end a body.
+    blocks only (``_unconnected_frontend.frontend_code_text``), so a brace or quote in a comment or in template
+    prose cannot end a body.
     """
-    text = code_text(rel, text)
+    text = frontend_code_text(rel, text)
     names = "|".join(re.escape(n) for n in sorted(receivers, key=len, reverse=True))
     found: dict[str, tuple[int, str]] = {}
     for fn in _FUNCTION.finditer(text):

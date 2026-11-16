@@ -157,18 +157,22 @@ def test_a_function_is_a_wrapper_only_by_its_own_body_20910(tmp_path: Path, call
 
 
 _VUE_CALLER = "autobot-slm-frontend/src/views/PlantedView.vue"
-_VUE_SCRIPT = "async function load(path: string): Promise<void> {\n  return slmApiClient.get(path)\n}\nload('{path}')\n"
-_VUE = (
-    "<template>\n  <p>Don't load {{ count }} rows; it's '{{ name }}</p>\n</template>\n\n"
-    '<script setup lang="ts">\n' + _IMPORT + _VUE_SCRIPT + "</script>\n"
+#: An odd number of template apostrophes, and a `}` in a trailing comment before the client call. Read as one .ts
+#: text, `Don't` opens a string that pairs with the next quotes, the comment sits inside a "string" and survives, its
+#: `}` closes the body early and the wrapper is missed. Read per file (the script only), the comment is stripped.
+_VUE_SCRIPT = (
+    "async function load(path: string): Promise<void> {\n"
+    "  const shape = 'ok' // reply shape: }\n"
+    "  return slmApiClient.get(path)\n}\nload('{path}')\n"
 )
+_VUE = "<template><p>Don't</p></template>\n" '<script setup lang="ts">\n' + _IMPORT + _VUE_SCRIPT + "</script>\n"
 
 
 @pytest.mark.parametrize(("path", "flagged"), [("/planted/orphan", False), ("/planted/other", True)])
 def test_a_vue_wrapper_is_read_from_its_script_past_template_apostrophes_20910(
     tmp_path: Path, path: str, flagged: bool
 ) -> None:
-    """Template prose (`Don't`, an unpaired `'`) must not shift the script's strings; another path is the control."""
+    """`Don't` in the template must not shift the script's strings and keep its `}` comment; another path stays out."""
     files = {**_ROUTE, **_WIRED, _VUE_CALLER: _VUE.replace("{path}", path)}
     key = "route:autobot-backend/api/planted_route.py:GET /orphan"
     assert _route_keys(tmp_path, files) == ({key} if flagged else set())
