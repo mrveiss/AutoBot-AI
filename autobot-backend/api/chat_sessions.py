@@ -435,7 +435,7 @@ async def list_user_sessions(chat_history_manager, username: str | None) -> list
     # #12685: company/agent-scoped conversations (e.g. LLC CEO chat) are not ordinary
     # user chats — first-class scoping fields, not a title parse.
     sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
-    return await _filter_user_sessions(sessions, username, lambda sid: chat_history_manager.get_session_owner(sid))
+    return await _filter_user_sessions(sessions, username, chat_history_manager.get_session_owner)
 
 
 async def _filter_user_sessions(sessions: list, username: str, read_owner) -> list:

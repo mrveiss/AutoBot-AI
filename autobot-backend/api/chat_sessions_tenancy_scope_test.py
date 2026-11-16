@@ -43,7 +43,7 @@ _ALL_SESSIONS = [
 
 
 def _manager(sessions=None):
-    manager = MagicMock(spec=["list_sessions_fast"])
+    manager = MagicMock(spec=["list_sessions_fast", "get_session_owner"])  # #21664: the durable-owner reader
     manager.list_sessions_fast = AsyncMock(return_value=list(sessions if sessions is not None else _ALL_SESSIONS))
     return manager
 
