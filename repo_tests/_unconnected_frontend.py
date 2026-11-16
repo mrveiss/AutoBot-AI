@@ -97,7 +97,7 @@ def stem(rel_or_spec: str) -> str:
     return last
 
 
-def _code_text(rel: str, text: str) -> str:
+def code_text(rel: str, text: str) -> str:
     """*text* without comments; HTML loses only its ``<!-- -->`` comments (an entry ``<script src>`` is not one).
 
     A ``.vue`` file contributes its ``<script>`` blocks only: a template's prose holds apostrophes and ``//`` that a
@@ -180,7 +180,7 @@ def _importer_index(tree: Tree) -> tuple[dict[str, set[str]], list[tuple[str, re
     importers: dict[str, set[str]] = {}
     globs: list[tuple[str, re.Pattern[str]]] = []
     for rel in tree.select(*_CODE_SUFFIXES, ".html"):
-        code = _code_text(rel, tree.text(rel))
+        code = code_text(rel, tree.text(rel))
         for name in quoted_stems(code, rel):
             importers.setdefault(name, set()).add(rel)
         globs.extend((rel, glob_regex(p)) for p in glob_patterns(rel, code))

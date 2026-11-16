@@ -65,8 +65,7 @@ from __future__ import annotations
 import re
 
 from repo_tests._unconnected_common import Tree
-
-from tools.lint._comment_syntax import code_lines
+from repo_tests._unconnected_frontend import code_text
 
 _VERBS = r"(?:get|post|put|patch|delete|getContract|rawRequest|upload\w*|request)"
 _PATH = r"""(?:<[^()]*>)?\s*\(\s*[`'"](/[^`'"\s]*)"""
@@ -90,8 +89,6 @@ _PATH_CONST = re.compile(
 )
 #: ``[async] function name<T>(params)``: a candidate request wrapper.
 _FUNCTION = re.compile(r"(?:async\s+)?function\s+(\w+)\s*(?:<[^()]*>)?\s*\(([^)]*)\)")
-#: The name that selects the shared stripper's script syntax (``//`` and ``/* */``) for a .ts, .js or .vue text.
-_SCRIPT_NAME = "wrapper.ts"
 _SLM_ROOT = "autobot-slm-frontend/src"
 _MAIN_ROOT = "autobot-frontend/src"
 
@@ -181,12 +178,14 @@ def _function_body(text: str, signature_end: int) -> str:
     return "" if opener < 0 else text[opener : _block_end(text, opener)]
 
 
-def _wrappers(text: str, receivers: dict[str, str]) -> dict[str, tuple[int, str]]:
+def _wrappers(rel: str, text: str, receivers: dict[str, str]) -> dict[str, tuple[int, str]]:
     """``{wrapper: (index of its path argument, base + prefix)}`` for functions that hand a path to a client.
 
-    Read from the text without comments (the shared stripper), so a brace or quote in a comment cannot end a body.
+    Read from *rel*'s code without comments, each file in its own syntax and a ``.vue`` file from its ``<script>``
+    blocks only (``_unconnected_frontend.code_text``), so a brace or quote in a comment or in template prose cannot
+    end a body.
     """
-    text = "\n".join(line.text for line in code_lines(text, name=_SCRIPT_NAME, strip_trailing=True))
+    text = code_text(rel, text)
     names = "|".join(re.escape(n) for n in sorted(receivers, key=len, reverse=True))
     found: dict[str, tuple[int, str]] = {}
     for fn in _FUNCTION.finditer(text):
@@ -222,7 +221,7 @@ def _file_calls(rel: str, text: str) -> set[str]:
     lines = ["" if (ln.lstrip()[:2] in _COMMENT_PREFIXES or ln.strip() == "*") else ln for ln in text.splitlines()]
     code = _inline_constants(lines)
     out.update(receivers[m.group(1)] + m.group(2) for m in pattern.finditer(code) if m.group(2) != "/api")
-    out.update(_wrapper_calls(code, _wrappers(code, receivers)))
+    out.update(_wrapper_calls(code, _wrappers(rel, code, receivers)))
     if rel.startswith(_SLM_ROOT):
         for line in lines:
             out.update("/api" + suffix for suffix in _SLM_BASE_CALL.findall(line))

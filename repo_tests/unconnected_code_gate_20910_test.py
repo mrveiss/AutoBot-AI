@@ -156,6 +156,24 @@ def test_a_function_is_a_wrapper_only_by_its_own_body_20910(tmp_path: Path, call
     assert _route_keys(tmp_path, {**_ROUTE, **_WIRED, _SLM_CALLER: caller}) == ({key} if flagged else set())
 
 
+_VUE_CALLER = "autobot-slm-frontend/src/views/PlantedView.vue"
+_VUE_SCRIPT = "async function load(path: string): Promise<void> {\n  return slmApiClient.get(path)\n}\nload('{path}')\n"
+_VUE = (
+    "<template>\n  <p>Don't load {{ count }} rows; it's '{{ name }}</p>\n</template>\n\n"
+    '<script setup lang="ts">\n' + _IMPORT + _VUE_SCRIPT + "</script>\n"
+)
+
+
+@pytest.mark.parametrize(("path", "flagged"), [("/planted/orphan", False), ("/planted/other", True)])
+def test_a_vue_wrapper_is_read_from_its_script_past_template_apostrophes_20910(
+    tmp_path: Path, path: str, flagged: bool
+) -> None:
+    """Template prose (`Don't`, an unpaired `'`) must not shift the script's strings; another path is the control."""
+    files = {**_ROUTE, **_WIRED, _VUE_CALLER: _VUE.replace("{path}", path)}
+    key = "route:autobot-backend/api/planted_route.py:GET /orphan"
+    assert _route_keys(tmp_path, files) == ({key} if flagged else set())
+
+
 _SSO = "autobot-slm-backend/api/sso_auth.py"
 
 
