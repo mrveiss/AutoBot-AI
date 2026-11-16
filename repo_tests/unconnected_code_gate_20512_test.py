@@ -73,13 +73,9 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_text
 from repo_tests._reach import declare
 from repo_tests._unconnected_common import Tree
+from repo_tests._unconnected_gate_fixtures import _ROUTE, _ROUTER, _WIRED, _fired, _state
 
 from tools.lint._comment_syntax import code_lines
-
-
-@functools.lru_cache(maxsize=2)
-def _state(root: Path) -> tuple[Tree, routes.Audit]:
-    return Tree.of_repo(root), routes.Audit(root, scripts_root=repo_root())
 
 
 def _module_files(root: Path) -> list[str]:
@@ -198,11 +194,12 @@ def test_declared_entries_describe_the_live_references() -> None:
     )
 
 
-#: The frozen one-time re-measures, one list per ruling (#20910, #21428): the ONLY baseline additions ever allowed
+#: The frozen one-time re-measures, one list per ruling (#20910, #21428, #21651): the ONLY baseline additions ever allowed
 #: against a base. Adding a list here is a decision a reviewer sees; every list is also held to "never grows".
 REMEASURE_RELS = (
     "repo_tests/unconnected_code_remeasure_20910.txt",
     "repo_tests/unconnected_code_remeasure_21428.txt",
+    "repo_tests/unconnected_code_remeasure_21651.txt",
     "repo_tests/unconnected_code_remeasure_21583.txt",
 )
 
@@ -312,27 +309,10 @@ def test_the_baseline_states_what_it_cannot_see() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _plant(tmp_path: Path, files: dict[str, str]) -> tuple[Tree, routes.Audit]:
-    for rel, body in files.items():
-        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / rel).write_text(body, encoding="utf-8")
-    tree = Tree(list(files), lambda rel: (tmp_path / rel).read_text(encoding="utf-8"))
-    return tree, routes.Audit(tmp_path, scripts_root=repo_root())
-
-
-def _fired(tmp_path: Path, files: dict[str, str]) -> set[str]:
-    tree, audit = _plant(tmp_path, files)
-    return uc.detected(tree, audit)
-
-
-_ROUTER = 'from fastapi import APIRouter\nrouter = APIRouter(prefix="/{prefix}")\n\n\n@router.{verb}("/{path}")\nasync def h():\n    return {{}}\n'
 _MODULE = {"autobot-backend/pkg/planted.py": "VALUE = 1\n"}
-_ROUTE = {"autobot-backend/api/planted_route.py": _ROUTER.format(prefix="planted", verb="get", path="orphan")}
 _HOOK = {"autobot-backend/api/planted_hook.py": _ROUTER.format(prefix="webhooks", verb="post", path="planted")}
 _QUEUE = {"autobot-backend/services/planted_queue.py": 'async def put(r, x):\n    await r.lpush("planted:work", x)\n'}
 _TABLE = {"autobot-backend/database/schemas/planted.sql": "CREATE TABLE IF NOT EXISTS planted_jobs (id INTEGER);\n"}
-#: Imports every planted module, so the subject under test is the route, queue or table and not its file.
-_WIRED = {"scripts/wire.py": "import api.planted_route\nimport api.planted_hook\nimport services.planted_queue\n"}
 
 
 @pytest.mark.parametrize(
@@ -452,53 +432,3 @@ def test_a_parenthesised_import_with_comments_keeps_every_name_20907() -> None:
     )
     refs = modules.import_refs("autobot-backend/x.py", text)
     assert {"autobot_shared.alpha", "autobot_shared.beta", "autobot_shared.gamma"} <= refs, refs
-
-
-class _NormMod:
-    @staticmethod
-    def norm_path(path: str) -> str:
-        return path
-
-
-def test_route_candidates_have_no_phantom_forms_20910() -> None:
-    """With a registration prefix and an own prefix only reg+own+raw is real; reg+raw only without an own prefix."""
-    cand = routes._candidates
-    assert cand(_NormMod, "/x", "/own", ["/api"]) == ("/api/own/x",)
-    assert cand(_NormMod, "/x", "", ["/api"]) == ("/api/x",)
-    assert cand(_NormMod, "/x", "/own", None) == ("/own/x", "/x")
-
-
-@pytest.mark.parametrize(
-    ("label", "path", "body"),
-    [
-        ("shell $VAR", "scripts/probe.sh", 'curl -s "$BACKEND_URL/api/planted/orphan"\n'),
-        ("shell quoted base", "scripts/probe.sh", 'curl -s "$BASE"/api/planted/orphan\n'),
-        ("shell ${VAR}", "scripts/probe.sh", "curl -s ${BASE}/api/planted/orphan\n"),
-        ("python f-string", "scripts/probe.py", 'URL = f"{base}/api/planted/orphan"\n'),
-        ("literal host and port", "scripts/probe.yml", "url: http://localhost:8001/api/planted/orphan\n"),
-        ("jinja variable", "scripts/probe.yml", 'url: "{{ backend_url }}/api/planted/orphan"\n'),
-    ],
-)
-def test_a_non_frontend_caller_behind_a_url_base_connects_the_route_20910(
-    tmp_path: Path, label: str, path: str, body: str
-) -> None:
-    """`$BASE/api/x`, `f"{base}/api/x"`, `host:8001/api/x` and `{{ var }}/api/x` are calls, not prose."""
-    assert _fired(tmp_path, {**_ROUTE, **_WIRED, path: body}) == set(), label
-
-
-def test_a_file_path_ending_in_api_is_not_a_caller_20910(tmp_path: Path) -> None:
-    """`autobot-backend/api/x.py` names a file; it must not read as a call to `/api/x.py`."""
-    decoy = {"scripts/note.sh": "# edit autobot-backend/api/planted/orphan\n"}
-    assert _fired(tmp_path, {**_ROUTE, **_WIRED, **decoy}) == {"route:autobot-backend/api/planted_route.py:GET /orphan"}
-
-
-def test_a_router_mounted_twice_is_judged_at_every_mount_20910() -> None:
-    """A router served at its registry mount and at a nested include has a candidate path per mount."""
-    assert routes._candidates(_NormMod, "/x", "", ["/a", "/a/sub"]) == ("/a/sub/x", "/a/x")
-    assert routes._candidates(_NormMod, "/x", "/own", ["/a", "/a/sub"]) == ("/a/own/x", "/a/sub/own/x")
-
-
-def test_the_real_nested_mount_of_a_registry_router_is_seen_20910() -> None:
-    """knowledge_debug.py is mounted by the registry AND `include_router`ed under /debug by knowledge.py."""
-    prefixes = _state(repo_root())[1].registry_prefixes("autobot-backend")["autobot-backend/api/knowledge_debug.py"]
-    assert {"/knowledge_base", "/knowledge_base/debug"} <= set(prefixes), prefixes
