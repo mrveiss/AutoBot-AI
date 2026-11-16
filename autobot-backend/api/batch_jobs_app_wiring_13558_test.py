@@ -44,7 +44,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -151,7 +151,9 @@ async def test_get_chat_sessions_reaches_the_chat_history_manager() -> None:
     manager = Mock()
     manager.list_sessions_fast = AsyncMock(return_value=[])
     app = SimpleNamespace(state=SimpleNamespace(chat_history_manager=manager))
-    result = await get_chat_sessions(app, None)
+    # A named caller: a nameless one fails closed before the manager is read (#21664).
+    with patch("api.chat_sessions._filter_user_sessions", new=AsyncMock(return_value=[])):
+        result = await get_chat_sessions(app, "alice")
     assert result == {"sessions": []}
     # Reaching the mock at all is the proof: a pre-fix ModuleNotFoundError died before
     # app.state was ever touched. `assert_awaited()` takes no message, so this rationale
