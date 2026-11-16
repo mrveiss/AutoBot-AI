@@ -161,6 +161,18 @@ export function getBackendUrl(): string {
   return '/autobot-api'
 }
 
+/**
+ * The user app's origin, for links to screens that live there (#20644: Batch Processing and Vision
+ * moved from this console to the user app). With no frontend host configured the two apps share
+ * one origin behind nginx, so the link is relative (''). Otherwise it is the frontend host on the
+ * port nginx serves it on (`frontendServed`, #20058).
+ */
+export function getUserAppUrl(): string {
+  if (!vm.frontend) return ''
+  // URL drops the scheme's default port from `origin`, so no port number is written here.
+  return new URL(`${config.httpProtocol}://${vm.frontend}:${config.port.frontendServed}`).origin
+}
+
 /*
  * #15227: `getHosts()` used to live here, returning a literal array of the
  * seven VMs the fleet happened to have when it was written. It is gone rather

@@ -12,12 +12,14 @@
 
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { getUserAppUrl } from '@/config/ssot-config'
 
 const route = useRoute()
 const router = useRouter()
 
-// Navigation tabs for all tools
-const tabs = [
+// Navigation tabs for all tools. #20644: Vision and Batch moved to the user app; their tabs open it
+// in a new tab, and their old paths here show where they went (views/tools/MovedToUserApp.vue).
+const tabs: Array<{ id: string; name: string; path: string; icon: string; userAppPath?: string }> = [
   { id: 'fleet', name: 'Fleet Tools', path: '/tools/fleet', icon: 'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01' },
   { id: 'terminal', name: 'Terminal', path: '/tools/terminal', icon: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
   { id: 'files', name: 'File Browser', path: '/tools/files', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
@@ -27,8 +29,8 @@ const tabs = [
   { id: 'voice', name: 'Voice', path: '/tools/voice', icon: 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z' },
   { id: 'mcp', name: 'MCP', path: '/tools/mcp', icon: 'M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z' },
   { id: 'agents', name: 'Agents', path: '/tools/agents', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
-  { id: 'vision', name: 'Vision', path: '/tools/vision', icon: 'M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' },
-  { id: 'batch', name: 'Batch', path: '/tools/batch', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
+  { id: 'vision', name: 'Vision', path: '/tools/vision', userAppPath: '/vision', icon: 'M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' },
+  { id: 'batch', name: 'Batch', path: '/tools/batch', userAppPath: '/batch', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
 ]
 
 // Get active tab based on current route
@@ -38,8 +40,12 @@ const activeTab = computed(() => {
   return tab?.id ?? 'fleet'
 })
 
-function navigateTo(path: string) {
-  router.push(path)
+function navigateTo(tab: (typeof tabs)[number]) {
+  if (tab.userAppPath) {
+    window.open(`${getUserAppUrl()}${tab.userAppPath}`, '_blank', 'noopener')
+    return
+  }
+  router.push(tab.path)
 }
 
 onMounted(() => {
@@ -76,7 +82,7 @@ onMounted(() => {
         <button
           v-for="tab in tabs"
           :key="tab.id"
-          @click="navigateTo(tab.path)"
+          @click="navigateTo(tab)"
           :class="[
             'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 whitespace-nowrap',
             activeTab === tab.id
