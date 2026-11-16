@@ -152,7 +152,9 @@ def _declarations(files: list[pathlib.Path]) -> dict[str, list[tuple[pathlib.Pat
 
 
 # A file's own constraints include: ``-c ../constraints/shared.txt`` (any relative depth, or ``--constraint=``).
-_SHARED_INCLUDE = re.compile(r"^\s*(?:-c|--constraint)[\s=]+\S*constraints/shared\.txt\b", re.MULTILINE)
+# The path ends at ``shared.txt``: whitespace (incl. before a ``#`` comment) or end of line must follow, so
+# ``shared.txt.backup`` is not the shared file. pip reads ``#`` as a comment only after whitespace.
+_SHARED_INCLUDE = re.compile(r"^\s*(?:-c|--constraint)[\s=]+\S*constraints/shared\.txt(?=\s|$)", re.MULTILINE)
 
 
 def unconstrained_bare_names(files: list[pathlib.Path], pinned: set[str]) -> list[str]:

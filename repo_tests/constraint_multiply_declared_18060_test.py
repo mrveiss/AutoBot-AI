@@ -205,3 +205,10 @@ def test_a_commented_out_shared_include_does_not_count(guard, tmp_path, body):
     """Negative control: pip ignores a commented ``-c``, so the bare name still floats and must be named."""
     found = _unbound(guard, tmp_path, body)
     assert any("planted-pkg" in v and "no -c line" in v for v in found), found
+
+
+@pytest.mark.parametrize("include", ["-c constraints/shared.txt.backup", "--constraint=../constraints/shared.txt.old"])
+def test_an_include_of_a_file_merely_prefixed_shared_txt_does_not_count(guard, tmp_path, include):
+    """Negative control: ``shared.txt.backup`` is another file, so its ``-c`` does not bind the bare name."""
+    found = _unbound(guard, tmp_path, f"{include}\nplanted-pkg\n")
+    assert any("planted-pkg" in v and "no -c line" in v for v in found), found

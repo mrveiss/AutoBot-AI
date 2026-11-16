@@ -466,9 +466,23 @@ def test_no_listed_paths_is_the_whole_population(tmp_path: Path) -> None:
 def test_the_plan_is_full_on_the_sweep_itself_and_none_when_no_swept_module_changed(tmp_path: Path) -> None:
     population = _plant(tmp_path)
     assert scope.plan(["autobot-backend/api/a.py", _BASELINE_FILE], population) == ("full", [])
-    unswept = ["autobot-backend/api/a_test.py", "autobot-backend/services/s.py", "requirements-ci.txt"]
+    unswept = ["autobot-backend/api/a_test.py", "autobot-backend/services/s.py", "docs/README.md"]
     assert scope.plan(["autobot-backend/api/a.py", *unswept], population) == ("subset", ["autobot-backend/api/a.py"])
     assert scope.plan(unswept, population) == ("none", [])
+
+
+@pytest.mark.parametrize(
+    "dependency", ["constraints/shared.txt", "requirements-ci.txt", "requirements-ci/framework.txt"]
+)
+def test_a_dependency_only_change_plans_the_full_sweep(tmp_path: Path, dependency: str) -> None:
+    """#21471: the sweep installs these, so a constraints-only PR must not plan ``none``."""
+    population = _plant(tmp_path)
+    assert scope.plan([dependency], population) == ("full", [])
+    assert scope.plan(["autobot-backend/services/s.py", dependency], population) == ("full", [])
+    filters = {*sorted(scope.ENVIRONMENT_FILES), *(f"{d}**" for d in scope.ENVIRONMENT_DIRS)}
+    doc = yaml.safe_load((_REPO_ROOT / _WORKFLOW).read_text(encoding="utf-8"))
+    paths = (doc.get(True) or doc.get("on") or {})["pull_request"]["paths"]
+    assert filters <= set(paths), f"{_WORKFLOW}: does not trigger on {sorted(filters - set(paths))}"
 
 
 def test_every_self_file_exists_and_triggers_the_workflow() -> None:

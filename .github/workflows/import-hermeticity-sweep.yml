@@ -9,6 +9,8 @@ name: import-hermeticity-sweep
 #   push to main, schedule, dispatch          FULL    these read the base
 #   PR touching the sweep's own files         FULL    only a full run judges every
 #                                                     baseline entry
+#   PR touching requirements-ci*, constraints FULL    a version change can change any
+#                                                     module's import (#21471)
 #   PR changing swept modules                 SUBSET  those, plus every module that
 #                                                     imports one of them directly
 #   PR changing no swept module               NONE    no install and no pytest; the summary
@@ -17,7 +19,7 @@ name: import-hermeticity-sweep
 #
 # A SUBSET does not reach a module that gets to the changed one only through an
 # intermediate's FUNCTION called at import time, a change confined to a module outside
-# the swept packages, a deleted module's former importers, or a dependency-only change.
+# the swept packages, or a deleted module's former importers.
 # The FULL run on the push that merges the PR covers each; the scope module lists them.
 #
 # Failures are compared with the frozen, shrink-only baseline of the 54 offenders the
