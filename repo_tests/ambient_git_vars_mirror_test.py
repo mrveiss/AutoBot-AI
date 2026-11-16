@@ -126,7 +126,7 @@ def test_the_shell_and_python_scrub_lists_are_identical() -> None:
 _SHELL_GLOBS = ("**/*.sh",)
 _SHELL_EXCLUDES = (".git/", "node_modules/", ".worktrees/")
 
-#: Pinned to the five this discovers (the seventh, `git-root.sh`, uses the array
+#: Pinned to the five this discovers (the sixth, `git-root.sh`, uses the array
 #: form and is covered by the mirror test above). The realistic drift here is a
 #: glob narrowed from `scripts/**/*.sh` to `scripts/lib/*.sh`, or a hook
 #: directory moving -- both leave 4 or 5 sites and would clear a loose floor
@@ -143,8 +143,8 @@ def _scrub_sites():
     """Yield `(path, set-of-vars)` for every shell `unset` naming GIT_DIR."""
     # Only the literal `unset GIT_...` form. `git-root.sh` uses the array
     # (`unset "${GIT_ROOT_AMBIENT_VARS[@]}"`) and is covered directly by the
-    # mirror test above, so it is not double-counted here -- six sites are
-    # discovered, seven exist. A NEW file copying the array form would be
+    # mirror test above, so it is not double-counted here -- five sites are
+    # discovered, six exist. A NEW file copying the array form would be
     # sourcing git-root.sh and inheriting the correct list; a new file copying
     # the literal form is what this catches.
     for pattern in _SHELL_GLOBS:
