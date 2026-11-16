@@ -73,7 +73,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/browser_mcp.py": 1320,
     "autobot-backend/api/cache_management.py": 692,
     "autobot-backend/api/chat.py": 2625,  # #20195: graph resume stream moved to chat_streaming; #20852
-    "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
+    "autobot-backend/api/chat_sessions.py": 1797,  # #21664: 1859 -> 1797
     "autobot-backend/api/code_intelligence.py": 2145,
     "autobot-backend/api/code_search.py": 786,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,

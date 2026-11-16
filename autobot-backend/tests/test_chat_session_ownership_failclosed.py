@@ -71,17 +71,13 @@ async def test_validator_failure_also_raises():
 
 
 @pytest.mark.asyncio
-async def test_no_ownership_records_still_returns_all_but_warns(caplog):
-    """Legacy-session path, deliberately unchanged — but no longer silent.
-
-    Failing closed here would hide a user's own history on installs predating
-    ownership tracking, so the decision is deferred to #12685. The exposure is
-    logged so it is visible rather than invisible.
-    """
+async def test_no_ownership_records_returns_nothing():
+    """#21664 (decided 2026-11-16: fail closed) — replaces the legacy fallback that
+    returned every session to a caller with no ownership records. Legacy unowned
+    sessions stay unlisted until an owner is approved through the ownerless-session
+    proposal (#20030, #17038)."""
     with patch("autobot_shared.redis_client.get_redis_client", new=AsyncMock()):
         with patch("api.chat_sessions._build_ownership_validator", return_value=_validator([])):
-            with caplog.at_level("WARNING"):
-                result = await _filter_user_sessions(list(_ALL), "alice")
+            result = await _filter_user_sessions(list(_ALL), "alice")
 
-    assert len(result) == 3
-    assert any("No ownership records" in r.getMessage() for r in caplog.records)
+    assert result == []

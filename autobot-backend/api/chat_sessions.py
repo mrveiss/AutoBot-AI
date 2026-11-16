@@ -427,23 +427,24 @@ async def list_user_sessions(chat_history_manager, username: str | None) -> list
     Shared by ``GET /chat/sessions`` (default scope) and ``/api/batch-jobs/chat-init``
     so both apply the same ownership filter (``_filter_user_sessions``) and the same
     agent-scoped exclusion. No role bypass: an administrator lists only their own.
+    Fails closed (#21664): a principal with no username owns nothing, so it gets ``[]``.
     """
+    if not username:
+        return []
     sessions = await chat_history_manager.list_sessions_fast()
     # #12685: company/agent-scoped conversations (e.g. LLC CEO chat) are not ordinary
     # user chats — first-class scoping fields, not a title parse.
     sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
-    if username:
-        sessions = await _filter_user_sessions(sessions, username)
-    return sessions
+    return await _filter_user_sessions(sessions, username)
 
 
 async def _filter_user_sessions(sessions: list, username: str) -> list:
-    """Filter sessions to those owned by the user.
+    """Filter sessions to those owned by the user (#684).
 
-    Uses Redis ownership data. Falls back to all sessions
-    if Redis is unavailable.
-
-    Helper for list_sessions (#684).
+    Uses Redis ownership data and fails closed: an unavailable store raises, and a
+    caller with no ownership records gets ``[]`` (#21664). Sessions that predate
+    ownership tracking stay unlisted until an owner is assigned through the approval
+    queue; nothing here assigns or deletes them.
     """
     from api.chat_sessions_errors import OwnershipUnavailableError
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
@@ -461,17 +462,6 @@ async def _filter_user_sessions(sessions: list, username: str) -> list:
         # showing someone else's.
         logger.error("Ownership lookup failed; refusing to return an unfiltered session list: %s", e)
         raise OwnershipUnavailableError("Could not verify session ownership") from e
-
-    if not user_session_ids:
-        # No ownership records for this user. Kept as-is pending #12685's
-        # decision on pre-ownership legacy sessions: failing closed here would
-        # hide a user's own history on installs that predate ownership
-        # tracking. Logged so the exposure is visible rather than silent.
-        logger.warning(
-            "No ownership records for %s — returning the unfiltered session list (#12685)",
-            username,
-        )
-        return sessions
 
     return [s for s in sessions if s.get("id") in user_session_ids]
 
