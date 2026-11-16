@@ -57,15 +57,23 @@ WHAT THIS CANNOT SEE
   and string and template text skipped. A regex literal holding a brace or quote, or an object-literal return type
   (``): { a: number } {``, whose ``{`` is taken as the body), can still end the body early (the wrapper is missed)
   or late (a later client call is read as its own).
-* A path constant built by concatenation, or one whose value does not start with ``/``.
+* A path constant whose whole initialiser is not one literal path (``'/a' + '/b'``, ``base + '/x'``, a value not
+  starting with ``/``), and a constant set inside a statement that does not start the line (``if (x) { const u =``).
+* A wrapper parameter rebound by an expression arrow in its body (``items.map((path) => client.get(path))``): the
+  parameter is then not read as handed to the client at all, so a real wrapper of that shape is missed.
+* A wrapper call inside a ``.vue`` template expression that holds a ``//`` or ``/* */`` text: the template is read
+  with only its ``<!-- -->`` comments removed.
 """
 
 from __future__ import annotations
 
 import re
 
+from repo_tests._ui_literal_scan import SCRIPT_BODY
 from repo_tests._unconnected_common import Tree
 from repo_tests._unconnected_frontend import frontend_code_text
+
+from tools.lint._comment_syntax import strip_html_comments
 
 _VERBS = r"(?:get|post|put|patch|delete|getContract|rawRequest|upload\w*|request)"
 _PATH = r"""(?:<[^()]*>)?\s*\(\s*[`'"](/[^`'"\s]*)"""
@@ -82,10 +90,13 @@ _DECLARED = (
 _MAIN_NAMED = {"apiClient": ""}
 _SLM_BASE_CALL = re.compile(r"\$\{getSlmApiBase\(\)\}(/[^`'\"\s]*)")
 _COMMENT_PREFIXES = ("* ", "//", "/*")
-#: ``const NAME = '/path'`` or a template; a ``${...}`` counts only as a whole segment (``/x/${id}/y``), so a
-#: query glued on (``/x${qs ? ...}``) ends the value.
-_PATH_CONST = re.compile(
-    r"""\b(?:const|let)\s+(\w+)\s*(?::\s*string\s*)?=\s*[`'"]""" r"""(/(?:[\w.\-/]|\$\{[^}`'"\n]*\}(?=[/`'"]))*)"""
+#: A whole initialiser that is ONE literal path: ``'/x'``, ``\`/x/${id}\``` or ``\`/x${query}\```, then at most ``;``
+#: and a trailing comment. A ``${...}`` counts as a segment only when whole (``/x/${id}/y``); one glued on at the end
+#: is a query (``norm_path`` drops it). ``'/a' + '/b'`` and ``base + '/x'`` are not one literal (#20910).
+_WHOLE_PATH = re.compile(r"""([`'"])(/(?:[\w.\-/]|\$\{[^}`'"\n]*\}(?=[/`'"]))*)(?:\$\{.*\})?\1\s*;?\s*(?://.*)?$""")
+#: One assignment statement: ``[export] [const|let|var] name[: string] [op]= value``.
+_ASSIGN = re.compile(
+    r"^[\s{]*(?:export\s+)?(?:(const|let|var)\s+)?(\w+)\s*(?::\s*string\s*)?([-+*/%|&?]*)=(?![=>])(.*)$"
 )
 #: ``[async] function name<T>(params)``: a candidate request wrapper.
 _FUNCTION = re.compile(r"(?:async\s+)?function\s+(\w+)\s*(?:<[^()]*>)?\s*\(([^)]*)\)")
@@ -107,16 +118,40 @@ def _site_pattern(receivers: dict[str, str]) -> re.Pattern[str]:
     return re.compile(rf"(?<![\w.$])({names})\s*\.\s*{_VERBS}\s*{_PATH}")
 
 
+def _track(statement: str, consts: dict[str, str]) -> None:
+    """Record, update or forget a path constant from one assignment statement.
+
+    A declaration or a plain reassignment whose whole value is one literal path sets the name; any other value, or a
+    compound assignment (``url += '/x'``), forgets it, so a later use is not read as the stale literal (#20910).
+    """
+    assigned = _ASSIGN.match(statement)
+    if assigned is None:
+        return
+    keyword, name, op, value = assigned.groups()
+    whole = None if op else _WHOLE_PATH.match(value.strip())
+    if whole is not None and (keyword or name in consts):
+        consts[name] = whole.group(2)
+    else:
+        consts.pop(name, None)
+
+
 def _inline_constants(lines: list[str]) -> str:
-    """The text with each file-local path constant replaced by its value where a call can use it."""
+    """The text with each file-local path constant replaced by its value where a call can use it.
+
+    Statements are read in order (a line split at ``;``), so a value set or forgotten earlier on a line applies to
+    the rest of it.
+    """
     consts: dict[str, str] = {}
     out: list[str] = []
     for line in lines:
-        for name, value in consts.items():
-            line = line.replace("${" + name + "}", value)
-            line = re.sub(rf"(\(\s*){name}(?=\s*[,)])", rf"\g<1>'{value}'", line)
-        consts.update(_PATH_CONST.findall(line))
-        out.append(line)
+        statements = line.split(";")
+        for index, statement in enumerate(statements):
+            for name, value in consts.items():
+                statement = statement.replace("${" + name + "}", value)
+                statement = re.sub(rf"(\(\s*){name}(?=\s*[,)])", rf"\g<1>'{value}'", statement)
+            statements[index] = statement
+            _track(statement, consts)
+        out.append(";".join(statements))
     return "\n".join(out)
 
 
@@ -178,25 +213,56 @@ def _function_body(text: str, signature_end: int) -> str:
     return "" if opener < 0 else text[opener : _block_end(text, opener)]
 
 
-def _wrappers(rel: str, text: str, receivers: dict[str, str]) -> dict[str, tuple[int, str]]:
+#: The start of a function nested in a body: ``function [name](params)`` or a block arrow ``=> {``.
+_INNER = re.compile(r"\bfunction\b[^(]*\([^)]*\)|=>\s*(?=\{)")
+
+
+def _own_body(body: str) -> str:
+    """*body* without the bodies of the functions nested in it: their client calls are theirs (#20910)."""
+    kept, index = [], 1  # past the body's own `{`
+    for inner in _INNER.finditer(body, 1):
+        if inner.start() < index:
+            continue  # inside a nested body already cut
+        opener = _body_open(body, inner.end()) if inner.group().startswith("function") else body.find("{", inner.end())
+        if opener < 0:
+            continue
+        kept.append(body[index : inner.start()])
+        index = _block_end(body, opener)
+    return "".join(kept) + body[index:]
+
+
+def _rebinds(body: str, param: str) -> bool:
+    """Whether an expression arrow in *body* binds its own *param* (``(path) => client.get(path)``)."""
+    return re.search(rf"(?:\b{param}|\([^()]*\b{param}\b[^()]*\))\s*(?::[^=()]*)?=>", body) is not None
+
+
+def _wrapper_hit(body: str, params: list[str], names: str) -> tuple[int, re.Match[str]] | None:
+    """``(index, match)`` of the first parameter *body* hands, whole and untransformed, to a client call."""
+    for index, param in enumerate(params):
+        if not param.isidentifier() or _rebinds(body, param):
+            continue
+        arg = rf"(?:`(/[^`'\"\s$]*)\$\{{{param}\}}`|{param})\s*[,)]"
+        hit = re.search(rf"(?<![\w.$])({names})\s*\.\s*{_VERBS}\s*(?:<[^()]*>)?\s*\(\s*{arg}", body)
+        if hit:
+            return index, hit
+    return None
+
+
+def _wrappers(script: str, receivers: dict[str, str]) -> dict[str, tuple[int, str]]:
     """``{wrapper: (index of its path argument, base + prefix)}`` for functions that hand a path to a client.
 
-    Read from *rel*'s code without comments, each file in its own syntax and a ``.vue`` file from its ``<script>``
-    blocks only (``_unconnected_frontend.frontend_code_text``), so a brace or quote in a comment or in template
-    prose cannot end a body.
+    *script* is the file's code without comments (``_unconnected_frontend.frontend_code_text``: each file in its own
+    syntax, a ``.vue`` file's ``<script>`` blocks only), so a brace or quote in a comment or in template prose cannot
+    end a body. Only the function's own body counts, and only an argument that is the parameter itself.
     """
-    text = frontend_code_text(rel, text)
     names = "|".join(re.escape(n) for n in sorted(receivers, key=len, reverse=True))
     found: dict[str, tuple[int, str]] = {}
-    for fn in _FUNCTION.finditer(text):
+    for fn in _FUNCTION.finditer(script):
         params = [p.split(":")[0].split("=")[0].strip(" ?\t\n") for p in fn.group(2).split(",")]
-        body = _function_body(text, fn.end())
-        for index, param in enumerate(params):
-            arg = rf"(?:`(/[^`'\"\s$]*)\$\{{{param}\}}`|{param}\b)" if param.isidentifier() else None
-            hit = arg and re.search(rf"(?<![\w.$])({names})\s*\.\s*{_VERBS}\s*(?:<[^()]*>)?\s*\(\s*{arg}", body)
-            if hit:
-                found[fn.group(1)] = (index, receivers[hit.group(1)] + (hit.group(2) or ""))
-                break
+        hit = _wrapper_hit(_own_body(_function_body(script, fn.end())), params, names)
+        if hit is not None:
+            index, match = hit
+            found[fn.group(1)] = (index, receivers[match.group(1)] + (match.group(2) or ""))
     return found
 
 
@@ -210,6 +276,14 @@ def _wrapper_calls(text: str, wrappers: dict[str, tuple[int, str]]) -> set[str]:
     return out
 
 
+def _call_text(rel: str, code: str, script: str) -> str:
+    """The text wrapper calls are read from: *script* (comments stripped), plus a ``.vue`` template's markup without
+    its ``<!-- -->`` comments, where a handler may call a wrapper (#20910)."""
+    if not rel.endswith(".vue"):
+        return script
+    return script + "\n" + strip_html_comments(SCRIPT_BODY.sub("", code))
+
+
 def _file_calls(rel: str, text: str) -> set[str]:
     """Raw ``base + path`` strings the client calls in one file make.
 
@@ -221,7 +295,8 @@ def _file_calls(rel: str, text: str) -> set[str]:
     lines = ["" if (ln.lstrip()[:2] in _COMMENT_PREFIXES or ln.strip() == "*") else ln for ln in text.splitlines()]
     code = _inline_constants(lines)
     out.update(receivers[m.group(1)] + m.group(2) for m in pattern.finditer(code) if m.group(2) != "/api")
-    out.update(_wrapper_calls(code, _wrappers(rel, code, receivers)))
+    script = frontend_code_text(rel, code)
+    out.update(_wrapper_calls(_call_text(rel, code, script), _wrappers(script, receivers)))
     if rel.startswith(_SLM_ROOT):
         for line in lines:
             out.update("/api" + suffix for suffix in _SLM_BASE_CALL.findall(line))

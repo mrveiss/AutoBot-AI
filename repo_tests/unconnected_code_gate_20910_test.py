@@ -156,6 +156,52 @@ def test_a_function_is_a_wrapper_only_by_its_own_body_20910(tmp_path: Path, call
     assert _route_keys(tmp_path, {**_ROUTE, **_WIRED, _SLM_CALLER: caller}) == ({key} if flagged else set())
 
 
+_CLIENT_LOAD = "function load(path: string) {{\n  return slmApiClient.get({arg})\n}}\n"
+_NESTED_LOAD = (
+    "function label(path: string) {\n  function load(path: string) {\n    return slmApiClient.get(path)\n  }\n"
+    "  return path.trim()\n}\nlabel('/planted/orphan')\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("label", "trap", "plain"),
+    [
+        (
+            "a concatenated constant is not its first literal",
+            "const URL = '/planted/orphan' + '/history'\nslmApiClient.get(URL)\n",
+            "const URL = '/planted/orphan'\nslmApiClient.get(URL)\n",
+        ),
+        (
+            "a transformed wrapper argument is not the parameter",
+            _CLIENT_LOAD.format(arg="path + '/history'") + "load('/planted/orphan')\n",
+            _CLIENT_LOAD.format(arg="path") + "load('/planted/orphan')\n",
+        ),
+        (
+            "a reassigned constant holds its latest value",
+            "let url = '/planted/orphan'\nurl = '/planted/other'\nslmApiClient.get(url)\n",
+            "let url = '/planted/other'\nurl = '/planted/orphan'\nslmApiClient.get(url)\n",
+        ),
+        (
+            "a nested function's client call is not the outer function's",
+            _NESTED_LOAD,
+            _CLIENT_LOAD.format(arg="path").replace("load", "label") + "label('/planted/orphan')\n",
+        ),
+        (
+            "a wrapper call in a trailing comment is not a call",
+            _CLIENT_LOAD.format(arg="path") + "const shown = 1 // load('/planted/orphan')\n",
+            _CLIENT_LOAD.format(arg="path") + "const shown = 1\nload('/planted/orphan')\n",
+        ),
+    ],
+)
+def test_only_a_whole_literal_reaching_a_client_untransformed_connects_the_route_20910(
+    tmp_path: Path, label: str, trap: str, plain: str
+) -> None:
+    """Each trap names `/planted/orphan` without calling it; its plain twin calls it (#20910 review)."""
+    key = "route:autobot-backend/api/planted_route.py:GET /orphan"
+    assert _route_keys(tmp_path, {**_ROUTE, **_WIRED, _SLM_CALLER: _IMPORT + trap}) == {key}, label
+    assert _route_keys(tmp_path, {**_ROUTE, **_WIRED, _SLM_CALLER: _IMPORT + plain}) == set(), label
+
+
 _VUE_CALLER = "autobot-slm-frontend/src/views/PlantedView.vue"
 #: An odd number of template apostrophes, and a `}` in a trailing comment before the client call. Read as one .ts
 #: text, `Don't` opens a string that pairs with the next quotes, the comment sits inside a "string" and survives, its
