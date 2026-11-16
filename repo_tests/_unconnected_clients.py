@@ -125,18 +125,22 @@ def _site_pattern(receivers: dict[str, str]) -> re.Pattern[str]:
     return re.compile(rf"(?<![\w.$])({names})\s*\.\s*{_VERBS}\s*{_PATH}")
 
 
-def _track(statement: str, consts: dict[str, str]) -> None:
-    """Record, update or forget a path constant from one assignment statement.
+def _track(statement: str, consts: dict[str, str], known: set[str]) -> None:
+    """Record, update or forget a path constant's value from one assignment statement.
 
-    A declaration or a plain reassignment whose whole value is one literal path sets the name; any other value, or a
-    compound assignment (``url += '/x'``), forgets it, so a later use is not read as the stale literal (#20910).
+    *known* is every name declared in the file (``const``/``let``/``var``), kept apart from *consts*, each name's
+    current value. A whole literal path assigned to a known name sets its value. Any other value, or a compound
+    assignment (``url += '/x'``), clears the value but leaves the name known, so a later literal sets it again and
+    a use in between is not read as the stale literal (#20910).
     """
     assigned = _ASSIGN.match(statement)
     if assigned is None:
         return
     keyword, name, op, value = assigned.groups()
+    if keyword:
+        known.add(name)
     whole = None if op else _WHOLE_PATH.match(value.strip())
-    if whole is not None and (keyword or name in consts):
+    if whole is not None and name in known:
         consts[name] = whole.group(2)
     else:
         consts.pop(name, None)
@@ -149,6 +153,7 @@ def _inline_constants(lines: list[str]) -> str:
     the rest of it.
     """
     consts: dict[str, str] = {}
+    known: set[str] = set()
     out: list[str] = []
     for line in lines:
         statements = line.split(";")
@@ -157,7 +162,7 @@ def _inline_constants(lines: list[str]) -> str:
                 statement = statement.replace("${" + name + "}", value)
                 statement = re.sub(rf"(\(\s*){name}(?=\s*[,)])", rf"\g<1>'{value}'", statement)
             statements[index] = statement
-            _track(statement, consts)
+            _track(statement, consts, known)
         out.append(";".join(statements))
     return "\n".join(out)
 

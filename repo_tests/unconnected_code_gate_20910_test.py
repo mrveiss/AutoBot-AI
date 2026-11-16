@@ -192,6 +192,11 @@ _NESTED_LOAD = (
             "let url = '/planted/other'\nurl = '/planted/orphan'\nslmApiClient.get(url)\n",
         ),
         (
+            "a name cleared by a non-literal value is set again by a later literal",
+            "let url = '/planted/other'\nurl = window.location.pathname\nslmApiClient.get(url)\n",
+            "let url = '/planted/other'\nurl = window.location.pathname\nurl = '/planted/orphan'\nslmApiClient.get(url)\n",
+        ),
+        (
             "a nested function's client call is not the outer function's",
             _NESTED_LOAD,
             _CLIENT_LOAD.format(arg="path").replace("load", "label") + "label('/planted/orphan')\n",
