@@ -5,7 +5,8 @@ Checklist for starting and ending a session. Rules it points at are not restated
 ## Start
 
 - [ ] If `.notes/INDEX.md` exists in the main checkout, read it and pick up every note whose latest line is not `closed`. No file, or no open line, means nothing is pending.
-- [ ] For each legacy `.session/HANDOFF-*.md` in the main checkout: if `.notes/legacy/main-<original file name>` does not exist, copy it there first, then append its open items to `.notes/INDEX.md`. An existing copy means already carried: skip it. Leave the original for the human; agents never delete it.
+- [ ] Carry each legacy `.session/HANDOFF-*.md` in the main checkout as `main-<original file name>`. Leave the original for the human; agents never delete it.
+- [ ] To carry a legacy handoff as `<name>`: `ledger claim task legacy-handoff:<name>` (refused means another session holds it: skip). If `.notes/legacy/<name>` exists, it is done: release and skip. Otherwise append each open item to `.notes/INDEX.md`, skipping any item whose file already has a line there; then copy the handoff to `.notes/legacy/<name>`, written last as the done marker; then `ledger release task legacy-handoff:<name>`. An interrupted carry has no copy, so the next session resumes it.
 
 ## End
 
@@ -31,7 +32,7 @@ Checklist for starting and ending a session. Rules it points at are not restated
 
 - [ ] No local test runs: CI and merge trains are the gate ([`CLAUDE_REVIEW.md`](CLAUDE_REVIEW.md#merge-trains)).
 - [ ] Everything finished is committed and pushed; no local-only work ([`CLAUDE_GIT.md`](CLAUDE_GIT.md#parallel-work-worktree-isolation-critical)).
-- [ ] Before removing each worktree, check it for a legacy `.session/HANDOFF-*.md` (gitignored, so removal will not refuse). If one exists and `.notes/legacy/<worktree>-<original file name>` does not, copy it there first, then append its open items to `.notes/INDEX.md`; an existing copy means already carried. Only then remove the worktree.
+- [ ] Before removing each worktree, check it for a legacy `.session/HANDOFF-*.md` (gitignored, so removal will not refuse). If one exists, carry it as `<worktree>-<original file name>` the same way as at Start. Only then remove the worktree.
 - [ ] Remove every worktree you own once its branch is pushed, landed or not, never with `--force`, then `ledger release worktree <name>` ([claims](AGENT_COORDINATION.md#scope-grammar)). The pushed branch is the record and the takeover point; the worktree is disposable. Unlike a restart, an end-of-session release is final.
 - [ ] A worktree that refuses removal is dirty: report it, do not force it.
 - [ ] Report anything uncommitted.
