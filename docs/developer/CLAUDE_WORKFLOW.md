@@ -89,33 +89,20 @@ only when dispatching agents or starting batch work.
 
 ## Session Lifecycle
 
-Sessions can terminate before their PRs merge. **Each session leaves a machine-readable handoff at end and never sweeps another's worktrees** ([OWNER_RULES.md](OWNER_RULES.md) rules 8, 9). Full
-protocol lives in the `session-lifecycle` skill, which also carries the handoff
-schema. **`.session/` is gitignored (#17479)** — handoffs are local working notes,
-never committed, because they name branches, worktrees and PR state that is false
-the moment the work moves.
+Sessions can terminate before their PRs merge. **Each session leaves a handoff note in `.notes/` at end and never sweeps another's worktrees** ([OWNER_RULES.md](OWNER_RULES.md) rules 8, 9). `.notes/` is the ONE handoff mechanism (the `.session/HANDOFF-<branch>.md` handoff is retired, owner decision 2026-11-16); procedure in [`SESSION_END.md`](SESSION_END.md). `.notes/` is gitignored — local working notes, never committed.
 
 **Start of session** (before any task work):
 1. `git fetch --prune`, then inventory worktrees (`git worktree list`, `ledger who worktree`). Never sweep: dispose only of a worktree you own whose PR shows MERGED. An orphan (owner session gone) is taken over: finish its work, then reuse it.
 2. If step 1 took over an orphan, skip this step and continue in its worktree. Otherwise create your **own** isolated worktree — never two sessions in one checkout:
    `git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/main`.
-3. Read predecessor handoffs in `.session/` **on this machine** — they are
-   local-only and will not be present in a fresh clone. If a branch is unmerged,
-   decide to continue it (merge base first) or start fresh — never
-   duplicate its work blind. Step 1's sweep reaps handoffs whose branch is gone
-   (#13848), so every file still there names a live branch. A handoff the sweep
-   reports as `STRANDED` is unlanded work with no branch left: **file an issue
-   for it**, which is now the only durable record, since the file itself is not
-   committed.
+3. Read `.notes/INDEX.md` if it exists ([`SESSION_END.md`](SESSION_END.md)). If a listed branch is unmerged, decide to continue it (merge base first) or start fresh — never duplicate its work blind.
 
 **End of session** (mandatory — also when blocked):
 1. Leave nothing uncommitted; WIP gets a `wip:` commit and a handoff note.
 2. Merge latest base, re-run the relevant gates, grep for conflict
    markers (`^<<<<<<< `) before the final push.
 3. Push and open/update the PR.
-4. Write `.session/HANDOFF-<branch>.md` (see schema). **Do not commit it** —
-   the path is gitignored. Anything a future reader must not lose belongs in the
-   issue or the PR body, not in a local note.
+4. Write or update the `.notes/` note and `INDEX.md` ([`SESSION_END.md`](SESSION_END.md)). Do not commit it; anything a future reader must not lose belongs in the issue or the PR body.
 5. Release your ledger claims (`ledger release worktree <dir>`) and remove your worktrees with plain `git worktree remove` (never `--force`) only when all work is pushed **and** has landed (PR merged, content in base) (rule 9). A pushed but unmerged branch keeps its worktree; a tree that refuses to go is reported and left.
 
 **Who disposes of a worktree:** whoever observes the merge. If your PR merges while you are
