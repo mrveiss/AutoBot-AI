@@ -31,10 +31,11 @@ name: import-hermeticity-sweep
 # or the FULL run after the merge would go red on the base. Entries a SUBSET did not
 # probe are judged by the next FULL run.
 #
-# A schedule runs the DEFAULT branch's copy of a workflow, and that branch does not
-# carry this one, so the schedule alone never fires (#16221); the push trigger is what
-# reads main after each merge that can change the answer. Only non-PR runs open,
-# update or close an issue: those describe the base, not a diff that may never merge.
+# A schedule runs the DEFAULT branch's copy of a workflow. Since #16221 the default
+# branch is main, which carries this one, and the schedule fires: scheduled runs
+# 43588365281, 43710051996 and 43865400643 (2026-11-14 to 2026-11-16) read main. The
+# push trigger reads main after each merge that can change the answer. Only non-PR runs
+# open, update or close an issue: those describe the base, not a diff that may never merge.
 on:
   pull_request:
     # ready_for_review is REQUIRED here: the jobs below are gated on
