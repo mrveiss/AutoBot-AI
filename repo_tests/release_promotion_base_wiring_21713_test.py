@@ -28,6 +28,8 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import code_text
+
 _REPO_TESTS = "repo_tests"
 _WORKFLOWS = ".github/workflows"
 ACTION = "./.github/actions/release-promotion-base"
@@ -91,19 +93,16 @@ def _targets_base_reader(token: str | None, readers: set[str]) -> bool:
     return any(r == dotted or r.startswith(dotted + ".") for r in readers)
 
 
-def _uncommented(text: str) -> str:
-    return "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#"))
-
-
 def _listed(script: str, root: Path) -> str:
     """The text of tracked guard lists the script feeds to pytest (ci.yml's short-check reads one)."""
     names = re.findall(r"(?<![\w/.-])([\w./-]+\.txt)\b", script)
-    return "\n".join(_uncommented((root / n).read_text(encoding="utf-8")) for n in names if (root / n).is_file())
+    return "\n".join(code_text(root / n, strip_trailing=True) for n in names if (root / n).is_file())
 
 
 def runs_base_reader(step: dict, readers: set[str], root: Path) -> bool:
     """True when the step's script runs pytest on a guard that reads the ratchet base."""
-    script = _uncommented(str(step.get("run", "")))
+    # A `run:` body is a bash script; the shared comment syntax reads it as one (#21713).
+    script = code_text(str(step.get("run", "")), name="run.sh", strip_trailing=True)
     if "pytest" not in script:
         return False
     text = script + "\n" + _listed(script, root)
@@ -152,10 +151,12 @@ def _condition_gap(step: dict, guard: dict, what: str) -> str | None:
 
 
 def _export_index(steps: list[dict], output: str) -> int | None:
+    """The step whose env leads with *output* (the whole name, not a longer one) and exports it (#21713)."""
+    leads = re.compile(r"\$\{\{\s*" + re.escape(output) + r"(?![\w.-])")
     for i, step in enumerate(steps):
         env = (step.get("env") or {}).values()
         run = str(step.get("run", ""))
-        if any(str(v).replace("${{", "").strip().startswith(output) for v in env) and (
+        if any(leads.match(str(v).strip()) for v in env) and (
             "AUTOBOT_RATCHET_BASE_SHA=" in run and "GITHUB_ENV" in run
         ):
             return i
@@ -245,6 +246,16 @@ _EXPORT = {
     [
         ([_CHECKOUT, _GUARD], "no `uses:"),
         ([_CHECKOUT, _ACTION_STEP, _GUARD], "exports AUTOBOT_RATCHET_BASE_SHA"),
+        # #21713: a longer output name is not the action's base-sha.
+        (
+            [
+                _CHECKOUT,
+                _ACTION_STEP,
+                {**_EXPORT, "env": {"EVENT_BASE": "${{ steps.release-base.outputs.base-sha-old }}"}},
+                _GUARD,
+            ],
+            "exports AUTOBOT_RATCHET_BASE_SHA",
+        ),
         ([_CHECKOUT, _GUARD, _ACTION_STEP, _EXPORT], "no `uses:"),
         ([_ACTION_STEP, _CHECKOUT, _EXPORT, _GUARD], "before any checkout"),
         ([_CHECKOUT, _ACTION_STEP, _EXPORT, _GUARD], None),
