@@ -8304,6 +8304,7 @@
     "about": "About",
     "chat": "Chat",
     "canvas": "Canvas",
+    "batchJobs": "Batch Processing",
     "knowledge": "Knowledge",
     "automation": "Automation",
     "analytics": "Analytics",
@@ -8398,6 +8399,8 @@
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
     "llcRoles": "Roles",
     "keywords": {
+      "batchJobs": "batch jobs queue bulk processing",
+      "vision": "image camera screenshot capture analyse picture",
       "knowledge": "documents files library transcriber notes",
       "companyOs": "company llc business organization",
       "automation": "workflow pipeline schedule jobs",
@@ -10852,6 +10855,125 @@
       "cancelled": "Move cancelled. {name} is back at position {position} of {total}.",
       "moved": "{name} moved to position {position} of {total}.",
       "resized": "{name} is now {span} of 12 columns wide and {height} pixels tall."
+    }
+  },
+  "batchJobs": {
+    "title": "Batch Processing",
+    "subtitle": "Your batch jobs: create, follow, retry and remove them.",
+    "refresh": "Refresh",
+    "newJob": "New job",
+    "counts": {
+      "total": "Total",
+      "pending": "Pending",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
+    "filterLabel": "Show jobs by status",
+    "filterAll": "All statuses",
+    "status": {
+      "pending": "Pending",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "type": {
+      "data_processing": "Data processing",
+      "file_conversion": "File conversion",
+      "report_generation": "Report generation",
+      "backup": "Backup",
+      "custom": "Custom"
+    },
+    "typeAndId": "{type} · {id}",
+    "progress": "{value}% done",
+    "progressLabel": "Progress of {name}",
+    "created": "Created",
+    "started": "Started",
+    "duration": "Duration",
+    "notStarted": "Not started",
+    "notReported": "Not reported",
+    "run": "Run",
+    "retry": "Retry",
+    "cancelAndRemove": "Cancel and remove",
+    "remove": "Remove",
+    "loading": "Loading batch jobs…",
+    "loadFailed": "Batch jobs could not be loaded",
+    "loadFailedDetail": "The batch service did not answer.",
+    "tryAgain": "Try again",
+    "empty": "No batch jobs yet",
+    "emptyDetail": "Jobs you create appear here.",
+    "emptyFiltered": {
+      "pending": "No pending jobs",
+      "running": "No running jobs",
+      "completed": "No completed jobs",
+      "failed": "No failed jobs",
+      "cancelled": "No cancelled jobs"
+    },
+    "emptyFilteredDetail": "None of your jobs has this status right now.",
+    "clearFilter": "Show all jobs",
+    "confirm": {
+      "cancelTitle": "Cancel and remove this job?",
+      "removeTitle": "Remove this job?",
+      "message": "\"{name}\" and its logs will be removed. This cannot be undone."
+    },
+    "errors": {
+      "create": "The job could not be created.",
+      "retry": "The job could not be run again.",
+      "run": "The job could not be started.",
+      "remove": "The job could not be removed."
+    },
+    "create": {
+      "title": "New batch job",
+      "close": "Close",
+      "name": "Job name",
+      "namePlaceholder": "Name this job",
+      "type": "Job type",
+      "cancel": "Cancel",
+      "submit": "Create job"
+    }
+  },
+  "visionCapture": {
+    "title": "Vision",
+    "subtitle": "Analyse an image from a file, your camera or a screen you share.",
+    "sourceTitle": "Image",
+    "sourceLabel": "Where the image comes from",
+    "source": {
+      "upload": "File",
+      "camera": "Camera",
+      "screen": "Screen"
+    },
+    "chooseFile": "Choose an image file",
+    "capture": {
+      "camera": "Take a photo",
+      "screen": "Capture a screen"
+    },
+    "unsupported": "This browser cannot capture here. A secure (HTTPS) connection is required.",
+    "analyzeTitle": "Analyse",
+    "clear": "Clear",
+    "previewAlt": "The image to analyse",
+    "intent": "Analysis type",
+    "question": "Question",
+    "questionPlaceholder": "What do you want to know about the image?",
+    "analyze": "Analyse image",
+    "noImage": "No image yet",
+    "noImageDetail": "Choose a file, take a photo or capture a screen to start.",
+    "historyTitle": "Recent analyses",
+    "historyEmpty": "Analyses from this visit appear here (the last 10).",
+    "result": {
+      "title": "Result",
+      "confidence": "{value}% confidence",
+      "nothing": "The service returned no description or labels for this image.",
+      "time": "Took {seconds} s",
+      "showRaw": "Show full reply",
+      "hideRaw": "Hide full reply"
+    },
+    "errors": {
+      "capture": "The image could not be captured: {detail}",
+      "unknown": "unknown reason",
+      "noImage": "the camera or screen returned no picture",
+      "analysis": "The image could not be analysed.",
+      "analysisUnsuccessful": "The analysis did not succeed: {detail}"
     }
   }
 }

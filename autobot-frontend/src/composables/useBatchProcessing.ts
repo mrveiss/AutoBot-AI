@@ -310,6 +310,47 @@ function useTemplatesAndSchedules(batchApi: BatchApi) {
   }
 }
 
+/** What a run visibly changes on a job: a re-run that fails again still moves `started_at`. */
+const runFingerprint = (job: BatchJob | undefined) =>
+  job ? `${job.status}|${job.started_at ?? ''}|${job.completed_at ?? ''}|${job.progress}` : ''
+
+/**
+ * Jobs a run or retry has queued whose record has not moved yet (#20644 review). `POST /{id}/run`
+ * returns before the worker picks the job up, so a retried failed job still reads `failed` and the
+ * active-jobs poll would stop; while any queued job is unchanged, the same poll keeps going.
+ */
+function useAwaitedRuns(jobs: Ref<BatchJob[]>) {
+  const awaited = ref(new Map<string, string>())
+  const find = (jobId: string) => jobs.value.find((j) => j.job_id === jobId)
+
+  function settle(): void {
+    for (const [jobId, before] of awaited.value) {
+      const job = find(jobId)
+      if (!job || runFingerprint(job) !== before) awaited.value.delete(jobId)
+    }
+  }
+
+  return {
+    waiting: computed(() => awaited.value.size > 0),
+    expect: (jobId: string) => awaited.value.set(jobId, runFingerprint(find(jobId))),
+    forget: (jobId: string) => awaited.value.delete(jobId),
+    settle,
+  }
+}
+
+/** Run a job and keep polling for it until its record moves; a failed request stops the wait. */
+function awaitingRunOf(runs: ReturnType<typeof useAwaitedRuns>, run: (jobId: string) => Promise<BatchJob>) {
+  return async (jobId: string): Promise<BatchJob> => {
+    runs.expect(jobId)
+    try {
+      return await run(jobId)
+    } catch (err) {
+      runs.forget(jobId)
+      throw err
+    }
+  }
+}
+
 /**
  * Batch processing screen state. Loads record their failure in the matching error ref;
  * mutations (create, cancel, delete, run, toggle) reject, so the caller reports them.
@@ -322,15 +363,19 @@ export function useBatchProcessingState() {
   const groups = useJobGroups(list, batchApi)
   const refreshJob = useRefreshJob(batchApi, list, detail)
   const mutations = useMutations(batchApi, list.loadJobs, detail.selectedJob, lists.loadTemplates, lists.loadSchedules)
+  const runs = useAwaitedRuns(list.jobs)
   const polling = useJobsPolling(async () => {
-    if (!groups.hasActiveJobs.value) return
+    if (!groups.hasActiveJobs.value && !runs.waiting.value) return
     await list.loadJobs()
+    runs.settle()
     const selected = detail.selectedJob.value
     if (selected && !isTerminalStatus(selected.status)) await refreshJob(selected.job_id)
   })
 
   return {
     ...list, ...detail, ...mutations, ...polling, ...lists, ...groups, ...useFilterActions(list), refreshJob,
+    awaitingRun: runs.waiting,
+    runJob: awaitingRunOf(runs, mutations.runJob),
   }
 }
 
