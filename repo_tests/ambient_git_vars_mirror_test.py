@@ -126,12 +126,15 @@ def test_the_shell_and_python_scrub_lists_are_identical() -> None:
 _SHELL_GLOBS = ("**/*.sh",)
 _SHELL_EXCLUDES = (".git/", "node_modules/", ".worktrees/")
 
-#: Pinned to the six this discovers (the seventh, `git-root.sh`, uses the array
+#: Pinned to the five this discovers (the seventh, `git-root.sh`, uses the array
 #: form and is covered by the mirror test above). The realistic drift here is a
 #: glob narrowed from `scripts/**/*.sh` to `scripts/lib/*.sh`, or a hook
 #: directory moving -- both leave 4 or 5 sites and would clear a loose floor
 #: while a third of the tree left discovery silently.
-_MIN_SCRUB_SITES = 6
+# Was 6 until #21676 retired the `.session/HANDOFF` mechanism and deleted
+# `scripts/lib/session-handoffs_test.sh`, which was one literal-`unset GIT_*`
+# scrub site; the real population dropped by one, the discovery did not regress.
+_MIN_SCRUB_SITES = 5
 
 _UNSET = re.compile(r"^[ \t]*unset[ \t]+((?:GIT_[A-Z_]+[ \t]*)+)", re.M)
 
