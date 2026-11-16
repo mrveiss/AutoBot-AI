@@ -22,7 +22,9 @@ from fastapi.testclient import TestClient
 
 from api.schemas_admin_status import AdminStatusRequest
 from api.user_management.admin_status import set_admin_status
+from api.user_management.dependencies import _PLATFORM_ADMIN_DENIED
 from api.user_management.dependencies import get_current_user as route_get_current_user
+from api.user_management.dependencies import get_db_session, get_user_service
 from api.user_management.router import router as user_management_router
 from autobot_shared.db_session import POST_COMMIT_CALLBACKS
 from autobot_shared.user_management import password_epoch
@@ -31,6 +33,7 @@ from autobot_shared.user_management.models.audit import AuditResourceType, Ident
 from autobot_shared.user_management.user_service import UserService
 from tests.security._credential_harness import real_middleware
 from tests.security._revocation_harness import assert_refused as _assert_refused
+from tests.security._revocation_harness import token_headers as _token_headers
 from tests.security._revocation_harness import token_request as _token_request
 
 
@@ -310,3 +313,71 @@ async def test_the_row_is_locked_for_the_read_modify_write(epochs):
     await _change(service, False)
 
     assert service.session.refresh.await_args.kwargs == {"with_for_update": True}
+
+
+# --- Through HTTP: the change made by the real route, the old token refused by a real admin route --------------------
+
+_LIST_USERS = "/user-management/users"  # ``list_users``: gated by ``require_platform_admin``, like the change itself
+
+
+async def _no_session():
+    """Admins send no ``X-Organization-Id`` here, so tenant resolution never queries; a query would fail loudly."""
+    yield MagicMock(name="unused-session")
+
+
+def _client(real_auth_middleware, monkeypatch, service) -> TestClient:
+    """The real user-management router behind the real credential gate; only the session and service are stood in for.
+
+    The route gate's import of ``auth_middleware`` is the pytest stub, so it is pointed at the real module
+    (as ``install_real_resolution`` does), whose ``get_current_user`` runs the real password-epoch check.
+    """
+    gate = "api.user_management.dependencies"
+    monkeypatch.setattr(f"{gate}._canonical_get_current_user", real_auth_middleware.get_current_user)
+    monkeypatch.setattr(f"{gate}._canonical_resolve_human_user", real_auth_middleware.resolve_human_user)
+    service.list_users = AsyncMock(return_value=([], 0))
+    app = FastAPI()
+    app.include_router(user_management_router)
+    app.dependency_overrides[get_db_session] = _no_session
+    app.dependency_overrides[get_user_service] = lambda: service
+    return TestClient(app)
+
+
+def _put_admin(client: TestClient, user, is_admin: bool, actor: dict):
+    return client.put(f"/user-management/users/{user.id}/admin", json={"is_platform_admin": is_admin}, headers=actor)
+
+
+def test_demoting_through_the_route_refuses_the_old_admin_token_on_a_real_admin_route(
+    real_auth_middleware, get_current_user, epochs, monkeypatch
+):
+    """PUT /users/{id}/admin by another admin, then the user's pre-change token on GET /users: 401."""
+    alice = _user(True)
+    client = _client(real_auth_middleware, monkeypatch, _service(alice))
+    old, bob = _token_headers(role="admin"), _token_headers(username="bob", role="admin")
+    assert client.get(_LIST_USERS, headers=old).status_code == 200, "control: the token works before the change"
+
+    changed = _put_admin(client, alice, False, bob)
+
+    assert changed.status_code == 200 and changed.json()["changed"] is True and alice.is_platform_admin is False
+    assert client.get(_LIST_USERS, headers=old).status_code == 401
+    assert client.get(_LIST_USERS, headers=bob).status_code == 200, "another admin's token is untouched"
+    fresh = client.get(_LIST_USERS, headers=_token_headers(age_seconds=-5, role=UserService.account_role(alice)))
+    assert (fresh.status_code, fresh.json()["detail"]) == (403, _PLATFORM_ADMIN_DENIED), "signed in, no longer admin"
+
+
+def test_promoting_through_the_route_voids_the_old_token_and_the_next_login_reaches_admin_routes(
+    real_auth_middleware, get_current_user, epochs, monkeypatch
+):
+    """PUT /users/{id}/admin grants admin; the pre-change user token is void and a token issued after it is admitted."""
+    alice = _user(False)
+    client = _client(real_auth_middleware, monkeypatch, _service(alice))
+    old, bob = _token_headers(role="user"), _token_headers(username="bob", role="admin")
+    before = client.get(_LIST_USERS, headers=old)
+    assert (before.status_code, before.json()["detail"]) == (403, _PLATFORM_ADMIN_DENIED), "control: not yet admin"
+
+    changed = _put_admin(client, alice, True, bob)
+
+    assert changed.status_code == 200 and changed.json()["changed"] is True and alice.is_platform_admin is True
+    assert client.get(_LIST_USERS, headers=old).status_code == 401
+    issued_role = UserService.account_role(alice)  # the one derivation login uses for the token's role
+    assert issued_role == "admin"
+    assert client.get(_LIST_USERS, headers=_token_headers(age_seconds=-5, role=issued_role)).status_code == 200
