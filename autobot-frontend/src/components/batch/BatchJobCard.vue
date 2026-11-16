@@ -15,6 +15,7 @@
 
     <div class="mb-3 flex flex-col gap-1 text-autobot-text-secondary">
       <span>{{ t('batchJobs.progress', { value: job.progress }) }}</span>
+      <!-- Native <progress>: the kit has no progress primitive yet (#21662). -->
       <progress class="w-full" :value="job.progress" max="100" :aria-label="t('batchJobs.progressLabel', { name: job.name })" />
     </div>
 

@@ -44,12 +44,12 @@ const job = (job_id: string, status: string) => ({
   job_id, name: `Job ${job_id}`, job_type: 'backup', status, progress: 40, parameters: {}, created_at: '2026-11-16T00:00:00Z',
 })
 
-function setState(view: string, jobs: unknown[] = [], error: unknown = null) {
+function setState(view: string, jobs: unknown[] = [], error: unknown = null, status?: string) {
   Object.assign(fake, {
     jobs: ref(jobs), jobsView: ref(view), error: ref(error), loading: ref(view === 'loading'),
-    filter: ref({ status: undefined }), statusCounts: ref({ failed: 1, running: 2 }),
+    filter: ref({ status }), statusCounts: ref({ failed: 1, running: 2 }),
     pendingCount: computed(() => 0), runningCount: computed(() => 2), completedCount: computed(() => 0), failedCount: computed(() => 1),
-    loadJobs: vi.fn(), setFilter: vi.fn(), startPolling: vi.fn(), stopPolling: vi.fn(),
+    loadJobs: vi.fn(), setFilter: vi.fn(), clearFilter: vi.fn(), cancelJob: vi.fn(), startPolling: vi.fn(), stopPolling: vi.fn(),
     createJob: vi.fn(), runJob: vi.fn().mockResolvedValue({}), deleteJob: vi.fn().mockResolvedValue({}),
   })
 }
@@ -120,5 +120,24 @@ describe('BatchJobsView (#20644)', () => {
     await remove.trigger('click')
     await flushPromises()
     expect(fake.deleteJob).toHaveBeenCalledWith('c')
+  })
+
+  it('a filter with no match says so and offers to clear it, instead of "no jobs yet"', async () => {
+    setState('empty', [], null, 'failed')
+    const wrapper = mountView()
+    expect(wrapper.text()).toContain('No failed jobs')
+    expect(wrapper.text()).not.toContain('No batch jobs yet')
+    await wrapper.findAll('button').find((b) => b.text() === 'Show all jobs')!.trigger('click')
+    expect(fake.clearFilter).toHaveBeenCalled()
+  })
+
+  it('"Cancel and remove" on a running job deletes it and never calls the unserved cancel route', async () => {
+    setState('ready', [job('r', 'running')])
+    confirmMock.mockResolvedValue(true)
+    const wrapper = mountView()
+    await wrapper.findAll('button').find((b) => b.text() === 'Cancel and remove')!.trigger('click')
+    await flushPromises()
+    expect(fake.deleteJob).toHaveBeenCalledWith('r')
+    expect(fake.cancelJob).not.toHaveBeenCalled()
   })
 })

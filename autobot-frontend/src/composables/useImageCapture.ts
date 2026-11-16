@@ -15,6 +15,11 @@ import { isoTimestampStamp } from '@autobot/ui'
 
 export type CaptureSource = 'camera' | 'screen'
 
+/** The canvas gave back no image; the screen maps `code` to its own i18n key, never this message. */
+export class CaptureError extends Error {
+  readonly code = 'no-image' as const
+}
+
 /** Whether this browser can capture from *source* (a secure context is required for both). */
 export function canCapture(source: CaptureSource): boolean {
   const devices = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices
@@ -29,7 +34,7 @@ function openStream(source: CaptureSource): Promise<MediaStream> {
 
 function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('capture produced no image'))), 'image/png')
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new CaptureError('no-image'))), 'image/png')
   })
 }
 

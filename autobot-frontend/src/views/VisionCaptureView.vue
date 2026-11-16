@@ -54,11 +54,11 @@
       <EmptyState v-if="!screen.history.value.length" :title="t('visionCapture.historyEmpty')" compact />
       <ul v-else class="m-0 flex list-none flex-col gap-2 p-0" data-testid="vision-history">
         <li v-for="entry in screen.history.value" :key="entry.id">
-          <button type="button" class="flex w-full cursor-pointer items-center gap-3 border border-autobot-border bg-transparent p-2 text-start text-autobot-text-primary" @click="screen.reopen(entry)">
+          <BaseButton variant="ghost" block class="justify-start gap-3" @click="screen.reopen(entry)">
             <img :src="entry.previewUrl" alt="" class="h-12 w-12 object-cover" />
             <span>{{ formatDateTime(entry.at) }}</span>
             <span>{{ intentLabel(entry.intent) }}</span>
-          </button>
+          </BaseButton>
         </li>
       </ul>
     </BaseCard>

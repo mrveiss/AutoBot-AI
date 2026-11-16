@@ -13,16 +13,12 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseButton, EmptyState } from '@autobot/ui'
-import { getUserAppUrl } from '@/config/ssot-config'
+import { getUserAppScreenUrl, type UserAppScreen } from '@/config/ssot-config'
 
-/** The user-app path of each moved screen. */
-type MovedScreen = 'batch' | 'vision'
-const USER_APP_PATHS: Record<MovedScreen, string> = { batch: '/batch', vision: '/vision' }
-
-const props = defineProps<{ screen: MovedScreen }>()
+const props = defineProps<{ screen: UserAppScreen }>()
 const { t } = useI18n()
 
-const href = computed(() => `${getUserAppUrl()}${USER_APP_PATHS[props.screen]}`)
+const href = computed(() => getUserAppScreenUrl(props.screen))
 const name = computed(() => t(`tools.moved.${props.screen}`))
 </script>
 

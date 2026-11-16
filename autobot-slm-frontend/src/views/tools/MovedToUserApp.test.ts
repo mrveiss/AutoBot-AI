@@ -11,7 +11,7 @@ import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/locales/en.json'
 
-vi.mock('@/config/ssot-config', () => ({ getUserAppUrl: () => 'https://user-app.example' }))
+// The real config: with no frontend host set the apps share an origin, so the link is the bare path.
 vi.mock('@autobot/ui', () => ({
   EmptyState: { props: ['title', 'description'], template: '<div><h2>{{ title }}</h2><p>{{ description }}</p><slot name="actions" /></div>' },
   BaseButton: { props: ['as'], template: '<a v-bind="$attrs"><slot /></a>' },
@@ -25,8 +25,8 @@ const mountFor = (screen: 'batch' | 'vision') =>
 
 describe('MovedToUserApp (#20644)', () => {
   it.each([
-    ['batch', 'Batch Processing', 'https://user-app.example/batch'],
-    ['vision', 'Vision', 'https://user-app.example/vision'],
+    ['batch', 'Batch Processing', '/batch'],
+    ['vision', 'Vision', '/vision'],
   ] as const)('%s: says where it moved and links there', (screen, name, href) => {
     const wrapper = mountFor(screen)
     expect(wrapper.get('h2').text()).toBe(`${name} moved to the user app`)

@@ -15,12 +15,18 @@ import { onScopeDispose, ref, shallowRef, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { httpErrorText } from '@autobot/ui'
 import { processImage } from '@/composables/useVisionApi'
-import { captureImage, type CaptureSource } from '@/composables/useImageCapture'
+import { CaptureError, captureImage, type CaptureSource } from '@/composables/useImageCapture'
 import { useImageAnalysisHistory, type ImageAnalysisEntry } from '@/composables/useImageAnalysisHistory'
 import { createLogger } from '@/utils/debugUtils'
 import type { MultiModalResponse, ProcessingIntent } from '@/types/visionMultimodal'
 
 const logger = createLogger('useVisionCaptureScreen')
+
+/** Why a capture failed, in the user's language: our own coded failure, else the browser's reason. */
+function captureFailureText(err: unknown, t: (key: string) => string): string {
+  if (err instanceof CaptureError) return t('visionCapture.errors.noImage')
+  return httpErrorText(err, t('visionCapture.errors.unknown'))
+}
 
 /** The image being worked on, its preview URL (revoked when replaced or on leave), and its result. */
 function useCurrentImage(error: Ref<string | null>) {
@@ -40,8 +46,13 @@ function useCurrentImage(error: Ref<string | null>) {
   return { file, previewUrl, result, choose }
 }
 
+/** Set once the screen's scope ends: work finishing after that must not create object URLs nobody revokes. */
+interface Lifetime {
+  disposed: boolean
+}
+
 /** Camera or screen capture; a declined prompt or unsupported browser becomes the screen's error. */
-function useCapture(choose: (file: File | null) => void, error: Ref<string | null>) {
+function useCapture(choose: (file: File | null) => void, error: Ref<string | null>, life: Lifetime) {
   const { t } = useI18n()
   const capturing = ref(false)
 
@@ -49,10 +60,11 @@ function useCapture(choose: (file: File | null) => void, error: Ref<string | nul
     capturing.value = true
     error.value = null
     try {
-      choose(await captureImage(source))
+      const file = await captureImage(source)
+      if (!life.disposed) choose(file)
     } catch (err) {
       logger.warn('Capture failed:', err)
-      error.value = t('visionCapture.errors.capture', { detail: httpErrorText(err, t('visionCapture.errors.unknown')) })
+      error.value = t('visionCapture.errors.capture', { detail: captureFailureText(err, t) })
     } finally {
       capturing.value = false
     }
@@ -62,7 +74,7 @@ function useCapture(choose: (file: File | null) => void, error: Ref<string | nul
 }
 
 /** Analyse the current image; each success lands in the history, a failure in the error. */
-function useAnalysis(image: ReturnType<typeof useCurrentImage>, error: Ref<string | null>) {
+function useAnalysis(image: ReturnType<typeof useCurrentImage>, error: Ref<string | null>, life: Lifetime) {
   const { t } = useI18n()
   const history = useImageAnalysisHistory()
   const intent = ref<ProcessingIntent>('analysis')
@@ -76,8 +88,10 @@ function useAnalysis(image: ReturnType<typeof useCurrentImage>, error: Ref<strin
     analyzing.value = true
     error.value = null
     try {
-      image.result.value = await processImage(file, intent.value, asked)
-      history.add({ file, intent: intent.value, question: asked, result: image.result.value })
+      const result = await processImage(file, intent.value, asked)
+      if (life.disposed) return
+      image.result.value = result
+      history.add({ file, intent: intent.value, question: asked, result })
     } catch (err) {
       logger.error('Image analysis failed:', err)
       error.value = httpErrorText(err, t('visionCapture.errors.analysis'))
@@ -91,9 +105,13 @@ function useAnalysis(image: ReturnType<typeof useCurrentImage>, error: Ref<strin
 
 export function useVisionCaptureScreen() {
   const error = ref<string | null>(null)
+  const life: Lifetime = { disposed: false }
+  onScopeDispose(() => {
+    life.disposed = true
+  })
   const image = useCurrentImage(error)
-  const capture = useCapture(image.choose, error)
-  const analysis = useAnalysis(image, error)
+  const capture = useCapture(image.choose, error, life)
+  const analysis = useAnalysis(image, error, life)
 
   function reopen(entry: ImageAnalysisEntry): void {
     image.choose(entry.file)

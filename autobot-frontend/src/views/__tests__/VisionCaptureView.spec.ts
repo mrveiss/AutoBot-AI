@@ -19,7 +19,7 @@ const { processImage, captureImage, canCapture } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/composables/useVisionApi', () => ({ processImage }))
-vi.mock('@/composables/useImageCapture', () => ({ captureImage, canCapture }))
+vi.mock('@/composables/useImageCapture', () => ({ captureImage, canCapture, CaptureError: class extends Error {} }))
 vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }))

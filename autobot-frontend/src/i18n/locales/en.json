@@ -10902,6 +10902,9 @@
     "tryAgain": "Try again",
     "empty": "No batch jobs yet",
     "emptyDetail": "Jobs you create appear here.",
+    "emptyFiltered": "No {status} jobs",
+    "emptyFilteredDetail": "None of your jobs has this status right now.",
+    "clearFilter": "Show all jobs",
     "confirm": {
       "cancelTitle": "Cancel and remove this job?",
       "removeTitle": "Remove this job?",
@@ -10960,6 +10963,7 @@
     "errors": {
       "capture": "The image could not be captured: {detail}",
       "unknown": "unknown reason",
+      "noImage": "the camera or screen returned no picture",
       "analysis": "The image could not be analysed."
     }
   }

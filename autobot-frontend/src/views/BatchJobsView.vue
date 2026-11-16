@@ -50,6 +50,16 @@
       </template>
     </EmptyState>
     <EmptyState
+      v-else-if="state.jobsView.value === 'empty' && activeStatus"
+      :title="t('batchJobs.emptyFiltered', { status: t(`batchJobs.status.${activeStatus}`).toLowerCase() })"
+      :description="t('batchJobs.emptyFilteredDetail')"
+      data-testid="batch-empty-filtered"
+    >
+      <template #actions>
+        <BaseButton @click="state.clearFilter()">{{ t('batchJobs.clearFilter') }}</BaseButton>
+      </template>
+    </EmptyState>
+    <EmptyState
       v-else-if="state.jobsView.value === 'empty'"
       :title="t('batchJobs.empty')"
       :description="t('batchJobs.emptyDetail')"
@@ -83,6 +93,9 @@ const { state, busy, actionError, createOpen, createError, openCreate, createJob
   useBatchJobsScreen()
 
 const STATUSES = ['pending', 'running', 'completed', 'failed', 'cancelled'] as const
+
+/** The status filter in force, if any: an empty answer under it is not "no jobs at all". */
+const activeStatus = computed(() => state.filter.value.status)
 
 const statusOptions = computed(() => [
   { value: 'all', label: t('batchJobs.filterAll') },

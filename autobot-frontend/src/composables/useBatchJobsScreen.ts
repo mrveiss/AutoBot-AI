@@ -59,8 +59,13 @@ function useCreateDialog(state: ReturnType<typeof useBatchProcessingState>, runn
 
   async function createJob(request: CreateBatchJobRequest): Promise<void> {
     const ok = await runner.run(() => state.createJob(request), 'batchJobs.errors.create')
-    if (ok) createOpen.value = false
-    else createError.value = runner.actionError.value
+    if (ok) {
+      createOpen.value = false
+      return
+    }
+    // Shown inside the dialog only; the page-level alert would repeat it behind the dialog.
+    createError.value = runner.actionError.value
+    runner.actionError.value = null
   }
 
   return { createOpen, createError, openCreate, createJob }

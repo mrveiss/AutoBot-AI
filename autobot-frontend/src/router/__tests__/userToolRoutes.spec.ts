@@ -7,8 +7,9 @@
 // not admin-gated, outside /tools (which leaves for the SLM), and reachable from the profile menu.
 
 import { describe, it, expect } from 'vitest'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { BATCH_JOBS_PATH, VISION_PATH, userToolRoutes } from '../userToolRoutes'
-import { SLM_REDIRECTS } from '../slmRedirectRoutes'
+import { SLM_REDIRECTS, slmRedirectRoutes } from '../slmRedirectRoutes'
 import { adminMenuItems, profileMenuItems } from '@/config/navItems'
 
 describe('userToolRoutes (#20644)', () => {
@@ -30,9 +31,38 @@ describe('userToolRoutes (#20644)', () => {
   it('puts both in the profile menu, not the admin menu', () => {
     const profile = profileMenuItems.map((i) => i.to)
     expect(profile).toEqual(expect.arrayContaining([BATCH_JOBS_PATH, VISION_PATH]))
-    expect(adminMenuItems.map((i) => i.to)).not.toEqual(expect.arrayContaining([BATCH_JOBS_PATH]))
+    const admin = adminMenuItems.map((i) => i.to)
+    expect(admin).not.toContain(BATCH_JOBS_PATH)
+    expect(admin).not.toContain(VISION_PATH)
     expect(profileMenuItems.filter((i) => i.to === BATCH_JOBS_PATH || i.to === VISION_PATH).every((i) => !i.featureFlag)).toBe(
       true,
     )
+  })
+})
+
+describe('the old SLM paths of the moved screens (#20644)', () => {
+  const view = { render: () => null }
+  const router = () =>
+    createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: BATCH_JOBS_PATH, component: view },
+        { path: VISION_PATH, component: view },
+        ...slmRedirectRoutes,
+      ],
+    })
+
+  it.each([
+    ['/tools/batch', BATCH_JOBS_PATH],
+    ['/tools/vision', VISION_PATH],
+  ])('%s stays in this app and lands on %s, not on the /tools wildcard', async (from, to) => {
+    const r = router()
+    await r.push(from)
+    expect(r.currentRoute.value.path).toBe(to)
+  })
+
+  it('other /tools paths still match the SLM wildcard', () => {
+    const matched = router().resolve('/tools/terminal').matched.map((m) => m.path)
+    expect(matched).toEqual(['/tools/:pathMatch(.*)*'])
   })
 })
