@@ -89,12 +89,14 @@ jobs:
             autobot-backend/requirements*.txt
             autobot-slm-backend/requirements*.txt
             requirements-ci/framework.txt
+            constraints/shared.txt
 
       - name: Install minimal codegen deps
         # The MANIFEST sources import pydantic, and autobot_shared/workflow/types.py
         # reads RetryConfig from ssot_constants, which loads ssot_config and so
-        # pydantic-settings. requirements-ci/framework.txt declares both versions
-        # once; installing from it keeps this job on those pins.
+        # pydantic-settings. requirements-ci/framework.txt lists both bare and its
+        # -c line takes their versions from constraints/shared.txt (#21471), so
+        # this job resolves the same versions as every other install.
         run: pip install -r requirements-ci/framework.txt
 
       - name: Run codegen drift check

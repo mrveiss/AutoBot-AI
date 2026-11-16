@@ -17,10 +17,11 @@ A package declared in two or more requirements files must also sit in the constr
 (#18060), otherwise each file carries its own spec and they drift apart. EXEMPT lists the few
 that cannot yet share one range.
 
-The CI plane (requirements-ci/*, requirements-ci-test.txt) carries exact pins and, for the long-standing ones,
-floors. Either may repeat a constrained package ONLY when its version satisfies the constraint, compared by
-PEP 440 (so ``2.0rc1`` is below ``>=2.0``); one below a shared floor or past a cap is a violation. Converting
-those floors to exact pins needs a resolver run against the whole CI set and is not done here.
+The CI plane (requirements-ci/*, requirements-ci-test.txt) is held to the same rule (#21471): it lists a
+constrained package bare and takes the version through its own ``-c`` line, and any file listing a constrained
+package bare without that line is a violation (pip would take the newest release). An exact pin that merely
+satisfied the shared specifier used to pass, so a dependabot bump of ``constraints/shared.txt`` (the only file
+it edits) left the CI pin behind and turned ``constraint-drift`` and ``provision-packages`` red.
 
 Packaging manifests (``pyproject.toml``, ``setup.py``) are read too (#18060): a quoted requirement for a
 constrained package whose floor does not satisfy the shared specifier is a violation. A standalone
@@ -150,6 +151,31 @@ def _declarations(files: list[pathlib.Path]) -> dict[str, list[tuple[pathlib.Pat
     return decls
 
 
+# A file's own constraints include: ``-c ../constraints/shared.txt`` (any relative depth, or ``--constraint=``).
+_SHARED_INCLUDE = re.compile(r"^\s*(?:-c|--constraint)[\s=]+\S*constraints/shared\.txt\b", re.MULTILINE)
+
+
+def unconstrained_bare_names(files: list[pathlib.Path], pinned: set[str]) -> list[str]:
+    """Files listing a constrained package bare with no ``-c`` line to the shared file (#21471).
+
+    A bare name is only safe because ``-c`` hands it the shared version; without that line pip takes the
+    newest release. Each file must carry its own line so it also installs correctly on its own (one workflow
+    installs ``requirements-ci/framework.txt`` alone). Not covered: a ``-c`` passed on the pip command line or
+    inherited from a parent file's include also binds, but does not satisfy this rule; the include's path is
+    matched by suffix, not resolved.
+    """
+    out = []
+    for f in files:
+        text = f.read_text(encoding="utf-8")
+        if _SHARED_INCLUDE.search(text):
+            continue
+        sites = _declarations([f])
+        bare = sorted(pkg for pkg in sites if pkg in pinned and not all(spec for *_, spec in sites[pkg]))
+        if bare:
+            out.append(f"{f}: lists {', '.join(bare)} bare with no -c line to {CONSTRAINTS}; pip takes the newest")
+    return out
+
+
 def _satisfies(version: str, spec: str) -> bool:
     """Does *version* meet the shared specifier? PEP 440 semantics: ``2.0rc1`` is below ``>=2.0``."""
     try:
@@ -168,32 +194,13 @@ def constraint_specs() -> dict[str, str]:
     return specs
 
 
-def _is_ci_plane(path: pathlib.Path) -> bool:
-    return path.parts[0] == "requirements-ci" or path.name in ("requirements-ci.txt", "requirements-ci-test.txt")
-
-
-def _ci_pin_ok(path: pathlib.Path, raw: str, spec: str | None) -> bool:
-    """A CI-plane exact pin (or floor) that itself satisfies the shared constraint."""
-    if spec is None or not _is_ci_plane(path):
-        return False
-    m = re.match(
-        r"^\s*[A-Za-z0-9._-]+\s*(?:\[[^\]]*\])?\s*(?:==|>=)\s*([0-9][^\s,;#]*)",
-        raw.split("#", 1)[0].split(";", 1)[0],
-    )
-    return bool(m) and _satisfies(m.group(1), spec)
-
-
-def find_violations(decls, pinned: set[str], specs: dict[str, str] | None = None) -> list[str]:
-    """Re-pins of a constrained package, and multiply-declared packages outside the constraints."""
+def find_violations(decls, pinned: set[str]) -> list[str]:
+    """Re-pins of a constrained package in ANY requirements file (the CI plane included, #21471), and
+    multiply-declared packages outside the constraints."""
     out: list[str] = []
-    specs = specs or {}
     for pkg, sites in sorted(decls.items()):
         if pkg in pinned:
-            out += [
-                f"{f}:{n}: '{raw}' re-pins a constrained package"
-                for f, n, raw, spec in sites
-                if spec and not _ci_pin_ok(f, raw, specs.get(pkg))
-            ]
+            out += [f"{f}:{n}: '{raw}' re-pins a constrained package" for f, n, raw, spec in sites if spec]
         elif pkg not in EXEMPT and len({f for f, *_ in sites}) >= 2 and any(s for *_, s in sites):
             where = ", ".join(sorted({str(f) for f, *_ in sites}))
             out.append(
@@ -216,7 +223,9 @@ def main() -> int:
         return 2
 
     specs = constraint_specs()
-    violations = find_violations(_declarations(requirement_files()), pinned, specs)
+    files = requirement_files()
+    violations = find_violations(_declarations(files), pinned)
+    violations += unconstrained_bare_names(files, pinned)
     violations += manifest_violations(manifest_files(), specs)
     if violations:
         print("Constraint drift — these versions belong ONLY in constraints/shared.txt:\n", file=sys.stderr)
