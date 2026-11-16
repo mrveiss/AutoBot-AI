@@ -30,7 +30,7 @@ on:
       - '.github/filters/backend-python-paths.yml'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
-      - 'constraints/shared.txt'
+      - 'constraints/shared.txt'  # #21471: CI-plane versions live here
       - 'pipeline-scripts/**'
       - 'tools/lint/**'
       - '.github/workflows/phase_validation.yml'

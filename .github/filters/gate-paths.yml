@@ -129,7 +129,7 @@ security_scope:
   - '.github/filters/backend-python-paths.yml'
   - '**/requirements*.txt'
   - 'requirements-ci/**'
-  - 'constraints/shared.txt'
+  - 'constraints/shared.txt'  # #21471: CI-plane versions live here
   - 'pyproject.toml'
   - 'autobot_shared/pyproject.toml'
   - '**/package*.json'

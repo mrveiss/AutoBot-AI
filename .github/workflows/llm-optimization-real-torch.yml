@@ -71,7 +71,7 @@ on:
       - "autobot_shared/token_count.py"
       - "autobot_shared/url_safety.py"
       - "requirements-ci/monitoring.txt"
-      - "constraints/shared.txt"
+      - "constraints/shared.txt"  # #21471: CI-plane versions live here
       - ".github/workflows/llm-optimization-real-torch.yml"
   pull_request:
     # ready_for_review is REQUIRED: the job is gated on draft == false, and
@@ -137,7 +137,7 @@ on:
       - "autobot_shared/token_count.py"
       - "autobot_shared/url_safety.py"
       - "requirements-ci/monitoring.txt"
-      - "constraints/shared.txt"
+      - "constraints/shared.txt"  # #21471: CI-plane versions live here
       - ".github/workflows/llm-optimization-real-torch.yml"
 
 # Least privilege (#15331). Runs tests only; no token writes.
