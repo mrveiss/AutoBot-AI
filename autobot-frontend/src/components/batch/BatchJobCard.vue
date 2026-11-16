@@ -13,29 +13,29 @@
       <BaseBadge :variant="statusVariant" :label="t(`batchJobs.status.${job.status}`)" />
     </template>
 
-    <div class="batch-job__progress">
+    <div class="mb-3 flex flex-col gap-1 text-autobot-text-secondary">
       <span>{{ t('batchJobs.progress', { value: job.progress }) }}</span>
-      <progress :value="job.progress" max="100" :aria-label="t('batchJobs.progressLabel', { name: job.name })" />
+      <progress class="w-full" :value="job.progress" max="100" :aria-label="t('batchJobs.progressLabel', { name: job.name })" />
     </div>
 
-    <dl class="batch-job__facts">
+    <dl class="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
       <div>
-        <dt>{{ t('batchJobs.created') }}</dt>
-        <dd>{{ formatDateTime(job.created_at) || t('batchJobs.notReported') }}</dd>
+        <dt class="text-autobot-text-muted">{{ t('batchJobs.created') }}</dt>
+        <dd class="m-0 text-autobot-text-primary">{{ formatDateTime(job.created_at) || t('batchJobs.notReported') }}</dd>
       </div>
       <div>
-        <dt>{{ t('batchJobs.started') }}</dt>
-        <dd>{{ formatDateTime(job.started_at) || t('batchJobs.notStarted') }}</dd>
+        <dt class="text-autobot-text-muted">{{ t('batchJobs.started') }}</dt>
+        <dd class="m-0 text-autobot-text-primary">{{ formatDateTime(job.started_at) || t('batchJobs.notStarted') }}</dd>
       </div>
       <div>
-        <dt>{{ t('batchJobs.duration') }}</dt>
-        <dd>{{ job.started_at ? formatDuration(job.started_at, job.completed_at ?? null) : t('batchJobs.notStarted') }}</dd>
+        <dt class="text-autobot-text-muted">{{ t('batchJobs.duration') }}</dt>
+        <dd class="m-0 text-autobot-text-primary">{{ job.started_at ? formatDuration(job.started_at, job.completed_at ?? null) : t('batchJobs.notStarted') }}</dd>
       </div>
     </dl>
 
     <BaseAlert v-if="job.error_message" variant="error" :message="job.error_message" />
 
-    <div class="batch-job__actions">
+    <div class="flex justify-end gap-2">
       <BaseButton v-if="job.status === 'failed'" size="sm" :disabled="busy" @click="emit('run', job.job_id)">
         {{ t('batchJobs.retry') }}
       </BaseButton>
@@ -71,39 +71,3 @@ const statusVariant = computed(() => STATUS_VARIANT[props.job.status])
 const typeLabel = computed(() => t(`batchJobs.type.${props.job.job_type}`))
 const isActive = computed(() => props.job.status === 'pending' || props.job.status === 'running')
 </script>
-
-<style scoped>
-.batch-job__progress {
-  display: flex;
-  flex-direction: column;
-  gap: var(--aui-space-1);
-  margin-bottom: var(--aui-space-3);
-  color: var(--aui-color-text-muted);
-}
-
-.batch-job__progress progress {
-  width: 100%;
-}
-
-.batch-job__facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: var(--aui-space-3);
-  margin: 0 0 var(--aui-space-3);
-}
-
-.batch-job__facts dt {
-  color: var(--aui-color-text-muted);
-}
-
-.batch-job__facts dd {
-  margin: 0;
-  color: var(--aui-color-text);
-}
-
-.batch-job__actions {
-  display: flex;
-  gap: var(--aui-space-2);
-  justify-content: flex-end;
-}
-</style>

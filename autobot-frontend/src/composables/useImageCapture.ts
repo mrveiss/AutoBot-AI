@@ -11,6 +11,8 @@
  * is taken, whether or not it succeeded, so the camera light and the share banner go out.
  */
 
+import { isoTimestampStamp } from '@autobot/ui'
+
 export type CaptureSource = 'camera' | 'screen'
 
 /** Whether this browser can capture from *source* (a secure context is required for both). */
@@ -53,7 +55,7 @@ export async function captureImage(source: CaptureSource, now: Date = new Date()
   const stream = await openStream(source)
   try {
     const blob = await grabFrame(stream)
-    return new File([blob], `${source}-${now.toISOString().replace(/[:.]/g, '-')}.png`, { type: 'image/png' })
+    return new File([blob], `${source}-${isoTimestampStamp(now)}.png`, { type: 'image/png' })
   } finally {
     stream.getTracks().forEach((track) => track.stop())
   }

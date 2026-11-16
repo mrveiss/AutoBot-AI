@@ -16,7 +16,7 @@
     :close-label="t('batchJobs.create.close')"
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <form class="batch-create" @submit.prevent="submit">
+    <form class="flex flex-col gap-4" @submit.prevent="submit">
       <BaseInput v-model="name" :label="t('batchJobs.create.name')" :placeholder="t('batchJobs.create.namePlaceholder')" required />
       <BaseSelectMenu v-model="jobType" :options="typeOptions" :label="t('batchJobs.create.type')" />
       <BaseAlert v-if="error" variant="error" :message="error" />
@@ -65,11 +65,3 @@ function submit(): void {
   emit('create', { name: trimmed, job_type: jobType.value as BatchJobType, parameters: {} })
 }
 </script>
-
-<style scoped>
-.batch-create {
-  display: flex;
-  flex-direction: column;
-  gap: var(--aui-space-4);
-}
-</style>

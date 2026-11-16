@@ -51,7 +51,7 @@ describe('useImageCapture (#20644)', () => {
     const file = await captureImage('camera', new Date('2026-11-16T10:00:00Z'))
     expect(getUserMedia).toHaveBeenCalledWith({ video: true })
     expect(file.type).toBe('image/png')
-    expect(file.name).toBe('camera-2026-11-16T10-00-00-000Z.png')
+    expect(file.name).toBe('camera-2026-11-16T10-00-00.png')
     expect(track.stop).toHaveBeenCalled()
   })
 

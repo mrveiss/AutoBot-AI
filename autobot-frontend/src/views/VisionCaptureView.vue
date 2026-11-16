@@ -8,7 +8,7 @@
   on Vision Automation; this screen only analyses the image the user gives it.
 -->
 <template>
-  <div class="vision-capture">
+  <div class="flex flex-col gap-4 p-6">
     <PageHeader :title="t('visionCapture.title')" :subtitle="t('visionCapture.subtitle')" />
 
     <BaseCard :title="t('visionCapture.sourceTitle')">
@@ -32,8 +32,8 @@
       <template #actions>
         <BaseButton variant="ghost" size="sm" @click="screen.choose(null)">{{ t('visionCapture.clear') }}</BaseButton>
       </template>
-      <img :src="screen.previewUrl.value" :alt="t('visionCapture.previewAlt')" class="vision-capture__preview" />
-      <div class="vision-capture__options">
+      <img :src="screen.previewUrl.value" :alt="t('visionCapture.previewAlt')" class="mb-3 block max-h-96 max-w-full" />
+      <div class="mb-3 flex flex-wrap gap-3">
         <BaseSelectMenu v-model="screen.intent.value" :options="intentOptions" :label="t('visionCapture.intent')" />
         <BaseInput
           v-if="screen.intent.value === 'visual_qa'"
@@ -52,10 +52,10 @@
 
     <BaseCard :title="t('visionCapture.historyTitle')">
       <EmptyState v-if="!screen.history.value.length" :title="t('visionCapture.historyEmpty')" compact />
-      <ul v-else class="vision-capture__history" data-testid="vision-history">
+      <ul v-else class="m-0 flex list-none flex-col gap-2 p-0" data-testid="vision-history">
         <li v-for="entry in screen.history.value" :key="entry.id">
-          <button type="button" class="vision-capture__history-item" @click="screen.reopen(entry)">
-            <img :src="entry.previewUrl" alt="" class="vision-capture__thumb" />
+          <button type="button" class="flex w-full cursor-pointer items-center gap-3 border border-autobot-border bg-transparent p-2 text-start text-autobot-text-primary" @click="screen.reopen(entry)">
+            <img :src="entry.previewUrl" alt="" class="h-12 w-12 object-cover" />
             <span>{{ formatDateTime(entry.at) }}</span>
             <span>{{ intentLabel(entry.intent) }}</span>
           </button>
@@ -104,54 +104,3 @@ function onFile(event: Event): void {
   input.value = ''
 }
 </script>
-
-<style scoped>
-.vision-capture {
-  display: flex;
-  flex-direction: column;
-  gap: var(--aui-space-4);
-  padding: var(--aui-space-6);
-}
-
-.vision-capture__preview {
-  display: block;
-  max-width: 100%;
-  max-height: 24rem;
-  margin-bottom: var(--aui-space-3);
-}
-
-.vision-capture__options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--aui-space-3);
-  margin-bottom: var(--aui-space-3);
-}
-
-.vision-capture__history {
-  display: flex;
-  flex-direction: column;
-  gap: var(--aui-space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.vision-capture__history-item {
-  display: flex;
-  align-items: center;
-  gap: var(--aui-space-3);
-  width: 100%;
-  padding: var(--aui-space-2);
-  border: 1px solid var(--aui-color-border);
-  background: transparent;
-  color: var(--aui-color-text);
-  text-align: start;
-  cursor: pointer;
-}
-
-.vision-capture__thumb {
-  width: 3rem;
-  height: 3rem;
-  object-fit: cover;
-}
-</style>

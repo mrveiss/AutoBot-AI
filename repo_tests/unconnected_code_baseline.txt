@@ -1518,7 +1518,6 @@ frontend:autobot-frontend/src/components/transcriber/SpeakerLabel.vue	#21629
 frontend:autobot-frontend/src/components/visualizations/index.ts	#21629
 frontend:autobot-frontend/src/composables/useAgentEvents.ts	#21629
 frontend:autobot-frontend/src/composables/useAnalyticsFetch.ts	#21629
-frontend:autobot-frontend/src/composables/useBatchProcessing.ts	#21629
 frontend:autobot-frontend/src/composables/useConnectionTester.ts	#21629
 frontend:autobot-frontend/src/composables/useDebouncedSearch.ts	#21629
 frontend:autobot-frontend/src/composables/useFakeProgress.ts	#21629

@@ -10,7 +10,7 @@
     <BaseButton :loading="busy" :disabled="!supported" :data-testid="`vision-capture-${source}`" @click="emit('capture', source)">
       {{ t(`visionCapture.capture.${source}`) }}
     </BaseButton>
-    <p v-if="!supported" class="capture-source__note">{{ t('visionCapture.unsupported') }}</p>
+    <p v-if="!supported" class="mt-2 text-sm text-autobot-text-muted">{{ t('visionCapture.unsupported') }}</p>
   </div>
 </template>
 
@@ -26,11 +26,3 @@ const { t } = useI18n()
 
 const supported = computed(() => canCapture(props.source))
 </script>
-
-<style scoped>
-.capture-source__note {
-  margin: var(--aui-space-2) 0 0;
-  color: var(--aui-color-text-muted);
-  font-size: var(--aui-text-sm);
-}
-</style>
