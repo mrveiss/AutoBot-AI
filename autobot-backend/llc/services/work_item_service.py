@@ -52,6 +52,7 @@ from ..models.label import LLCWorkItemLabel
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from .actor import ActivityRecordError, audit, resolve_actor, resolve_actor_as
 from .base import LLCServiceBase
+from .commit_publish import run_after_commit
 from .company_os.errors import CompanyOsError, CompanyOsNotFound
 from .wake_events import wake_for_comment, wake_for_item_changes
 from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-exported for the API and tests
@@ -60,7 +61,7 @@ from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-ex
     resolve_actor_role,
 )
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
-from .work_item_completion_effects import release_workspace_for_task
+from .work_item_completion_effects import index_artifacts_after_commit, release_workspace_for_task
 from .work_item_gated_done import DoneGate, default_gate, review_outcome
 from .work_item_hierarchy import reparent, validate_create
 from .work_item_own_task import (
@@ -755,11 +756,12 @@ class WorkItemService(LLCServiceBase):
 
     @staticmethod
     def _check_move(
-        item: LLCWorkItem, acting_user: Optional[uuid.UUID], new_status: WorkItemStatus
+        item: LLCWorkItem, acting_user: Optional[uuid.UUID], new_status: WorkItemStatus, gate: DoneGate = DoneGate()
     ) -> tuple[WorkItemStatus, bool]:
         """The allowed-transition rule, with the person-only parts: no finishing past a reviewer, own tasks (#20508)."""
         current = WorkItemStatus(item.status)
         allowed = _ALLOWED_TRANSITIONS.get(current, set())
+        gate.refuse_unheld(item)  # an agent moves only an item it holds (#21586)
         refuse_past_reviewer(item, acting_user, new_status)
         own = is_own_task(item, acting_user, new_status)
         if not own and new_status not in allowed:
@@ -800,7 +802,7 @@ class WorkItemService(LLCServiceBase):
             gate = done_gate or default_gate()  # a caller that brings no gate gets the real one, never none
             return await self.transition_to_done(session, work_item_id, company_id, **gate.finish_args(acting_user))
         item = await self._load_locked(session, work_item_id, company_id)
-        current, own = self._check_move(item, acting_user, new_status)
+        current, own = self._check_move(item, acting_user, new_status, done_gate or DoneGate())
         if not own and current == WorkItemStatus.BLOCKED and new_status == WorkItemStatus.IN_PROGRESS:
             await self._refuse_unresolved_blockers(session, work_item_id, item, relation_svc)
 
@@ -835,11 +837,10 @@ class WorkItemService(LLCServiceBase):
         """
         item = await self._load_locked(session, work_item_id, company_id)
         company_id = company_id or str(item.company_id)
-        current, own = self._check_move(item, acting_user, WorkItemStatus.DONE)
         gate = DoneGate(review_gate_svc, handoff_svc, actor_agent_id, is_agent)
+        current, own = self._check_move(item, acting_user, WorkItemStatus.DONE, gate)
         who = (actor_agent_id, actor_user_id, is_board_override)
-        held = await review_outcome(session, item, company_id, gate, who, acting_user)
-        if held is not None:
+        if (held := await review_outcome(session, item, company_id, gate, who, acting_user)) is not None:
             return held
         await self._complete(session, item, current, own, company_id, who)
         return item
@@ -858,7 +859,7 @@ class WorkItemService(LLCServiceBase):
         item.version += 1
         await session.flush()
         await self._record_completed(session, str(item.id), current, company_id, actor)
-        # External effects (Chroma upsert, worktree removal) only once the audit has succeeded (#20102)
+        # External effects only once the audit has succeeded (#20102); the Chroma upsert waits for the commit (#21586)
         await self._trigger_artifact_ingest(session, item)
         await release_workspace_for_task(str(item.id), session)
 
@@ -953,27 +954,13 @@ class WorkItemService(LLCServiceBase):
                 )
         return f"WI-{uuid.uuid4().hex[:8].upper()}"
 
-    async def _trigger_artifact_ingest(
-        self,
-        session: AsyncSession,
-        item: LLCWorkItem,
-    ) -> None:
-        """Non-fatally call ArtifactIngestor for all pending products on this item."""
-        try:
-            from ..kb.artifact_ingestor import ArtifactIngestor
-
-            ingestor = ArtifactIngestor()
-            await ingestor.ingest_all_pending(
-                session,
-                work_item_id=str(item.id),
-                project_id=str(item.project_id) if item.project_id else None,
-                work_item_identifier=item.identifier,
-                company_id=str(item.company_id),
-                completed_at=item.completed_at,
-            )
-        except Exception:
-            logger.warning(
-                "ArtifactIngestor failed for work item %s — transition still succeeds",
-                item.id,
-                exc_info=True,
-            )
+    async def _trigger_artifact_ingest(self, session: AsyncSession, item: LLCWorkItem) -> None:
+        """Index the item's pending artifacts once *session* commits; a rollback indexes nothing (#21586)."""
+        job = dict(
+            work_item_id=str(item.id),
+            project_id=str(item.project_id) if item.project_id else None,
+            identifier=item.identifier,
+            company_id=str(item.company_id),
+            completed_at=item.completed_at,
+        )
+        await run_after_commit(session, lambda: index_artifacts_after_commit(**job), f"index artifacts of {item.id}")

@@ -66,7 +66,7 @@ async def effects(monkeypatch):  # noqa: ANN001, ANN201
     monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", _SIGNER)
     with (
         patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=MagicMock())),
-        patch("llc.services.handoff.delete_if_holder", new=AsyncMock()),
+        patch("llc.services.handoff.release_agent_fence", new=AsyncMock()),
         patch.object(HandoffService, "_record_a2h_activity", new=AsyncMock()),
         patch.object(HandoffService, "_publish_a2h_notification", new=AsyncMock()),
         patch.object(HandoffService, "_generate_and_update_brief_async", new=AsyncMock()),

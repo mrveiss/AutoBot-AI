@@ -463,7 +463,7 @@ class TestHandoffService:
         session.execute = AsyncMock(return_value=execute_result)
 
         with (
-            patch("llc.services.handoff.get_async_redis_client", new_callable=AsyncMock, return_value=None),
+            patch("llc.services.work_item_own_task.get_async_redis_client", new_callable=AsyncMock, return_value=None),
             patch("llc.services.commit_publish.get_async_redis_client", new_callable=AsyncMock, return_value=None),
         ):
             result = await HandoffService().agent_to_human(

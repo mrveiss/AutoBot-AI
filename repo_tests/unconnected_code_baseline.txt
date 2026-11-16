@@ -14,7 +14,8 @@
 # What it cannot see: a function nobody calls inside a module somebody imports; a module imported
 # only by another unused module; callers that build a path or key at runtime; plugins and
 # migrations loaded by directory scan; Redis keys held in variables; anything outside the
-# autobot-backend, autobot-slm-backend, autobot_shared and autobot-infrastructure trees. A key
+# autobot-backend, autobot-slm-backend, autobot_shared and autobot-infrastructure trees (the `frontend:` lines are the
+# one exception: a source file of the two frontends with no importer; its limits are in _unconnected_frontend.py). A key
 # absent from this file means the detectors did not flag it, not that it is wired. The
 # `declared:` lines record cases the detectors cannot see (see _unconnected_code.py).
 #
@@ -1471,3 +1472,42 @@ route:autobot-slm-backend/api/code_sync.py:GET /nodes/{node_id}/package	#21651
 route:autobot-slm-backend/api/memory_lifecycle_proxy.py:GET /lifecycle	#21651
 route:autobot-slm-backend/api/performance.py:GET /metrics/node/{node_id}	#21651
 route:autobot-slm-backend/api/redis_service.py:GET /status	#21651
+# The one-time re-measure of #21629 (frozen in unconnected_code_remeasure_21583.txt): frontend source files nothing imports.
+frontend:autobot-frontend/src/components/chat/MCPPromptTemplatePicker.vue	#21629
+frontend:autobot-frontend/src/components/collaboration/index.ts	#21629
+frontend:autobot-frontend/src/components/examples/ThemingPatternExample.vue	#21629
+frontend:autobot-frontend/src/components/knowledge/modals/DocumentExportModal.vue	#21629
+frontend:autobot-frontend/src/components/manpage/index.ts	#21629
+frontend:autobot-frontend/src/components/transcriber/AiAnalysisPanel.vue	#21629
+frontend:autobot-frontend/src/components/transcriber/ExportMenu.vue	#21629
+frontend:autobot-frontend/src/components/transcriber/KbPushButton.vue	#21629
+frontend:autobot-frontend/src/components/transcriber/SpeakerLabel.vue	#21629
+frontend:autobot-frontend/src/components/visualizations/index.ts	#21629
+frontend:autobot-frontend/src/composables/useAgentEvents.ts	#21629
+frontend:autobot-frontend/src/composables/useAnalyticsFetch.ts	#21629
+frontend:autobot-frontend/src/composables/useBatchProcessing.ts	#21629
+frontend:autobot-frontend/src/composables/useConnectionTester.ts	#21629
+frontend:autobot-frontend/src/composables/useDebouncedSearch.ts	#21629
+frontend:autobot-frontend/src/composables/useFakeProgress.ts	#21629
+frontend:autobot-frontend/src/composables/useHostInventory.ts	#21629
+frontend:autobot-frontend/src/composables/useKnowledgeBase.ts	#21629
+frontend:autobot-frontend/src/composables/useKnowledgeCollaboration.ts	#21629
+frontend:autobot-frontend/src/composables/useLocalStorage.ts	#21629
+frontend:autobot-frontend/src/composables/useServiceDiscovery.ts	#21629
+frontend:autobot-frontend/src/composables/useSessionSync.ts	#21629
+frontend:autobot-frontend/src/composables/useSettingsHandlers.ts	#21629
+frontend:autobot-frontend/src/composables/useSvgIcons.ts	#21629
+frontend:autobot-frontend/src/composables/useTLSCredentials.ts	#21629
+frontend:autobot-frontend/src/composables/useTerminalHistory.ts	#21629
+frontend:autobot-frontend/src/composables/useVideoGeneration.ts	#21629
+frontend:autobot-frontend/src/utils/StoreMonitor.js	#21629
+frontend:autobot-frontend/src/utils/WebSocketMonitor.js	#21629
+frontend:autobot-frontend/src/utils/workflowComponents.ts	#21629
+frontend:autobot-frontend/src/views/DesktopView.vue	#21629
+frontend:autobot-frontend/src/views/SlmNoVncView.vue	#21629
+frontend:autobot-frontend/src/views/slm/ThemeManagerView.vue	#21629
+frontend:autobot-slm-frontend/src/components/DeploymentLogViewer.vue	#21629
+frontend:autobot-slm-frontend/src/components/DeploymentWizard.vue	#21629
+frontend:autobot-slm-frontend/src/components/fleet/FleetToolsTab.vue	#21629
+frontend:autobot-slm-frontend/src/composables/useFleetHealth.ts	#21629
+frontend:autobot-slm-frontend/src/composables/useNodeHealth.ts	#21629

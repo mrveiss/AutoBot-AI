@@ -349,7 +349,7 @@ const loadVncUrl = async () => {
     } else if (err.message && err.message.includes('Network Error')) {
       error.value = t('desktop.interface.errorNetworkConnectivity');
       connectionStatus.value = 'Network Error';
-    } else if (err.message && err.message.includes('timeout')) {
+    } else if (err.message && err.message.includes('timeout')) { // text: ServiceDiscovery.getServiceUrl re-wraps into a plain Error, no kit client on this path
       error.value = t('desktop.interface.errorConfigTimeout');
       connectionStatus.value = 'Timeout';
     } else {
