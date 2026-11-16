@@ -1,6 +1,7 @@
 # GUI automation, browser, and computer vision
+-c ../constraints/shared.txt  # every constrained package below is listed bare and takes its version from here (#21471)
 pyautogui==0.9.54
 mouseinfo==0.1.3
-opencv-python==5.0.0.93
+opencv-python
 pygetwindow==0.0.9
-playwright==1.65.0
+playwright

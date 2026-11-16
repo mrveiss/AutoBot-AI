@@ -20,13 +20,16 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value, delete_if_value
 
+from ..exceptions import PublicMessageMixin
 from ..models.enums import AssigneeType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
 from .after_commit import defer_until_commit
+from .company_os.errors import CompanyOsError, CompanyOsNotFound
 
 logger = get_logger(__name__)
 
 _CHECKOUT_KEY_PREFIX = "llc:checkout:"
+_WAITING_ON_REVIEWER = "This task is waiting on its reviewer, who decides whether it is done"
 
 
 def checkout_fence_key(item_id: uuid.UUID | str) -> str:
@@ -45,12 +48,16 @@ def _past_its_reviewer(item: LLCWorkItem, acting_user: uuid.UUID, new_status: Op
     )
 
 
-class InvalidTransition(Exception):
+class InvalidTransition(PublicMessageMixin, Exception):
     """Raised when a status transition is not permitted."""
 
 
-class CheckoutConflict(Exception):
-    """Raised when a work item is held by someone else: another agent, or a person (#20521)."""
+class CheckoutConflict(PublicMessageMixin, Exception):
+    """Raised when a work item is held by someone else: another agent, or a person (#20521).
+
+    Public: the holder is a member or agent of the company the caller is already authorised for, and
+    telling the caller who holds the item is the route's contract.
+    """
 
 
 def refuse_past_reviewer(item: LLCWorkItem, acting_user: Optional[uuid.UUID], new_status: WorkItemStatus) -> None:
@@ -59,7 +66,23 @@ def refuse_past_reviewer(item: LLCWorkItem, acting_user: Optional[uuid.UUID], ne
     Applies to people only: *acting_user* is None for any other credential, which keeps its own rules.
     """
     if acting_user is not None and _past_its_reviewer(item, acting_user, new_status):
-        raise InvalidTransition("This task is waiting on its reviewer, who decides whether it is done")
+        raise InvalidTransition(_WAITING_ON_REVIEWER)
+
+
+def refuse_unheld_agent_move(item: LLCWorkItem, agent_id: Optional[str], is_agent: bool) -> None:
+    """An agent changes the status only of an item it holds, and never past the reviewer named on it (#21586).
+
+    *agent_id* is the agent's node (``None`` for a credential that names an agent with no node, which holds
+    nothing); *is_agent* False is any other caller, whose rules are its own. An item the agent does not hold
+    answers exactly as a missing one, so the refusal does not reveal whether it exists. One it holds that waits
+    on a named reviewer is refused: that person decides.
+    """
+    if not is_agent:
+        return
+    if agent_id is None or item.assignee_agent_id is None or str(item.assignee_agent_id) != agent_id:
+        raise CompanyOsNotFound(f"Work item {item.id} not found")
+    if item.status == WorkItemStatus.IN_REVIEW and item.reviewer_user_id is not None:
+        raise InvalidTransition(_WAITING_ON_REVIEWER)
 
 
 def is_own_task(
@@ -128,7 +151,7 @@ def refuse_release(item: LLCWorkItem, agent_id: str, run_id: Optional[str] = Non
             f"Work item {item.id} is held by user {item.assignee_user_id}; an agent cannot release it"
         )
     if item.assignee_agent_id and str(item.assignee_agent_id) != agent_id:
-        raise ValueError(f"Agent {agent_id} does not hold checkout for work item {item.id}")
+        raise CompanyOsError(f"Agent {agent_id} does not hold checkout for work item {item.id}")
     if run_id is not None and run_id != item.checkout_run_id:
         raise CheckoutConflict(f"Work item {item.id} is not checked out in run {run_id!r}; it was not released")
 

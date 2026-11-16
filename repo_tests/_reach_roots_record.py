@@ -33,6 +33,7 @@ REACH_ROOTS = {
         "autobot_shared",
     ),
     "repo_tests/ci_requirements_one_install_20191_test.py": (".github/workflows",),
+    "repo_tests/company_os_exception_text_21579_test.py": ("autobot-backend/llc",),
     "repo_tests/compat_module_needs_importer_18552_test.py": ("autobot-backend",),
     "repo_tests/compose_nodes_one_home_19323_test.py": (
         "autobot-infrastructure",
@@ -145,6 +146,7 @@ REACH_ROOTS = {
     ),
     "repo_tests/generated_type_names_not_redeclared_19334_test.py": ("autobot-frontend/src",),
     "repo_tests/github_api_single_module_15411_test.py": ("pipeline-scripts", "scripts"),
+    "repo_tests/hardcoded_colour_ratchet_17560_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/hardcoded_ui_literal_ratchet_12732_test.py": ("autobot-frontend/src/", "autobot-slm-frontend/src/"),
     "repo_tests/hosted_model_literal_guard_15501_test.py": (
         "autobot-backend",
@@ -286,6 +288,7 @@ REACH_ROOTS = {
         "scripts",
         "tools",
     ),
+    "repo_tests/one_done_path_21503_test.py": ("autobot-backend",),
     "repo_tests/one_fact_read_authorization_18184_test.py": (
         "autobot-backend",
         "autobot-slm-backend",
@@ -352,6 +355,10 @@ REACH_ROOTS = {
         "scripts",
         "tools",
     ),
+    "repo_tests/primary_fill_class_label_reads_text_on_primary_21543_test.py": (
+        "autobot-frontend/src",
+        "autobot-slm-frontend/src",
+    ),
     "repo_tests/primary_fill_label_reads_text_on_primary_20425_test.py": ("autobot-frontend/src",),
     "repo_tests/provenance_accessor_17527_test.py": ("autobot-backend",),
     "repo_tests/provider_key_env_reads_route_through_vault_18094_test.py": (
@@ -389,6 +396,7 @@ REACH_ROOTS = {
         "scripts",
         "tools",
     ),
+    "repo_tests/scheduled_workflows_covered_by_failure_report_21592_test.py": (".github/workflows",),
     "repo_tests/script_module_names_unique_14873_test.py": ("autobot-infrastructure/shared/scripts",),
     "repo_tests/search_mode_one_home_19335_test.py": ("autobot-backend",),
     "repo_tests/service_port_homes_test.py": (
@@ -456,8 +464,10 @@ REACH_ROOTS = {
     ),
     "repo_tests/unconnected_code_gate_20512_test.py": (
         "autobot-backend",
+        "autobot-frontend/src",
         "autobot-infrastructure",
         "autobot-slm-backend",
+        "autobot-slm-frontend/src",
         "autobot_shared",
     ),
     "repo_tests/v_html_sanitiser_guard_19118_test.py": (

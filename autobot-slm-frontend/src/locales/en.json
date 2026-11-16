@@ -3911,6 +3911,13 @@
     "upgradeAllStartedOnNode": "Upgrade all started for {nodeId}"
   },
   "tools": {
+    "moved": {
+      "title": "{name} moved to the user app",
+      "description": "{name} is user work, so it now lives in the AutoBot user app, where every signed-in user can reach it.",
+      "open": "Open {name} in the user app",
+      "batch": "Batch Processing",
+      "vision": "Vision"
+    },
     "admin": {
       "advancedControlTool": {
         "title": "Advanced Control",

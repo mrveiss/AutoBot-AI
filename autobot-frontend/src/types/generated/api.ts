@@ -1290,7 +1290,7 @@ export interface paths {
         };
         /**
          * List Chats
-         * @description List all available chat sessions with improved error handling (consolidated).
+         * @description List the caller's own chat sessions (consolidated; same listing as GET /chat/sessions).
          *
          *     Issue #744: Requires authenticated user.
          */
@@ -1312,7 +1312,7 @@ export interface paths {
         };
         /**
          * List Chats
-         * @description List all available chat sessions with improved error handling (consolidated).
+         * @description List the caller's own chat sessions (consolidated; same listing as GET /chat/sessions).
          *
          *     Issue #744: Requires authenticated user.
          */
@@ -53457,7 +53457,8 @@ export interface paths {
          *     1. Branch name: ``llc/{work_item_id}`` (and variants)
          *     2. PR body: ``Closes #llc-{work_item_id}``
          *
-         *     On PR merge → transition the work item to ``in_review``.
+         *     On PR merge → hand the work item to its reviewer through the review handoff, or leave it
+         *     where it is with a comment saying why (#21591).
          *     On PR close without merge → add a comment to the work item.
          */
         post: operations["handle_github_webhook_api_llc_webhooks_github_post"];
@@ -53552,6 +53553,8 @@ export interface paths {
          *     The company check is not incidental: ``transition_status`` takes
          *     ``company_id`` and this route is reached with an agent's context, so an
          *     item belonging to another company must 404 rather than transition.
+         *
+         *     Only an item the agent holds changes (404 as if missing, #21586); one waiting on its reviewer is 409.
          */
         post: operations["update_work_item_status_api_llc_agent_work_items__item_id__status_post"];
         delete?: never;
@@ -79677,10 +79680,27 @@ export interface components {
         GraphRequest: {
             /**
              * Max Facts
-             * @description Maximum facts to include
+             * @description Facts per page (page through with offset)
              * @default 50
              */
             max_facts: number;
+            /**
+             * Offset
+             * @description Facts and bucket records to skip, so a client can page to every one the caller may read (#20945)
+             * @default 0
+             */
+            offset: number;
+            /**
+             * Cursor
+             * @description Facts only: the `cursor` of the previous response's facts section. The scan resumes there, so every readable fact is reachable however deep the listing is; `offset` then pages bucket records only (#20945)
+             */
+            cursor?: string | null;
+            /**
+             * Include Buckets
+             * @description Include one section per non-fact knowledge bucket (#20945)
+             * @default true
+             */
+            include_buckets: boolean;
             /**
              * Max Depth
              * @description Maximum relation depth
@@ -79714,12 +79734,92 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * GraphSection
+         * @description Visible total vs this page of one graph section (the facts, or one knowledge bucket).
+         */
+        GraphSection: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Total
+             * @description Records the caller may read (a lower bound when truncated)
+             */
+            total?: number | null;
+            /**
+             * Returned
+             * @description Records on this page
+             */
+            returned: number;
+            /**
+             * Limited
+             * @description True while readable records remain past this page
+             */
+            limited: boolean;
+            /**
+             * Truncated
+             * @description True when the scan cap cut the listing short
+             * @default false
+             */
+            truncated: boolean;
+            /**
+             * Budget Exhausted
+             * @description True when the per-request scan budget ended before a readable record or the end of data
+             * @default false
+             */
+            budget_exhausted: boolean;
+            /**
+             * Failed
+             * @description True when the section's source could not be read; total is unknown
+             * @default false
+             */
+            failed: boolean;
+            /**
+             * Cursor
+             * @description Facts section only: pass as `cursor` to continue the scan
+             */
+            cursor?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** GraphSpec */
         GraphSpec: {
             /** Nodes */
             nodes?: components["schemas"]["NodeSpec"][];
             /** Transitions */
             transitions?: components["schemas"]["TransitionSpec"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GraphStats
+         * @description Counts of one multi-source graph response.
+         */
+        GraphStats: {
+            /** Sections */
+            sections?: components["schemas"]["GraphSection"][];
+            /**
+             * Total Entities
+             * @default 0
+             */
+            total_entities: number;
+            /**
+             * Total Relations
+             * @default 0
+             */
+            total_relations: number;
+            /**
+             * Categories
+             * @default 0
+             */
+            categories: number;
+            /**
+             * Facts
+             * @default 0
+             */
+            facts: number;
         } & {
             [key: string]: unknown;
         };
@@ -83133,10 +83233,7 @@ export interface components {
             data: {
                 [key: string]: unknown;
             };
-            /** Stats */
-            stats: {
-                [key: string]: unknown;
-            };
+            stats: components["schemas"]["GraphStats"];
         } & {
             [key: string]: unknown;
         };
@@ -118301,6 +118398,11 @@ export interface operations {
                 max_facts?: number;
                 /** @description Include category nodes */
                 include_categories?: boolean;
+                /** @description Facts and bucket records to skip */
+                offset?: number;
+                /** @description Resume the facts scan (see GraphRequest) */
+                cursor?: string | null;
+                include_buckets?: boolean;
             };
             header?: never;
             path?: never;

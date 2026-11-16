@@ -44,6 +44,16 @@ MID: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "One frontend tree's `.vue` and `.css` files, against all tracked ones incl. the other frontend and kit.",
     ),
+    "primary-fill-class-label-files": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both frontends' `.vue`, `.ts`, `.js` and `.css` files minus tests, against all tracked ones incl. the kit.",
+    ),
+    "llc-exception-text-sweep-files-21579": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python under the LLC package, a subset of all tracked Python; the other trees drift.",
+    ),
     "deployment-mode-detector-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -197,6 +207,12 @@ MID: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Backend files that declare a route decorator; a subset of the backends' `.py` files that drifts as "
         "non-router modules are added (#20512).",
+    ),
+    "unconnected-code-frontend": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Production `.ts`/`.js`/`.vue` files of the two frontends' `src` trees (no tests, stories or entry points); a "
+        "subset of all tracked files that drifts as components are added (#21583).",
     ),
     "unconnected-code-stores": (
         ABSOLUTE,

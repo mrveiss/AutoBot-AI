@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from llc.api._common import http_refusal
 from llc.deps import assert_company_access
 from llc.services.portability import ImportNeedsApprovalError, PortabilityService
 from llc.services.portability import TemplateImportError as LLCImportError
@@ -119,7 +120,7 @@ async def execute_import(
             secret_mapping=body.secret_mapping or {},
         )
     except ImportNeedsApprovalError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="portability.execute_import") from None
     except LLCImportError:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     await session.commit()

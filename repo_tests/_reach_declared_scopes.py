@@ -34,6 +34,7 @@ DECLARED_SCOPES = {
         "scripts",
         "tools",
     ),
+    "llc-exception-text-sweep-files-21579": ("autobot-backend/llc",),
     "slm-users-db-scan": ("autobot-slm-backend",),
     "test-name-predicate-single-home-21078": (
         "autobot-backend",
@@ -64,6 +65,7 @@ DECLARED_SCOPES = {
     "dead-icon-selector-vue-files": ("autobot-frontend/src",),
     "icon-font-size-rule-vue-files": ("autobot-frontend/src",),
     "primary-fill-white-label-files": ("autobot-frontend/src",),
+    "primary-fill-class-label-files": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "kit-shadow-ts-files-scanned-14908": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "duplicate-type-names-ts-files-scanned-14908": (
         "autobot-frontend/src",
@@ -102,6 +104,7 @@ DECLARED_SCOPES = {
     "compat-module-needs-importer": ("autobot-backend",),
     "unconnected-code-modules": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "unconnected-code-routes": ("autobot-backend", "autobot-slm-backend"),
+    "unconnected-code-frontend": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "unconnected-code-stores": ("autobot-backend", "autobot-slm-backend", "autobot_shared", "autobot-infrastructure"),
     "compose-nodes-restated-default": ("autobot-slm-backend", "autobot-infrastructure", "docker", "docker-compose.yml"),
     "chat-history-async-calls-awaited": ("autobot-backend/api",),
@@ -394,4 +397,6 @@ DECLARED_SCOPES = {
     ),
     "ansible-secret-renders-20941": ("autobot-slm-backend/ansible",),
     "one-after-commit-queue-21107": ("autobot-backend", "autobot_shared"),
+    "one-done-path": ("autobot-backend",),
+    "scheduled-workflows-derived-for-failure-report-21592": (".github/workflows",),
 }
