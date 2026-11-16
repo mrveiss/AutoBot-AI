@@ -21,13 +21,15 @@ from __future__ import annotations
 import ast
 import fnmatch
 import re
+from pathlib import Path
 
 import pytest
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
-REPO_TESTS = repo_root() / "repo_tests"
-WORKFLOWS = repo_root() / ".github" / "workflows"
+_REPO_TESTS = "repo_tests"
+_WORKFLOWS = ".github/workflows"
 ACTION = "./.github/actions/release-promotion-base"
 RELEASE = "release"
 BASE_MODULE = "_ratchet_base"
@@ -61,10 +63,11 @@ def _imported(tree: ast.AST) -> set[str]:
     return out
 
 
-def _module_imports() -> dict[str, set[str]]:
+def _module_imports(root: Path) -> dict[str, set[str]]:
     graph = {}
-    for path in REPO_TESTS.rglob("*.py"):
-        name = ".".join(path.relative_to(REPO_TESTS).with_suffix("").parts)
+    tests = root / _REPO_TESTS
+    for path in tests.rglob("*.py"):
+        name = ".".join(path.relative_to(tests).with_suffix("").parts)
         graph[name] = _imported(ast.parse(path.read_text(encoding="utf-8")))
     return graph
 
@@ -91,20 +94,18 @@ def _uncommented(text: str) -> str:
     return "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#"))
 
 
-def _listed(script: str) -> str:
+def _listed(script: str, root: Path) -> str:
     """The text of tracked guard lists the script feeds to pytest (ci.yml's short-check reads one)."""
     names = re.findall(r"(?<![\w/.-])([\w./-]+\.txt)\b", script)
-    return "\n".join(
-        _uncommented((repo_root() / n).read_text(encoding="utf-8")) for n in names if (repo_root() / n).is_file()
-    )
+    return "\n".join(_uncommented((root / n).read_text(encoding="utf-8")) for n in names if (root / n).is_file())
 
 
-def runs_base_reader(step: dict, readers: set[str]) -> bool:
+def runs_base_reader(step: dict, readers: set[str], root: Path) -> bool:
     """True when the step's script runs pytest on a guard that reads the ratchet base."""
     script = _uncommented(str(step.get("run", "")))
     if "pytest" not in script:
         return False
-    text = script + "\n" + _listed(script)
+    text = script + "\n" + _listed(script, root)
     return any(_targets_base_reader(m.group(1), readers) for m in _TOKEN.finditer(text))
 
 
@@ -130,9 +131,9 @@ def release_prs_reach(doc: dict) -> bool:
     return not _matches_release(pr.get("branches-ignore"))
 
 
-def wiring_gap(steps: list[dict], readers: set[str]) -> str | None:
+def wiring_gap(steps: list[dict], readers: set[str], root: Path) -> str | None:
     """Why this job's base-reading guard would read the release tip, or None when it is wired."""
-    first = next((i for i, s in enumerate(steps) if runs_base_reader(s, readers)), None)
+    first = next((i for i, s in enumerate(steps) if runs_base_reader(s, readers, root)), None)
     if first is None:
         return None
     action = next(
@@ -152,25 +153,35 @@ def wiring_gap(steps: list[dict], readers: set[str]) -> str | None:
     return f"no step between the action and the guard exports AUTOBOT_RATCHET_BASE_SHA from {output}"
 
 
-def _scan() -> tuple[set[tuple[str, str]], list[str]]:
-    readers = base_readers(_module_imports())
-    in_scope, gaps = set(), []
-    for path in sorted(WORKFLOWS.glob("*.yml")):
+def _jobs_in_scope(root: Path) -> list[tuple[str, str, str | None]]:
+    """(workflow, job, wiring gap) for every job a PR into release runs that runs a base-reading guard."""
+    readers = base_readers(_module_imports(root))
+    found = []
+    for path in sorted((root / _WORKFLOWS).glob("*.yml")):
         doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         if not release_prs_reach(doc):
             continue
         for name, job in (doc.get("jobs") or {}).items():
             steps = job.get("steps") or []
-            if any(runs_base_reader(s, readers) for s in steps):
-                in_scope.add((path.name, name))
-                gap = wiring_gap(steps, readers)
-                if gap:
-                    gaps.append(f"{path.name}:{name}: {gap}")
-    return in_scope, gaps
+            if any(runs_base_reader(s, readers, root) for s in steps):
+                found.append((path.name, name, wiring_gap(steps, readers, root)))
+    return found
+
+
+# Pinned while this guard is new: the base it would compute a floor from has no such declaration
+# (#19676). The live population is the six jobs in KNOWN_IN_SCOPE.
+REACH = declare(
+    "release-promotion-base-wiring-21713",
+    discover=_jobs_in_scope,
+    what="workflow jobs a pull request into release runs that run a base-reading guard",
+    floor=6,
+)
 
 
 def test_every_base_reading_job_a_release_pr_runs_takes_the_promotion_base() -> None:
-    in_scope, gaps = _scan()
+    jobs = REACH.examined(repo_root())
+    in_scope = {(workflow, job) for workflow, job, _ in jobs}
+    gaps = [f"{workflow}:{job}: {gap}" for workflow, job, gap in jobs if gap]
     missing = KNOWN_IN_SCOPE - in_scope
     assert not missing, f"the detector lost jobs it must see (instrument check): {sorted(missing)}"
     assert not gaps, (
@@ -181,7 +192,7 @@ def test_every_base_reading_job_a_release_pr_runs_takes_the_promotion_base() -> 
 
 
 def test_the_closure_reaches_the_guard_that_failed_on_the_promotion_pr() -> None:
-    readers = base_readers(_module_imports())
+    readers = base_readers(_module_imports(repo_root()))
     assert {"_reach", "docs_liquid_tags_are_defined_17930_test"} <= readers
 
 
@@ -213,7 +224,7 @@ _EXPORT = {
     ],
 )
 def test_the_wiring_check_on_fixtures(steps, gap) -> None:
-    found = wiring_gap(steps, _READERS)
+    found = wiring_gap(steps, _READERS, repo_root())
     assert (found is None) if gap is None else (found is not None and gap in found), found
 
 
