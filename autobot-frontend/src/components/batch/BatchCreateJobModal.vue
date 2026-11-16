@@ -12,7 +12,7 @@
     :title="t('batchJobs.create.title')"
     width="32rem"
     :close-on-overlay="false"
-    :close-on-esc="!busy"
+    :locked="busy"
     :close-label="t('batchJobs.create.close')"
     @update:model-value="emit('update:modelValue', $event)"
   >

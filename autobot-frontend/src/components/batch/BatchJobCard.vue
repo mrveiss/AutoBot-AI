@@ -3,7 +3,8 @@
 <!-- Author: mrveiss -->
 <!--
   BatchJobCard — one batch job: status, progress, timing and the actions its status allows (#20644).
-  A failed job offers Retry (it is run again, POST /batch-jobs/{id}/run). A pending or running job
+  A pending job offers Run and a failed job Retry (both POST /batch-jobs/{id}/run; nothing else queues a
+  new job). A pending or running job
   offers "Cancel and remove": the backend's only cancel is DELETE, which also removes the job.
   A finished job offers Remove. The card only emits; the screen performs the call and reports a failure.
 -->
@@ -37,7 +38,10 @@
     <BaseAlert v-if="job.error_message" variant="error" :message="job.error_message" />
 
     <div class="flex justify-end gap-2">
-      <BaseButton v-if="job.status === 'failed'" size="sm" :disabled="busy" @click="emit('run', job.job_id)">
+      <BaseButton v-if="job.status === 'pending'" size="sm" :disabled="busy" @click="emit('run', job)">
+        {{ t('batchJobs.run') }}
+      </BaseButton>
+      <BaseButton v-if="job.status === 'failed'" size="sm" :disabled="busy" @click="emit('run', job)">
         {{ t('batchJobs.retry') }}
       </BaseButton>
       <BaseButton v-if="isActive" size="sm" variant="error" :disabled="busy" @click="emit('remove', job)">
@@ -57,7 +61,7 @@ import { BaseAlert, BaseBadge, BaseButton, BaseCard, formatDateTime, formatDurat
 import type { BatchJob, BatchJobStatus } from '@/types/batch-processing'
 
 const props = defineProps<{ job: BatchJob; busy?: boolean }>()
-const emit = defineEmits<{ run: [jobId: string]; remove: [job: BatchJob] }>()
+const emit = defineEmits<{ run: [job: BatchJob]; remove: [job: BatchJob] }>()
 const { t } = useI18n()
 
 const STATUS_VARIANT: Record<BatchJobStatus, 'neutral' | 'info' | 'success' | 'error' | 'warning'> = {

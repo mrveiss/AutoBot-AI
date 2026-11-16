@@ -73,6 +73,33 @@ function useCapture(choose: (file: File | null) => void, error: Ref<string | nul
   return { capturing, capture }
 }
 
+/** One analysis request, with the intent and question fixed when it is sent (#20644 review). */
+interface AnalysisRequest {
+  file: File
+  intent: ProcessingIntent
+  question?: string
+}
+
+type Translate = (key: string, values?: Record<string, unknown>) => string
+type AnalysisOutcome = { result: MultiModalResponse } | { failure: string }
+
+/**
+ * The reply, or the user-facing reason it is not one. The image route can answer 200 with
+ * `success: false`, an empty `result_data` and an `error_message`; that is a failure, not a result.
+ */
+async function requestAnalysis(request: AnalysisRequest, t: Translate): Promise<AnalysisOutcome> {
+  try {
+    const result = await processImage(request.file, request.intent, request.question)
+    if (result.success) return { result }
+    logger.warn('Image analysis reported failure:', result.error_message)
+    const detail = result.error_message || t('visionCapture.errors.unknown')
+    return { failure: t('visionCapture.errors.analysisUnsuccessful', { detail }) }
+  } catch (err) {
+    logger.error('Image analysis failed:', err)
+    return { failure: httpErrorText(err, t('visionCapture.errors.analysis')) }
+  }
+}
+
 /** Analyse the current image; each success lands in the history, a failure in the error. */
 function useAnalysis(image: ReturnType<typeof useCurrentImage>, error: Ref<string | null>, life: Lifetime) {
   const { t } = useI18n()
@@ -84,20 +111,20 @@ function useAnalysis(image: ReturnType<typeof useCurrentImage>, error: Ref<strin
   async function analyze(): Promise<void> {
     const file = image.file.value
     if (!file || analyzing.value) return
-    const asked = intent.value === 'visual_qa' ? question.value.trim() || undefined : undefined
+    // Fixed now: a change to the intent while the request runs must not relabel this answer.
+    const sent = intent.value
+    const request = { file, intent: sent, question: sent === 'visual_qa' ? question.value.trim() || undefined : undefined }
     analyzing.value = true
     error.value = null
-    try {
-      const result = await processImage(file, intent.value, asked)
-      if (life.disposed) return
-      image.result.value = result
-      history.add({ file, intent: intent.value, question: asked, result })
-    } catch (err) {
-      logger.error('Image analysis failed:', err)
-      error.value = httpErrorText(err, t('visionCapture.errors.analysis'))
-    } finally {
-      analyzing.value = false
+    const outcome = await requestAnalysis(request, t)
+    analyzing.value = false
+    if (life.disposed) return
+    if ('failure' in outcome) {
+      error.value = outcome.failure
+      return
     }
+    image.result.value = outcome.result
+    history.add({ ...request, result: outcome.result })
   }
 
   return { history: history.entries, intent, question, analyzing, analyze }

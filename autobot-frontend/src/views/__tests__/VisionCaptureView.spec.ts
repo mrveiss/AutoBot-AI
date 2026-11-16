@@ -128,4 +128,35 @@ describe('VisionCaptureView (#20644)', () => {
     await items[1].trigger('click')
     expect(wrapper.get('[data-testid="vision-result"]').text()).toContain('first')
   })
+
+  it('a 200 reply with success: false is an error, not a result, and adds nothing to history', async () => {
+    captureImage.mockResolvedValue(png())
+    processImage.mockResolvedValue({ ...reply(''), success: false, result_data: {}, error_message: 'model not loaded' })
+    const wrapper = mountView()
+    await wrapper.get('[data-testid="vision-capture-camera"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="vision-analyze"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="vision-error"]').text()).toBe('The analysis did not succeed: model not loaded')
+    expect(wrapper.find('[data-testid="vision-result"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="vision-history"]').exists()).toBe(false)
+  })
+
+  it('records the intent the request was sent with, even if it changes mid-request', async () => {
+    captureImage.mockResolvedValue(png())
+    let answer: (value: unknown) => void = () => undefined
+    processImage.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const wrapper = mountView()
+    await wrapper.get('[data-testid="vision-capture-camera"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="vision-analyze"]').trigger('click')
+    const screen = (wrapper.vm as unknown as { screen: { intent: { value: string } } }).screen
+    screen.intent.value = 'automation'
+    answer(reply('done'))
+    await flushPromises()
+    expect(processImage).toHaveBeenCalledWith(expect.any(File), 'analysis', undefined)
+    const entry = wrapper.get('[data-testid="vision-history"]').text()
+    expect(entry).toContain('Analysis')
+    expect(entry).not.toContain('Automation')
+  })
 })

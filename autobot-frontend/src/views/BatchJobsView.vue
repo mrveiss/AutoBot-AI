@@ -71,7 +71,7 @@
         :key="job.job_id"
         :job="job"
         :busy="busy"
-        @run="retryJob"
+        @run="runJob"
         @remove="removeJob"
       />
     </div>
@@ -89,7 +89,7 @@ import BatchCreateJobModal from '@/components/batch/BatchCreateJobModal.vue'
 import { useBatchJobsScreen } from '@/composables/useBatchJobsScreen'
 
 const { t } = useI18n()
-const { state, busy, actionError, createOpen, createError, openCreate, createJob, retryJob, removeJob, filterBy } =
+const { state, busy, actionError, createOpen, createError, openCreate, createJob, runJob, removeJob, filterBy } =
   useBatchJobsScreen()
 
 const STATUSES = ['pending', 'running', 'completed', 'failed', 'cancelled'] as const

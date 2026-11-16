@@ -78,7 +78,8 @@ export function useBatchJobsScreen() {
   const runner = useActionRunner()
   const dialog = useCreateDialog(state, runner)
 
-  const retryJob = (jobId: string) => runner.run(() => state.runJob(jobId), 'batchJobs.errors.retry')
+  const runJob = (job: BatchJob) =>
+    runner.run(() => state.runJob(job.job_id), job.status === 'failed' ? 'batchJobs.errors.retry' : 'batchJobs.errors.run')
 
   async function removeJob(job: BatchJob): Promise<void> {
     const active = job.status === 'pending' || job.status === 'running'
@@ -98,5 +99,5 @@ export function useBatchJobsScreen() {
   })
   onScopeDispose(() => state.stopPolling())
 
-  return { state, ...runner, ...dialog, retryJob, removeJob, filterBy }
+  return { state, ...runner, ...dialog, runJob, removeJob, filterBy }
 }

@@ -10893,6 +10893,7 @@
     "duration": "Duration",
     "notStarted": "Not started",
     "notReported": "Not reported",
+    "run": "Run",
     "retry": "Retry",
     "cancelAndRemove": "Cancel and remove",
     "remove": "Remove",
@@ -10919,6 +10920,7 @@
     "errors": {
       "create": "The job could not be created.",
       "retry": "The job could not be run again.",
+      "run": "The job could not be started.",
       "remove": "The job could not be removed."
     },
     "create": {
@@ -10970,7 +10972,8 @@
       "capture": "The image could not be captured: {detail}",
       "unknown": "unknown reason",
       "noImage": "the camera or screen returned no picture",
-      "analysis": "The image could not be analysed."
+      "analysis": "The image could not be analysed.",
+      "analysisUnsuccessful": "The analysis did not succeed: {detail}"
     }
   }
 }

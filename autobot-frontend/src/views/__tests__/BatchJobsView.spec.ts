@@ -140,4 +140,13 @@ describe('BatchJobsView (#20644)', () => {
     expect(fake.deleteJob).toHaveBeenCalledWith('r')
     expect(fake.cancelJob).not.toHaveBeenCalled()
   })
+
+  it('a pending job offers Run, which queues it (#20644 review)', async () => {
+    setState('ready', [job('p', 'pending')])
+    const wrapper = mountView()
+    expect(wrapper.findAll('button').some((b) => b.text() === 'Retry')).toBe(false)
+    await wrapper.findAll('button').find((b) => b.text() === 'Run')!.trigger('click')
+    await flushPromises()
+    expect(fake.runJob).toHaveBeenCalledWith('p')
+  })
 })
