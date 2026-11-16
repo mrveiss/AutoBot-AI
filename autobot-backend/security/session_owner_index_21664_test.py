@@ -17,7 +17,12 @@ import pytest
 
 from autobot_shared.ssot_constants import TTL_30_DAYS
 from security.session_owner_errors import SessionOwnerUnreadable
-from security.session_owner_index import OWNER_INDEX_COMPLETE_TTL, complete_key, owned_session_ids
+from security.session_owner_index import (
+    OWNER_INDEX_COMPLETE_TTL,
+    complete_key,
+    index_owner_or_unmark,
+    owned_session_ids,
+)
 from security.session_ownership import SessionOwnershipValidator
 
 
@@ -54,14 +59,18 @@ class _Store:
     async def set(self, key, value, ex=None):
         self.keys[key] = (value, ex)
 
+    async def delete(self, key):
+        self.keys.pop(key, None)
+
 
 def _validator(store, recache_ok=True):
     v = MagicMock()
     v.redis = store
     v.get_user_sessions = AsyncMock(side_effect=lambda username: list(store.members))
 
-    async def set_session_owner(session_id, username):
-        store.members.add(session_id)
+    async def set_session_owner(session_id, username, **context):
+        if recache_ok:
+            store.members.add(session_id)
         return recache_ok
 
     v.set_session_owner = AsyncMock(side_effect=set_session_owner)
@@ -143,3 +152,32 @@ async def test_an_index_read_error_propagates():
     validator.get_user_sessions = AsyncMock(side_effect=ConnectionError("redis down"))
     with pytest.raises(ConnectionError):
         await owned_session_ids(validator, "alice", ["s-1"], AsyncMock())
+
+
+@pytest.mark.asyncio
+async def test_a_rebuild_that_hits_an_unreadable_file_leaves_the_index_unmarked():
+    store = _Store()
+
+    async def read_owner(sid):
+        if sid == "s-bad":
+            raise SessionOwnerUnreadable(sid)
+        return "alice"
+
+    assert await owned_session_ids(_validator(store), "alice", ["s-bad", "s-1"], read_owner) == {"s-1"}
+    assert complete_key("alice") not in store.keys
+
+
+@pytest.mark.asyncio
+async def test_a_successful_index_write_keeps_the_marked_set_complete():
+    store = _Store(members={"s-old"}, marked=True)
+    assert await index_owner_or_unmark(_validator(store), "s-new", "alice") is True
+    assert await owned_session_ids(_validator(store), "alice", ["s-old", "s-new"], AsyncMock()) == {"s-old", "s-new"}
+
+
+@pytest.mark.asyncio
+async def test_a_failed_index_write_unmarks_and_the_next_list_rebuilds():
+    store = _Store(members={"s-old"}, marked=True)
+    assert await index_owner_or_unmark(_validator(store, recache_ok=False), "s-new", "alice") is False
+    assert complete_key("alice") not in store.keys
+    read_owner = _disk({"s-old": "alice", "s-new": "alice"})
+    assert await owned_session_ids(_validator(store), "alice", ["s-old", "s-new"], read_owner) == {"s-old", "s-new"}

@@ -30,6 +30,10 @@ from unittest.mock import AsyncMock
 import pytest
 
 from security.session_owner_errors import SessionOwnerUnreadable
+from security.session_owner_index import owned_session_ids
+from security.session_owner_index_21664_test import _Store
+from security.session_owner_index_21664_test import _validator as _index_validator
+from services import conversation_export
 from services.conversation_export import import_conversation
 
 _DOCUMENT: Dict[str, Any] = {
@@ -42,6 +46,15 @@ _DOCUMENT: Dict[str, Any] = {
 
 _ALICE = {"username": "alice", "user_id": "u-1"}
 _BOB = {"username": "bob", "user_id": "u-2"}
+
+
+@pytest.fixture(autouse=True)
+def owner_index(monkeypatch):
+    """alice's owner index, marked complete with one older session (#21664); no real Redis."""
+    store = _Store(members={"s-old"}, marked=True)
+    validator = _index_validator(store)
+    monkeypatch.setattr(conversation_export, "_owner_validator", AsyncMock(return_value=validator))
+    return validator
 
 
 def _manager(*, exists: bool = False, owner: Any = None, owner_raises: bool = False):
@@ -173,3 +186,32 @@ async def test_the_checks_and_the_save_run_inside_the_session_lease(monkeypatch)
     await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_ALICE)
 
     assert events == ["enter:import", "save", "exit"]
+
+
+# --- #21664: an import enters the importer's owner index ---------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_import_into_a_marked_index_is_listed(owner_index) -> None:
+    result = await import_conversation(_manager(), dict(_DOCUMENT), user_data=_ALICE)
+
+    assert result["success"] is True
+    listed = await owned_session_ids(owner_index, "alice", ["s-old", "sess-abc"], AsyncMock())
+    assert listed == {"s-old", "sess-abc"}
+
+
+@pytest.mark.asyncio
+async def test_replacing_ones_own_session_keeps_it_indexed(owner_index) -> None:
+    await import_conversation(
+        _manager(exists=True, owner="alice"), dict(_DOCUMENT), on_conflict="replace", user_data=_ALICE
+    )
+
+    owner_index.set_session_owner.assert_awaited_once_with("sess-abc", "alice")
+
+
+@pytest.mark.asyncio
+async def test_an_import_over_an_ownerless_session_is_not_indexed(owner_index) -> None:
+    """The ownerless takeover itself is #21668; the owner index must not record it."""
+    await import_conversation(_manager(exists=True, owner=None), dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
+
+    owner_index.set_session_owner.assert_not_awaited()

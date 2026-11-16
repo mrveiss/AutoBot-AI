@@ -177,3 +177,20 @@ def test_every_list_route_shares_one_listing():
     """One ownership mechanism: each chat-session list route calls the same helper."""
     for fn in (batch_jobs.get_chat_sessions, chat_sessions.list_sessions, chat.list_chats):
         assert "list_user_sessions" in _calls(fn), fn.__name__
+
+
+@pytest.mark.asyncio
+async def test_a_failed_create_index_unmarks_and_the_next_list_shows_the_new_session():
+    """#21664: ``set_session_owner`` refused at create time; the next list rebuilds from the files."""
+    from security.session_owner_index_21664_test import _Store
+    from security.session_owner_index_21664_test import _validator as _index_validator
+
+    store = _Store(members={"s-old"}, marked=True)
+    with patch("autobot_shared.redis_client.get_redis_client", new=AsyncMock()):
+        with patch.object(chat_sessions, "_build_ownership_validator", return_value=_index_validator(store, False)):
+            await chat_sessions._register_session_ownership({"username": "alice"}, "s-new", None)
+        assert store.keys == {}, "the marker survived a failed index write"
+        with patch.object(chat_sessions, "_build_ownership_validator", return_value=_index_validator(store)):
+            disk = AsyncMock(side_effect=lambda sid: "alice")
+            listed = await chat_sessions._filter_user_sessions([{"id": "s-old"}, {"id": "s-new"}], "alice", disk)
+    assert _ids(listed) == ["s-new", "s-old"]

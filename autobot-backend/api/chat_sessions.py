@@ -651,14 +651,12 @@ async def _register_session_ownership(
         return
     try:
         from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+        from security.session_owner_index import index_owner_or_unmark
 
-        redis = await get_redis_mgr(async_client=True, database="main")
-        validator = _build_ownership_validator(redis)
-        await validator.set_session_owner(
-            session_id=session_id,
-            username=user_data["username"],
-            org_id=user_data.get("org_id"),
-            team_id=team_id,
+        validator = _build_ownership_validator(await get_redis_mgr(async_client=True, database="main"))
+        # #21664: index it, or unmark the owner's index so their next list rebuilds and shows it
+        await index_owner_or_unmark(
+            validator, session_id, user_data["username"], org_id=user_data.get("org_id"), team_id=team_id
         )
     except Exception as e:
         logger.warning("Failed to register session ownership: %s", e)
