@@ -435,31 +435,30 @@ async def list_user_sessions(chat_history_manager, username: str | None) -> list
     # #12685: company/agent-scoped conversations (e.g. LLC CEO chat) are not ordinary
     # user chats — first-class scoping fields, not a title parse.
     sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
-    return await _filter_user_sessions(sessions, username)
+    return await _filter_user_sessions(sessions, username, lambda sid: chat_history_manager.get_session_owner(sid))
 
 
-async def _filter_user_sessions(sessions: list, username: str) -> list:
+async def _filter_user_sessions(sessions: list, username: str, read_owner) -> list:
     """Filter sessions to those owned by the user (#684).
 
-    Uses Redis ownership data and fails closed: an unavailable store raises, and a
-    caller with no ownership records gets ``[]`` (#21664). Sessions that predate
-    ownership tracking stay unlisted until an owner is assigned through the approval
-    queue; nothing here assigns or deletes them.
+    Uses the owner index, rebuilt from the session files' durable owner through
+    *read_owner* when the Redis set is empty (``security.session_owner_index``), and
+    fails closed: an unavailable store raises, and a caller who owns nothing gets
+    ``[]`` (#21664). Sessions that predate ownership tracking stay unlisted until an
+    owner is assigned through the approval queue; nothing here assigns or deletes them.
     """
     from api.chat_sessions_errors import OwnershipUnavailableError
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+    from security.session_owner_index import owned_session_ids
 
     try:
         redis = await get_redis_mgr(async_client=True, database="main")
         validator = _build_ownership_validator(redis)
-        user_session_ids = set(await validator.get_user_sessions(username))
+        candidate_ids = [s.get("id") for s in sessions if s.get("id")]
+        user_session_ids = await owned_session_ids(validator, username, candidate_ids, read_owner)
     except Exception as e:
-        # #12685: this used to `return sessions` — the UNFILTERED list — whenever
-        # the ownership lookup failed. On a tenancy filter that is the wrong
-        # direction to fail: a Redis blip silently exposed every session on the
-        # instance, including other companies' agent conversations. Surfacing an
-        # error lets the UI say "could not load your sessions" instead of
-        # showing someone else's.
+        # #12685: never the unfiltered list on a failed lookup; a 503 lets the UI say "could not
+        # load your sessions" (and carries no intentional_empty, so it keeps its local copy, #21664).
         logger.error("Ownership lookup failed; refusing to return an unfiltered session list: %s", e)
         raise OwnershipUnavailableError("Could not verify session ownership") from e
 

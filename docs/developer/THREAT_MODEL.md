@@ -35,7 +35,7 @@ not an auth boundary — the caller is logged in — so a missing check reads as
 endpoint.
 
 **Canonical enforcement:** [`autobot-backend/security/session_ownership.py`](../../autobot-backend/security/session_ownership.py)
-— `build_owner_metadata` (:45) the one owner stamper · `validate_session_ownership` (:741) the one read-side gate · `validate_ownership` (:579).
+— `build_owner_metadata` (:45) the one owner stamper · `validate_session_ownership` (:735) the one read-side gate · `validate_ownership` (:579).
 Two postures, one validator (#14016): the contract is the docstring of [`security/session_posture.py`](../../autobot-backend/security/session_posture.py). A failed durable owner lookup denies under both and claims nothing: "unknown" is never "unowned" (#14033).
 
 **Invariants**
@@ -44,6 +44,7 @@ Two postures, one validator (#14016): the contract is the docstring of [`securit
 - Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent Redis record means "not cached", never "unowned" — [`session_ownership.py`](../../autobot-backend/security/session_ownership.py) `_owner_when_cache_is_empty` (:504) asks disk first and rehydrates **for the real owner, never for the caller** (#14018). Nobody claims an existing session with no owner, by reading or writing: an admin may act on it, anyone else gets the same 404 as a missing session, and nothing is written; an ownerless session is itself a defect. With no session at all, a read gets that 404 and a write creates it and records its owner. Not knowing which of the two it is denies (#20025).
 - Undetermined enforcement policy degrades, in [`security/enforcement_mode.py`](../../autobot-backend/security/enforcement_mode.py), to `DEGRADED_ENFORCEMENT_MODE` (:53) and never to `disabled`: checks still run and violations are still recorded (#14010). A new `except` that returns `"disabled"` is a fail-open.
 - A resolution that degraded stays marked `degraded` (:73), so a `log_only` decision record says which of the two `log_only` states produced it (#15159). It marks the record only — `log_only` is allow-and-audit in both, deliberately. A degraded route reporting the chosen `reason` is a finding.
+- The per-user owner index `user_chat_sessions:<username>` is the same kind of cache: an empty set is a miss, rebuilt from the session files and re-cached for their real owner ([`session_owner_index.py`](../../autobot-backend/security/session_owner_index.py) `owned_session_ids`, #21664). A Redis error reaching it is an error (503), never "owns nothing".
 - Only two legitimate fast-path bypasses exist, in [`security/session_ownership.py`](../../autobot-backend/security/session_ownership.py) — `_resolve_fast_paths` (:454): global auth disabled, and enforcement explicitly `disabled`. A third one added in a diff is a finding.
 - Creating over an existing session id is a 409, identical for "owned by someone else" and "no recorded owner" — a 403 on the first would confirm who owns it (#14012).
 

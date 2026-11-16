@@ -325,7 +325,7 @@ logger.info(
 
 # Include session management router
 from api.chat_sessions import delete_session as _canonical_delete_session
-from api.chat_sessions import log_request_context
+from api.chat_sessions import list_user_sessions, log_request_context
 from api.chat_sessions import router as sessions_router
 
 router.include_router(sessions_router)
@@ -954,7 +954,7 @@ async def list_chats(
     request: Request = None,
 ):
     """
-    List all available chat sessions with improved error handling (consolidated).
+    List the caller's own chat sessions (consolidated; same listing as GET /chat/sessions).
 
     Issue #744: Requires authenticated user.
     """
@@ -974,9 +974,8 @@ async def list_chats(
             details={"component": "chat_history_manager"},
         )
 
-    # Get sessions directly - decorator handles all errors
-    # list_sessions_fast is async (uses asyncio.to_thread internally)
-    sessions = await chat_history_manager.list_sessions_fast()
+    # #21664: the caller's own sessions through the one shared listing, never the instance-wide list
+    sessions = await list_user_sessions(chat_history_manager, current_user.get("username"))
     return create_chat_response(
         data=sessions,
         message="Chat sessions retrieved successfully",
