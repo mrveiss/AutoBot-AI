@@ -50627,7 +50627,6 @@
     "repo_tests/shell_lib_test.py::test_shell_suite_passes[scripts/lib/git-root_test.sh]": 0.0837490109997816,
     "repo_tests/shell_lib_test.py::test_shell_suite_passes[scripts/lib/git-scope_test.sh]": 0.2102722250001534,
     "repo_tests/shell_lib_test.py::test_shell_suite_passes[scripts/lib/project_root_test.sh]": 0.06714267100028337,
-    "repo_tests/shell_lib_test.py::test_shell_suite_passes[scripts/lib/session-handoffs_test.sh]": 0.451555542000051,
     "repo_tests/shell_lib_test.py::test_shell_suite_passes[scripts/pr-merge-gate_test.sh]": 0.14617876300007993,
     "repo_tests/shell_lib_test.py::test_shell_suite_passes[scripts/pr-preflight_test.sh]": 22.72672820599996,
     "repo_tests/sigterm_grace_one_home_19340_test.py::test_a_literal_grace_passed_to_terminate_pid_is_flagged": 0.0026240279996727622,

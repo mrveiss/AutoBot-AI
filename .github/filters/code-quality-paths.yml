@@ -66,6 +66,7 @@ backend:
   - '**/*.vue'
   - '**/requirements*.txt'
   - 'requirements-ci/**'
+  - 'constraints/shared.txt'  # #21471: CI-plane versions live here
   - 'repo_tests/**'
   - 'pyproject.toml'
   - '.flake8'
