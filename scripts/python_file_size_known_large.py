@@ -69,7 +69,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/analytics_root_cause_test.py": 628,
     "autobot-backend/api/api_endpoint_migrations_test.py": 31017,
     "autobot-backend/api/auth.py": 650,
-    "autobot-backend/api/batch_jobs.py": 909,  # #21650: 916 -> 909
+    "autobot-backend/api/batch_jobs.py": 867,  # #21653: 909 -> 867
     "autobot-backend/api/browser_mcp.py": 1320,
     "autobot-backend/api/cache_management.py": 692,
     "autobot-backend/api/chat.py": 2625,  # #20195: graph resume stream moved to chat_streaming; #20852

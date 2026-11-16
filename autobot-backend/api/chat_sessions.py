@@ -376,19 +376,8 @@ async def list_sessions(
     if scope in ("org", "team"):
         return await _list_scoped_sessions(request, request_id, chat_history_manager, scope, team_id)
 
-    # Default: list all sessions (fast mode)
-    sessions = await chat_history_manager.list_sessions_fast()
-
-    # #12685: exclude company/agent-scoped conversations (e.g. LLC CEO chat)
-    # from the ordinary user list — first-class scoping fields, not a title
-    # parse. See _is_agent_scoped_session for the migration story on sessions
-    # created before this fix.
-    sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
-
-    # Filter to authenticated user's own sessions
-    username = current_user.get("username")
-    if username:
-        sessions = await _filter_user_sessions(sessions, username)
+    # Default: the caller's own ordinary sessions (fast mode)
+    sessions = await list_user_sessions(chat_history_manager, current_user.get("username"))
 
     # Issue #4352: Signal intentional empty to distinguish from API failure.
     # When an authenticated request returns 0 sessions, mark it explicitly so
@@ -430,6 +419,22 @@ def _is_agent_scoped_session(session: dict) -> bool:
     one-time operation — #14756, not folded into this filter.
     """
     return bool(session.get("companyId")) or session.get("sessionKind") == "agent"
+
+
+async def list_user_sessions(chat_history_manager, username: str | None) -> list:
+    """The caller's own ordinary chat sessions — the one listing every route uses (#21653).
+
+    Shared by ``GET /chat/sessions`` (default scope) and ``/api/batch-jobs/chat-init``
+    so both apply the same ownership filter (``_filter_user_sessions``) and the same
+    agent-scoped exclusion. No role bypass: an administrator lists only their own.
+    """
+    sessions = await chat_history_manager.list_sessions_fast()
+    # #12685: company/agent-scoped conversations (e.g. LLC CEO chat) are not ordinary
+    # user chats — first-class scoping fields, not a title parse.
+    sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
+    if username:
+        sessions = await _filter_user_sessions(sessions, username)
+    return sessions
 
 
 async def _filter_user_sessions(sessions: list, username: str) -> list:
