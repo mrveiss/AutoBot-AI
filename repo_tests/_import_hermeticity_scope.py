@@ -31,13 +31,20 @@ sweep on every push to main covers it:
 * an import the AST cannot see, such as ``importlib.import_module`` on a computed name.
 
 What does NOT count as an environment input, so a diff touching only it plans by the
-rules above (the full run after the merge reads it):
+rules above. Most of these are in neither ``paths:`` filter, so no pull request or push
+run sees them: the daily scheduled full run, or a manual dispatch, is the first to.
 
 * the composite actions the sweep calls (``.github/actions/setup-python-ci``,
   ``install-ci-requirements``, ``free-disk-space``) -- they shape how the install runs,
-  not which versions it resolves, and their own callers exercise them;
-* ``pytest.ini`` and ``conftest.py`` -- run configuration, not the installed set;
-* the unpinned ``pip``/``setuptools``/``wheel`` upgrade -- no file in the diff names it.
+  not which versions it resolves, and their own callers exercise them. First seen by the
+  scheduled or dispatched run;
+* the root ``pytest.ini``, the root ``conftest.py`` and ``repo_tests/conftest.py`` --
+  run configuration, not the installed set. First seen by the scheduled or dispatched
+  run. A ``conftest.py`` or pytest config under one of the three swept trees
+  (``autobot-backend/``, ``autobot-slm-backend/``, ``autobot_shared/``) also starts the
+  full run on the push to main, since those trees are push triggers;
+* the unpinned ``pip``/``setuptools``/``wheel`` upgrade -- no file in the diff names it;
+  every run that installs takes the then-current release.
 """
 
 from __future__ import annotations
