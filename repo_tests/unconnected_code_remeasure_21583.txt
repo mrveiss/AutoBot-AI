@@ -15,7 +15,6 @@ frontend:autobot-frontend/src/components/transcriber/SpeakerLabel.vue
 frontend:autobot-frontend/src/components/visualizations/index.ts
 frontend:autobot-frontend/src/composables/useAgentEvents.ts
 frontend:autobot-frontend/src/composables/useAnalyticsFetch.ts
-frontend:autobot-frontend/src/composables/useBatchProcessing.ts
 frontend:autobot-frontend/src/composables/useConnectionTester.ts
 frontend:autobot-frontend/src/composables/useDebouncedSearch.ts
 frontend:autobot-frontend/src/composables/useFakeProgress.ts

@@ -69,11 +69,11 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/analytics_root_cause_test.py": 628,
     "autobot-backend/api/api_endpoint_migrations_test.py": 31017,
     "autobot-backend/api/auth.py": 650,
-    "autobot-backend/api/batch_jobs.py": 909,  # #21650: 916 -> 909
+    "autobot-backend/api/batch_jobs.py": 867,  # #21653: 909 -> 867
     "autobot-backend/api/browser_mcp.py": 1320,
     "autobot-backend/api/cache_management.py": 692,
-    "autobot-backend/api/chat.py": 2625,  # #20195: graph resume stream moved to chat_streaming; #20852
-    "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
+    "autobot-backend/api/chat.py": 2624,  # #20195, #20852; #21664: 2625 -> 2624
+    "autobot-backend/api/chat_sessions.py": 1794,  # #21664: 1859 -> 1794
     "autobot-backend/api/code_intelligence.py": 2145,
     "autobot-backend/api/code_search.py": 786,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
@@ -297,7 +297,7 @@ KNOWN_LARGE: dict[str, int] = {
     # #16354: invisible-char table moved to security/unicode_normalization.py
     "autobot-backend/security/prompt_injection_detector.py": 703,
     "autobot-backend/security/security_edge_cases_test.py": 613,
-    "autobot-backend/security/session_ownership.py": 813,
+    "autobot-backend/security/session_ownership.py": 807,  # #21664: 813 -> 807
     "autobot-backend/security/threat_detection_refactor_test.py": 880,
     "autobot-backend/security/threat_intelligence.py": 762,
     "autobot-backend/security_layer.py": 661,

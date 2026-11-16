@@ -14,7 +14,11 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockCall, mockPost } = vi.hoisted(() => ({ mockCall: vi.fn(), mockPost: vi.fn() }))
+const { mockCall, mockPost, poller } = vi.hoisted(() => ({
+  mockCall: vi.fn(),
+  mockPost: vi.fn(),
+  poller: { tick: null as null | (() => Promise<void>) },
+}))
 
 vi.mock('@/utils/ApiClient', () => ({ default: { call: mockCall, post: mockPost } }))
 vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api' }))
@@ -26,7 +30,10 @@ vi.mock('@/composables/useProbeBackedHealth', () => ({
   probeStatusToLegacy: vi.fn(),
 }))
 vi.mock('@/composables/usePollingJob', () => ({
-  usePollingJob: () => ({ start: vi.fn(), stop: vi.fn() }),
+  usePollingJob: (tick: () => Promise<void>) => {
+    poller.tick = tick
+    return { start: vi.fn(), stop: vi.fn() }
+  },
 }))
 
 import { useBatchProcessingApi, useBatchProcessingState } from '../useBatchProcessing'
@@ -181,5 +188,34 @@ describe('useBatchProcessingState (#21649)', () => {
     expect(await state.loadJobLogs('a')).toBeNull()
     expect(state.logsError.value).toBe(failure)
     expect(state.error.value).toBeNull()
+  })
+
+  it('keeps polling after a retry until the queued job\'s record moves, then stops (#20644 review)', async () => {
+    const failed = { ...job('f', 'failed'), started_at: 't1' }
+    const listOf = (j: unknown) => ({ jobs: [j], total_count: 1, status_counts: {} })
+    replies({ '/api/batch-jobs': listOf(failed), '/api/batch-jobs/{job_id}/run': failed })
+    const state = useBatchProcessingState()
+    await state.loadJobs()
+    state.startPolling(1000)
+    await state.runJob('f')
+    expect(state.awaitingRun.value).toBe(true)
+    mockCall.mockClear()
+    await poller.tick!()
+    expect(mockCall).toHaveBeenCalledWith('get', '/api/batch-jobs', expect.anything())
+    expect(state.awaitingRun.value).toBe(true)
+    replies({ '/api/batch-jobs': listOf({ ...failed, status: 'running', started_at: 't2' }) })
+    await poller.tick!()
+    expect(state.awaitingRun.value).toBe(false)
+  })
+
+  it('a run request that fails stops waiting for that job', async () => {
+    replies({
+      '/api/batch-jobs': { jobs: [job('f', 'failed')], total_count: 1, status_counts: {} },
+      '/api/batch-jobs/{job_id}/run': new Error('HTTP 409'),
+    })
+    const state = useBatchProcessingState()
+    await state.loadJobs()
+    await expect(state.runJob('f')).rejects.toThrow('HTTP 409')
+    expect(state.awaitingRun.value).toBe(false)
   })
 })
