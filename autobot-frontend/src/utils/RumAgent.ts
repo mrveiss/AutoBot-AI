@@ -11,7 +11,7 @@ import { saveTextFile } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { isBenignBrowserNotice } from '@/utils/benignBrowserNotice'
-import { pushCapped } from '@/utils/rumBufferCap'
+import { pushCapped, RUM_MAX_ERRORS } from '@/utils/rumBufferCap'
 
 // Issue #981: Use scoped logger — console.* was causing [object Object] in log output
 const logger = createLogger('RumAgent')
@@ -427,7 +427,7 @@ class RumAgent {
       userAgent: navigator.userAgent
     }
 
-    this.metrics.errors.push(error)
+    pushCapped(this.metrics.errors, error, RUM_MAX_ERRORS)
 
     // #10938: Send structured event to /api/rum/event so the per-event rum.log
     // captures it. errorData is nested under `data` as the backend formatter expects.
@@ -437,12 +437,12 @@ class RumAgent {
     if (this.prometheusEnabled) {
       const isRejection = type === 'unhandled_promise_rejection'
       const page = this.getCurrentPage()
-      this.pendingJsErrors.push({
+      pushCapped(this.pendingJsErrors, {
         error_type: type,
         page,
         is_rejection: isRejection,
         component: errorData.component as string | undefined
-      })
+      }, RUM_MAX_ERRORS)
     }
 
     // Reduce noise from expected network errors during backend connection attempts
