@@ -29,6 +29,15 @@ sweep on every push to main covers it:
   ``services/`` module an ``api/`` module imports -- it has no entry to match;
 * a deleted module -- its former importers are not re-examined;
 * an import the AST cannot see, such as ``importlib.import_module`` on a computed name.
+
+What does NOT count as an environment input, so a diff touching only it plans by the
+rules above (the full run after the merge reads it):
+
+* the composite actions the sweep calls (``.github/actions/setup-python-ci``,
+  ``install-ci-requirements``, ``free-disk-space``) -- they shape how the install runs,
+  not which versions it resolves, and their own callers exercise them;
+* ``pytest.ini`` and ``conftest.py`` -- run configuration, not the installed set;
+* the unpinned ``pip``/``setuptools``/``wheel`` upgrade -- no file in the diff names it.
 """
 
 from __future__ import annotations
@@ -67,16 +76,25 @@ SELF_FILES: frozenset[str] = frozenset(
     }
 )
 
-#: The dependency files the sweep installs (``install-ci-requirements`` takes
-#: ``requirements-ci.txt``, which includes ``requirements-ci/*``; the shared constraints
-#: bind them, #21471). A version change can make any module's import connect or fail, so
-#: a pull request touching one runs the full sweep, not none.
-ENVIRONMENT_FILES: frozenset[str] = frozenset({"constraints/shared.txt", "requirements-ci.txt"})
+#: The files that seed the sweep's environment (#21471): ``.python-version`` picks the
+#: interpreter (``setup-python-ci``); ``install-ci-requirements`` installs
+#: ``requirements-ci.txt``, which includes ``requirements-ci/*``; ``pip install -e
+#: autobot_shared`` installs that manifest's dependencies; the shared constraints bind
+#: them. A change to any can make a module's import connect or fail, so a pull request
+#: touching one runs the full sweep, not none.
+ENVIRONMENT_FILES: frozenset[str] = frozenset(
+    {
+        ".python-version",
+        "autobot_shared/pyproject.toml",
+        "constraints/shared.txt",
+        "requirements-ci.txt",
+    }
+)
 ENVIRONMENT_DIRS: tuple[str, ...] = ("requirements-ci/",)
 
 
 def reaches_environment(path: str) -> bool:
-    """Whether *path* is a dependency file the sweep installs."""
+    """Whether *path* seeds the environment the sweep installs."""
     return path in ENVIRONMENT_FILES or path.startswith(ENVIRONMENT_DIRS)
 
 

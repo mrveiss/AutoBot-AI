@@ -49,6 +49,7 @@ lists; the full sweep on every push to main does.
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import subprocess  # nosec B404  # the sandboxed probe IS the subject of this guard
 import sys
@@ -471,18 +472,31 @@ def test_the_plan_is_full_on_the_sweep_itself_and_none_when_no_swept_module_chan
     assert scope.plan(unswept, population) == ("none", [])
 
 
-@pytest.mark.parametrize(
-    "dependency", ["constraints/shared.txt", "requirements-ci.txt", "requirements-ci/framework.txt"]
-)
+_ENVIRONMENT_CHANGES = [
+    ".python-version",
+    "autobot_shared/pyproject.toml",
+    "constraints/shared.txt",
+    "requirements-ci.txt",
+    "requirements-ci/framework.txt",
+]
+
+
+@pytest.mark.parametrize("dependency", _ENVIRONMENT_CHANGES)
 def test_a_dependency_only_change_plans_the_full_sweep(tmp_path: Path, dependency: str) -> None:
-    """#21471: the sweep installs these, so a constraints-only PR must not plan ``none``."""
+    """#21471: these seed the sweep's environment, so a PR changing only one must not plan ``none``."""
     population = _plant(tmp_path)
     assert scope.plan([dependency], population) == ("full", [])
     assert scope.plan(["autobot-backend/services/s.py", dependency], population) == ("full", [])
-    filters = {*sorted(scope.ENVIRONMENT_FILES), *(f"{d}**" for d in scope.ENVIRONMENT_DIRS)}
     doc = yaml.safe_load((_REPO_ROOT / _WORKFLOW).read_text(encoding="utf-8"))
-    paths = (doc.get(True) or doc.get("on") or {})["pull_request"]["paths"]
-    assert filters <= set(paths), f"{_WORKFLOW}: does not trigger on {sorted(filters - set(paths))}"
+    filters = (doc.get(True) or doc.get("on") or {})["pull_request"]["paths"]
+    # Glob-aware: autobot_shared/pyproject.toml triggers through ``autobot_shared/**``.
+    assert any(fnmatch.fnmatchcase(dependency, f) for f in filters), f"{_WORKFLOW}: does not trigger on {dependency}"
+
+
+def test_every_environment_input_has_a_planning_case() -> None:
+    """A file added to ENVIRONMENT_FILES without a case above would go unproven."""
+    assert scope.ENVIRONMENT_FILES <= set(_ENVIRONMENT_CHANGES)
+    assert all(any(c.startswith(d) for c in _ENVIRONMENT_CHANGES) for d in scope.ENVIRONMENT_DIRS)
 
 
 def test_every_self_file_exists_and_triggers_the_workflow() -> None:

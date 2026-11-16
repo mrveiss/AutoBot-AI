@@ -9,7 +9,9 @@ name: import-hermeticity-sweep
 #   push to main, schedule, dispatch          FULL    these read the base
 #   PR touching the sweep's own files         FULL    only a full run judges every
 #                                                     baseline entry
-#   PR touching requirements-ci*, constraints FULL    a version change can change any
+#   PR touching an environment input          FULL    requirements-ci*, constraints, the
+#   (scope module's ENVIRONMENT_FILES)                autobot_shared manifest, .python-version:
+#                                                     a version change can change any
 #                                                     module's import (#21471)
 #   PR changing swept modules                 SUBSET  those, plus every module that
 #                                                     imports one of them directly
@@ -47,6 +49,7 @@ on:
       - 'requirements-ci.txt'
       - 'requirements-ci/**'
       - 'constraints/shared.txt'  # #21471: CI-plane versions live here
+      - '.python-version'  # #21471: setup-python-ci reads the interpreter version here
       - 'repo_tests/_import_hermeticity_scope.py'
       - 'repo_tests/import_hermeticity_known_offenders.py'
       - 'repo_tests/import_hermeticity_test.py'
@@ -60,6 +63,7 @@ on:
       - 'requirements-ci.txt'
       - 'requirements-ci/**'
       - 'constraints/shared.txt'  # #21471: CI-plane versions live here
+      - '.python-version'  # #21471: setup-python-ci reads the interpreter version here
       - 'repo_tests/_import_hermeticity_scope.py'
       - 'repo_tests/import_hermeticity_known_offenders.py'
       - 'repo_tests/import_hermeticity_test.py'
