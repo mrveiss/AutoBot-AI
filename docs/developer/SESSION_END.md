@@ -4,12 +4,14 @@ Checklist for starting and ending a session. Rules it points at are not restated
 
 ## Start
 
-- [ ] If `.notes/INDEX.md` exists, read it and pick up the listed topics. No file means nothing is pending.
+- [ ] If `.notes/INDEX.md` exists in the main checkout, read it and pick up the listed topics. No file means nothing is pending.
+- [ ] If a legacy `.session/HANDOFF-*.md` exists in the main checkout, read it and carry its open items into `.notes/`. Leave the file for the human; agents never delete it.
 
 ## End
 
-### Notes (`.notes/`, repo root, gitignored, never committed)
+### Notes (`.notes/`, gitignored, never committed) — write BEFORE removing any worktree
 
+- [ ] `.notes/` lives at the root of the MAIN checkout, never inside a worktree (removing the worktree would delete it, unrecoverably). Path: `$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.notes`.
 - [ ] One file per open topic, named `yyyy.mm.dd-topic.md`.
 - [ ] `.notes/INDEX.md` lists every open note: file, topic, issue, next step.
 - [ ] Write or update a note for every open topic.

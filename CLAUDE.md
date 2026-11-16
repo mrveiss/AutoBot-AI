@@ -8,7 +8,7 @@ global instructions and are not repeated here; where the two disagree, **this fi
 
 | Trigger | Doc |
 |---|---|
-| Starting a session (read `.notes/INDEX.md` if present) or ending one | [`SESSION_END.md`](docs/developer/SESSION_END.md) |
+| Starting a session (read the main checkout's `.notes/INDEX.md` if present) or ending one | [`SESSION_END.md`](docs/developer/SESSION_END.md) |
 | Unsure which workflow rule is current, or two rules disagree | [`OWNER_RULES.md`](docs/developer/OWNER_RULES.md) |
 | Starting a task — the 8 core rules in full | [`CLAUDE_RULES.md`](docs/developer/CLAUDE_RULES.md) |
 | Branching, worktree collisions, stashing, force-push, push recovery | [`CLAUDE_GIT.md`](docs/developer/CLAUDE_GIT.md) |
