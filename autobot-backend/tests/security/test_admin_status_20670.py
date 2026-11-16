@@ -26,10 +26,12 @@ from api.user_management.dependencies import _PLATFORM_ADMIN_DENIED
 from api.user_management.dependencies import get_current_user as route_get_current_user
 from api.user_management.dependencies import get_db_session, get_user_service
 from api.user_management.router import router as user_management_router
+from autobot_shared.auth.revocation_unavailable import REVOCATION_UNAVAILABLE_DETAIL
 from autobot_shared.db_session import POST_COMMIT_CALLBACKS
 from autobot_shared.user_management import password_epoch
 from autobot_shared.user_management.base_service import TenantContext
 from autobot_shared.user_management.models.audit import AuditResourceType, IdentityAuditAction
+from autobot_shared.user_management.revocation_outcome import REVOCATION_INCOMPLETE_MESSAGE
 from autobot_shared.user_management.user_service import UserService
 from tests.security._credential_harness import real_middleware
 from tests.security._revocation_harness import assert_refused as _assert_refused
@@ -381,3 +383,47 @@ def test_promoting_through_the_route_voids_the_old_token_and_the_next_login_reac
     issued_role = UserService.account_role(alice)  # the one derivation login uses for the token's role
     assert issued_role == "admin"
     assert client.get(_LIST_USERS, headers=_token_headers(age_seconds=-5, role=issued_role)).status_code == 200
+
+
+def test_a_store_that_cannot_record_makes_the_route_a_503_and_the_change_stays_committed(
+    real_auth_middleware, get_current_user, epochs, monkeypatch
+):
+    """PUT /users/{id}/admin, the store answers reads but cannot record the epoch: 503, flag kept, every write tried."""
+    monkeypatch.setattr(password_epoch, "MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS", 0.0)
+    alice = _user(True)
+    service = _service(alice)
+    client = _client(real_auth_middleware, monkeypatch, service)
+    set_epoch = AsyncMock(return_value=None)
+    password_epoch.use_epoch_store(get_epoch=AsyncMock(return_value=None), set_epoch=set_epoch)
+    try:
+        failed = _put_admin(client, alice, False, _token_headers(username="bob", role="admin"))
+    finally:
+        _restore_epoch_store(epochs)
+
+    assert failed.status_code == 503
+    assert failed.json()["detail"] == REVOCATION_INCOMPLETE_MESSAGE
+    assert alice.is_platform_admin is False, "the demotion is not rolled back"
+    assert service.session.commit.await_count == 1, "the change was committed"
+    assert set_epoch.await_count == password_epoch.MEMBERSHIP_EPOCH_BUMP_ATTEMPTS
+    assert {call.args[0] for call in set_epoch.await_args_list} == {"alice"}
+
+
+def test_a_store_that_is_down_refuses_the_caller_at_the_gate_and_the_change_never_runs(
+    real_auth_middleware, get_current_user, epochs, monkeypatch
+):
+    """The epoch store raises on read: the real gate answers its 503 before the route, and nothing is changed."""
+    alice = _user(True)
+    service = _service(alice)
+    client = _client(real_auth_middleware, monkeypatch, service)
+    unavailable = password_epoch.RevocationCheckUnavailable("down")
+    password_epoch.use_epoch_store(get_epoch=AsyncMock(side_effect=unavailable), set_epoch=AsyncMock())
+    try:
+        refused = _put_admin(client, alice, False, _token_headers(username="bob", role="admin"))
+    finally:
+        _restore_epoch_store(epochs)
+
+    assert refused.status_code == 503
+    assert refused.json()["detail"] == REVOCATION_UNAVAILABLE_DETAIL
+    assert alice.is_platform_admin is True, "the admin flag is unchanged"
+    service.get_user.assert_not_awaited()
+    service.session.commit.assert_not_awaited()

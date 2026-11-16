@@ -54,7 +54,7 @@ from repo_tests._ui_literal_scan import SCRIPT_BODY
 from repo_tests._unconnected_common import Tree
 
 from autobot_shared.testfile_names import is_test_filename
-from tools.lint._comment_syntax import code_lines, strip_html_comments
+from tools.lint._comment_syntax import code_text, strip_html_comments
 
 #: The frontend source trees whose files are candidates.
 FRONTEND_ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src")
@@ -97,7 +97,7 @@ def stem(rel_or_spec: str) -> str:
     return last
 
 
-def _code_text(rel: str, text: str) -> str:
+def frontend_code_text(rel: str, text: str) -> str:
     """*text* without comments; HTML loses only its ``<!-- -->`` comments (an entry ``<script src>`` is not one).
 
     A ``.vue`` file contributes its ``<script>`` blocks only: a template's prose holds apostrophes and ``//`` that a
@@ -108,7 +108,7 @@ def _code_text(rel: str, text: str) -> str:
     name = rel
     if rel.endswith(".vue"):
         text, name = "\n".join(SCRIPT_BODY.findall(text)), "script.ts"
-    return "\n".join(line.text for line in code_lines(text, name=name, strip_trailing=True))
+    return code_text(text, name=name, strip_trailing=True)
 
 
 def _spec_stem(spec: str, importer: str) -> str:
@@ -180,7 +180,7 @@ def _importer_index(tree: Tree) -> tuple[dict[str, set[str]], list[tuple[str, re
     importers: dict[str, set[str]] = {}
     globs: list[tuple[str, re.Pattern[str]]] = []
     for rel in tree.select(*_CODE_SUFFIXES, ".html"):
-        code = _code_text(rel, tree.text(rel))
+        code = frontend_code_text(rel, tree.text(rel))
         for name in quoted_stems(code, rel):
             importers.setdefault(name, set()).add(rel)
         globs.extend((rel, glob_regex(p)) for p in glob_patterns(rel, code))
