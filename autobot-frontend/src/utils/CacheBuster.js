@@ -6,6 +6,7 @@
  */
 
 import { createLogger } from '@/utils/debugUtils';
+import { isRequestTimeout } from '@/utils/errorExtract';
 
 // Create scoped logger for CacheBuster
 const logger = createLogger('CacheBuster');
@@ -236,19 +237,17 @@ class CacheBuster {
                 return response;
             } catch (error) {
                 // Rate-limit connection/timeout error logging to prevent console spam
-                // Producer is the browser's window.fetch (never the kit client), so the name checks are the typed signal;
-                // the message texts below stay for engines that throw a plain TypeError worded by the browser.
+                // Producer is the browser's window.fetch (never the kit client). A timeout is recognised by type only
+                // (#21581: isRequestTimeout reads the 'TimeoutError' name AbortSignal.timeout() sets, never the message);
+                // the connection texts below stay because browsers word a refused connection as a plain TypeError.
                 const isConnectionOrTimeoutError =
+                    isRequestTimeout(error) ||
                     error.name === 'AbortError' ||
-                    error.name === 'TimeoutError' ||
                     error.message?.includes('Failed to fetch') ||
                     error.message?.includes('ERR_CONNECTION_REFUSED') ||
                     error.message?.includes('NetworkError') ||
                     error.message?.includes('Network request failed') ||
-                    error.message?.includes('signal is aborted') ||
-                    error.message?.includes('signal timed out') ||
-                    error.message?.includes('timed out') ||
-                    error.message?.includes('timeout');
+                    error.message?.includes('signal is aborted');
 
                 if (isConnectionOrTimeoutError) {
                     this.connectionErrorCount++;
