@@ -77,29 +77,27 @@ def test_the_guard_reads_the_real_manifests_and_the_tree_is_clean(guard):
         os.chdir(cwd)
 
 
-def _ci_site(guard, raw: str, specs: dict[str, str]) -> list[str]:
-    decls = {"planted-pkg": [(Path("requirements-ci/x.txt"), 1, raw, True)]}
-    found = guard.find_violations(decls, {"planted-pkg"}, specs)
+def _ci_site(guard, path: str, raw: str) -> list[str]:
+    decls = {"planted-pkg": [(Path(path), 1, raw, bool(guard._SPEC.match(raw)))]}
+    found = guard.find_violations(decls, {"planted-pkg"})
     return [v for v in found if "stale EXEMPT" not in v]
 
 
-def test_a_ci_exact_pin_that_meets_the_shared_constraint_is_allowed(guard):
-    assert _ci_site(guard, "planted-pkg==2.3.0", {"planted-pkg": ">=2.0,<3.0"}) == []
+_PLANES = ["requirements-ci/x.txt", "requirements-ci-test.txt", "autobot-backend/requirements.txt"]
 
 
-def test_a_ci_exact_pin_below_the_shared_floor_is_named(guard):
-    found = _ci_site(guard, "planted-pkg==1.9.0", {"planted-pkg": ">=2.0,<3.0"})
+@pytest.mark.parametrize("path", _PLANES)
+@pytest.mark.parametrize("raw", ["planted-pkg==2.3.0", "planted-pkg>=2.0", "planted-pkg[extra]==2.3.0"])
+def test_a_ci_plane_pin_that_meets_the_shared_constraint_is_still_named(guard, path, raw):
+    """#21471: the CI plane once passed with a pin that satisfied the shared range, so a dependabot bump of
+    constraints/shared.txt (the only file it edits) left the pin behind. Every plane now lists it bare."""
+    found = _ci_site(guard, path, raw)
     assert any("re-pins a constrained package" in v for v in found), found
 
 
-def test_a_ci_exact_pin_past_the_shared_cap_is_named(guard):
-    assert _ci_site(guard, "planted-pkg==3.1.0", {"planted-pkg": ">=2.0,<3.0"})
-
-
-def test_a_non_ci_file_may_not_repeat_a_constrained_pin_even_when_it_satisfies(guard):
-    decls = {"planted-pkg": [(Path("autobot-backend/requirements.txt"), 1, "planted-pkg==2.3.0", True)]}
-    found = guard.find_violations(decls, {"planted-pkg"}, {"planted-pkg": ">=2.0"})
-    assert [v for v in found if "stale EXEMPT" not in v]
+@pytest.mark.parametrize("path", ["requirements-ci/x.txt", "requirements-ci-test.txt"])
+def test_a_bare_constrained_name_in_the_ci_plane_is_clean(guard, path):
+    assert _ci_site(guard, path, "planted-pkg  # version from constraints/shared.txt") == []
 
 
 @pytest.mark.parametrize(
@@ -130,12 +128,6 @@ def test_a_marked_pin_of_a_constrained_package_is_reported(guard, tmp_path):
 def test_two_parenthesised_specs_of_one_package_are_drift_not_silence(guard, tmp_path):
     found = _violations(guard, tmp_path, {"a.txt": "planted-pkg (>=1)\n", "b.txt": "planted-pkg (>=2)\n"}, set())
     assert found, "parenthesised specifiers were treated as bare"
-
-
-def test_a_ci_prerelease_below_the_shared_floor_is_named(guard):
-    found = _ci_site(guard, "planted-pkg==2.0rc1", {"planted-pkg": ">=2.0,<3.0"})
-    assert any("re-pins a constrained package" in v for v in found), found
-    assert _ci_site(guard, "planted-pkg==2.0", {"planted-pkg": ">=2.0,<3.0"}) == []
 
 
 def _manifest(guard, tmp_path: Path, name: str, body: str, specs: dict[str, str]) -> list[str]:
@@ -172,3 +164,44 @@ def test_the_guard_reads_the_real_packaging_manifests(guard):
         os.chdir(cwd)
     assert "libs/autobot-sdk-python/pyproject.toml" in files
     assert "autobot-backend/code_analysis/setup.py" in files
+
+
+def test_a_manifest_prerelease_floor_below_the_shared_floor_is_named(guard, tmp_path):
+    """PEP 440: ``2.0rc1`` sits below ``>=2.0``, so a standalone manifest floored there is drift."""
+    body = 'dev = ["planted-pkg>=2.0rc1"]\n'
+    assert _manifest(guard, tmp_path, "pyproject.toml", body, {"planted-pkg": ">=2.0"})
+    assert _manifest(guard, tmp_path, "pyproject.toml", 'dev = ["planted-pkg>=2.0"]\n', {"planted-pkg": ">=2.0"}) == []
+
+
+def _unbound(guard, tmp_path: Path, body: str) -> list[str]:
+    path = tmp_path / "requirements-ci-test.txt"
+    path.write_text(body, encoding="utf-8")
+    return guard.unconstrained_bare_names([path], {"planted-pkg"})
+
+
+def test_a_bare_constrained_name_with_no_shared_include_is_named(guard, tmp_path):
+    """#21471: requirements-ci-test.txt listed pytest-asyncio bare with no -c line, so its own installs floated."""
+    found = _unbound(guard, tmp_path, "planted-pkg\nother-pkg\n")
+    assert any("planted-pkg" in v and "no -c line" in v for v in found), found
+
+
+@pytest.mark.parametrize(
+    "include",
+    ["-c constraints/shared.txt", "-c ../constraints/shared.txt  # why", "--constraint=constraints/shared.txt"],
+)
+def test_a_bare_constrained_name_under_a_shared_include_is_clean(guard, tmp_path, include):
+    assert _unbound(guard, tmp_path, f"{include}\nplanted-pkg\n") == []
+
+
+def test_a_file_with_no_constrained_bare_name_needs_no_include(guard, tmp_path):
+    assert _unbound(guard, tmp_path, "other-pkg\nkombu==5.6.2\n") == []
+
+
+_COMMENTED_INCLUDES = ["# -c constraints/shared.txt\nplanted-pkg\n", "planted-pkg  # -c constraints/shared.txt\n"]
+
+
+@pytest.mark.parametrize("body", _COMMENTED_INCLUDES)
+def test_a_commented_out_shared_include_does_not_count(guard, tmp_path, body):
+    """Negative control: pip ignores a commented ``-c``, so the bare name still floats and must be named."""
+    found = _unbound(guard, tmp_path, body)
+    assert any("planted-pkg" in v and "no -c line" in v for v in found), found

@@ -44,6 +44,7 @@ on:
       - 'autobot_shared/**'
       - 'requirements-ci.txt'
       - 'requirements-ci/**'
+      - 'constraints/shared.txt'  # #21471: CI-plane versions live here
       - 'repo_tests/_import_hermeticity_scope.py'
       - 'repo_tests/import_hermeticity_known_offenders.py'
       - 'repo_tests/import_hermeticity_test.py'
@@ -56,6 +57,7 @@ on:
       - 'autobot_shared/**'
       - 'requirements-ci.txt'
       - 'requirements-ci/**'
+      - 'constraints/shared.txt'  # #21471: CI-plane versions live here
       - 'repo_tests/_import_hermeticity_scope.py'
       - 'repo_tests/import_hermeticity_known_offenders.py'
       - 'repo_tests/import_hermeticity_test.py'
