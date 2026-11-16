@@ -184,6 +184,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/pull_request_workflows_cannot_push_15362_test.py",
             "repo_tests/python_interpreter_role_rename_test.py",
             "repo_tests/redis_config_path_is_canonical_17434_test.py",
+            "repo_tests/release_promotion_base_wiring_21713_test.py",  # #21713: workflows a release PR runs
             "repo_tests/required_context_complements_test.py",
             "repo_tests/slm_admin_password_one_home_19318_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
