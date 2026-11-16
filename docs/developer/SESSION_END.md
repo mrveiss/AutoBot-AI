@@ -30,7 +30,7 @@ Checklist for starting and ending a session. Rules it points at are not restated
 
 - [ ] No local test runs: CI and merge trains are the gate ([`CLAUDE_REVIEW.md`](CLAUDE_REVIEW.md#merge-trains)).
 - [ ] Everything finished is committed and pushed; no local-only work ([`CLAUDE_GIT.md`](CLAUDE_GIT.md#parallel-work-worktree-isolation-critical)).
-- [ ] Remove every worktree you own without `--force`, then `~/.claude/scripts/ledger release worktree <name>` ([`AGENT_COORDINATION.md`](AGENT_COORDINATION.md#restart-and-resume)).
+- [ ] Remove every worktree you own, never with `--force`, then `ledger release worktree <name>` ([claims](AGENT_COORDINATION.md#scope-grammar)). Unlike a restart, an end-of-session release is final.
 - [ ] A worktree that refuses removal is dirty: report it, do not force it.
 - [ ] Report anything uncommitted.
 
