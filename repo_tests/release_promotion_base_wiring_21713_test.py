@@ -33,8 +33,9 @@ _WORKFLOWS = ".github/workflows"
 ACTION = "./.github/actions/release-promotion-base"
 RELEASE = "release"
 BASE_MODULE = "_ratchet_base"
-# A `repo_tests` token in a run script: the bare root, or a path under it.
-_TOKEN = re.compile(r"(?<![\w/.-])repo_tests(?:/([\w./-]+))?(?![\w-])")
+# A `repo_tests` token in a run script: the bare root, or a path under it. A dotted module name
+# (`-p repo_tests.stable_shard`, a plugin) is neither, so a following `.` rules the token out (#21713).
+_TOKEN = re.compile(r"(?<![\w/.-])repo_tests(?:/([\w./-]+))?(?![\w.-])")
 # Jobs the detector must find, so a detector that finds nothing cannot read as "all wired".
 KNOWN_IN_SCOPE = {
     ("ci.yml", "python-shard"),
@@ -131,26 +132,55 @@ def release_prs_reach(doc: dict) -> bool:
     return not _matches_release(pr.get("branches-ignore"))
 
 
+def _checkout_gap(checkouts: list[dict]) -> str | None:
+    """#21713: with no base named (a PR into main, a dispatch, a new branch's push) base_commit()
+    reads HEAD^1, so the checkout must hold a parent: fetch-depth 0 (full) or >= 2, as a literal."""
+    if not checkouts:
+        return "the local action runs before any checkout"
+    depth = (checkouts[0].get("with") or {}).get("fetch-depth", 1)
+    if not isinstance(depth, int) or depth == 1:
+        return f"the checkout's fetch-depth is {depth!r}; HEAD^1 needs 0 or >= 2"
+    return None
+
+
+def _condition_gap(step: dict, guard: dict, what: str) -> str | None:
+    """#21713: the wiring must run whenever the guard does, so its `if:` is absent or the guard's own."""
+    cond = step.get("if")
+    if cond is None or cond == guard.get("if"):
+        return None
+    return f"the {what}'s `if: {cond}` differs from the guard's, so the guard can run without the base"
+
+
+def _export_index(steps: list[dict], output: str) -> int | None:
+    for i, step in enumerate(steps):
+        env = (step.get("env") or {}).values()
+        run = str(step.get("run", ""))
+        if any(str(v).replace("${{", "").strip().startswith(output) for v in env) and (
+            "AUTOBOT_RATCHET_BASE_SHA=" in run and "GITHUB_ENV" in run
+        ):
+            return i
+    return None
+
+
 def wiring_gap(steps: list[dict], readers: set[str], root: Path) -> str | None:
     """Why this job's base-reading guard would read the release tip, or None when it is wired."""
     first = next((i for i, s in enumerate(steps) if runs_base_reader(s, readers, root)), None)
     if first is None:
         return None
-    action = next(
-        (i for i, s in enumerate(steps[:first]) if s.get("uses") == ACTION and s.get("id")),
-        None,
-    )
+    action = next((i for i, s in enumerate(steps[:first]) if s.get("uses") == ACTION and s.get("id")), None)
     if action is None:
         return f"no `uses: {ACTION}` with an id before the guard step"
-    if not any("actions/checkout" in str(s.get("uses", "")) for s in steps[:action]):
-        return "the local action runs before any checkout"
+    gap = _checkout_gap([s for s in steps[:action] if "actions/checkout" in str(s.get("uses", ""))])
+    if gap:
+        return gap
     output = f"steps.{steps[action]['id']}.outputs.base-sha"
-    for step in steps[action + 1 : first]:
-        env_refs = any(str(v).replace("${{", "").strip().startswith(output) for v in (step.get("env") or {}).values())
-        run = str(step.get("run", ""))
-        if env_refs and "AUTOBOT_RATCHET_BASE_SHA=" in run and "GITHUB_ENV" in run:
-            return None
-    return f"no step between the action and the guard exports AUTOBOT_RATCHET_BASE_SHA from {output}"
+    export = _export_index(steps[action + 1 : first], output)
+    if export is None:
+        return f"no step between the action and the guard exports AUTOBOT_RATCHET_BASE_SHA from {output}"
+    guard = steps[first]
+    return _condition_gap(steps[action], guard, "action") or _condition_gap(
+        steps[action + 1 + export], guard, "export step"
+    )
 
 
 def _jobs_in_scope(root: Path) -> list[tuple[str, str, str | None]]:
@@ -199,7 +229,9 @@ def test_the_closure_reaches_the_guard_that_failed_on_the_promotion_pr() -> None
 # --- fixtures: the checker on synthetic workflows (positive and negative) -----------------------
 
 _READERS = {BASE_MODULE, "_reach", "x_test"}
-_CHECKOUT = {"uses": "actions/checkout@v7"}
+_CHECKOUT = {"uses": "actions/checkout@v7", "with": {"fetch-depth": 2}}
+_SHALLOW = {"uses": "actions/checkout@v7"}
+_ONLY_MAIN = "github.event.pull_request.base.ref == 'main'"
 _GUARD = {"run": "python3 -m pytest repo_tests/x_test.py -q"}
 _ACTION_STEP = {"uses": ACTION, "id": "release-base"}
 _EXPORT = {
@@ -220,6 +252,25 @@ _EXPORT = {
         (
             [_CHECKOUT, {"run": "python -m pytest autobot-backend repo_tests -q"}],
             "no `uses:",
+        ),
+        # #21713 review: a plugin module argument is not the repo_tests root.
+        ([_CHECKOUT, {"run": "python -m pytest autobot-backend -p repo_tests.stable_shard -q"}], None),
+        # #21713 review: the HEAD^1 fallback needs a parent in the checkout.
+        ([_SHALLOW, _ACTION_STEP, _EXPORT, _GUARD], "fetch-depth is 1"),
+        ([{**_CHECKOUT, "with": {"fetch-depth": 1}}, _ACTION_STEP, _EXPORT, _GUARD], "fetch-depth is 1"),
+        ([{**_CHECKOUT, "with": {"fetch-depth": "${{ x }}"}}, _ACTION_STEP, _EXPORT, _GUARD], "fetch-depth is"),
+        ([{**_CHECKOUT, "with": {"fetch-depth": 0}}, _ACTION_STEP, _EXPORT, _GUARD], None),
+        # #21713 review: the wiring runs whenever the guard does.
+        ([_CHECKOUT, {**_ACTION_STEP, "if": _ONLY_MAIN}, _EXPORT, _GUARD], "action's `if:"),
+        ([_CHECKOUT, _ACTION_STEP, {**_EXPORT, "if": _ONLY_MAIN}, _GUARD], "export step's `if:"),
+        (
+            [
+                _CHECKOUT,
+                {**_ACTION_STEP, "if": "inputs.x"},
+                {**_EXPORT, "if": "inputs.x"},
+                {**_GUARD, "if": "inputs.x"},
+            ],
+            None,
         ),
     ],
 )
