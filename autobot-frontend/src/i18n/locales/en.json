@@ -10902,7 +10902,13 @@
     "tryAgain": "Try again",
     "empty": "No batch jobs yet",
     "emptyDetail": "Jobs you create appear here.",
-    "emptyFiltered": "No {status} jobs",
+    "emptyFiltered": {
+      "pending": "No pending jobs",
+      "running": "No running jobs",
+      "completed": "No completed jobs",
+      "failed": "No failed jobs",
+      "cancelled": "No cancelled jobs"
+    },
     "emptyFilteredDetail": "None of your jobs has this status right now.",
     "clearFilter": "Show all jobs",
     "confirm": {

@@ -51,7 +51,7 @@
     </EmptyState>
     <EmptyState
       v-else-if="state.jobsView.value === 'empty' && activeStatus"
-      :title="t('batchJobs.emptyFiltered', { status: t(`batchJobs.status.${activeStatus}`).toLowerCase() })"
+      :title="t(`batchJobs.emptyFiltered.${activeStatus}`)"
       :description="t('batchJobs.emptyFilteredDetail')"
       data-testid="batch-empty-filtered"
     >
