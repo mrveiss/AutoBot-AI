@@ -432,18 +432,7 @@ class RumAgent {
     // #10938: Send structured event to /api/rum/event so the per-event rum.log
     // captures it. errorData is nested under `data` as the backend formatter expects.
     this.sendRumEvent(type, errorData)
-
-    // Issue #476: Queue for Prometheus reporting
-    if (this.prometheusEnabled) {
-      const isRejection = type === 'unhandled_promise_rejection'
-      const page = this.getCurrentPage()
-      pushCapped(this.pendingJsErrors, {
-        error_type: type,
-        page,
-        is_rejection: isRejection,
-        component: errorData.component as string | undefined
-      }, RUM_MAX_ERRORS)
-    }
+    this.queueJsErrorMetric(type, errorData)
 
     // Reduce noise from expected network errors during backend connection attempts
     if (type !== 'network_error' && type !== 'http_error') {
@@ -451,6 +440,17 @@ class RumAgent {
     }
 
     this.reportCriticalIssue(type, error)
+  }
+
+  // Issue #476: Queue a tracked error for Prometheus reporting
+  private queueJsErrorMetric(type: string, errorData: RumMetadata): void {
+    if (!this.prometheusEnabled) return
+    pushCapped(this.pendingJsErrors, {
+      error_type: type,
+      page: this.getCurrentPage(),
+      is_rejection: type === 'unhandled_promise_rejection',
+      component: errorData.component as string | undefined
+    }, RUM_MAX_ERRORS)
   }
 
   // Issue #476: Get current page name for metrics

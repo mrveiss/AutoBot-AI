@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import rum from '@/utils/RumAgent'
-import { RUM_MAX_API_CALLS, RUM_MAX_ERRORS } from '@/utils/rumBufferCap'
+import { RUM_MAX_ERRORS } from '@/utils/rumBufferCap'
 
 type Buffers = {
   metrics: { errors: Array<{ message?: string }> }
@@ -49,8 +49,27 @@ describe('RumAgent.trackError buffers', () => {
     expect(buffers().pendingJsErrors.map(e => e.error_type)).toEqual(['javascript_error', 'vue_error'])
   })
 
-  it('defaults to the retired error log bound, separate from the API-call bound', () => {
-    expect(RUM_MAX_ERRORS).toBe(100)
-    expect(RUM_MAX_API_CALLS).toBe(200)
+})
+
+describe('the RUM error bound default', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('defaults to the retired error log bound, separate from the API-call bound', async () => {
+    // Unset in this case only, whatever the running environment configures; a fresh module reads it.
+    vi.stubEnv('VITE_RUM_MAX_ERRORS', '')
+    vi.stubEnv('VITE_RUM_MAX_API_CALLS', '')
+    vi.resetModules()
+    const fresh = await import('@/utils/rumBufferCap')
+    expect(fresh.RUM_MAX_ERRORS).toBe(100)
+    expect(fresh.RUM_MAX_API_CALLS).toBe(200)
+  })
+
+  it('follows a configured bound', async () => {
+    vi.stubEnv('VITE_RUM_MAX_ERRORS', '7')
+    vi.resetModules()
+    expect((await import('@/utils/rumBufferCap')).RUM_MAX_ERRORS).toBe(7)
   })
 })
