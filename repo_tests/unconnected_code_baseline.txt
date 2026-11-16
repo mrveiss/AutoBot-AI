@@ -9,7 +9,7 @@
 # One ruled exception (#20910): the detector fixes newly flagged routes that were always unconnected;
 # they were added once, each linked to a grouped wiring issue under #20512 (frozen in the gate test).
 # A second, #21428: following a router included through a package router unmasked twelve routes, added once and frozen.
-# A third, #21651 (2026-11-15): judging SLM routes at their real mount unmasked six routes, added once and frozen.
+# A third, #21651 (2026-11-15/16): judging SLM routes at their real mount unmasked seven routes, added once and frozen.
 #
 # What it cannot see: a function nobody calls inside a module somebody imports; a module imported
 # only by another unused module; callers that build a path or key at runtime; plugins and
@@ -1463,7 +1463,8 @@ route:autobot-backend/api/codebase_analytics/endpoints/ownership.py:GET /knowled
 route:autobot-backend/api/codebase_analytics/endpoints/stats.py:GET /embedding-stats	#21459
 route:autobot-backend/llc/api/__init__.py:GET /health	#21460
 # The one-time re-measure of the #20910 SLM mount fix (frozen in unconnected_code_remeasure_21651.txt; owner ruling
-# 2026-11-15): six SLM routes no caller reaches once they are judged at their real mount. #21651: wire or retire each.
+# 2026-11-15, 2026-11-16): seven SLM routes no caller reaches once they are judged at their real mount. #21651: wire or retire each.
+route:autobot-slm-backend/api/agent_ledger.py:GET /waitlists	#21651
 route:autobot-slm-backend/api/auth.py:POST /users	#21651
 route:autobot-slm-backend/api/code_source.py:POST /upload-package	#21651
 route:autobot-slm-backend/api/code_sync.py:GET /nodes/{node_id}/package	#21651
