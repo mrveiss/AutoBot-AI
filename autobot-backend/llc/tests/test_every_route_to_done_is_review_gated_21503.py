@@ -94,7 +94,7 @@ async def effects(factory):  # noqa: ANN001, ANN201
         patch("user_management.database.get_async_session_factory", return_value=factory),
         patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)),
         patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=MagicMock())),
-        patch("llc.services.handoff.delete_if_holder", new=AsyncMock()) as fence,
+        patch("llc.services.handoff.release_agent_fence", new=AsyncMock()) as fence,
         patch.object(HandoffService, "_record_a2h_activity", new=AsyncMock()),
         patch.object(HandoffService, "_publish_a2h_notification", new=AsyncMock()),
         patch.object(HandoffService, "_generate_and_update_brief_async", new=AsyncMock()),
@@ -236,12 +236,13 @@ async def test_a_gated_finish_by_the_holder_goes_to_review(factory, effects, rev
     await _seed(factory, reviewer=reviewer, creator=_CREATOR)
 
     answer = await _agent_asks_for_done()
+    await asyncio.gather(*after_commit.after_commit_tasks)  # the fence drop follows the commit (#21589)
 
     row = await _row(factory)
     assert answer["status"] == "in_review"
     assert (row.status, row.reviewer_user_id, row.assignee_user_id) == (WorkItemStatus.IN_REVIEW, expected, expected)
     assert (row.assignee_agent_id, row.checkout_run_id, row.checkout_locked_at, row.completed_at) == (None,) * 4
-    assert effects.fence.await_args.args[1:] == (f"llc:checkout:{_ITEM}", str(_NODE))
+    assert effects.fence.await_args.args[1:] == (str(_NODE), "run-1")  # this checkout generation only
     assert await _completed_rows(factory) == []
 
 
@@ -258,13 +259,14 @@ async def test_a_gated_finish_with_no_reviewer_is_refused(factory, effects) -> N
 
 
 async def test_a_gated_finish_by_a_non_holder_is_refused(factory, effects) -> None:  # noqa: ANN001
+    """An agent changes only an item it holds (#21586): any other answers as a missing item, so it is not revealed."""
     await _seed(factory, agent=_OTHER_NODE, reviewer=_REVIEWER)
 
     with pytest.raises(HTTPException) as refused:
         await _agent_asks_for_done()
 
     row = await _row(factory)
-    assert (refused.value.status_code, "does not hold checkout" in refused.value.detail) == (409, True)
+    assert (refused.value.status_code, "not found" in refused.value.detail) == (404, True)
     assert (row.status, row.assignee_agent_id) == (WorkItemStatus.IN_PROGRESS, _OTHER_NODE)
     effects.fence.assert_not_awaited()
 
@@ -275,7 +277,7 @@ async def test_a_gated_finish_by_an_agent_with_no_node_is_refused(factory) -> No
     with pytest.raises(HTTPException) as refused:
         await _agent_asks_for_done(node=None)
 
-    assert (refused.value.status_code, "has no org node" in refused.value.detail) == (409, True)
+    assert (refused.value.status_code, "not found" in refused.value.detail) == (404, True)  # it holds nothing (#21586)
     assert (await _row(factory)).status == WorkItemStatus.IN_PROGRESS
 
 

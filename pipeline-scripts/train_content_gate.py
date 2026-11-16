@@ -20,6 +20,8 @@ pre-commit fixer inserts a missing header in its own checkout, so the header ste
 A head already on the train's base has landed
 and passes with a note; a head reachable only through the train leaves nothing to compare and fails.
 ``--body`` may name a deliberate drop: ``train-content-drop: #N path reason``.
+A passenger, a small commit handed over without a PR of its own, rides as ``Merge the #N ... @ sha into the
+merge train (passenger)`` and gets every member check, reported as ``passenger #N``; it never satisfies ``--title``.
 
 ``--landed MERGE`` runs after landing. A file the train changed and main did not must arrive
 byte-identical.
@@ -45,6 +47,9 @@ from autobot_shared.git_probe import committed_text, run_git  # noqa: E402
 from tools.lint.check_spdx_header import lacks_header  # noqa: E402
 
 MEMBER_MERGE = re.compile(r"^Merge #(\d+) @ [0-9a-f]{7,40}\b")
+#: A passenger rides without a PR of its own; the "(passenger)" suffix is required.
+PASSENGER_MERGE = re.compile(r"^Merge the #(\d+) .+ @ [0-9a-f]{7,40} into the merge train \(passenger\)$")
+MERGE_KINDS = (("member", MEMBER_MERGE), ("passenger", PASSENGER_MERGE))
 #: Bringing main into the train adds no member: "Merge main into ...", "Merge branch 'main' into ...".
 BASE_MERGE = re.compile(r"^Merge (?:branch |remote-tracking branch )?['\"]?(?:origin/)?main\b")
 #: The member list of a train title: "chore(merge-train): #1 #2". A "(#3)" later in it is no member.
@@ -73,14 +78,37 @@ def _git(*args: str) -> str:
     return run_git(list(args), capture_output=True, check=True, errors="replace").stdout
 
 
-def member_merges(rng: str, report: ContentReport) -> dict[str, tuple[str, str]]:
-    """``{pr: (last merge, first merge)}``; a merge that is neither member nor main is a finding."""
-    found: dict[str, tuple[str, str]] = {}
+def _merge_key(subject: str) -> tuple[str, str] | None:
+    """``(kind, pr)`` for a member or passenger merge subject, else None."""
+    for kind, pattern in MERGE_KINDS:
+        match = pattern.match(subject)
+        if match:
+            return kind, match.group(1)
+    return None
+
+
+def _label(key: tuple[str, ...]) -> str:
+    """``#N`` for a member, ``passenger #N`` for a passenger, ``passenger #N (sha)`` for a repeated passenger merge."""
+    kind, pr, *repeat = key
+    if kind == "member":
+        return f"#{pr}"
+    return f"{kind} #{pr} ({repeat[0]})" if repeat else f"{kind} #{pr}"
+
+
+def member_merges(rng: str, report: ContentReport) -> dict[tuple[str, ...], tuple[str, str]]:
+    """``{(kind, pr): (last merge, first merge)}``; a merge that is neither member, passenger nor main is a finding.
+
+    A passenger number merged again is a finding, and each repeat is measured on its own under ``(kind, pr, sha)``.
+    """
+    found: dict[tuple[str, ...], tuple[str, str]] = {}
     for line in _git("log", "--first-parent", "--merges", "--format=%H %s", rng).splitlines():  # newest first
         sha, _, subject = line.partition(" ")
-        match = MEMBER_MERGE.match(subject)
-        if match:
-            found[match.group(1)] = (found.get(match.group(1), (sha,))[0], sha)
+        key = _merge_key(subject)
+        if key and key[0] == "passenger" and key in found:
+            report.findings.append(f"passenger #{key[1]} merged more than once ({sha[:10]}); merge each passenger once")
+            found[(*key, sha[:10])] = (sha, sha)
+        elif key:
+            found[key] = (found.get(key, (sha,))[0], sha)
         elif not BASE_MERGE.match(subject):
             report.findings.append(f"{sha[:10]} is a merge this gate cannot account for: {subject!r}")
     return found
@@ -139,15 +167,19 @@ def _judge_file(status: str, path: str, base: str, head: str, merge: str, report
     return "; ".join(reasons) or None
 
 
-def _check_member(pr: str, last: str, first: str, rng: str, drops: set[tuple[str, str]], report: ContentReport) -> None:
+def _check_member(
+    key: tuple[str, ...], last: str, first: str, rng: str, drops: set[tuple[str, str]], report: ContentReport
+) -> None:
+    """Judge one member or passenger merge; *key* is ``(kind, pr[, sha])``, named in every note and finding."""
     start, tip = rng.split("..")
+    pr, who = key[1], _label(key)
     head = f"{last}^2"
     base = _git("merge-base", f"{first}^1", f"{first}^2").strip()
     if _git("rev-parse", head).strip() == base:
         if _is_ancestor(head, start):
-            report.notes.append(f"#{pr}: its head is already on {start[:10]}, so it has landed")
+            report.notes.append(f"{who}: its head is already on {start[:10]}, so it has landed")
         else:
-            report.findings.append(f"#{pr}: its head is already in the train at {last[:10]}: nothing was measured")
+            report.findings.append(f"{who}: its head is already in the train at {last[:10]}: nothing was measured")
         return
     for status, path in changed(base, head):
         if RECOMPUTED.search(path):
@@ -155,13 +187,13 @@ def _check_member(pr: str, last: str, first: str, rng: str, drops: set[tuple[str
         report.files += 1
         why = _judge_file(status, path, base, head, last, report)
         if why and (pr, path) in drops:
-            report.notes.append(f"#{pr} {path}: {why}, recorded as a deliberate drop")
+            report.notes.append(f"{who} {path}: {why}, recorded as a deliberate drop")
         elif why:
-            report.findings.append(f"#{pr} {path}: {why} at {last[:10]}")
+            report.findings.append(f"{who} {path}: {why} at {last[:10]}")
         elif status != "D" and not _exists_at(tip, path):
-            report.notes.append(f"#{pr} {path}: present at its merge, gone by the tip")
+            report.notes.append(f"{who} {path}: present at its merge, gone by the tip")
     if not _git("diff", "--name-only", f"{last}^1", last).strip():
-        report.notes.append(f"#{pr}: its merge changed nothing; its content was checked above")
+        report.notes.append(f"{who}: its merge changed nothing; its content was checked above")
 
 
 def check_range(rng: str, title: str = "", body: str = "") -> ContentReport:
@@ -169,13 +201,16 @@ def check_range(rng: str, title: str = "", body: str = "") -> ContentReport:
     report = ContentReport()
     merges = member_merges(rng, report)
     report.members = len(merges)
-    if not merges:
+    members = {key[1] for key in merges if key[0] == "member"}  # a passenger never satisfies the title
+    if not members:
         report.findings.append(f"no 'Merge #N @ sha' commit in {rng}: nothing was measured")
-    for pr in sorted(declared_members(title) - set(merges), key=int):
+    for pr in sorted(declared_members(title) - members, key=int):
         report.findings.append(f"#{pr} is declared by the train and has no merge in {rng}")
     drops = set(DELIBERATE_DROP.findall(body))
-    for pr, (last, first) in sorted(merges.items(), key=lambda item: int(item[0])):
-        _check_member(pr, last, first, rng, drops, report)
+    for key, (last, first) in sorted(merges.items(), key=lambda item: (int(item[0][1]), item[0][0])):
+        if key[0] == "passenger":
+            report.notes.append(f"{_label(key)}: merged at {last[:10]}, content checked as a member's")
+        _check_member(key, last, first, rng, drops, report)
     return report
 
 

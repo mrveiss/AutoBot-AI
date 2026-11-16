@@ -133,7 +133,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/stores/useKnowledgeStore.ts": 809,
     "autobot-frontend/src/utils/RumAgent.ts": 852,
     "autobot-frontend/src/utils/debugUtils.ts": 620,
-    "autobot-frontend/src/views/AdminUsersView.vue": 796,
+    "autobot-frontend/src/views/AdminUsersView.vue": 751,  # #20670: 796 -> 751, role and admin cells extracted
     "autobot-frontend/src/views/AdvancedControlView.vue": 1049,
     "autobot-frontend/src/views/BudgetPolicies.vue": 879,
     "autobot-frontend/src/views/BusinessIntelligenceView.vue": 982,  # #20004: 988 -> 987

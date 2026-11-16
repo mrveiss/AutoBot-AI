@@ -554,8 +554,7 @@ async def checkout_work_item(
         logger.info("Rejected work-item checkout conflict: %s", safe_log_text(repr(exc)))
         raise http_refusal(409, exc, scope="work_items.checkout_work_item") from None
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise http_refusal(404, exc, scope="work_items.checkout_work_item") from None
 
 
 @router.post("/{work_item_id}/release")
@@ -579,8 +578,7 @@ async def release_work_item(
     except CheckoutConflict as exc:
         raise http_refusal(409, exc, scope="work_items.release_work_item") from None
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise http_refusal(400, exc, scope="work_items.release_work_item") from None
 
 
 @router.post("/{work_item_id}/transition")
@@ -604,8 +602,7 @@ async def transition_work_item(
     except InvalidTransition as exc:
         raise refused_transition(exc)
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise http_refusal(404, exc, scope="work_items.transition_work_item") from None
 
 
 @router.post("/{work_item_id}/link-pr")
@@ -671,8 +668,7 @@ async def claim_work_item(
         logger.info("Rejected work-item checkout conflict: %s", safe_log_text(repr(exc)))
         raise http_refusal(409, exc, scope="work_items.claim_work_item") from None
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise http_refusal(404, exc, scope="work_items.claim_work_item") from None
 
 
 @router.post("/{work_item_id}/unclaim")
@@ -697,8 +693,7 @@ async def unclaim_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise http_refusal(400, exc, scope="work_items.unclaim_work_item") from None
 
 
 @router.post("/{work_item_id}/coworker", status_code=200)
@@ -835,11 +830,9 @@ async def handoff_to_agent(
             "review_brief": result.review_brief,
         }
     except HandoffNotAuthorized as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=403, detail="Internal server error")
+        raise http_refusal(403, exc, scope="work_items.handoff_to_agent") from None
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise http_refusal(404, exc, scope="work_items.handoff_to_agent") from None
 
 
 # ------------------------------------------------------------------
@@ -871,11 +864,9 @@ async def handoff_to_human(
         await session.commit()
         return await _item_to_dict(item, session)
     except HandoffNotAllowed as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=403, detail="Internal server error")
+        raise http_refusal(403, exc, scope="work_items.handoff_to_human") from None
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise http_refusal(404, exc, scope="work_items.handoff_to_human") from None
 
 
 @router.post("/{work_item_id}/review/approve")
@@ -900,11 +891,11 @@ async def review_approve(
         await session.commit()
         return await _item_to_dict(item, session)
     except HandoffNotAllowed as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=403, detail="Internal server error")
+        raise http_refusal(403, exc, scope="work_items.review_approve") from None
+    except InvalidTransition as exc:  # the done path refuses a move the item's state does not allow (#21590)
+        raise refused_transition(exc) from None
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise http_refusal(404, exc, scope="work_items.review_approve") from None
 
 
 @router.post("/{work_item_id}/review/request-changes")
@@ -932,11 +923,9 @@ async def review_request_changes(
         await session.commit()
         return await _item_to_dict(item, session)
     except HandoffNotAllowed as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=403, detail="Internal server error")
+        raise http_refusal(403, exc, scope="work_items.review_request_changes") from None
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise http_refusal(404, exc, scope="work_items.review_request_changes") from None
 
 
 @router.get("/{work_item_id}/handoff-brief")
@@ -954,8 +943,7 @@ async def get_handoff_brief(
         brief = await _handoff_service().get_brief(session, work_item_id)
         return {"work_item_id": work_item_id, "brief": brief}
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise http_refusal(404, exc, scope="work_items.get_handoff_brief") from None
 
 
 @router.get("/{work_item_id}/products")
