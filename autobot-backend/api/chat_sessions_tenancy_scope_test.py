@@ -54,6 +54,7 @@ def _validator_owning_everything():
     ownership filter."""
     v = MagicMock()
     v.get_user_sessions = AsyncMock(return_value=[s["id"] for s in _ALL_SESSIONS])
+    v.redis.exists = AsyncMock(return_value=1)  # the index is marked complete (#21664)
     return v
 
 

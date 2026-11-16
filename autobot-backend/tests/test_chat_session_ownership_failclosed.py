@@ -32,6 +32,7 @@ _NO_DISK_OWNER = AsyncMock(return_value=None)
 def _validator(owned):
     v = MagicMock()
     v.get_user_sessions = AsyncMock(return_value=owned)
+    v.redis.exists = AsyncMock(return_value=1)  # the index is marked complete (#21664)
     return v
 
 

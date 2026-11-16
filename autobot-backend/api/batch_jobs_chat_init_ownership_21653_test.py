@@ -50,10 +50,13 @@ NAMELESS = {"role": "service"}  # authenticated principal with no username
 
 
 def _validator(index=None, error=None):
-    index = _INDEX if index is None else index
+    """``index=None``: the cached index, marked complete. ``index={}``: expired, no marker (#21664)."""
+    marked, index = index is None, _INDEX if index is None else index
     v = MagicMock()
     v.get_user_sessions = AsyncMock(side_effect=error or (lambda username: index.get(username, [])))
     v.set_session_owner = AsyncMock(return_value=True)
+    v.redis.exists = AsyncMock(return_value=int(marked))
+    v.redis.set = AsyncMock(return_value=True)
     return v
 
 

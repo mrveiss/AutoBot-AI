@@ -2,21 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The owner index: a Redis error is an error, and an empty set is a cache miss (#21664).
+"""The owner index: a Redis error is an error, and the set is trusted only behind its marker (#21664).
 
 ``SessionOwnershipValidator.get_user_sessions`` used to swallow a Redis error and return ``[]``,
-which the list route answered with ``intentional_empty`` -- telling the UI to wipe its local
-sessions on a Redis blip. ``owned_session_ids`` reads an empty set as "not cached" and rebuilds
-it from the session files, because Redis is a TTL cache and the file's owner is the record of
-truth (THREAT_MODEL.md section 2).
+which the list route answered with ``intentional_empty``. ``owned_session_ids`` reads the set only
+while ``user_chat_sessions_complete:<user>`` exists: after the set expires, one new ``sadd`` would
+otherwise make it look complete with a single member. Without the marker it rebuilds from the
+session files (THREAT_MODEL.md section 2) and writes the marker, also when nothing is owned.
 """
 
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from autobot_shared.ssot_constants import TTL_30_DAYS
 from security.session_owner_errors import SessionOwnerUnreadable
-from security.session_owner_index import owned_session_ids
+from security.session_owner_index import OWNER_INDEX_COMPLETE_TTL, complete_key, owned_session_ids
 from security.session_ownership import SessionOwnershipValidator
 
 
@@ -39,32 +40,93 @@ async def test_get_user_sessions_decodes_members():
     assert sorted(await validator.get_user_sessions("alice")) == ["s-1", "s-2"]
 
 
-def _validator(cached):
+class _Store:
+    """Just the keys this module touches: the user's set (``sadd``) and the marker."""
+
+    def __init__(self, members=(), marked=False):
+        self.members, self.keys = set(members), {}
+        if marked:
+            self.keys[complete_key("alice")] = "1"
+
+    async def exists(self, key):
+        return int(key in self.keys)
+
+    async def set(self, key, value, ex=None):
+        self.keys[key] = (value, ex)
+
+
+def _validator(store, recache_ok=True):
     v = MagicMock()
-    v.get_user_sessions = AsyncMock(return_value=cached)
-    v.set_session_owner = AsyncMock(return_value=True)
+    v.redis = store
+    v.get_user_sessions = AsyncMock(side_effect=lambda username: list(store.members))
+
+    async def set_session_owner(session_id, username):
+        store.members.add(session_id)
+        return recache_ok
+
+    v.set_session_owner = AsyncMock(side_effect=set_session_owner)
     return v
 
 
+def _disk(owners):
+    return AsyncMock(side_effect=lambda sid: owners[sid])
+
+
 @pytest.mark.asyncio
-async def test_a_cached_index_is_used_without_reading_the_files():
+async def test_a_marked_index_is_used_without_reading_the_files():
     read_owner = AsyncMock()
-    assert await owned_session_ids(_validator(["s-1"]), "alice", ["s-1", "s-2"], read_owner) == {"s-1"}
+    validator = _validator(_Store(members={"s-1"}, marked=True))
+    assert await owned_session_ids(validator, "alice", ["s-1", "s-2"], read_owner) == {"s-1"}
     read_owner.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_an_empty_index_is_rebuilt_from_the_durable_owner_and_recached():
-    validator = _validator([])
-    disk = {"s-1": "alice", "s-2": "bob", "s-3": None}
-    read_owner = AsyncMock(side_effect=lambda sid: disk[sid])
-    assert await owned_session_ids(validator, "alice", list(disk), read_owner) == {"s-1"}
-    validator.set_session_owner.assert_awaited_once_with("s-1", "alice")
+async def test_an_expired_set_with_one_new_sadd_still_lists_the_older_owned_session():
+    """The set expired, then one new session was added: ``{s-new}`` alone is not complete."""
+    validator = _validator(_Store(members={"s-new"}))
+    read_owner = _disk({"s-old": "alice", "s-new": "alice", "s-bob": "bob"})
+    assert await owned_session_ids(validator, "alice", ["s-old", "s-new", "s-bob"], read_owner) == {"s-old", "s-new"}
+
+
+@pytest.mark.asyncio
+async def test_a_user_who_owns_nothing_reads_no_file_on_the_second_call():
+    store = _Store()
+    read_owner = _disk({"s-1": "bob", "s-2": "bob"})
+    assert await owned_session_ids(_validator(store), "alice", ["s-1", "s-2"], read_owner) == set()
+    assert read_owner.await_count == 2
+    assert await owned_session_ids(_validator(store), "alice", ["s-1", "s-2"], read_owner) == set()
+    assert read_owner.await_count == 2, "the empty result was not cached behind the marker"
+
+
+@pytest.mark.asyncio
+async def test_after_the_marker_expires_a_rebuild_runs_again():
+    store = _Store()
+    read_owner = _disk({"s-1": "alice"})
+    await owned_session_ids(_validator(store), "alice", ["s-1"], read_owner)
+    del store.keys[complete_key("alice")]  # the marker's TTL ran out
+    await owned_session_ids(_validator(store), "alice", ["s-1"], read_owner)
+    assert read_owner.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_the_marker_is_written_with_a_ttl_shorter_than_the_set():
+    store = _Store()
+    await owned_session_ids(_validator(store), "alice", [], _disk({}))
+    assert store.keys[complete_key("alice")] == ("1", OWNER_INDEX_COMPLETE_TTL)
+    assert 0 < OWNER_INDEX_COMPLETE_TTL < TTL_30_DAYS
+
+
+@pytest.mark.asyncio
+async def test_a_failed_recache_leaves_the_index_unmarked():
+    store = _Store()
+    owned = await owned_session_ids(_validator(store, recache_ok=False), "alice", ["s-1"], _disk({"s-1": "alice"}))
+    assert owned == {"s-1"}
+    assert complete_key("alice") not in store.keys
 
 
 @pytest.mark.asyncio
 async def test_an_unreadable_session_file_is_left_out_not_claimed():
-    validator = _validator([])
+    validator = _validator(_Store())
 
     async def read_owner(sid):
         if sid == "s-bad":
@@ -72,11 +134,12 @@ async def test_an_unreadable_session_file_is_left_out_not_claimed():
         return "alice"
 
     assert await owned_session_ids(validator, "alice", ["s-bad", "s-1"], read_owner) == {"s-1"}
+    validator.set_session_owner.assert_awaited_once_with("s-1", "alice")
 
 
 @pytest.mark.asyncio
 async def test_an_index_read_error_propagates():
-    validator = _validator([])
+    validator = _validator(_Store(marked=True))
     validator.get_user_sessions = AsyncMock(side_effect=ConnectionError("redis down"))
     with pytest.raises(ConnectionError):
         await owned_session_ids(validator, "alice", ["s-1"], AsyncMock())
