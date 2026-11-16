@@ -17,6 +17,7 @@
 
 import { ref, computed, type Ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from '@/composables/useLoadingState'
@@ -67,11 +68,12 @@ function listJobs(filter?: BatchJobsFilter): Promise<BatchJobsListResponse> {
   return apiClient.call('get', '/api/batch-jobs', { query })
 }
 
-function cancelJob(jobId: string): Promise<{ status: string }> {
+async function cancelJob(jobId: string): Promise<{ status: string }> {
   // POST /{id}/cancel is not served -- the backend's only cancel is DELETE, which also
-  // deletes the job. That gap is tracked in #18730 / #18751; this call stays untyped
-  // because the contract has no such route, and it now fails loudly instead of quietly.
-  return apiClient.post<{ status: string }>(`${getApiBase()}/batch-jobs/${encodeURIComponent(jobId)}/cancel`)
+  // deletes the job. Per the #18751 ruling the request stays exactly as it was, pending a
+  // per-row decision (#18730 / #18751); since #21649 a failure rejects instead of returning null.
+  const api = useApiClient()
+  return await api.post<{ status: string }>(`${getApiBase()}/batch-jobs/${jobId}/cancel`)
 }
 
 /** Job calls: the list, one job, its logs, and the job actions. */
