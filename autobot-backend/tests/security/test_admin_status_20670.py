@@ -30,6 +30,7 @@ from autobot_shared.db_session import POST_COMMIT_CALLBACKS
 from autobot_shared.user_management import password_epoch
 from autobot_shared.user_management.base_service import TenantContext
 from autobot_shared.user_management.models.audit import AuditResourceType, IdentityAuditAction
+from autobot_shared.user_management.revocation_outcome import REVOCATION_INCOMPLETE_MESSAGE
 from autobot_shared.user_management.user_service import UserService
 from tests.security._credential_harness import real_middleware
 from tests.security._revocation_harness import assert_refused as _assert_refused
@@ -381,3 +382,23 @@ def test_promoting_through_the_route_voids_the_old_token_and_the_next_login_reac
     issued_role = UserService.account_role(alice)  # the one derivation login uses for the token's role
     assert issued_role == "admin"
     assert client.get(_LIST_USERS, headers=_token_headers(age_seconds=-5, role=issued_role)).status_code == 200
+
+
+def test_a_store_that_is_down_makes_the_route_a_503_and_the_change_stays_committed(
+    real_auth_middleware, get_current_user, epochs, monkeypatch
+):
+    """PUT /users/{id}/admin with the epoch store unavailable: 503 with the revocation-incomplete detail, flag kept."""
+    monkeypatch.setattr(password_epoch, "MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS", 0.0)
+    alice = _user(True)
+    client = _client(real_auth_middleware, monkeypatch, _service(alice))
+    bob = _token_headers(username="bob", role="admin")
+    password_epoch.use_epoch_store(get_epoch=AsyncMock(return_value=None), set_epoch=AsyncMock(return_value=None))
+    try:
+        failed = _put_admin(client, alice, False, bob)
+    finally:
+        _restore_epoch_store(epochs)
+
+    assert failed.status_code == 503
+    assert failed.json()["detail"] == REVOCATION_INCOMPLETE_MESSAGE
+    assert alice.is_platform_admin is False, "the demotion is not rolled back"
+    assert epochs == {}, "the store never recorded the revocation"
