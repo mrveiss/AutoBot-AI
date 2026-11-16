@@ -195,3 +195,13 @@ def test_a_bare_constrained_name_under_a_shared_include_is_clean(guard, tmp_path
 
 def test_a_file_with_no_constrained_bare_name_needs_no_include(guard, tmp_path):
     assert _unbound(guard, tmp_path, "other-pkg\nkombu==5.6.2\n") == []
+
+
+_COMMENTED_INCLUDES = ["# -c constraints/shared.txt\nplanted-pkg\n", "planted-pkg  # -c constraints/shared.txt\n"]
+
+
+@pytest.mark.parametrize("body", _COMMENTED_INCLUDES)
+def test_a_commented_out_shared_include_does_not_count(guard, tmp_path, body):
+    """Negative control: pip ignores a commented ``-c``, so the bare name still floats and must be named."""
+    found = _unbound(guard, tmp_path, body)
+    assert any("planted-pkg" in v and "no -c line" in v for v in found), found

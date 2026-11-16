@@ -129,6 +129,7 @@ security_scope:
   - '.github/filters/backend-python-paths.yml'
   - '**/requirements*.txt'
   - 'requirements-ci/**'
+  - 'constraints/shared.txt'
   - 'pyproject.toml'
   - 'autobot_shared/pyproject.toml'
   - '**/package*.json'

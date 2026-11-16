@@ -42,6 +42,7 @@ on:
       - 'autobot-infrastructure/shared/scripts/gen_frontend_types.py'
       - '.github/workflows/frontend-codegen-drift.yml'
       - 'requirements-ci/framework.txt'
+      - 'constraints/shared.txt'
   push:
     branches: [main]
     paths:
@@ -52,6 +53,7 @@ on:
       - 'autobot-frontend/src/types/_generated/**'
       - 'autobot-infrastructure/shared/scripts/gen_frontend_types.py'
       - 'requirements-ci/framework.txt'
+      - 'constraints/shared.txt'
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever

@@ -103,7 +103,8 @@ markdownify>=1.2.3
 mcp>=2.3.0
 netifaces>=0.11.0
 nltk>=3.10.4
-openai>=2.54.0
+# openai 3.x unreviewed (#21472); CI resolves through this file, so this cap keeps the unreviewed major out (#21471).
+openai>=2.54.0,<3
 opencv-python>=5.0.0.93
 opentelemetry-api==1.45.2
 opentelemetry-exporter-otlp-proto-grpc==1.45.2

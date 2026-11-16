@@ -30,6 +30,7 @@ on:
       - '.github/filters/backend-python-paths.yml'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
+      - 'constraints/shared.txt'
       - 'pipeline-scripts/**'
       - 'tools/lint/**'
       - '.github/workflows/phase_validation.yml'

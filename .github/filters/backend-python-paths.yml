@@ -69,6 +69,7 @@ static_analysis:
 deps:
   - '**/requirements*.txt'
   - 'requirements-ci/**'
+  - 'constraints/shared.txt'
   - 'pyproject.toml'
   - 'autobot_shared/pyproject.toml'
   - 'autobot-frontend/package*.json'
@@ -83,6 +84,7 @@ startup_smoke:
   - *backend_python
   - '**/requirements*.txt'
   - 'requirements-ci/**'
+  - 'constraints/shared.txt'
 
 # ci.yml `api-wiring` gate, output `wiring`.
 #
