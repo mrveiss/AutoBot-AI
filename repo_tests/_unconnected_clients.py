@@ -61,7 +61,10 @@ WHAT THIS CANNOT SEE
   starting with ``/``), and a constant set inside a statement that does not start the line (``if (x) { const u =``).
 * A wrapper parameter rebound by an expression arrow in its body (``items.map((path) => client.get(path))``): the
   parameter is then not read as handed to the client at all, so a real wrapper of that shape is missed.
-* A wrapper call inside a ``.vue`` template expression that holds a ``//`` or ``/* */`` text: the template is read
+* A wrapper whose client call sits inside a block arrow in its body (``retry(() => { return client.get(path) })``):
+  nested function and block-arrow bodies are cut before the call is searched, so the wrapper is missed and its
+  routes read as unconnected (a loud miss, never a false caller).
+* A call inside a ``.vue`` template expression that holds a ``//`` or ``/* */`` text: the template is read
   with only its ``<!-- -->`` comments removed.
 """
 
@@ -93,7 +96,11 @@ _COMMENT_PREFIXES = ("* ", "//", "/*")
 #: A whole initialiser that is ONE literal path: ``'/x'``, ``\`/x/${id}\``` or ``\`/x${query}\```, then at most ``;``
 #: and a trailing comment. A ``${...}`` counts as a segment only when whole (``/x/${id}/y``); one glued on at the end
 #: is a query (``norm_path`` drops it). ``'/a' + '/b'`` and ``base + '/x'`` are not one literal (#20910).
-_WHOLE_PATH = re.compile(r"""([`'"])(/(?:[\w.\-/]|\$\{[^}`'"\n]*\}(?=[/`'"]))*)(?:\$\{.*\})?\1\s*;?\s*(?://.*)?$""")
+#: The query tail is ONE interpolation, which may hold a complete nested template (``${q ? `?${q}` : ''}``) but never
+#: the outer literal's closing backtick, so ```/x/${id}` + `?${qs}``` cannot read as ``/x/`` (#20910).
+_WHOLE_PATH = re.compile(
+    r"""([`'"])(/(?:[\w.\-/]|\$\{[^}`'"\n]*\}(?=[/`'"]))*)(?:\$\{(?:[^}`\n]|`[^`\n]*`)*\})?\1\s*;?\s*(?://.*)?$"""
+)
 #: One assignment statement: ``[export] [const|let|var] name[: string] [op]= value``.
 _ASSIGN = re.compile(
     r"^[\s{]*(?:export\s+)?(?:(const|let|var)\s+)?(\w+)\s*(?::\s*string\s*)?([-+*/%|&?]*)=(?![=>])(.*)$"
@@ -277,8 +284,8 @@ def _wrapper_calls(text: str, wrappers: dict[str, tuple[int, str]]) -> set[str]:
 
 
 def _call_text(rel: str, code: str, script: str) -> str:
-    """The text wrapper calls are read from: *script* (comments stripped), plus a ``.vue`` template's markup without
-    its ``<!-- -->`` comments, where a handler may call a wrapper (#20910)."""
+    """The text every call form is read from: *script* (comments stripped), plus a ``.vue`` template's markup without
+    its ``<!-- -->`` comments, where a handler may make a call (#20910)."""
     if not rel.endswith(".vue"):
         return script
     return script + "\n" + strip_html_comments(SCRIPT_BODY.sub("", code))
@@ -287,19 +294,20 @@ def _call_text(rel: str, code: str, script: str) -> str:
 def _file_calls(rel: str, text: str) -> set[str]:
     """Raw ``base + path`` strings the client calls in one file make.
 
-    Comment lines are blanked and the call is matched across the whole text, so a call whose path
-    sits on the line after ``client.post<T>(`` is seen (``_PATH`` already allows the newline).
+    Every call form is read from the comment-stripped text (``_call_text``), so ``x = 1 // client.get('/x')`` is no
+    call (#20910). The call is matched across the whole text, so a call whose path sits on the line after
+    ``client.post<T>(`` is seen (``_PATH`` already allows the newline).
     """
     receivers = _receivers(rel, text)
     pattern, out = _site_pattern(receivers), set[str]()
     lines = ["" if (ln.lstrip()[:2] in _COMMENT_PREFIXES or ln.strip() == "*") else ln for ln in text.splitlines()]
     code = _inline_constants(lines)
-    out.update(receivers[m.group(1)] + m.group(2) for m in pattern.finditer(code) if m.group(2) != "/api")
     script = frontend_code_text(rel, code)
-    out.update(_wrapper_calls(_call_text(rel, code, script), _wrappers(script, receivers)))
+    calls = _call_text(rel, code, script)
+    out.update(receivers[m.group(1)] + m.group(2) for m in pattern.finditer(calls) if m.group(2) != "/api")
+    out.update(_wrapper_calls(calls, _wrappers(script, receivers)))
     if rel.startswith(_SLM_ROOT):
-        for line in lines:
-            out.update("/api" + suffix for suffix in _SLM_BASE_CALL.findall(line))
+        out.update("/api" + suffix for suffix in _SLM_BASE_CALL.findall(calls))
     return {c for c in out if not c.startswith("/api/api/")}
 
 

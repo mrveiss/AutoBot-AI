@@ -172,6 +172,16 @@ _NESTED_LOAD = (
             "const URL = '/planted/orphan'\nslmApiClient.get(URL)\n",
         ),
         (
+            "a template interpolation ends inside its own literal",
+            "const URL = `/planted/orphan/${id}` + `${tail}`\nslmApiClient.get(URL)\n",
+            "const URL = `/planted/orphan${tail ? `?${tail}` : ''}`\nslmApiClient.get(URL)\n",
+        ),
+        (
+            "a direct client call in a trailing comment is not a call",
+            "const shown = 1 // slmApiClient.get('/planted/orphan')\n",
+            "const shown = 1\nslmApiClient.get('/planted/orphan')\n",
+        ),
+        (
             "a transformed wrapper argument is not the parameter",
             _CLIENT_LOAD.format(arg="path + '/history'") + "load('/planted/orphan')\n",
             _CLIENT_LOAD.format(arg="path") + "load('/planted/orphan')\n",
