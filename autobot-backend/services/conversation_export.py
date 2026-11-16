@@ -20,7 +20,8 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from chat_history.session_lease import session_lease
 from security.session_owner_errors import SessionOwnerUnreadable
-from security.session_ownership import build_owner_metadata
+from security.session_owner_index import index_owner_or_unmark
+from security.session_ownership import SessionOwnershipValidator, build_owner_metadata
 
 logger = get_logger(__name__)
 
@@ -239,7 +240,8 @@ def _conflict_result(session_id: str, message: str) -> Dict[str, Any]:
 
 
 async def _owner_refusal(chat_history_manager, session_id: str, user_data: Dict[str, Any] | None):
-    """A refusal result when the importer may not write into the existing session, else None.
+    """``(refusal, existing_owner)``: a refusal result when the importer may not write into the existing
+    session, else None; and the owner the session records (None when it records none).
 
     #14026: an import carrying a known session_id could write into another user's conversation. An
     owner that cannot be read is refused, never treated as "unowned" (#14033).
@@ -251,8 +253,8 @@ async def _owner_refusal(chat_history_manager, session_id: str, user_data: Dict[
     importer = (user_data or {}).get("username")
     if existing_owner is _UNREADABLE_OWNER or (existing_owner is not None and existing_owner != importer):
         logger.warning("Import refused: %s may not write session %s", importer or "<anonymous>", session_id)
-        return _conflict_result(session_id, f"Session {session_id!r} belongs to another user")
-    return None
+        return _conflict_result(session_id, f"Session {session_id!r} belongs to another user"), existing_owner
+    return None, existing_owner
 
 
 async def _import_under_lease(
@@ -260,7 +262,7 @@ async def _import_under_lease(
 ) -> Dict[str, Any]:
     """Resolve the conflict policy against the stored session, then save; the caller holds the lease."""
     session_id: str = document["session_id"]
-    exists = await _session_exists(chat_history_manager, session_id)
+    exists, existing_owner = await _session_exists(chat_history_manager, session_id), None
     if exists and on_conflict == "skip":
         logger.info("Import skipped: session %s already exists", session_id)
         return _conflict_result(session_id, f"Session {session_id!r} already exists (on_conflict=skip)")
@@ -268,10 +270,12 @@ async def _import_under_lease(
         session_id = _apply_suffix_to_session_id(session_id, f"imported-{int(time.time())}")
         logger.info("Import renamed to %s due to conflict", session_id)
     elif exists:
-        refusal = await _owner_refusal(chat_history_manager, session_id, user_data)
+        refusal, existing_owner = await _owner_refusal(chat_history_manager, session_id, user_data)
         if refusal is not None:
             return refusal
-    return await _save_import(chat_history_manager, document, session_id, exists, on_conflict, user_data)
+    # #21664: index a new session or one the importer already owns -- never an ownerless takeover (#21668)
+    index = not exists or on_conflict == "rename" or existing_owner == (user_data or {}).get("username")
+    return await _save_import(chat_history_manager, document, session_id, exists, on_conflict, user_data, index)
 
 
 async def _save_import(
@@ -281,8 +285,12 @@ async def _save_import(
     exists: bool,
     on_conflict: str,
     user_data: Dict[str, Any] | None,
+    index: bool = False,
 ) -> Dict[str, Any]:
-    """Save the imported messages under *session_id*, stamped with the importer as owner (#14026)."""
+    """Save the imported messages under *session_id*, stamped with the importer as owner (#14026).
+
+    With *index*, the importer's owner index also takes the session (#21664).
+    """
     messages: List[Dict[str, Any]] = document.get("messages", [])
     await chat_history_manager.save_session(
         session_id=session_id,
@@ -292,12 +300,29 @@ async def _save_import(
         replace=exists and on_conflict == "replace",  # the explicit replace; a snapshot never drops messages (#20862)
     )
     logger.info("Imported conversation %s (%d messages)", session_id, len(messages))
+    if index and (importer := (user_data or {}).get("username")):
+        await _index_import_owner(session_id, importer)
     return {
         "success": True,
         "session_id": session_id,
         "conflict": exists,
         "message": f"Imported {len(messages)} messages into session {session_id!r}",
     }
+
+
+async def _owner_validator() -> SessionOwnershipValidator:
+    """The session-ownership validator over the main Redis database."""
+    from autobot_shared.redis_client import get_redis_client
+
+    return SessionOwnershipValidator(await get_redis_client(async_client=True, database="main"))
+
+
+async def _index_import_owner(session_id: str, importer: str) -> None:
+    """Index the import for its importer, or unmark their owner index (#21664). The save already landed."""
+    try:
+        await index_owner_or_unmark(await _owner_validator(), session_id, importer)
+    except Exception as e:  # no store to index into or to unmark: the marker's TTL bounds the gap
+        logger.error("Imported session %s is not in %s's owner index: %s", session_id, importer, e)
 
 
 # ---------------------------------------------------------------------------

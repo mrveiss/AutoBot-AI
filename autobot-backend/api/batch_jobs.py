@@ -14,7 +14,6 @@ Issue #1287: Consolidated from batch.py — legacy batch optimization endpoints
 
 import asyncio
 import json
-import os
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List
@@ -251,7 +250,7 @@ async def batch_chat_initialization(request: Request, current_user: dict = Depen
 
     try:
         results = await asyncio.gather(
-            get_chat_sessions(request.app),
+            get_chat_sessions(request.app, current_user.get("username")),
             get_system_health(),
             get_service_health_legacy(),
             get_settings(request.app),
@@ -797,28 +796,6 @@ async def probe_batch_jobs(request) -> ComponentHealth:
 # =============================================================================
 
 
-def _process_session_file(filename: str, chats_directory: str):
-    """Process a single session file and return session metadata"""
-    if not (filename.startswith("chat_") and filename.endswith(".json")):
-        return None
-
-    chat_id = filename.replace("chat_", "").replace(".json", "")
-    chat_path = os.path.join(chats_directory, filename)
-
-    try:
-        stat = os.stat(chat_path)
-        return {
-            "id": chat_id,
-            "title": (f"Chat {chat_id[-8:]}" if len(chat_id) > 8 else f"Chat {chat_id}"),
-            "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
-            "updated_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            "message_count": 0,
-        }
-    except Exception as e:
-        logger.warning("Failed to get stats for %s: %s", filename, e)
-        return None
-
-
 @router.post("/load", response_model=BatchLoadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -834,41 +811,22 @@ async def batch_load(batch_request: APIBatchRequest, request: Request, current_u
     return BatchLoadResponse(results=await dispatch_batch(request, batch_request.requests))
 
 
-async def get_chat_sessions(app):
-    """Get chat sessions list; `app` is passed in, not imported (#13558)."""
-    if hasattr(app.state, "chat_history_manager") and app.state.chat_history_manager:
-        try:
-            sessions = await asyncio.to_thread(
-                _get_sessions_sync,
-                app.state.chat_history_manager,
-            )
-            return {"sessions": sessions}
-        except Exception as e:
-            logger.warning("Failed to get chat sessions: %s", e)
-            return {"sessions": []}
-    return {"sessions": []}
+async def get_chat_sessions(app, username: str | None):
+    """The caller's own chat sessions; `app` is passed in, not imported (#13558).
 
+    #21653: this used to list every ``chat_*.json`` on the instance. It now uses the
+    canonical listing behind ``GET /chat/sessions``, so the same ownership filter applies.
+    """
+    manager = getattr(app.state, "chat_history_manager", None)
+    if not manager:
+        return {"sessions": []}
+    from api.chat_sessions import list_user_sessions
 
-def _get_sessions_sync(chat_history_manager):
-    """Synchronous helper for getting sessions"""
     try:
-        sessions = []
-        chats_directory = chat_history_manager._get_chats_directory()
-
-        if not os.path.exists(chats_directory):
-            os.makedirs(chats_directory, exist_ok=True)
-            return sessions
-
-        for filename in os.listdir(chats_directory):
-            session = _process_session_file(filename, chats_directory)
-            if session:
-                sessions.append(session)
-
-        return sessions
-
+        return {"sessions": await list_user_sessions(manager, username)}
     except Exception as e:
-        logger.error("Failed to list chat sessions: %s", e)
-        return []
+        logger.warning("Failed to get chat sessions: %s", e)
+        return {"sessions": []}
 
 
 async def get_system_health():

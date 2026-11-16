@@ -376,19 +376,8 @@ async def list_sessions(
     if scope in ("org", "team"):
         return await _list_scoped_sessions(request, request_id, chat_history_manager, scope, team_id)
 
-    # Default: list all sessions (fast mode)
-    sessions = await chat_history_manager.list_sessions_fast()
-
-    # #12685: exclude company/agent-scoped conversations (e.g. LLC CEO chat)
-    # from the ordinary user list — first-class scoping fields, not a title
-    # parse. See _is_agent_scoped_session for the migration story on sessions
-    # created before this fix.
-    sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
-
-    # Filter to authenticated user's own sessions
-    username = current_user.get("username")
-    if username:
-        sessions = await _filter_user_sessions(sessions, username)
+    # Default: the caller's own ordinary sessions (fast mode)
+    sessions = await list_user_sessions(chat_history_manager, current_user.get("username"))
 
     # Issue #4352: Signal intentional empty to distinguish from API failure.
     # When an authenticated request returns 0 sessions, mark it explicitly so
@@ -432,41 +421,46 @@ def _is_agent_scoped_session(session: dict) -> bool:
     return bool(session.get("companyId")) or session.get("sessionKind") == "agent"
 
 
-async def _filter_user_sessions(sessions: list, username: str) -> list:
-    """Filter sessions to those owned by the user.
+async def list_user_sessions(chat_history_manager, username: str | None) -> list:
+    """The caller's own ordinary chat sessions — the one listing every route uses (#21653).
 
-    Uses Redis ownership data. Falls back to all sessions
-    if Redis is unavailable.
+    Shared by ``GET /chat/sessions`` (default scope) and ``/api/batch-jobs/chat-init``
+    so both apply the same ownership filter (``_filter_user_sessions``) and the same
+    agent-scoped exclusion. No role bypass: an administrator lists only their own.
+    Fails closed (#21664): a principal with no username owns nothing, so it gets ``[]``.
+    """
+    if not username:
+        return []
+    sessions = await chat_history_manager.list_sessions_fast()
+    # #12685: company/agent-scoped conversations (e.g. LLC CEO chat) are not ordinary
+    # user chats — first-class scoping fields, not a title parse.
+    sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
+    return await _filter_user_sessions(sessions, username, chat_history_manager.get_session_owner)
 
-    Helper for list_sessions (#684).
+
+async def _filter_user_sessions(sessions: list, username: str, read_owner) -> list:
+    """Filter sessions to those owned by the user (#684).
+
+    Uses the owner index, rebuilt from the session files' durable owner through
+    *read_owner* when the Redis set is empty (``security.session_owner_index``), and
+    fails closed: an unavailable store raises, and a caller who owns nothing gets
+    ``[]`` (#21664). Sessions that predate ownership tracking stay unlisted until an
+    owner is assigned through the approval queue; nothing here assigns or deletes them.
     """
     from api.chat_sessions_errors import OwnershipUnavailableError
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+    from security.session_owner_index import owned_session_ids
 
     try:
         redis = await get_redis_mgr(async_client=True, database="main")
         validator = _build_ownership_validator(redis)
-        user_session_ids = set(await validator.get_user_sessions(username))
+        candidate_ids = [s.get("id") for s in sessions if s.get("id")]
+        user_session_ids = await owned_session_ids(validator, username, candidate_ids, read_owner)
     except Exception as e:
-        # #12685: this used to `return sessions` — the UNFILTERED list — whenever
-        # the ownership lookup failed. On a tenancy filter that is the wrong
-        # direction to fail: a Redis blip silently exposed every session on the
-        # instance, including other companies' agent conversations. Surfacing an
-        # error lets the UI say "could not load your sessions" instead of
-        # showing someone else's.
+        # #12685: never the unfiltered list on a failed lookup; a 503 lets the UI say "could not
+        # load your sessions" (and carries no intentional_empty, so it keeps its local copy, #21664).
         logger.error("Ownership lookup failed; refusing to return an unfiltered session list: %s", e)
         raise OwnershipUnavailableError("Could not verify session ownership") from e
-
-    if not user_session_ids:
-        # No ownership records for this user. Kept as-is pending #12685's
-        # decision on pre-ownership legacy sessions: failing closed here would
-        # hide a user's own history on installs that predate ownership
-        # tracking. Logged so the exposure is visible rather than silent.
-        logger.warning(
-            "No ownership records for %s — returning the unfiltered session list (#12685)",
-            username,
-        )
-        return sessions
 
     return [s for s in sessions if s.get("id") in user_session_ids]
 
@@ -657,14 +651,12 @@ async def _register_session_ownership(
         return
     try:
         from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+        from security.session_owner_index import index_owner_or_unmark
 
-        redis = await get_redis_mgr(async_client=True, database="main")
-        validator = _build_ownership_validator(redis)
-        await validator.set_session_owner(
-            session_id=session_id,
-            username=user_data["username"],
-            org_id=user_data.get("org_id"),
-            team_id=team_id,
+        validator = _build_ownership_validator(await get_redis_mgr(async_client=True, database="main"))
+        # #21664: index it, or unmark the owner's index so their next list rebuilds and shows it
+        await index_owner_or_unmark(
+            validator, session_id, user_data["username"], org_id=user_data.get("org_id"), team_id=team_id
         )
     except Exception as e:
         logger.warning("Failed to register session ownership: %s", e)

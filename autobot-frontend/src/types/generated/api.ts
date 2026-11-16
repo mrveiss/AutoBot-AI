@@ -1290,7 +1290,7 @@ export interface paths {
         };
         /**
          * List Chats
-         * @description List all available chat sessions with improved error handling (consolidated).
+         * @description List the caller's own chat sessions (consolidated; same listing as GET /chat/sessions).
          *
          *     Issue #744: Requires authenticated user.
          */
@@ -1312,7 +1312,7 @@ export interface paths {
         };
         /**
          * List Chats
-         * @description List all available chat sessions with improved error handling (consolidated).
+         * @description List the caller's own chat sessions (consolidated; same listing as GET /chat/sessions).
          *
          *     Issue #744: Requires authenticated user.
          */
