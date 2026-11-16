@@ -13,6 +13,8 @@ import en from '@/locales/en.json'
 
 // The real config: with no frontend host set the apps share an origin, so the link is the bare path.
 vi.mock('@autobot/ui', () => ({
+  // The real config reads its ports through this kit helper; the env carries none, so the default stands.
+  getEnvPositiveInt: (_env: unknown, _key: string, fallback: number) => fallback,
   EmptyState: { props: ['title', 'description'], template: '<div><h2>{{ title }}</h2><p>{{ description }}</p><slot name="actions" /></div>' },
   BaseButton: { props: ['as'], template: '<a v-bind="$attrs"><slot /></a>' },
 }))
