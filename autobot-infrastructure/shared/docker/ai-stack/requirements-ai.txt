@@ -16,7 +16,7 @@ chromadb                         # version from constraints/shared.txt (#19478)
 sentence-transformers
 
 # Model and Tokenization
-transformers>=5.20.2
+transformers>=5.22.2
 tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
                           # unsatisfiable. #10416 (a grouped dependency bump) raised it back to
                           # >=0.23.1 two days after #10332 fixed it, keeping this comment, and the
@@ -73,14 +73,14 @@ httpcore>=1.0.9
 requests
 
 # Data Processing
-pandas>=3.1.0
+pandas>=3.1.1
 pydantic
 
 # Utilities
 async-timeout
 packaging>=26.3
 protobuf  # floor: opentelemetry-exporter-otlp-proto-grpc>=1.40.0 regenerated protos, C extension compatible (#3973); ceiling: mirrors googleapis-common-protos requirement (#4061)
-googleapis-common-protos>=1.75.5,<2.0.0  # required by opentelemetry-exporter-otlp-proto-grpc~=1.57; needs protobuf>=4.25.8 satisfied by floor above (#4061)
+googleapis-common-protos>=1.76.0,<2.0.0  # required by opentelemetry-exporter-otlp-proto-grpc~=1.57; needs protobuf>=4.25.8 satisfied by floor above (#4061)
 python-dotenv
 tenacity
 tqdm
@@ -117,7 +117,7 @@ aiosqlite
 redis>=8.1.0
 
 # Optional: ONNX Runtime for model optimization
-onnxruntime>=1.31.0
+onnxruntime>=1.31.1
 
 # vLLM for high-performance HuggingFace model serving (optional)
 # vllm>=0.7.0
