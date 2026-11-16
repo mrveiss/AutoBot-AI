@@ -28,10 +28,13 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_text
 
 _REPO_TESTS = "repo_tests"
-_WORKFLOWS = ".github/workflows"
+# Root-relative, so the glob names the tree it reads (`.yml` and `.yaml`); actionlint.yml runs this guard
+# on every change to that tree, the record's dedicated-workflow route (#21713).
+_WORKFLOW_FILES = ".github/workflows/*.y*ml"
 ACTION = "./.github/actions/release-promotion-base"
 RELEASE = "release"
 BASE_MODULE = "_ratchet_base"
@@ -46,6 +49,7 @@ KNOWN_IN_SCOPE = {
     ("test-durations.yml", "store-durations"),
     ("marker-tests.yml", "marker-tests"),
     ("_gate-slm-frontend.yml", "slm-frontend-check"),
+    ("actionlint.yml", "promotion-base-wiring"),
 }
 
 
@@ -71,7 +75,7 @@ def _module_imports(root: Path) -> dict[str, set[str]]:
     tests = root / _REPO_TESTS
     for path in tests.rglob("*.py"):
         name = ".".join(path.relative_to(tests).with_suffix("").parts)
-        graph[name] = _imported(ast.parse(path.read_text(encoding="utf-8")))
+        graph[name] = _imported(parse_cache.parse(path.read_text(encoding="utf-8"), str(path)))
     return graph
 
 
@@ -188,7 +192,7 @@ def _jobs_in_scope(root: Path) -> list[tuple[str, str, str | None]]:
     """(workflow, job, wiring gap) for every job a PR into release runs that runs a base-reading guard."""
     readers = base_readers(_module_imports(root))
     found = []
-    for path in sorted((root / _WORKFLOWS).glob("*.yml")):
+    for path in sorted(root.glob(_WORKFLOW_FILES)):
         doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         if not release_prs_reach(doc):
             continue
@@ -200,12 +204,12 @@ def _jobs_in_scope(root: Path) -> list[tuple[str, str, str | None]]:
 
 
 # Pinned while this guard is new: the base it would compute a floor from has no such declaration
-# (#19676). The live population is the six jobs in KNOWN_IN_SCOPE.
+# (#19676). The live population is the seven jobs in KNOWN_IN_SCOPE.
 REACH = declare(
     "release-promotion-base-wiring-21713",
     discover=_jobs_in_scope,
     what="workflow jobs a pull request into release runs that run a base-reading guard",
-    floor=6,
+    floor=7,
 )
 
 
