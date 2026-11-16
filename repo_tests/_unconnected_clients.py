@@ -53,10 +53,10 @@ WHAT THIS CANNOT SEE
 * A wrapper that is an arrow function or a method, or whose body passes its path to the client in any form
   other than the bare parameter or ``${PREFIX}${param}``; a wrapper call whose leading arguments before the
   path are not plain string literals.
-* A wrapper's body is read from its ``{`` to the matching ``}`` (#20910). The brace count skips strings, template
-  text and ``//`` comments, but not a ``/* */`` comment inside a line, a regex literal holding a brace or quote, or
-  an object-literal return type (``): { a: number } {``), whose ``{`` is taken as the body. Any of these can end
-  the body early (the wrapper is missed) or late (a later client call is read as its own).
+* A wrapper's body is read from its ``{`` to the matching ``}`` (#20910), comments removed by the shared stripper
+  and string and template text skipped. A regex literal holding a brace or quote, or an object-literal return type
+  (``): { a: number } {``, whose ``{`` is taken as the body), can still end the body early (the wrapper is missed)
+  or late (a later client call is read as its own).
 * A path constant built by concatenation, or one whose value does not start with ``/``.
 """
 
@@ -65,6 +65,8 @@ from __future__ import annotations
 import re
 
 from repo_tests._unconnected_common import Tree
+
+from tools.lint._comment_syntax import code_lines
 
 _VERBS = r"(?:get|post|put|patch|delete|getContract|rawRequest|upload\w*|request)"
 _PATH = r"""(?:<[^()]*>)?\s*\(\s*[`'"](/[^`'"\s]*)"""
@@ -88,6 +90,8 @@ _PATH_CONST = re.compile(
 )
 #: ``[async] function name<T>(params)``: a candidate request wrapper.
 _FUNCTION = re.compile(r"(?:async\s+)?function\s+(\w+)\s*(?:<[^()]*>)?\s*\(([^)]*)\)")
+#: The name that selects the shared stripper's script syntax (``//`` and ``/* */``) for a .ts, .js or .vue text.
+_SCRIPT_NAME = "wrapper.ts"
 _SLM_ROOT = "autobot-slm-frontend/src"
 _MAIN_ROOT = "autobot-frontend/src"
 
@@ -150,7 +154,7 @@ def _literal_step(text: str, index: int, stack: list[str]) -> int:
 
 
 def _block_end(text: str, opener: int) -> int:
-    """Index just past the ``}`` closing the ``{`` at *opener*: strings, template text and ``//`` comments skipped.
+    """Index just past the ``}`` closing the ``{`` at *opener*, string and template text skipped (comments are gone).
 
     A template's ``${...}`` is code again, so a brace or a nested template inside it is read as code.
     """
@@ -159,10 +163,6 @@ def _block_end(text: str, opener: int) -> int:
     while index < len(text):
         if stack and stack[-1] in ("'", '"', "`"):
             index = _literal_step(text, index, stack)
-            continue
-        if text.startswith("//", index):
-            newline = text.find("\n", index)
-            index = len(text) if newline < 0 else newline
             continue
         char = text[index]
         if char in ("'", '"', "`", "{"):
@@ -182,7 +182,11 @@ def _function_body(text: str, signature_end: int) -> str:
 
 
 def _wrappers(text: str, receivers: dict[str, str]) -> dict[str, tuple[int, str]]:
-    """``{wrapper: (index of its path argument, base + prefix)}`` for functions that hand a path to a client."""
+    """``{wrapper: (index of its path argument, base + prefix)}`` for functions that hand a path to a client.
+
+    Read from the text without comments (the shared stripper), so a brace or quote in a comment cannot end a body.
+    """
+    text = "\n".join(line.text for line in code_lines(text, name=_SCRIPT_NAME, strip_trailing=True))
     names = "|".join(re.escape(n) for n in sorted(receivers, key=len, reverse=True))
     found: dict[str, tuple[int, str]] = {}
     for fn in _FUNCTION.finditer(text):
