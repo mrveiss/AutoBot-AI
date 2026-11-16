@@ -142,6 +142,20 @@ def test_a_client_call_through_a_constant_or_a_local_wrapper_connects_the_route_
     assert _route_keys(tmp_path, {**_ROUTE, **_WIRED, _SLM_CALLER: _IMPORT + control}) == {key}, label
 
 
+_NEIGHBOURS = (
+    "function label(path: string): string {\n  return path.trim()\n}\n"
+    "async function load(path: string): Promise<{ ok: boolean }> {\n  return slmApiClient.get(path)\n}\n"
+)
+
+
+@pytest.mark.parametrize(("callee", "flagged"), [("label", True), ("load", False)])
+def test_a_function_is_a_wrapper_only_by_its_own_body_20910(tmp_path: Path, callee: str, flagged: bool) -> None:
+    """`label(path)` sits just above the real wrapper `load(path)`: only `load`'s body hands the path to a client."""
+    caller = _IMPORT + _NEIGHBOURS + f"{callee}('/planted/orphan')\n"
+    key = "route:autobot-backend/api/planted_route.py:GET /orphan"
+    assert _route_keys(tmp_path, {**_ROUTE, **_WIRED, _SLM_CALLER: caller}) == ({key} if flagged else set())
+
+
 _SSO = "autobot-slm-backend/api/sso_auth.py"
 
 

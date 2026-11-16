@@ -53,6 +53,10 @@ WHAT THIS CANNOT SEE
 * A wrapper that is an arrow function or a method, or whose body passes its path to the client in any form
   other than the bare parameter or ``${PREFIX}${param}``; a wrapper call whose leading arguments before the
   path are not plain string literals.
+* A wrapper's body is read from its ``{`` to the matching ``}`` (#20910). The brace count skips strings, template
+  text and ``//`` comments, but not a ``/* */`` comment inside a line, a regex literal holding a brace or quote, or
+  an object-literal return type (``): { a: number } {``), whose ``{`` is taken as the body. Any of these can end
+  the body early (the wrapper is missed) or late (a later client call is read as its own).
 * A path constant built by concatenation, or one whose value does not start with ``/``.
 """
 
@@ -84,8 +88,6 @@ _PATH_CONST = re.compile(
 )
 #: ``[async] function name<T>(params)``: a candidate request wrapper.
 _FUNCTION = re.compile(r"(?:async\s+)?function\s+(\w+)\s*(?:<[^()]*>)?\s*\(([^)]*)\)")
-#: How far into a wrapper's body its client call is looked for.
-_WRAPPER_BODY = 1500
 _SLM_ROOT = "autobot-slm-frontend/src"
 _MAIN_ROOT = "autobot-frontend/src"
 
@@ -117,13 +119,75 @@ def _inline_constants(lines: list[str]) -> str:
     return "\n".join(out)
 
 
+def _body_open(text: str, start: int) -> int:
+    """Index of the ``{`` opening the body after a signature ending at *start*; a return type's ``<...>`` is skipped."""
+    angle, index = 0, start
+    while index < len(text):
+        char = text[index]
+        if char == "<":
+            angle += 1
+        elif char == ">" and text[index - 1] != "=":
+            angle -= 1
+        elif char == "{" and angle <= 0:
+            return index
+        elif char == ";" and angle <= 0:
+            return -1  # a declaration with no body (an overload signature)
+        index += 1
+    return -1
+
+
+def _literal_step(text: str, index: int, stack: list[str]) -> int:
+    """One step inside a string or template literal: the next index. Ends the literal, or opens a ``${`` as code."""
+    char, top = text[index], stack[-1]
+    if char == "\\":
+        return index + 2
+    if char == top:
+        stack.pop()
+    elif top == "`" and text.startswith("${", index):
+        stack.append("{")
+        return index + 2
+    return index + 1
+
+
+def _block_end(text: str, opener: int) -> int:
+    """Index just past the ``}`` closing the ``{`` at *opener*: strings, template text and ``//`` comments skipped.
+
+    A template's ``${...}`` is code again, so a brace or a nested template inside it is read as code.
+    """
+    stack: list[str] = []
+    index = opener
+    while index < len(text):
+        if stack and stack[-1] in ("'", '"', "`"):
+            index = _literal_step(text, index, stack)
+            continue
+        if text.startswith("//", index):
+            newline = text.find("\n", index)
+            index = len(text) if newline < 0 else newline
+            continue
+        char = text[index]
+        if char in ("'", '"', "`", "{"):
+            stack.append(char)
+        elif char == "}" and stack:
+            stack.pop()
+            if not stack:
+                return index + 1
+        index += 1
+    return len(text)
+
+
+def _function_body(text: str, signature_end: int) -> str:
+    """The body of the function whose signature ends at *signature_end*, from its ``{`` to the matching ``}``."""
+    opener = _body_open(text, signature_end)
+    return "" if opener < 0 else text[opener : _block_end(text, opener)]
+
+
 def _wrappers(text: str, receivers: dict[str, str]) -> dict[str, tuple[int, str]]:
     """``{wrapper: (index of its path argument, base + prefix)}`` for functions that hand a path to a client."""
     names = "|".join(re.escape(n) for n in sorted(receivers, key=len, reverse=True))
     found: dict[str, tuple[int, str]] = {}
     for fn in _FUNCTION.finditer(text):
         params = [p.split(":")[0].split("=")[0].strip(" ?\t\n") for p in fn.group(2).split(",")]
-        body = text[fn.end() : fn.end() + _WRAPPER_BODY]
+        body = _function_body(text, fn.end())
         for index, param in enumerate(params):
             arg = rf"(?:`(/[^`'\"\s$]*)\$\{{{param}\}}`|{param}\b)" if param.isidentifier() else None
             hit = arg and re.search(rf"(?<![\w.$])({names})\s*\.\s*{_VERBS}\s*(?:<[^()]*>)?\s*\(\s*{arg}", body)
