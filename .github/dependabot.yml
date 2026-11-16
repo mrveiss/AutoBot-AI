@@ -73,7 +73,7 @@ updates:
         # #21472 (maintainer decision 2026-11-16): held at main's line; celery 5.7 needs kombu>=5.7 while the CI plane pins kombu 5.6.2; celery and kombu move together.
         versions: [">=5.7.0"]
       - dependency-name: "torch"
-        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor - 15), with repo_tests/torch_pair_one_home_19330_test.py.
+        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor + 15), with repo_tests/torch_pair_one_home_19330_test.py.
         versions: [">=2.15.0"]
       - dependency-name: "torchvision"
         # #21472 (maintainer decision 2026-11-16): held at main's line; paired with torch, see torch above.
@@ -180,7 +180,7 @@ updates:
         # #21472 (maintainer decision 2026-11-16): held at main's line; celery 5.7 needs kombu>=5.7 while the CI plane pins kombu 5.6.2; celery and kombu move together.
         versions: [">=5.7.0"]
       - dependency-name: "torch"
-        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor - 15), with repo_tests/torch_pair_one_home_19330_test.py.
+        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor + 15), with repo_tests/torch_pair_one_home_19330_test.py.
         versions: [">=2.15.0"]
       - dependency-name: "torchvision"
         # #21472 (maintainer decision 2026-11-16): held at main's line; paired with torch, see torch above.
@@ -468,7 +468,7 @@ updates:
         # #21472 (maintainer decision 2026-11-16): held at main's line; celery 5.7 needs kombu>=5.7 while the CI plane pins kombu 5.6.2; celery and kombu move together.
         versions: [">=5.7.0"]
       - dependency-name: "torch"
-        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor - 15), with repo_tests/torch_pair_one_home_19330_test.py.
+        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor + 15), with repo_tests/torch_pair_one_home_19330_test.py.
         versions: [">=2.15.0"]
       - dependency-name: "torchvision"
         # #21472 (maintainer decision 2026-11-16): held at main's line; paired with torch, see torch above.
@@ -535,7 +535,7 @@ updates:
         # #21472 (maintainer decision 2026-11-16): held at main's line; celery 5.7 needs kombu>=5.7 while the CI plane pins kombu 5.6.2; celery and kombu move together.
         versions: [">=5.7.0"]
       - dependency-name: "torch"
-        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor - 15), with repo_tests/torch_pair_one_home_19330_test.py.
+        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor + 15), with repo_tests/torch_pair_one_home_19330_test.py.
         versions: [">=2.15.0"]
       - dependency-name: "torchvision"
         # #21472 (maintainer decision 2026-11-16): held at main's line; paired with torch, see torch above.
@@ -591,7 +591,7 @@ updates:
         # #21472 (maintainer decision 2026-11-16): held at main's line; celery 5.7 needs kombu>=5.7 while the CI plane pins kombu 5.6.2; celery and kombu move together.
         versions: [">=5.7.0"]
       - dependency-name: "torch"
-        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor - 15), with repo_tests/torch_pair_one_home_19330_test.py.
+        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor + 15), with repo_tests/torch_pair_one_home_19330_test.py.
         versions: [">=2.15.0"]
       - dependency-name: "torchvision"
         # #21472 (maintainer decision 2026-11-16): held at main's line; paired with torch, see torch above.
@@ -652,7 +652,7 @@ updates:
         # #21472 (maintainer decision 2026-11-16): held at main's line; celery 5.7 needs kombu>=5.7 while the CI plane pins kombu 5.6.2; celery and kombu move together.
         versions: [">=5.7.0"]
       - dependency-name: "torch"
-        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor - 15), with repo_tests/torch_pair_one_home_19330_test.py.
+        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor + 15), with repo_tests/torch_pair_one_home_19330_test.py.
         versions: [">=2.15.0"]
       - dependency-name: "torchvision"
         # #21472 (maintainer decision 2026-11-16): held at main's line; paired with torch, see torch above.
@@ -729,7 +729,7 @@ updates:
         # #21472 (maintainer decision 2026-11-16): held at main's line; celery 5.7 needs kombu>=5.7 while the CI plane pins kombu 5.6.2; celery and kombu move together.
         versions: [">=5.7.0"]
       - dependency-name: "torch"
-        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor - 15), with repo_tests/torch_pair_one_home_19330_test.py.
+        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor + 15), with repo_tests/torch_pair_one_home_19330_test.py.
         versions: [">=2.15.0"]
       - dependency-name: "torchvision"
         # #21472 (maintainer decision 2026-11-16): held at main's line; paired with torch, see torch above.
@@ -821,7 +821,7 @@ updates:
         # #21472 (maintainer decision 2026-11-16): held at main's line; celery 5.7 needs kombu>=5.7 while the CI plane pins kombu 5.6.2; celery and kombu move together.
         versions: [">=5.7.0"]
       - dependency-name: "torch"
-        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor - 15), with repo_tests/torch_pair_one_home_19330_test.py.
+        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor + 15), with repo_tests/torch_pair_one_home_19330_test.py.
         versions: [">=2.15.0"]
       - dependency-name: "torchvision"
         # #21472 (maintainer decision 2026-11-16): held at main's line; paired with torch, see torch above.
@@ -880,7 +880,7 @@ updates:
         # #21472 (maintainer decision 2026-11-16): held at main's line; celery 5.7 needs kombu>=5.7 while the CI plane pins kombu 5.6.2; celery and kombu move together.
         versions: [">=5.7.0"]
       - dependency-name: "torch"
-        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor - 15), with repo_tests/torch_pair_one_home_19330_test.py.
+        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor + 15), with repo_tests/torch_pair_one_home_19330_test.py.
         versions: [">=2.15.0"]
       - dependency-name: "torchvision"
         # #21472 (maintainer decision 2026-11-16): held at main's line; paired with torch, see torch above.
@@ -928,7 +928,7 @@ updates:
         # #21472 (maintainer decision 2026-11-16): held at main's line; celery 5.7 needs kombu>=5.7 while the CI plane pins kombu 5.6.2; celery and kombu move together.
         versions: [">=5.7.0"]
       - dependency-name: "torch"
-        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor - 15), with repo_tests/torch_pair_one_home_19330_test.py.
+        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor + 15), with repo_tests/torch_pair_one_home_19330_test.py.
         versions: [">=2.15.0"]
       - dependency-name: "torchvision"
         # #21472 (maintainer decision 2026-11-16): held at main's line; paired with torch, see torch above.
@@ -1010,7 +1010,7 @@ updates:
         # #21472 (maintainer decision 2026-11-16): held at main's line; celery 5.7 needs kombu>=5.7 while the CI plane pins kombu 5.6.2; celery and kombu move together.
         versions: [">=5.7.0"]
       - dependency-name: "torch"
-        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor - 15), with repo_tests/torch_pair_one_home_19330_test.py.
+        # #21472 (maintainer decision 2026-11-16): held at main's line; torch and torchvision move as a pair (torchvision minor = torch minor + 15), with repo_tests/torch_pair_one_home_19330_test.py.
         versions: [">=2.15.0"]
       - dependency-name: "torchvision"
         # #21472 (maintainer decision 2026-11-16): held at main's line; paired with torch, see torch above.
