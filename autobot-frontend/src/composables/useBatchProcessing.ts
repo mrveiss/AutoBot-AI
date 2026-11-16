@@ -6,29 +6,33 @@
  *
  * Vue Composable for Batch Processing API
  * Issue #584 - Batch Processing Manager
+ *
+ * #21649: every call goes through the typed `apiClient.call` against the generated
+ * contract, resolves to exactly what the backend sends, and THROWS on failure (an
+ * `HttpError`). Nothing is replaced by an empty fallback, so a failed load can never
+ * read as "no jobs". The state layer records each area's failure as its own error
+ * (the raw error, so the screen words it with `httpErrorText` and its own i18n key)
+ * and keeps loading, error and empty apart in `jobsView`.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, type Ref } from 'vue'
+import apiClient from '@/utils/ApiClient'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from '@/composables/useLoadingState'
 import type {
   BatchJob,
   BatchTemplate,
   BatchSchedule,
+  BatchLogEntry,
   BatchJobsListResponse,
-  BatchTemplatesListResponse,
-  BatchSchedulesListResponse,
   BatchHealthResponse,
   BatchJobsFilter,
-  BatchJobLogsResponse,
   CreateBatchJobRequest,
-  CreateBatchJobResponse,
   CreateBatchTemplateRequest,
   CreateBatchScheduleRequest,
-  BatchJobStatus
+  BatchJobStatus,
 } from '@/types/batch-processing'
 import { isTerminalStatus } from '@/types/batch-processing'
 import { getApiBase } from '@/config/ssot-config'
@@ -37,393 +41,327 @@ import { PROBE_NAMES } from '@/types/probe-names'
 
 const logger = createLogger('useBatchProcessing')
 
-export function useBatchProcessingApi() {
+/** What the jobs list is showing: kept apart so an outage never reads as an empty list. */
+export type BatchJobsView = 'loading' | 'error' | 'empty' | 'ready'
+
+const getHealth = useProbeBackedHealth<BatchHealthResponse>({
+  probeName: PROBE_NAMES.BATCH_JOBS,
+  buildHealthy: (probe, data) => ({
+    status: probeStatusToLegacy(probe.status),
+    active_jobs: 0,
+    total_jobs: 0,
+    redis_connected: Boolean(data.redis_connected),
+    message: probe.detail,
+  }),
+  buildUnavailable: (message) => ({
+    status: 'unavailable' as const,
+    active_jobs: 0,
+    total_jobs: 0,
+    redis_connected: false,
+    message,
+  }),
+  errorMessage: 'Failed to check batch service health',
+})
+
+function listJobs(filter?: BatchJobsFilter): Promise<BatchJobsListResponse> {
+  const query = { status: filter?.status, job_type: filter?.job_type, limit: filter?.limit }
+  return apiClient.call('get', '/api/batch-jobs', { query })
+}
+
+async function cancelJob(jobId: string): Promise<{ status: string }> {
+  // POST /{id}/cancel is not served -- the backend's only cancel is DELETE, which also
+  // deletes the job. Per the #18751 ruling the request stays exactly as it was, pending a
+  // per-row decision (#18730 / #18751); since #21649 a failure rejects instead of returning null.
   const api = useApiClient()
+  return await api.post<{ status: string }>(`${getApiBase()}/batch-jobs/${jobId}/cancel`)
+}
 
-  return {
-    async listJobs(filter?: BatchJobsFilter): Promise<BatchJobsListResponse | null> {
-      try {
-        const params = new URLSearchParams()
-        if (filter?.status) params.append('status', filter.status)
-        if (filter?.job_type) params.append('job_type', filter.job_type)
-        if (filter?.limit) params.append('limit', filter.limit.toString())
-        const queryString = params.toString()
-        const url = `${getApiBase()}/batch-jobs${queryString ? `?${queryString}` : ''}`
-        return await api.get<BatchJobsListResponse>(url)
-      } catch (error: unknown) {
-        logger.error('Failed to load batch jobs', error)
-        showSubtleErrorNotification('Error', 'Failed to load batch jobs', 'error')
-        return { jobs: [], total_count: 0, pending_count: 0, running_count: 0, completed_count: 0, failed_count: 0 }
-      }
-    },
+/** Job calls: the list, one job, its logs, and the job actions. */
+const jobCalls = {
+  listJobs,
+  getJob: (jobId: string): Promise<BatchJob> =>
+    apiClient.call('get', '/api/batch-jobs/{job_id}', { path: { job_id: jobId } }),
+  createJob: (request: CreateBatchJobRequest): Promise<BatchJob> =>
+    apiClient.call('post', '/api/batch-jobs', { body: request }),
+  deleteJob: (jobId: string) => apiClient.call('delete', '/api/batch-jobs/{job_id}', { path: { job_id: jobId } }),
+  runJob: (jobId: string): Promise<BatchJob> =>
+    apiClient.call('post', '/api/batch-jobs/{job_id}/run', { path: { job_id: jobId } }),
+  cancelJob,
+  getJobLogs: (jobId: string): Promise<BatchLogEntry[]> =>
+    apiClient.call('get', '/api/batch-jobs/{job_id}/logs', { path: { job_id: jobId } }),
+}
 
-    async getJob(jobId: string): Promise<BatchJob | null> {
-      try {
-        return await api.get<BatchJob>(`${getApiBase()}/batch-jobs/${jobId}`)
-      } catch (error: unknown) {
-        logger.error('Failed to get batch job', error)
-        showSubtleErrorNotification('Error', 'Failed to get batch job', 'error')
-        return null
-      }
-    },
+/** Template calls: name and type travel as query on create, the parameters as the body. */
+const templateCalls = {
+  listTemplates: (): Promise<BatchTemplate[]> => apiClient.call('get', '/api/batch-jobs/templates/'),
+  createTemplate: ({ name, job_type, parameters }: CreateBatchTemplateRequest): Promise<BatchTemplate> =>
+    apiClient.call('post', '/api/batch-jobs/templates/', { query: { name, job_type }, body: parameters ?? {} }),
+  deleteTemplate: (templateId: string) =>
+    apiClient.call('delete', '/api/batch-jobs/templates/{template_id}', { path: { template_id: templateId } }),
+}
 
-    async createJob(request: CreateBatchJobRequest): Promise<CreateBatchJobResponse | null> {
-      try {
-        return await api.post<CreateBatchJobResponse>(`${getApiBase()}/batch-jobs`, request)
-      } catch (error: unknown) {
-        logger.error('Failed to create batch job', error)
-        showSubtleErrorNotification('Error', 'Failed to create batch job', 'error')
-        return null
-      }
-    },
-
-    async deleteJob(jobId: string): Promise<{ status: string } | null> {
-      try {
-        return await api.delete<{ status: string }>(`${getApiBase()}/batch-jobs/${jobId}`)
-      } catch (error: unknown) {
-        logger.error('Failed to delete batch job', error)
-        showSubtleErrorNotification('Error', 'Failed to delete batch job', 'error')
-        return null
-      }
-    },
-
-    async cancelJob(jobId: string): Promise<{ status: string } | null> {
-      try {
-        return await api.post<{ status: string }>(`${getApiBase()}/batch-jobs/${jobId}/cancel`)
-      } catch (error: unknown) {
-        logger.error('Failed to cancel batch job', error)
-        showSubtleErrorNotification('Error', 'Failed to cancel batch job', 'error')
-        return null
-      }
-    },
-
-    async getJobLogs(jobId: string): Promise<BatchJobLogsResponse | null> {
-      try {
-        return await api.get<BatchJobLogsResponse>(`${getApiBase()}/batch-jobs/${jobId}/logs`)
-      } catch (error: unknown) {
-        logger.error('Failed to get batch job logs', error)
-        showSubtleErrorNotification('Error', 'Failed to get batch job logs', 'error')
-        return { job_id: jobId, logs: [] }
-      }
-    },
-
-    async listTemplates(): Promise<BatchTemplatesListResponse | null> {
-      try {
-        return await api.get<BatchTemplatesListResponse>(`${getApiBase()}/batch-jobs/templates/`)
-      } catch (error: unknown) {
-        logger.error('Failed to load batch templates', error)
-        showSubtleErrorNotification('Error', 'Failed to load batch templates', 'error')
-        return { templates: [], total_count: 0 }
-      }
-    },
-
-    async createTemplate(request: CreateBatchTemplateRequest): Promise<BatchTemplate | null> {
-      try {
-        return await api.post<BatchTemplate>(`${getApiBase()}/batch-jobs/templates/`, request)
-      } catch (error: unknown) {
-        logger.error('Failed to create batch template', error)
-        showSubtleErrorNotification('Error', 'Failed to create batch template', 'error')
-        return null
-      }
-    },
-
-    async deleteTemplate(templateId: string): Promise<{ status: string } | null> {
-      try {
-        return await api.delete<{ status: string }>(`${getApiBase()}/batch-jobs/templates/${templateId}`)
-      } catch (error: unknown) {
-        logger.error('Failed to delete batch template', error)
-        showSubtleErrorNotification('Error', 'Failed to delete batch template', 'error')
-        return null
-      }
-    },
-
-    async listSchedules(): Promise<BatchSchedulesListResponse | null> {
-      try {
-        return await api.get<BatchSchedulesListResponse>(`${getApiBase()}/batch-jobs/schedules/`)
-      } catch (error: unknown) {
-        logger.error('Failed to load batch schedules', error)
-        showSubtleErrorNotification('Error', 'Failed to load batch schedules', 'error')
-        return { schedules: [], total_count: 0 }
-      }
-    },
-
-    async createSchedule(request: CreateBatchScheduleRequest): Promise<BatchSchedule | null> {
-      try {
-        return await api.post<BatchSchedule>(`${getApiBase()}/batch-jobs/schedules/`, request)
-      } catch (error: unknown) {
-        logger.error('Failed to create batch schedule', error)
-        showSubtleErrorNotification('Error', 'Failed to create batch schedule', 'error')
-        return null
-      }
-    },
-
-    async toggleSchedule(scheduleId: string, enabled: boolean): Promise<BatchSchedule | null> {
-      try {
-        // #12326: corrected prefix to /batch-jobs/schedules.
-        // #12380: backend PATCH /api/batch-jobs/schedules/{id} added.
-        return await api.patch<BatchSchedule>(`${getApiBase()}/batch-jobs/schedules/${scheduleId}`, { enabled })
-      } catch (error: unknown) {
-        logger.error('Failed to update batch schedule', error)
-        showSubtleErrorNotification('Error', 'Failed to update batch schedule', 'error')
-        return null
-      }
-    },
-
-    async deleteSchedule(scheduleId: string): Promise<{ status: string } | null> {
-      try {
-        return await api.delete<{ status: string }>(`${getApiBase()}/batch-jobs/schedules/${scheduleId}`)
-      } catch (error: unknown) {
-        logger.error('Failed to delete batch schedule', error)
-        showSubtleErrorNotification('Error', 'Failed to delete batch schedule', 'error')
-        return null
-      }
-    },
-
-    /**
-     * Get batch service health status.
-     *
-     * Issue #6902: migrated off the legacy /api/batch-jobs/health (sunset
-     * 2026-09-02) onto the canonical aggregator at /api/system/health. The
-     * `batch_jobs` probe populates `data.redis_connected`; `active_jobs` and
-     * `total_jobs` were never returned by the legacy backend response, so
-     * the fallback values match the prior behaviour.
-     */
-    getHealth: useProbeBackedHealth<BatchHealthResponse>({
-      probeName: PROBE_NAMES.BATCH_JOBS,
-      buildHealthy: (probe, data) => ({
-        status: probeStatusToLegacy(probe.status),
-        active_jobs: 0,
-        total_jobs: 0,
-        redis_connected: Boolean(data.redis_connected),
-        message: probe.detail,
-      }),
-      buildUnavailable: (message) => ({
-        status: 'unavailable' as const,
-        active_jobs: 0,
-        total_jobs: 0,
-        redis_connected: false,
-        message,
-      }),
-      errorMessage: 'Failed to check batch service health',
+/** Schedule calls: every create field travels as query. */
+const scheduleCalls = {
+  listSchedules: (): Promise<BatchSchedule[]> => apiClient.call('get', '/api/batch-jobs/schedules/'),
+  createSchedule: (request: CreateBatchScheduleRequest): Promise<BatchSchedule> =>
+    apiClient.call('post', '/api/batch-jobs/schedules/', { query: request }),
+  // #12326 / #12380: PATCH /api/batch-jobs/schedules/{id} toggles a schedule.
+  toggleSchedule: (scheduleId: string, enabled: boolean): Promise<BatchSchedule> =>
+    apiClient.call('patch', '/api/batch-jobs/schedules/{schedule_id}', {
+      path: { schedule_id: scheduleId },
+      body: { enabled },
     }),
+  deleteSchedule: (scheduleId: string) =>
+    apiClient.call('delete', '/api/batch-jobs/schedules/{schedule_id}', { path: { schedule_id: scheduleId } }),
+}
+
+/** The raw batch-jobs calls. Each resolves to the backend's reply and throws on a non-2xx. */
+export function useBatchProcessingApi() {
+  return { ...jobCalls, ...templateCalls, ...scheduleCalls, getHealth }
+}
+
+type BatchApi = ReturnType<typeof useBatchProcessingApi>
+
+/** What the list shows, and the per-status counts read from `status_counts`. */
+function useJobsView(
+  jobs: Ref<BatchJob[]>,
+  statusCounts: Ref<Record<string, number>>,
+  loaded: Ref<boolean>,
+  error: Ref<unknown>,
+) {
+  const countOf = (status: BatchJobStatus) => computed(() => statusCounts.value[status] ?? 0)
+  return {
+    jobsView: computed<BatchJobsView>(() => {
+      if (error.value) return 'error'
+      if (!loaded.value) return 'loading'
+      return jobs.value.length ? 'ready' : 'empty'
+    }),
+    pendingCount: countOf('pending'),
+    runningCount: countOf('running'),
+    completedCount: countOf('completed'),
+    failedCount: countOf('failed'),
   }
 }
 
-export function useBatchProcessingState() {
-  const batchApi = useBatchProcessingApi()
-
+/** The jobs list: rows, per-status counts, and its own loading and error. */
+function useJobsList(batchApi: BatchApi) {
   const jobs = ref<BatchJob[]>([])
   const totalCount = ref(0)
-  const pendingCount = ref(0)
-  const runningCount = ref(0)
-  const completedCount = ref(0)
-  const failedCount = ref(0)
+  const statusCounts = ref<Record<string, number>>({})
+  const loaded = ref(false)
+  const error = ref<unknown>(null)
   const { isLoading: loading, wrap } = useLoadingState()
-  const errors = ref<string[]>([])
-  const error = computed<string | null>(() =>
-    errors.value.length > 0 ? errors.value.join('; ') : null,
-  )
-  const selectedJob = ref<BatchJob | null>(null)
-  const jobLogs = ref<BatchJobLogsResponse | null>(null)
-  const healthStatus = ref<BatchHealthResponse | null>(null)
-
   const filter = ref<BatchJobsFilter>({ status: undefined, job_type: undefined, limit: 50 })
 
-  const templates = ref<BatchTemplate[]>([])
-  const { isLoading: templatesLoading, wrap: wrapTemplates } = useLoadingState()
-
-  const schedules = ref<BatchSchedule[]>([])
-  const { isLoading: schedulesLoading, wrap: wrapSchedules } = useLoadingState()
-
-  const isPolling = ref(false)
-  const pollingIntervalMs = ref(5000)
-
-  const activeJobs = computed(() =>
-    jobs.value.filter((job) => job.status === 'running' || job.status === 'pending')
-  )
-  const completedJobs = computed(() => jobs.value.filter((job) => job.status === 'completed'))
-  const failedJobs = computed(() => jobs.value.filter((job) => job.status === 'failed'))
-  const hasActiveJobs = computed(() => activeJobs.value.length > 0)
-  const isServiceHealthy = computed(() => healthStatus.value?.status === 'healthy')
-
-  async function loadJobs() {
-    errors.value = []
+  async function loadJobs(): Promise<void> {
     await wrap(async () => {
       try {
         const result = await batchApi.listJobs(filter.value)
-        if (result) {
-          jobs.value = result.jobs
-          totalCount.value = result.total_count
-          pendingCount.value = result.pending_count
-          runningCount.value = result.running_count
-          completedCount.value = result.completed_count
-          failedCount.value = result.failed_count
-        }
+        jobs.value = result.jobs
+        totalCount.value = result.total_count
+        statusCounts.value = result.status_counts
+        error.value = null
+        loaded.value = true
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Unknown error'
-        errors.value = [...errors.value, msg]
+        error.value = e
         logger.error('Failed to load batch jobs:', e)
       }
     })
   }
 
-  async function refreshJob(jobId: string) {
-    const result = await batchApi.getJob(jobId)
-    if (result) {
-      updateJobInList(result)
-      if (selectedJob.value?.job_id === jobId) {
-        selectedJob.value = result
+  return {
+    jobs, totalCount, statusCounts, loaded, error, loading, filter, loadJobs,
+    ...useJobsView(jobs, statusCounts, loaded, error),
+  }
+}
+
+/** A list that loads all at once, with its own loading and error. */
+function useLoadedList<T>(load: () => Promise<T[]>, what: string) {
+  const items = ref<T[]>([]) as { value: T[] }
+  const error = ref<unknown>(null)
+  const { isLoading: loading, wrap } = useLoadingState()
+
+  async function reload(): Promise<void> {
+    await wrap(async () => {
+      try {
+        items.value = await load()
+        error.value = null
+      } catch (e) {
+        error.value = e
+        logger.error(`Failed to load batch ${what}:`, e)
       }
-    }
-    return result
-  }
-
-  function updateJobInList(updatedJob: BatchJob) {
-    const index = jobs.value.findIndex((job) => job.job_id === updatedJob.job_id)
-    if (index !== -1) {
-      jobs.value[index] = updatedJob
-    }
-  }
-
-  async function createJob(request: CreateBatchJobRequest) {
-    const result = await batchApi.createJob(request)
-    if (result) await loadJobs()
-    return result
-  }
-
-  async function cancelJob(jobId: string) {
-    const result = await batchApi.cancelJob(jobId)
-    if (result) await refreshJob(jobId)
-    return result
-  }
-
-  async function deleteJob(jobId: string) {
-    const result = await batchApi.deleteJob(jobId)
-    if (result) {
-      if (selectedJob.value?.job_id === jobId) selectedJob.value = null
-      await loadJobs()
-    }
-    return result
-  }
-
-  async function loadJobLogs(jobId: string) {
-    jobLogs.value = await batchApi.getJobLogs(jobId)
-    return jobLogs.value
-  }
-
-  async function checkHealth() {
-    healthStatus.value = await batchApi.getHealth()
-    return healthStatus.value
-  }
-
-  async function setFilter(newFilter: Partial<BatchJobsFilter>) {
-    filter.value = { ...filter.value, ...newFilter }
-    await loadJobs()
-  }
-
-  async function clearFilter() {
-    filter.value = { status: undefined, job_type: undefined, limit: 50 }
-    await loadJobs()
-  }
-
-  function selectJob(job: BatchJob | null) {
-    selectedJob.value = job
-    if (job) {
-      loadJobLogs(job.job_id)
-    } else {
-      jobLogs.value = null
-    }
-  }
-
-  async function loadTemplates() {
-    await wrapTemplates(async () => {
-      const result = await batchApi.listTemplates()
-      if (result) templates.value = result.templates
     })
   }
 
-  async function createTemplate(request: CreateBatchTemplateRequest) {
-    const result = await batchApi.createTemplate(request)
-    if (result) await loadTemplates()
-    return result
-  }
+  return { items, error, loading, reload }
+}
 
-  async function deleteTemplate(templateId: string) {
-    const result = await batchApi.deleteTemplate(templateId)
-    if (result) await loadTemplates()
-    return result
-  }
-
-  async function loadSchedules() {
-    await wrapSchedules(async () => {
-      const result = await batchApi.listSchedules()
-      if (result) schedules.value = result.schedules
-    })
-  }
-
-  async function createSchedule(request: CreateBatchScheduleRequest) {
-    const result = await batchApi.createSchedule(request)
-    if (result) await loadSchedules()
-    return result
-  }
-
-  async function toggleSchedule(scheduleId: string, enabled: boolean) {
-    const result = await batchApi.toggleSchedule(scheduleId, enabled)
-    if (result) await loadSchedules()
-    return result
-  }
-
-  async function deleteSchedule(scheduleId: string) {
-    const result = await batchApi.deleteSchedule(scheduleId)
-    if (result) await loadSchedules()
-    return result
-  }
-
-  let _stopBatchPoller: (() => void) | null = null
+/** Polling that refreshes the list (and the selected job) only while a job is still active. */
+function useJobsPolling(tick: () => Promise<void>) {
+  const isPolling = ref(false)
+  const pollingIntervalMs = ref(5000)
+  let stopPoller: (() => void) | null = null
 
   function startPolling(intervalMs = 5000) {
-    if (_stopBatchPoller) _stopBatchPoller()
+    if (stopPoller) stopPoller()
     pollingIntervalMs.value = intervalMs
     isPolling.value = true
     logger.debug(`Started polling every ${intervalMs}ms`)
-    const poller = usePollingJob<void>(
-      async () => {
-        if (hasActiveJobs.value) {
-          logger.debug('Polling for batch job updates...')
-          await loadJobs()
-          if (selectedJob.value && !isTerminalStatus(selectedJob.value.status)) {
-            await refreshJob(selectedJob.value.job_id)
-          }
-        }
-      },
-      { intervalMs }
-    )
-    _stopBatchPoller = poller.stop
+    const poller = usePollingJob<void>(tick, { intervalMs })
+    stopPoller = poller.stop
     poller.start('')
   }
 
   function stopPolling() {
-    if (_stopBatchPoller) _stopBatchPoller()
-    _stopBatchPoller = null
+    if (stopPoller) stopPoller()
+    stopPoller = null
     isPolling.value = false
     logger.debug('Stopped polling')
   }
 
-  function getJobsByStatus(status: BatchJobStatus): BatchJob[] {
-    return jobs.value.filter((job) => job.status === status)
+  return { isPolling, pollingIntervalMs, startPolling, stopPolling }
+}
+
+/** The selected job and its logs; a logs failure is its own error, not the list's. */
+function useJobDetail(batchApi: BatchApi) {
+  const selectedJob = ref<BatchJob | null>(null)
+  const jobLogs = ref<BatchLogEntry[] | null>(null)
+  const logsError = ref<unknown>(null)
+
+  async function loadJobLogs(jobId: string): Promise<BatchLogEntry[] | null> {
+    try {
+      jobLogs.value = await batchApi.getJobLogs(jobId)
+      logsError.value = null
+    } catch (e) {
+      jobLogs.value = null
+      logsError.value = e
+      logger.error('Failed to load batch job logs:', e)
+    }
+    return jobLogs.value
   }
 
-  // usePollingJob handles cleanup via its own onScopeDispose hook.
+  function selectJob(job: BatchJob | null) {
+    selectedJob.value = job
+    jobLogs.value = null
+    logsError.value = null
+    if (job) void loadJobLogs(job.job_id)
+  }
+
+  return { selectedJob, jobLogs, logsError, loadJobLogs, selectJob }
+}
+
+type JobsList = ReturnType<typeof useJobsList>
+type JobDetail = ReturnType<typeof useJobDetail>
+
+/** The list split by status, and the service health those groups sit beside. */
+function useJobGroups(list: JobsList, batchApi: BatchApi) {
+  const healthStatus = ref<BatchHealthResponse | null>(null)
+  const activeJobs = computed(() => list.jobs.value.filter((j) => j.status === 'running' || j.status === 'pending'))
 
   return {
-    jobs, totalCount, pendingCount, runningCount, completedCount, failedCount,
-    loading, error, selectedJob, jobLogs, healthStatus, filter,
-    templates, templatesLoading, schedules, schedulesLoading, isPolling, pollingIntervalMs,
-    activeJobs, completedJobs, failedJobs, hasActiveJobs, isServiceHealthy,
-    loadJobs, refreshJob, createJob, cancelJob, deleteJob, loadJobLogs, checkHealth,
-    setFilter, clearFilter, selectJob, getJobsByStatus,
-    loadTemplates, createTemplate, deleteTemplate,
-    loadSchedules, createSchedule, toggleSchedule, deleteSchedule,
-    startPolling, stopPolling
+    healthStatus,
+    activeJobs,
+    completedJobs: computed(() => list.jobs.value.filter((j) => j.status === 'completed')),
+    failedJobs: computed(() => list.jobs.value.filter((j) => j.status === 'failed')),
+    hasActiveJobs: computed(() => activeJobs.value.length > 0),
+    isServiceHealthy: computed(() => healthStatus.value?.status === 'healthy'),
+    getJobsByStatus: (status: BatchJobStatus): BatchJob[] => list.jobs.value.filter((j) => j.status === status),
+    async checkHealth() {
+      healthStatus.value = await batchApi.getHealth()
+      return healthStatus.value
+    },
+  }
+}
+
+/** Filter changes; each reloads the list with the new filter. */
+function useFilterActions(list: JobsList) {
+  return {
+    async setFilter(newFilter: Partial<BatchJobsFilter>) {
+      list.filter.value = { ...list.filter.value, ...newFilter }
+      await list.loadJobs()
+    },
+    async clearFilter() {
+      list.filter.value = { status: undefined, job_type: undefined, limit: 50 }
+      await list.loadJobs()
+    },
+  }
+}
+
+/** Re-read one job into the list and, if it is the selected one, into the detail. */
+function useRefreshJob(batchApi: BatchApi, list: JobsList, detail: JobDetail) {
+  return async function refreshJob(jobId: string): Promise<BatchJob> {
+    const job = await batchApi.getJob(jobId)
+    const index = list.jobs.value.findIndex((j) => j.job_id === job.job_id)
+    if (index !== -1) list.jobs.value[index] = job
+    if (detail.selectedJob.value?.job_id === jobId) detail.selectedJob.value = job
+    return job
+  }
+}
+
+/** Templates and schedules, each under the names the screen state has always exposed. */
+function useTemplatesAndSchedules(batchApi: BatchApi) {
+  const templates = useLoadedList(batchApi.listTemplates, 'templates')
+  const schedules = useLoadedList(batchApi.listSchedules, 'schedules')
+  return {
+    templates: templates.items, templatesLoading: templates.loading, templatesError: templates.error,
+    loadTemplates: templates.reload,
+    schedules: schedules.items, schedulesLoading: schedules.loading, schedulesError: schedules.error,
+    loadSchedules: schedules.reload,
+  }
+}
+
+/**
+ * Batch processing screen state. Loads record their failure in the matching error ref;
+ * mutations (create, cancel, delete, run, toggle) reject, so the caller reports them.
+ */
+export function useBatchProcessingState() {
+  const batchApi = useBatchProcessingApi()
+  const list = useJobsList(batchApi)
+  const detail = useJobDetail(batchApi)
+  const lists = useTemplatesAndSchedules(batchApi)
+  const groups = useJobGroups(list, batchApi)
+  const refreshJob = useRefreshJob(batchApi, list, detail)
+  const mutations = useMutations(batchApi, list.loadJobs, detail.selectedJob, lists.loadTemplates, lists.loadSchedules)
+  const polling = useJobsPolling(async () => {
+    if (!groups.hasActiveJobs.value) return
+    await list.loadJobs()
+    const selected = detail.selectedJob.value
+    if (selected && !isTerminalStatus(selected.status)) await refreshJob(selected.job_id)
+  })
+
+  return {
+    ...list, ...detail, ...mutations, ...polling, ...lists, ...groups, ...useFilterActions(list), refreshJob,
+  }
+}
+
+/** Each mutation awaits the backend (rejecting on failure), then reloads what it changed. */
+function useMutations(
+  batchApi: BatchApi,
+  loadJobs: () => Promise<void>,
+  selectedJob: { value: BatchJob | null },
+  loadTemplates: () => Promise<void>,
+  loadSchedules: () => Promise<void>,
+) {
+  const thenReload = <A extends unknown[], R>(call: (...a: A) => Promise<R>, reload: () => Promise<void>) =>
+    async (...args: A): Promise<R> => {
+      const result = await call(...args)
+      await reload()
+      return result
+    }
+
+  return {
+    createJob: thenReload(batchApi.createJob, loadJobs),
+    cancelJob: thenReload(batchApi.cancelJob, loadJobs),
+    runJob: thenReload(batchApi.runJob, loadJobs),
+    deleteJob: thenReload(async (jobId: string) => {
+      const result = await batchApi.deleteJob(jobId)
+      if (selectedJob.value?.job_id === jobId) selectedJob.value = null
+      return result
+    }, loadJobs),
+    createTemplate: thenReload(batchApi.createTemplate, loadTemplates),
+    deleteTemplate: thenReload(batchApi.deleteTemplate, loadTemplates),
+    createSchedule: thenReload(batchApi.createSchedule, loadSchedules),
+    toggleSchedule: thenReload(batchApi.toggleSchedule, loadSchedules),
+    deleteSchedule: thenReload(batchApi.deleteSchedule, loadSchedules),
   }
 }
