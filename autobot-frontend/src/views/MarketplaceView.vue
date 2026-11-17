@@ -502,8 +502,8 @@ onMounted(async () => {
 }
 
 .btn-filter-toggle.active .count-badge {
-  background: rgba(255, 255, 255, 0.25);
-  color: white;
+  background: color-mix(in srgb, var(--text-on-primary) 25%, transparent);
+  color: var(--text-on-primary);
 }
 
 /* ---- Stats ---- */

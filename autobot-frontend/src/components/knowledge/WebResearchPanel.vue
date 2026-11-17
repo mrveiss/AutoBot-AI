@@ -437,7 +437,7 @@ const tabs: Tab[] = [
 
 .wr-btn--primary {
   background: var(--color-primary);
-  color: var(--bg-primary);
+  color: var(--text-on-primary);
 }
 
 .wr-btn--primary:not(:disabled):hover {

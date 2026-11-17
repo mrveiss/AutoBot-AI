@@ -46,7 +46,7 @@
       </button>
       <button
         type="button"
-        class="rounded-md bg-autobot-primary px-4 py-2 text-sm font-medium text-autobot-text-inverse hover:bg-autobot-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-autobot-primary"
+        class="rounded-md bg-autobot-primary px-4 py-2 text-sm font-medium text-autobot-text-on-primary hover:bg-autobot-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-autobot-primary"
         @click="showSystemStatus = false"
       >
         {{ $t('common.close') }}

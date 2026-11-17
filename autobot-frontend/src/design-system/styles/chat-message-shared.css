@@ -20,14 +20,14 @@
 .message-wrapper.user-message {
   @apply ml-auto mr-0;
   background: var(--color-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
   border-color: var(--color-primary);
   border-radius: 18px 18px 4px 18px;
 }
 
 .message-wrapper.user-message .sender-name,
 .message-wrapper.user-message .message-time {
-  color: rgba(255, 255, 255, 0.85);
+  color: color-mix(in srgb, var(--text-on-primary) 85%, transparent);
 }
 
 .message-wrapper.assistant-message .sender-name {
@@ -63,6 +63,7 @@
 
 .message-avatar.user {
   background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .message-info {
@@ -97,12 +98,12 @@
 .user-message .message-text :deep(pre) {
   @apply p-3 rounded-lg overflow-x-auto my-1.5;
   background: rgba(0, 0, 0, 0.2);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
 }
 
 .user-message .message-text :deep(a) {
-  @apply hover:text-white underline;
-  color: rgba(255, 255, 255, 0.85);
+  @apply hover:text-autobot-text-on-primary underline;
+  color: color-mix(in srgb, var(--text-on-primary) 85%, transparent);
 }
 
 .assistant-message .message-text :deep(pre) {
@@ -113,7 +114,7 @@
 
 .user-message .metadata-items {
   @apply flex flex-wrap gap-1.5 text-xs;
-  color: rgba(255, 255, 255, 0.85);
+  color: color-mix(in srgb, var(--text-on-primary) 85%, transparent);
 }
 
 .assistant-message .metadata-items {

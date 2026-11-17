@@ -21,6 +21,13 @@
  * Electric Blue - Technical Precision
  * ============================================ */
 
+/* Text on the accent fill (#21566). Each label colour is the one with the higher
+   WCAG contrast on that accent's --color-primary: white (#FFFFFF) on purple and
+   indigo, the dark ink of the dark theme (#0E1420) on the rest. Ratios, white vs
+   ink: blue 3.68/5.01, green 2.54/7.26, purple 5.38/3.42, orange 2.80/6.57,
+   pink 3.53/5.22, teal 2.49/7.40, indigo 4.47/4.13, red 3.76/4.90. The contrast
+   and mono themes own their primary and keep --on-primary (their files). */
+
 /* #18066: `:root` removed from this selector. design-tokens.css already
    declares every token in this block with byte-identical values, and is
    a superset (it also has -alpha-, -muted, -subtle). Two `:root` blocks
@@ -34,6 +41,7 @@
   --color-primary-dark: #1d4ed8;
   --color-primary-bg: rgba(59, 130, 246, 0.1);
   --color-primary-bg-hover: rgba(59, 130, 246, 0.15);
+  --text-on-primary: #0E1420;
 }
 
 /* ============================================
@@ -49,6 +57,7 @@
   --color-primary-dark: #047857;
   --color-primary-bg: rgba(16, 185, 129, 0.1);
   --color-primary-bg-hover: rgba(16, 185, 129, 0.15);
+  --text-on-primary: #0E1420;
 }
 
 /* ============================================
@@ -64,6 +73,7 @@
   --color-primary-dark: #6b21a8;
   --color-primary-bg: rgba(147, 51, 234, 0.1);
   --color-primary-bg-hover: rgba(147, 51, 234, 0.15);
+  --text-on-primary: #FFFFFF;
 }
 
 /* ============================================
@@ -79,6 +89,7 @@
   --color-primary-dark: #c2410c;
   --color-primary-bg: rgba(249, 115, 22, 0.1);
   --color-primary-bg-hover: rgba(249, 115, 22, 0.15);
+  --text-on-primary: #0E1420;
 }
 
 /* ============================================
@@ -94,6 +105,7 @@
   --color-primary-dark: #be185d;
   --color-primary-bg: rgba(236, 72, 153, 0.1);
   --color-primary-bg-hover: rgba(236, 72, 153, 0.15);
+  --text-on-primary: #0E1420;
 }
 
 /* ============================================
@@ -109,6 +121,7 @@
   --color-primary-dark: #0f766e;
   --color-primary-bg: rgba(20, 184, 166, 0.1);
   --color-primary-bg-hover: rgba(20, 184, 166, 0.15);
+  --text-on-primary: #0E1420;
 }
 
 /* ============================================
@@ -124,6 +137,7 @@
   --color-primary-dark: #4338ca;
   --color-primary-bg: rgba(99, 102, 241, 0.1);
   --color-primary-bg-hover: rgba(99, 102, 241, 0.15);
+  --text-on-primary: #FFFFFF;
 }
 
 /* ============================================
@@ -139,6 +153,7 @@
   --color-primary-dark: #b91c1c;
   --color-primary-bg: rgba(239, 68, 68, 0.1);
   --color-primary-bg-hover: rgba(239, 68, 68, 0.15);
+  --text-on-primary: #0E1420;
 }
 
 /* ============================================

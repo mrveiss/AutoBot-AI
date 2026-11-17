@@ -113,5 +113,5 @@ const rows = computed(() => [
 ])
 
 const activeClass = (to?: string): string =>
-  to && route.path.startsWith(to) ? 'bg-autobot-primary text-autobot-text-inverse' : ''
+  to && route.path.startsWith(to) ? 'bg-autobot-primary text-autobot-text-on-primary' : ''
 </script>
