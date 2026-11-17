@@ -401,6 +401,7 @@ class PluginLoader:
             await plugin.shutdown()
             plugin.status = PluginStatus.UNLOADED
             reverse_registrations(name)  # #19302
+
             # Unregister from plugin registry and unified registry
             self.registry.unregister(name)
             get_registry().unregister(name)
