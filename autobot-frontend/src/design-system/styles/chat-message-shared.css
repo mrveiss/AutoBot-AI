@@ -27,7 +27,7 @@
 
 .message-wrapper.user-message .sender-name,
 .message-wrapper.user-message .message-time {
-  color: color-mix(in srgb, var(--text-on-primary) 85%, transparent);
+  color: var(--text-on-primary);
 }
 
 .message-wrapper.assistant-message .sender-name {
@@ -103,7 +103,7 @@
 
 .user-message .message-text :deep(a) {
   @apply hover:text-autobot-text-on-primary underline;
-  color: color-mix(in srgb, var(--text-on-primary) 85%, transparent);
+  color: var(--text-on-primary);
 }
 
 .assistant-message .message-text :deep(pre) {
@@ -114,7 +114,7 @@
 
 .user-message .metadata-items {
   @apply flex flex-wrap gap-1.5 text-xs;
-  color: color-mix(in srgb, var(--text-on-primary) 85%, transparent);
+  color: var(--text-on-primary);
 }
 
 .assistant-message .metadata-items {
