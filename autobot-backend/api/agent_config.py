@@ -833,25 +833,14 @@ async def list_specialized_agents(
 ):
     """List the host's Claude Code agents from the configured agents dir (#1794).
 
-    Returns agent definitions parsed from markdown files including
-    name, description, tools, color, model, and category.
-
     Issue #744: Requires admin authentication.
     """
     from services.specialized_agent_service import SpecializedAgentService
 
-    service = SpecializedAgentService()
-    agents = service.list_agents()
-    categories = service.get_categories_summary(agents)
+    payload = SpecializedAgentService().list_payload()
     return JSONResponse(
         status_code=200,
-        content={
-            "agents": agents,
-            "total_count": len(agents),
-            "categories": categories,
-            "available": service.is_available(),
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        },
+        content={**payload, "timestamp": datetime.now(tz=timezone.utc).isoformat()},
     )
 
 

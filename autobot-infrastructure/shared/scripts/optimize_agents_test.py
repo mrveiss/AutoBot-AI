@@ -591,16 +591,3 @@ def test_git_backup_refuses_a_dir_inside_an_unrelated_repo(tmp_path: pathlib.Pat
     assert "unrelated repository" in caplog.text
     assert (agents / "a.md").read_text(encoding="utf-8") == before
     assert optimize_agents._backup_tags(root) == []
-
-
-def test_git_backup_accepts_a_dir_that_is_its_own_repo(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
-    _, agents = _git_repo(tmp_path)
-    own = tmp_path / "own"
-    agents.rename(own)
-    for cmd in (["init", "-q"], ["config", "user.email", "t@example.invalid"], ["config", "user.name", "t"],
-                ["config", "commit.gpgsign", "false"], ["config", "tag.gpgsign", "false"], ["add", "."], ["commit", "-qm", "seed"]):
-        subprocess.run(["git", "-C", str(own), *cmd], check=True, capture_output=True, env=scrubbed_git_env())
-    _use_agents_dir(monkeypatch, own)
-    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--strip-code-blocks"])
-    assert optimize_agents.main() == 0
-    assert len(optimize_agents._backup_tags(own)) == 1

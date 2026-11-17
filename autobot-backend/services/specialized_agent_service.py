@@ -166,6 +166,16 @@ class SpecializedAgentService:
 
         return agents
 
+    def list_payload(self) -> Dict[str, Any]:
+        """Listing body for GET /agents/specialized, minus the timestamp (#1794)."""
+        agents = self.list_agents()
+        return {
+            "agents": agents,
+            "total_count": len(agents),
+            "categories": self.get_categories_summary(agents),
+            "available": self.is_available(),
+        }
+
     def get_agent(self, agent_id: str) -> Dict[str, Any] | None:
         """Return a single agent by ID (stem of .md filename) (#1794)."""
         if not self.agents_dir.exists():
