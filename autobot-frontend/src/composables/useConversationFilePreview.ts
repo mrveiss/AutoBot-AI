@@ -6,7 +6,6 @@
  */
 import { ref, type Ref } from 'vue'
 import type { ConversationFilePreview } from '@/utils/conversationFilePreview'
-import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useLatestRequest } from './useLatestRequest'
 
@@ -53,6 +52,7 @@ export interface PreviewDeps {
     get: <T>(url: string) => Promise<T>
     rawRequest: (url: string, init: { method: string }) => Promise<Response>
   }
+  conversationApi: () => string
   currentSessionId: () => string
   files: Ref<PreviewFile[]>
   error: Ref<string | null>
@@ -69,7 +69,7 @@ export interface PreviewDeps {
 async function openAuthenticatedPreview(deps: PreviewDeps, fileId: string, shownType: string, isCurrent: () => boolean): Promise<void> {
   const tab = window.open('', '_blank')
   try {
-    const response = await deps.api.rawRequest(`${getApiBase()}/conversation-files/conversation/${deps.currentSessionId()}/download/${fileId}`, { method: 'GET' })
+    const response = await deps.api.rawRequest(`${deps.conversationApi()}/download/${fileId}`, { method: 'GET' })
     const blob = new Blob([await response.blob()], { type: shownType })
     if (!isCurrent()) {
       tab?.close()
@@ -99,7 +99,7 @@ type PreviewFetch = { failed: false; data: ConversationFilePreview | null } | { 
 
 async function fetchPreview(deps: PreviewDeps, fileId: string): Promise<PreviewFetch> {
   try {
-    const data: ConversationFilePreview | null = await deps.api.get(`${getApiBase()}/conversation-files/conversation/${deps.currentSessionId()}/preview/${fileId}`)
+    const data: ConversationFilePreview | null = await deps.api.get(`${deps.conversationApi()}/preview/${fileId}`)
     return { failed: false, data }
   } catch (err: unknown) {
     logger.warn('Preview route failed, falling back to the bytes:', err)

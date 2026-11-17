@@ -269,3 +269,29 @@ def test_the_real_package_router_mounts_are_seen_21428() -> None:
     assert "/analytics/codebase" in mounts["autobot-backend/api/codebase_analytics/endpoints/charts.py"]
     assert "/redis" in mounts["autobot-backend/api/redis_mcp/router.py"]
     assert "" in mounts["autobot-backend/llc/api/__init__.py"]
+
+
+_HELPER = "const plantedUrl = (): string => `${getApiBase()}/planted`\n"
+
+
+@pytest.mark.parametrize(
+    ("label", "body", "connected"),
+    [
+        ("a helper call with a path tail", _HELPER + "api.get(`${plantedUrl()}/orphan`)\n", True),
+        ("a helper call with a templated tail", _HELPER + "api.get(`${plantedUrl()}/${id}`)\n", True),
+        (
+            "a bare helper call handed to a client",
+            "const h = () => `${getApiBase()}/planted/orphan`\napi.get(h())\n",
+            True,
+        ),
+        ("a helper never called", _HELPER + "const x = 1\n", False),
+        ("a call of a helper declared in another file", "api.get(`${plantedUrl()}/orphan`)\n", False),
+        ("a helper call in a comment", _HELPER + "// api.get(`${plantedUrl()}/orphan`)\n", False),
+        ("a helper to another prefix", _HELPER + "api.get(`${otherUrl()}/orphan`)\n", False),
+    ],
+)
+def test_a_route_reached_only_through_a_same_file_url_helper_counts_as_connected(
+    tmp_path: Path, label: str, body: str, connected: bool
+) -> None:
+    """#21307: ``${helper()}/...`` is read as the helper's ``${getApiBase()}/...`` template plus the tail."""
+    assert (_KEY not in _fired(tmp_path, {**_PLANTED, f"{_MAIN}/a.ts": body})) is connected, label
