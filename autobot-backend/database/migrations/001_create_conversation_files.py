@@ -16,6 +16,7 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger, setup_logging
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
+from conversation_file_access_type_schema import ensure_access_type_schema
 from conversation_file_quota_owner_schema import ensure_quota_owner_schema
 
 logger = get_logger(__name__)
@@ -146,6 +147,7 @@ class ConversationFilesMigration:
             # Execute schema as a script (handles multiple statements)
             cursor.executescript(schema_sql)
             ensure_quota_owner_schema(self.connection)  # a table made before #20678 gains the column
+            ensure_access_type_schema(self.connection)  # a log made before #21404 accepts 'reference'
             logger.info("Schema executed successfully")
 
         except sqlite3.Error as e:

@@ -36,6 +36,7 @@ from autobot_shared.ssot_config import config
 from config import config_manager
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_1_HOUR
+from conversation_file_access_type_schema import ensure_access_type_schema
 from conversation_file_cleanup import deleted_file_stats, pending_cleanup_stats
 from conversation_file_quota import UploadRefused, abandon, file_too_large, insert_within_quota, resize_within_quota
 from conversation_file_quota_owner_schema import ensure_quota_owner_schema
@@ -442,6 +443,7 @@ class ConversationFileManager(ConversationFileRouteApi):
 
             connection.executescript(schema_sql)
             ensure_quota_owner_schema(connection)  # a table made before #20678 gains the column
+            ensure_access_type_schema(connection)  # a log made before #21404 accepts 'reference'
             logger.info("✅ Database schema initialized successfully")
 
         except Exception as e:
@@ -680,9 +682,9 @@ class ConversationFileManager(ConversationFileRouteApi):
 
         await self._log_access(
             existing_file_id,
-            "upload",  # the CHECK on file_access_log has no 'reference'; the metadata says it was one (#20225)
+            "reference",  # a dedup is a reference to an existing file, not an upload (#21404)
             file_info.uploaded_by,
-            {"session_id": file_info.session_id, "deduplication": True, "reference": True},
+            {"session_id": file_info.session_id, "deduplication": True},
         )
         await self._invalidate_session_cache(file_info.session_id)
 
@@ -1055,7 +1057,7 @@ class ConversationFileManager(ConversationFileRouteApi):
 
         Args:
             file_id: File identifier
-            access_type: Type of access ('upload', 'download', 'view', 'delete')
+            access_type: Type of access ('upload', 'download', 'view', 'delete', 'restore', 'reference')
             accessed_by: User identifier
             metadata: Additional metadata for log entry
         """

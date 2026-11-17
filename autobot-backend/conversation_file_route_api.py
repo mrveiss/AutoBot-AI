@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import mimetypes
-import re
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -42,7 +41,11 @@ def file_extension(name: str) -> str | None:
 
 
 _GENERIC_MIME = "application/octet-stream"
-_MIME_TOKEN = re.compile(r"^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$")
+# Inert types a client may declare for an extension mimetypes cannot type. Nothing script-capable (text/html,
+# image/svg+xml, ...) and nothing the preview route would turn into an image: it stays metadata-only (#21403).
+_DECLARABLE_MIME = frozenset(
+    {"text/plain", "text/yaml", "text/x-yaml", "application/json", "application/yaml", "application/x-yaml"}
+)
 
 
 def resolve_mime_type(filename: str, declared: str | None = None) -> str:
@@ -50,15 +53,14 @@ def resolve_mime_type(filename: str, declared: str | None = None) -> str:
 
     The filename's extension is authoritative: it already passed the upload extension allow-list, and the
     preview and download routes branch on the stored type. The client-declared part type is untrusted input,
-    so it is only the fallback when the extension maps to no type, and only if it is one well-formed
-    ``type/subtype`` token (parameters dropped, lower-cased, never the generic octet-stream). Otherwise
-    ``application/octet-stream``.
+    so it is only the fallback when the extension maps to no type, and only if (parameters dropped,
+    lower-cased) it is in ``_DECLARABLE_MIME``. Anything else is ``application/octet-stream``.
     """
     guessed = mimetypes.guess_type(filename)[0]
     if guessed:
         return guessed
     candidate = (declared or "").split(";", 1)[0].strip().lower()
-    return candidate if candidate != _GENERIC_MIME and _MIME_TOKEN.match(candidate) else _GENERIC_MIME
+    return candidate if candidate in _DECLARABLE_MIME else _GENERIC_MIME
 
 
 def with_extension(row: Dict[str, Any]) -> Dict[str, Any]:
