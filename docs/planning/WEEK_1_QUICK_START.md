@@ -27,7 +27,7 @@
 
 ## 🚀 Launch Commands (Copy-Paste Ready)
 
-### Step 1: Launch Database Engineer Agent
+### Step 1: Launch autobot-dev-skills:senior-developer (database-engineer lens) agent
 
 ```
 Task(
@@ -73,7 +73,7 @@ File: planning/tasks/week-1-database-initialization-detailed-guide.md
 )
 ```
 
-### Step 2: Launch Backend Engineer Agent
+### Step 2: Launch autobot-dev-skills:senior-developer (senior-backend-engineer lens) agent
 
 ```
 Task(
@@ -117,7 +117,7 @@ See guide for complete implementations of both options.
 )
 ```
 
-### Step 3: Launch Testing Engineer Agent
+### Step 3: Launch autobot-dev-skills:senior-developer (testing-engineer lens) agent
 
 ```
 Task(

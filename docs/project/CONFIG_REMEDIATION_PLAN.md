@@ -2017,7 +2017,7 @@ For each file modified:
 
 **Sign-off Required From:**
 - [ ] Senior Backend Engineer (technical lead)
-- [ ] Code Reviewer Agent (quality)
+- [ ] autobot-dev-skills:reviewer (code-reviewer lens) agent (quality)
 - [ ] DevOps Engineer (operational readiness)
 - [ ] Testing Engineer (test validation)
 - [ ] Project Manager (overall approval)
