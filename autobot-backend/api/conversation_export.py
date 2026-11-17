@@ -154,9 +154,8 @@ async def export_conversation(
     return _build_export_response(content, session_id, format)
 
 
-def _require_admin_and_audit_instance_export(request: Request, current_user: dict) -> None:
-    """The instance-wide export is admin-only (403 otherwise) and every attempt is audited (#21666)."""
-    admin = is_admin_role(current_user.get("role"))
+def _audit_instance_export(request: Request, current_user: dict, outcome: str) -> None:
+    """Audit one attempt at the instance-wide export (#21666)."""
     audit_record(
         user_id=str(current_user.get("user_id") or current_user.get("username") or "unknown"),
         action=AuditAction.SESSION_EXPORT,
@@ -164,9 +163,14 @@ def _require_admin_and_audit_instance_export(request: Request, current_user: dic
         resource_id="*",
         ip_address=request.client.host if request.client else "unknown",
         metadata={"scope": "instance"},
-        outcome="success" if admin else "denied",
+        outcome=outcome,
     )
-    if not admin:
+
+
+def _require_admin_for_instance_export(request: Request, current_user: dict) -> None:
+    """The instance-wide export is admin-only: 403, audited as ``denied``, before anything is read (#21666)."""
+    if not is_admin_role(current_user.get("role")):
+        _audit_instance_export(request, current_user, "denied")
         raise HTTPException(status_code=403, detail="Administrator role required for an instance-wide export")
 
 
@@ -190,7 +194,7 @@ async def export_all_conversations(
     instance: administrators only, and audited as a ``SESSION_EXPORT`` of scope ``instance``.
     """
     if all_users:
-        _require_admin_and_audit_instance_export(request, current_user)
+        _require_admin_for_instance_export(request, current_user)
     chat_history_manager = get_chat_history_manager(request)
     archive = await export_all_conversations_json(
         chat_history_manager, current_user.get("username"), all_users=all_users
@@ -199,6 +203,8 @@ async def export_all_conversations(
     if archive is None:
         _, InternalError, _, _, _ = get_exceptions_lazy()
         raise InternalError("Failed to build conversation archive")
+    if all_users:
+        _audit_instance_export(request, current_user, "success")  # only once the archive exists
 
     logger.info(
         "Bulk conversation export requested by user %s",

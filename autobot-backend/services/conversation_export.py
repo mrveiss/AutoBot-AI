@@ -265,16 +265,20 @@ async def _owner_refusal(chat_history_manager, session_id: str, user_data: Dict[
     #14026: an import carrying a known session_id could write into another user's conversation. An
     owner that cannot be read is refused, never treated as "unowned" (#14033). A session with no owner
     is never claimed by an import (#21668, THREAT_MODEL section 2): a non-admin gets the 404 a missing
-    session gets; an admin is refused too, because its owner is assigned only through the approval queue (#17038).
+    session gets, as for a session another user owns (#21731);
+    an admin is refused too, because its owner is assigned only through the approval queue (#17038).
     """
     try:
         existing_owner = await chat_history_manager.get_session_owner(session_id)
     except SessionOwnerUnreadable:
         existing_owner = _UNREADABLE_OWNER
     importer = (user_data or {}).get("username")
-    if existing_owner is _UNREADABLE_OWNER or (existing_owner is not None and existing_owner != importer):
-        logger.warning("Import refused: %s may not write session %s", importer or "<anonymous>", session_id)
+    if existing_owner is _UNREADABLE_OWNER:
+        logger.warning("Import refused: owner of session %s is unreadable", session_id)
         return _conflict_result(session_id, f"Session {session_id!r} belongs to another user"), existing_owner
+    if existing_owner is not None and existing_owner != importer:
+        logger.warning("Import refused: %s may not write session %s", importer or "<anonymous>", session_id)
+        raise session_not_found()  # #21731: a session that is not the caller's reads as a missing one
     if existing_owner is None:
         return _ownerless_refusal(session_id, user_data), existing_owner
     return None, existing_owner
@@ -296,16 +300,17 @@ async def _import_under_lease(
     """Resolve the conflict policy against the stored session, then save; the caller holds the lease."""
     session_id: str = document["session_id"]
     exists, existing_owner = await _session_exists(chat_history_manager, session_id), None
-    if exists and on_conflict == "skip":
-        logger.info("Import skipped: session %s already exists", session_id)
-        return _conflict_result(session_id, f"Session {session_id!r} already exists (on_conflict=skip)")
     if exists and on_conflict == "rename":
         session_id = _apply_suffix_to_session_id(session_id, f"imported-{int(time.time())}")
         logger.info("Import renamed to %s due to conflict", session_id)
     elif exists:
+        # Ownership first (#21731): a non-owner never learns, through skip or otherwise, that the id exists.
         refusal, existing_owner = await _owner_refusal(chat_history_manager, session_id, user_data)
         if refusal is not None:
             return refusal
+        if on_conflict == "skip":
+            logger.info("Import skipped: session %s already exists", session_id)
+            return _conflict_result(session_id, f"Session {session_id!r} already exists (on_conflict=skip)")
     # #21664: index a new session or one the importer already owns (an ownerless one is refused above, #21668)
     index = not exists or on_conflict == "rename" or existing_owner == (user_data or {}).get("username")
     return await _save_import(chat_history_manager, document, session_id, exists, on_conflict, user_data, index)

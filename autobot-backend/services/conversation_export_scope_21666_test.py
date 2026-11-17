@@ -12,7 +12,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
-from api import chat_sessions, conversation_export as export_route
+from api import chat_sessions
+from api import conversation_export as export_route
 from services.conversation_export import export_all_conversations_json
 
 _OWNERS = {"s-a": "alice", "s-b": "bob"}
@@ -64,22 +65,38 @@ def _request():
     return request
 
 
-def test_the_instance_wide_export_refuses_a_non_admin_and_audits_the_attempt(monkeypatch) -> None:
+def test_a_non_admin_is_refused_and_the_attempt_audited(monkeypatch) -> None:
     audit = MagicMock()
     monkeypatch.setattr(export_route, "audit_record", audit)
 
     with pytest.raises(HTTPException) as refused:
-        export_route._require_admin_and_audit_instance_export(_request(), {"username": "alice", "role": "user"})
+        export_route._require_admin_for_instance_export(_request(), {"username": "alice", "role": "user"})
 
     assert refused.value.status_code == 403
     assert audit.call_args.kwargs["outcome"] == "denied"
 
 
-def test_the_instance_wide_export_admits_an_admin_and_audits_it(monkeypatch) -> None:
+def test_an_admin_passes_the_gate_without_a_success_audit_yet(monkeypatch) -> None:
     audit = MagicMock()
     monkeypatch.setattr(export_route, "audit_record", audit)
 
-    export_route._require_admin_and_audit_instance_export(_request(), {"username": "root", "role": "admin"})
+    export_route._require_admin_for_instance_export(_request(), {"username": "root", "role": "admin"})
 
-    assert audit.call_args.kwargs["outcome"] == "success"
-    assert audit.call_args.kwargs["metadata"] == {"scope": "instance"}
+    audit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_the_success_is_audited_only_after_the_archive_is_built(monkeypatch) -> None:
+    order: list[str] = []
+    monkeypatch.setattr(export_route, "audit_record", lambda **kw: order.append(f"audit:{kw['outcome']}"))
+    monkeypatch.setattr(export_route, "get_chat_history_manager", lambda request: MagicMock())
+
+    async def _build(*args, **kwargs):
+        order.append("build")
+        return "{}"
+
+    monkeypatch.setattr(export_route, "export_all_conversations_json", _build)
+
+    await export_route.export_all_conversations(_request(), True, {"username": "root", "role": "admin"})
+
+    assert order == ["build", "audit:success"]

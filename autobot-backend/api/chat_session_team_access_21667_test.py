@@ -89,3 +89,33 @@ async def test_team_scope_lists_only_after_the_membership_check(monkeypatch, mem
         with pytest.raises(HTTPException):
             await _call()
     assert team_list.await_count == int(listed)
+
+
+@pytest.mark.asyncio
+async def test_the_canonical_team_service_is_asked_with_team_then_user(monkeypatch) -> None:
+    """``TeamService.is_team_member(team_id, user_id)``: the order is the contract."""
+    import contextlib
+
+    import user_management.database as database
+    import user_management.services as services
+
+    calls: list[tuple] = []
+
+    class _StubTeamService:
+        def __init__(self, session, context):
+            pass
+
+        async def is_team_member(self, team_id, user_id, required_role=None):
+            calls.append((team_id, user_id))
+            return True
+
+    @contextlib.asynccontextmanager
+    async def _session():
+        yield object()
+
+    monkeypatch.setattr(services, "TeamService", _StubTeamService)
+    monkeypatch.setattr(database, "db_session_context", _session)
+
+    await access.require_team_member(_USER, _TEAM)
+
+    assert calls == [(uuid.UUID(_TEAM), uuid.UUID(_USER["user_id"]))]

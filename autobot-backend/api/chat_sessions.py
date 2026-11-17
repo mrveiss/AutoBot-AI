@@ -56,6 +56,7 @@ from chat_history.owner_keys import owner_from_metadata, strip_server_controlled
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
+from exceptions import ValidationError as ScopeValidationError
 from exceptions import get_exceptions_lazy
 
 # CRITICAL SECURITY FIX: Import session ownership validation
@@ -507,8 +508,7 @@ async def _list_scoped_sessions(
 
     # scope == "team"
     if not team_id:
-        raise get_exceptions_lazy()[3]("team_id required for team scope")  # [3] is ValidationError
-
+        raise ScopeValidationError("team_id required for team scope")
     await require_team_member(user_data, team_id)  # #21667
     return await _list_team_sessions(team_id, validator, chat_history_manager, request_id)
 

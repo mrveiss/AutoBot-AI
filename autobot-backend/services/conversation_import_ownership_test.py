@@ -91,10 +91,10 @@ async def test_an_import_stamps_the_importing_user_as_owner() -> None:
 async def test_replace_refuses_to_overwrite_another_users_session() -> None:
     manager = _manager(exists=True, owner="alice")
 
-    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
+    with pytest.raises(HTTPException) as refused:
+        await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
 
-    assert result["success"] is False
-    assert "another user" in result["message"]
+    assert refused.value.status_code == 404
     manager.save_session.assert_not_awaited()
 
 
@@ -156,9 +156,10 @@ async def test_a_merge_import_into_another_users_session_is_refused() -> None:
     """The default conflict path (no replace) must not merge into someone else's session (#20908)."""
     manager = _manager(exists=True, owner="alice")
 
-    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="merge", user_data=_BOB)
+    with pytest.raises(HTTPException) as refused:
+        await import_conversation(manager, dict(_DOCUMENT), on_conflict="merge", user_data=_BOB)
 
-    assert result["success"] is False
+    assert refused.value.status_code == 404
     manager.save_session.assert_not_awaited()
 
 
@@ -225,3 +226,28 @@ async def test_replacing_ones_own_session_keeps_it_indexed(owner_index) -> None:
     )
 
     owner_index.set_session_owner.assert_awaited_once_with("sess-abc", "alice")
+
+
+# --- #21731: skip answers a non-owner exactly as a missing session does ------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("owner", ["alice", None])
+async def test_a_skip_import_by_a_non_owner_is_the_404_of_a_missing_session(owner) -> None:
+    manager = _manager(exists=True, owner=owner)
+
+    with pytest.raises(HTTPException) as refused:
+        await import_conversation(manager, dict(_DOCUMENT), on_conflict="skip", user_data=_BOB)
+
+    assert refused.value.status_code == 404
+    manager.save_session.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_owner_skipping_their_own_session_still_reports_a_conflict() -> None:
+    manager = _manager(exists=True, owner="alice")
+
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="skip", user_data=_ALICE)
+
+    assert result["success"] is False and result["conflict"] is True
+    manager.save_session.assert_not_awaited()
