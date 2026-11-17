@@ -21,6 +21,7 @@ logger = get_logger(__name__)
 _SCHEMA_PATH = Path(__file__).parent / "database/schemas/conversation_files_schema.sql"
 _TABLE = re.compile(r"CREATE TABLE IF NOT EXISTS file_access_log \(.*?\n\);", re.DOTALL)
 _INDEX = re.compile(r"CREATE INDEX IF NOT EXISTS idx_file_access_log_\w+\s+ON file_access_log\([^)]*\);")
+_COMMENT = re.compile(r"--[^\n]*|/\*.*?\*/", re.DOTALL)
 _CHECK = re.compile(r"CHECK\s*\(\s*access_type\s+IN\s*\(([^)]*)\)\s*\)", re.IGNORECASE)
 _STAGE_SQL = (
     "CREATE TEMP TABLE file_access_log_rebuild AS "
@@ -39,16 +40,22 @@ _KEEP_SEQUENCE_SQL = "UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 
 _ADD_SEQUENCE_SQL = "INSERT INTO sqlite_sequence (name, seq) SELECT 'file_access_log', ? WHERE changes() = 0"
 
 
+def _without_comments(sql: str) -> str:
+    """*sql* with its ``--`` line comments and ``/* */`` block comments removed."""
+    return _COMMENT.sub("", sql)
+
+
 def _accepts_reference(connection: sqlite3.Connection) -> bool:
     """True when there is no log table to relax, or its ``access_type`` CHECK already lists ``reference``.
 
-    Only the CHECK clause is read: the stored CREATE text also holds the column comments, which name
-    ``reference`` in a table whose CHECK refuses it. A table with no readable CHECK is rebuilt.
+    Only the CHECK clause is read, with comments stripped: the stored CREATE text keeps the column comments,
+    which name ``reference`` in a table whose CHECK refuses it, and may even hold a commented-out CHECK.
+    A table with no readable CHECK is rebuilt.
     """
     row = connection.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='file_access_log'").fetchone()
     if row is None:
         return True
-    check = _CHECK.search(row[0])
+    check = _CHECK.search(_without_comments(row[0]))
     return check is not None and "'reference'" in check.group(1)
 
 

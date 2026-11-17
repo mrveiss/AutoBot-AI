@@ -38,10 +38,11 @@ _FULL_INSERT = (
 )
 
 
-def _old_database(tmp_path, rows=_ROWS):
+def _old_database(tmp_path, rows=_ROWS, before_check=""):
     """A log made before #21404: the schema with its CHECK lacking ``reference``, and *rows* in it (FKs off)."""
     old = _SCHEMA.read_text(encoding="utf-8").replace(", 'restore', 'reference'))", ", 'restore'))")
     assert "'reference'))" not in old
+    old = old.replace("    CHECK (access_type IN ('upload'", before_check + "    CHECK (access_type IN ('upload'", 1)
     connection = sqlite3.connect(tmp_path / "old.db")
     connection.executescript(old)  # the schema file switches foreign keys on
     connection.execute("PRAGMA foreign_keys = OFF")
@@ -119,4 +120,26 @@ def test_foreign_keys_that_were_off_stay_off(tmp_path):
     ensure_access_type_schema(connection)
 
     assert connection.execute("PRAGMA foreign_keys").fetchone() == (0,)
+    connection.close()
+
+
+@pytest.mark.parametrize(
+    "comment",
+    [
+        "    -- was: CHECK (access_type IN ('upload', 'reference'))\n",
+        "    /* CHECK (access_type IN ('upload', 'reference')) */\n",
+    ],
+    ids=["line-comment", "block-comment"],
+)
+def test_a_check_written_in_a_comment_does_not_hide_the_real_old_one(tmp_path, comment):
+    connection = _old_database(tmp_path, before_check=comment)
+    assert (
+        comment.strip()
+        in connection.execute("SELECT sql FROM sqlite_master WHERE name = 'file_access_log'").fetchone()[0]
+    )
+    assert _refused_reference(connection)
+
+    ensure_access_type_schema(connection)
+
+    assert not _refused_reference(connection)
     connection.close()

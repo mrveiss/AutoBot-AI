@@ -197,3 +197,17 @@ def test_a_lone_surrogate_in_a_rotated_value_gets_the_fixed_400(url, store) -> N
         gen.close()
 
     assert (response.status_code, response.json()) == (400, {"detail": REFUSAL_TEXT[400]})
+
+
+def test_a_lone_surrogate_in_a_share_grantee_gets_the_fixed_400(store) -> None:
+    error = UnicodeEncodeError("utf-8", "\ud800", 0, 1, "surrogates not allowed")  # if parsing lets it through
+    gen = _client(_Raises(error))
+    client = next(gen)
+    try:
+        response = client.post(
+            _U + "/share", content=b'{"grantee": "user:\\ud800"}', headers={"content-type": "application/json"}
+        )
+    finally:
+        gen.close()
+
+    assert (response.status_code, response.json()) == (400, {"detail": REFUSAL_TEXT[400]})
