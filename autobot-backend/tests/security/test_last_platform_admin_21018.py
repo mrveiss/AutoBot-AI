@@ -443,7 +443,12 @@ async def test_an_admin_row_the_session_already_loaded_is_refreshed_from_the_loc
 
 @pytest.mark.asyncio
 async def test_an_approval_decision_and_a_demotion_interleaved_both_complete_without_a_deadlock(maker):
-    """The four-eyes check takes the guard's own id-ordered lock (#21331), so the two queue instead of crossing."""
+    """Smoke test: both callers complete when interleaved under the harness's queueing lock (#21331).
+
+    SQLite has no row locks and cannot deadlock, so this proves the callers compose, not the lock order. The
+    evidence for the order is ``test_the_approval_check_issues_the_guards_id_ordered_set_lock``, which asserts the
+    PostgreSQL-compiled statement is ``FOR UPDATE`` with ``ORDER BY users.id``, the same statement the guard issues.
+    """
     first, second = await _seed(maker, 2)
 
     async def approval_decision() -> set[uuid.UUID]:
