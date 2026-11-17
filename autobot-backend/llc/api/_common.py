@@ -23,9 +23,7 @@ from fastapi import HTTPException, Request, status
 from pydantic import AfterValidator
 
 from autobot_shared.auth.interactive_principal import is_interactive_human
-from autobot_shared.http_refusal import (  # noqa: F401 -- the one refusal rule; re-exported to the llc routes
-    http_refusal,
-)
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 
 from ..services.work_item_hierarchy import HierarchyViolation

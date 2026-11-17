@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from models.agent_org import AgentOrgNode
@@ -30,7 +31,6 @@ from ..org_role_authority import describe_role_bound
 from ..scheduler.dispatch_gate import AgentNotDispatchable, run_block_reason
 from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
 from ..services.agent_presence_queries import agent_org_nodes_with_latest_heartbeat
-from ._common import http_refusal
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/agents", tags=["llc-agents"])

@@ -7,15 +7,15 @@
 import pytest
 
 from api import secrets as secrets_module
-from api.secrets_delete_outcome import INVALID_REQUEST_TEXT, PERMISSION_DENIED_TEXT
 from api.secrets_system_vault_17731_test import _SECRET_ID, client_and_vault  # noqa: F401 -- fixture
+from autobot_shared.http_refusal import REFUSAL_TEXT
 
 _LEAK = "LEAK-21559-update-marker"
 
 
 @pytest.mark.parametrize(
     "error, status, text",
-    [(PermissionError(_LEAK), 403, PERMISSION_DENIED_TEXT), (ValueError(_LEAK), 400, INVALID_REQUEST_TEXT)],
+    [(PermissionError(_LEAK), 403, REFUSAL_TEXT[403]), (ValueError(_LEAK), 400, REFUSAL_TEXT[400])],
     ids=["refused", "invalid"],
 )
 def test_update_answers_with_a_fixed_text(error, status, text, client_and_vault) -> None:
@@ -27,3 +27,11 @@ def test_update_answers_with_a_fixed_text(error, status, text, client_and_vault)
     assert response.status_code == status, response.text
     assert response.json()["detail"] == text
     assert _LEAK not in response.text
+
+
+def test_update_of_a_missing_secret_answers_with_the_shared_not_found_text(client_and_vault) -> None:
+    client, _vault = client_and_vault()
+
+    response = client.put("/api/secrets/no-such-secret", json={"description": "x"})
+
+    assert (response.status_code, response.json()["detail"]) == (404, REFUSAL_TEXT[404])

@@ -41,6 +41,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.singleton_factory import lazy_singleton
 from llc.deps import assert_company_access
 from user_management.database import get_async_session
@@ -49,7 +50,7 @@ from user_management.services import TenantContext
 from ..services.authz import NotAuthorisedError
 from ..services.contact import ContactService
 from ..services.contact_directory import ContactDirectoryService, ContactInUseError
-from ._common import actor_id, bad_request, forbidden, http_refusal
+from ._common import actor_id, bad_request, forbidden
 
 router = APIRouter(prefix="/contacts", tags=["llc-contacts"])
 

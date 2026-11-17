@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import http_refusal
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
@@ -25,7 +26,7 @@ from ..kb.rag_assembler import LLCRAGAssembler
 from ..services.accessors import get_work_item_service
 from ..services.company_os.errors import CompanyOsError, CompanyOsNotFound
 from ..services.goal import GoalService
-from ._common import http_refusal, parse_work_item_id
+from ._common import parse_work_item_id
 
 router = APIRouter(tags=["llc-context"])
 

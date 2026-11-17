@@ -35,10 +35,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.user_management.base_service import TenantContext
-from llc.api._common import http_refusal
 from llc.deps import assert_company_access, get_session
 from llc.models.enums import RoleHolderType
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform

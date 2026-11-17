@@ -20,7 +20,7 @@ from typing import Any
 
 from fastapi import HTTPException, Request, status
 
-from autobot_shared.http_refusal import REFUSAL_TEXT, fixed_refusal
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from services.audit_logger import AuditResult
 from services.envelope_secrets_service import SecretNotFoundError
@@ -62,11 +62,6 @@ _STATUS_FOR_REASON: dict[str, int] = {
     "not_found": status.HTTP_404_NOT_FOUND,
     "permission_denied": status.HTTP_403_FORBIDDEN,
 }
-
-
-#: The fixed 403 and 400 texts of every secret route that answers a refusal or a bad request (#21559).
-PERMISSION_DENIED_TEXT = REFUSAL_TEXT[status.HTTP_403_FORBIDDEN]
-INVALID_REQUEST_TEXT = REFUSAL_TEXT[status.HTTP_400_BAD_REQUEST]
 
 
 def invalid_request_error(exc: BaseException) -> HTTPException:

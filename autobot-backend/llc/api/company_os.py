@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import http_refusal
 from llc.deps import get_session
 from llc.models.company_os_enums import WorkflowKind
 from llc.services.authz import NotAuthorisedError
@@ -38,7 +39,7 @@ from llc.services.company_os.processes import ProcessService
 from llc.services.company_os.workflows import CompanyOsWorkflowService
 from user_management.services import TenantContext
 
-from ._common import actor_id, http_refusal
+from ._common import actor_id
 from .company_os_schemas import (
     CompanyWorkflowCreate,
     CompanyWorkflowResponse,
