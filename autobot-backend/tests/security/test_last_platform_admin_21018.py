@@ -37,6 +37,7 @@ from autobot_shared.user_management.last_platform_admin import (
     LastPlatformAdminError,
     LastPlatformAdminRetry,
     ensure_not_last_platform_admin,
+    lock_active_platform_admin_ids,
     lock_platform_admin_rows,
     refuse_last_platform_admin,
 )
@@ -438,3 +439,37 @@ async def test_an_admin_row_the_session_already_loaded_is_refreshed_from_the_loc
         await rival.commit()
         with pytest.raises(LastPlatformAdminError):
             await ensure_not_last_platform_admin(session, _User, target)
+
+
+@pytest.mark.asyncio
+async def test_an_approval_decision_and_a_demotion_interleaved_both_complete_without_a_deadlock(maker):
+    """The four-eyes check takes the guard's own id-ordered lock (#21331), so the two queue instead of crossing."""
+    first, second = await _seed(maker, 2)
+
+    async def approval_decision() -> set[uuid.UUID]:
+        async with maker() as session:
+            eligible = await lock_active_platform_admin_ids(session, _User)
+            await asyncio.sleep(0.05)  # the window in which a demotion would take rows in another order
+            await session.commit()
+            return eligible
+
+    async def demotion() -> None:
+        async with maker() as session:
+            await ensure_not_last_platform_admin(session, _User, first)
+            await session.execute(update(_User).where(_User.id == first).values(is_platform_admin=False))
+            await session.commit()
+
+    eligible, _ = await asyncio.wait_for(asyncio.gather(approval_decision(), demotion()), timeout=5)
+    assert eligible in ({first, second}, {second})
+
+
+def test_the_approval_check_issues_the_guards_id_ordered_set_lock():
+    captured = []
+
+    async def run(statement):
+        captured.append(statement)
+        return MagicMock(scalars=lambda: MagicMock(all=lambda: []))
+
+    asyncio.run(lock_active_platform_admin_ids(MagicMock(execute=run), _User))
+    sql = str(captured[0].compile(dialect=postgresql.dialect()))
+    assert "FOR UPDATE" in sql and "ORDER BY users.id" in sql and "users.id = " not in sql
