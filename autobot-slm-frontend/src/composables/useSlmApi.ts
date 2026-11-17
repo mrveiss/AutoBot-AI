@@ -136,7 +136,7 @@ export function useSlmApi() {
     return fetchAllPages(async (params) => {
       const { data } = await client.get<NodesResponse>('/nodes', { params })
       return { items: data.nodes.map(mapBackendNode), total: data.total }
-    })
+    }, undefined, (node) => node.node_id)
   }
 
   async function getNode(nodeId: string): Promise<SLMNode> {

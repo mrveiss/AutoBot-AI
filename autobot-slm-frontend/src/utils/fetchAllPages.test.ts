@@ -119,4 +119,17 @@ describe('fetchAllPages with no usable total (#21584)', () => {
     expect(err.items).toHaveLength(100)
     expect(err.total).toBeNull()
   })
+
+  it('a server that ignores `page` and has no total ends on the repeated first id', async () => {
+    const getPage = vi.fn(async () => ({ items: Array.from({ length: 100 }, (_, i) => ({ id: i })), total: undefined as unknown as number }))
+    const all = await fetchAllPages(getPage, 100, (row) => row.id)
+    expect(all).toHaveLength(100)
+    expect(getPage).toHaveBeenCalledTimes(2)
+  })
+
+  it('without an id reader the runaway guard still ends it, at 50 pages', async () => {
+    const getPage = vi.fn(async () => ({ items: [1], total: undefined as unknown as number }))
+    expect(await fetchAllPages(getPage, 1)).toHaveLength(MAX_PAGES)
+    expect(MAX_PAGES).toBe(50)
+  })
 })

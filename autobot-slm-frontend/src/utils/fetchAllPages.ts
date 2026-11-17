@@ -42,23 +42,26 @@ export class PartialListError<T> extends Error {
   }
 }
 
-/** A runaway guard: 1000 pages of 100 is far beyond any fleet, and ends a server that never stops answering. */
-export const MAX_PAGES = 1000
+/** A runaway guard: 50 pages of 100 (5000 nodes) is beyond any fleet, and ends a server that never stops answering. */
+export const MAX_PAGES = 50
 
 /**
  * Collect all pages, one request each, never above `perPage` items. A failure on the first page is
  * rethrown as is (nothing was read); a failure on a later page throws `PartialListError`.
  *
  * A missing or non-finite `total` means "unknown", not "none": paging then continues until an empty or
- * short page, so a response without a total can never truncate the list after page 1.
+ * short page, so a response without a total can never truncate the list after page 1. With `idOf`, a page
+ * whose first item repeats the previous page's first item ends it too: the server ignores `page`.
  */
 export async function fetchAllPages<T>(
   getPage: (params: PageParams) => Promise<Page<T>>,
   perPage: number = MAX_PAGE_SIZE,
+  idOf?: (item: T) => unknown,
 ): Promise<T[]> {
   const size = Math.min(perPage, MAX_PAGE_SIZE)
   const items: T[] = []
   let total: number | null = null
+  let previousFirst: unknown
   for (let page = 1; page <= MAX_PAGES && (total === null || items.length < total); page++) {
     let result: Page<T>
     try {
@@ -69,6 +72,9 @@ export async function fetchAllPages<T>(
     }
     total = Number.isFinite(result.total) ? result.total : null
     if (result.items.length === 0) break // rows were removed while paging: nothing more to read
+    const first = idOf && idOf(result.items[0])
+    if (total === null && page > 1 && idOf && first === previousFirst) break // `page` is ignored: the same page again
+    previousFirst = first
     items.push(...result.items)
     if (total === null && result.items.length < size) break // unknown total: a short page is the last
   }
