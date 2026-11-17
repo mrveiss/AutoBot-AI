@@ -17,7 +17,7 @@ from repo_tests._reach import declare
 from repo_tests.kb_destructive_paths_allowlist_21383 import ALLOWLIST
 
 from autobot_shared.testfile_names import is_test_filename
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _DESTRUCTIVE = re.compile(r"dropindex|flushdb|flushall", re.IGNORECASE)
 _SUFFIXES = (".py", ".sh")
@@ -27,7 +27,11 @@ _NAMES_ONLY = ("autobot_shared/auth/mcp_tool_permissions.py", "autobot-backend/s
 
 
 def _discover(root: Path) -> list[str]:
-    return tracked_paths(Path(root), "*.py", "*.sh")
+    """Every tracked .py/.sh path; an empty tree yields [] so the floor raises the typed refusal."""
+    try:
+        return tracked_paths(Path(root), "*.py", "*.sh")
+    except EmptyEnumeration:
+        return []
 
 
 #: Non-vacuity: the sweep must have read a real tree (a pin computed from this base, #19676).
