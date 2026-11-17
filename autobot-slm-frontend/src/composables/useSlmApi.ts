@@ -12,6 +12,8 @@
 import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
 import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
 import { fetchAllPages } from '@/utils/fetchAllPages'
+import { mapBackendNode } from './slmNodeMapping'
+import type { BackendNodeResponse, NodesResponse } from './slmNodeMapping'
 import type {
   SLMNode,
   NodeHealth,
@@ -101,81 +103,17 @@ import type {
   WizardStatusResponse,
 } from '@/types/api-responses'
 
-// slmApiClient adapter (#12420 Phase 2 batch 5 → consolidated in #12654): every call goes through the
-// canonical `slmApiClient` via the axios-compat adapter in `utils/slmApiCompat.ts` (shared with
-// useRoles). `textFallback: true` keeps this composable returning `response.text()` for a non-JSON
-// 2xx body (PEM cert downloads).
+// =============================================================================
+// slmApiClient adapter (#12420 Phase 2 batch 5 → consolidated in #12654)
+//
+// useSlmApi historically owned its own axios instance; the Phase-2 migration
+// routed every call through the canonical `slmApiClient` via a thin axios-compat
+// adapter. That adapter now lives in `utils/slmApiCompat.ts` (shared with
+// useRoles). `textFallback: true` preserves this composable's behaviour of
+// returning `response.text()` for a non-JSON 2xx body (PEM cert downloads).
+// =============================================================================
 
 const client = makeAxiosCompatClient({ textFallback: true })
-
-// Backend response types (different from frontend SLMNode)
-interface BackendNodeResponse {
-  id: number
-  node_id: string
-  hostname: string
-  ip_address: string
-  status: string
-  roles: string[]
-  detected_roles?: string[]
-  cpu_percent: number
-  memory_percent: number
-  disk_percent: number
-  last_heartbeat: string | null
-  agent_version: string | null
-  os_info: string | null
-  created_at: string
-  updated_at: string
-  ssh_user?: string
-  ssh_port?: number
-  auth_method?: string
-  code_status?: string
-  code_version?: string
-  // #14794: the backend reports roles that reach no deploy path. It was absent
-  // here, so the mapper below silently dropped it and the setup wizard's toast
-  // could never fire — producer and consumer both built, the hop missing.
-  unreachable_roles?: string[]
-}
-
-interface NodesResponse {
-  nodes: BackendNodeResponse[]
-  total: number
-}
-
-/**
- * Maps backend node response to frontend SLMNode type
- * Backend stores metrics directly, frontend expects nested health object
- */
-function mapBackendNode(node: BackendNodeResponse): SLMNode {
-  return {
-    node_id: node.node_id,
-    hostname: node.hostname,
-    ip_address: node.ip_address,
-    status: node.status as SLMNode['status'],
-    roles: node.roles as SLMNode['roles'],
-    detected_roles: node.detected_roles ?? [],
-    ssh_user: node.ssh_user,
-    ssh_port: node.ssh_port,
-    auth_method: node.auth_method as SLMNode['auth_method'],
-    health: {
-      status: node.status === 'online' ? 'healthy' :
-              node.status === 'degraded' ? 'degraded' :
-              node.status === 'error' ? 'unhealthy' : 'unknown',
-      cpu_percent: node.cpu_percent,
-      memory_percent: node.memory_percent,
-      disk_percent: node.disk_percent,
-      last_heartbeat: node.last_heartbeat,
-      services: [],
-    },
-    created_at: node.created_at,
-    updated_at: node.updated_at,
-    code_status: (node.code_status as SLMNode['code_status']) || undefined,
-    code_version: node.code_version || undefined,
-    // #14794: carry it through. Defaulted so an older backend that does not
-    // send the field yields an empty list rather than undefined, which is what
-    // the consumers iterate.
-    unreachable_roles: node.unreachable_roles ?? [],
-  }
-}
 
 interface DeploymentsResponse {
   deployments: Deployment[]

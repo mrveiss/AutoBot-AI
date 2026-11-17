@@ -122,7 +122,9 @@ async function fetchAgents() {
 
 async function fetchNodes() {
   try {
-    // Every page of the fleet (#21584); a failed read rejects into the catch below (Custom mode).
+    // A non-OK response used to `return` silently; `get()` rejects, so it now
+    // lands in the catch below — the same outcome (fall back to Custom mode)
+    // reached by one code path instead of two. Every page of the fleet (#21584).
     nodes.value = (await slmApi.getNodes()).filter((n: FleetNode) => n.status === 'online')
   } catch {
     // Non-critical — fall back to Custom mode

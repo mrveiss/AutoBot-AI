@@ -5,7 +5,9 @@
 
 /**
  * FleetOverview - Main fleet management page.
- * Issue #754: ARIA roles for tabs, dialogs and status indicators; aria-labels on icon-only buttons.
+ *
+ * Issue #754: Added ARIA roles for tabs, dialogs, status indicators,
+ * aria-labels for icon-only buttons, and role="dialog" for modals.
  */
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
@@ -18,7 +20,7 @@ import { useNodeConnectionTest } from '@/composables/useNodeConnectionTest'
 import { useRoles } from '@/composables/useRoles'
 import type { SLMNode, NodeHealth } from '@/types/slm'
 import { formatCompactRelativeTime } from '@/utils/dateUtils'
-import { PartialListError } from '@/utils/fetchAllPages'
+import { useFleetRefresh } from '@/composables/useFleetRefresh'
 import NodeCard from '@/components/fleet/NodeCard.vue'
 import FleetSummary from '@/components/fleet/FleetSummary.vue'
 import AddNodeModal from '@/components/AddNodeModal.vue'
@@ -34,6 +36,7 @@ const logger = createLogger('FleetOverview')
 const { t } = useI18n()
 const { showToast } = useToast()
 const fleetStore = useFleetStore()
+const { refreshFleet } = useFleetRefresh()
 const slmApi = useSlmApi()
 const route = useRoute()
 const router = useRouter()
@@ -170,15 +173,6 @@ onUnmounted(() => {
 })
 
 // Actions
-async function refreshFleet(): Promise<void> {
-  try {
-    await fleetStore.fetchNodes()
-  } catch (err) {
-    logger.error('Failed to refresh fleet:', err)
-    if (err instanceof PartialListError) showToast(t('fleetOverview.incompleteList', { loaded: err.items.length, total: err.total, message: err.reason }), 'error')
-  }
-}
-
 function handleNodeAction(action: string, nodeId: string): void {
   const node = fleetStore.getNode(nodeId)
   if (!node) return
