@@ -38,6 +38,8 @@ import type {
 } from '@/types/slm'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { PartialListError } from '@/utils/fetchAllPages'
+import { incompleteOf, reconcileUpdateSummary, toNodeMap } from './fleetHelpers'
+import type { NodeListIncomplete } from './fleetHelpers'
 
 export const useFleetStore = defineStore('fleet', () => {
   const api = useSlmApi()
@@ -50,6 +52,8 @@ export const useFleetStore = defineStore('fleet', () => {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const lastRefresh = ref<Date | null>(null)
+  /** Set when the node list held is not the whole fleet (#21584); null when it is. */
+  const incomplete = ref<NodeListIncomplete | null>(null)
 
   /** Currently selected node for detail view */
   const selectedNode = ref<SLMNode | null>(null)
@@ -180,34 +184,14 @@ export const useFleetStore = defineStore('fleet', () => {
     return fleetUpdateSummary.value?.nodes.find(n => n.node_id === nodeId)
   }
 
-  /**
-   * Reconcile a single node's cached update summary with a fresh live-check
-   * result (#11964).
-   *
-   * The live "Check for updates" scan (NodeLifecyclePanel) re-reads
-   * node.code_status directly from the DB at click-time. The fleet-wide
-   * summary that drives the node-card badge is otherwise only fetched once
-   * on page load, so it can go stale. Patching the cached entry here after
-   * every live check keeps the badge and the live scan from disagreeing.
-   */
+  /** Patch one node's cached update summary after a live check (#11964); see `reconcileUpdateSummary`. */
   function reconcileNodeUpdateSummary(
     nodeId: string,
     systemUpdates: number,
     codeUpdateAvailable: boolean,
     codeStatus: string
   ): void {
-    const summary = fleetUpdateSummary.value
-    const entry = summary?.nodes.find(n => n.node_id === nodeId)
-    if (!summary || !entry) return
-
-    entry.system_updates = systemUpdates
-    entry.code_update_available = codeUpdateAvailable
-    entry.code_status = codeStatus
-    entry.total_updates = systemUpdates + (codeUpdateAvailable ? 1 : 0)
-
-    summary.total_system_updates = summary.nodes.reduce((sum, n) => sum + n.system_updates, 0)
-    summary.total_code_updates = summary.nodes.filter(n => n.code_update_available).length
-    summary.nodes_needing_updates = summary.nodes.filter(n => n.total_updates > 0).length
+    reconcileUpdateSummary(fleetUpdateSummary.value, nodeId, systemUpdates, codeUpdateAvailable, codeStatus)
   }
 
   // ============================================================
@@ -240,13 +224,16 @@ export const useFleetStore = defineStore('fleet', () => {
     error.value = null
 
     try {
-      nodes.value = new Map((await api.getNodes()).map((n) => [n.node_id, n]))
+      nodes.value = toNodeMap(await api.getNodes())
+      incomplete.value = null
       lastRefresh.value = new Date()
     } catch (err) {
-      // A later page failed (#21584): keep what was read; the caller says the list is partial.
-      if (err instanceof PartialListError) nodes.value = new Map((err.items as SLMNode[]).map((n) => [n.node_id, n]))
+      // A later page failed (#21584): keep what was read and record that the list is not the fleet.
+      // That is a result with a flag (the shell tells the operator), not a failure the 9 callers handle.
+      incomplete.value = incompleteOf(err)
       error.value = err instanceof Error ? err.message : 'Failed to fetch nodes'
-      throw err
+      if (!(err instanceof PartialListError)) throw err
+      nodes.value = toNodeMap(err.items as SLMNode[])
     } finally {
       isLoading.value = false
     }
@@ -893,6 +880,7 @@ export const useFleetStore = defineStore('fleet', () => {
     isLoading.value = false
     error.value = null
     lastRefresh.value = null
+    incomplete.value = null
     selectedNode.value = null
     clearAllCaches()
   }
@@ -903,6 +891,7 @@ export const useFleetStore = defineStore('fleet', () => {
     isLoading,
     error,
     lastRefresh,
+    incomplete,
     selectedNode,
     nodeEvents,
     certificateStatus,

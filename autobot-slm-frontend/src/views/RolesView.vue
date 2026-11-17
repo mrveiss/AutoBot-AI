@@ -15,13 +15,13 @@ import { BaseAlert, BaseModal, HttpError, createLogger } from '@autobot/ui'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { slmApiClient } from '@/utils/ApiClient'
-import { useSlmApi } from '@/composables/useSlmApi'
+import { useFleetStore } from '@/stores/fleet'
 import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
 import { joinSystemdUnits, parseSystemdUnits } from '@/composables/useRoles'
 
 const logger = createLogger('RolesView')
 const { t } = useI18n()
-const slmApi = useSlmApi()
+const fleetStore = useFleetStore()
 
 // Types
 interface RoleDefinition {
@@ -182,7 +182,8 @@ async function fetchFleetHealth(): Promise<void> {
 async function fetchNodes(): Promise<void> {
   // Every page of the fleet through the one node-list fetch (#21584), not the first 20.
   try {
-    nodes.value = await slmApi.getNodes()
+    await fleetStore.fetchNodes() // a partial read is kept and announced once by the shell
+    nodes.value = fleetStore.nodeList
   } catch (err) {
     errorMessage.value = t('rolesView.requestFailed', { message: err instanceof Error ? err.message : t('rolesView.unknownError') })
     logger.error('Failed to load nodes:', err)
