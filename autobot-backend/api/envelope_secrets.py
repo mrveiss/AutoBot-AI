@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api._service_principal_refusal import validated_service
 from api.envelope_secrets_delete import delete_as_service, delete_as_user
-from api.secrets_delete_outcome import fixed_secret_error_for
+from api.secrets_delete_outcome import fixed_secret_error_for, invalid_request_error
 from auth_middleware import resolve_human_user, verify_internal_api_key
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from llc.deps import get_session
@@ -128,7 +128,7 @@ def _mapped(exc: Exception) -> HTTPException:
     if known is not None:
         return known
     if isinstance(exc, ValueError):
-        return HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+        return invalid_request_error(exc)
     raise exc
 
 

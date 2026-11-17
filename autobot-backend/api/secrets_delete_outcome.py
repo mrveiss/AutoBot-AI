@@ -66,6 +66,17 @@ _ERROR_FOR_REASON: dict[str, tuple[int, str]] = {
 }
 
 
+#: The fixed 403 and 400 texts of every secret route that answers a refusal or a bad request (#21559).
+PERMISSION_DENIED_TEXT = _ERROR_FOR_REASON["permission_denied"][1]
+INVALID_REQUEST_TEXT = "Invalid secret request"
+
+
+def invalid_request_error(exc: BaseException) -> HTTPException:
+    """The fixed-text 400 for a validation failure; the message is not returned, only its class is logged (#21559)."""
+    logger.warning("secret request rejected as invalid: %s", type(exc).__name__)
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=INVALID_REQUEST_TEXT)
+
+
 def error_for(exc: BaseException) -> HTTPException | None:
     """The HTTP error a non-HTTP secret failure is answered with, or None to keep the caller's behaviour.
 

@@ -115,3 +115,15 @@ def test_the_refusal_is_logged_by_class_and_reason_without_the_message(op, kind,
         assert "\r" not in line and "\n" not in line
         for leaked in (_MARKER, _SECRET, _OWNER, "forged"):
             assert leaked not in line
+
+
+@pytest.mark.parametrize("op", _OPERATIONS, ids=_IDS)
+def test_a_validation_failure_gets_the_fixed_400_body_without_its_message(op, store, caplog) -> None:
+    _, method, url, body = op
+
+    with caplog.at_level(logging.WARNING, logger="api.secrets_delete_outcome"):
+        response = _send(ValueError(f"{_MARKER} {_SECRET} {_OWNER}"), method, url, body)
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Invalid secret request"}
+    assert _MARKER not in "".join(r.getMessage() for r in caplog.records)

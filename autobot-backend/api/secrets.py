@@ -46,7 +46,7 @@ from api.schemas_system import (
     SecretUpdateRequest,
 )
 from api.secrets_audit import audit_secret_op, remember_actor
-from api.secrets_delete_outcome import record_delete_failure
+from api.secrets_delete_outcome import INVALID_REQUEST_TEXT, PERMISSION_DENIED_TEXT, record_delete_failure
 from api.secrets_failure_log import describe_failure
 from api.secrets_ownership import stamp_owner
 from api.secrets_system_vault import create_system_vault_secret as _create_system_vault_secret
@@ -721,7 +721,7 @@ async def create_secret(
         raise HTTPException(status_code=403, detail="Not permitted to create this secret")
     except ValueError as e:
         await audit_secret_op("CREATE", None, http_request, "failed", reason=type(e).__name__)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise HTTPException(status_code=400, detail=INVALID_REQUEST_TEXT)
     except HTTPException:
         # #16428: without this, get_coordinator()'s 503 (vault not configured)
         # falls into the generic handler below and becomes a misleading 500.
@@ -913,7 +913,7 @@ async def get_secret(
         return JSONResponse(status_code=200, content=secret)
     except PermissionError:
         await audit_secret_op("ACCESS", secret_id, http_request, "denied", reason="permission_denied")
-        raise HTTPException(status_code=403, detail="Internal server error")
+        raise HTTPException(status_code=403, detail=PERMISSION_DENIED_TEXT)
     except HTTPException:
         raise
     except Exception as e:
@@ -972,11 +972,11 @@ async def update_secret(
         )
     except PermissionError:
         await audit_secret_op("UPDATE", secret_id, http_request, "denied", reason="permission_denied")
-        raise HTTPException(status_code=403, detail="Internal server error")
+        raise HTTPException(status_code=403, detail=PERMISSION_DENIED_TEXT)
     except ValueError as e:
         # #16428: rotate()'s merged-bundle validation failure: a bad request.
         await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason=type(e).__name__)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise HTTPException(status_code=400, detail=INVALID_REQUEST_TEXT)
     except HTTPException:
         raise
     except Exception as e:
