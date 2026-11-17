@@ -17225,9 +17225,6 @@ export interface paths {
          * List Specialized Agents
          * @description List the host's Claude Code agents from the configured agents dir (#1794).
          *
-         *     Returns agent definitions parsed from markdown files including
-         *     name, description, tools, color, model, and category.
-         *
          *     Issue #744: Requires admin authentication.
          */
         get: operations["list_specialized_agents_api_agent_config_agents_specialized_get"];
