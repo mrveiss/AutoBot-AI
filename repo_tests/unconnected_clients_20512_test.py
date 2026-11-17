@@ -305,6 +305,16 @@ _HELPER = "const plantedUrl = (): string => `${getApiBase()}/planted`\n"
             _HELPER + "apiClient.rawRequest(`${plantedUrl()}/orphan`, { method: 'PUT' })\n",
             False,
         ),
+        (
+            "an options-less rawRequest followed by a DELETE call keeps its own GET",
+            _HELPER + "apiClient.rawRequest(`${plantedUrl()}/orphan`)\napiClient.rawRequest(x, { method: 'DELETE' })\n",
+            True,
+        ),
+        (
+            "an options-less rawRequest of a route that is not GET is not connected by the next call",
+            "const h = () => `${getApiBase()}/planted/other`\napiClient.rawRequest(h())\napiClient.delete('/x')\n",
+            False,
+        ),
         ("a placeholder segment against a literal route", _HELPER + "apiClient.get(`${plantedUrl()}/${id}`)\n", False),
     ],
 )

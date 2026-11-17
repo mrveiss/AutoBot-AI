@@ -9,6 +9,10 @@ is ``autobot_shared.user_management.last_platform_admin.lock_platform_admin_rows
 last-admin guard and the four-eyes approval check alike. A new ``with_for_update`` over the user model fails
 here unless it is that helper or one of the named single-row locks below (one row cannot deadlock on order
 among itself, and each takes its row after the set lock).
+
+Trade-off: the bare name ``user`` also counts as the user model, so a function that merely has a variable called
+``user`` and locks another table is flagged and must be named below. That is noisy but safe (a miss would hide a
+real lock), and the repo has no such function today.
 """
 
 from __future__ import annotations

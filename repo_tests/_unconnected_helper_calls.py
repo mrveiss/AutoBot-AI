@@ -32,15 +32,36 @@ _URL_HELPER = re.compile(
     r"`\$\{getApiBase\(\)\}(/[^`]*)`"
 )
 _METHOD_OPTION = re.compile(r"method\s*:\s*['\"](\w+)['\"]")
-_OPTIONS_WINDOW = 200
 _PATH_TAIL = r"/[^`'\"\s]*"
 HelperCalls = dict[tuple[str, str], set[str]]
 
 
-def _verb(verb: str, after: str) -> str:
+def _own_arguments(text: str, start: int) -> str:
+    """The text of the call whose argument list opens at the first ``(`` from *start*, up to its closing ``)``.
+
+    Parentheses are balanced and quoted text is skipped, so the next call's options are never read as this one's.
+    """
+    open_at = text.index("(", start)
+    depth, quote = 0, ""
+    for index in range(open_at, len(text)):
+        char = text[index]
+        if quote:
+            quote = "" if char == quote and text[index - 1] != "\\" else quote
+        elif char in "'\"`":
+            quote = char
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return text[open_at : index + 1]
+    return text[open_at:]
+
+
+def _verb(verb: str, arguments: str) -> str:
     """The HTTP method of a client call: its own verb, or the ``method:`` option of ``rawRequest``/``request``."""
     if verb in ("rawRequest", "request"):
-        option = _METHOD_OPTION.search(after[:_OPTIONS_WINDOW])
+        option = _METHOD_OPTION.search(arguments)
         return option.group(1).upper() if option else "GET"
     return verb.upper() if verb in ("get", "post", "put", "patch", "delete") else ""
 
@@ -52,7 +73,7 @@ def _calls_of(helper: re.Match[str], calls: str, receivers: dict[str, str]) -> s
     site = re.compile(rf"(?<![\w.$])(?:{names})\s*\.\s*({_VERBS})\s*(?:<[^()]*>)?\s*\(\s*{arg}")
     found = set()
     for m in site.finditer(calls):
-        if verb := _verb(m.group(1), calls[m.end() :]):
+        if verb := _verb(m.group(1), _own_arguments(calls, m.end(1))):
             found.add((verb, path + (m.group(2) or "")))
     return found
 
