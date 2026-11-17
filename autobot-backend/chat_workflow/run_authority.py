@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, FrozenSet, Iterable
 
+from autobot_shared.ai_lines import declared_categories_of
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS
 from security.authority import TOP, Authority
 
@@ -40,6 +41,7 @@ class Inheritance:
     authority: Authority = TOP
     work_item_id: str | None = None
     approve_every_call: bool = False  # #20195: the parent's turn carries attached files; every child call asks
+    declared_categories: tuple[str, ...] | None = None  # #19957: what the parent declared, apart from the baseline
 
     @classmethod
     def of(cls, parent_ctx: Any) -> Inheritance:
@@ -50,6 +52,7 @@ class Inheritance:
             authority=authority_of(parent_ctx),
             work_item_id=getattr(parent_ctx, "work_item_id", None),
             approve_every_call=bool(getattr(parent_ctx, "approve_every_call", False)),
+            declared_categories=declared_categories_of(parent_ctx),
         )
 
 

@@ -177,7 +177,7 @@ async def test_with_the_line_store_down_no_card_is_raised_and_the_seam_refuses()
     assert message.type == "error" and filed == 0
 
 
-async def _governed(context):
+async def _governed(context, read=None):
     """The turn context as chat builds it with the gate ON: the baseline overlaid on ``requires_approval_before``."""
     from unittest.mock import AsyncMock
 
@@ -186,7 +186,9 @@ async def _governed(context):
     with (
         patch("chat_workflow.session_role.CHAT_APPROVAL_GATE_ENABLED", True),
         patch("chat_workflow.session_role.SessionRoleService.get_role", AsyncMock(return_value=None)),
-        patch("chat_workflow.session_role.SessionRoleService.get_approval_categories", AsyncMock(return_value=[])),
+        patch(
+            "chat_workflow.session_role.SessionRoleService.read_approval_categories", read or AsyncMock(return_value=[])
+        ),
         patch("chat_workflow.session_work_item.SessionWorkItemService.get_work_item", AsyncMock(return_value=None)),
         patch("chat_workflow.attachment_floor.stamp_attachment_floor", AsyncMock(side_effect=lambda c, _s: c)),
         ai_line_world(),
@@ -234,3 +236,84 @@ def test_the_card_counts_the_other_calls_even_when_the_first_is_a_shell_command(
     assert card["metadata"]["command"] == "ls (+1 more)"
     alone = approval_card({"session_id": "s", "terminal_session_id": "t"}, [shell])
     assert alone["metadata"]["command"] == "ls"
+
+
+NAVIGATE = {"name": "navigate", "params": {"url": "https://example.test"}}
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_session_declaration_fails_closed_and_holds_navigate():
+    from unittest.mock import AsyncMock
+
+    governed = await _governed(
+        {"declared_approval_categories": []}, read=AsyncMock(side_effect=ConnectionError("down"))
+    )
+    assert "declared_approval_categories" not in governed, "unstamped, and a client's own value is dropped"
+    assert await _needs_approval(NAVIGATE, governed) is True
+
+
+def test_declared_categories_fall_back_to_the_overlaid_list_when_unstamped_or_malformed():
+    from autobot_shared.ai_lines import declared_categories_of
+
+    overlaid = ["browser actions", "writing files"]
+    assert declared_categories_of(SimpleNamespace(requires_approval_before=overlaid, context={})) == tuple(overlaid)
+    for bad in ("browser actions", 7, None, {"x": 1}):
+        ctx = SimpleNamespace(requires_approval_before=overlaid, context={"declared_approval_categories": bad})
+        assert declared_categories_of(ctx) == tuple(overlaid), "a malformed stamp fails closed"
+    stamped = SimpleNamespace(requires_approval_before=overlaid, context={"declared_approval_categories": ["a", 3]})
+    assert declared_categories_of(stamped) == ("a",)
+
+
+@pytest.mark.asyncio
+async def test_a_delegate_declares_what_its_parent_declared_so_it_holds_what_the_parent_holds():
+    from chat_workflow.delegation import _declared_for_child
+    from chat_workflow.run_authority import NO_INHERITANCE, Inheritance
+    from services.ai_line_enforcement import call_needs_approval
+
+    parent = await _governed({})
+    parent_ctx = SimpleNamespace(requires_approval_before=parent["requires_approval_before"], context=parent)
+    inherited = Inheritance.of(parent_ctx)
+    assert inherited.declared_categories == ()
+    stamp = _declared_for_child(["writing files"], inherited)
+    child = SimpleNamespace(requires_approval_before=parent["requires_approval_before"], context={**parent, **stamp})
+    with ai_line_world():
+        assert await call_needs_approval(NAVIGATE, child) is False and await call_needs_approval(CLICK, child) is True
+    assert _declared_for_child(["writing files"], NO_INHERITANCE) == {}, "no parent: the child's own list counts"
+
+    work_item = await _governed({"requires_approval_before": ["browser actions"]})
+    held = Inheritance.of(
+        SimpleNamespace(requires_approval_before=work_item["requires_approval_before"], context=work_item)
+    )
+    child = SimpleNamespace(
+        requires_approval_before=work_item["requires_approval_before"], context=_declared_for_child([], held)
+    )
+    child.context["verified_company_id"] = VERIFIED_COMPANY
+    with ai_line_world():
+        assert await call_needs_approval(NAVIGATE, child) is True, "a parent's declared gate reaches the child"
+
+
+@pytest.mark.asyncio
+async def test_dispatching_approved_calls_drops_the_stamp_from_the_exec_ctx_copy_only():
+    from chat_workflow.graph_tool_dispatch import dispatch_approved_calls
+
+    key = "declared_approval_categories"
+    state = {
+        "session_id": "s1",
+        "terminal_session_id": "t1",
+        "execution_history": [],
+        "llm_params": {"ollama_endpoint": "http://x", "selected_model": "m"},
+        "context": {key: ["browser actions"]},
+    }
+    exec_ctx = SimpleNamespace(context=dict(state["context"]), requires_approval_before=["browser actions"])
+
+    class Manager:
+        def _bind_spill_run(self, _sid):
+            pass
+
+        async def _process_tool_calls(self, *_a, ctx=None, **_k):
+            yield (False, None)
+
+    await dispatch_approved_calls(Manager(), exec_ctx, state, [dict(CLICK)], 1, [], None)
+
+    assert key not in exec_ctx.context and exec_ctx.requires_approval_before == []
+    assert state["context"] == {key: ["browser actions"]}, "graph state is untouched"

@@ -217,14 +217,18 @@ class SessionRoleService(AsyncRedisClientMixin):
         )
         logger.info("session_role.set_approval session=%s categories=%s", session_id, categories)
 
+    async def read_approval_categories(self, session_id: str) -> List[str]:
+        """The session's declared approval categories; raises when they cannot be read (#19957)."""
+        redis = await self._get_redis()
+        raw = await redis.get(_APPROVAL_KEY.format(session_id=session_id))
+        if not raw:
+            return []
+        return list(json.loads(raw.decode() if isinstance(raw, bytes) else raw))
+
     async def get_approval_categories(self, session_id: str) -> List[str]:
         """Return the session's declared approval categories (never raises into chat)."""
         try:
-            redis = await self._get_redis()
-            raw = await redis.get(_APPROVAL_KEY.format(session_id=session_id))
-            if not raw:
-                return []
-            return list(json.loads(raw.decode() if isinstance(raw, bytes) else raw))
+            return await self.read_approval_categories(session_id)
         except Exception as exc:  # defensive; must never break chat
             logger.warning("session_role.get_approval failed for session=%s: %s", session_id, exc)
             return []
@@ -256,9 +260,18 @@ async def apply_session_governance(
     # #13704: a server-set work-item binding overrides any client-supplied work_item_id (#13687).
     context = apply_work_item(context, await SessionWorkItemService().get_work_item(session_id))
     context = await stamp_attachment_floor(context, session_id)
-    session_categories = await svc.get_approval_categories(session_id) if CHAT_APPROVAL_GATE_ENABLED else ()
-    context = stamp_declared_categories(context, session_categories)  # #19957: before the overlay mixes them in
+    session_categories: "List[str] | None" = []
+    if CHAT_APPROVAL_GATE_ENABLED:
+        try:
+            session_categories = await svc.read_approval_categories(session_id)
+        except Exception as exc:  # noqa: BLE001 - fail closed (#19957): an unread declaration must not lift a gate
+            logger.error(
+                "Session approval categories unreadable for %s (%s); every category stays gated", session_id, exc
+            )
+            session_categories = None
+    # #19957: stamped before the overlay mixes the baseline in; None leaves it unstamped, so the overlay is what counts.
+    context = stamp_declared_categories(context, session_categories)
     if CHAT_APPROVAL_GATE_ENABLED:
         # #18294: all categories gated by default; only the SLM setting relaxes one.
-        context = await with_baseline_categories(context, session_categories)
+        context = await with_baseline_categories(context, session_categories or ())
     return context

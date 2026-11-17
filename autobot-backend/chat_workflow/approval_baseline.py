@@ -68,13 +68,17 @@ def union_categories(*groups: Optional[Iterable[str]]) -> List[str]:
 
 
 def stamp_declared_categories(
-    context: Optional[Dict[str, Any]], session_categories: Iterable[str] = ()
+    context: Optional[Dict[str, Any]], session_categories: Optional[Iterable[str]] = ()
 ) -> Dict[str, Any]:
     """Record what the work item and the session declared, before the baseline overlay mixes it in (#19957).
 
-    Overwrites any client-supplied value: only the server decides what was declared.
+    Overwrites any client-supplied value: only the server decides what was declared. ``None`` (the session's
+    declaration could not be read) removes the key, so the overlaid list is what counts and every category holds.
     """
     base = dict(context or {})
+    if session_categories is None:
+        base.pop(DECLARED_CATEGORIES_KEY, None)
+        return base
     declared = base.get("requires_approval_before")
     base[DECLARED_CATEGORIES_KEY] = union_categories(
         session_categories, declared if isinstance(declared, (list, tuple)) else ()
