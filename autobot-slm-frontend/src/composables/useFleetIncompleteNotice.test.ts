@@ -6,8 +6,9 @@
 // #21584: the shell tells the operator once when the node list held is not the whole fleet, whichever
 // view's fetchNodes() produced it; a complete list, or the same shortfall seen again, says nothing.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { reactive, nextTick } from 'vue'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { reactive, nextTick, effectScope } from 'vue'
+import type { EffectScope } from 'vue'
 
 const showToast = vi.fn()
 type Shortfall = { read: number; total: number | null; reason: string }
@@ -21,20 +22,32 @@ vi.mock('@autobot/ui', () => ({ useToast: () => ({ showToast }) }))
 
 import { useFleetIncompleteNotice } from './useFleetIncompleteNotice'
 
+// The composable's watcher lives in an effect scope per test and is stopped after it: outside a component
+// nothing stops it, and the previous tests' watchers would otherwise answer the next test's changes too.
+let scope: EffectScope
+const mountNotice = (): void => {
+  scope.run(useFleetIncompleteNotice)
+}
+
 describe('useFleetIncompleteNotice (#21584)', () => {
   beforeEach(() => {
     showToast.mockReset()
     store.incomplete = null
+    scope = effectScope()
+  })
+
+  afterEach(() => {
+    scope.stop()
   })
 
   it('a complete list shows no notice', async () => {
-    useFleetIncompleteNotice()
+    mountNotice()
     await nextTick()
     expect(showToast).not.toHaveBeenCalled()
   })
 
   it('a partial list says how many of how many nodes are shown, once', async () => {
-    useFleetIncompleteNotice()
+    mountNotice()
     store.incomplete = { read: 100, total: 250, reason: '504' }
     await nextTick()
 
@@ -49,7 +62,7 @@ describe('useFleetIncompleteNotice (#21584)', () => {
   })
 
   it('a different shortfall, or one after a recovery, is announced again', async () => {
-    useFleetIncompleteNotice()
+    mountNotice()
     store.incomplete = { read: 100, total: 250, reason: '504' }
     await nextTick()
     store.incomplete = { read: 200, total: 250, reason: '504' }
@@ -62,7 +75,7 @@ describe('useFleetIncompleteNotice (#21584)', () => {
   })
 
   it('an unknown total is worded, not printed as null', async () => {
-    useFleetIncompleteNotice()
+    mountNotice()
     store.incomplete = { read: 100, total: null, reason: '504' }
     await nextTick()
     expect(showToast.mock.calls[0][0]).toContain('"total":"fleetOverview.incompleteTotalUnknown:{}"')

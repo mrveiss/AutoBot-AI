@@ -185,7 +185,7 @@ async function fetchNodes(): Promise<void> {
     await fleetStore.fetchNodes() // a partial read is kept and announced once by the shell
     nodes.value = fleetStore.nodeList
   } catch (err) {
-    errorMessage.value = t('rolesView.requestFailed', { message: err instanceof Error ? err.message : t('rolesView.unknownError') })
+    errorMessage.value = t('rolesView.requestFailed', { message: (err instanceof HttpError && err.detail) || (err instanceof Error ? err.message : t('rolesView.unknownError')) })
     logger.error('Failed to load nodes:', err)
   }
 }
