@@ -23,19 +23,8 @@ SLM frontend (``autobot-slm-frontend/src/utils/ApiClient.ts``, ``SlmApiClient.re
   path (loose: it errs toward "connected").
 * ``${getSlmApiBase()}/x`` in a template -> ``/api`` + ``/x`` (same base, written out).
 
-A same-file URL helper (#21307): ``const uploadsUrl = () => `${getApiBase()}/knowledge_base/uploads` `` is
-``/api`` + its template, so ``${uploadsUrl()}/${id}`` in the same file is that full path, and a bare
-``uploadsUrl()`` handed to a call is the helper's own path. Any receiver counts (``api.get``, ``deps.api.get``), as for
-the literal ``${getApiBase()}/...`` the audit script reads; a helper declared in another file is not followed.
-
-Two file-local forms resolve to those clients (#20910):
-
-* a path constant, ``const SETUP_RESET = '/setup/reset'`` (or a template, ``const url = `/x${qs}` ``):
-  ``client.post(SETUP_RESET)``, ``${LEDGER}/claims`` and ``wrapper(url)`` read as the value. The latest
-  declaration above the use applies, whichever function declared it.
-* a request wrapper, ``function read(path: string) { ... client.rawRequest(`${LEDGER}${path}`) }`` or
-  ``async function apiRequest(method, path) { ... client.get(path) }``: a call ``read('/claims')`` or
-  ``apiRequest('GET', '/config/defaults')`` is the client's base + the wrapper's prefix + the path.
+A same-file URL helper (``const uploadsUrl = () => `${getApiBase()}/x` ``) is followed by
+``_unconnected_helper_calls``, which keeps the verb: its calls connect only a route of the same method (#21307).
 
 Main frontend (``autobot-frontend/src/utils/ApiClient.ts``): the base is the host (``baseUrl`` is
 ``''`` in proxy mode) and the ``/api`` is written at the call site, which ``frontend_calls`` already
@@ -96,11 +85,6 @@ _DECLARED = (
 )
 #: Main-frontend names that are the canonical client wherever they appear.
 _MAIN_NAMED = {"apiClient": ""}
-#: ``const name = (args)[: string] =>`` then a ``${getApiBase()}/...`` template: a URL helper (#21307).
-_URL_HELPER = re.compile(
-    r"\b(?:const|let)\s+(\w+)\s*(?::[^=\n]+)?=\s*(?:async\s*)?\([^)]*\)\s*(?::\s*string\s*)?=>\s*"
-    r"`\$\{getApiBase\(\)\}(/[^`]*)`"
-)
 _SLM_BASE_CALL = re.compile(r"\$\{getSlmApiBase\(\)\}(/[^`'\"\s]*)")
 _COMMENT_PREFIXES = ("* ", "//", "/*")
 #: A whole initialiser that is ONE literal path: ``'/x'``, ``\`/x/${id}\``` or ``\`/x${query}\```, then at most ``;``
@@ -298,24 +282,21 @@ def _wrapper_calls(text: str, wrappers: dict[str, tuple[int, str]]) -> set[str]:
     return out
 
 
-def _helper_calls(calls: str) -> set[str]:
-    """``/api`` + the helper's template + the tail, for each call of a same-file ``${getApiBase()}`` URL helper."""
-    out: set[str] = set()
-    for helper in _URL_HELPER.finditer(calls):
-        name, path = helper.group(1), "/api" + helper.group(2)
-        tails = re.findall(rf"\$\{{{name}\(\)\}}(/[^`'\"\s]*)?", calls)
-        bare = re.search(rf"\(\s*{name}\(\)\s*[,)]", calls)
-        out.update(path + tail for tail in tails)
-        out.update([path] if bare else [])
-    return out
-
-
 def _call_text(rel: str, code: str, script: str) -> str:
     """The text every call form is read from: *script* (comments stripped), plus a ``.vue`` template's markup without
     its ``<!-- -->`` comments, where a handler may make a call (#20910)."""
     if not rel.endswith(".vue"):
         return script
     return script + "\n" + strip_html_comments(SCRIPT_BODY.sub("", code))
+
+
+def prepared_text(rel: str, text: str) -> tuple[dict[str, str], str, str]:
+    """``(receivers, script, calls)`` of one file: its clients, its code sans comments, the text calls are read from."""
+    receivers = _receivers(rel, text)
+    lines = ["" if (ln.lstrip()[:2] in _COMMENT_PREFIXES or ln.strip() == "*") else ln for ln in text.splitlines()]
+    code = _inline_constants(lines)
+    script = frontend_code_text(rel, code)
+    return receivers, script, _call_text(rel, code, script)
 
 
 def _file_calls(rel: str, text: str) -> set[str]:
@@ -325,15 +306,10 @@ def _file_calls(rel: str, text: str) -> set[str]:
     call (#20910). The call is matched across the whole text, so a call whose path sits on the line after
     ``client.post<T>(`` is seen (``_PATH`` already allows the newline).
     """
-    receivers = _receivers(rel, text)
+    receivers, script, calls = prepared_text(rel, text)
     pattern, out = _site_pattern(receivers), set[str]()
-    lines = ["" if (ln.lstrip()[:2] in _COMMENT_PREFIXES or ln.strip() == "*") else ln for ln in text.splitlines()]
-    code = _inline_constants(lines)
-    script = frontend_code_text(rel, code)
-    calls = _call_text(rel, code, script)
     out.update(receivers[m.group(1)] + m.group(2) for m in pattern.finditer(calls) if m.group(2) != "/api")
     out.update(_wrapper_calls(calls, _wrappers(script, receivers)))
-    out.update(_helper_calls(calls))
     if rel.startswith(_SLM_ROOT):
         out.update("/api" + suffix for suffix in _SLM_BASE_CALL.findall(calls))
     return {c for c in out if not c.startswith("/api/api/")}

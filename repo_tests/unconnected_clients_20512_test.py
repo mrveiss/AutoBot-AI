@@ -277,21 +277,44 @@ _HELPER = "const plantedUrl = (): string => `${getApiBase()}/planted`\n"
 @pytest.mark.parametrize(
     ("label", "body", "connected"),
     [
-        ("a helper call with a path tail", _HELPER + "api.get(`${plantedUrl()}/orphan`)\n", True),
-        ("a helper call with a templated tail", _HELPER + "api.get(`${plantedUrl()}/${id}`)\n", True),
+        ("a helper call with a path tail", _HELPER + "apiClient.get(`${plantedUrl()}/orphan`)\n", True),
+        (
+            "a typed helper call, tail on the next line",
+            _HELPER + "apiClient.get<X>(\n  `${plantedUrl()}/orphan`\n)\n",
+            True,
+        ),
         (
             "a bare helper call handed to a client",
-            "const h = () => `${getApiBase()}/planted/orphan`\napi.get(h())\n",
+            "const h = () => `${getApiBase()}/planted/orphan`\napiClient.get(h())\n",
+            True,
+        ),
+        (
+            "rawRequest with the route's method",
+            _HELPER + "apiClient.rawRequest(`${plantedUrl()}/orphan`, { method: 'GET' })\n",
             True,
         ),
         ("a helper never called", _HELPER + "const x = 1\n", False),
-        ("a call of a helper declared in another file", "api.get(`${plantedUrl()}/orphan`)\n", False),
-        ("a helper call in a comment", _HELPER + "// api.get(`${plantedUrl()}/orphan`)\n", False),
-        ("a helper to another prefix", _HELPER + "api.get(`${otherUrl()}/orphan`)\n", False),
+        ("a call of a helper declared in another file", "apiClient.get(`${plantedUrl()}/orphan`)\n", False),
+        ("a helper call in a comment", _HELPER + "// apiClient.get(`${plantedUrl()}/orphan`)\n", False),
+        ("a helper to another prefix", _HELPER + "apiClient.get(`${otherUrl()}/orphan`)\n", False),
+        ("a console.log, not a client call", _HELPER + "console.log(`${plantedUrl()}/orphan`)\n", False),
+        ("a fetch, not a recognised client", _HELPER + "fetch(`${plantedUrl()}/orphan`)\n", False),
+        ("another method (the route is GET)", _HELPER + "apiClient.delete(`${plantedUrl()}/orphan`)\n", False),
+        (
+            "rawRequest with another method",
+            _HELPER + "apiClient.rawRequest(`${plantedUrl()}/orphan`, { method: 'PUT' })\n",
+            False,
+        ),
+        ("a placeholder segment against a literal route", _HELPER + "apiClient.get(`${plantedUrl()}/${id}`)\n", False),
     ],
 )
 def test_a_route_reached_only_through_a_same_file_url_helper_counts_as_connected(
     tmp_path: Path, label: str, body: str, connected: bool
 ) -> None:
-    """#21307: ``${helper()}/...`` is read as the helper's ``${getApiBase()}/...`` template plus the tail."""
+    """#21307: ``${helper()}/...`` in a client call is the helper's template + tail, by method and literal segment."""
     assert (_KEY not in _fired(tmp_path, {**_PLANTED, f"{_MAIN}/a.ts": body})) is connected, label
+
+
+def test_a_placeholder_segment_reaches_a_parameter_route(tmp_path: Path) -> None:
+    files = {**_PARAM_ROUTE, f"{_MAIN}/a.ts": _HELPER + "apiClient.get(`${plantedUrl()}/${id}/x`)\n"}
+    assert "route:autobot-backend/api/planted_param.py:GET /{provider}/x" not in _fired(tmp_path, files)
