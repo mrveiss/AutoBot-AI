@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.human_decider import require_interactive_human
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.singleton_factory import lazy_singleton
@@ -58,11 +59,7 @@ from ..models.enums import (
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from ..services.accessors import get_attachment_service, get_handoff_service, get_work_product_service
 from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
-from ..services.attachment_service import (
-    AttachmentNotFound,
-    AttachmentService,
-    AttachmentTooLarge,
-)
+from ..services.attachment_service import AttachmentNotFound, AttachmentService, AttachmentTooLarge
 from ..services.company_os.errors import CompanyOsNotFound
 from ..services.handoff import HandoffAttachment, HandoffNotAllowed, HandoffNotAuthorized, HandoffService
 from ..services.work_item_service import (
@@ -74,7 +71,7 @@ from ..services.work_item_service import (
 )
 from ._common import FenceSafeAgentId
 from ._common import actor_id as verified_user_id
-from ._common import http_refusal, moving_as, refused_transition, write_refusal
+from ._common import moving_as, refused_transition, write_refusal
 from ._handoff_identity import handing_off_agent, member_reviewer
 from ._release_request import ReleaseRequest
 from .activity import ActivityLogEntry, ActivityLogResponse

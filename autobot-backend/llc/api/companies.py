@@ -40,10 +40,10 @@ from api.user_management.dependencies import (
     get_current_user,
     require_org_context,
 )
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
-from llc.api._common import http_refusal
 from llc.api.company_member_schemas import CompanyMembersResponse
 from llc.deps import assert_company_access, get_session, log_unexpected, logged_server_error, service_dep
 from llc.kb.collections import KbCollectionManager, company_id_of

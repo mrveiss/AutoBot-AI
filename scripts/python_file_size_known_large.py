@@ -85,11 +85,11 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 794,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 647,
-    "autobot-backend/api/conversation_files.py": 916,
+    "autobot-backend/api/conversation_files.py": 915,
     "autobot-backend/api/database_mcp.py": 1056,
     "autobot-backend/api/development_speedup.py": 611,
     "autobot-backend/api/enterprise_features.py": 698,
-    "autobot-backend/api/envelope_secrets.py": 608,
+    "autobot-backend/api/envelope_secrets.py": 605,
     "autobot-backend/api/files.py": 1241,
     "autobot-backend/api/filesystem_mcp.py": 1954,
     "autobot-backend/api/git_mcp.py": 1336,
@@ -190,7 +190,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 626,
-    "autobot-backend/conversation_file_manager.py": 1193,
+    "autobot-backend/conversation_file_manager.py": 1187,
     "autobot-backend/conversation_file_manager_init_test.py": 729,
     "autobot-backend/desktop_streaming_manager.py": 1419,
     "autobot-backend/enterprise_feature_manager.py": 955,
@@ -237,7 +237,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/companies.py": 1594,
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1211,
-    "autobot-backend/llc/api/work_items.py": 1284,  # #18978: 1302 -> 1287; #19582: comment wake moved into the service
+    "autobot-backend/llc/api/work_items.py": 1253,  # #21559: was 1284; #18978: 1302 -> 1287; #19582: wake moved
     "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 979,  # #19240 (run key moved out)
     "autobot-backend/llc/services/template.py": 642,
     "autobot-backend/llc/services/work_item_service.py": 995,  # #18978: -19; #20102, #20930: code moved out
