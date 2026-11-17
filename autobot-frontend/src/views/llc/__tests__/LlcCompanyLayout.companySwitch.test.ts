@@ -338,9 +338,12 @@ describe('the company layout remounts its routed view on a company switch (#2150
     expect(m.wrapper.find('[data-testid="executor-rollup-unavailable"]').exists()).toBe(true)
     expect(m.wrapper.text()).not.toContain('Alpha')
     expect(canvasIds(m).filter((id) => id.startsWith('process:') || id.startsWith('tool:'))).toEqual([])
-    const attach = m.wrapper.findComponent(OrgProcessAttachForm)
-    expect(attach.props('roles')).toEqual([])
-    expect(attach.props('rolesFailed')).toBe(true)
+    // The attach forms are mutation controls shown only to a viewer known to manage the company
+    // (`v-if="canManageCompany"`). The new company's members request failed, so the viewer's standing is
+    // unknown: the view says so and offers no form -- and so no role list, least of all the previous company's.
+    expect(m.wrapper.find('[data-testid="org-standing-unavailable"]').exists()).toBe(true)
+    expect(m.wrapper.findComponent(OrgProcessAttachForm).exists()).toBe(false)
+    expect(m.wrapper.text()).not.toContain(DATA.c1.role)
   })
 
   it('remounts an ordinary view, keeps an opted-out view and never remounts the sidebar', async () => {
