@@ -25,6 +25,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from security.upload_filename_policy import require_safe_upload
 
@@ -34,7 +35,6 @@ from ._common import (
     agent_context,
     agent_node_uuid,
     assert_item_in_company,
-    http_refusal,
     parse_work_item_id,
     refused_transition,
 )

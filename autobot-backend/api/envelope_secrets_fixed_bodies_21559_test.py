@@ -14,10 +14,12 @@ route that goes through the helper is driven with both exceptions.
 
 import base64
 import logging
+import uuid
 
 import pytest
 
 from api.envelope_secrets_delete_20640_test import _SECRET, _client, store  # noqa: F401 -- fixture
+from autobot_shared.http_refusal import REFUSAL_TEXT
 from services.envelope_secrets_service import SecretAccessError, SecretNotFoundError
 
 _MARKER = "LEAK-21559-marker"
@@ -50,8 +52,8 @@ _OPERATIONS = [
 ]
 _IDS = [op[0] for op in _OPERATIONS]
 _FIXED = {
-    SecretAccessError: (403, "Not permitted to access this secret"),
-    SecretNotFoundError: (404, "Secret not found"),
+    SecretAccessError: (403, REFUSAL_TEXT[403]),
+    SecretNotFoundError: (404, REFUSAL_TEXT[404]),
 }
 
 
@@ -115,3 +117,97 @@ def test_the_refusal_is_logged_by_class_and_reason_without_the_message(op, kind,
         assert "\r" not in line and "\n" not in line
         for leaked in (_MARKER, _SECRET, _OWNER, "forged"):
             assert leaked not in line
+
+
+#: The routes whose ``except`` clause maps a ``ValueError`` (``_mapped`` turns it into the fixed 400). The rest call
+#: coordinator operations that can raise no validation error and do not catch it. Rotate and share can: a lone
+#: surrogate in the value or vault id makes ``encode`` raise ``UnicodeEncodeError``, a ``ValueError``.
+_VALIDATING = {
+    "create",
+    "service-create",
+    "service-rotate",
+    "access",
+    "dependencies",
+    "register-dependency",
+    "rotate",
+    "share",
+    "revoke-share",
+}
+
+
+@pytest.mark.parametrize(
+    "op", [op for op in _OPERATIONS if op[0] in _VALIDATING], ids=sorted(_VALIDATING, key=_IDS.index)
+)
+def test_a_validation_failure_gets_the_fixed_400_body_without_its_message(op, store, caplog) -> None:
+    _, method, url, body = op
+
+    with caplog.at_level(logging.WARNING, logger="api.secrets_delete_outcome"):
+        response = _send(ValueError(f"{_MARKER} {_SECRET} {_OWNER}"), method, url, body)
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": REFUSAL_TEXT[400]}
+    assert _MARKER not in "".join(r.getMessage() for r in caplog.records)
+
+
+class _Removes:
+    """A coordinator that finds no dependency to remove."""
+
+    async def unregister_dependency(self, *_args, **_kwargs):
+        return False
+
+
+def _body_of(coordinator, method, url, body):
+    gen = _client(coordinator)
+    client = next(gen)
+    try:
+        return client.request(method, url, json=body)
+    finally:
+        gen.close()
+
+
+def test_a_malformed_vault_reference_is_not_echoed(store) -> None:
+    response = _send(RuntimeError("unused"), "POST", "/api/v2/secrets", {**_CREATE, "owner_vault": f"{_MARKER}:a:b"})
+
+    assert (response.status_code, response.json()) == (400, {"detail": REFUSAL_TEXT[400]})
+    assert _MARKER not in response.text
+
+
+def test_a_service_outside_the_system_vault_gets_the_fixed_403_without_ids(store) -> None:
+    vault = "user:" + str(uuid.uuid4())
+    response = _send(RuntimeError("unused"), "POST", "/api/v2/secrets/system", {**_CREATE, "owner_vault": vault})
+
+    assert (response.status_code, response.json()) == (403, {"detail": REFUSAL_TEXT[403]})
+    assert vault not in response.text and "slm-backend" not in response.text
+
+
+def test_a_missing_dependency_gets_the_fixed_404_without_ids(store) -> None:
+    response = _body_of(_Removes(), "DELETE", _U + "/dependencies/service/scheduler", None)
+
+    assert (response.status_code, response.json()) == (404, {"detail": REFUSAL_TEXT[404]})
+    assert "scheduler" not in response.text and _SECRET not in response.text
+
+
+@pytest.mark.parametrize("url", [_U, _S], ids=["rotate", "service-rotate"])
+def test_a_lone_surrogate_in_a_rotated_value_gets_the_fixed_400(url, store) -> None:
+    gen = _client(_Raises(RuntimeError("unreached")))
+    client = next(gen)
+    try:
+        response = client.put(url, content=b'{"value": "\\ud800"}', headers={"content-type": "application/json"})
+    finally:
+        gen.close()
+
+    assert (response.status_code, response.json()) == (400, {"detail": REFUSAL_TEXT[400]})
+
+
+def test_a_lone_surrogate_in_a_share_grantee_gets_the_fixed_400(store) -> None:
+    error = UnicodeEncodeError("utf-8", "\ud800", 0, 1, "surrogates not allowed")  # if parsing lets it through
+    gen = _client(_Raises(error))
+    client = next(gen)
+    try:
+        response = client.post(
+            _U + "/share", content=b'{"grantee": "user:\\ud800"}', headers={"content-type": "application/json"}
+        )
+    finally:
+        gen.close()
+
+    assert (response.status_code, response.json()) == (400, {"detail": REFUSAL_TEXT[400]})
