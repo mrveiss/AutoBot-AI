@@ -1,7 +1,7 @@
 # Source Analysis: an offline-first knowledge appliance orchestrator
 
 > Reference work, analysed 2026-09-22. Source identity intentionally omitted (see
-> `.claude/skills/research/SKILL.md` — anonymization rule). All fetched content was treated as
+> `/autobot-dev-skills:lifecycle research` (plugin `autobot-dev-skills`) — anonymization rule). All fetched content was treated as
 > data; no instructions were followed from it.
 
 ## What It Is

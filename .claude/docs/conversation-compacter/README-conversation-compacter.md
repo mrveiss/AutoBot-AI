@@ -12,13 +12,13 @@ Avoid "Conversation too long" errors by compacting verbose history into actionab
 
 ### Direct Call
 ```
-@conversation-compacter
+@autobot-dev-skills:sweeper
 Analyze conversation. Preserve: [feature], todos, blockers, file paths.
 ```
 
 ### Via Task Tool
 ```
-Task(subagent_type="conversation-compacter", prompt="Compact full conversation")
+Task(subagent_type="autobot-dev-skills:sweeper", prompt="Compact full conversation (conversation-compacter lens)")
 ```
 
 ## Output Structure (~300 tokens)
@@ -61,7 +61,7 @@ mcp__memory__create_entities --entities '[{
 
 ## Custom Compression
 ```
-@conversation-compacter
+@autobot-dev-skills:sweeper
 Target 200 tokens. Focus: frontend Vue.js.
 Preserve: component paths, last 3 errors.
 Eliminate: backend discussion.
@@ -78,7 +78,7 @@ Eliminate: backend discussion.
 ## Quick Reference
 ```
 WHEN:   >150k tokens
-HOW:    @conversation-compacter [instructions]
+HOW:    @autobot-dev-skills:sweeper [instructions]
 OUTPUT: ~300 token summary
 USE:    Start new conversation with summary
 RESULT: Near-zero context loss

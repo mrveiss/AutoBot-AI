@@ -136,7 +136,7 @@ and how findings are structured, deduplicated and exported. The runtime tooling 
 ## AutoBot Comparison: the reference work → AutoBot (code-analysis suite angle)
 
 Audit method: I grepped and read `.claude/skills/{secreview,bugfix}`, the `review-fleet`
-plugin skill (in the `AutoBot-AI-Claude-dev-skills` repo), `.claude/agents/security-auditor.md`,
+plugin skill (in the `AutoBot-AI-Claude-dev-skills` repo), plugin `autobot-dev-skills` `skills/review/references/security-auditor.md`,
 `docs/developer/{MEASUREMENT_DISCIPLINE,CLAUDE_REVIEW,CLAUDE_RULES,CODE_REVIEW_HARDENING,CODEQL_SUPPRESSION}.md`,
 `.github/workflows/{security,codeql,ai-security-review}.yml` and `pipeline-scripts/security_scan_gate.py`.
 I then searched open and closed issues for each pattern.

@@ -9,7 +9,7 @@ Token usage: 150000/200000 → Time to compact
 
 ### 1. Call Agent
 ```
-@conversation-compacter
+@autobot-dev-skills:sweeper
 Summarize. Preserve: [current task], todos, blockers, file paths.
 ```
 
@@ -36,7 +36,7 @@ Paste: "Continue from previous:\n\n[summary]"
 
 ## Custom Compression
 ```
-@conversation-compacter
+@autobot-dev-skills:sweeper
 Target 200 tokens. Focus: frontend Vue.js, component paths.
 Eliminate: backend discussion.
 ```
@@ -58,5 +58,5 @@ mcp__memory__create_entities --entities '[{
 | Can't continue | Check file paths, todos, blockers included |
 
 ## Files
-- Agent: `.claude/agents/conversation-compacter.md`
+- Agent: `autobot-dev-skills:sweeper` (lens `/autobot-dev-skills:engineering conversation-compacter`, shipped by the plugin)
 - Guide: `.claude/docs/conversation-compacter/`

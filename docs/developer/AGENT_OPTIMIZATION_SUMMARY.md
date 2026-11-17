@@ -1,5 +1,12 @@
 # Agent Optimization Implementation Summary
 
+> **Moved (#21718, #21719):** the dev agent definitions this tool optimizes no longer live in
+> this repository. They ship from the `autobot-dev-skills` plugin as 7 role routers
+> (`autobot-dev-skills:<role>`) with their domain content in `engineering`/`review` lens
+> references, so `.claude/agents/` does not exist here and the default `--agent-dir` is empty.
+> The sections below describe the tool as built; paths under `.claude/agents/` refer to the
+> former layout.
+
 ## Overview
 
 Successfully implemented a zero-risk agent optimization system that achieves **39.3% token reduction** without modifying any agent files.
