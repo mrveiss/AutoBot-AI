@@ -119,7 +119,14 @@ def test_the_refusal_is_logged_by_class_and_reason_without_the_message(op, kind,
             assert leaked not in line
 
 
-@pytest.mark.parametrize("op", _OPERATIONS, ids=_IDS)
+#: The routes whose ``except`` clause maps a ``ValueError`` (``_mapped`` turns it into the fixed 400). The other
+#: routes call coordinator operations that raise no validation error and do not catch it: it stays a 500 there.
+_VALIDATING = {"create", "service-create", "access", "dependencies", "register-dependency", "revoke-share"}
+
+
+@pytest.mark.parametrize(
+    "op", [op for op in _OPERATIONS if op[0] in _VALIDATING], ids=sorted(_VALIDATING, key=_IDS.index)
+)
 def test_a_validation_failure_gets_the_fixed_400_body_without_its_message(op, store, caplog) -> None:
     _, method, url, body = op
 
