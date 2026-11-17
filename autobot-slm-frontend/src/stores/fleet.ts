@@ -231,9 +231,12 @@ export const useFleetStore = defineStore('fleet', () => {
       // A later page failed (#21584): keep what was read and record that the list is not the fleet.
       // That is a result with a flag (the shell tells the operator), not a failure the 9 callers handle.
       incomplete.value = incompleteOf(err)
+      if (err instanceof PartialListError) {
+        nodes.value = toNodeMap(err.items as SLMNode[]) // usable data: `incomplete` is the signal, not `error`
+        return
+      }
       error.value = err instanceof Error ? err.message : 'Failed to fetch nodes'
-      if (!(err instanceof PartialListError)) throw err
-      nodes.value = toNodeMap(err.items as SLMNode[])
+      throw err
     } finally {
       isLoading.value = false
     }

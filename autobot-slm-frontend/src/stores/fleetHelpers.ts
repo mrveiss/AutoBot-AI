@@ -47,11 +47,13 @@ export interface NodeListIncomplete {
   read: number
   /** Nodes the server reports, or null when it reported none. */
   total: number | null
+  /** Why the rest could not be read. */
+  reason: string
 }
 
 export const toNodeMap = (list: SLMNode[]): Map<string, SLMNode> => new Map(list.map((n) => [n.node_id, n]))
 
 /** `{read, total}` for a partial read, null for anything else. */
 export function incompleteOf(err: unknown): NodeListIncomplete | null {
-  return err instanceof PartialListError ? { read: err.items.length, total: err.total } : null
+  return err instanceof PartialListError ? { read: err.items.length, total: err.total, reason: err.reason } : null
 }

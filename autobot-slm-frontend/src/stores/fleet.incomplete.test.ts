@@ -30,7 +30,8 @@ describe('fleet store incomplete node list (#21584)', () => {
     await expect(store.fetchNodes()).resolves.toBeUndefined()
 
     expect(store.nodeList.map((n) => n.node_id)).toEqual(['n1', 'n2'])
-    expect(store.incomplete).toEqual({ read: 2, total: 5 })
+    expect(store.incomplete).toEqual({ read: 2, total: 5, reason: '504' })
+    expect(store.error).toBeNull() // usable data beside a failure banner would contradict itself
     expect(store.isLoading).toBe(false)
   })
 

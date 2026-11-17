@@ -10,7 +10,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { reactive, nextTick } from 'vue'
 
 const showToast = vi.fn()
-const store = reactive({ incomplete: null as { read: number; total: number | null } | null, error: null as string | null })
+type Shortfall = { read: number; total: number | null; reason: string }
+const store = reactive({ incomplete: null as Shortfall | null })
 
 vi.mock('@/stores/fleet', () => ({ useFleetStore: () => store }))
 vi.mock('vue-i18n', () => ({
@@ -24,7 +25,6 @@ describe('useFleetIncompleteNotice (#21584)', () => {
   beforeEach(() => {
     showToast.mockReset()
     store.incomplete = null
-    store.error = null
   })
 
   it('a complete list shows no notice', async () => {
@@ -35,36 +35,35 @@ describe('useFleetIncompleteNotice (#21584)', () => {
 
   it('a partial list says how many of how many nodes are shown, once', async () => {
     useFleetIncompleteNotice()
-    store.error = 'Loaded 100 of 250: 504'
-    store.incomplete = { read: 100, total: 250 }
+    store.incomplete = { read: 100, total: 250, reason: '504' }
     await nextTick()
 
     expect(showToast).toHaveBeenCalledTimes(1)
     const [message, kind] = showToast.mock.calls[0] as [string, string]
-    expect(message).toBe('fleetOverview.incompleteList:{"loaded":100,"total":250,"message":"Loaded 100 of 250: 504"}')
+    expect(message).toBe('fleetOverview.incompleteList:{"loaded":100,"total":250,"message":"504"}')
     expect(kind).toBe('error')
 
-    store.incomplete = { read: 100, total: 250 } // the next poll finds the same shortfall
+    store.incomplete = { read: 100, total: 250, reason: '504' } // the next poll finds the same shortfall
     await nextTick()
     expect(showToast).toHaveBeenCalledTimes(1)
   })
 
   it('a different shortfall, or one after a recovery, is announced again', async () => {
     useFleetIncompleteNotice()
-    store.incomplete = { read: 100, total: 250 }
+    store.incomplete = { read: 100, total: 250, reason: '504' }
     await nextTick()
-    store.incomplete = { read: 200, total: 250 }
+    store.incomplete = { read: 200, total: 250, reason: '504' }
     await nextTick()
     store.incomplete = null
     await nextTick()
-    store.incomplete = { read: 100, total: 250 }
+    store.incomplete = { read: 100, total: 250, reason: '504' }
     await nextTick()
     expect(showToast).toHaveBeenCalledTimes(3)
   })
 
   it('an unknown total is worded, not printed as null', async () => {
     useFleetIncompleteNotice()
-    store.incomplete = { read: 100, total: null }
+    store.incomplete = { read: 100, total: null, reason: '504' }
     await nextTick()
     expect(showToast.mock.calls[0][0]).toContain('"total":"fleetOverview.incompleteTotalUnknown:{}"')
   })

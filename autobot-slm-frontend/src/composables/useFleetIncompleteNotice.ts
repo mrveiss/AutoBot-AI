@@ -35,7 +35,7 @@ export function useFleetIncompleteNotice(): void {
         t('fleetOverview.incompleteList', {
           loaded: incomplete.read,
           total: incomplete.total ?? t('fleetOverview.incompleteTotalUnknown'),
-          message: fleetStore.error ?? '',
+          message: incomplete.reason,
         }),
         'error',
       )
