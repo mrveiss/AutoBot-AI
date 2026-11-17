@@ -54,6 +54,8 @@ export const useFleetStore = defineStore('fleet', () => {
   const lastRefresh = ref<Date | null>(null)
   /** Set when the node list held is not the whole fleet (#21584); null when it is. */
   const incomplete = ref<NodeListIncomplete | null>(null)
+  /** Why the last node-list read failed outright; null after a read that succeeded, empty or not. */
+  const nodesError = ref<string | null>(null)
 
   /** Currently selected node for detail view */
   const selectedNode = ref<SLMNode | null>(null)
@@ -221,7 +223,7 @@ export const useFleetStore = defineStore('fleet', () => {
    */
   async function fetchNodes(): Promise<void> {
     isLoading.value = true
-    error.value = null
+    error.value = nodesError.value = null
 
     try {
       nodes.value = toNodeMap(await api.getNodes())
@@ -235,7 +237,7 @@ export const useFleetStore = defineStore('fleet', () => {
         nodes.value = toNodeMap(err.items as SLMNode[]) // usable data: `incomplete` is the signal, not `error`
         return
       }
-      error.value = err instanceof Error ? err.message : 'Failed to fetch nodes'
+      error.value = nodesError.value = err instanceof Error ? err.message : 'Failed to fetch nodes'
       throw err
     } finally {
       isLoading.value = false
@@ -895,6 +897,7 @@ export const useFleetStore = defineStore('fleet', () => {
     error,
     lastRefresh,
     incomplete,
+    nodesError,
     selectedNode,
     nodeEvents,
     certificateStatus,

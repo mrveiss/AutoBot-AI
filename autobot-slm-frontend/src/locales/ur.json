@@ -1054,6 +1054,7 @@
     "fleetViewTabsAria": "Fleet view tabs",
     "incompleteList": "Showing {loaded} of {total} nodes. The rest could not be loaded: {message}",
     "incompleteTotalUnknown": "an unknown number of",
+    "loadFailed": "Could not load the node list: {message}",
     "infrastructure": "Infrastructure",
     "infrastructureSetupAria": "Infrastructure setup",
     "lastSeen": "Last seen:",

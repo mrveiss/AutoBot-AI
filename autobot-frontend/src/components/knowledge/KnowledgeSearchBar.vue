@@ -236,7 +236,8 @@ function onClear() {
 }
 
 .search-button:hover:not(:disabled) {
-  filter: brightness(1.1);
+  /* keep the fill so --text-on-primary contrast holds on every accent */
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text-on-primary) 35%, transparent);
 }
 
 /* Filters disclosure */

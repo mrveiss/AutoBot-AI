@@ -97,7 +97,9 @@
 
 .user-message .message-text :deep(pre) {
   @apply p-3 rounded-lg overflow-x-auto my-1.5;
-  background: rgba(0, 0, 0, 0.2);
+  /* no overlay: the bubble fill is the contrast base for --text-on-primary */
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-on-primary) 40%, transparent);
   color: var(--text-on-primary);
 }
 
