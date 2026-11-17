@@ -97,7 +97,9 @@ def validate_key_namespace(key: str, is_admin: bool, access: ToolAccess) -> tupl
         return True, None
     if access == ToolAccess.SCOPED_WRITE and not is_admin:
         if not key.startswith(AGENT_NAMESPACE_PREFIX):
-            return False, (f"Write denied: key '{key}' is outside the allowed namespace '{AGENT_NAMESPACE_PREFIX}*'")
+            return False, (
+                f"Write denied: key '{key}' is outside the " f"allowed namespace '{AGENT_NAMESPACE_PREFIX}*'"
+            )
     return True, None
 
 
@@ -106,8 +108,18 @@ def validate_key_namespace(key: str, is_admin: bool, access: ToolAccess) -> tupl
 # quarantine (#21605). Names, resolved to numbers so an alias or an env override follows.
 ADMIN_ONLY_DATABASES = frozenset({"knowledge", "sessions", "agents"})
 
-# Tool arguments that name a key (or a key glob) the call reads.
+# Tool arguments that name a key (or a key glob) the call reads, and the one naming a search index.
 _READ_KEY_ARGS = ("key", "pattern")
+INDEX_ARG = "index_name"
+# Non-admins may query only agent-namespace indexes (default-deny); the tools' own default is inside it.
+AGENT_INDEX_PREFIX = "idx:agent_"
+SCOPED_READ_ARGS = frozenset((*_READ_KEY_ARGS, INDEX_ARG))
+
+
+def is_agent_index(args: dict) -> bool:
+    """True when the call names no index (the tool default is an agent index) or an agent-namespace one."""
+    name = args.get(INDEX_ARG)
+    return name is None or str(name).startswith(AGENT_INDEX_PREFIX)
 
 
 def _database_number(name: str) -> int | None:
@@ -142,6 +154,8 @@ def validate_read_scope(args: dict, is_admin: bool) -> tuple[bool, str | None]:
                 False,
                 f"Read denied: key '{key}' is outside the allowed namespace '{AGENT_NAMESPACE_PREFIX}*'",
             )
+    if not is_agent_index(args):
+        return False, f"Read denied: index '{args[INDEX_ARG]}' is outside the allowed prefix '{AGENT_INDEX_PREFIX}*'"
     return True, None
 
 

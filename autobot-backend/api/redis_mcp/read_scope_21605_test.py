@@ -8,15 +8,15 @@ The guard class at the bottom fails when a tool is granted to non-admins with a 
 argument but the router does not run the read-scope check before dispatch.
 """
 
-import inspect
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
 
 from api.redis_mcp import router as router_module
-from api.redis_mcp.rbac import TOOL_ACCESS_MATRIX, ToolAccess, validate_read_scope
-from api.redis_mcp.router import RedisToolCallRequest, call_redis_mcp_tool
+from api.redis_mcp.rbac import SCOPED_READ_ARGS, TOOL_ACCESS_MATRIX, ToolAccess, validate_read_scope
+from api.redis_mcp.router import RedisToolCallRequest, call_redis_mcp_tool, redis_mcp_tool_endpoint
+from api.redis_mcp.tools import get_all_tools
 
 USER = {"user_id": "u1", "role": "user"}
 ADMIN = {"user_id": "a1", "role": "admin"}
@@ -105,28 +105,80 @@ async def test_admin_read_of_an_ordinary_database_is_not_audited():
     audit.assert_not_awaited()
 
 
+VECTOR_TOOLS = ("redis_vector_search", "redis_hybrid_search", "redis_vector_index_info")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", VECTOR_TOOLS)
+async def test_non_admin_index_outside_agent_prefix_is_403_and_never_read(tool):
+    handler = AsyncMock()
+    with patch.dict(router_module._TOOL_HANDLERS, {tool: handler}):
+        with pytest.raises(HTTPException) as exc:
+            await call_redis_mcp_tool(
+                RedisToolCallRequest(tool_name=tool, arguments={"index_name": "idx:knowledge"}), USER
+            )
+    assert exc.value.status_code == 403
+    handler.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", VECTOR_TOOLS)
+async def test_non_admin_default_and_agent_index_are_allowed(tool):
+    for args in ({}, {"index_name": "idx:agent_memory"}):
+        out, handler = await _call(USER, tool, args)
+        assert out == {"ok": True}
+        handler.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_admin_read_of_a_non_agent_index_is_audited():
+    audit = AsyncMock(return_value=True)
+    with patch("knowledge.root_read.audit_admin_read", audit):
+        await _call(ADMIN, "redis_vector_search", {"index_name": "idx:knowledge"})
+    audit.assert_awaited_once()
+    assert audit.await_args.args[1]["index"] == "idx:knowledge"
+
+
+@pytest.mark.asyncio
+async def test_per_tool_endpoint_enforces_the_read_scope_before_the_handler():
+    """Behavioural: the registry route /mcp/{tool} reaches the same check, and the handler never runs."""
+    handler = AsyncMock()
+    with patch.dict(router_module._TOOL_HANDLERS, {"redis_hgetall": handler}):
+        with pytest.raises(HTTPException) as exc:
+            await redis_mcp_tool_endpoint("redis_hgetall", RedisToolCallRequest(arguments={"key": FACT}), USER)
+    assert exc.value.status_code == 403
+    handler.assert_not_awaited()
+
+
+def _schema_args(tool) -> set[str]:
+    return set((tool.input_schema or {}).get("properties", {}))
+
+
 class TestRawReadGuard:
-    """A raw tool granted to non-admins must pass through the read-scope check (#21605 AC3)."""
+    """Derived from the tools' declared input schemas, so a new tool is covered without editing this file (#21605, #21740).
 
-    def test_router_runs_the_read_scope_check_before_dispatch(self):
-        source = inspect.getsource(router_module.call_redis_mcp_tool)
-        assert source.index("_enforce_read_scope") < source.index("handler(args)")
+    Limit: it recognises a key-bearing argument by name (``key``, ``keys``, ``pattern``, ``index_name`` or any
+    argument containing ``key``/``pattern``/``index``); a differently named argument must be added to
+    ``SCOPED_READ_ARGS`` by whoever adds the tool.
+    """
 
-    def test_every_user_readable_key_tool_is_confined(self):
-        granted = [t for t, (user, _) in TOOL_ACCESS_MATRIX.items() if user is ToolAccess.READ]
-        for tool in set(granted) & set(KEY_TOOLS):
-            ok, _ = validate_read_scope(KEY_TOOLS[tool], is_admin=False)
-            assert not ok, f"{tool} is readable by non-admins outside the agent namespace"
+    def _user_readable_tools(self):
+        return [t for t in get_all_tools() if TOOL_ACCESS_MATRIX[t.name][0] is ToolAccess.READ]
 
-    def test_every_handler_taking_a_key_argument_is_covered_by_the_scope_check(self):
-        """A new tool whose wrapper reads args['key'|'pattern'] is confined by name of the argument."""
-        from api.redis_mcp.rbac import _READ_KEY_ARGS
+    def test_every_key_like_schema_argument_of_a_user_readable_tool_is_scoped(self):
+        for tool in self._user_readable_tools():
+            like = {a for a in _schema_args(tool) if any(w in a for w in ("key", "pattern", "index"))}
+            assert like <= SCOPED_READ_ARGS | {"keys"}, f"{tool.name}: {like - SCOPED_READ_ARGS} not read-scoped"
 
-        for tool, wrapper in router_module._TOOL_HANDLERS.items():
-            used = {
-                a
-                for a in ("key", "keys", "pattern")
-                if f'args["{a}"]' in inspect.getsource(wrapper) or f'args.get("{a}"' in inspect.getsource(wrapper)
-            }
-            if TOOL_ACCESS_MATRIX[tool][0] is ToolAccess.READ:
-                assert used <= set(_READ_KEY_ARGS), f"{tool} reads {used - set(_READ_KEY_ARGS)} outside the scoped args"
+    def test_every_user_readable_key_or_index_tool_is_denied_outside_the_scope(self):
+        for tool in self._user_readable_tools():
+            props = _schema_args(tool)
+            probe = {a: "outside:ns" for a in props & SCOPED_READ_ARGS}
+            if probe:
+                ok, _ = validate_read_scope(probe, is_admin=False)
+                assert not ok, f"{tool.name} is readable by non-admins outside the agent scope"
+
+    def test_every_vector_tool_declares_an_index_argument_that_is_scoped(self):
+        for name in VECTOR_TOOLS:
+            tool = next(t for t in get_all_tools() if t.name == name)
+            assert "index_name" in _schema_args(tool)
