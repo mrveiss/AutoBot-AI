@@ -5001,6 +5001,13 @@
       "error": "Error",
       "noBackendAgents": "No backend agents configured",
       "noSpecializedAgents": "No specialized agents found",
+      "agentsDirMissing": "No Claude Code agents directory was found on this host. Set AUTOBOT_CLAUDE_CONFIG_DIR (or CLAUDE_CONFIG_DIR) to the Claude Code configuration directory.",
+      "tiers": {
+        "tier1_default": "Default tier",
+        "tier2_analysis": "Analysis tier",
+        "tier3_specialized": "Specialized tier",
+        "tier4_orchestrator": "Orchestrator tier"
+      },
       "systemPrompt": "System Prompt",
       "noModel": "no model",
       "defaultModel": "default",

@@ -44,7 +44,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/ai_hardware_accelerator.py": 1034,
     "autobot-backend/api/advanced_control.py": 615,
     "autobot-backend/api/agent.py": 1349,
-    "autobot-backend/api/agent_config.py": 1371,
+    "autobot-backend/api/agent_config.py": 1360,
     "autobot-backend/api/agent_terminal.py": 773,
     "autobot-backend/api/analytics.py": 1269,
     "autobot-backend/api/analytics_architecture.py": 1257,
@@ -121,7 +121,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/orchestration.py": 610,
     "autobot-backend/api/playwright.py": 877,
     "autobot-backend/api/redis_mcp/tools.py": 658,
-    "autobot-backend/api/schemas_agent.py": 2212,
+    "autobot-backend/api/schemas_agent.py": 2160,
     "autobot-backend/api/schemas_analytics.py": 3533,
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3257,
@@ -471,7 +471,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/redis_client.py": 674,
     "autobot_shared/redis_management/connection_manager.py": 1290,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3202,  # splits: #19319, #15501, #19934, #18057
+    "autobot_shared/ssot_config.py": 3201,  # splits: #19319, #15501, #19934, #18057
     "autobot_shared/ssot_config_test.py": 776,
     "autobot_shared/ssot_constants.py": 859,
     "autobot_shared/user_management/team_service.py": 659,
