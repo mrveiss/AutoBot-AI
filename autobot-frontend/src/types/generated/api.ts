@@ -17223,10 +17223,7 @@ export interface paths {
         };
         /**
          * List Specialized Agents
-         * @description List all AutoBot specialized agents from .claude/agents/ (#1794).
-         *
-         *     Returns agent definitions parsed from markdown files including
-         *     name, description, tools, color, model, and category.
+         * @description List the host's Claude Code agents from the configured agents dir (#1794).
          *
          *     Issue #744: Requires admin authentication.
          */
@@ -49476,9 +49473,10 @@ export interface paths {
         };
         /**
          * Export All Conversations
-         * @description Export all conversations as a bulk JSON archive (#1808).
+         * @description Export the caller's conversations as a bulk JSON archive (#1808, #21666).
          *
-         *     Returns a JSON file containing every conversation stored on this instance.
+         *     Returns only the sessions the caller owns. ``all_users=true`` exports every conversation on this
+         *     instance: administrators only, and audited as a ``SESSION_EXPORT`` of scope ``instance``.
          */
         get: operations["export_all_conversations_api_conversations_conversations_export_all_get"];
         put?: never;
@@ -57449,6 +57447,11 @@ export interface components {
             specialized_agents?: {
                 [key: string]: unknown;
             }[];
+            /**
+             * Specialized Available
+             * @default true
+             */
+            specialized_available: boolean;
             /** Summary */
             summary?: {
                 [key: string]: unknown;
@@ -57656,6 +57659,8 @@ export interface components {
             model?: string | null;
             /** Category */
             category?: string | null;
+            /** Tier */
+            tier?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57677,6 +57682,11 @@ export interface components {
             categories?: {
                 [key: string]: unknown;
             };
+            /**
+             * Available
+             * @default true
+             */
+            available: boolean;
             /**
              * Timestamp
              * @default
@@ -174748,7 +174758,10 @@ export interface operations {
     };
     export_all_conversations_api_conversations_conversations_export_all_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Instance-wide export of every user's conversations; admin only */
+                all_users?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -174761,6 +174774,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

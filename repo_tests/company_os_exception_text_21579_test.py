@@ -5,7 +5,7 @@
 """No LLC response is built from exception text (#21579).
 
 An exception's message can hold a driver message, a path or another company's data. A route may show an
-exception's `public_detail` or the fixed text `llc.api._common.http_refusal` chooses; nothing else. The scanner
+exception's `public_detail` or the fixed text `autobot_shared.http_refusal.http_refusal` chooses; nothing else. The scanner
 is `repo_tests/_company_os_exception_text_scan.py`; known sites are in
 `repo_tests/_company_os_exception_text_baseline.py` and may only shrink (docs/developer/RATCHET_BASELINES.md).
 """

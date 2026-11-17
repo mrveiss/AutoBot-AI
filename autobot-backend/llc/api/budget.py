@@ -15,9 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, get_tenant_context, require_org_context
 from autobot_shared.db_session import commit_and_run_post_commit
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
-from llc.api._common import http_refusal
 from llc.config import DEFAULT_BUDGET_LIMIT
 from llc.deps import assert_company_access, load_authorized
 from llc.exceptions import BudgetExhausted, UnpricedModel

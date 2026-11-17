@@ -20,7 +20,7 @@
   `gh api -X POST repos/$REPO/issues/$UMBRELLA/sub_issues -F sub_issue_id=$(gh api repos/$REPO/issues/$NEW -q .id)`
   and every `Depends on:` with `.../issues/$NEW/dependencies/blocked_by -F issue_id=…`, at filing
   time. The `- [ ]` checklist stays — it carries wave grouping and PR refs the native view cannot.
-  Full commands in the `issue` skill, Step 4. Issue *types* are org-only and unavailable here
+  Full commands in `/autobot-dev-skills:lifecycle issue` (Step 4). Issue *types* are org-only and unavailable here
 - For large features (backend + frontend), complete and commit backend fully first
 - Commit completed work incrementally
 - If approaching context limit: stop at phase boundary, commit, add GitHub comment with next steps
@@ -171,7 +171,7 @@ named by alias; the pinned ID for each alias is written only in
 | Sonnet | `sonnet` | deliverables — code, reviews, acceptance criteria, approvals |
 
 Never hand Haiku a deliverable or a judgement that ships. Each agent declares its own tier in
-its `.claude/agents/` definition; an agent with no `model:` inherits the caller's model, which
+its plugin definition (`autobot-dev-skills` agents); an agent with no `model:` inherits the caller's model, which
 is a bug rather than a default.
 
 **Verify what comes back.** A subagent's report is an assertion, not evidence — more so the
@@ -195,10 +195,14 @@ cd .worktrees/issue-XXXX && git branch --unset-upstream
 **Subagent Bash Permission Constraint:**
 Subagents cannot autonomously acquire Bash permission. Run batch file-manipulation and git work in the main session.
 
-**Available Agents:**
-- Implementation: `senior-backend-engineer`, `frontend-engineer`, `database-engineer`, `devops-engineer`, `testing-engineer`, `code-reviewer` (MANDATORY), `documentation-engineer`
-- Analysis: `code-skeptic`, `systems-architect`, `performance-engineer`, `security-auditor`, `ai-ml-engineer`
-- Planning: `project-task-planner`, `project-manager`
+**Available Agents** (plugin `autobot-dev-skills`, invoked as `autobot-dev-skills:<role>`; each role loads its lens through `/autobot-dev-skills:engineering <lens>` or `/autobot-dev-skills:review <lens>`):
+- `senior-developer` — backend, frontend, database, devops, testing, performance, ai-ml, multimodal, refactoring
+- `reviewer` — `/autobot-dev-skills:review code-reviewer` (MANDATORY on every PR), `/autobot-dev-skills:review code-skeptic`, `/autobot-dev-skills:review security-auditor`
+- `planner` — `/autobot-dev-skills:engineering systems-architect`, `/autobot-dev-skills:engineering project-manager`, `/autobot-dev-skills:engineering project-task-planner`, `/autobot-dev-skills:engineering prd-writer`, `/autobot-dev-skills:engineering frontend-designer`
+- `researcher` — `/autobot-dev-skills:lifecycle research-to-issues`, research, adopt hand-off
+- `writer` — `/autobot-dev-skills:engineering documentation-engineer`, `/autobot-dev-skills:engineering content-writer`
+- `sweeper` — `/autobot-dev-skills:engineering repo-sweeper`, `/autobot-dev-skills:engineering conversation-compacter` (read-only)
+- `memory` — `/autobot-dev-skills:engineering memory-monitor`, `/autobot-dev-skills:engineering memory-curator`
 
 ---
 

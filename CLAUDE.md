@@ -54,7 +54,7 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 - **Security reviews are findings-first** — one-line verdict, then a severity/`file:line`/issue/fix table, within 3 tool calls. Verify *after*; never explore before the verdict lands. Skill: `secreview`.
 - **Nothing internal in outward artifacts** — no IPs, hostnames, secrets, tokens, or internal filesystem paths in issues, PRs, comments or logs. Redact to a generic role or node reference.
 - **No cap on open PRs** — finished local work is pushed, never held local-only ([#19397](https://github.com/mrveiss/AutoBot-AI/issues/19397)); landing throughput is governed by merge trains and the CI slots.
-- **Every PR gets a `code-reviewer` pass before merge.**
+- **Every PR gets an `autobot-dev-skills:reviewer` pass before merge** (code-reviewer lens: `/autobot-dev-skills:review code-reviewer`).
 - **Same file ⇒ ONE PR, ONE agent** — check the open PRs touching a file before editing it; batching, append-before-open and the sweep point → [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md#pr-granularity).
 
 ## When rules conflict
@@ -83,7 +83,7 @@ Rules here accumulate; some pull against each other. **Precedence, highest first
 ### Pre-Push Checklist (non-negotiable)
 1. No file exceeds `MAX_LINES` (600, enforced by `check_python_file_size.py`) — split, don't
    raise the ceiling; see [`RATCHET_BASELINES.md`](docs/developer/RATCHET_BASELINES.md).
-2. Run the repo's lint/type-check locally before pushing — don't rely on `/pre-merge-validate`
+2. Run the repo's lint/type-check locally before pushing — don't rely on `/autobot-dev-skills:review pre-merge-validate`
    at review time to catch it first.
 3. Never bypass pre-commit hooks via `core.hooksPath` (`--no-verify` is under **Never violate**).
 
@@ -108,8 +108,9 @@ it in the ledger first) — see the global worktree-mandate exception.
 ## Issue Filing
 
 Search open **and** closed issues (`gh issue list --search "<query>" --state all`) before
-filing — no duplicates. Scrub external vendor/product names from filed content (see the
-`research-to-issues` skill). Link children to their umbrella with native GitHub relationships,
+filing — no duplicates. Scrub external vendor/product names from filed content; the
+`/autobot-dev-skills:lifecycle research-to-issues` skill, run by the `autobot-dev-skills:researcher`
+agent, does this. Link children to their umbrella with native GitHub relationships,
 not just the `- [ ]` checklist — full commands in [`CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md).
 
 ## Essential Patterns

@@ -17,17 +17,19 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_agent import (
-    AgentConfigAllAgentsResponse,
     AgentConfigDetailResponse,
     AgentConfigEnableDisableResponse,
     AgentConfigHealthResponse,
-    AgentConfigListAgentsResponse,
     AgentConfigOverviewResponse,
+    AgentConfigUpdateModelResponse,
+    AgentModelUpdate,
+)
+from api.schemas_agent_config import (
+    AgentConfigAllAgentsResponse,
+    AgentConfigListAgentsResponse,
     AgentConfigSpecializedDetailResponse,
     AgentConfigSpecializedListResponse,
-    AgentConfigUpdateModelResponse,
     AgentConfigUsageResponse,
-    AgentModelUpdate,
 )
 from api.schemas_common import DataResponse
 from api.settings_config import require_settings_admin
@@ -794,7 +796,6 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
         backend_agents.append(await _resolve_agent_entry(agent_id, agent_cfg, config_manager))
 
     healthy_count = sum(1 for a in backend_agents if a["status"] == "connected")
-
     # Include specialized agents in the combined response (#1794)
     from services.specialized_agent_service import SpecializedAgentService
 
@@ -806,6 +807,7 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
         content={
             "agents": backend_agents,
             "specialized_agents": specialized_agents,
+            "specialized_available": spec_service.is_available(),
             "summary": {
                 "total": len(backend_agents),
                 "total_specialized": len(specialized_agents),
@@ -829,27 +831,16 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
 async def list_specialized_agents(
     admin_check: bool = Depends(check_admin_permission),
 ):
-    """List all AutoBot specialized agents from .claude/agents/ (#1794).
-
-    Returns agent definitions parsed from markdown files including
-    name, description, tools, color, model, and category.
+    """List the host's Claude Code agents from the configured agents dir (#1794).
 
     Issue #744: Requires admin authentication.
     """
     from services.specialized_agent_service import SpecializedAgentService
 
-    service = SpecializedAgentService()
-    agents = service.list_agents()
-    categories = service.get_categories_summary(agents)
-
+    payload = SpecializedAgentService().list_payload()
     return JSONResponse(
         status_code=200,
-        content={
-            "agents": agents,
-            "total_count": len(agents),
-            "categories": categories,
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        },
+        content={**payload, "timestamp": datetime.now(tz=timezone.utc).isoformat()},
     )
 
 
