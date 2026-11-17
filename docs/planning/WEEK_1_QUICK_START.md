@@ -280,7 +280,7 @@ curl -X POST https://<backend-ip>:8443/api/files/conversation/upload \
   - Testing engineer: Tasks 1.5, 1.6 (7 hours) - can start after 1.2
 
 - **Day 3:** Code review and validation
-  - Code review by code-reviewer agent
+  - Code review by autobot-dev-skills:reviewer (code-reviewer lens) agent
   - Run comprehensive test suite
   - Fix any issues identified
 

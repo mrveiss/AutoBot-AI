@@ -197,12 +197,12 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 
 **Available Agents** (plugin `autobot-dev-skills`, invoked as `autobot-dev-skills:<role>`; each role loads its lens through `/autobot-dev-skills:engineering <lens>` or `/autobot-dev-skills:review <lens>`):
 - `senior-developer` — backend, frontend, database, devops, testing, performance, ai-ml, multimodal, refactoring
-- `reviewer` — code-reviewer (MANDATORY on every PR), code-skeptic, security-auditor
-- `planner` — systems-architect, project-manager, project-task-planner, prd-writer, frontend-designer
-- `researcher` — research-to-issues, research, adopt hand-off
-- `writer` — documentation-engineer, content-writer
-- `sweeper` — repo-sweeper, conversation-compacter (read-only)
-- `memory` — memory-monitor, memory-curator
+- `reviewer` — lenses: code-reviewer (MANDATORY on every PR), code-skeptic, security-auditor
+- `planner` — lenses: systems-architect, project-manager, project-task-planner, prd-writer, frontend-designer
+- `researcher` — lenses: research-to-issues, research, adopt hand-off
+- `writer` — lenses: documentation-engineer, content-writer
+- `sweeper` — lenses: repo-sweeper, conversation-compacter (read-only)
+- `memory` — lenses: memory-monitor, memory-curator
 
 ---
 

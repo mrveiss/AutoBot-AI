@@ -74,7 +74,7 @@ This project plan addresses **147 hardcoded configuration violations** identifie
 
 **Priority:** CRITICAL - P0 (HIGHEST)
 **File:** `src/knowledge_base_v2.py`
-**Agent:** `senior-backend-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
 **Estimated Time:** 1 hour
 
 **Issue:**
@@ -111,7 +111,7 @@ This project plan addresses **147 hardcoded configuration violations** identifie
 
 **Priority:** CRITICAL - P0
 **File:** `backend/celery_app.py`
-**Agent:** `senior-backend-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
 **Estimated Time:** 2 hours
 
 **Issue:**
@@ -170,7 +170,7 @@ celery_results: 2
 
 **Priority:** CRITICAL - P0
 **File:** `src/chat_workflow_manager.py`
-**Agent:** `senior-backend-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
 **Estimated Time:** 2 hours
 
 **Issue:**
@@ -223,7 +223,7 @@ ollama_endpoint = config.get(
 
 **Priority:** CRITICAL - P0
 **File:** `src/unified_config.py`
-**Agent:** `senior-backend-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
 **Estimated Time:** 3 hours
 
 **Issue:**
@@ -271,7 +271,7 @@ ollama_endpoint = config.get(
 
 **Priority:** CRITICAL - P0
 **File:** `backend/app_factory.py`
-**Agent:** `senior-backend-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
 **Estimated Time:** 2 hours
 
 **Issue:**
@@ -339,7 +339,7 @@ security:
 
 **Priority:** CRITICAL - P0
 **File:** `src/chat_history_manager.py`
-**Agent:** `senior-backend-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
 **Estimated Time:** 1 hour
 
 **Issue:**
@@ -383,7 +383,7 @@ self.redis_host = redis_host or redis_config.get(
 
 **Priority:** CRITICAL - P1
 **File:** `src/unified_config_manager.py`
-**Agent:** `senior-backend-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
 **Estimated Time:** 1 hour
 
 **Issue:**
@@ -424,8 +424,8 @@ self.redis_host = redis_host or redis_config.get(
 **Total Tasks:** 7
 **Total Files Modified:** 7 core files + 1 config file
 **Total Estimated Time:** 12 hours
-**Agent:** `senior-backend-engineer`
-**Reviewer:** `code-reviewer` (MANDATORY)
+**Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
+**Reviewer:** `autobot-dev-skills:reviewer (code-reviewer lens)` (MANDATORY)
 
 **Phase 1 Deliverables:**
 - [ ] All CRITICAL hardcoded values fixed
@@ -439,7 +439,7 @@ self.redis_host = redis_host or redis_config.get(
 **Phase 1 Quality Gates:**
 1. All unit tests pass
 2. All integration tests pass
-3. Code review approved by code-reviewer agent
+3. Code review approved by autobot-dev-skills:reviewer (code-reviewer lens) agent
 4. Manual testing checklist completed
 5. No new hardcoded values introduced
 6. Configuration schema documented
@@ -466,7 +466,7 @@ self.redis_host = redis_host or redis_config.get(
 
 **Priority:** HIGH - P1
 **Files:** 40+ files with hardcoded timeout values
-**Agent:** `senior-backend-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
 **Estimated Time:** 8 hours
 
 **Affected Files:**
@@ -519,7 +519,7 @@ timeouts:
 
 **Priority:** HIGH - P1
 **Files:** Multiple files in `/analysis/` directory
-**Agent:** `database-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (database-engineer lens)`
 **Estimated Time:** 6 hours
 
 **Affected Files:**
@@ -568,7 +568,7 @@ redis:
 
 **Priority:** HIGH - P1
 **Files:** All monitoring/* files
-**Agent:** `senior-backend-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
 **Estimated Time:** 4 hours
 
 **Affected Files:**
@@ -603,7 +603,7 @@ redis:
 
 **Priority:** HIGH - P2
 **File:** `src/constants/network_constants.py`
-**Agent:** `senior-backend-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
 **Estimated Time:** 4 hours
 
 **Issue:**
@@ -642,7 +642,7 @@ FRONTEND_VM_IP: str = "<frontend-ip>"
 
 **Priority:** HIGH - P2
 **File:** `scripts/export_service_keys.py`
-**Agent:** `devops-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (devops-engineer lens)`
 **Estimated Time:** 2 hours
 
 **Issue:**
@@ -670,7 +670,7 @@ FRONTEND_VM_IP: str = "<frontend-ip>"
 
 **Priority:** HIGH - P2
 **File:** `monitoring/performance_monitor.py`
-**Agent:** `devops-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (devops-engineer lens)`
 **Estimated Time:** 3 hours
 
 **Issue:**
@@ -713,8 +713,8 @@ monitoring:
 **Total Task Groups:** 6
 **Total Files Modified:** 60+ files
 **Total Estimated Time:** 27 hours
-**Agents:** `senior-backend-engineer`, `database-engineer`, `devops-engineer`
-**Reviewer:** `code-reviewer` (MANDATORY)
+**Agents:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`, `autobot-dev-skills:senior-developer (database-engineer lens)`, `autobot-dev-skills:senior-developer (devops-engineer lens)`
+**Reviewer:** `autobot-dev-skills:reviewer (code-reviewer lens)` (MANDATORY)
 
 **Phase 2 Deliverables:**
 - [ ] All HIGH priority hardcoded values fixed
@@ -757,7 +757,7 @@ monitoring:
 
 **Priority:** MEDIUM - P3
 **Files:** All test files
-**Agent:** `testing-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (testing-engineer lens)`
 **Estimated Time:** 6 hours
 
 **Issue:** Test files use hardcoded values, should use dedicated test config
@@ -817,7 +817,7 @@ timeouts:
 
 **Priority:** MEDIUM - P3
 **Files:** All files in `/debug/` directory
-**Agent:** `senior-backend-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
 **Estimated Time:** 4 hours
 
 **Issue:** Debug scripts use hardcoded localhost endpoints
@@ -847,7 +847,7 @@ timeouts:
 
 **Priority:** MEDIUM - P3
 **Files:** Utility scripts with hardcoded values
-**Agent:** `devops-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (devops-engineer lens)`
 **Estimated Time:** 5 hours
 
 **Affected Files:**
@@ -877,7 +877,7 @@ timeouts:
 
 **Priority:** MEDIUM - P4
 **Files:** Files in `/examples/` directory
-**Agent:** `documentation-engineer`
+**Agent:** `autobot-dev-skills:writer (documentation-engineer lens)`
 **Estimated Time:** 3 hours
 
 **Issue:** Example code shows hardcoded values instead of best practices
@@ -905,7 +905,7 @@ timeouts:
 
 **Priority:** MEDIUM - P3
 **File:** `autobot-backend/api/playwright.py`
-**Agent:** `senior-backend-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
 **Estimated Time:** 2 hours
 
 **Issue:**
@@ -932,7 +932,7 @@ timeouts:
 
 **Priority:** MEDIUM - P5
 **Files:** Files in `/archive/` directory
-**Agent:** `devops-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (devops-engineer lens)`
 **Estimated Time:** 3 hours
 
 **Issue:** Archived test files contain hardcoded values
@@ -959,8 +959,8 @@ timeouts:
 **Total Task Groups:** 6
 **Total Files Modified:** 40-50 files
 **Total Estimated Time:** 23 hours
-**Agents:** `testing-engineer`, `senior-backend-engineer`, `devops-engineer`, `documentation-engineer`
-**Reviewer:** `code-reviewer` (MANDATORY)
+**Agents:** `autobot-dev-skills:senior-developer (testing-engineer lens)`, `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`, `autobot-dev-skills:senior-developer (devops-engineer lens)`, `autobot-dev-skills:writer (documentation-engineer lens)`
+**Reviewer:** `autobot-dev-skills:reviewer (code-reviewer lens)` (MANDATORY)
 
 **Phase 3 Deliverables:**
 - [ ] Test configuration system implemented
@@ -999,7 +999,7 @@ timeouts:
 
 **Priority:** LOW - P5
 **Files:** Documentation with hardcoded example IPs
-**Agent:** `documentation-engineer`
+**Agent:** `autobot-dev-skills:writer (documentation-engineer lens)`
 **Estimated Time:** 4 hours
 
 **Issue:** Docstrings and comments reference specific IPs/ports
@@ -1030,7 +1030,7 @@ timeouts:
 ### Task Group 4.2: Create Configuration Schema Documentation
 
 **Priority:** MEDIUM - P3
-**Agent:** `documentation-engineer`
+**Agent:** `autobot-dev-skills:writer (documentation-engineer lens)`
 **Estimated Time:** 6 hours
 
 **Implementation Steps:**
@@ -1061,7 +1061,7 @@ timeouts:
 ### Task Group 4.3: Create Configuration Validation Tool
 
 **Priority:** MEDIUM - P3
-**Agent:** `devops-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (devops-engineer lens)`
 **Estimated Time:** 5 hours
 
 **Implementation Steps:**
@@ -1093,7 +1093,7 @@ timeouts:
 ### Task Group 4.4: Create Configuration Audit Tool
 
 **Priority:** LOW - P4
-**Agent:** `devops-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (devops-engineer lens)`
 **Estimated Time:** 4 hours
 
 **Implementation Steps:**
@@ -1123,7 +1123,7 @@ timeouts:
 ### Task Group 4.5: Final Testing & Validation
 
 **Priority:** HIGH - P1
-**Agent:** `testing-engineer`
+**Agent:** `autobot-dev-skills:senior-developer (testing-engineer lens)`
 **Estimated Time:** 6 hours
 
 **Implementation Steps:**
@@ -1155,8 +1155,8 @@ timeouts:
 
 **Total Task Groups:** 5
 **Total Estimated Time:** 25 hours
-**Agents:** `documentation-engineer`, `devops-engineer`, `testing-engineer`
-**Reviewer:** `code-reviewer` (MANDATORY)
+**Agents:** `autobot-dev-skills:writer (documentation-engineer lens)`, `autobot-dev-skills:senior-developer (devops-engineer lens)`, `autobot-dev-skills:senior-developer (testing-engineer lens)`
+**Reviewer:** `autobot-dev-skills:reviewer (code-reviewer lens)` (MANDATORY)
 
 **Phase 4 Deliverables:**
 - [ ] Documentation updated
@@ -1183,7 +1183,7 @@ timeouts:
 ### Agent Roles and Responsibilities
 
 #### 1. Senior Backend Engineer
-**Primary Agent:** `senior-backend-engineer`
+**Primary Agent:** `autobot-dev-skills:senior-developer (senior-backend-engineer lens)`
 **Responsibility:** Core infrastructure and service fixes
 
 **Assigned Tasks:**
@@ -1202,7 +1202,7 @@ timeouts:
 ---
 
 #### 2. Database Engineer
-**Primary Agent:** `database-engineer`
+**Primary Agent:** `autobot-dev-skills:senior-developer (database-engineer lens)`
 **Responsibility:** Redis database configuration and analysis scripts
 
 **Assigned Tasks:**
@@ -1219,7 +1219,7 @@ timeouts:
 ---
 
 #### 3. DevOps Engineer
-**Primary Agent:** `devops-engineer`
+**Primary Agent:** `autobot-dev-skills:senior-developer (devops-engineer lens)`
 **Responsibility:** Deployment scripts, utilities, infrastructure
 
 **Assigned Tasks:**
@@ -1238,7 +1238,7 @@ timeouts:
 ---
 
 #### 4. Testing Engineer
-**Primary Agent:** `testing-engineer`
+**Primary Agent:** `autobot-dev-skills:senior-developer (testing-engineer lens)`
 **Responsibility:** Test infrastructure and validation
 
 **Assigned Tasks:**
@@ -1256,7 +1256,7 @@ timeouts:
 ---
 
 #### 5. Documentation Engineer
-**Primary Agent:** `documentation-engineer`
+**Primary Agent:** `autobot-dev-skills:writer (documentation-engineer lens)`
 **Responsibility:** Documentation updates and examples
 
 **Assigned Tasks:**
@@ -1274,7 +1274,7 @@ timeouts:
 ---
 
 #### 6. Code Reviewer (MANDATORY)
-**Primary Agent:** `code-reviewer`
+**Primary Agent:** `autobot-dev-skills:reviewer (code-reviewer lens)`
 **Responsibility:** Review ALL code changes
 
 **Assigned Tasks:**
@@ -1483,7 +1483,7 @@ def test_config_validation_missing_required():
    - Run full test suite (unit + integration)
    - End-to-end testing of major workflows
    - Performance benchmarking
-   - Code review by code-reviewer agent
+   - Code review by autobot-dev-skills:reviewer (code-reviewer lens) agent
    - Manual testing checklist completion
 
 4. **Before Production Deployment:**
@@ -1780,7 +1780,7 @@ Each phase must pass these gates before proceeding:
 - [ ] No flaky tests introduced
 
 #### Gate 3: Code Review
-- [ ] Code reviewed by code-reviewer agent
+- [ ] Code reviewed by autobot-dev-skills:reviewer (code-reviewer lens) agent
 - [ ] All review comments addressed
 - [ ] No hardcoded values remain in changed files
 - [ ] Error handling adequate
