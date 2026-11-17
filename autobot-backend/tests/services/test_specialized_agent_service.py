@@ -415,12 +415,23 @@ class TestTier:
         agent = SpecializedAgentService(agents_dir=d).get_agent("x")
         assert agent["tier"] == "tier3_specialized"
 
-    def test_invalid_declared_tier_falls_back_to_default(self, tmp_path):
+    def test_invalid_declared_tier_falls_back_to_default(self, tmp_path, caplog):
         d = tmp_path / "agents"
         d.mkdir()
         (d / "x.md").write_text("---\nname: X\ntier: nonsense\n---\nBody", encoding="utf-8")
-        agent = SpecializedAgentService(agents_dir=d).get_agent("x")
+        with caplog.at_level("WARNING"):
+            agent = SpecializedAgentService(agents_dir=d).get_agent("x")
         assert agent["tier"] == get_agent_tier("x").value
+        assert "unknown tier" in caplog.text and "nonsense" in caplog.text
+
+    def test_blank_declared_tier_falls_back_silently(self, tmp_path, caplog):
+        d = tmp_path / "agents"
+        d.mkdir()
+        (d / "x.md").write_text("---\nname: X\ntier:\n---\nBody", encoding="utf-8")
+        with caplog.at_level("WARNING"):
+            agent = SpecializedAgentService(agents_dir=d).get_agent("x")
+        assert agent["tier"] == get_agent_tier("x").value
+        assert "unknown tier" not in caplog.text
 
     def test_undeclared_tier_is_the_classifier_default(self, service):
         assert service.get_agent("quick-helper")["tier"] == get_agent_tier("quick-helper").value
@@ -436,3 +447,15 @@ class TestDefaultDirectory:
         (d / "cfg.md").write_text(MINIMAL_AGENT_MD, encoding="utf-8")
         monkeypatch.setattr("services.specialized_agent_service.claude_agents_dir", lambda: d)
         assert [a["id"] for a in SpecializedAgentService().list_agents()] == ["cfg"]
+
+
+class TestAvailability:
+    """A missing agents dir is a visible state, not an empty list."""
+
+    def test_missing_dir_is_unavailable(self, tmp_path):
+        svc = SpecializedAgentService(agents_dir=tmp_path / "absent")
+        assert svc.is_available() is False
+        assert svc.list_agents() == []
+
+    def test_existing_empty_dir_is_available(self, tmp_path):
+        assert SpecializedAgentService(agents_dir=tmp_path).is_available() is True

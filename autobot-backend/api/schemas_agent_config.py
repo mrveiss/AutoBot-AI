@@ -28,6 +28,7 @@ class AgentConfigAllAgentsResponse(BaseModel):
 
     agents: List[Dict[str, Any]] = Field(default_factory=list)
     specialized_agents: List[Dict[str, Any]] = Field(default_factory=list)
+    specialized_available: bool = True
     summary: Dict[str, Any] = Field(default_factory=dict)
     timestamp: str = ""
 
@@ -38,6 +39,7 @@ class AgentConfigSpecializedListResponse(BaseModel):
     agents: List[Dict[str, Any]] = Field(default_factory=list)
     total_count: int = 0
     categories: Dict[str, Any] = Field(default_factory=dict)
+    available: bool = True
     timestamp: str = ""
 
 

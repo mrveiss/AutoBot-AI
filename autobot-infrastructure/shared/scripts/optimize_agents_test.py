@@ -401,7 +401,7 @@ def _git_repo(tmp_path: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
 def test_git_backup_tags_commits_and_restores(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys):
     root, agents = _git_repo(tmp_path)
     _use_agents_dir(monkeypatch, root / "agents")
-    args = ["optimize_agents.py", "--apply", "--git-backup", "--strip-code-blocks", "--no-collapse-policy"]
+    args = ["optimize_agents.py", "--apply", "--git-backup", "--allow-enclosing-repo", "--strip-code-blocks", "--no-collapse-policy"]
     monkeypatch.setattr(sys, "argv", args)
     assert optimize_agents.main() == 0
     assert "def example()" not in (agents / "a.md").read_text(encoding="utf-8")
@@ -448,7 +448,8 @@ def test_the_shell_wrapper_runs_the_surviving_module_with_its_old_behaviour():
     wrapper = pathlib.Path(__file__).parent / "utilities" / "agent-optimize.sh"
     text = wrapper.read_text(encoding="utf-8")
     assert 'OPTIMIZER_SCRIPT="$SCRIPT_DIR/../optimize_agents.py"' in text
-    assert "--apply --git-backup --cache --strip-code-blocks --no-collapse-policy" in text
+    assert "--git-backup --cache --strip-code-blocks --no-collapse-policy" in text
+    assert "--apply --git-backup" not in text  # applying is an explicit flag, never hardwired
     assert (pathlib.Path(__file__).parent / "optimize_agents.py").is_file()
     assert not (pathlib.Path(__file__).parent / "utilities" / "optimize_agents.py").exists()
 
@@ -462,7 +463,7 @@ def test_git_backup_commit_is_scoped_to_the_agent_files(tmp_path: pathlib.Path, 
     (root / "unrelated.txt").write_text("staged elsewhere\n", encoding="utf-8")
     _git_out(root, "add", "unrelated.txt")
     _use_agents_dir(monkeypatch, root / "agents")
-    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--cache", "--strip-code-blocks"])
+    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--allow-enclosing-repo", "--cache", "--strip-code-blocks"])
     assert optimize_agents.main() == 0
     committed = _git_out(root, "show", "--name-only", "--format=", "HEAD").split()
     assert committed == ["agents/a.md"]
@@ -475,7 +476,7 @@ def test_a_rejected_commit_returns_1_and_names_the_backup_tag(tmp_path: pathlib.
     hook.write_text("#!/bin/sh\necho rejected-by-hook >&2\nexit 1\n", encoding="utf-8")
     hook.chmod(0o755)
     _use_agents_dir(monkeypatch, root / "agents")
-    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--strip-code-blocks"])
+    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--allow-enclosing-repo", "--strip-code-blocks"])
     assert optimize_agents.main() == 1
     tag = optimize_agents._backup_tags(root)[0]
     assert "rejected-by-hook" in caplog.text
@@ -493,7 +494,7 @@ def test_a_failed_backup_tag_returns_1_before_writing(tmp_path: pathlib.Path, mo
         return real_git(r, *args, check=check)
 
     monkeypatch.setattr(optimize_agents, "_git", failing_tag)
-    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--strip-code-blocks"])
+    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--allow-enclosing-repo", "--strip-code-blocks"])
     assert optimize_agents.main() == 1
     assert "def example()" in (agents / "a.md").read_text(encoding="utf-8")
     assert "tag already exists" in caplog.text
@@ -545,7 +546,7 @@ def test_git_backup_refuses_when_the_agent_dir_has_uncommitted_changes(
     dirty = _CODE_DOC + "\nuncommitted edit\n"
     (agents / "a.md").write_text(dirty, encoding="utf-8")
     _use_agents_dir(monkeypatch, root / "agents")
-    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--strip-code-blocks"])
+    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--allow-enclosing-repo", "--strip-code-blocks"])
     assert optimize_agents.main() == 1
     assert optimize_agents._backup_tags(root) == []
     assert (agents / "a.md").read_text(encoding="utf-8") == dirty  # nothing rewritten
@@ -556,7 +557,7 @@ def test_contrast_an_untracked_run_cache_does_not_block_the_backup(tmp_path: pat
     root, agents = _git_repo(tmp_path)
     (agents / optimize_agents._CACHE_FILENAME).write_text("{}", encoding="utf-8")
     _use_agents_dir(monkeypatch, root / "agents")
-    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--strip-code-blocks"])
+    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--allow-enclosing-repo", "--strip-code-blocks"])
     assert optimize_agents.main() == 0
     assert len(optimize_agents._backup_tags(root)) == 1
 
@@ -579,3 +580,27 @@ def test_contrast_a_letters_only_tag_behaves_as_before():
     out, removed = optimize_agents.strip_code_blocks(_PROSE_BETWEEN.format(tag="python"))
     assert removed == 2
     assert "Keep this prose." in out
+
+
+def test_git_backup_refuses_a_dir_inside_an_unrelated_repo(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, caplog):
+    root, agents = _git_repo(tmp_path)
+    before = (agents / "a.md").read_text(encoding="utf-8")
+    _use_agents_dir(monkeypatch, agents)
+    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--strip-code-blocks"])
+    assert optimize_agents.main() == 1
+    assert "unrelated repository" in caplog.text
+    assert (agents / "a.md").read_text(encoding="utf-8") == before
+    assert optimize_agents._backup_tags(root) == []
+
+
+def test_git_backup_accepts_a_dir_that_is_its_own_repo(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
+    _, agents = _git_repo(tmp_path)
+    own = tmp_path / "own"
+    agents.rename(own)
+    for cmd in (["init", "-q"], ["config", "user.email", "t@example.invalid"], ["config", "user.name", "t"],
+                ["config", "commit.gpgsign", "false"], ["config", "tag.gpgsign", "false"], ["add", "."], ["commit", "-qm", "seed"]):
+        subprocess.run(["git", "-C", str(own), *cmd], check=True, capture_output=True, env=scrubbed_git_env())
+    _use_agents_dir(monkeypatch, own)
+    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--strip-code-blocks"])
+    assert optimize_agents.main() == 0
+    assert len(optimize_agents._backup_tags(own)) == 1

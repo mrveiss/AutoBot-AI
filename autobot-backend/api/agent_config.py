@@ -796,7 +796,6 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
         backend_agents.append(await _resolve_agent_entry(agent_id, agent_cfg, config_manager))
 
     healthy_count = sum(1 for a in backend_agents if a["status"] == "connected")
-
     # Include specialized agents in the combined response (#1794)
     from services.specialized_agent_service import SpecializedAgentService
 
@@ -808,6 +807,7 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
         content={
             "agents": backend_agents,
             "specialized_agents": specialized_agents,
+            "specialized_available": spec_service.is_available(),
             "summary": {
                 "total": len(backend_agents),
                 "total_specialized": len(specialized_agents),
@@ -843,13 +843,13 @@ async def list_specialized_agents(
     service = SpecializedAgentService()
     agents = service.list_agents()
     categories = service.get_categories_summary(agents)
-
     return JSONResponse(
         status_code=200,
         content={
             "agents": agents,
             "total_count": len(agents),
             "categories": categories,
+            "available": service.is_available(),
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         },
     )

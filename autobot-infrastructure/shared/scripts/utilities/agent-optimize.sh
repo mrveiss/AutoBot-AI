@@ -36,8 +36,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 export PYTHONPATH="$PROJECT_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 # Paths
-# The host's Claude Code user-level agents dir, same resolution as autobot_shared.claude_config.claude_agents_dir()
-AGENT_DIR="${AUTOBOT_CLAUDE_CONFIG_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}/agents"
+# The host's Claude Code user-level agents dir: ONE lookup, in Python (SSOT)
+AGENT_DIR="$(python3 -m autobot_shared.claude_config)" || { echo "Cannot resolve the Claude Code agents directory" >&2; exit 1; }
 OPTIMIZER_SCRIPT="$SCRIPT_DIR/../optimize_agents.py"
 
 # Functions
@@ -76,12 +76,6 @@ check_requirements() {
         exit 1
     fi
 
-    # Check if in git repository
-    if ! git rev-parse --git-dir &> /dev/null; then
-        print_error "Not in a git repository"
-        exit 1
-    fi
-
     # Check optimizer script exists
     if [ ! -f "$OPTIMIZER_SCRIPT" ]; then
         print_error "Optimizer script not found: $OPTIMIZER_SCRIPT"
@@ -98,22 +92,35 @@ check_requirements() {
 run_optimization() {
     local force_flag=""
     local stats_flag="--stats"  # Always show stats
+    local mode_args=()          # empty = dry-run preview; writing needs --apply
+    local repo_flag=""
 
     if [ "$FORCE" = true ]; then
         force_flag="--force"
     fi
 
-    print_header "Running Agent Optimization (In-Place)"
+    if [ "$APPLY" = true ]; then
+        mode_args=(--apply)
+    fi
+    if [ "$ALLOW_ENCLOSING" = true ]; then
+        repo_flag="--allow-enclosing-repo"
+    fi
 
-    # Run Python optimizer
+    print_header "Agent Optimization ($([ "$APPLY" = true ] && echo APPLY || echo 'dry-run preview'))"
+    print_info "Agents directory: $AGENT_DIR"
+
+    # The optimizer prints the backup repository and refuses an unrelated enclosing one
     cd "$PROJECT_ROOT"
-    python3 "$OPTIMIZER_SCRIPT" --apply --git-backup --cache --strip-code-blocks --no-collapse-policy $force_flag $stats_flag
+    python3 "$OPTIMIZER_SCRIPT" "${mode_args[@]}" --git-backup --cache --strip-code-blocks --no-collapse-policy $repo_flag $force_flag $stats_flag
 
-    print_success "Optimization complete!"
-    print_info "Agents optimized in: $AGENT_DIR"
-    echo ""
-    print_info "To restore from backup:"
-    echo "  $0 --restore"
+    if [ "$APPLY" = true ]; then
+        print_success "Optimization complete!"
+        echo ""
+        print_info "To restore from backup:"
+        echo "  $0 --restore"
+    else
+        print_info "Preview only; nothing was written. Re-run with --apply to write."
+    fi
 }
 
 restore_agents() {
@@ -154,13 +161,12 @@ show_status() {
     # Show git status
     echo ""
     print_info "Git status of agents directory:"
-    cd "$PROJECT_ROOT"
     git -C "$AGENT_DIR" status --short . || print_info "No changes"
 
     # Show recent backup tags
     echo ""
     print_info "Recent backup tags:"
-    git tag --list 'agents-pre-optimization-*' --sort=-creatordate | head -5 || print_info "No backup tags found"
+    git -C "$AGENT_DIR" tag --list 'agents-pre-optimization-*' --sort=-creatordate | head -5 || print_info "No backup tags found"
 
     # Check if optimization cache exists
     echo ""
@@ -184,7 +190,9 @@ USAGE:
     $0 [OPTIONS]
 
 OPTIONS:
-    --optimize        Run optimization (default action)
+    --optimize        Preview the optimization (default action; dry-run, writes nothing)
+    --apply           With --optimize: actually rewrite the files (git backup tag + commit)
+    --allow-enclosing-repo  With --apply: permit the agents dir to sit inside an unrelated git repo
     --restore         Restore from most recent git backup tag
     --restore TAG     Restore from specific git backup tag
     --list-backups    List all available backup tags
@@ -194,8 +202,11 @@ OPTIONS:
     --help            Show this help message
 
 EXAMPLES:
-    # Run optimization with default settings
+    # Preview what would change (writes nothing)
     $0 --optimize
+
+    # Rewrite the files, with a git backup tag first
+    $0 --optimize --apply
 
     # Force regeneration and show detailed stats
     $0 --optimize --force --stats
@@ -231,6 +242,8 @@ EOF
 
 # Parse command line arguments
 FORCE=false
+APPLY=false
+ALLOW_ENCLOSING=false
 STATS=false
 ACTION="optimize"
 RESTORE_TAG=""
@@ -256,6 +269,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --status)
             ACTION="status"
+            shift
+            ;;
+        --apply)
+            APPLY=true
+            shift
+            ;;
+        --allow-enclosing-repo)
+            ALLOW_ENCLOSING=true
             shift
             ;;
         --force)

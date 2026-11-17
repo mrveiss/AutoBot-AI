@@ -1314,13 +1314,13 @@ class PathConfig(RedactedSettings):
     # autobot_ssh_key_path's owning account).
     ssh_user: str = Field(default="autobot", alias="AUTOBOT_SSH_USER")
 
-    # Override for the `claude` CLI binary (LLC claude_code adapter, GH#12478).
-    # Empty = fall back to shutil.which("claude") then per-user install locations;
-    # set it when a per-user install (~/.local/bin) is off the service PATH.
+    # Override for the `claude` CLI binary (LLC claude_code adapter, GH#12478); empty =
+    # PATH, then per-user install locations (set it when ~/.local/bin is off the service PATH).
     claude_cli_path: str = Field(default="", alias="AUTOBOT_CLAUDE_CLI_PATH")
-    # Claude Code user-level config dir (agents/, skills/) of the account running
-    # the CLI. Empty = CLAUDE_CONFIG_DIR, then ~/.claude of the backend's account.
-    claude_config_dir: str = Field(default="", alias="AUTOBOT_CLAUDE_CONFIG_DIR")
+    # Claude Code user-level config dir (agents/, skills/); empty = ~/.claude of the backend account.
+    claude_config_dir: str = Field(
+        default="", validation_alias=AliasChoices("AUTOBOT_CLAUDE_CONFIG_DIR", "CLAUDE_CONFIG_DIR")
+    )
 
     def resolve(self, relative: str) -> Path:
         """Resolve a path relative to base_dir."""

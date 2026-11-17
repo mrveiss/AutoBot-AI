@@ -505,6 +505,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cache", action="store_true", help="Skip files unchanged since the last --apply run.")
     parser.add_argument("--force", action="store_true", help="With --cache: reprocess even cached files.")
     parser.add_argument("--stats", action="store_true", help="Print detailed byte-level statistics.")
+    parser.add_argument(
+        "--allow-enclosing-repo",
+        action="store_true",
+        help="With --git-backup: allow the agents dir to sit inside a larger, unrelated git repository.",
+    )
     parser.add_argument("--git-backup", action="store_true", help="With --apply: tag before writing, commit after.")
     parser.add_argument("--restore", nargs="?", const="", metavar="TAG", help="Restore from a backup tag (latest).")
     parser.add_argument("--list-backups", action="store_true", help="List the backup tags.")
@@ -527,6 +532,21 @@ def _find_agent_files(agents_dir: Path) -> list[Path] | str:
     return agent_files
 
 
+def _backup_repo_problem(agents_dir: Path, allow_enclosing: bool) -> str | None:
+    """Why a git backup of ``agents_dir`` would land in the wrong repository, else None.
+
+    The backup tag and commit must live in the agents dir's OWN repository; a dir
+    that sits inside an unrelated enclosing repo (or in none) would tag/commit there.
+    """
+    top = _git(agents_dir, "rev-parse", "--show-toplevel", check=False).stdout.strip()
+    if not top:
+        return f"{agents_dir} is not inside a git repository; run `git init` there first"
+    print(f"Git backup repository: {top}")
+    if Path(top).resolve() != agents_dir and not allow_enclosing:
+        return f"{agents_dir} sits inside the unrelated repository {top}; pass --allow-enclosing-repo to back up there"
+    return None
+
+
 def _run(args: argparse.Namespace, root: Path, agents_dir: Path, agent_files: list[Path]) -> int:
     """Optimize ``agent_files`` per ``args`` and report; the git/cache bookends live here."""
     options = OptimizeOptions(not args.no_collapse_policy, args.strip_code_blocks, args.strip_verbose)
@@ -534,7 +554,12 @@ def _run(args: argparse.Namespace, root: Path, agents_dir: Path, agent_files: li
     cache_file = agents_dir / _CACHE_FILENAME
     cache = load_cache(cache_file, options) if args.cache else None
     mode_label = "APPLY (files will be rewritten)" if apply_changes else "DRY RUN (default; pass --apply to write)"
-    print(f"\nOptimizing {len(agent_files)} agent configuration file(s) - mode: {mode_label}\n")
+    print(f"\nOptimizing {len(agent_files)} agent configuration file(s) in {agents_dir} - mode: {mode_label}\n")
+    if apply_changes and args.git_backup:
+        problem = _backup_repo_problem(agents_dir, args.allow_enclosing_repo)
+        if problem:
+            logger.error("Refusing to apply: %s", problem)
+            return 1  # nothing written yet
 
     try:
         backup_tag = create_backup_tag(root, agents_dir) if apply_changes and args.git_backup else None

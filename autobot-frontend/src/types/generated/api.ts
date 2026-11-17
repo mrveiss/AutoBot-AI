@@ -57449,6 +57449,11 @@ export interface components {
             specialized_agents?: {
                 [key: string]: unknown;
             }[];
+            /**
+             * Specialized Available
+             * @default true
+             */
+            specialized_available: boolean;
             /** Summary */
             summary?: {
                 [key: string]: unknown;
@@ -57679,6 +57684,11 @@ export interface components {
             categories?: {
                 [key: string]: unknown;
             };
+            /**
+             * Available
+             * @default true
+             */
+            available: boolean;
             /**
              * Timestamp
              * @default

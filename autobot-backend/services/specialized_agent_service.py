@@ -125,6 +125,8 @@ def _resolve_tier(stem: str, declared: str | None) -> str:
     """Tier value for an agent: a valid declared ``tier``, else the classifier default."""
     if declared and declared in {t.value for t in AgentTier}:
         return declared
+    if declared:
+        logger.warning("Agent %s declares unknown tier %r; using the default tier", stem, declared)
     return get_agent_tier(stem).value
 
 
@@ -145,6 +147,10 @@ class SpecializedAgentService:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    def is_available(self) -> bool:
+        """Whether the agents directory exists (False = the setting needs configuring)."""
+        return self.agents_dir.is_dir()
 
     def list_agents(self) -> List[Dict[str, Any]]:
         """Return all agents found in the agents directory (#1794)."""
