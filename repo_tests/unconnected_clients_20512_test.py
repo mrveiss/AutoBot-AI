@@ -451,6 +451,21 @@ _HELPER = "const plantedUrl = (): string => `${getApiBase()}/planted`\n"
             True,
         ),
         (
+            "a single-quoted top-level method key is the request's method",
+            _HELPER + "apiClient.rawRequest(`${plantedUrl()}/orphan`, { 'method': 'DELETE' })\n",
+            False,
+        ),
+        (
+            "a double-quoted top-level method key is the request's method",
+            _HELPER + 'apiClient.rawRequest(`${plantedUrl()}/orphan`, { "method": "DELETE" })\n',
+            False,
+        ),
+        (
+            "a quoted method key inside a nested headers object is not the request's method",
+            _HELPER + "apiClient.rawRequest(`${plantedUrl()}/orphan`, { headers: { 'method': 'DELETE' } })\n",
+            True,
+        ),
+        (
             "a URL argument continued after the template",
             _HELPER + "apiClient.get(`${plantedUrl()}/orphan` + '/other')\n",
             False,

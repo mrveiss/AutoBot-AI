@@ -32,7 +32,7 @@ _URL_HELPER = re.compile(
     r"`\$\{getApiBase\(\)\}(/[^`]*)`(?=[ \t]*(?:[;,)}]|//|$))",  # the template is the WHOLE return value
     re.M,
 )
-_METHOD_OPTION = re.compile(r"method\s*:\s*['\"](\w+)['\"]")
+_METHOD_OPTION = re.compile(r"""(['"]?)method\1\s*:\s*['"](?P<verb>\w+)['"]""")
 _PATH_TAIL = r"/[^`'\"\s]*"
 HelperCalls = dict[tuple[str, str], set[str]]
 
@@ -59,6 +59,14 @@ def _own_arguments(text: str, start: int) -> str:
     return text[open_at:]
 
 
+def _method_key_at(arguments: str, index: int, stack: list[str]) -> str:
+    """The verb of a ``method:`` key (bare or quoted) at *index* of the call's own options object, else ``""``."""
+    if stack != ["(", "{"] or arguments[:index].rstrip()[-1:] not in ("{", ","):
+        return ""
+    option = _METHOD_OPTION.match(arguments, index)
+    return option.group("verb") if option else ""
+
+
 def _top_level_method(arguments: str) -> str:
     """The ``method:`` of the call's own options object, or ``""``: nested objects and quoted text are skipped."""
     stack: list[str] = []
@@ -66,16 +74,14 @@ def _top_level_method(arguments: str) -> str:
     for index, char in enumerate(arguments):
         if quote:
             quote = "" if char == quote and arguments[index - 1] != "\\" else quote
+        elif verb := _method_key_at(arguments, index, stack):
+            return verb
         elif char in "'\"`":
             quote = char
         elif char in "({[":
             stack.append(char)
         elif char in ")}]":
             stack.pop()
-        elif stack == ["(", "{"] and arguments[:index].rstrip()[-1:] in ("{", ","):
-            option = _METHOD_OPTION.match(arguments, index)
-            if option:
-                return option.group(1)
     return ""
 
 
