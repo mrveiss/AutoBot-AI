@@ -656,9 +656,7 @@ route:autobot-backend/api/scheduler.py:GET /templates/schedule/{template_id}	#10
 route:autobot-backend/api/scheduler.py:GET /workflows/{workflow_id}	#10603
 route:autobot-backend/api/scheduler.py:POST /queue/control	#10603
 route:autobot-backend/api/scheduler.py:PUT /workflows/{workflow_id}/reschedule	#10603
-route:autobot-backend/api/scrape_templates.py:DELETE /{template_id}	#10603
 route:autobot-backend/api/scrape_templates.py:GET /{template_id}	#10603
-route:autobot-backend/api/scrape_templates.py:POST /{template_id}/run	#10603
 route:autobot-backend/api/search.py:GET /hardware/status	#10603
 route:autobot-backend/api/search.py:GET /performance/analytics	#10603
 route:autobot-backend/api/search.py:GET /test/connectivity	#10603
@@ -1112,12 +1110,7 @@ route:autobot-backend/api/knowledge_audit.py:GET /compliance-summary	#20975
 route:autobot-backend/api/knowledge_audit.py:GET /permission-changes	#20975
 route:autobot-backend/api/knowledge_audit.py:GET /user-activity	#20975
 route:autobot-backend/api/knowledge_audit.py:POST /compliance-report	#20975
-route:autobot-backend/api/knowledge_chunked_upload.py:DELETE /{upload_id}	#20975
 route:autobot-backend/api/knowledge_chunked_upload.py:GET /expired	#20975
-route:autobot-backend/api/knowledge_chunked_upload.py:GET /limits	#20975
-route:autobot-backend/api/knowledge_chunked_upload.py:GET /{upload_id}	#20975
-route:autobot-backend/api/knowledge_chunked_upload.py:POST /{upload_id}/complete	#20975
-route:autobot-backend/api/knowledge_chunked_upload.py:PUT /{upload_id}/chunks	#20975
 route:autobot-backend/api/knowledge_claude_memory.py:POST /import_claude_memory	#20975
 route:autobot-backend/api/knowledge_collections.py:GET /collections	#20975
 route:autobot-backend/api/knowledge_collections.py:POST /collections	#20975
