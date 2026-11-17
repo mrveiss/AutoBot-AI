@@ -43,7 +43,10 @@ from api.redis_mcp.rbac import (
     ToolAccess,
     check_tool_permission,
     get_tool_access,
+    is_admin_only_database,
+    read_keys,
     validate_key_namespace,
+    validate_read_scope,
 )
 from api.redis_mcp.tools import get_all_tools
 from api.redis_mcp.vector_search import (
@@ -141,7 +144,7 @@ async def call_redis_mcp_tool(
             "status": "approval_required",
             "tool": tool_name,
             "message": (
-                f"Tool '{tool_name}' requires explicit approval. " "Confirm to proceed with this destructive operation."
+                f"Tool '{tool_name}' requires explicit approval. Confirm to proceed with this destructive operation."
             ),
             "arguments": args,
         }
@@ -161,6 +164,9 @@ async def call_redis_mcp_tool(
             status_code=400,
             detail=f"Invalid database '{db}'. Valid: {sorted(_VALID_DATABASES)}",
         )
+
+    # Raw reads: confine non-admins, audit admin reads of user-content databases (#21605)
+    await _enforce_read_scope(tool_name, args, current_user, is_admin, access)
 
     # Route to handler
     handler = _TOOL_HANDLERS.get(tool_name)
@@ -417,6 +423,28 @@ _TOOL_HANDLERS = {
 def _is_admin(user: dict) -> bool:
     """The one admin predicate (#16333); the old literal tuple refused "Admin" and Role members."""
     return is_admin_role(user.get("role"))
+
+
+async def _enforce_read_scope(
+    tool_name: str, args: dict, current_user: dict, is_admin: bool, access: ToolAccess
+) -> None:
+    """403 a non-admin raw read outside the agent namespace; audit an admin read of a user-content database."""
+    ok, error = validate_read_scope(args, is_admin)
+    if not ok:
+        raise HTTPException(status_code=403, detail=error)
+    if not (is_admin and access == ToolAccess.READ and is_admin_only_database(args.get("database"))):
+        return
+    from knowledge.root_read import audit_admin_read, audit_unavailable  # noqa: PLC0415
+
+    user_id = str(current_user.get("user_id") or current_user.get("username") or "unknown")
+    details = {
+        "surface": "redis_mcp",
+        "tool": tool_name,
+        "database": args.get("database"),
+        "keys": read_keys(args),
+    }
+    if not await audit_admin_read(user_id, details):
+        raise audit_unavailable()
 
 
 def _extract_keys(args: dict) -> list[str]:

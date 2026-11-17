@@ -97,8 +97,50 @@ def validate_key_namespace(key: str, is_admin: bool, access: ToolAccess) -> tupl
         return True, None
     if access == ToolAccess.SCOPED_WRITE and not is_admin:
         if not key.startswith(AGENT_NAMESPACE_PREFIX):
-            return False, (
-                f"Write denied: key '{key}' is outside the " f"allowed namespace '{AGENT_NAMESPACE_PREFIX}*'"
+            return False, (f"Write denied: key '{key}' is outside the allowed namespace '{AGENT_NAMESPACE_PREFIX}*'")
+    return True, None
+
+
+# Databases that hold user content (KB facts, conversations, sessions). Raw tools reach them
+# only for admins: a raw hash read there bypasses per-fact visibility and the research
+# quarantine (#21605). Names, resolved to numbers so an alias or an env override follows.
+ADMIN_ONLY_DATABASES = frozenset({"knowledge", "sessions", "agents"})
+
+# Tool arguments that name a key (or a key glob) the call reads.
+_READ_KEY_ARGS = ("key", "pattern")
+
+
+def _database_number(name: str) -> int | None:
+    from autobot_shared.redis_management.types import DATABASE_MAPPING  # noqa: PLC0415
+
+    return DATABASE_MAPPING.get(name)
+
+
+def is_admin_only_database(name: str | None) -> bool:
+    """True when *name* (or an alias of it) is a database raw tools may reach only as an admin."""
+    if not name:
+        return False
+    number = _database_number(name)
+    return number is not None and number in {_database_number(n) for n in ADMIN_ONLY_DATABASES}
+
+
+def read_keys(args: dict) -> list[str]:
+    """Every key or key glob a read tool call names."""
+    return [str(args[a]) for a in _READ_KEY_ARGS if args.get(a)]
+
+
+def validate_read_scope(args: dict, is_admin: bool) -> tuple[bool, str | None]:
+    """Confine a non-admin raw read like a write: agent namespace only, no user-content database (#21605)."""
+    if is_admin:
+        return True, None
+    database = args.get("database")
+    if is_admin_only_database(database):
+        return False, f"Read denied: database '{database}' is admin-only for raw tools"
+    for key in read_keys(args):
+        if not key.startswith(AGENT_NAMESPACE_PREFIX):
+            return (
+                False,
+                f"Read denied: key '{key}' is outside the allowed namespace '{AGENT_NAMESPACE_PREFIX}*'",
             )
     return True, None
 
