@@ -31,6 +31,11 @@ USER_MODEL = frozenset({"User", "user_model", "user"})
 
 #: The one set-lock helper.
 HELPER = "autobot_shared/user_management/last_platform_admin.py"
+#: The only function of HELPER that may lock the set.
+HELPER_FUNCTION = "lock_platform_admin_rows"
+#: Reach floors (of ~3700 production files, 40 carry a FOR UPDATE): a sweep narrowed below them is not a sweep.
+MIN_FILES_ENUMERATED = 1000
+MIN_FILES_PARSED = 20
 #: Single-row locks of the user model: file -> number of sites.
 SINGLE_ROW = {
     "autobot-backend/user_management/services/session_successor.py": 2,
@@ -48,8 +53,8 @@ def _names(scope: ast.AST) -> set[str]:
     }
 
 
-def user_row_locks(source: str) -> int:
-    """How many ``with_for_update`` uses in *source* sit in a function (or module) that references the user model.
+def user_row_lock_sites(source: str) -> list[str]:
+    """The enclosing function name (``<module>`` at top level) of each ``with_for_update`` over the user model.
 
     The whole enclosing function counts, not only the statement: ``query = select(User.id)`` then
     ``query.with_for_update()`` is the split form that a statement-level check misses. Only code names count
@@ -57,7 +62,7 @@ def user_row_locks(source: str) -> int:
     """
     tree = parse_cache.parse(source)
     parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
-    found = 0
+    sites = []
     for node in ast.walk(tree):
         if not (
             (isinstance(node, ast.Attribute) and node.attr == "with_for_update")
@@ -67,29 +72,55 @@ def user_row_locks(source: str) -> int:
         scope = node
         while not isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Module)):
             scope = parents[scope]
-        found += bool(_names(scope) & USER_MODEL)
-    return found
+        if _names(scope) & USER_MODEL:
+            sites.append(getattr(scope, "name", "<module>"))
+    return sites
 
 
-def _census() -> dict[str, int]:
-    census = {}
+def user_row_locks(source: str) -> int:
+    """How many ``with_for_update`` uses in *source* sit in a function (or module) that references the user model."""
+    return len(user_row_lock_sites(source))
+
+
+def _census() -> tuple[dict[str, list[str]], int, int]:
+    """``({file: [enclosing function per lock]}, production files enumerated, files parsed)``."""
+    census, enumerated, parsed = {}, 0, 0
     for rel in tracked_py(ROOT, *TREES):
         if _TEST_PATH.search(rel):
             continue
+        enumerated += 1
         text = (ROOT / rel).read_text(encoding="utf-8")
-        if "with_for_update" in text and (count := user_row_locks(text)):
-            census[rel] = count
-    return census
+        if "with_for_update" not in text:
+            continue
+        parsed += 1
+        if sites := user_row_lock_sites(text):
+            census[rel] = sites
+    return census, enumerated, parsed
+
+
+def test_the_sweep_reaches_the_repository():
+    """Reach, not findings: the enumeration must not narrow to the helper and the baseline files."""
+    _census_map, enumerated, parsed = _census()
+    assert enumerated >= MIN_FILES_ENUMERATED, f"only {enumerated} production files enumerated"
+    assert parsed >= MIN_FILES_PARSED, f"only {parsed} files with a FOR UPDATE parsed"
 
 
 def test_user_row_locks_go_through_the_one_helper_or_are_named_single_row_locks():
-    census = _census()
+    census, _enumerated, _parsed = _census()
     assert HELPER in census, "the helper is not found: the detector has stopped seeing the lock it guards"
-    census.pop(HELPER)
-    assert census == SINGLE_ROW, (
-        f"a FOR UPDATE over the user model outside the helper: {sorted(set(census) ^ set(SINGLE_ROW))}"
+    assert census.pop(HELPER) == [HELPER_FUNCTION], f"a lock in {HELPER} outside {HELPER_FUNCTION}"
+    counts = {rel: len(sites) for rel, sites in census.items()}
+    assert counts == SINGLE_ROW, (
+        f"a FOR UPDATE over the user model outside the helper: {sorted(set(counts) ^ set(SINGLE_ROW))}"
         f" (or a changed count); use lock_platform_admin_rows (#21331)"
     )
+
+
+def test_control_a_lock_in_another_function_of_the_helper_file_is_not_exempt():
+    authorised = "async def lock_platform_admin_rows(s):\n    return select(User).with_for_update()\n"
+    rogue = authorised + "async def other(s):\n    return select(User).with_for_update()\n"
+    assert user_row_lock_sites(authorised) == [HELPER_FUNCTION]
+    assert user_row_lock_sites(rogue) == [HELPER_FUNCTION, "other"]
 
 
 def test_control_a_planted_set_lock_outside_the_helper_is_counted():

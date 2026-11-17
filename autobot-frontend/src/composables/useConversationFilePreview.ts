@@ -6,6 +6,7 @@
  */
 import { ref, type Ref } from 'vue'
 import type { ConversationFilePreview } from '@/utils/conversationFilePreview'
+import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useLatestRequest } from './useLatestRequest'
 
@@ -99,7 +100,7 @@ type PreviewFetch = { failed: false; data: ConversationFilePreview | null } | { 
 
 async function fetchPreview(deps: PreviewDeps, fileId: string): Promise<PreviewFetch> {
   try {
-    const data: ConversationFilePreview | null = await deps.api.get(`${deps.conversationApi()}/preview/${fileId}`)
+    const data: ConversationFilePreview | null = await deps.api.get(`${getApiBase()}/conversation-files/conversation/${deps.currentSessionId()}/preview/${fileId}`)
     return { failed: false, data }
   } catch (err: unknown) {
     logger.warn('Preview route failed, falling back to the bytes:', err)

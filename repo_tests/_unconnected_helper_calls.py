@@ -29,7 +29,8 @@ from repo_tests._unconnected_common import Tree
 #: ``const name = (args)[: string] =>`` then a ``${getApiBase()}/...`` template: a URL helper.
 _URL_HELPER = re.compile(
     r"\b(?:const|let)\s+(\w+)\s*(?::[^=\n]+)?=\s*(?:async\s*)?\([^)]*\)\s*(?::\s*string\s*)?=>\s*"
-    r"`\$\{getApiBase\(\)\}(/[^`]*)`"
+    r"`\$\{getApiBase\(\)\}(/[^`]*)`(?=[ \t]*(?:[;,)}]|//|$))",  # the template is the WHOLE return value
+    re.M,
 )
 _METHOD_OPTION = re.compile(r"method\s*:\s*['\"](\w+)['\"]")
 _PATH_TAIL = r"/[^`'\"\s]*"
@@ -58,18 +59,37 @@ def _own_arguments(text: str, start: int) -> str:
     return text[open_at:]
 
 
+def _top_level_method(arguments: str) -> str:
+    """The ``method:`` of the call's own options object, or ``""``: nested objects and quoted text are skipped."""
+    stack: list[str] = []
+    quote = ""
+    for index, char in enumerate(arguments):
+        if quote:
+            quote = "" if char == quote and arguments[index - 1] != "\\" else quote
+        elif char in "'\"`":
+            quote = char
+        elif char in "({[":
+            stack.append(char)
+        elif char in ")}]":
+            stack.pop()
+        elif stack == ["(", "{"] and arguments[:index].rstrip()[-1:] in ("{", ","):
+            option = _METHOD_OPTION.match(arguments, index)
+            if option:
+                return option.group(1)
+    return ""
+
+
 def _verb(verb: str, arguments: str) -> str:
     """The HTTP method of a client call: its own verb, or the ``method:`` option of ``rawRequest``/``request``."""
     if verb in ("rawRequest", "request"):
-        option = _METHOD_OPTION.search(arguments)
-        return option.group(1).upper() if option else "GET"
+        return (_top_level_method(arguments) or "GET").upper()
     return verb.upper() if verb in ("get", "post", "put", "patch", "delete") else ""
 
 
 def _calls_of(helper: re.Match[str], calls: str, receivers: dict[str, str]) -> set[tuple[str, str]]:
     name, path = helper.group(1), "/api" + helper.group(2)
     names = "|".join(re.escape(n) for n in sorted(receivers, key=len, reverse=True))
-    arg = rf"(?:`\$\{{{name}\(\)\}}({_PATH_TAIL})?`?|{name}\(\)\s*[,)])"
+    arg = rf"(?:`\$\{{{name}\(\)\}}({_PATH_TAIL})?`|{name}\(\))\s*[,)]"
     site = re.compile(rf"(?<![\w.$])(?:{names})\s*\.\s*({_VERBS})\s*(?:<[^()]*>)?\s*\(\s*{arg}")
     found = set()
     for m in site.finditer(calls):
