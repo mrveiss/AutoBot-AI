@@ -102,8 +102,8 @@ def test_unknown_target_is_rejected(live, etype, eid):
 
 
 @pytest.mark.asyncio
-async def test_failed_apply_records_no_rollback_row(monkeypatch):
-    target = SimpleNamespace(entity_type="bogus", entity_id="x", after_config={"a": 1})
+async def test_failed_apply_records_no_rollback_row(monkeypatch, live):
+    target = SimpleNamespace(entity_type="bogus", entity_id="x", after_config={"a": 1}, before_config=None)
     svc = ConfigRevisionService(session=SimpleNamespace())
     created = []
 
@@ -136,6 +136,24 @@ def test_only_keys_the_revision_changed_are_restored(live):
     cfg = live.get_full_config()
     assert cfg["llm"]["model"] == "old"
     assert cfg["other"] == {"keep": "later-edit"}
+
+
+def test_nested_leaf_delta_does_not_reassert_sibling_leaves(live):
+    live.config["llm"]["temp"] = "edited-later"
+    before = {"llm": {"model": "a", "temp": "t0"}}
+    after = {"llm": {"model": "old", "temp": "t0"}}
+    apply_snapshot("system", "config", after, before)
+    assert live.get_full_config()["llm"] == {"model": "old", "temp": "edited-later", "api_key": _LIVE}
+
+
+def test_a_key_the_revision_deleted_is_deleted_from_live(live):
+    live.config["llm"]["legacy"] = 1
+    live.config["gone"] = {"x": 1}
+    before = {"llm": {"model": "a", "legacy": 1}, "gone": {"x": 1}}
+    after = {"llm": {"model": "a"}}
+    apply_snapshot("system", "config", after, before)
+    cfg = live.get_full_config()
+    assert "legacy" not in cfg["llm"] and "gone" not in cfg
 
 
 def test_keep_live_secrets_recurses_into_lists():

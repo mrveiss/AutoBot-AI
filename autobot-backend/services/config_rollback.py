@@ -16,12 +16,14 @@ from typing import Any, Dict
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import LEGACY_PLACEHOLDERS, REDACTED_PLACEHOLDER
 from services.config_service import ConfigService
+from services.config_write_lock import CONFIG_WRITE_LOCK
 
 logger = get_logger(__name__)
 
 _PLACEHOLDERS = frozenset({REDACTED_PLACEHOLDER}) | LEGACY_PLACEHOLDERS
 _FULL_CONFIG_IDS = frozenset({"settings", "config", "hardware_priority", "telemetry_settings"})
 _AGENT_FIELDS = ("model", "provider", "enabled")
+_ABSENT = object()
 
 
 class UnsupportedRollbackTarget(Exception):
@@ -85,24 +87,57 @@ def _apply_agent(agent_id: str, snapshot: Dict[str, Any]) -> None:
     ConfigService.clear_cache()
 
 
-def _changed_entries(snapshot: Dict[str, Any], before: Dict[str, Any] | None) -> Dict[str, Any]:
-    """Keys the revision itself set: those whose value differs from its before snapshot."""
+def _leaf_delta(after: Dict[str, Any], before: Dict[str, Any] | None, path: tuple = ()):
+    """Leaf-level difference between a revision's snapshots.
+
+    Returns ``(changes, deleted)``: *changes* is a nested dict holding only the
+    leaves the revision set or changed; *deleted* lists the key paths present in
+    *before* and absent from *after*. The writers that record ``system``
+    revisions replace their section whole, so an absent key really was deleted.
+    With no *before*, everything in *after* counts as changed and nothing as deleted.
+    """
     if before is None:
-        return dict(snapshot)
-    return {k: v for k, v in snapshot.items() if before.get(k) != v}
+        return dict(after), []
+    changes: Dict[str, Any] = {}
+    deleted: list = [path + (k,) for k in before if k not in after]
+    for key, value in after.items():
+        old = before.get(key, _ABSENT)
+        if isinstance(value, dict) and isinstance(old, dict):
+            sub, sub_deleted = _leaf_delta(value, old, path + (key,))
+            deleted += sub_deleted
+            if sub:
+                changes[key] = sub
+        elif old is _ABSENT or old != value:
+            changes[key] = value
+    return changes, deleted
+
+
+def _delete_path(config: Dict[str, Any], path: tuple) -> None:
+    """Remove the key at *path* from *config* when it is there."""
+    node = config
+    for key in path[:-1]:
+        node = node.get(key) if isinstance(node, dict) else None
+    if isinstance(node, dict):
+        node.pop(path[-1], None)
+
+
+def _merged_live(live: Dict[str, Any], snapshot: Dict[str, Any], before: Dict[str, Any] | None):
+    """The live config with only this revision's leaf changes applied and its deletions removed."""
+    from config.loader import deep_merge
+
+    changes, deleted = _leaf_delta(snapshot, before)
+    merged = deep_merge(copy.deepcopy(live), keep_live_secrets(changes, live))
+    for path in deleted:
+        _delete_path(merged, path)
+    return merged
 
 
 def _apply_system(entity_id: str, snapshot: Dict[str, Any], before: Dict[str, Any] | None) -> None:
-    """Merge a system snapshot's delta into the LIVE config; never overwrite it whole."""
-    from config.loader import deep_merge
-
-    delta = _changed_entries(snapshot, before)
+    """Merge a system snapshot's leaf delta into the LIVE config; never overwrite it whole."""
     if entity_id == "backend":
-        live = ConfigService.get_backend_settings()
-        ConfigService.update_backend_settings(deep_merge(copy.deepcopy(live), keep_live_secrets(delta, live)))
+        ConfigService.update_backend_settings(_merged_live(ConfigService.get_backend_settings(), snapshot, before))
     elif entity_id in _FULL_CONFIG_IDS:
-        live = ConfigService.get_full_config()
-        ConfigService.save_full_config(deep_merge(copy.deepcopy(live), keep_live_secrets(delta, live)))
+        ConfigService.save_full_config(_merged_live(ConfigService.get_full_config(), snapshot, before))
     else:
         raise UnsupportedRollbackTarget(f"no live config writer for system/{entity_id}")
     ConfigService.clear_cache()
@@ -148,7 +183,7 @@ def rollback_locked(
     held across an await. A concurrent settings save cannot land between the
     reads and the write, so the audit row matches what was applied.
     """
-    with ConfigService._config_write_lock:
+    with CONFIG_WRITE_LOCK:
         live_before = _read_live(entity_type, entity_id)
         apply_snapshot(entity_type, entity_id, snapshot, before)
         return live_before, _read_live(entity_type, entity_id)

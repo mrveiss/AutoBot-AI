@@ -14,7 +14,6 @@ UPDATED: Now uses config_manager for consistent model selection
 """
 
 import fcntl
-import threading
 from typing import Dict
 
 import yaml
@@ -26,6 +25,7 @@ from autobot_shared.ssot_config import get_config as get_ssot_config
 
 # Legacy import for backward compatibility - these now read from SSOT
 from constants.network_constants import NetworkConstants
+from services.config_write_lock import CONFIG_WRITE_LOCK, locked_config_write
 from type_defs.common import Metadata
 
 # Get SSOT config
@@ -50,8 +50,7 @@ class ConfigService:
     _cached_config = None
     _cache_timestamp = None
     CACHE_DURATION = 30  # Cache for 30 seconds
-    # Issue #481: thread-safe config writes; reentrant so rollback can hold it (#18478)
-    _config_write_lock = threading.RLock()
+    _config_write_lock = CONFIG_WRITE_LOCK  # Issue #481, #18478: see services/config_write_lock.py
 
     @staticmethod
     def _should_refresh_cache() -> bool:
@@ -385,6 +384,7 @@ class ConfigService:
             raise
 
     @staticmethod
+    @locked_config_write
     def update_llm_config(config_data: Metadata) -> Dict[str, str]:
         """Update LLM configuration using unified config system"""
         try:
@@ -423,6 +423,7 @@ class ConfigService:
             raise
 
     @staticmethod
+    @locked_config_write
     def update_redis_config(config_data: Metadata) -> Dict[str, str]:
         """Update Redis configuration"""
         try:
@@ -452,18 +453,8 @@ class ConfigService:
             if "priority" in config_data:
                 redis_config["priority"] = int(config_data["priority"])
 
-            # Filter out prompts before saving (prompts are managed separately)
-            import copy
-
-            filtered_config = copy.deepcopy(current_config)
-            if "prompts" in filtered_config:
-                logger.info(
-                    "Removing prompts section from Redis config save - prompts are managed in prompts/ directory"
-                )
-                del filtered_config["prompts"]
-
-            # Save updated config to file
-            ConfigService._save_config_to_file(filtered_config)
+            # Save updated config (the save path strips the prompts section)
+            ConfigService._save_config_to_file(current_config)
 
             # Reload the global config manager
             config_manager.reload()
@@ -478,6 +469,7 @@ class ConfigService:
             raise
 
     @staticmethod
+    @locked_config_write
     def save_full_config(config_data: Metadata) -> Dict[str, str]:
         """Save complete application configuration to config.yaml and reload"""
         try:
@@ -540,6 +532,7 @@ class ConfigService:
             raise
 
     @staticmethod
+    @locked_config_write
     def update_backend_settings(backend_settings: Metadata) -> Dict[str, str]:
         """Update backend-specific settings in config.yaml"""
         try:
@@ -549,18 +542,8 @@ class ConfigService:
             # Update backend settings
             current_config["backend"] = backend_settings
 
-            # Filter out prompts before saving (prompts are managed separately)
-            import copy
-
-            filtered_config = copy.deepcopy(current_config)
-            if "prompts" in filtered_config:
-                logger.info(
-                    "Removing prompts section from backend settings save - prompts are managed in prompts/ directory"
-                )
-                del filtered_config["prompts"]
-
-            # Save updated config to file
-            ConfigService._save_config_to_file(filtered_config)
+            # Save updated config (the save path strips the prompts section)
+            ConfigService._save_config_to_file(current_config)
 
             # Reload the global config manager
             config_manager.reload()
