@@ -31,7 +31,7 @@
 
 ```
 Task(
-    subagent_type="database-engineer",
+    subagent_type="autobot-dev-skills:senior-developer",  # load the database-engineer lens: /autobot-dev-skills:engineering database-engineer
     description="Database schema initialization",
     prompt="""**WEEK 1 - TASKS 1.1, 1.2, 1.3: Database Schema Initialization**
 
@@ -77,7 +77,7 @@ File: planning/tasks/week-1-database-initialization-detailed-guide.md
 
 ```
 Task(
-    subagent_type="senior-backend-engineer",
+    subagent_type="autobot-dev-skills:senior-developer",  # load the senior-backend-engineer lens: /autobot-dev-skills:engineering senior-backend-engineer
     description="Backend startup integration",
     prompt="""**WEEK 1 - TASK 1.4: Backend Startup Integration**
 
@@ -121,7 +121,7 @@ See guide for complete implementations of both options.
 
 ```
 Task(
-    subagent_type="testing-engineer",
+    subagent_type="autobot-dev-skills:senior-developer",  # load the testing-engineer lens: /autobot-dev-skills:engineering testing-engineer
     description="Database initialization tests",
     prompt="""**WEEK 1 - TASKS 1.5, 1.6: Comprehensive Testing**
 
@@ -186,7 +186,7 @@ When launching agents:
    - Testing engineer completes Tasks 1.5, 1.6
 
 4. **Code Review** (After all agents complete)
-   - Launch `code-reviewer` agent
+   - Launch `autobot-dev-skills:reviewer` agent (code-reviewer lens)
    - Verify all implementations
    - Check test coverage reports
 

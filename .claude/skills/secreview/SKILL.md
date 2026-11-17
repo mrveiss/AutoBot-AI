@@ -1,6 +1,6 @@
 ---
 name: secreview
-description: Fast findings-first security review of a diff — emits a findings table within 3 tool calls, then verifies. Use when asked to security-review a diff, branch, uncommitted changes, or "check this for vulnerabilities". For deep multi-agent PR review use review-fleet instead; for whole-codebase audits use the security-auditor agent.
+description: Fast findings-first security review of a diff — emits a findings table within 3 tool calls, then verifies. Use when asked to security-review a diff, branch, uncommitted changes, or "check this for vulnerabilities". For deep multi-agent PR review use `/autobot-dev-skills:review review-fleet` instead; for whole-codebase audits use the `autobot-dev-skills:reviewer` agent with the security-auditor lens.
 ---
 
 # Secreview — Findings Before Exploration
@@ -26,10 +26,10 @@ in step 3 is useful; a perfectly-verified finding that never gets printed is not
 | Situation | Use instead |
 |---|---|
 | Unbounded review of the branch, thoroughness over speed | built-in `/security-review` |
-| Deep, recall-biased review of an open PR | `review-fleet` (10 parallel finder + verifier agents) |
-| Whole-codebase security audit | `security-auditor` agent |
-| Syntax, imports, types, lint before merge | `pre-merge-validate` |
-| CI triage / PR merge cycle | `review` |
+| Deep, recall-biased review of an open PR | `/autobot-dev-skills:review review-fleet` (10 parallel finder + verifier agents) |
+| Whole-codebase security audit | `autobot-dev-skills:reviewer` agent, security-auditor lens (`/autobot-dev-skills:review security-auditor`) |
+| Syntax, imports, types, lint before merge | `/autobot-dev-skills:review pre-merge-validate` |
+| CI triage / PR merge cycle | `/autobot-dev-skills:review review` |
 
 This skill is the **fast path**. Reach for it when the answer is wanted now.
 
