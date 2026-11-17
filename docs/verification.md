@@ -64,12 +64,17 @@
 
 ## How to Regenerate
 
+Run from the repository root:
+
 ```bash
-claude /claims-audit
+python3 .claude/skills/claims-audit/extract_claims.py
+python3 .claude/skills/claims-audit/verify_claims.py .claude/skills/claims-audit/extracted-claims.json
+python3 .claude/skills/claims-audit/generate_report.py
+python3 .claude/skills/claims-audit/file_issues.py --dry-run
 ```
 
-The `/claims-audit` skill at [`autobot-backend/skills/builtin/claims_audit/SKILL.md`](../autobot-backend/skills/builtin/claims_audit/SKILL.md):
-1. Walks `README.md`, `docs/` for capability claims
-2. For each claim, greps for endpoint declarations, test files, and Docker service definitions
-3. Writes `docs/verification.md` and `docs/verification-inventory.json` with current status
-4. Files `discovery:` issues for any `❌ broken` rows found
+The scripts under [`.claude/skills/claims-audit/`](../.claude/skills/claims-audit/):
+1. `extract_claims.py` walks `README.md`, `docs/` for capability claims
+2. `verify_claims.py` greps each claim for endpoint declarations, test files, and Docker service definitions, and writes `docs/verification-inventory.json`
+3. `generate_report.py` writes `docs/verification.md` from that inventory
+4. `file_issues.py` files `discovery:` issues for any `❌ broken` rows (drop `--dry-run` to file)

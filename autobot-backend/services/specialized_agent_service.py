@@ -17,6 +17,8 @@ the classifier's default tier.
 from pathlib import Path
 from typing import Any, Dict, List
 
+import yaml
+
 from agent_tier_classifier import AgentTier, get_agent_tier
 from autobot_shared.claude_config import claude_agents_dir
 from autobot_shared.frontmatter import split_frontmatter, strip_frontmatter
@@ -80,6 +82,15 @@ def _categorize_agent(name: str, description: str) -> str:
     return "general"
 
 
+def _yaml_scalar(value: str) -> str | None:
+    """A frontmatter value decoded as a YAML scalar (quotes and trailing comments dropped)."""
+    try:
+        decoded = yaml.safe_load(value)
+    except yaml.YAMLError:
+        return value
+    return None if decoded is None else str(decoded)
+
+
 def _parse_frontmatter(content: str) -> Dict[str, Any]:
     """Parse YAML frontmatter from an agent .md file (#1794).
 
@@ -116,7 +127,7 @@ def _parse_frontmatter(content: str) -> Dict[str, Any]:
         elif key == "model":
             result["model"] = value
         elif key == "tier":
-            result["tier"] = value
+            result["tier"] = _yaml_scalar(value)
 
     return result
 

@@ -38,6 +38,8 @@ export PYTHONPATH="$PROJECT_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 # Paths
 # The host's Claude Code user-level agents dir: ONE lookup, in Python (SSOT)
 AGENT_DIR="$(python3 -m autobot_shared.claude_config)" || { echo "Cannot resolve the Claude Code agents directory" >&2; exit 1; }
+# Absolute once, before any cd, and handed to the optimiser via --agent-dir so both agree
+AGENT_DIR="$(realpath -m -- "$AGENT_DIR")"
 OPTIMIZER_SCRIPT="$SCRIPT_DIR/../optimize_agents.py"
 
 # Functions
@@ -111,7 +113,7 @@ run_optimization() {
 
     # The optimizer prints the backup repository and refuses an unrelated enclosing one
     cd "$PROJECT_ROOT"
-    python3 "$OPTIMIZER_SCRIPT" "${mode_args[@]}" --git-backup --cache --strip-code-blocks --no-collapse-policy $repo_flag $force_flag $stats_flag
+    python3 "$OPTIMIZER_SCRIPT" --agent-dir "$AGENT_DIR" "${mode_args[@]}" --git-backup --cache --strip-code-blocks --no-collapse-policy $repo_flag $force_flag $stats_flag
 
     if [ "$APPLY" = true ]; then
         print_success "Optimization complete!"
@@ -131,9 +133,9 @@ restore_agents() {
     cd "$PROJECT_ROOT"
 
     if [ -n "$tag" ]; then
-        python3 "$OPTIMIZER_SCRIPT" --restore "$tag"
+        python3 "$OPTIMIZER_SCRIPT" --agent-dir "$AGENT_DIR" --restore "$tag"
     else
-        python3 "$OPTIMIZER_SCRIPT" --restore
+        python3 "$OPTIMIZER_SCRIPT" --agent-dir "$AGENT_DIR" --restore
     fi
 
     print_success "Agents restored successfully"
@@ -143,7 +145,17 @@ list_backups() {
     print_header "Available Backup Tags"
 
     cd "$PROJECT_ROOT"
-    python3 "$OPTIMIZER_SCRIPT" --list-backups
+    python3 "$OPTIMIZER_SCRIPT" --agent-dir "$AGENT_DIR" --list-backups
+}
+
+# git against the agents repo with the ambient repository overrides removed; the variable
+# list is the Python optimiser's own (autobot_shared.paths.AMBIENT_GIT_VARS), one source.
+agents_git() {
+    local unset_args=() var
+    for var in $(python3 -c 'from autobot_shared.paths import AMBIENT_GIT_VARS; print(*AMBIENT_GIT_VARS)'); do
+        unset_args+=(-u "$var")
+    done
+    env "${unset_args[@]}" git -C "$AGENT_DIR" "$@"
 }
 
 show_status() {
@@ -161,12 +173,12 @@ show_status() {
     # Show git status
     echo ""
     print_info "Git status of agents directory:"
-    git -C "$AGENT_DIR" status --short . || print_info "No changes"
+    agents_git status --short . || print_info "No changes"
 
     # Show recent backup tags
     echo ""
     print_info "Recent backup tags:"
-    git -C "$AGENT_DIR" tag --list 'agents-pre-optimization-*' --sort=-creatordate | head -5 || print_info "No backup tags found"
+    agents_git tag --list 'agents-pre-optimization-*' --sort=-creatordate | head -5 || print_info "No backup tags found"
 
     # Check if optimization cache exists
     echo ""

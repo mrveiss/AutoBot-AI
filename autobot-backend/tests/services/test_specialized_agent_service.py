@@ -415,6 +415,22 @@ class TestTier:
         agent = SpecializedAgentService(agents_dir=d).get_agent("x")
         assert agent["tier"] == "tier3_specialized"
 
+    @pytest.mark.parametrize(
+        "line",
+        [
+            'tier: "tier3_specialized"',
+            "tier: 'tier3_specialized'",
+            "tier: tier3_specialized  # specialised",
+            'tier: "tier3_specialized" # c',
+        ],
+    )
+    def test_quoted_or_commented_tier_is_decoded(self, tmp_path, line):
+        d = tmp_path / "agents"
+        d.mkdir()
+        (d / "x.md").write_text(f"---\nname: X\n{line}\n---\nBody", encoding="utf-8")
+        agent = SpecializedAgentService(agents_dir=d).get_agent("x")
+        assert agent["tier"] == "tier3_specialized"
+
     def test_invalid_declared_tier_falls_back_to_default(self, tmp_path, caplog):
         d = tmp_path / "agents"
         d.mkdir()

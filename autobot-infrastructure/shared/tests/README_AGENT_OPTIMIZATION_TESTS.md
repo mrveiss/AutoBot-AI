@@ -394,7 +394,7 @@ cache_key = hashlib.md5(file_path.encode()).hexdigest()
 - **Tests:** `tests/test_optimized_agent_loader.py`
 - **Fixtures:** `tests/fixtures/agent_optimization/`
 - **CLAUDE.md:** Project development guidelines
-- **Agent Files:** `autobot-backend/resources/prompts/*.md`
+- **Agent Files:** the host agents directory, `claude_agents_dir()` in `autobot_shared/claude_config.py` (default `~/.claude/agents`; override with `AUTOBOT_CLAUDE_CONFIG_DIR` or `CLAUDE_CONFIG_DIR`, or `--agent-dir`)
 
 ## Maintenance
 
