@@ -81,6 +81,22 @@ describe('graph-interrupt approval cards', () => {
     expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('approved')
   })
 
+  it('a held non-command tool (navigate) is approved and refused through resume, never the terminal route (#19957)', async () => {
+    const calls = [{ tool: 'navigate', params: { url: 'https://example.test/weather' } }]
+    const terminal = vi.fn()
+    const approve = useApprovalRouting(terminal)
+
+    seedCard({ session_id: 'chat-1', command: 'navigate {"url": "https://example.test/weather"}', calls })
+    expect(isGraphApproval(fakeStore.currentMessages[0].metadata)).toBe(true)
+    await approve('term-1', true)
+    expect(JSON.parse(fetchWithAuth.mock.calls[0][1].body)).toEqual({ approved: true, reason: '' })
+
+    seedCard({ session_id: 'chat-1', calls })
+    await approve('term-1', false, 'not now')
+    expect(JSON.parse(fetchWithAuth.mock.calls[1][1].body)).toEqual({ approved: false, reason: 'not now' })
+    expect(terminal).not.toHaveBeenCalled()
+  })
+
   it('posts a denial with approved=false', async () => {
     seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }] })
     await useApprovalRouting(vi.fn())('term-1', false)

@@ -78,11 +78,14 @@ CODE_EXEC_TOOLS = ("code_interpreter",)
 # #18294: owner decision 2026-10-11 -- every mutating tool is gated by a category.
 PROCESS_EXEC_TOOLS = ("run_shell", "start_process", "stop_process", "manage_service")
 DATA_WRITE_TOOLS = ("set_redis_value", "insert_database")
-BROWSER_ACTION_TOOLS = ("navigate", "click", "fill", "select", "evaluate")
+BROWSER_ACTION_TOOLS = ("click", "fill", "select", "evaluate")
+#: Owner ruling 2026-11-17 (#17237): navigate is always available. It loads a page and submits nothing, so it has no
+#: approval category and an unset line does not hold it. It stays a STATE effect below (the page later calls act on).
+BROWSER_NAVIGATION_TOOLS = ("navigate",)
 #: #18430: browser tools that only observe the page (and hover), and the index-addressed form of the actions.
 BROWSER_READ_TOOLS = ("hover", "screenshot", "get_text", "get_attribute", "wait_for_selector", "browser_state")
 BROWSER_INDEXED_TOOLS = ("click_index", "fill_index", "select_index", "hover_index")
-BROWSER_TOOLS = BROWSER_ACTION_TOOLS + BROWSER_READ_TOOLS + BROWSER_INDEXED_TOOLS
+BROWSER_TOOLS = BROWSER_NAVIGATION_TOOLS + BROWSER_ACTION_TOOLS + BROWSER_READ_TOOLS + BROWSER_INDEXED_TOOLS
 DELEGATION_TOOLS = ("compose", "delegate")
 
 # --- composed catalogues (each reproduces its former literal exactly) ------
@@ -108,6 +111,10 @@ SENSITIVE_TOOLS = frozenset(
     + BROWSER_ACTION_TOOLS
     + DELEGATION_TOOLS
 )
+
+#: Mutating by effect, yet never held for approval (owner ruling 2026-11-17, #17237): the AI lines leave an unset
+#: line on these unmanaged, like a read. A stored line still applies.
+ALWAYS_AVAILABLE_TOOLS = frozenset(BROWSER_NAVIGATION_TOOLS)
 
 #: Work-item approval categories → the tools that constitute each action (seam gate).
 #: Note: "destructive operations" intentionally excludes SYSTEM_EXEC/DEPLOY, and
@@ -253,7 +260,7 @@ TOOL_EFFECTS: "dict[str, ToolEffect]" = {
     **_entries(CODE_EXEC_TOOLS, _E.EXEC | _E.STATE),
     **_entries(DATA_WRITE_TOOLS, _E.WRITE),
     **_entries(PROCESS_EXEC_TOOLS, _E.EXEC | _E.STATE),
-    **_entries(BROWSER_ACTION_TOOLS, _E.STATE),
+    **_entries(BROWSER_NAVIGATION_TOOLS + BROWSER_ACTION_TOOLS, _E.STATE),
     "evaluate": _E.EXEC | _E.STATE,
     **_entries(DELEGATION_TOOLS, _E.DELEGATE),
     **_entries(

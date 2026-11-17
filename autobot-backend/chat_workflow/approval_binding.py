@@ -13,6 +13,7 @@ through line 2 only if its fingerprint is among them. The client's resume payloa
 
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Mapping, Sequence
 
 from autobot_shared.secret_redaction import redact_nested
@@ -27,6 +28,14 @@ def _params(tool_call: Mapping[str, Any]) -> Dict[str, Any]:
 def ai_line_calls_shown(shown: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
     """What the interrupt displays for every call that needs a person: tool and redacted params."""
     return [{"tool": tc.get("name", ""), "params": redact_nested(_params(tc))} for tc in shown]
+
+
+def call_summary(call: Mapping[str, Any]) -> str:
+    """``tool {params}`` for the approval card of a call that carries no shell command (#19957)."""
+    params = call.get("params") or {}
+    return (
+        f"{call.get('tool', '')} {json.dumps(params, sort_keys=True, default=str)}" if params else call.get("tool", "")
+    )
 
 
 def bind_decision(decision: Any, shown: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:

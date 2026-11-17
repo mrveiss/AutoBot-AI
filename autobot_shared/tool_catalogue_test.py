@@ -156,11 +156,11 @@ _ADDED_18294 = {
     "create_file", "rename_file",
     "run_shell", "start_process", "stop_process", "manage_service",
     "set_redis_value", "insert_database",
-    "navigate", "click", "fill", "select", "evaluate",
+    "click", "fill", "select", "evaluate",
     "compose", "delegate",
     "multi_edit", "apply_patch",
 }  # fmt: skip
-_EXPECTED_SENSITIVE = _ORIG_SENSITIVE | _ADDED_18294
+_EXPECTED_SENSITIVE = _ORIG_SENSITIVE | _ADDED_18294  # navigate is not here: owner ruling 2026-11-17 (#17237)
 
 _ORIG_APPROVAL = {
     "pushing commits": {"git_push", "git_commit", "git_merge", "git_rebase", "git_force_push"},

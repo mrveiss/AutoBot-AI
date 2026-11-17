@@ -261,7 +261,9 @@ async def test_deny_skips_execution_entirely(monkeypatch):
     result = await graph.execute_tools(state, config)
 
     assert dispatch_calls["count"] == 0
-    assert result["should_continue"] is False
+    # #19957: the refusal is a result the model reads next, so the turn continues rather than ending silently.
+    assert result["should_continue"] is True
+    assert [r["status"] for r in result["execution_history"]] == ["refused"]
 
 
 # --- execute_tools must not re-block an already-approved/never-gated tool -

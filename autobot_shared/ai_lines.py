@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping, Optional
 
-from autobot_shared.tool_catalogue import ToolEffect, canonical_tool_name, tool_effect
+from autobot_shared.tool_catalogue import ALWAYS_AVAILABLE_TOOLS, ToolEffect, canonical_tool_name, tool_effect
 
 
 class AiLine(str, Enum):
@@ -152,8 +152,8 @@ def is_mutating(tool_name: str) -> bool:
     Fail closed (#18430): an unknown tool (MCP, plugin, a new builtin) counts as mutating, so an unset line
     holds it. Only a tool the catalogue declares with no mutating effect, or a conversation tool, is free.
     """
-    if tool_name in CONVERSATION_TOOLS:
-        return False
+    if tool_name in CONVERSATION_TOOLS or canonical_tool_name(tool_name) in ALWAYS_AVAILABLE_TOOLS:
+        return False  # owner ruling 2026-11-17 (#17237): navigate is always available
     declared = tool_effect(tool_name)
     return declared is None or bool(declared & ToolEffect.MUTATING)
 

@@ -31,7 +31,7 @@ from langchain_core.runnables import RunnableConfig
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_workflow import limits
-from chat_workflow.approval_binding import ai_line_calls_shown, bind_decision
+from chat_workflow.approval_binding import ai_line_calls_shown, bind_decision, call_summary
 from chat_workflow.attachment_context import attachment_prompt, deliver_notices, without_block
 from chat_workflow.checkpointer_connection import describe_connection, describe_error, get_checkpointer_connection
 from chat_workflow.graph_hooks import (
@@ -45,6 +45,7 @@ from chat_workflow.graph_tool_dispatch import (
     dispatch_approved_calls,
     emit_tool_call_hook,
     emit_tool_complete_hook,
+    refusal_results,
     send_denied_message,
 )
 from chat_workflow.stall_escalation import add_stall_nodes, stall_mode
@@ -809,16 +810,17 @@ async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
     stream_cb = config["configurable"].get("stream_callback")
 
     # Emit approval request to frontend before interrupting
+    calls = ai_line_calls_shown(shown)
     approval_request = {
         "type": "command_approval_request",
         "content": pending.get("description", ""),
         "metadata": {
-            "command": pending.get("command", ""),
+            "command": pending.get("command") or call_summary(calls[0]),  # #19957: a non-command tool has none
             "host": pending.get("host", ""),
             "risk_level": pending.get("risk_level", "medium"),
             "session_id": state["session_id"],
             "terminal_session_id": state["terminal_session_id"],
-            "calls": ai_line_calls_shown(shown),
+            "calls": calls,
         },
     }
     if stream_cb:
@@ -897,9 +899,13 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
             output_summary="approval denied — tools skipped",
             session_id=session_id,
         )
+        # #19957: a refusal is a result the model reads, not the end of the task; the decision ends with the batch.
         return {
-            "should_continue": False,
+            "should_continue": True,
+            "execution_history": [*state.get("execution_history", []), *refusal_results(tool_calls, decision)],
             "workflow_messages": messages,
+            "tool_calls": [],
+            "approval_decision": None,
         }
 
     loop_state = planned_loop_update(state, tool_calls)  # #3254: before execution
@@ -932,6 +938,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         "execution_history": exec_history,
         "workflow_messages": messages,
         "tool_calls": [],  # Clear after execution
+        "approval_decision": None,  # #19957: a yes covers its batch only
         **loop_state,
         **plan_update,
     }
