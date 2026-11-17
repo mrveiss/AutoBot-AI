@@ -6,6 +6,7 @@
 
 from typing import Any, Dict, List, Tuple
 
+from autobot_shared.ai_lines import DECLARED_CATEGORIES_KEY
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -105,6 +106,7 @@ async def dispatch_approved_calls(
     # the graph path while leaving it fully active for legacy/MCP callers
     # that never pass through the interrupt.
     exec_ctx.requires_approval_before = []
+    exec_ctx.context.pop(DECLARED_CATEGORIES_KEY, None)  # #19957: the stamped declared set is cleared with it
 
     async for item in manager._process_tool_calls(
         tool_calls,

@@ -31,14 +31,19 @@ def ai_line_calls_shown(shown: Sequence[Mapping[str, Any]]) -> List[Dict[str, An
 
 
 def calls_summary(calls: Sequence[Mapping[str, Any]]) -> str:
-    """The card's one line for calls with no shell command: ``tool {params}`` of the first, ``(+N more)`` (#19957)."""
+    """``tool {params}`` of the first call: the card's line for a call with no shell command (#19957)."""
     first = calls[0]
     params = first.get("params") or {}
-    text = (
+    return (
         f"{first.get('tool', '')} {json.dumps(params, sort_keys=True, default=str)}"
         if params
         else first.get("tool", "")
     )
+
+
+def _card_command(pending: Mapping[str, Any], calls: Sequence[Mapping[str, Any]]) -> str:
+    """The pending shell command, or the first call's summary; ``(+N more)`` whenever the card covers several."""
+    text = pending.get("command") or calls_summary(calls)  # #19957: a non-command tool has none
     return f"{text} (+{len(calls) - 1} more)" if len(calls) > 1 else text
 
 
@@ -49,7 +54,7 @@ def approval_card(state: Mapping[str, Any], shown: Sequence[Mapping[str, Any]]) 
         "type": "command_approval_request",
         "content": pending.get("description", ""),
         "metadata": {
-            "command": pending.get("command") or calls_summary(calls),  # #19957: a non-command tool has none
+            "command": _card_command(pending, calls),
             "host": pending.get("host", ""),
             "risk_level": pending.get("risk_level", "medium"),
             "session_id": state["session_id"],

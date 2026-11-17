@@ -79,16 +79,23 @@ async def _two_passes(self, http, prompt, iteration, ctx):
     yield ("answer", iteration == 1)
 
 
-async def _drive(manager):
+async def _plan_only_answer(self, http, prompt, iteration, ctx):
+    """The plan-only seam (the shipping default): one answer, no tool calls."""
+    yield {"type": "response", "content": "answer", "metadata": {}}
+    yield ("answer", [], False)
+
+
+async def _drive(manager, gate_on=False):
     saver = MemorySaver()
     graph_module._compiled_graph = None
     try:
         with (
             patch.object(graph_module, "get_redis_checkpointer", AsyncMock(return_value=saver)),
             patch.object(ChatWorkflowManager, "_run_continuation_loop_iteration", _two_passes),
+            patch.object(ChatWorkflowManager, "_run_llm_iteration_plan_only", _plan_only_answer),
             patch("autobot_shared.http_client.get_http_client", lambda: None),
-            # The harness scripts the inline model seam; the plan-only path (the gate default) calls another one.
-            patch("chat_workflow.session_role.CHAT_APPROVAL_GATE_ENABLED", False),
+            # The inline seam is scripted by default; gate_on drives the plan-only path the shipping default takes.
+            patch("chat_workflow.session_role.CHAT_APPROVAL_GATE_ENABLED", gate_on),
             patch("chat_workflow.graph.attachment_prompt", AsyncMock(return_value="p")),
         ):
             return [
@@ -120,6 +127,19 @@ async def test_flag_on_the_live_turn_creates_and_advances_a_plan():
     ):
         await _drive(_manager())
     assert create_spy.call_count == 1 and complete_spy.call_count == 1
+
+
+async def test_flag_on_the_shipping_plan_only_path_still_creates_and_advances_a_plan():
+    gen, create, complete = _spies()
+    with (
+        gen,
+        create as create_spy,
+        complete as complete_spy,
+        patch.object(plan_runner, "planner_enabled", return_value=True),
+    ):
+        messages = await _drive(_manager(), gate_on=True)
+    assert create_spy.call_count == 1 and complete_spy.call_count == 1
+    assert any(m.type == "response" and m.content == "answer" for m in messages)
 
 
 async def test_flag_off_the_planner_is_never_called_and_the_output_matches_the_baseline():

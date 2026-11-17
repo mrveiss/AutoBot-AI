@@ -95,7 +95,7 @@ async def _boom(self, *args, **kwargs):
     yield  # pragma: no cover - makes this an async generator like the real one
 
 
-async def _drive(script, workspace_root, graph_raises=False):
+async def _drive(script, workspace_root, graph_raises=False, gate_on=False):
     """Run the default turn runner with *script* as the model; returns (record, contexts, deleted_threads)."""
     contexts: list = []
     deleted: list = []
@@ -106,6 +106,11 @@ async def _drive(script, workspace_root, graph_raises=False):
     async def passes(self, http, prompt, iteration, ctx):
         async for item in script(iteration, ctx):
             yield item
+
+    async def plan_passes(self, http, prompt, iteration, ctx):
+        """The plan-only seam (the shipping default): the same script, its final pair as (text, no calls, stop)."""
+        async for item in script(iteration, ctx):
+            yield (item[0], [], False) if isinstance(item, tuple) else item
 
     real_delete = graph_module.delete_thread_checkpoints
 
@@ -119,9 +124,10 @@ async def _drive(script, workspace_root, graph_raises=False):
         with (
             patch.object(graph_module, "get_redis_checkpointer", AsyncMock(return_value=saver)),
             patch.object(ChatWorkflowManager, "_run_continuation_loop_iteration", passes),
+            patch.object(ChatWorkflowManager, "_run_llm_iteration_plan_only", plan_passes),
             patch("autobot_shared.http_client.get_http_client", lambda: None),
-            # The harness scripts the inline model seam; the plan-only path (the gate default) calls another one.
-            patch("chat_workflow.session_role.CHAT_APPROVAL_GATE_ENABLED", False),
+            # The inline seam is scripted by default; gate_on drives the plan-only path the shipping default takes.
+            patch("chat_workflow.session_role.CHAT_APPROVAL_GATE_ENABLED", gate_on),
             patch("chat_workflow.graph.attachment_prompt", AsyncMock(return_value="p")),
             patch("chat_workflow.get_chat_workflow_manager", lambda: manager),
             patch("chat_workflow.graph.delete_thread_checkpoints", spy_delete),
@@ -147,6 +153,18 @@ async def test_a_clean_answer_has_no_category_and_the_turn_is_pinned_bounded_and
     assert ctx["requires_approval_before"], "every approval category is gated"
     (thread,) = deleted
     assert thread.startswith("eval-g-") and not [c async for c in saver.alist({"configurable": {"thread_id": thread}})]
+
+
+async def test_a_clean_answer_through_the_shipping_plan_only_path(tmp_path):
+    """Gate ON (the default): generate_response -> _generate_response_planned -> persist, no inline pass."""
+
+    async def script(iteration, ctx):
+        yield {"type": "response", "content": "a grounded answer", "metadata": {}}
+        yield ("a grounded answer", False)
+
+    record, contexts, deleted, saver = await _drive(script, tmp_path, gate_on=True)
+    assert record.final_text == "a grounded answer" and record.final_status == "completed"
+    assert classify_failures(record) == [] and len(deleted) == 1
 
 
 async def test_a_repeated_tool_call_trips_the_real_loop_detector(tmp_path):

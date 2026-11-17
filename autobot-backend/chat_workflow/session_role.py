@@ -245,7 +245,7 @@ async def apply_session_governance(
     baseline and the session's approval categories are overlaid as ``requires_approval_before``. #20195: the
     attachment floor (this chat used a file; an admin may waive it) is written from server state, never the client.
     """
-    from chat_workflow.approval_baseline import with_baseline_categories
+    from chat_workflow.approval_baseline import stamp_declared_categories, with_baseline_categories
     from chat_workflow.attachment_floor import stamp_attachment_floor
     from chat_workflow.session_work_item import SessionWorkItemService, apply_work_item
 
@@ -256,7 +256,9 @@ async def apply_session_governance(
     # #13704: a server-set work-item binding overrides any client-supplied work_item_id (#13687).
     context = apply_work_item(context, await SessionWorkItemService().get_work_item(session_id))
     context = await stamp_attachment_floor(context, session_id)
+    session_categories = await svc.get_approval_categories(session_id) if CHAT_APPROVAL_GATE_ENABLED else ()
+    context = stamp_declared_categories(context, session_categories)  # #19957: before the overlay mixes them in
     if CHAT_APPROVAL_GATE_ENABLED:
         # #18294: all categories gated by default; only the SLM setting relaxes one.
-        context = await with_baseline_categories(context, await svc.get_approval_categories(session_id))
+        context = await with_baseline_categories(context, session_categories)
     return context

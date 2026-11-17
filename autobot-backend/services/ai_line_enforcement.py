@@ -51,6 +51,7 @@ from autobot_shared.ai_lines import (
     LineResolution,
     LineScope,
     action_key,
+    declared_categories_of,
     is_mutating,
     resolve_line,
     resolve_scope,
@@ -211,7 +212,7 @@ async def call_needs_approval(tool_call: Mapping[str, Any], ctx: Any) -> bool:
         params if isinstance(params, dict) else {},
         (getattr(ctx, "context", None) or {}).get(VERIFIED_COMPANY_KEY),
         user_id=(getattr(ctx, "context", None) or {}).get(VERIFIED_USER_KEY),
-        declared_categories=getattr(ctx, "requires_approval_before", None) or (),
+        declared_categories=declared_categories_of(ctx),
         role_requires_approval=turn_requires_approval(tool_call.get("name", ""), ctx),
     )
     return resolution.line is AiLine.DRAFT_THEN_SEND

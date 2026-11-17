@@ -175,3 +175,62 @@ async def test_with_the_line_store_down_no_card_is_raised_and_the_seam_refuses()
         assert await graph._tool_call_needs_approval(CLICK, ctx) is False
     message, filed = await arun_guard(dict(CLICK), ctx, [], store_unavailable=True)
     assert message.type == "error" and filed == 0
+
+
+async def _governed(context):
+    """The turn context as chat builds it with the gate ON: the baseline overlaid on ``requires_approval_before``."""
+    from unittest.mock import AsyncMock
+
+    from chat_workflow.session_role import apply_session_governance
+
+    with (
+        patch("chat_workflow.session_role.CHAT_APPROVAL_GATE_ENABLED", True),
+        patch("chat_workflow.session_role.SessionRoleService.get_role", AsyncMock(return_value=None)),
+        patch("chat_workflow.session_role.SessionRoleService.get_approval_categories", AsyncMock(return_value=[])),
+        patch("chat_workflow.session_work_item.SessionWorkItemService.get_work_item", AsyncMock(return_value=None)),
+        patch("chat_workflow.attachment_floor.stamp_attachment_floor", AsyncMock(side_effect=lambda c, _s: c)),
+        ai_line_world(),
+    ):
+        governed = await apply_session_governance(
+            "s1", {"verified_company_id": VERIFIED_COMPANY, **context}, "user", {}
+        )
+    return governed
+
+
+async def _needs_approval(call, governed):
+    from services.ai_line_enforcement import call_needs_approval
+
+    ctx = SimpleNamespace(requires_approval_before=governed["requires_approval_before"], context=governed)
+    with ai_line_world():
+        return await call_needs_approval(call, ctx)
+
+
+@pytest.mark.asyncio
+async def test_navigate_runs_in_real_chat_where_the_baseline_overlay_is_applied_and_click_is_held():
+    governed = await _governed({})
+    assert "browser actions" in governed["requires_approval_before"], "control: the overlay put the category in"
+    assert await _needs_approval({"name": "navigate", "params": {"url": "https://example.test"}}, governed) is False
+    assert await _needs_approval(CLICK, governed) is True
+
+
+@pytest.mark.asyncio
+async def test_a_work_item_that_declares_browser_actions_still_holds_navigate():
+    governed = await _governed({"requires_approval_before": ["browser actions"]})
+    assert await _needs_approval({"name": "navigate", "params": {"url": "https://example.test"}}, governed) is True
+
+
+@pytest.mark.asyncio
+async def test_a_client_cannot_stamp_the_declared_set_to_lift_a_work_items_gate():
+    forged = {"requires_approval_before": ["browser actions"], "declared_approval_categories": []}
+    governed = await _governed(forged)
+    assert governed["declared_approval_categories"] == ["browser actions"]
+
+
+def test_the_card_counts_the_other_calls_even_when_the_first_is_a_shell_command():
+    from chat_workflow.approval_binding import approval_card
+
+    shell = {"name": "execute_command", "params": {"command": "ls"}, "command": "ls", "needs_approval": True}
+    card = approval_card({"session_id": "s", "terminal_session_id": "t"}, [shell, dict(CLICK, needs_approval=True)])
+    assert card["metadata"]["command"] == "ls (+1 more)"
+    alone = approval_card({"session_id": "s", "terminal_session_id": "t"}, [shell])
+    assert alone["metadata"]["command"] == "ls"
