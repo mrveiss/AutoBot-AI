@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 
 from api.chat_activity_store import _process_activity_batch, _store_single_activity, activity_principal
 from api.chat_session_messages import fetch_session_messages
+from api.chat_session_team_access import require_team_member
 from api.chat_sessions_update import apply_session_update
 from api.schemas_chat import (
     ActivityAddData,
@@ -506,15 +507,9 @@ async def _list_scoped_sessions(
 
     # scope == "team"
     if not team_id:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("team_id required for team scope")
+        raise get_exceptions_lazy()[3]("team_id required for team scope")  # [3] is ValidationError
 
+    await require_team_member(user_data, team_id)  # #21667
     return await _list_team_sessions(team_id, validator, chat_history_manager, request_id)
 
 

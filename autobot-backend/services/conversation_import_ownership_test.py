@@ -28,6 +28,7 @@ from typing import Any, Dict
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import HTTPException
 
 from security.session_owner_errors import SessionOwnerUnreadable
 from security.session_owner_index import owned_session_ids
@@ -123,14 +124,31 @@ async def test_replace_refuses_when_ownership_cannot_be_read() -> None:
 
 
 @pytest.mark.asyncio
-async def test_replace_still_works_on_a_genuinely_unowned_session() -> None:
-    """A real legacy session records no owner and stays replaceable."""
+@pytest.mark.parametrize("on_conflict", ["replace", "merge"])
+async def test_an_import_over_an_ownerless_session_is_a_404_for_a_non_admin(on_conflict) -> None:
+    """#21668: nobody claims a session with no owner by writing; the answer is a missing session's 404."""
     manager = _manager(exists=True, owner=None)
 
-    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
+    with pytest.raises(HTTPException) as refused:
+        await import_conversation(manager, dict(_DOCUMENT), on_conflict=on_conflict, user_data=_BOB)
 
-    assert result["success"] is True
-    manager.save_session.assert_awaited()
+    assert refused.value.status_code == 404
+    manager.save_session.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_admin_import_over_an_ownerless_session_is_refused_not_stamped(owner_index) -> None:
+    """#21668: an admin's owner assignment goes through the approval queue (#17038), not an import."""
+    manager = _manager(exists=True, owner=None)
+
+    result = await import_conversation(
+        manager, dict(_DOCUMENT), on_conflict="replace", user_data={"username": "root", "role": "admin"}
+    )
+
+    assert result["success"] is False and result["conflict"] is True
+    assert "approval queue" in result["message"]
+    manager.save_session.assert_not_awaited()
+    owner_index.set_session_owner.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -207,11 +225,3 @@ async def test_replacing_ones_own_session_keeps_it_indexed(owner_index) -> None:
     )
 
     owner_index.set_session_owner.assert_awaited_once_with("sess-abc", "alice")
-
-
-@pytest.mark.asyncio
-async def test_an_import_over_an_ownerless_session_is_not_indexed(owner_index) -> None:
-    """The ownerless takeover itself is #21668; the owner index must not record it."""
-    await import_conversation(_manager(exists=True, owner=None), dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
-
-    owner_index.set_session_owner.assert_not_awaited()
