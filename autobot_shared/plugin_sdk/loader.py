@@ -28,6 +28,7 @@ from autobot_shared.testfile_names import is_test_filename
 from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
 from .credential_binding import bound_resolver
 from .hooks import validate_hook_names
+from .lifecycle import reload_with_fresh_code, reverse_registrations
 from .registry import get_registry
 
 if TYPE_CHECKING:
@@ -399,7 +400,7 @@ class PluginLoader:
             # Shutdown plugin
             await plugin.shutdown()
             plugin.status = PluginStatus.UNLOADED
-
+            reverse_registrations(name)  # #19302
             # Unregister from plugin registry and unified registry
             self.registry.unregister(name)
             get_registry().unregister(name)
@@ -427,11 +428,9 @@ class PluginLoader:
                 logger.warning("Plugin not found: %s", name)
                 return False
 
-            # Use plugin's reload method
-            await plugin.reload()
-
-            logger.info("Reloaded plugin: %s", name)
-            return True
+            reloaded = await reload_with_fresh_code(self, plugin)
+            logger.info("Reload of plugin %s: %s", name, "done" if reloaded else "not done")
+            return reloaded
 
         except Exception as e:
             logger.error("Failed to reload plugin %s: %s", name, e, exc_info=True)

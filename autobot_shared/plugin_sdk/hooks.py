@@ -21,6 +21,8 @@ import warnings
 from enum import Enum
 from typing import Any, Callable, Dict, List
 
+from .base import PluginRegistry, PluginStatus
+
 logger = logging.getLogger(__name__)
 
 
@@ -176,6 +178,9 @@ def validate_hook_names(hook_names: List[str], plugin_name: str = "unknown") -> 
             )
 
 
+_INACTIVE_STATUSES = frozenset({PluginStatus.DISABLED, PluginStatus.UNLOADED, PluginStatus.ERROR})
+
+
 class HookRegistry:
     """
     Singleton registry for managing hooks and callbacks.
@@ -212,6 +217,10 @@ class HookRegistry:
         if hook_name not in self._hooks:
             self._hooks[hook_name] = []
 
+        # #19302: a repeat registration of the same callback fires once, not twice
+        if any(cb["callback"] == callback and cb["plugin_name"] == plugin_name for cb in self._hooks[hook_name]):
+            return
+
         # Store callback with metadata
         callback_info = {
             "callback": callback,
@@ -245,6 +254,30 @@ class HookRegistry:
             del self._hooks[hook_name]
             logger.info("Unregistered all callbacks for hook '%s'", hook_name)
 
+    def unregister_plugin(self, plugin_name: str) -> int:
+        """Remove every callback *plugin_name* registered, on any hook (#19302).
+
+        The host calls this on unload so cleanup never depends on the plugin's
+        own ``shutdown()``. Returns the number of callbacks removed.
+        """
+        removed = 0
+        for hook_name in list(self._hooks):
+            kept = [cb for cb in self._hooks[hook_name] if cb["plugin_name"] != plugin_name]
+            removed += len(self._hooks[hook_name]) - len(kept)
+            if kept:
+                self._hooks[hook_name] = kept
+            else:
+                del self._hooks[hook_name]
+        if removed:
+            logger.info("Unregistered %d hook callback(s) for plugin '%s'", removed, plugin_name)
+        return removed
+
+    @staticmethod
+    def _plugin_is_inactive(plugin_name: str | None) -> bool:
+        """True when the owning plugin is known and disabled, unloaded or errored (#19302)."""
+        plugin = PluginRegistry().get_plugin(plugin_name) if plugin_name else None
+        return plugin is not None and plugin.status in _INACTIVE_STATUSES
+
     async def call_hook(
         self,
         hook_name: str,
@@ -269,6 +302,8 @@ class HookRegistry:
         for callback_info in self._hooks[hook_name]:
             callback = callback_info["callback"]
             plugin_name = callback_info["plugin_name"]
+            if self._plugin_is_inactive(plugin_name):
+                continue
 
             try:
                 # Handle both async and sync callbacks

@@ -16,6 +16,7 @@ favour recall); this module declares no vocabulary (#17337). See
 ``docs/developer/REDACTION_BOUNDARY.md``.
 """
 
+import asyncio
 import uuid
 from typing import Any, Dict, List
 
@@ -25,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER, MatchPolicy, is_credential_entry
 from models.config_revision import ConfigRevision
+from services.config_rollback import apply_snapshot
 
 logger = get_logger(__name__)
 
@@ -109,9 +111,12 @@ class ConfigRevisionService:
     ) -> ConfigRevision:
         """Restore config to a prior snapshot and record the rollback (#1404).
 
-        Returns the new revision that captures the rollback action.
+        The snapshot is applied to the live config first (#18478); a failed
+        apply raises before any rollback row is written. Returns the new
+        revision that captures the rollback action.
         """
         target = await self._get_or_raise(revision_id)
+        await asyncio.to_thread(apply_snapshot, target.entity_type, target.entity_id, target.after_config or {})
         current = await self._get_latest(target.entity_type, target.entity_id)
 
         new_revision = await self.create_revision(
