@@ -53,17 +53,17 @@ class AdvisoryException:
 #: The expiry is enforced by THIS GATE and not by the test suite, deliberately: a test
 #: failing on a date would block every Python PR, where the gate blocks only the PRs that
 #: trigger the frontend suite. So the suite stays date-independent and #21736 carries the
-#: reminder to look again before 2026-12-18.
+#: reminder to look again before 2026-12-17.
 #:
-#: The table is EMPTY when nothing is currently unfixable, and the tests never depend on a real
-#: entry. GHSA-vfj7-8cjw-p6xm (braces, owner decision 2026-10-03, #13400) was retired once
-#: upstream stopped reporting it (2026-10-23): the stale-record check above is what demanded
-#: its removal. GHSA-fc5q-39xc-vjpf (picomatch, owner decision 2026-11-18, #21736) is the
-#: current entry; it also covers the report-only SLM frontend lockfile (#17864), which reads
-#: this same table.
+#: The table is EMPTY whenever nothing is currently unfixable, and holds one entry per advisory
+#: that is. GHSA-vfj7-8cjw-p6xm (braces, owner decision 2026-10-03, #13400) was retired once
+#: upstream stopped reporting it (2026-10-23): the stale-record check above is what demanded its
+#: removal. GHSA-fc5q-39xc-vjpf (picomatch, owner decision 2026-11-17, #21736) is the live entry:
+#: no patched version exists (latest, 4.0.7, is still affected). It retires itself -- a published
+#: patch makes the gate refuse it, and upstream ceasing to report it makes the gate demand its removal.
 ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {
     "GHSA-fc5q-39xc-vjpf": AdvisoryException(
-        expires="2026-12-18",
+        expires="2026-12-17",
         reason=(
             "picomatch <= 4.0.7 ReDoS through single-branch repeated extglobs, with no patched "
             "version (npm latest is 4.0.7; upstream fix PRs are open and unmerged), so no bump "
@@ -71,8 +71,8 @@ ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {
             "vitest, vue-tsc, stylelint via micromatch, storybook, npm-run-all2). The lockfile "
             "marks exactly four of the ten copies as non-dev (vite, vue-router, tinyglobby and "
             "unplugin-utils); no autobot-frontend source file imports picomatch, and whether "
-            "those four reach the browser bundle is not established. Owner decision "
-            "2026-11-18, recorded on #21736."
+            "those four reach the browser bundle is not established. Owner decision 2026-11-17 "
+            "on #21736, renewed or removed deliberately by the expiry."
         ),
     ),
 }
