@@ -282,7 +282,9 @@ def _small_window(monkeypatch, tokens: int):
     from context_window_manager import get_context_window_manager
 
     real = get_context_window_manager()
-    monkeypatch.setattr(real, "get_prompt_budget", lambda model=None: tokens)
+    # Patch the CLASS: monkeypatch "restores" an instance attribute by setting the old bound method on the
+    # shared singleton, which then shadows every later class-level patch of the budget (#21230).
+    monkeypatch.setattr(type(real), "get_prompt_budget", lambda self, model=None: tokens)
     return real
 
 
@@ -306,10 +308,10 @@ def test_a_window_with_no_room_left_sheds_the_attachment_and_keeps_the_prompt_wh
 def test_an_unreadable_window_budget_falls_back_to_the_configured_bounds(world, monkeypatch):
     from context_window_manager import get_context_window_manager
 
-    def _boom(model=None):
+    def _boom(self, model=None):
         raise RuntimeError("no window")
 
-    monkeypatch.setattr(get_context_window_manager(), "get_prompt_budget", _boom)
+    monkeypatch.setattr(type(get_context_window_manager()), "get_prompt_budget", _boom)  # class: see _small_window
     file_id = _seed(world, _ALICE, "report.txt", f"Revenue: {_FACT}".encode())
     _, prompt = _turn(world, [file_id])
     assert _FACT in prompt
