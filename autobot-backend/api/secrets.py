@@ -427,7 +427,7 @@ class SecretsManager:
         for secret_id in request.secret_ids:
             secret_data = secrets.get(secret_id)
             if not secret_data:
-                failed.append({"secret_id": secret_id, "reason": "Secret not found"})
+                failed.append({"secret_id": secret_id, "reason": REFUSAL_TEXT[404]})
                 continue
 
             # Check access permissions for source
