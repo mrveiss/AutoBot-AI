@@ -8,8 +8,10 @@ Guard test for AGENT_TIER_MAP roster drift (#14194).
 AGENT_TIER_MAP (agent_tier_classifier.py) classifies TWO independent agent
 rosters for vLLM prefix-cache tiering, and neither roster can see the other:
 
-  1. Claude Code dev subagents -- one ``.claude/agents/*.md`` file per agent,
-     each carrying the agent's ``name:`` frontmatter field.
+  1. Claude Code dev subagents -- formerly one ``.claude/agents/*.md`` file per
+     agent. Those definitions now ship from the ``autobot-dev-skills`` plugin
+     (#21718), so this repo can no longer enumerate them; their names are the
+     frozen ``_PLUGIN_DEV_SUBAGENT_NAMES`` below.
   2. AutoBot's own internal task-agent taxonomy -- ``AgentType`` in
      ``agents/agent_orchestration/types.py``, dispatched at runtime by
      ``BaseModalityAgent`` subclasses (``agents/*_agent.py``) and the
@@ -25,8 +27,6 @@ no AGENT_TIER_MAP entry, and an AGENT_TIER_MAP entry with no roster member
 Both rosters are read here WITHOUT going through agent_tier_classifier or the
 ``agents`` package:
 
-- ``.claude/agents/*.md`` via a regex frontmatter scan -- the same technique
-  ``services/specialized_agent_service.py`` already uses in production.
 - ``AgentType`` via ``importlib.util.spec_from_file_location``, loading
   ``types.py`` in isolation. ``agents/__init__.py`` eagerly imports
   ``kb_librarian_agent`` (which imports ``services.llm_service``), and
@@ -43,7 +43,6 @@ compared here in dash form to match AGENT_TIER_MAP's own key convention.
 """
 
 import importlib.util
-import re
 import sys
 from pathlib import Path
 
@@ -51,25 +50,40 @@ from agent_tier_classifier import AGENT_TIER_MAP
 
 _BACKEND_ROOT = Path(__file__).resolve().parent
 _REPO_ROOT = _BACKEND_ROOT.parent
-_CLAUDE_AGENTS_DIR = _REPO_ROOT / ".claude" / "agents"
 _AGENT_TYPES_FILE = _BACKEND_ROOT / "agents" / "agent_orchestration" / "types.py"
 
-_FRONTMATTER_BLOCK_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
-_FRONTMATTER_NAME_RE = re.compile(r"^name:\s*(\S+)\s*$", re.MULTILINE)
-
-
-def _claude_subagent_names() -> set[str]:
-    """Every ``name:`` frontmatter value across ``.claude/agents/*.md``."""
-    names: set[str] = set()
-    for md_file in sorted(_CLAUDE_AGENTS_DIR.glob("*.md")):
-        content = md_file.read_text(encoding="utf-8")
-        block = _FRONTMATTER_BLOCK_RE.match(content)
-        if not block:
-            continue
-        name_match = _FRONTMATTER_NAME_RE.search(block.group(1))
-        if name_match:
-            names.add(name_match.group(1))
-    return names
+#: Dev-subagent names that AGENT_TIER_MAP still carries after the definitions moved to
+#: the ``autobot-dev-skills`` plugin (#21718). Frozen: the roster is no longer in this repo,
+#: so a new dev subagent cannot be detected here. Retiring these map entries is tracked
+#: with the agent-registry source (#21719).
+_PLUGIN_DEV_SUBAGENT_NAMES = frozenset(
+    {
+        "ai-ml-engineer",
+        "code-refactorer",
+        "code-reviewer",
+        "code-skeptic",
+        "content-writer",
+        "conversation-compacter",
+        "database-engineer",
+        "devops-engineer",
+        "documentation-engineer",
+        "frontend-designer",
+        "frontend-engineer",
+        "memory-curator",
+        "memory-monitor",
+        "multimodal-engineer",
+        "performance-engineer",
+        "prd-writer",
+        "project-manager",
+        "project-task-planner",
+        "repo-sweeper",
+        "research-to-issues",
+        "security-auditor",
+        "senior-backend-engineer",
+        "systems-architect",
+        "testing-engineer",
+    }
+)
 
 
 def _agent_orchestration_type_values() -> set[str]:
@@ -102,31 +116,9 @@ def _agent_orchestration_type_values() -> set[str]:
         sys.modules.pop(name, None)
 
 
-def test_claude_subagent_roster_is_non_empty():
-    """Sanity check: the .claude/agents scan must find real agents (#14194).
-
-    Guards against a silently-empty roster making the drift tests vacuously
-    pass -- e.g. a wrong path or a frontmatter format change.
-    """
-    assert len(_claude_subagent_names()) >= 10
-
-
 def test_agent_orchestration_roster_is_non_empty():
     """Sanity check: the AgentType scan must find real members (#14194)."""
     assert len(_agent_orchestration_type_values()) >= 5
-
-
-def test_every_claude_subagent_definition_is_mapped():
-    """Every .claude/agents/*.md name has an AGENT_TIER_MAP entry (#14194).
-
-    Direction 1 (on disk, unmapped): the agent silently defaults to
-    TIER_1_DEFAULT instead of getting a deliberate classification.
-    """
-    unmapped = _claude_subagent_names() - set(AGENT_TIER_MAP)
-    assert not unmapped, (
-        f"Agent definition(s) on disk with no AGENT_TIER_MAP entry: {sorted(unmapped)}. "
-        "Add a deliberate AgentTier to AGENT_TIER_MAP in agent_tier_classifier.py."
-    )
 
 
 def test_every_agent_orchestration_type_is_mapped():
@@ -147,10 +139,10 @@ def test_agent_tier_map_has_no_orphan_entries():
     Direction 2 (mapped, no definition anywhere): a dead entry -- the agent
     was renamed or removed and AGENT_TIER_MAP was never updated.
     """
-    known_roster = _claude_subagent_names() | _agent_orchestration_type_values()
+    known_roster = _PLUGIN_DEV_SUBAGENT_NAMES | _agent_orchestration_type_values()
     orphans = set(AGENT_TIER_MAP) - known_roster
     assert not orphans, (
-        f"AGENT_TIER_MAP entries with no matching .claude/agents definition or "
+        f"AGENT_TIER_MAP entries with no matching dev-subagent name or "
         f"AgentType member: {sorted(orphans)}. Remove the dead entry, or restore the "
         "missing agent definition / AgentType member if it still exists elsewhere."
     )

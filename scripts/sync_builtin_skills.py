@@ -36,13 +36,8 @@ MIRRORED: dict[str, str] = {
 }
 
 #: Same name, deliberately different text -> why. Owner ruling 2026-10-25 on #19341.
-HOMONYMS: dict[str, str] = {
-    "research": (
-        "the developer skill writes docs/research/ and clones through scripts/research/safe_clone.py "
-        "in this repo; the product skill runs for an AutoBot user who has neither, so each keeps its "
-        "own text (both carry the untrusted-content contract)"
-    ),
-}
+#: Empty since the developer ``research`` skill moved to the ``autobot-dev-skills`` plugin (#21718).
+HOMONYMS: dict[str, str] = {}
 
 
 def pairs(root: Path = REPO_ROOT) -> list[tuple[Path, Path]]:

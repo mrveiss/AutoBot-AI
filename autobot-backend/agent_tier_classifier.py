@@ -36,8 +36,9 @@ class AgentTier(Enum):
 #
 # Two independent rosters feed this map, and neither can see the other:
 #
-#   1. Claude Code dev subagents -- one name per .claude/agents/*.md file
-#      (frontend-engineer, senior-backend-engineer, code-reviewer, ...).
+#   1. Claude Code dev subagents -- names formerly defined by .claude/agents/*.md
+#      (frontend-engineer, senior-backend-engineer, code-reviewer, ...); the
+#      definitions now ship from the autobot-dev-skills plugin (#21718).
 #   2. AutoBot's own internal task-agent taxonomy -- AgentType in
 #      agents/agent_orchestration/types.py, dispatched at runtime by
 #      BaseModalityAgent subclasses (agents/*_agent.py) and the
@@ -81,7 +82,7 @@ AGENT_TIER_MAP: Dict[str, AgentTier] = {
     "content-writer": AgentTier.TIER_3_SPECIALIZED,
     "memory-monitor": AgentTier.TIER_3_SPECIALIZED,
     "project-task-planner": AgentTier.TIER_3_SPECIALIZED,
-    # #14194: added when .claude/agents/*.md gained these three definitions
+    # #14194: added when the dev-subagent definitions gained these three
     # (#14135, #14139) without a matching entry here. Narrow, non-default
     # tasks like the existing specialized agents above.
     "conversation-compacter": AgentTier.TIER_3_SPECIALIZED,
