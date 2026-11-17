@@ -348,7 +348,7 @@ async def service_rotate_system_secret(
             session, secret_id=secret_id, new_plaintext=body.value.encode("utf-8"), vault=_SYSTEM_VAULT
         )
         await session.commit()
-    except (SecretAccessError, SecretNotFoundError) as exc:
+    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
         raise _mapped(exc)
     return SecretMetadata.of(secret)
 
@@ -515,7 +515,7 @@ async def rotate_secret(
             session, user_id=user_id, permissions=perms, secret_id=secret_id, new_plaintext=body.value.encode("utf-8")
         )
         await session.commit()
-    except (SecretAccessError, SecretNotFoundError) as exc:
+    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
         raise _mapped(exc)
     return SecretMetadata.of(secret)
 
@@ -548,7 +548,7 @@ async def share_secret(
             session, user_id=user_id, permissions=perms, secret_id=secret_id, grantee=_vault(body.grantee)
         )
         await session.commit()
-    except (SecretAccessError, SecretNotFoundError) as exc:
+    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
         raise _mapped(exc)
     return {"status": "shared", "grantee": body.grantee}
 

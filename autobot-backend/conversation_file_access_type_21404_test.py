@@ -110,3 +110,13 @@ def test_an_error_mid_migration_leaves_the_old_table_and_rows_intact(tmp_path, m
     assert _refused_reference(connection)  # still the old CHECK
     assert connection.execute("SELECT name FROM sqlite_temp_master WHERE name LIKE 'file_access_log%'").fetchall() == []
     connection.close()
+
+
+def test_foreign_keys_that_were_off_stay_off(tmp_path):
+    connection = _old_database(tmp_path)
+    assert connection.execute("PRAGMA foreign_keys").fetchone() == (0,)
+
+    ensure_access_type_schema(connection)
+
+    assert connection.execute("PRAGMA foreign_keys").fetchone() == (0,)
+    connection.close()

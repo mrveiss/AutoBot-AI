@@ -119,9 +119,20 @@ def test_the_refusal_is_logged_by_class_and_reason_without_the_message(op, kind,
             assert leaked not in line
 
 
-#: The routes whose ``except`` clause maps a ``ValueError`` (``_mapped`` turns it into the fixed 400). The other
-#: routes call coordinator operations that raise no validation error and do not catch it: it stays a 500 there.
-_VALIDATING = {"create", "service-create", "access", "dependencies", "register-dependency", "revoke-share"}
+#: The routes whose ``except`` clause maps a ``ValueError`` (``_mapped`` turns it into the fixed 400). The rest call
+#: coordinator operations that can raise no validation error and do not catch it. Rotate and share can: a lone
+#: surrogate in the value or vault id makes ``encode`` raise ``UnicodeEncodeError``, a ``ValueError``.
+_VALIDATING = {
+    "create",
+    "service-create",
+    "service-rotate",
+    "access",
+    "dependencies",
+    "register-dependency",
+    "rotate",
+    "share",
+    "revoke-share",
+}
 
 
 @pytest.mark.parametrize(
@@ -174,3 +185,15 @@ def test_a_missing_dependency_gets_the_fixed_404_without_ids(store) -> None:
 
     assert (response.status_code, response.json()) == (404, {"detail": REFUSAL_TEXT[404]})
     assert "scheduler" not in response.text and _SECRET not in response.text
+
+
+@pytest.mark.parametrize("url", [_U, _S], ids=["rotate", "service-rotate"])
+def test_a_lone_surrogate_in_a_rotated_value_gets_the_fixed_400(url, store) -> None:
+    gen = _client(_Raises(RuntimeError("unreached")))
+    client = next(gen)
+    try:
+        response = client.put(url, content=b'{"value": "\\ud800"}', headers={"content-type": "application/json"})
+    finally:
+        gen.close()
+
+    assert (response.status_code, response.json()) == (400, {"detail": REFUSAL_TEXT[400]})
