@@ -17,17 +17,19 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_agent import (
-    AgentConfigAllAgentsResponse,
     AgentConfigDetailResponse,
     AgentConfigEnableDisableResponse,
     AgentConfigHealthResponse,
-    AgentConfigListAgentsResponse,
     AgentConfigOverviewResponse,
+    AgentConfigUpdateModelResponse,
+    AgentModelUpdate,
+)
+from api.schemas_agent_config import (
+    AgentConfigAllAgentsResponse,
+    AgentConfigListAgentsResponse,
     AgentConfigSpecializedDetailResponse,
     AgentConfigSpecializedListResponse,
-    AgentConfigUpdateModelResponse,
     AgentConfigUsageResponse,
-    AgentModelUpdate,
 )
 from api.schemas_common import DataResponse
 from api.settings_config import require_settings_admin

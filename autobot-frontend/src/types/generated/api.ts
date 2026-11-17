@@ -57656,6 +57656,8 @@ export interface components {
             model?: string | null;
             /** Category */
             category?: string | null;
+            /** Tier */
+            tier?: string | null;
         } & {
             [key: string]: unknown;
         };
