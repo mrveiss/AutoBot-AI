@@ -43,7 +43,8 @@ def _old_database(tmp_path, rows=_ROWS):
     old = _SCHEMA.read_text(encoding="utf-8").replace(", 'restore', 'reference'))", ", 'restore'))")
     assert "'reference'))" not in old
     connection = sqlite3.connect(tmp_path / "old.db")
-    connection.executescript(old)
+    connection.executescript(old)  # the schema file switches foreign keys on
+    connection.execute("PRAGMA foreign_keys = OFF")
     connection.executemany(_FULL_INSERT, rows)
     connection.commit()
     return connection
