@@ -108,12 +108,13 @@ SENSITIVE_TOOLS = frozenset(
     + CODE_EXEC_TOOLS
     + PROCESS_EXEC_TOOLS
     + DATA_WRITE_TOOLS
+    + BROWSER_NAVIGATION_TOOLS  # sensitive for roles and the verifier; only the AI-line hold is lifted (#17237)
     + BROWSER_ACTION_TOOLS
     + DELEGATION_TOOLS
 )
 
-#: Mutating by effect, yet never held for approval (owner ruling 2026-11-17, #17237): the AI lines leave an unset
-#: line on these unmanaged, like a read. A stored line still applies.
+#: Mutating by effect, yet never held by the AI lines (owner ruling 2026-11-17, #17237, approval only): an unset
+#: line is left unmanaged, like a read; a stored line still applies. Role forbiddance and the verifier still cover them.
 ALWAYS_AVAILABLE_TOOLS = frozenset(BROWSER_NAVIGATION_TOOLS)
 
 #: Work-item approval categories → the tools that constitute each action (seam gate).

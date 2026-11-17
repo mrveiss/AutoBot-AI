@@ -371,6 +371,9 @@ async def test_tool_call_needs_approval_asks_the_single_resolver():
     # ... but the baseline alone holds it back again if the category is not relaxed.
     with ai_line_world(stored=AiLine.AUTONOMOUS):
         assert await graph._tool_call_needs_approval({"name": "bash"}, ctx) is True
-    # Line 3 always interrupts (the seam then refuses).
+    # Line 3 gets no card, since no yes lifts it (#19957): the dispatch seam refuses it and the model is told.
     with ai_line_world(stored=AiLine.NEVER, slm_relaxed=relaxed):
-        assert await graph._tool_call_needs_approval({"name": "bash"}, ctx) is True
+        assert await graph._tool_call_needs_approval({"name": "bash"}, ctx) is False
+    # An unreadable line store resolves to line 3 too: no Approve card that could only be refused.
+    with ai_line_world(store_unavailable=True):
+        assert await graph._tool_call_needs_approval({"name": "bash"}, ctx) is False

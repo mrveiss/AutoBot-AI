@@ -50,13 +50,19 @@ def send_denied_message(decision: Dict[str, Any], iteration: int, messages: list
         stream_cb(deny_msg)
 
 
-def refusal_results(tool_calls: List[Dict[str, Any]], decision: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """One result per call a person refused, so the model is told it did not run and why (#19957)."""
+def split_refused(tool_calls: List[Dict[str, Any]], decision: Dict[str, Any]) -> Tuple[list, List[Dict[str, Any]]]:
+    """``(calls still to run, results for the calls the person refused)`` (#19957).
+
+    Only a call the person was shown (``needs_approval``) is refused; an ungated one was never in front of them.
+    The model is told a refused call did not run and why.
+    """
     from chat_workflow.tool_call_loop import stamp_call_fingerprint
 
     reason = decision.get("reason") or "no reason given"
     results = []
     for tool_call in tool_calls:
+        if not tool_call.get("needs_approval"):
+            continue
         result = {
             "tool": tool_call.get("name", ""),
             "status": "refused",
@@ -65,7 +71,7 @@ def refusal_results(tool_calls: List[Dict[str, Any]], decision: Dict[str, Any]) 
         }
         stamp_call_fingerprint([result], tool_call)
         results.append(result)
-    return results
+    return [tc for tc in tool_calls if not tc.get("needs_approval")], results
 
 
 async def dispatch_approved_calls(

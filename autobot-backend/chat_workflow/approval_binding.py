@@ -30,12 +30,16 @@ def ai_line_calls_shown(shown: Sequence[Mapping[str, Any]]) -> List[Dict[str, An
     return [{"tool": tc.get("name", ""), "params": redact_nested(_params(tc))} for tc in shown]
 
 
-def call_summary(call: Mapping[str, Any]) -> str:
-    """``tool {params}`` for the approval card of a call that carries no shell command (#19957)."""
-    params = call.get("params") or {}
-    return (
-        f"{call.get('tool', '')} {json.dumps(params, sort_keys=True, default=str)}" if params else call.get("tool", "")
+def calls_summary(calls: Sequence[Mapping[str, Any]]) -> str:
+    """The card's one line for calls with no shell command: ``tool {params}`` of the first, ``(+N more)`` (#19957)."""
+    first = calls[0]
+    params = first.get("params") or {}
+    text = (
+        f"{first.get('tool', '')} {json.dumps(params, sort_keys=True, default=str)}"
+        if params
+        else first.get("tool", "")
     )
+    return f"{text} (+{len(calls) - 1} more)" if len(calls) > 1 else text
 
 
 def bind_decision(decision: Any, shown: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:

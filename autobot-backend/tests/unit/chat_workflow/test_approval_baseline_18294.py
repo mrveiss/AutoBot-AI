@@ -96,3 +96,11 @@ def test_navigate_is_always_available_and_a_state_changing_browser_action_is_sti
     for tool in ("click", "fill", "select", "evaluate"):
         msg, filed = run_guard({"name": tool, "params": {}}, _ctx([]), [])
         assert msg is not None and msg.type == "approval_required" and filed == 1
+
+
+def test_navigate_keeps_its_role_forbiddance_and_verifier_coverage():
+    """The ruling lifts the AI-line hold only (#17237): a non-executor agent still cannot navigate by default."""
+    from autobot_shared.tool_catalogue import SENSITIVE_TOOLS
+    from orchestration.agent_registry import DEFAULT_FORBIDDEN_TOOLS
+
+    assert "navigate" in SENSITIVE_TOOLS and "navigate" in DEFAULT_FORBIDDEN_TOOLS

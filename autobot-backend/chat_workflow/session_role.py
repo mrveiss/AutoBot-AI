@@ -30,11 +30,17 @@ logger = get_logger(__name__)
 # TTL for a session's role binding — env-tunable, never hard-coded.
 SESSION_ROLE_TTL_SECONDS: int = env_int("AUTOBOT_SESSION_ROLE_TTL_SECONDS", 24 * 3600)
 
+
 # GH#11202, #19957: master switch for the chat approval gate. ON by default: the gate routes tool calls through
 # the LangGraph approval interrupt, which the chat UI renders and resolves through ``POST /chats/{id}/resume``.
 # It is the one path on which a held call can be approved and run; the inline path can only end the turn.
 # ``AUTOBOT_CHAT_APPROVAL_GATE=0`` turns it off.
-CHAT_APPROVAL_GATE_ENABLED: bool = os.environ.get("AUTOBOT_CHAT_APPROVAL_GATE", "1").lower() in ("1", "true", "yes")
+def approval_gate_enabled(raw: Optional[str]) -> bool:
+    """The gate's setting from ``AUTOBOT_CHAT_APPROVAL_GATE``: unset means on, only 1/true/yes is on otherwise."""
+    return (raw if raw is not None else "1").strip().lower() in ("1", "true", "yes")
+
+
+CHAT_APPROVAL_GATE_ENABLED: bool = approval_gate_enabled(os.environ.get("AUTOBOT_CHAT_APPROVAL_GATE"))
 
 _KEY = "autobot:session:{session_id}:role"
 _APPROVAL_KEY = "autobot:session:{session_id}:approval_categories"

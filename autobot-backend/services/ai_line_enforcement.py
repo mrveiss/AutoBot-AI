@@ -193,9 +193,10 @@ def turn_requires_approval(tool_name: str, ctx: Any) -> bool:
 
 
 async def call_needs_approval(tool_call: Mapping[str, Any], ctx: Any) -> bool:
-    """Plan-time projection for the chat graph's interrupt: any line stricter than line 1 (GH#11202).
+    """Plan-time projection for the chat graph's interrupt: line 2 (GH#11202).
 
     Asks the same resolver ``enforce_line`` applies, so the interrupt and the dispatch seam cannot disagree.
+    Line 3 gets no card: no yes lifts it. The dispatch seam refuses it and the model is told (#19957).
     """
     params = tool_call.get("params") or tool_call.get("arguments") or {}
     resolution = await resolve_action_line(
@@ -206,7 +207,7 @@ async def call_needs_approval(tool_call: Mapping[str, Any], ctx: Any) -> bool:
         declared_categories=getattr(ctx, "requires_approval_before", None) or (),
         role_requires_approval=turn_requires_approval(tool_call.get("name", ""), ctx),
     )
-    return resolution.line is not AiLine.AUTONOMOUS
+    return resolution.line is AiLine.DRAFT_THEN_SEND
 
 
 def _fingerprint_key() -> bytes:
