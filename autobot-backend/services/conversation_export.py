@@ -16,12 +16,15 @@ import json
 import time
 from typing import Any, Dict, List, Tuple
 
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
+from chat_history.session_file import session_file_exists
 from chat_history.session_lease import session_lease
 from security.session_owner_errors import SessionOwnerUnreadable
 from security.session_owner_index import index_owner_or_unmark
 from security.session_ownership import SessionOwnershipValidator, build_owner_metadata
+from security.session_posture import deny_unreadable_owner, session_not_found
 
 logger = get_logger(__name__)
 
@@ -134,14 +137,31 @@ async def export_conversation_markdown(chat_history_manager, session_id: str) ->
         return None
 
 
-async def export_all_conversations_json(chat_history_manager) -> str | None:
+async def _sessions_to_export(chat_history_manager, username: str | None, all_users: bool) -> list:
+    """The caller's own sessions through the canonical listing (#21666); every user's only when *all_users*.
+
+    *all_users* is the instance-wide export: the caller (the route) has already required an administrator.
     """
-    Export all conversations as a bulk JSON archive.
+    if all_users:
+        return await chat_history_manager.list_sessions()
+    from api.chat_sessions import list_user_sessions  # noqa: PLC0415 -- api imports this module's siblings
+
+    return await list_user_sessions(chat_history_manager, username)
+
+
+async def export_all_conversations_json(
+    chat_history_manager, username: str | None = None, *, all_users: bool = False
+) -> str | None:
+    """
+    Export the caller's conversations as a bulk JSON archive (#21666).
+
+    Without *all_users* only sessions *username* owns are exported; a principal with no username
+    exports none. *all_users* exports every conversation on the instance and is admin-only.
 
     Returns serialised JSON string, or None on error.
     """
     try:
-        sessions = await chat_history_manager.list_sessions()
+        sessions = await _sessions_to_export(chat_history_manager, username, all_users)
         envelopes = []
         for session_info in sessions:
             session_id = session_info.get("chatId") or session_info.get("id", "")
@@ -184,8 +204,8 @@ async def _session_exists(chat_history_manager, session_id: str) -> bool:
     Fails closed: a storage error propagates, because "could not tell" must never read as "no such
     session" when the answer decides whether an import may write into someone else's conversation.
     """
-    messages = await chat_history_manager.load_session(session_id)
-    return len(messages) > 0
+    # The stored record decides, not its message count: an owned session with no messages still exists (#21668).
+    return await session_file_exists(chat_history_manager, session_id)
 
 
 def _apply_suffix_to_session_id(session_id: str, suffix: str) -> str:
@@ -196,11 +216,6 @@ def _apply_suffix_to_session_id(session_id: str, suffix: str) -> str:
 # ---------------------------------------------------------------------------
 # Public import function
 # ---------------------------------------------------------------------------
-
-
-# Distinct from None: ownership could not be read, which must never be treated
-# as "unowned" when deciding whether an overwrite is allowed (#14033).
-_UNREADABLE_OWNER = object()
 
 
 async def import_conversation(
@@ -241,20 +256,35 @@ def _conflict_result(session_id: str, message: str) -> Dict[str, Any]:
 
 async def _owner_refusal(chat_history_manager, session_id: str, user_data: Dict[str, Any] | None):
     """``(refusal, existing_owner)``: a refusal result when the importer may not write into the existing
-    session, else None; and the owner the session records (None when it records none).
+    session, else None; and the owner the session records.
 
     #14026: an import carrying a known session_id could write into another user's conversation. An
-    owner that cannot be read is refused, never treated as "unowned" (#14033).
+    owner that cannot be read is refused, never treated as "unowned" (#14033). A session with no owner
+    is never claimed by an import (#21668, THREAT_MODEL section 2): a non-admin gets the 404 a missing
+    session gets, as for a session another user owns (#21731);
+    an admin is refused too, because its owner is assigned only through the approval queue (#17038).
     """
+    importer = (user_data or {}).get("username")
     try:
         existing_owner = await chat_history_manager.get_session_owner(session_id)
     except SessionOwnerUnreadable:
-        existing_owner = _UNREADABLE_OWNER
-    importer = (user_data or {}).get("username")
-    if existing_owner is _UNREADABLE_OWNER or (existing_owner is not None and existing_owner != importer):
+        raise deny_unreadable_owner(session_id, importer) from None  # as a read denies (#14033)
+    if existing_owner is not None and existing_owner != importer:
         logger.warning("Import refused: %s may not write session %s", importer or "<anonymous>", session_id)
-        return _conflict_result(session_id, f"Session {session_id!r} belongs to another user"), existing_owner
+        raise session_not_found()  # #21731: a session that is not the caller's reads as a missing one
+    if existing_owner is None:
+        return _ownerless_refusal(session_id, user_data), existing_owner
     return None, existing_owner
+
+
+def _ownerless_refusal(session_id: str, user_data: Dict[str, Any] | None) -> Dict[str, Any]:
+    """The refusal of an import over a session with no owner: 404 for a non-admin, a conflict for an admin."""
+    logger.error("Import refused: session %s has no owner and an import does not claim one", session_id[:8])
+    if not is_admin_role((user_data or {}).get("role")):
+        raise session_not_found()
+    return _conflict_result(
+        session_id, f"Session {session_id!r} has no owner; its owner is assigned through the approval queue"
+    )
 
 
 async def _import_under_lease(
@@ -263,17 +293,18 @@ async def _import_under_lease(
     """Resolve the conflict policy against the stored session, then save; the caller holds the lease."""
     session_id: str = document["session_id"]
     exists, existing_owner = await _session_exists(chat_history_manager, session_id), None
-    if exists and on_conflict == "skip":
-        logger.info("Import skipped: session %s already exists", session_id)
-        return _conflict_result(session_id, f"Session {session_id!r} already exists (on_conflict=skip)")
     if exists and on_conflict == "rename":
         session_id = _apply_suffix_to_session_id(session_id, f"imported-{int(time.time())}")
         logger.info("Import renamed to %s due to conflict", session_id)
     elif exists:
+        # Ownership first (#21731): a non-owner never learns, through skip or otherwise, that the id exists.
         refusal, existing_owner = await _owner_refusal(chat_history_manager, session_id, user_data)
         if refusal is not None:
             return refusal
-    # #21664: index a new session or one the importer already owns -- never an ownerless takeover (#21668)
+        if on_conflict == "skip":
+            logger.info("Import skipped: session %s already exists", session_id)
+            return _conflict_result(session_id, f"Session {session_id!r} already exists (on_conflict=skip)")
+    # #21664: index a new session or one the importer already owns (an ownerless one is refused above, #21668)
     index = not exists or on_conflict == "rename" or existing_owner == (user_data or {}).get("username")
     return await _save_import(chat_history_manager, document, session_id, exists, on_conflict, user_data, index)
 

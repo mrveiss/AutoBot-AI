@@ -49473,9 +49473,10 @@ export interface paths {
         };
         /**
          * Export All Conversations
-         * @description Export all conversations as a bulk JSON archive (#1808).
+         * @description Export the caller's conversations as a bulk JSON archive (#1808, #21666).
          *
-         *     Returns a JSON file containing every conversation stored on this instance.
+         *     Returns only the sessions the caller owns. ``all_users=true`` exports every conversation on this
+         *     instance: administrators only, and audited as a ``SESSION_EXPORT`` of scope ``instance``.
          */
         get: operations["export_all_conversations_api_conversations_conversations_export_all_get"];
         put?: never;
@@ -174757,7 +174758,10 @@ export interface operations {
     };
     export_all_conversations_api_conversations_conversations_export_all_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Instance-wide export of every user's conversations; admin only */
+                all_users?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -174770,6 +174774,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
