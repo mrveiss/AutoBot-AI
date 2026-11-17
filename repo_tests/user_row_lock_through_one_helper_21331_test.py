@@ -23,6 +23,8 @@ import re
 from repo_tests._infra_backend_names import tracked_py
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 ROOT = repo_root()
 TREES = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 USER_MODEL = frozenset({"User", "user_model", "user"})
@@ -53,7 +55,7 @@ def user_row_locks(source: str) -> int:
     ``query.with_for_update()`` is the split form that a statement-level check misses. Only code names count
     (``ast.Name``), so a message that says "User 7 ..." does not.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
     found = 0
     for node in ast.walk(tree):
