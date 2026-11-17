@@ -122,3 +122,33 @@ def apply_snapshot(
     else:
         raise UnsupportedRollbackTarget(f"unsupported entity type '{entity_type}'")
     logger.info("Applied config snapshot to live %s/%s", entity_type, entity_id)
+
+
+def _read_live(entity_type: str, entity_id: str) -> Dict[str, Any]:
+    """Copy of the live state a revision of this entity describes."""
+    if entity_type == "agent":
+        from config import config_manager
+
+        out = {f: config_manager.get_nested(f"agents.{entity_id}.{f}", None) for f in _AGENT_FIELDS}
+        return {k: v for k, v in out.items() if v is not None}
+    if entity_id == "backend":
+        return copy.deepcopy(ConfigService.get_backend_settings())
+    return copy.deepcopy(ConfigService.get_full_config())
+
+
+def rollback_locked(
+    entity_type: str,
+    entity_id: str,
+    snapshot: Dict[str, Any],
+    before: Dict[str, Any] | None = None,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """Apply a snapshot and return the live (before, after) read under one lock (#18478).
+
+    Synchronous: run it via ``asyncio.to_thread``; the threading lock is never
+    held across an await. A concurrent settings save cannot land between the
+    reads and the write, so the audit row matches what was applied.
+    """
+    with ConfigService._config_write_lock:
+        live_before = _read_live(entity_type, entity_id)
+        apply_snapshot(entity_type, entity_id, snapshot, before)
+        return live_before, _read_live(entity_type, entity_id)

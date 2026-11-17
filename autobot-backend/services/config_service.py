@@ -50,8 +50,8 @@ class ConfigService:
     _cached_config = None
     _cache_timestamp = None
     CACHE_DURATION = 30  # Cache for 30 seconds
-    # Issue #481: Thread-safe lock for config file writes
-    _config_write_lock = threading.Lock()
+    # Issue #481: thread-safe config writes; reentrant so rollback can hold it (#18478)
+    _config_write_lock = threading.RLock()
 
     @staticmethod
     def _should_refresh_cache() -> bool:

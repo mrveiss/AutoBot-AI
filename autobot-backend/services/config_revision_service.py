@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER, MatchPolicy, is_credential_entry
 from models.config_revision import ConfigRevision
-from services.config_rollback import apply_snapshot
+from services.config_rollback import rollback_locked
 
 logger = get_logger(__name__)
 
@@ -116,14 +116,14 @@ class ConfigRevisionService:
         revision that captures the rollback action.
         """
         target = await self._get_or_raise(revision_id)
-        await asyncio.to_thread(
-            apply_snapshot,
+        live_before, live_after = await asyncio.to_thread(
+            rollback_locked,
             target.entity_type,
             target.entity_id,
             target.after_config or {},
             target.before_config,
         )
-        new_revision = await self._record_applied_rollback(target, revision_id, created_by)
+        new_revision = await self._record_applied_rollback(target, revision_id, created_by, live_before, live_after)
         logger.info(
             "Rolled back %s/%s to revision %s (new revision %s)",
             target.entity_type,
@@ -133,15 +133,14 @@ class ConfigRevisionService:
         )
         return new_revision
 
-    async def _record_applied_rollback(self, target: ConfigRevision, revision_id: uuid.UUID, created_by: str):
+    async def _record_applied_rollback(self, target, revision_id, created_by, live_before, live_after):
         """Record a rollback whose snapshot is already live; a failed write is logged, then raised."""
         try:
-            current = await self._get_latest(target.entity_type, target.entity_id)
             return await self.create_revision(
                 entity_type=target.entity_type,
                 entity_id=target.entity_id,
-                before_config=current.after_config if current else None,
-                after_config=target.after_config or {},
+                before_config=live_before,
+                after_config=live_after,
                 source="rollback",
                 created_by=created_by,
             )

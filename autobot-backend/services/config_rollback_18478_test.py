@@ -161,3 +161,26 @@ def test_agent_write_failure_restores_prior_values(monkeypatch):
     with pytest.raises(RuntimeError):
         apply_snapshot("agent", agent, {"model": "m2", "enabled": False})
     assert store == {f"agents.{agent}.model": "old-model"}
+
+
+@pytest.mark.asyncio
+async def test_row_before_after_come_from_the_locked_live_read(live):
+    target = SimpleNamespace(
+        entity_type="system", entity_id="settings", after_config={"llm": {"model": "old"}}, before_config=None
+    )
+    svc = ConfigRevisionService(session=SimpleNamespace())
+    created = []
+
+    async def _get(_id):
+        return target
+
+    async def _create(**kw):
+        created.append(kw)
+
+    async def _latest(*_a):
+        raise AssertionError("row must not be built from a separate _get_latest read")
+
+    svc._get_or_raise, svc.create_revision, svc._get_latest = _get, _create, _latest
+    await svc.rollback_to_revision(uuid.uuid4(), "tester")
+    assert created[0]["before_config"]["llm"]["model"] == "new"
+    assert created[0]["after_config"]["llm"]["model"] == "old"
