@@ -141,7 +141,11 @@ def read_keys(args: dict) -> list[str]:
     for arg in _READ_KEY_ARGS:
         if arg in args:
             value = args[arg]
-            named.extend(str(v) for v in value) if isinstance(value, (list, tuple)) else named.append(str(value))
+            if isinstance(value, (list, tuple)):
+                # An empty list still names the argument: "" fails the namespace check instead of passing it.
+                named.extend(str(v) for v in value or [""])
+            else:
+                named.append(str(value))
     return named
 
 

@@ -185,7 +185,7 @@ class TestRawReadGuard:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("prefix", ["fact:", ["autobot:agent:ok", "fact:"], ""])
+@pytest.mark.parametrize("prefix", ["fact:", ["autobot:agent:ok", "fact:"], "", []])
 async def test_non_admin_cannot_create_an_index_over_a_non_agent_prefix(prefix):
     handler = AsyncMock()
     args = {"index_name": "idx:agent_x", "prefix": prefix}
