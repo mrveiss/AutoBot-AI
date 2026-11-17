@@ -55,10 +55,21 @@ class AdvisoryException:
 #: trigger the frontend suite. So the suite stays date-independent and #17890 carries the
 #: reminder to look again before 2026-11-14.
 #:
-#: The table is EMPTY by design when nothing is currently unfixable. GHSA-vfj7-8cjw-p6xm
-#: (braces, owner decision 2026-10-03, #13400) was retired once upstream stopped reporting
-#: it (2026-10-23): the stale-record check above is what demanded its removal.
-ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {}
+#: The table is EMPTY whenever nothing is currently unfixable, and holds one entry per advisory
+#: that is. GHSA-vfj7-8cjw-p6xm (braces, owner decision 2026-10-03, #13400) was retired once
+#: upstream stopped reporting it (2026-10-23): the stale-record check above is what demanded its
+#: removal. GHSA-fc5q-39xc-vjpf (picomatch, owner decision 2026-11-17, #21736) is the live entry:
+#: no patched version exists (latest, 4.0.7, is still affected). It retires itself -- a published
+#: patch makes the gate refuse it, and upstream ceasing to report it makes the gate demand its removal.
+ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {
+    "GHSA-fc5q-39xc-vjpf": AdvisoryException(
+        expires="2026-12-17",
+        reason=(
+            "picomatch has no patched version (latest, 4.0.7, is still affected), so no bump can clear "
+            "it; owner decision 2026-11-17 on #21736, renewed or removed deliberately by the expiry"
+        ),
+    ),
+}
 
 
 _LOWER_BOUND = re.compile(r">=?\s*(\d+(?:\.\d+)*)")
