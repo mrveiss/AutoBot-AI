@@ -95,6 +95,10 @@ def _leaf_delta(after: Dict[str, Any], before: Dict[str, Any] | None, path: tupl
     *before* and absent from *after*. The writers that record ``system``
     revisions replace their section whole, so an absent key really was deleted.
     With no *before*, everything in *after* counts as changed and nothing as deleted.
+
+    Intended ("restore the revision's state"): a key in *before* and absent from
+    *after* is deleted on rollback even if it was re-added later, and a subtree
+    *after* lacks is dropped whole, including children added to it later.
     """
     if before is None:
         return dict(after), []
